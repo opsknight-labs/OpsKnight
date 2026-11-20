@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
-    "MAPPED": 179,
-    "READER_COMPLETE": 210,
-    "SOURCE_VERIFIED": 1,
+    "MAPPED": 140,
+    "READER_COMPLETE": 202,
+    "SOURCE_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
-  "taskPages": 246,
-  "readerCompleteTaskPages": 207,
-  "sourceVerifiedTaskPages": 246,
+  "taskPages": 216,
+  "readerCompleteTaskPages": 200,
+  "sourceVerifiedTaskPages": 216,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
     {
@@ -201,17 +201,6 @@
     },
     {
       "page": "concepts/schedules.md",
-      "type": "concept",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "concepts/service-automation.md",
       "type": "concept",
       "userTask": null,
       "status": "MAPPED",
@@ -608,11 +597,11 @@
     },
     {
       "page": "guides/identity/authentication-modes.md",
-      "type": "concept",
-      "userTask": "Choose and change how people sign in.",
-      "status": "READER_COMPLETE",
-      "taskPage": false,
-      "screenshotCount": 0,
+      "type": "how-to",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": true,
+      "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
       "sourceVerified": true,
       "runtimeVerified": false
@@ -631,10 +620,10 @@
     {
       "page": "guides/identity/configure-oidc.md",
       "type": "tutorial",
-      "userTask": "Connect an OpenID Connect provider, test it and turn on single sign-on.",
+      "userTask": "Configure, pilot, verify, and safely enforce OIDC single sign-on.",
       "status": "READER_COMPLETE",
       "taskPage": true,
-      "screenshotCount": 1,
+      "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "sourceVerified": true,
       "runtimeVerified": false
@@ -651,34 +640,12 @@
       "runtimeVerified": false
     },
     {
-      "page": "guides/identity/link-existing-accounts.md",
-      "type": "how-to",
-      "userTask": "Connect existing OpsKnight accounts to single sign-on safely and at scale.",
-      "status": "READER_COMPLETE",
-      "taskPage": true,
-      "screenshotCount": 1,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
       "page": "guides/identity/local-certification.md",
       "type": "how-to",
       "userTask": null,
       "status": "MAPPED",
       "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/identity/map-roles-and-teams.md",
-      "type": "how-to",
-      "userTask": "Map identity provider groups to OpsKnight roles and teams.",
-      "status": "READER_COMPLETE",
-      "taskPage": true,
-      "screenshotCount": 2,
+      "screenshotCount": 5,
       "screenshotAssessment": "UNASSESSED",
       "sourceVerified": true,
       "runtimeVerified": false
@@ -689,17 +656,6 @@
       "userTask": null,
       "status": "MAPPED",
       "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/identity/roles-and-access.md",
-      "type": "concept",
-      "userTask": "Understand who can do what in OpsKnight, and get or grant the access someone needs.",
-      "status": "SOURCE_VERIFIED",
-      "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "sourceVerified": true,
@@ -730,10 +686,10 @@
     {
       "page": "guides/identity/test-and-enforce-sso.md",
       "type": "how-to",
-      "userTask": "Test single sign-on and turn it on safely.",
-      "status": "READER_COMPLETE",
+      "userTask": null,
+      "status": "MAPPED",
       "taskPage": true,
-      "screenshotCount": 2,
+      "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "sourceVerified": true,
       "runtimeVerified": false
@@ -908,193 +864,6 @@
       "type": "tutorial",
       "userTask": "Connect Jira and validate incident-to-issue synchronization end to end.",
       "status": "READER_COMPLETE",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/README.md",
-      "type": "concept",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/api-agents.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/build-an-agent.md",
-      "type": "developer",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/clients/README.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/clients/chatgpt.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/clients/claude-apps.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/clients/claude-code.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/clients/codex-cli.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/clients/cursor.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/clients/gemini-cli.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/clients/vscode.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/clients/windsurf.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/security-and-data.md",
-      "type": "concept",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/self-hosted-setup.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/stdio-bridge.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/troubleshooting.md",
-      "type": "troubleshooting",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/mcp/what-to-ask.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
@@ -1608,40 +1377,7 @@
       "runtimeVerified": false
     },
     {
-      "page": "guides/runbooks/health.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/runbooks/permissions.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
       "page": "guides/runbooks/respond.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/runbooks/service-bindings.md",
       "type": "how-to",
       "userTask": null,
       "status": "MAPPED",
@@ -1663,17 +1399,6 @@
       "runtimeVerified": false
     },
     {
-      "page": "guides/services/maintenance-windows.md",
-      "type": "how-to",
-      "userTask": "Schedule, verify, end, and remove a maintenance window for one or more services.",
-      "status": "READER_COMPLETE",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
       "page": "guides/services/manage-service.md",
       "type": "how-to",
       "userTask": "Create, configure, verify, and retire an OpsKnight service.",
@@ -1681,39 +1406,6 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/services/service-automation-api.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/services/service-automation-examples.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "guides/services/service-automation.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
       "sourceVerified": true,
       "runtimeVerified": false
     },
@@ -2851,17 +2543,6 @@
       "runtimeVerified": false
     },
     {
-      "page": "operate/deploy/helm/external-secrets.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
       "page": "operate/deploy/helm/ingress.md",
       "type": "deployment",
       "userTask": "Configure and validate Helm-managed ingress for OpsKnight.",
@@ -2922,17 +2603,6 @@
       "userTask": "Diagnose and recover a failed Helm install or upgrade.",
       "status": "READER_COMPLETE",
       "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/deploy/helm/upgrade-gate.md",
-      "type": "reference",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "sourceVerified": true,
@@ -3108,17 +2778,6 @@
       "type": "deployment",
       "userTask": "Configure and validate external PostgreSQL in a Kustomize overlay.",
       "status": "READER_COMPLETE",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/deploy/kustomize/external-secrets.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
@@ -3313,94 +2972,6 @@
       "runtimeVerified": false
     },
     {
-      "page": "operate/deploy/waf-compatibility.md",
-      "type": "deployment",
-      "userTask": "Keep a WAF in front of OpsKnight without blocking sign-in, status pages, runbooks, or integrations.",
-      "status": "READER_COMPLETE",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/mcp/README.md",
-      "type": "concept",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/mcp/architecture.md",
-      "type": "concept",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/mcp/certification.md",
-      "type": "reference",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/mcp/contributing.md",
-      "type": "developer",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/mcp/exclusion-review.md",
-      "type": "reference",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/mcp/full-parity.md",
-      "type": "developer",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/mcp/monitoring.md",
-      "type": "reference",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
       "page": "operate/reliability/README.md",
       "type": "concept",
       "userTask": null,
@@ -3449,17 +3020,6 @@
       "type": "deployment",
       "userTask": "Scale the constrained runtime role and verify capacity without breaking correctness.",
       "status": "READER_COMPLETE",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/reliability/service-automation.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
@@ -3525,17 +3085,6 @@
       "page": "operate/upgrades/rollback.md",
       "type": "deployment",
       "userTask": "Select and execute the safest image, forward-fix, or restore recovery path.",
-      "status": "READER_COMPLETE",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "operate/upgrades/upgrade-to-2.2.0.md",
-      "type": "deployment",
-      "userTask": "Prepare, apply, verify, and if necessary roll back an upgrade from OpsKnight 2.1.x to 2.2.0.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
@@ -3731,50 +3280,6 @@
       "runtimeVerified": false
     },
     {
-      "page": "reference/mcp/README.md",
-      "type": "reference",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "reference/mcp/catalog.md",
-      "type": "reference",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "reference/mcp/permissions.md",
-      "type": "reference",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "reference/mcp/tools.md",
-      "type": "reference",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
       "page": "reference/metrics.md",
       "type": "reference",
       "userTask": null,
@@ -3842,17 +3347,6 @@
     },
     {
       "page": "reference/runbooks.md",
-      "type": "reference",
-      "userTask": null,
-      "status": "MAPPED",
-      "taskPage": false,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "reference/service-automation.md",
       "type": "reference",
       "userTask": null,
       "status": "MAPPED",
@@ -4128,21 +3622,10 @@
     },
     {
       "page": "troubleshooting/login/README.md",
-      "type": "troubleshooting",
+      "type": "concept",
       "userTask": null,
       "status": "MAPPED",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "troubleshooting/login/admin-test-failures.md",
-      "type": "troubleshooting",
-      "userTask": "Fix a failed administrator test sign-in.",
-      "status": "READER_COMPLETE",
-      "taskPage": true,
+      "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "sourceVerified": true,
@@ -4162,10 +3645,10 @@
     {
       "page": "troubleshooting/login/oidc-access.md",
       "type": "troubleshooting",
-      "userTask": "Diagnose and fix a failed single sign-on sign-in from the message on screen.",
+      "userTask": "Diagnose, recover, and verify oidc access.",
       "status": "READER_COMPLETE",
       "taskPage": true,
-      "screenshotCount": 1,
+      "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "sourceVerified": true,
       "runtimeVerified": false
@@ -4219,17 +3702,6 @@
       "type": "troubleshooting",
       "userTask": "Diagnose, recover, and verify not processing.",
       "status": "READER_COMPLETE",
-      "taskPage": true,
-      "screenshotCount": 0,
-      "screenshotAssessment": "UNASSESSED",
-      "sourceVerified": true,
-      "runtimeVerified": false
-    },
-    {
-      "page": "troubleshooting/service-automation.md",
-      "type": "troubleshooting",
-      "userTask": null,
-      "status": "MAPPED",
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",

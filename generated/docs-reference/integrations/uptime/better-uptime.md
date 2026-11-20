@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Better Uptime webhook", "connect Better Uptime", "Better Uptime alerts", "Better Uptime integration"]
 verification:
   level: source
-  verified_at: 2026-11-20
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/better-uptime.ts
     - src/app/api/integrations/better-uptime/route.ts

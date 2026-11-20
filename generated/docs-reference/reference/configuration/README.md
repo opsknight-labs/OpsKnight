@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-11-20
+  verified_at: 2026-10-27
   evidence:
     - src/
     - deploy/
@@ -504,21 +504,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `5`
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `deploy/swarm/docker-stack.yml`, `scripts/ingestion/profile-general-dispatch.cjs`, `src/lib/prisma.ts`
-
-## `DATABASE_POOL_SIZE_INGESTION_WORKER`
-
-- Type: string
-- Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
-- Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: derived
-- Static default: `5`
-- Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/prisma.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `deploy/swarm/docker-stack.yml`, `src/lib/prisma.ts`
 
 ## `DATABASE_POOL_SIZE_RUNBOOK_WORKER`
 
@@ -937,106 +923,8 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `ghcr.io/opsknight-labs/opsknight:2.1.2`, `opsknight-local:test`
+- Static default: `ghcr.io/opsknight-labs/opsknight:2.1.1`, `opsknight-local:test`
 - Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `scripts/soak-test-2h.sh`
-
-## `OPSKNIGHT_INGESTION_CONCURRENCY`
-
-- Type: string
-- Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
-- Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: derived
-- Static default: `4`
-- Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/ingestion/config.ts`
-
-## `OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE`
-
-- Type: string
-- Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
-- Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: derived
-- Static default: `120`
-- Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/ingestion/config.ts`
-
-## `OPSKNIGHT_INGESTION_INTEGRATION_PER_MINUTE`
-
-- Type: string
-- Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
-- Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: derived
-- Static default: `100`
-- Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/ingestion/config.ts`
-
-## `OPSKNIGHT_INGESTION_MAX_INFLIGHT_REQUESTS`
-
-- Type: string
-- Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
-- Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: derived
-- Static default: `32`
-- Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/ingestion/config.ts`
-
-## `OPSKNIGHT_INGESTION_MAX_PENDING`
-
-- Type: string
-- Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
-- Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: derived
-- Static default: `100000`
-- Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/ingestion/config.ts`
-
-## `OPSKNIGHT_INGESTION_MAX_PENDING_BYTES`
-
-- Type: string
-- Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
-- Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: derived
-- Static default: `1073741824`
-- Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/ingestion/config.ts`
-
-## `OPSKNIGHT_INGESTION_PAYLOAD_RETENTION_HOURS`
-
-- Type: string
-- Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
-- Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: derived
-- Static default: `24`
-- Sources: `deploy/compose/docker-compose.ingestion.yml`, `src/lib/ingestion/config.ts`
 
 ## `OPSKNIGHT_MIGRATION_ONLY`
 
@@ -1120,7 +1008,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `integrated`
-- Sources: `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `env.example`, `scripts/ingestion/certify-upgrade.cjs`, `scripts/ingestion/profile-general-dispatch.cjs`, `scripts/wait-for-runtime-database.cjs`, `src/lib/cron-scheduler.ts`, `src/lib/job-worker.ts`, `src/lib/runtime-role.ts`
+- Sources: `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `env.example`, `scripts/wait-for-runtime-database.cjs`, `src/lib/cron-scheduler.ts`, `src/lib/job-worker.ts`, `src/lib/runtime-role.ts`
 
 ## `OPSKNIGHT_PULL_POLICY`
 
@@ -1530,17 +1418,17 @@ Sets the polling interval while the general queue is idle.
 
 ## `PGBOUNCER_ENABLED`
 
-- Type: enum/string
+- Type: string
 - Required: conditional or optional; inspect cited source
-- Allowed values: `true`
+- Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
-- Extraction confidence: derived
+- Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `env.example`, `src/lib/maintenance/database.ts`, `src/lib/prisma.ts`
+- Sources: `env.example`
 
 ## `PGBOUNCER_IMAGE`
 
@@ -1974,5 +1862,5 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `env.example`, `scripts/ingestion/isolated-runtime.cjs`, `scripts/wait-for-runtime-database.cjs`, `src/lib/prisma-datasource.ts`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `env.example`, `scripts/wait-for-runtime-database.cjs`, `src/lib/prisma-datasource.ts`
 

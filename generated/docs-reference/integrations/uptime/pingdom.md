@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Pingdom webhook", "connect Pingdom", "Pingdom alerts", "Pingdom integration"]
 verification:
   level: source
-  verified_at: 2026-11-20
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/pingdom.ts
     - src/app/api/integrations/pingdom/route.ts

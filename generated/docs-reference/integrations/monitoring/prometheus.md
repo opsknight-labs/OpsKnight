@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Prometheus Alertmanager webhook", "connect Prometheus Alertmanager", "Prometheus Alertmanager alerts", "Prometheus Alertmanager integration", "Alertmanager webhook"]
 verification:
   level: source
-  verified_at: 2026-11-20
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/prometheus.ts
     - src/app/api/integrations/prometheus/route.ts

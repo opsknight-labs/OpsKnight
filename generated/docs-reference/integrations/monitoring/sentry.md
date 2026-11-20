@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Sentry webhook", "connect Sentry", "Sentry alerts", "Sentry integration"]
 verification:
   level: source
-  verified_at: 2026-11-20
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/sentry.ts
     - src/app/api/integrations/sentry/route.ts

@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Vercel webhook", "connect Vercel", "Vercel alerts", "Vercel integration"]
 verification:
   level: source
-  verified_at: 2026-11-20
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/vercel.ts
     - src/app/api/integrations/vercel/route.ts
