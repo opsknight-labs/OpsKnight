@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { BarChart3, Download } from 'lucide-react';
 import AnalyticsFilters from '@/components/analytics/AnalyticsFilters';
 import AnalyticsFreshness from '@/components/analytics/AnalyticsFreshness';
+import { BreakdownSection } from '@/components/analytics/BreakdownSection';
 import { SectionSkeleton } from '@/components/analytics/SectionCard';
 import {
   FollowThroughSection,
@@ -162,6 +163,12 @@ export default async function AnalyticsPage({
           fallback={<SectionSkeleton title="services" className="xl:col-span-12" />}
         >
           <ServicesSection context={context} />
+        </Suspense>
+        <Suspense
+          key={`breakdown-${key}`}
+          fallback={<SectionSkeleton title="breakdown" className="xl:col-span-12" />}
+        >
+          <BreakdownSection context={context} />
         </Suspense>
         <Suspense
           key={`responders-${key}`}

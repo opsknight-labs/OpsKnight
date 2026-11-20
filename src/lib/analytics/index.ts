@@ -13,6 +13,7 @@ import {
   queryTiming,
   queryTrend,
 } from './queries';
+import { queryBreakdown } from './queries-breakdown';
 import { buildAnalyticsScope, type AnalyticsScope } from './scope';
 import { resolveAnalyticsWindow, type AnalyticsWindow } from './window';
 
@@ -20,6 +21,7 @@ export * from './params';
 export * from './definitions';
 export type { AnalyticsWindow } from './window';
 export type * from './queries';
+export type * from './queries-breakdown';
 
 const SECTIONS = {
   kpis: queryKpis,
@@ -29,6 +31,12 @@ const SECTIONS = {
   timing: queryTiming,
   noise: queryNoise,
   followThrough: queryFollowThrough,
+  breakdownTeam: (scope: AnalyticsScope, window: AnalyticsWindow) =>
+    queryBreakdown(scope, window, 'team'),
+  breakdownPriority: (scope: AnalyticsScope, window: AnalyticsWindow) =>
+    queryBreakdown(scope, window, 'priority'),
+  breakdownUrgency: (scope: AnalyticsScope, window: AnalyticsWindow) =>
+    queryBreakdown(scope, window, 'urgency'),
 };
 
 export type AnalyticsSectionKey = keyof typeof SECTIONS;
@@ -82,9 +90,13 @@ export function getAnalyticsSectionWithTime<K extends AnalyticsSectionKey>(
 ): Promise<Cached<AnalyticsSectionData<K>>> {
   const query = SECTIONS[section] as (
     scope: AnalyticsScope,
-    window: AnalyticsWindow
+    window: AnalyticsWindow,
+    params: AnalyticsParams
   ) => Promise<AnalyticsSectionData<K>>;
-  return cachedWithTime(`${section}${context.cacheKey}`, () => query(context.scope, context.window));
+  // cacheKey includes every param, so sections that read params (trend: compare) stay distinct.
+  return cachedWithTime(`${section}${context.cacheKey}`, () =>
+    query(context.scope, context.window, context.params)
+  );
 }
 
 /** Forces fresh numbers for this actor and filter set on the next read. */

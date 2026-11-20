@@ -27,7 +27,7 @@ import SectionError from './SectionError';
 import ServicesTable from './ServicesTable';
 
 /** Loads one section; a failure renders an inline retry instead of breaking the page. */
-async function load<K extends AnalyticsSectionKey>(
+export async function load<K extends AnalyticsSectionKey>(
   context: AnalyticsContext,
   section: K
 ): Promise<{ data: AnalyticsSectionData<K> } | { error: string }> {
@@ -40,7 +40,7 @@ async function load<K extends AnalyticsSectionKey>(
   }
 }
 
-function NoIncidents({ filtered }: { filtered: boolean }) {
+export function NoIncidents({ filtered }: { filtered: boolean }) {
   return (
     <EmptyState
       variant="simple"
@@ -55,7 +55,7 @@ function NoIncidents({ filtered }: { filtered: boolean }) {
   );
 }
 
-const isFiltered = (context: AnalyticsContext) => {
+export const isFiltered = (context: AnalyticsContext) => {
   const p = context.params;
   return Boolean(
     p.teams.length || p.services.length || p.priorities.length || p.urgency || p.status || p.assignee
@@ -253,9 +253,19 @@ export async function TrendSection({ context }: { context: AnalyticsContext }) {
   }
   const rows = result.data;
   const total = rows.reduce((sum, row) => sum + row.high + row.medium + row.low, 0);
+  const compare = context.params.compare;
   const durationColumns = (prefix: 'mtta' | 'mttr') => [
     { label: 'Median', render: (row: (typeof rows)[number]) => formatDuration(row[`${prefix}P50`]) },
     { label: 'p90', render: (row: (typeof rows)[number]) => formatDuration(row[`${prefix}P90`]) },
+    ...(compare
+      ? [
+          {
+            label: 'Previous median',
+            render: (row: (typeof rows)[number]) =>
+              formatDuration(prefix === 'mtta' ? row.previousMttaP50 : row.previousMttrP50),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -282,6 +292,9 @@ export async function TrendSection({ context }: { context: AnalyticsContext }) {
                   { label: 'Medium', render: row => String(row.medium) },
                   { label: 'Low', render: row => String(row.low) },
                   { label: 'Total', render: row => String(row.high + row.medium + row.low) },
+                  ...(compare
+                    ? [{ label: 'Previous', render: (row: (typeof rows)[number]) => formatMetric(row.previousTotal, 'count') }]
+                    : []),
                 ]}
               />
             }

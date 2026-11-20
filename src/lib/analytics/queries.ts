@@ -71,14 +71,33 @@ export type TrendPoint = {
   mttaP90: number | null;
   mttrP50: number | null;
   mttrP90: number | null;
+  /**
+   * Only with compare on: the previous window's bucket at the same position
+   * (bucket i here ↔ bucket i there). Null when the previous window has fewer buckets.
+   * shortcut: if the previous window spans one extra bucket (DST, week/month edges) that
+   * bucket is not shown; fold it into the last one if the mismatch ever matters.
+   */
+  previousTotal?: number | null;
+  previousMttaP50?: number | null;
+  previousMttrP50?: number | null;
 };
+
+const numOrNull = (value: unknown) => (value === null || value === undefined ? null : Number(value));
 
 export async function queryTrend(
   scope: AnalyticsScope,
-  window: AnalyticsWindow
+  window: AnalyticsWindow,
+  { compare = false }: { compare?: boolean } = {}
 ): Promise<TrendPoint[]> {
   const unit = window.bucket;
   const localTs = (date: Date) => Prisma.sql`timezone(${window.timeZone}, ${tz(date)})`;
+  const series = (start: Date, end: Date) => Prisma.sql`
+    SELECT bucket, row_number() OVER (ORDER BY bucket) AS pos
+    FROM generate_series(
+      date_trunc(${unit}, ${localTs(start)}),
+      date_trunc(${unit}, ${localTs(new Date(end.getTime() - 1))}),
+      ${`1 ${unit}`}::interval
+    ) AS bucket`;
   const rows = await run<
     Array<{
       bucket: string;
@@ -89,16 +108,13 @@ export async function queryTrend(
       mtta_p90: number | null;
       mttr_p50: number | null;
       mttr_p90: number | null;
+      previous_total?: number | null;
+      previous_mtta_p50?: number | null;
+      previous_mttr_p50?: number | null;
     }>
   >(Prisma.sql`
-    WITH ${metricRowsCte(scope, window)},
-    buckets AS (
-      SELECT generate_series(
-        date_trunc(${unit}, ${localTs(window.start)}),
-        date_trunc(${unit}, ${localTs(new Date(window.end.getTime() - 1))}),
-        ${`1 ${unit}`}::interval
-      ) AS bucket
-    ),
+    WITH ${metricRowsCte(scope, window, { includePrevious: compare })},
+    buckets AS (${series(window.start, window.end)}),
     grouped AS (
       SELECT date_trunc(${unit}, local_at) AS bucket,
         COUNT(*) FILTER (WHERE urgency = 'HIGH'::"IncidentUrgency")::int AS high,
@@ -108,22 +124,48 @@ export async function queryTrend(
         PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY ack_ms) AS mtta_p90,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY resolve_ms) AS mttr_p50,
         PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY resolve_ms) AS mttr_p90
-      FROM metric_rows GROUP BY 1
-    )
+      FROM metric_rows WHERE in_current GROUP BY 1
+    )${
+      compare
+        ? Prisma.sql`,
+    previous_buckets AS (${series(window.previousStart, window.previousEnd)}),
+    previous_grouped AS (
+      SELECT date_trunc(${unit}, local_at) AS bucket, COUNT(*)::int AS total,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ack_ms) AS mtta_p50,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY resolve_ms) AS mttr_p50
+      FROM metric_rows WHERE NOT in_current GROUP BY 1
+    ),
+    previous AS (
+      SELECT pb.pos, COALESCE(pg.total, 0) AS total, pg.mtta_p50, pg.mttr_p50
+      FROM previous_buckets pb LEFT JOIN previous_grouped pg ON pg.bucket = pb.bucket
+    )`
+        : Prisma.empty
+    }
     SELECT to_char(b.bucket, 'YYYY-MM-DD"T"HH24:MI:SS') AS bucket,
       COALESCE(g.high, 0) AS high, COALESCE(g.medium, 0) AS medium, COALESCE(g.low, 0) AS low,
-      g.mtta_p50, g.mtta_p90, g.mttr_p50, g.mttr_p90
+      g.mtta_p50, g.mtta_p90, g.mttr_p50, g.mttr_p90${
+        compare
+          ? Prisma.sql`,
+      p.total AS previous_total, p.mtta_p50 AS previous_mtta_p50, p.mttr_p50 AS previous_mttr_p50`
+          : Prisma.empty
+      }
     FROM buckets b LEFT JOIN grouped g ON g.bucket = b.bucket
+    ${compare ? Prisma.sql`LEFT JOIN previous p ON p.pos = b.pos` : Prisma.empty}
     ORDER BY b.bucket`);
   return rows.map(row => ({
     bucket: row.bucket,
     high: n(row.high),
     medium: n(row.medium),
     low: n(row.low),
-    mttaP50: row.mtta_p50 === null ? null : Number(row.mtta_p50),
-    mttaP90: row.mtta_p90 === null ? null : Number(row.mtta_p90),
-    mttrP50: row.mttr_p50 === null ? null : Number(row.mttr_p50),
-    mttrP90: row.mttr_p90 === null ? null : Number(row.mttr_p90),
+    mttaP50: numOrNull(row.mtta_p50),
+    mttaP90: numOrNull(row.mtta_p90),
+    mttrP50: numOrNull(row.mttr_p50),
+    mttrP90: numOrNull(row.mttr_p90),
+    ...(compare && {
+      previousTotal: numOrNull(row.previous_total),
+      previousMttaP50: numOrNull(row.previous_mtta_p50),
+      previousMttrP50: numOrNull(row.previous_mttr_p50),
+    }),
   }));
 }
 

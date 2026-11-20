@@ -2,10 +2,9 @@
 
 import {
   Bar,
-  BarChart,
   CartesianGrid,
+  ComposedChart,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -19,7 +18,47 @@ type Bucket = 'hour' | 'day' | 'week' | 'month';
 const AXIS = { fontSize: 11, fill: 'hsl(var(--ui-muted-foreground))' };
 const HEIGHT = 240;
 
-type Series = { key: string; label: string; color: string };
+type Series = { key: string; label: string; color: string; dashed?: boolean };
+
+/** Previous period: a dashed, muted line, so it reads as context rather than a series hue. */
+const PREVIOUS_COLOR = 'hsl(var(--ui-muted-foreground))';
+const previousSeries = (key: string, label = 'Previous period'): Series => ({
+  key,
+  label,
+  color: PREVIOUS_COLOR,
+  dashed: true,
+});
+const hasPrevious = (data: TrendPoint[]) => data.some(point => point.previousTotal !== undefined);
+
+function Swatch({ item }: { item: Series }) {
+  return item.dashed ? (
+    <span
+      aria-hidden
+      className="w-3 border-t-2 border-dashed"
+      style={{ borderColor: item.color }}
+    />
+  ) : (
+    <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: item.color }} />
+  );
+}
+
+// A plain function, not a component: keeps <Line> a direct chart child.
+function previousLine(item: Series) {
+  return (
+    <Line
+      key={item.key}
+      type="monotone"
+      dataKey={item.key}
+      stroke={item.color}
+      strokeWidth={2}
+      strokeDasharray="4 4"
+      dot={false}
+      activeDot={{ r: 3, strokeWidth: 0, fill: item.color }}
+      connectNulls
+      isAnimationActive={false}
+    />
+  );
+}
 
 function ChartTooltip({
   active,
@@ -49,7 +88,7 @@ function ChartTooltip({
       {[...series].reverse().map(item => (
         <p key={item.key} className="flex items-center justify-between gap-4 tabular-nums">
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: item.color }} />
+            <Swatch item={item} />
             {item.label}
           </span>
           <span className="font-medium">{format(row[item.key] ?? null)}</span>
@@ -64,7 +103,7 @@ function Legend({ series }: { series: Series[] }) {
     <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
       {series.map(item => (
         <li key={item.key} className="flex items-center gap-1.5">
-          <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: item.color }} />
+          <Swatch item={item} />
           {item.label}
         </li>
       ))}
@@ -79,11 +118,18 @@ const URGENCY_SERIES: Series[] = [
 ];
 
 export function VolumeChart({ data, bucket }: { data: TrendPoint[]; bucket: Bucket }) {
+  const previous = hasPrevious(data) ? previousSeries('previousTotal') : null;
+  // Tooltip lists series top-down (reversed), so the previous line goes first to land last.
+  const tooltipSeries = previous ? [previous, ...URGENCY_SERIES] : URGENCY_SERIES;
   return (
     <div>
       <div style={{ height: HEIGHT }} aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -12 }} barCategoryGap="20%">
+          <ComposedChart
+            data={data}
+            margin={{ top: 4, right: 4, bottom: 0, left: -12 }}
+            barCategoryGap="20%"
+          >
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis
               dataKey="bucket"
@@ -99,7 +145,7 @@ export function VolumeChart({ data, bucket }: { data: TrendPoint[]; bucket: Buck
               content={props => (
                 <ChartTooltip
                   {...props}
-                  series={URGENCY_SERIES}
+                  series={tooltipSeries}
                   bucket={bucket}
                   format={value => String(value ?? 0)}
                 />
@@ -117,10 +163,11 @@ export function VolumeChart({ data, bucket }: { data: TrendPoint[]; bucket: Buck
                 isAnimationActive={false}
               />
             ))}
-          </BarChart>
+            {previous && previousLine(previous)}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <Legend series={URGENCY_SERIES} />
+      <Legend series={previous ? [...URGENCY_SERIES, previous] : URGENCY_SERIES} />
     </div>
   );
 }
@@ -140,11 +187,14 @@ export function DurationChart({
   metric: 'mtta' | 'mttr';
 }) {
   const series = DURATION_SERIES(metric);
+  const previous = hasPrevious(data)
+    ? previousSeries(metric === 'mtta' ? 'previousMttaP50' : 'previousMttrP50', 'Previous median')
+    : null;
   return (
     <div>
       <div style={{ height: HEIGHT }} aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -4 }}>
+          <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -4 }}>
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis
               dataKey="bucket"
@@ -164,7 +214,12 @@ export function DurationChart({
             <Tooltip
               cursor={{ stroke: 'hsl(var(--ui-muted-foreground))', strokeDasharray: '3 3' }}
               content={props => (
-                <ChartTooltip {...props} series={series} bucket={bucket} format={formatDuration} />
+                <ChartTooltip
+                  {...props}
+                  series={previous ? [previous, ...series] : series}
+                  bucket={bucket}
+                  format={formatDuration}
+                />
               )}
             />
             {series.map(item => (
@@ -180,10 +235,11 @@ export function DurationChart({
                 isAnimationActive={false}
               />
             ))}
-          </LineChart>
+            {previous && previousLine(previous)}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <Legend series={series} />
+      <Legend series={previous ? [...series, previous] : series} />
     </div>
   );
 }
