@@ -193,11 +193,13 @@ export default function AnalyticsFilters({
   services,
   users,
   priorities,
+  actions,
 }: {
   teams: Option[];
   services: Option[];
   users: Option[];
   priorities: string[];
+  actions?: ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -343,6 +345,7 @@ export default function AnalyticsFilters({
           navigate({ ...parseAnalyticsParams({}), range: params.range, from: params.from, to: params.to, compare: params.compare })
         }
         clearLabel="Clear filters"
+        actions={actions}
       />
     </div>
   );

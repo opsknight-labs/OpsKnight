@@ -587,6 +587,7 @@ model User {
   avatar                      UserAvatar?
   dashboards                  Dashboard[]
   savedReports                SavedReport[]
+  analyticsViews              AnalyticsView[]
   reportExports               ReportExport[]
   auditExports                AuditExport[]
   assignedActionItems         ActionItem[]
@@ -656,6 +657,7 @@ model Team {
   incidents         Incident[]
   dashboards        Dashboard[]
   savedReports      SavedReport[]
+  analyticsViews    AnalyticsView[]
   runbooks          Runbook[]          @relation("RunbookOwnerTeam")
   teamLeadId        String?
   teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
@@ -3168,6 +3170,28 @@ model SavedReport {
 
   @@index([userId, createdAt, id])
   @@index([teamId, createdAt, id])
+}
+
+/// A saved filter set on /analytics. `query` is the canonical string from
+/// toAnalyticsSearchParams and is re-validated through parseAnalyticsParams on load.
+model AnalyticsView {
+  id          String              @id @default(cuid())
+  name        String
+  query       String
+  visibility  DashboardVisibility @default(PRIVATE)
+  userId      String
+  teamId      String?
+  isDefault   Boolean             @default(false)
+  emailWeekly Boolean             @default(false)
+  lastSentAt  DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team        Team?               @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt, id])
+  @@index([teamId, createdAt, id])
+  @@index([emailWeekly, lastSentAt])
 }
 
 model ReportExport {

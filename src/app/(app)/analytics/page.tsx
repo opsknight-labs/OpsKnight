@@ -1,9 +1,11 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { BarChart3, Download } from 'lucide-react';
 import AnalyticsFilters from '@/components/analytics/AnalyticsFilters';
 import AnalyticsFreshness from '@/components/analytics/AnalyticsFreshness';
+import AnalyticsViews from '@/components/analytics/AnalyticsViews';
 import { AvailabilitySection } from '@/components/analytics/AvailabilitySection';
 import { BreakdownSection } from '@/components/analytics/BreakdownSection';
 import { SectionSkeleton } from '@/components/analytics/SectionCard';
@@ -27,6 +29,7 @@ import {
   parseAnalyticsParams,
   toAnalyticsSearchParams,
 } from '@/lib/analytics';
+import { getDefaultAnalyticsViewQuery, listAnalyticsViews } from '@/lib/analytics/views';
 import { getAuthOptions } from '@/lib/auth';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
@@ -61,10 +64,14 @@ export default async function AnalyticsPage({
     getAuthOptions().then(options => getServerSession(options)),
     searchParams,
   ]);
+  if (Object.keys(raw ?? {}).length === 0) {
+    const defaultQuery = await getDefaultAnalyticsViewQuery(actor.id);
+    if (defaultQuery) redirect(`/analytics?${defaultQuery}`);
+  }
   const params = parseAnalyticsParams(raw);
   const email = session?.user?.email ?? null;
 
-  const [user, accessContext, teams, services, users] = await Promise.all([
+  const [user, accessContext, teams, services, users, views] = await Promise.all([
     email ? prisma.user.findUnique({ where: { email }, select: { timeZone: true } }) : null,
     resolveAccessContext(actor),
     prisma.team.findMany({
@@ -87,6 +94,7 @@ export default async function AnalyticsPage({
       orderBy: { name: 'asc' },
       take: OPTION_LIMIT,
     }),
+    listAnalyticsViews(actor),
   ]);
 
   const context = await createAnalyticsContext(actor, params, getUserTimeZone(user ?? undefined));
@@ -122,6 +130,9 @@ export default async function AnalyticsPage({
         services={services}
         users={users.map(u => ({ id: u.id, name: u.name || u.email }))}
         priorities={PRIORITIES}
+        actions={
+          <AnalyticsViews views={views} teams={teams.filter(t => actor.teamIds.includes(t.id))} />
+        }
       />
       <Suspense key={`fresh-${key}`} fallback={<div className="h-11 sm:h-5" aria-hidden />}>
         <AnalyticsFreshness context={context} />
