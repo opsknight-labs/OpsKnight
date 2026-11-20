@@ -1,5 +1,6 @@
 'use client';
 
+import { notify } from '@/lib/toast';
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
@@ -112,9 +113,13 @@ export default function UserCreateForm({ action, className = '', disabled = fals
 
   const copyToClipboard = () => {
     if (state?.inviteUrl) {
-      navigator.clipboard.writeText(state.inviteUrl);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
+      navigator.clipboard.writeText(state.inviteUrl).then(
+        () => {
+          setIsCopied(true);
+          setTimeout(() => setIsCopied(false), 2000);
+        },
+        () => notify.error("Couldn't copy the invite link; select it and copy it manually.")
+      );
     }
   };
 
