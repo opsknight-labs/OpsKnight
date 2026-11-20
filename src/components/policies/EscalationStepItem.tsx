@@ -218,8 +218,9 @@ export default function EscalationStepItem({
                       variant="ghost"
                       size="sm"
                       className="h-8 w-8 p-0 rounded-full text-ink-400 hover:text-ink-600"
+                      aria-label={`Actions for step ${step.stepOrder + 1}`}
                     >
-                      <MoreHorizontal className="h-4 w-4" />
+                      <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">

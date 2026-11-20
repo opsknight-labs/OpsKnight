@@ -133,10 +133,14 @@ export default function UserDetailTabs({
   };
 
   const copyToClipboard = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
-    toast.success('Copied to clipboard');
-    setTimeout(() => setCopiedKey(null), 2000);
+    navigator.clipboard.writeText(text).then(
+      () => {
+        setCopiedKey(key);
+        toast.success('Copied to clipboard');
+        setTimeout(() => setCopiedKey(null), 2000);
+      },
+      () => toast.error("Couldn't copy; select the text and copy it manually.")
+    );
   };
 
   const statusVariantMap: Record<
@@ -208,6 +212,7 @@ export default function UserDetailTabs({
                     onClick={() => copyToClipboard(user.email, 'email')}
                     className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition-colors"
                     title="Copy Email"
+                    aria-label="Copy email address"
                   >
                     {copiedKey === 'email' ? (
                       <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
