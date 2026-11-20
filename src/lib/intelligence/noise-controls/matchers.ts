@@ -1,4 +1,4 @@
-import { PREPAGING_LIMITS, type Matcher, type PrePagingInput } from './contract';
+import { PREPAGING_LIMITS, assertSafeRegex, type Matcher, type PrePagingInput } from './contract';
 
 /** A matcher with its regular expression compiled once, at snapshot load, never on the hot path. */
 export interface CompiledMatcher {
@@ -15,10 +15,19 @@ export function compileMatcher(matcher: Matcher): CompiledMatcher {
     key: matcher.key?.toLowerCase(),
     op: matcher.op,
     value: (matcher.value ?? '').toLowerCase(),
-    // Patterns pass assertSafeRegex when saved; compilation happens once per snapshot, not per event.
-    // eslint-disable-next-line security/detect-non-literal-regexp
-    regex: matcher.op === 'regex' && matcher.value ? new RegExp(matcher.value, 'i') : null,
+    regex: matcher.op === 'regex' && matcher.value ? compileSafeRegex(matcher.value) : null,
   };
+}
+
+// Re-checked at compile (once per snapshot) so a row written around the save-time check never matches.
+function compileSafeRegex(pattern: string): RegExp | null {
+  try {
+    assertSafeRegex(pattern);
+    // eslint-disable-next-line security/detect-non-literal-regexp
+    return new RegExp(pattern, 'i');
+  } catch {
+    return null;
+  }
 }
 
 function labelOf(labels: Readonly<Record<string, string>>, key: string): string | null {

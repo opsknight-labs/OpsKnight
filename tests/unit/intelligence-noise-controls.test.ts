@@ -191,6 +191,12 @@ describe('matchers', () => {
     ).toBe(false);
   });
 
+  it('never compiles an unsafe pattern that bypassed the save-time check', () => {
+    const unsafe = compileMatcher({ field: 'summary', op: 'regex', value: '(d+)+$' });
+    expect(unsafe.regex).toBeNull();
+    expect(matches(unsafe, input())).toBe(false);
+  });
+
   it('rejects patterns that can blow up and label matchers without a key', () => {
     expect(() => assertSafeRegex('(a+)+$')).toThrow(/quantifiers/);
     expect(() => assertSafeRegex('(.*)\\1')).toThrow(/Back-references/);
