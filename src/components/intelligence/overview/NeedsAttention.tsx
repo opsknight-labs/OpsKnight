@@ -59,11 +59,11 @@ export default function NeedsAttention({
           row.type === 'insight' ? (
             <InsightRow
               key={`insight:${row.id}`}
-              insight={
-                row.insight.scopeHref
-                  ? { ...row.insight, scopeHref: resolveHref(row.insight.scopeHref) }
-                  : row.insight
-              }
+              insight={{
+                ...row.insight,
+                scopeHref: row.insight.scopeHref && resolveHref(row.insight.scopeHref),
+                draftHref: row.insight.draftHref && resolveHref(row.insight.draftHref),
+              }}
               canDecide={canDecide}
               squireName={squireName}
               className="px-4 py-3 sm:px-5"

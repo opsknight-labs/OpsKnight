@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import MobileSquireMount from '@/components/squire/MobileSquireMount';
 import prisma from '@/lib/prisma';
 import UserAvatar from '@/components/UserAvatar';
 import Link from 'next/link';
@@ -114,6 +116,10 @@ export default async function MobilePostmortemDetailPage({ params }: PageProps) 
 
         {/* Could add Lessons Learned, Timeline, etc here */}
       </div>
+      {/* The assistant: optional and off by default; never delays or breaks the page. */}
+      <Suspense fallback={null}>
+        <MobileSquireMount />
+      </Suspense>
     </div>
   );
 }

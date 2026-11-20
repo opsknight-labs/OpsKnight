@@ -309,7 +309,7 @@ test.describe.serial('AIOps overview', () => {
       ['Speed', 'View incidents', '/incidents'],
       ['Alert quality', 'View services', '/services'],
       ['Changes', 'View changes', '/changes'],
-      ['Outcomes', 'Open analytics', '/analytics'],
+      ['Outcomes', 'Open analytics', '/insights'],
       ['Lane health', 'Open Intelligence settings', '/settings/intelligence'],
     ] as const)
       await expect(

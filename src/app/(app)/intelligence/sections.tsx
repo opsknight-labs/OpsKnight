@@ -174,7 +174,7 @@ export async function OutcomesSection({ scope, range }: SectionProps) {
   return (
     <OverviewSection
       id="overview-outcomes"
-      drilldown={{ href: '/analytics', label: 'Open analytics' }}
+      drilldown={{ href: '/insights', label: 'Open analytics' }}
       title={SECTION_TITLES.outcomes}
       description="Mean time to acknowledge and resolve for incidents created in this window, compared with the window before it."
       className="lg:col-span-2"

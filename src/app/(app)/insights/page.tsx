@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { BarChart3, Download } from 'lucide-react';
+import AnalyticsAsk from '@/components/analytics/AnalyticsAsk';
 import AnalyticsFilters from '@/components/analytics/AnalyticsFilters';
 import AnalyticsFreshness from '@/components/analytics/AnalyticsFreshness';
 import AnalyticsViews from '@/components/analytics/AnalyticsViews';
@@ -31,6 +32,7 @@ import {
 } from '@/lib/analytics';
 import { getDefaultAnalyticsViewQuery, listAnalyticsViews } from '@/lib/analytics/views';
 import { getAuthOptions } from '@/lib/auth';
+import { opsHelpersOn } from '@/lib/intelligence/helpers/on-demand';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   dashboardUserReadWhere,
@@ -72,7 +74,7 @@ export default async function AnalyticsPage({
   const params = parseAnalyticsParams(raw);
   const email = session?.user?.email ?? null;
 
-  const [user, accessContext, teams, services, users, views] = await Promise.all([
+  const [user, accessContext, teams, services, users, views, helpersOn] = await Promise.all([
     email ? prisma.user.findUnique({ where: { email }, select: { timeZone: true } }) : null,
     resolveAccessContext(actor),
     prisma.team.findMany({
@@ -96,6 +98,8 @@ export default async function AnalyticsPage({
       take: OPTION_LIMIT,
     }),
     listAnalyticsViews(actor),
+    // The plain-words box sits behind the small-helpers switch (off by default).
+    opsHelpersOn().catch(() => false),
   ]);
 
   const context = await createAnalyticsContext(actor, params, getUserTimeZone(user ?? undefined));
@@ -125,6 +129,8 @@ export default async function AnalyticsPage({
           ) : undefined
         }
       />
+
+      {helpersOn && <AnalyticsAsk />}
 
       <AnalyticsFilters
         teams={teams}

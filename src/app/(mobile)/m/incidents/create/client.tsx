@@ -17,6 +17,7 @@ import { readCache, writeCache } from '@/lib/mobile-cache';
 import { removeMobileCacheEntry } from '@/lib/mobile-cache-status';
 import { ClientTimeoutError, fetchWithTimeout } from '@/lib/client-timeout';
 import { appRoutes } from '@/lib/app-routes';
+import CreateIncidentSuggestions from '@/components/incident/CreateIncidentSuggestions';
 
 type Service = {
   id: string;
@@ -105,6 +106,7 @@ export default function MobileCreateIncidentClient({
   const submissionRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(null);
 
   const selectedService = services.find(service => service.id === selectedServiceId);
+  const selectableServiceIds = useMemo(() => new Set(services.map(s => s.id)), [services]);
   const selectedTemplate = templates.find(template => template.id === selectedTemplateId);
   const normalizedPriority = normalizeIncidentPriority(priority);
   const selectedPriorityDefinition = normalizedPriority
@@ -423,6 +425,16 @@ export default function MobileCreateIncidentClient({
               !title.trim() && error && 'border-destructive ring-1 ring-destructive/40'
             )}
             maxLength={500}
+          />
+          <CreateIncidentSuggestions
+            title={title}
+            serviceId={selectedServiceId}
+            urgency={urgency}
+            getDescription={() => description}
+            selectableServiceIds={selectableServiceIds}
+            onPickService={handleServiceChange}
+            onPickUrgency={setUrgency}
+            incidentHrefBase="/m/incidents"
           />
         </div>
         <div className="space-y-2">
