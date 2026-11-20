@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import UserAvatar from '@/components/UserAvatar';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import MobileCard from '@/components/mobile/MobileCard';
@@ -42,7 +43,7 @@ export default async function MobilePostmortemDetailPage({ params }: PageProps) 
           resolvedAt: true,
         },
       },
-      createdBy: { select: { name: true, email: true } },
+      createdBy: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
     },
   });
 
@@ -75,8 +76,19 @@ export default async function MobilePostmortemDetailPage({ params }: PageProps) 
           <h1 className="text-lg font-bold text-[color:var(--text-primary)]">
             Postmortem: {pm.incident.title}
           </h1>
-          <div className="text-xs text-[color:var(--text-muted)]">
-            Author: {pm.createdBy?.name || pm.createdBy?.email || 'Deleted user'}
+          <div className="flex items-center gap-1.5 text-xs text-[color:var(--text-muted)]">
+            Author:
+            {pm.createdBy && (
+              <UserAvatar
+                userId={pm.createdBy.id}
+                avatarUrl={pm.createdBy.avatarUrl}
+                name={pm.createdBy.name || pm.createdBy.email}
+                gender={pm.createdBy.gender}
+                size="xs"
+                aria-hidden
+              />
+            )}
+            {pm.createdBy?.name || pm.createdBy?.email || 'Deleted user'}
           </div>
         </div>
       </div>

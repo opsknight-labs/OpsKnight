@@ -1,8 +1,7 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { MobileAvatar } from '@/components/mobile/MobileUtils';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft } from 'lucide-react';
 import { activeIncidentStatuses } from '@/lib/incident-status';
@@ -90,11 +89,13 @@ export default async function MobileTeamDetailPage({ params }: PageProps) {
             {team.members.map(member => (
               <MobileCard key={member.id} padding="sm">
                 <div className="flex items-center gap-3">
-                  <MobileAvatar
+                  <UserAvatar
+                    userId={member.user.id}
+                    avatarUrl={member.user.avatarUrl}
                     name={member.user.name || member.user.email}
-                    src={
-                      member.user.avatarUrl || getDefaultAvatar(member.user.gender, member.user.id)
-                    }
+                    gender={member.user.gender}
+                    size="sm"
+                    aria-hidden
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-[color:var(--text-primary)]">

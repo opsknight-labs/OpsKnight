@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { AlertTriangle, Users } from 'lucide-react';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { toneClasses } from '@/components/patterns';
 import { cn } from '@/lib/utils';
 
@@ -73,11 +72,14 @@ export function TeamLead({
   return (
     <span id={id} className={cn('flex min-w-0 items-center gap-1.5 text-xs', className)}>
       <span aria-hidden="true" className="inline-flex">
-        <DirectUserAvatar
-          avatarUrl={lead.avatarUrl || getDefaultAvatar(lead.gender, lead.id || lead.name)}
+        <UserAvatar
+          userId={lead.id || lead.name}
+          avatarUrl={lead.avatarUrl}
+          gender={lead.gender}
           name={lead.name}
           size="xs"
           className="h-5 w-5"
+          aria-hidden
         />
       </span>
       <span className="truncate font-medium text-foreground">{lead.name}</span>
@@ -134,19 +136,18 @@ export default function TeamDirectoryCard({ team }: TeamDirectoryCardProps) {
         {visibleMembers.length > 0 && (
           <span aria-hidden="true" className="flex shrink-0 items-center -space-x-1.5">
             {visibleMembers.map(member => (
-              <DirectUserAvatar
+              <UserAvatar
                 key={member.userId}
-                avatarUrl={
-                  member.user.avatarUrl ||
-                  getDefaultAvatar(member.user.gender, member.user.id || member.userId)
-                }
+                userId={member.user.id || member.userId}
+                avatarUrl={member.user.avatarUrl}
+                gender={member.user.gender}
                 name={member.user.name}
                 size="xs"
                 className="h-5 w-5 rounded-full ring-2 ring-card"
               />
             ))}
             {hiddenMembers > 0 && (
-              <span className="relative inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
+              <span className="relative inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1 text-2xs font-semibold text-muted-foreground ring-2 ring-card">
                 +{hiddenMembers}
               </span>
             )}

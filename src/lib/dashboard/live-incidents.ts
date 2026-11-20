@@ -116,7 +116,7 @@ const liveSetSelect = {
     },
   },
   team: { select: { id: true, name: true } },
-  assignee: { select: { id: true, name: true, email: true } },
+  assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
 } satisfies Prisma.IncidentSelect;
 
 const liveDetailSelect = {
@@ -310,7 +310,12 @@ function toSetRow(row: LiveRow, sensitive: boolean, counts?: RowCounts): LiveSet
     },
     team: owner ? { id: owner.id, name: owner.name } : null,
     assignee: visible.assignee
-      ? { id: visible.assignee.id, name: visible.assignee.name || visible.assignee.email }
+      ? {
+          id: visible.assignee.id,
+          name: visible.assignee.name || visible.assignee.email,
+          avatarUrl: visible.assignee.avatarUrl,
+          gender: visible.assignee.gender,
+        }
       : null,
   };
 }

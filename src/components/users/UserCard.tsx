@@ -821,6 +821,7 @@ export function UserCard({ selected, onSelect, ...props }: UserCardProps) {
             gender={user.gender}
             size="sm"
             className="rounded-full ring-1 ring-border/80"
+            aria-hidden
           />
         </Link>
         <div className="min-w-0 flex-1">

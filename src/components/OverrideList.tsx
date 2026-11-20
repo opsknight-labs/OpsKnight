@@ -6,9 +6,8 @@ import { useToast } from '@/hooks/use-product-notification';
 import type { ScheduleActionState } from '@/lib/schedule-action-errors';
 import type { OverrideStatus } from '@/lib/schedules/detail-view-model';
 import { formatDateTime } from '@/lib/timezone';
-import { getDefaultAvatar } from '@/lib/avatar';
 import ConfirmDialog from './ConfirmDialog';
-import { DirectUserAvatar } from './UserAvatar';
+import UserAvatar from './UserAvatar';
 import { Card } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -102,14 +101,14 @@ export default function OverrideList({
               )}
             >
               <div className="flex items-start gap-3">
-                <DirectUserAvatar
-                  avatarUrl={
-                    override.user.avatarUrl ||
-                    getDefaultAvatar(override.user.gender, override.userId)
-                  }
+                <UserAvatar
+                  userId={override.userId}
+                  avatarUrl={override.user.avatarUrl}
+                  gender={override.user.gender}
                   name={override.user.name}
                   size="sm"
                   className="h-9 w-9"
+                  aria-hidden
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">

@@ -1,5 +1,6 @@
 'use client';
 
+import UserAvatar from '@/components/UserAvatar';
 import React, { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -11,7 +12,6 @@ import {
   Globe,
   Lock,
   Server,
-  User,
   Clock,
   MoreHorizontal,
   Trash2,
@@ -59,7 +59,12 @@ export type IncidentTemplateItem = {
   createdById: string | null;
   isPublic: boolean;
   createdAt: Date | string;
-  createdBy?: { id: string; name: string } | null;
+  createdBy?: {
+    id: string;
+    name: string;
+    avatarUrl?: string | null;
+    gender?: string | null;
+  } | null;
   defaultService?: { id: string; name: string } | null;
 };
 
@@ -540,8 +545,15 @@ export default function TemplatesListClient({
                           )}
 
                           {template.createdBy && (
-                            <div className="flex items-center gap-1 text-[11px]">
-                              <User className="h-3 w-3 text-muted-foreground/70" />
+                            <div className="flex items-center gap-1 text-2xs">
+                              <UserAvatar
+                                userId={template.createdBy.id}
+                                avatarUrl={template.createdBy.avatarUrl}
+                                name={template.createdBy.name}
+                                gender={template.createdBy.gender}
+                                size="xs"
+                                aria-hidden
+                              />
                               <span>{template.createdBy.name}</span>
                             </div>
                           )}

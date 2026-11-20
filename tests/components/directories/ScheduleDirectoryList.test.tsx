@@ -46,7 +46,7 @@ describe('ScheduleDirectoryList', () => {
       '/teams'
     );
     expect(screen.getByRole('button', { name: 'How schedules work' })).toBeTruthy();
-    expect(screen.getByText(/Next: Bob/)).toBeTruthy();
+    expect(screen.getByText('Next:').parentElement?.textContent).toMatch(/^Next:.*Bob/);
   });
 
   it('teaches the lifecycle in the empty state', () => {

@@ -3,11 +3,10 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ChevronRight, Users } from 'lucide-react';
 import { appRoutes } from '@/lib/app-routes';
-import { MobileAvatar } from '@/components/mobile/MobileUtils';
+import UserAvatar from '@/components/UserAvatar';
 import { MobileSearchWithParams } from '@/components/mobile/MobileSearchParams';
 import EmptyState from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/shadcn/card';
-import { getDefaultAvatar } from '@/lib/avatar';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { assertCanListUsers } from '@/lib/rbac';
 import { requirePageAccess } from '@/lib/access/server';
@@ -77,10 +76,13 @@ export default async function MobileUsersPage({
                 index > 0 ? 'border-t border-border/70' : ''
               }`}
             >
-              <MobileAvatar
+              <UserAvatar
+                userId={user.id}
+                avatarUrl={user.avatarUrl}
                 name={user.name || user.email}
-                src={user.avatarUrl || getDefaultAvatar(user.gender, user.id)}
+                gender={user.gender}
                 size="sm"
+                aria-hidden
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-semibold text-foreground">

@@ -10,8 +10,7 @@ import ScheduleCard, {
 } from '@/components/ScheduleCard';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { Calendar, CheckCircle2, AlertTriangle, Loader2, Network, Users } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/service/Pagination';
@@ -67,11 +66,13 @@ type ScheduleDirectoryListProps = {
 function Responder({ responder }: { responder: ScheduleResponder }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <DirectUserAvatar
-        avatarUrl={responder.avatarUrl || getDefaultAvatar(responder.gender, responder.userId)}
+      <UserAvatar
+        userId={responder.userId}
+        avatarUrl={responder.avatarUrl}
         name={responder.name}
+        gender={responder.gender}
         size="xs"
-        className="h-5 w-5 shrink-0"
+        aria-hidden
       />
       <span className="truncate">{responder.name}</span>
     </span>
@@ -129,7 +130,7 @@ const columns: DirectoryColumn<ScheduleItem>[] = [
           <RelativeTime
             date={s.next.start}
             format="long"
-            className="pl-7 text-xs text-muted-foreground"
+            className="pl-8 text-xs text-muted-foreground"
           />
         </span>
       ) : (
@@ -178,8 +179,11 @@ function mobileRow(s: ScheduleItem) {
         <span className="truncate">{s.timeZone}</span>
       </div>
       {s.next && (
-        <div className="truncate text-xs text-muted-foreground">
-          Next: {s.next.name} · <RelativeTime date={s.next.start} format="long" />
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="shrink-0">Next:</span>
+          <Responder responder={s.next} />
+          <span aria-hidden="true">·</span>
+          <RelativeTime date={s.next.start} format="long" className="shrink-0" />
         </div>
       )}
     </div>

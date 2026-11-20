@@ -4,8 +4,7 @@ import { useMemo, useState } from 'react';
 import { CalendarDays, Clock, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import {
   formatDateTime,
   formatDateForInput,
@@ -104,14 +103,14 @@ export default function ScheduleCoveragePreview({ effectiveShifts, timeZone, max
                     className="flex items-center justify-between gap-2 px-3 py-2 text-xs transition-colors hover:bg-muted/20"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <DirectUserAvatar
-                        avatarUrl={
-                          shift.userAvatar ||
-                          getDefaultAvatar(shift.userGender, shift.userId || shift.userName)
-                        }
+                      <UserAvatar
+                        userId={shift.userId || shift.userName}
+                        avatarUrl={shift.userAvatar}
+                        gender={shift.userGender}
                         name={shift.userName}
                         size="xs"
                         className="h-5 w-5 shrink-0"
+                        aria-hidden
                       />
                       <div className="min-w-0">
                         <span className="font-semibold text-foreground truncate block text-xs">

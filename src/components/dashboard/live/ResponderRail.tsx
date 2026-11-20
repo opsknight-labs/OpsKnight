@@ -217,6 +217,7 @@ export function OnCallCard() {
                     avatarUrl={shift.user.avatarUrl}
                     gender={shift.user.gender}
                     size="xs"
+                    aria-hidden
                   />
                   <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card" />
                 </span>

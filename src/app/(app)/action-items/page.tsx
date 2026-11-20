@@ -147,6 +147,8 @@ export default async function ActionItemsPage({
         id: true,
         name: true,
         email: true,
+        avatarUrl: true,
+        gender: true,
       },
     },
     postmortem: {
@@ -204,6 +206,8 @@ export default async function ActionItemsPage({
     description: record.description ?? '',
     owner: record.ownerId ?? undefined,
     ownerName: record.owner?.name ?? undefined,
+    ownerAvatarUrl: record.owner?.avatarUrl,
+    ownerGender: record.owner?.gender,
     dueDate: formatActionItemDueDate(record.dueDate),
     status: record.status,
     priority: record.priority,

@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
-import { getDefaultAvatar } from '@/lib/avatar';
 import StatusBadge from '../incident/StatusBadge';
 import PriorityBadge from '@/components/incident/PriorityBadge';
 import EscalationStatusBadge from '@/components/incident/EscalationStatusBadge';
@@ -14,7 +13,7 @@ import ResolveIncidentModal, {
   type ResolvingIncidentData,
 } from '@/components/incident/ResolveIncidentModal';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import {
   Clock,
   CheckCircle2,
@@ -295,21 +294,15 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                 >
                   {/* Assignee / Team / Unassigned */}
                   {incident.assignee ? (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/40 border border-border/70 text-[11px] text-foreground font-medium">
-                      <Avatar className="h-3.5 w-3.5">
-                        <AvatarImage
-                          src={
-                            incident.assignee.avatarUrl ||
-                            getDefaultAvatar(
-                              incident.assignee.gender,
-                              incident.assignee.id || incident.assignee.name
-                            )
-                          }
-                        />
-                        <AvatarFallback className="text-[8px]">
-                          {incident.assignee.name.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                    <div className="flex items-center gap-1.5 rounded-full bg-muted/40 border border-border/70 py-0.5 pl-0.5 pr-2 text-2xs text-foreground font-medium">
+                      <UserAvatar
+                        userId={incident.assignee.id || incident.assignee.name}
+                        avatarUrl={incident.assignee.avatarUrl}
+                        name={incident.assignee.name}
+                        gender={incident.assignee.gender}
+                        size="xs"
+                        aria-hidden
+                      />
                       <span className="max-w-[100px] truncate">{incident.assignee.name}</span>
                     </div>
                   ) : incident.team ? (

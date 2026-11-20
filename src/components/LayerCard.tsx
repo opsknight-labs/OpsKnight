@@ -559,6 +559,7 @@ export default function LayerCard({
                           avatarUrl={layerUser.user.avatarUrl}
                           size="xs"
                           className="h-6 w-6 shrink-0"
+                          aria-hidden
                         />
                         <span className="truncate text-sm font-medium text-foreground">
                           {layerUser.user.name}

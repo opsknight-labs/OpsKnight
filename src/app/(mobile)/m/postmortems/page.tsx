@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import UserAvatar from '@/components/UserAvatar';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ChevronRight, FileText } from 'lucide-react';
@@ -34,7 +35,7 @@ export default async function MobilePostmortemsPage() {
           service: { select: { name: true } },
         },
       },
-      createdBy: { select: { name: true, email: true } },
+      createdBy: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
     },
     take: 20,
   });
@@ -81,9 +82,21 @@ export default async function MobilePostmortemsPage() {
                   <h2 className="line-clamp-2 text-[12px] font-semibold leading-snug text-foreground">
                     {postmortem.incident.title}
                   </h2>
-                  <p className="mt-1 truncate text-[10px] text-muted-foreground">
-                    {postmortem.incident.service.name} ·{' '}
-                    {postmortem.createdBy?.name || postmortem.createdBy?.email || 'Deleted user'}
+                  <p className="mt-1 flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
+                    <span className="truncate">{postmortem.incident.service.name} ·</span>
+                    {postmortem.createdBy && (
+                      <UserAvatar
+                        userId={postmortem.createdBy.id}
+                        avatarUrl={postmortem.createdBy.avatarUrl}
+                        name={postmortem.createdBy.name || postmortem.createdBy.email}
+                        gender={postmortem.createdBy.gender}
+                        size="xs"
+                        aria-hidden
+                      />
+                    )}
+                    <span className="truncate">
+                      {postmortem.createdBy?.name || postmortem.createdBy?.email || 'Deleted user'}
+                    </span>
                   </p>
                 </div>
                 <ChevronRight

@@ -691,6 +691,7 @@ export default function Sidebar({
                   size="sm"
                   className="border-white/10 h-8 w-8 shrink-0"
                   fallbackClassName="bg-indigo-500/20 text-indigo-200 text-xs"
+                  aria-hidden
                 />
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
                   <div className="text-[13px] font-semibold text-white truncate">

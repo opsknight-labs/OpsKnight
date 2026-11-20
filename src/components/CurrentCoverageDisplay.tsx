@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/timezone';
-import { getDefaultAvatar } from '@/lib/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
-import { DirectUserAvatar } from '@/components/UserAvatar';
+import UserAvatar from '@/components/UserAvatar';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { Clock, ShieldCheck, TriangleAlert, UserRoundCog } from 'lucide-react';
@@ -109,17 +108,14 @@ export default function CurrentCoverageDisplay({
           {hasCoverage ? (
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <DirectUserAvatar
-                  avatarUrl={
-                    currentCoverage[0].userAvatar ||
-                    getDefaultAvatar(
-                      currentCoverage[0].userGender,
-                      currentCoverage[0].userId || currentCoverage[0].userName
-                    )
-                  }
+                <UserAvatar
+                  userId={currentCoverage[0].userId || currentCoverage[0].userName}
+                  avatarUrl={currentCoverage[0].userAvatar}
+                  gender={currentCoverage[0].userGender}
                   name={currentCoverage[0].userName}
                   size="sm"
                   className="h-9 w-9 shrink-0 ring-1.5 ring-primary/20"
+                  aria-hidden
                 />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">

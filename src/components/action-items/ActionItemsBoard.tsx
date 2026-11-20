@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/shadcn/dropdown-menu';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { cn } from '@/lib/utils';
+import UserAvatar from '@/components/UserAvatar';
 import type { ActionItem } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
 import type { JiraIssueReference } from '@/lib/jira-references';
@@ -71,6 +72,8 @@ import {
 
 export interface BoardActionItem extends ActionItem {
   ownerName?: string;
+  ownerAvatarUrl?: string | null;
+  ownerGender?: string | null;
   postmortemId: string;
   postmortemTitle: string;
   incidentId: string;
@@ -179,6 +182,33 @@ function getOwnerName(
   if (ownerName) return ownerName;
   if (!ownerId) return 'Unassigned';
   return users.find(user => user.id === ownerId)?.name || 'Unknown';
+}
+
+/** Owner name with avatar; plain text when nobody owns the item. */
+function OwnerLabel({
+  item,
+  users,
+  className,
+}: {
+  item: BoardActionItem;
+  users: Array<{ id: string; name: string; email: string }>;
+  className?: string;
+}) {
+  const name = getOwnerName(item.owner, users, item.ownerName);
+  if (!item.owner) return <span className={cn('truncate', className)}>{name}</span>;
+  return (
+    <span className={cn('flex min-w-0 items-center gap-1.5', className)}>
+      <UserAvatar
+        userId={item.owner}
+        avatarUrl={item.ownerAvatarUrl}
+        name={name}
+        gender={item.ownerGender}
+        size="xs"
+        aria-hidden
+      />
+      <span className="truncate">{name}</span>
+    </span>
+  );
 }
 
 /** Status changes offered in every item menu (board card and table row). */
@@ -388,9 +418,11 @@ function ActionItemCard({
 
       <div className="pt-1.5 border-t border-border flex flex-col gap-0.5 text-[11px] text-muted-foreground">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-medium text-foreground truncate max-w-[150px]">
-            👤 {getOwnerName(item.owner, users, item.ownerName)}
-          </span>
+          <OwnerLabel
+            item={item}
+            users={users}
+            className="max-w-[150px] font-medium text-foreground"
+          />
           <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono text-muted-foreground truncate max-w-[100px]">
             {item.serviceName}
           </span>
@@ -749,9 +781,7 @@ export default function ActionItemsBoard({
       header: 'Owner',
       className: 'hidden w-36 md:table-cell',
       cell: item => (
-        <span className="block max-w-36 truncate text-xs text-foreground">
-          {getOwnerName(item.owner, users, item.ownerName)}
-        </span>
+        <OwnerLabel item={item} users={users} className="max-w-36 text-xs text-foreground" />
       ),
     },
     {
@@ -1033,7 +1063,7 @@ export default function ActionItemsBoard({
                 <DirectoryPrimaryCell
                   href={`/postmortems/${item.incidentId}`}
                   title={item.title}
-                  subtitle={getOwnerName(item.owner, users, item.ownerName)}
+                  subtitle={<OwnerLabel item={item} users={users} className="mt-0.5" />}
                 />
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={statusConfigFor(item).badgeVariant} size="xs">

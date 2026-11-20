@@ -21,8 +21,7 @@ import {
   CardDescription,
   CardContent,
 } from '@/components/ui/shadcn/card';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { formatDateTime } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 
@@ -258,14 +257,14 @@ export default function ScheduleActivityFeed({
                       <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
                         {log.actor ? (
                           <div className="flex items-center gap-1.5 font-medium text-foreground/80">
-                            <DirectUserAvatar
-                              avatarUrl={
-                                log.actor.avatarUrl ||
-                                getDefaultAvatar(log.actor.gender, log.actor.id || log.actor.name)
-                              }
+                            <UserAvatar
+                              userId={log.actor.id || log.actor.name}
+                              avatarUrl={log.actor.avatarUrl}
+                              gender={log.actor.gender}
                               name={log.actor.name}
                               size="xs"
                               className="h-3.5 w-3.5"
+                              aria-hidden
                             />
                             <span>{actorName}</span>
                           </div>

@@ -33,14 +33,7 @@ export type ActivityTimelineProps = {
 function formatActionBadge(action: string): {
   label: string;
   variant:
-    | 'default'
-    | 'secondary'
-    | 'outline'
-    | 'danger'
-    | 'success'
-    | 'warning'
-    | 'neutral'
-    | 'info';
+    'default' | 'secondary' | 'outline' | 'danger' | 'success' | 'warning' | 'neutral' | 'info';
 } {
   const normalized = action.toLowerCase();
   if (normalized.includes('create') || normalized.includes('add')) {
@@ -126,6 +119,7 @@ export default function ActivityTimeline({
                       avatarUrl={item.actor.avatarUrl}
                       gender={item.actor.gender}
                       size="sm"
+                      aria-hidden
                     />
                   ) : (
                     <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-xs font-bold">
