@@ -60,6 +60,10 @@ action items, and ownership. Before deleting a team, reassign services,
 incidents, escalation targets, dashboards, and integrations. SCIM group DELETE
 can also delete the mapped team; review that policy first.
 
+OpsKnight refuses to delete a team that still has unresolved incidents or is a
+target in an escalation policy step. Resolve or reassign those incidents and
+remove the team from escalation steps, then delete it.
+
 ## Troubleshooting
 
 - **Member cannot see a service:** verify both team assignment and system role.

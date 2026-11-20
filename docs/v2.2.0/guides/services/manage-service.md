@@ -42,6 +42,11 @@ Open **Services**. Select an existing service or choose **Create service**.
 4. Open **Notifications** and configure provider destinations and routing.
 5. Open **Integrations** or **Webhooks** and add only sources that belong to the
    service; send a synthetic test from each source.
+   Outgoing webhooks must use HTTPS by default; the URL is checked when you save
+   and again on every delivery, and private or internal network addresses are
+   always refused. If you post to an internal tool without TLS, an administrator
+   can allow `http://` URLs under **System Settings → Application URL → Outgoing
+   webhooks** (the change is audited).
 6. Configure Slack/Teams, Jira, status-page participation, and incident defaults
    where required by the operating model.
 7. Save, reload, and open the service overview.
