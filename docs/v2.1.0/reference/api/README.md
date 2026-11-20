@@ -57,7 +57,7 @@ public route has a full success/authorization/validation/concurrency matrix.
 - `POST /api/admin/war-rooms/[warRoomId]/repair` — `src/app/api/admin/war-rooms/[warRoomId]/repair/route.ts`
 - `GET /api/admin/war-rooms/[warRoomId]` — `src/app/api/admin/war-rooms/[warRoomId]/route.ts`
 - `GET /api/admin/war-rooms` — `src/app/api/admin/war-rooms/route.ts`
-- `GET /api/analytics/export` — `src/app/api/insights/export/route.ts`
+- `GET /api/analytics/export` — `src/app/api/analytics/export/route.ts`
 - `GET, POST /api/auth/[...nextauth]` — `src/app/api/auth/[...nextauth]/route.ts`
 - `GET /api/auth/control/diagnostics` — `src/app/api/auth/control/diagnostics/route.ts`
 - `GET, POST /api/auth/control` — `src/app/api/auth/control/route.ts`
