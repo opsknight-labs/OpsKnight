@@ -89,6 +89,16 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     description: 'Encrypted result of a confirmed action, visible only to its authorized owner',
   },
   {
+    id: 'squire.mcp-investigation',
+    model: 'SquireMcpInvestigation',
+    field: 'payloadEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'MCP Squire Investigation',
+    description:
+      'Steps and answer of a Squire investigation started over MCP, readable by its starter for one hour',
+  },
+  {
     id: 'squire.conversation-title',
     model: 'SquireConversation',
     field: 'titleEncrypted',

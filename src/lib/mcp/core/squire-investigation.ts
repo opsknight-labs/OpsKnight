@@ -1,8 +1,8 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import { decrypt, encrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import type { SquireInvestigationStep } from '@/lib/intelligence/squire/contract';
@@ -73,12 +73,19 @@ export async function startSquireInvestigationForMcp(
   };
 }
 
+/** What is stored, encrypted: model-written step titles and the answer can quote incident data. */
+interface Payload {
+  progress: SquireInvestigationStep[];
+  result?: ReturnType<typeof squireAnswerForMcp>;
+}
+const seal = (payload: Payload) => encrypt(JSON.stringify(payload));
+
 async function runInvestigation(
   id: string,
   turn: Awaited<ReturnType<typeof prepareSquireMcpTurn>>
 ) {
   const steps = new Map<number, SquireInvestigationStep>();
-  const progress = () => [...steps.values()] as unknown as Prisma.InputJsonValue;
+  const progress = () => [...steps.values()];
   // Progress writes run one at a time, in order; a failed write only delays the progress shown.
   let saving: Promise<unknown> = Promise.resolve();
   try {
@@ -90,10 +97,10 @@ async function runInvestigation(
         steps.set(event.step.index, event.step);
         const snapshot = progress();
         saving = saving
-          .then(() =>
+          .then(async () =>
             prisma.squireMcpInvestigation.updateMany({
               where: { id, status: 'RUNNING' },
-              data: { progress: snapshot },
+              data: { payloadEncrypted: await seal({ progress: snapshot }) },
             })
           )
           .catch(() => undefined);
@@ -103,11 +110,17 @@ async function runInvestigation(
     await prisma.squireMcpInvestigation.updateMany({
       where: { id },
       data: answer.error
-        ? { status: 'FAILED', error: answer.error.slice(0, 500), progress: progress() }
+        ? {
+            status: 'FAILED',
+            error: answer.error.slice(0, 500),
+            payloadEncrypted: await seal({ progress: progress() }),
+          }
         : {
             status: 'COMPLETED',
-            result: squireAnswerForMcp(answer) as Prisma.InputJsonValue,
-            progress: progress(),
+            payloadEncrypted: await seal({
+              progress: progress(),
+              result: squireAnswerForMcp(answer),
+            }),
           },
     });
   } catch (error) {
@@ -140,22 +153,22 @@ export async function getSquireInvestigationForMcp(
     'MCP_TASK_NOT_FOUND',
     404
   );
+  const payload: Payload = row.payloadEncrypted
+    ? (JSON.parse(await decrypt(row.payloadEncrypted)) as Payload)
+    : { progress: [] };
   const lost = row.status === 'RUNNING' && row.createdAt.getTime() < now.getTime() - STALE_MS;
   const status = lost ? 'failed' : row.status.toLowerCase();
-  const steps = (Array.isArray(row.progress)
-    ? row.progress
-    : []) as unknown as SquireInvestigationStep[];
   return {
     investigationId: row.id,
     status,
-    progress: steps.map(step => ({
+    progress: payload.progress.map(step => ({
       // Step titles are written by the planner model from what it read: business text.
       title: projectMcpData(step.title),
       status: step.status,
       reads: step.calls.map(call => call.label),
     })),
     ...(status === 'running' ? { pollIntervalMs: SQUIRE_INVESTIGATION_POLL_MS } : {}),
-    ...(status === 'completed' && row.result ? { result: row.result } : {}),
+    ...(status === 'completed' && payload.result ? { result: payload.result } : {}),
     ...(status === 'failed' ? { error: lost ? LOST : (row.error ?? LOST) } : {}),
     expiresAt: row.expiresAt.toISOString(),
   };

@@ -6497,19 +6497,17 @@ model McpTask {
 // the same connection, can read it; it is unreadable after expiresAt and purged by MCP maintenance.
 model SquireMcpInvestigation {
   // Unpredictable server-generated id.
-  id        String   @id
-  actorId   String
-  grantId   String
+  id               String   @id
+  actorId          String
+  grantId          String
   // RUNNING, COMPLETED or FAILED.
-  status    String   @default("RUNNING")
-  // The investigation steps seen so far (titles and which reads ran).
-  progress  Json     @default("[]")
-  // The finished answer, already projected for MCP.
-  result    Json?
-  error     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  expiresAt DateTime
+  status           String   @default("RUNNING")
+  // Encrypted JSON { progress, result }: the steps seen so far and, once done, the answer for MCP.
+  payloadEncrypted String?
+  error            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  expiresAt        DateTime
 
   @@index([actorId, status, createdAt])
   @@index([expiresAt])

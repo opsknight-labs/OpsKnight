@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { randomBytes } from 'node:crypto';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import type { SquireEvent } from '@/lib/intelligence/squire/contract';
@@ -53,6 +54,7 @@ beforeAll(async () => {
   const url = new URL(process.env.DATABASE_URL ?? '');
   if (!url.pathname.endsWith('_test') || !['localhost', '127.0.0.1'].includes(url.hostname))
     throw new Error('Owned local test database required');
+  process.env.ENCRYPTION_KEY ??= randomBytes(32).toString('hex');
   await resetDatabase();
 }, 60000);
 
@@ -125,6 +127,13 @@ describe('MCP Squire investigation (start and poll)', () => {
       answer: 'A deploy at 10:02 preceded the errors.',
       suggestedActions: [],
     });
+    // Model-written steps and the answer are stored encrypted.
+    const row = await db.squireMcpInvestigation.findUniqueOrThrow({
+      where: { id: id.investigationId },
+    });
+    expect(row.payloadEncrypted).toBeTruthy();
+    expect(row.payloadEncrypted).not.toContain('deploy');
+    expect(row.payloadEncrypted).not.toContain('Check recent changes');
   });
 
   it('is readable only by the person who started it, on the same connection', async () => {
