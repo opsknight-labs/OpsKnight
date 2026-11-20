@@ -694,7 +694,7 @@ export default function DashboardHistorySection() {
             ))}
           </div>
           <Link
-            href={`/analytics?range=${query.range}`}
+            href={`/analytics?range=${query.range}d`}
             className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
           >
             Full analytics

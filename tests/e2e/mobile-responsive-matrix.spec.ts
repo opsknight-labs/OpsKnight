@@ -238,8 +238,8 @@ test.describe('mobile responsive visual integrity matrix', () => {
       await page.goto('/m/postmortems');
       await assertResponsiveIntegrity(page);
 
-      // 15. Analytics
-      await page.goto('/m/analytics');
+      // 15. Analytics (responsive desktop page; no /m twin)
+      await page.goto('/analytics');
       await assertResponsiveIntegrity(page);
     });
   }

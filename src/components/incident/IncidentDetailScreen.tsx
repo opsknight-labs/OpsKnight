@@ -391,7 +391,6 @@ export default async function IncidentDetailScreen({
 
   const quickLinksContent = (
     <IncidentQuickLinksCard
-      incidentId={incident.id}
       incidentPolicy={incidentPolicy}
       pinnedPolicy={decision?.mode === 'LIVE'}
       noEscalation={decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION'}

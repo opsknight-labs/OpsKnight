@@ -439,8 +439,7 @@ the absolute time + timezone (the user's, from `TimezoneContext`) in `title`.
 `EmptyState` (`patterns/EmptyState.tsx`): `icon`, `title` (one line), `description` (what this area is
 for), `primaryAction` (alias `action`), `secondaryAction`, `helpLink` (`{href, label}`; external links
 open in a new tab), `variant` `dashed|card|simple`, `size`, `headingLevel`. A filtered-empty state offers
-"Clear filters" as its action. Never just "No data". `ui/EmptyState` re-exports it and
-`analytics/EmptyState` delegates to it.
+"Clear filters" as its action. Never just "No data". `ui/EmptyState` re-exports it.
 
 ### ErrorState
 

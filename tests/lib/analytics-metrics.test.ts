@@ -5,7 +5,6 @@ import {
   buildStatusAges,
   calculateMtbfMs,
   calculatePercentile,
-  smoothSeries,
 } from '@/lib/analytics-metrics';
 
 describe('analytics-metrics utilities', () => {
@@ -116,12 +115,5 @@ describe('analytics-metrics utilities', () => {
     // so it belongs in the denominator as a breach rather than disappearing.
     expect(table[0].ackRate).toBe(50);
     expect(table[0].resolveRate).toBe(50);
-  });
-
-  it('smooths series with trailing window average', () => {
-    const values = [2, 4, 6, 8];
-    expect(smoothSeries(values, 1)).toEqual(values);
-    expect(smoothSeries(values, 2)).toEqual([2, 3, 5, 7]);
-    expect(smoothSeries(values, 3)).toEqual([2, 3, 4, 6]);
   });
 });

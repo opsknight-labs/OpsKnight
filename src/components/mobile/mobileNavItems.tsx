@@ -18,7 +18,6 @@ export const MOBILE_MORE_ROUTES = [
   '/m/teams',
   '/m/users',
   '/m/policies',
-  '/m/analytics',
   '/m/postmortems',
   '/m/status',
   '/m/help',

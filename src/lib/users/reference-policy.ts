@@ -57,6 +57,8 @@ export const USER_REFERENCE_POLICY = {
   avatar: { deactivate: 'KEEP', delete: 'CASCADE' },
   dashboards: { deactivate: 'REPORT', delete: 'BLOCK' },
   savedReports: { deactivate: 'KEEP', delete: 'CASCADE' },
+  analyticsViews: { deactivate: 'KEEP', delete: 'CASCADE' },
+  analyticsDigest: { deactivate: 'SUPPRESS', delete: 'CASCADE' },
   reportExports: { deactivate: 'KEEP', delete: 'CASCADE' },
   auditExports: { deactivate: 'REVOKE', delete: 'CASCADE' },
   assignedActionItems: { deactivate: 'REPORT', delete: 'BLOCK' },

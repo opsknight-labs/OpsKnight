@@ -8,7 +8,7 @@ reader:
   status: READER_COMPLETE
   task: Filter, interpret, validate, and export Analytics results.
   evidence: [docs/v2.0.0/assets/analytics-overview.png]
-verification: { level: source, verified_at: 2026-10-02, evidence: [src/app/(app)/analytics/page.tsx, src/app/(app)/analytics/analytics-v2.css, src/lib/metric-contract.ts] }
+verification: { level: source, verified_at: 2026-10-02, evidence: [src/app/(app)/analytics/page.tsx, src/lib/analytics/definitions.ts, src/lib/metric-contract.ts] }
 ---
 
 # Filter and interpret Analytics

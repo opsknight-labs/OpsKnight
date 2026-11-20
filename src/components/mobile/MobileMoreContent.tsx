@@ -23,6 +23,7 @@ import MobileBiometricToggle from '@/components/mobile/MobileBiometricToggle';
 import { MobileAvatar } from '@/components/mobile/MobileUtils';
 import { useUserAvatarContextSafe } from '@/contexts/UserAvatarContext';
 import PwaInstallCard from '@/components/mobile/PwaInstallCard';
+import { appRoutes } from '@/lib/app-routes';
 import MobileSignOutButton from '@/components/mobile/MobileSignOutButton';
 import { Card } from '@/components/ui/shadcn/card';
 import { APP_VERSION } from '@/lib/constants';
@@ -76,9 +77,9 @@ const operations: NavigationItem[] = [
   },
   { href: '/m/status', label: 'System health', description: 'Operational status', icon: Signal },
   {
-    href: '/m/analytics',
+    href: appRoutes.analytics(),
     label: 'Analytics',
-    description: 'Responder performance and trends',
+    description: 'Response times, SLA, load and noise',
     icon: BarChart3,
   },
   {
