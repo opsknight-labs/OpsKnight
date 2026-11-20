@@ -14,7 +14,7 @@ verification:
   verified_at: 2026-09-29
   evidence:
     - tests/docs/journeys/incident-lifecycle.spec.ts
-    - src/components/incident/detail/IncidentStatusActions.tsx
+    - src/components/incident/detail/IncidentCommandBar.tsx
     - src/components/incident/detail/actions.ts
     - src/lib/incidents/lifecycle.ts
     - src/lib/incidents/operator-lifecycle.ts
