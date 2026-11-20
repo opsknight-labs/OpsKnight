@@ -161,7 +161,7 @@ function Body({ variant }: { variant: RunbookSkeletonVariant }) {
       return (
         <>
           <FilterBar />
-          <CardGrid />
+          <Rows count={8} />
         </>
       );
     case 'executions':
