@@ -6332,6 +6332,8 @@ model SquireConversation {
 // Basic-mode dialogue state when there is no saved conversation (history off), shared by every replica.
 // One row per person and incident context ('' for none); encrypted; short-lived and swept on write.
 model SquireDialogueState {
+  // Surrogate key so key-rotation migration can page through encrypted rows like every other target.
+  id             String   @id @default(cuid())
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   scopeKey       String
@@ -6339,7 +6341,7 @@ model SquireDialogueState {
   expiresAt      DateTime
   updatedAt      DateTime @updatedAt
 
-  @@id([userId, scopeKey])
+  @@unique([userId, scopeKey])
   @@index([expiresAt], map: "idx_squire_dialogue_state_expiry")
 }
 

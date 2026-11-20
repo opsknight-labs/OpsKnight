@@ -1,13 +1,16 @@
 -- Basic-mode dialogue state shared across replicas when no conversation is saved. New table only; expand-only.
 CREATE TABLE IF NOT EXISTS "SquireDialogueState" (
+    "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "scopeKey" TEXT NOT NULL,
     "stateEncrypted" TEXT NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "SquireDialogueState_pkey" PRIMARY KEY ("userId","scopeKey")
+    CONSTRAINT "SquireDialogueState_pkey" PRIMARY KEY ("id")
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS "SquireDialogueState_userId_scopeKey_key" ON "SquireDialogueState"("userId", "scopeKey");
 
 CREATE INDEX IF NOT EXISTS "idx_squire_dialogue_state_expiry" ON "SquireDialogueState"("expiresAt");
 
