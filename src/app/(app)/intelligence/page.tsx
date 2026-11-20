@@ -10,7 +10,6 @@ import {
 } from '@/lib/intelligence/overview';
 import WindowSelector from '@/components/intelligence/overview/WindowSelector';
 import { FeatureOff, SectionSkeleton } from '@/components/intelligence/overview/primitives';
-import InsightsInboxSection from '@/components/intelligence/insights/InsightsInboxSection';
 import {
   AttentionSection,
   ChangeSection,
@@ -80,14 +79,9 @@ export default async function IntelligenceOverviewPage({
         />
       )}
 
-      {/* No skeleton: the inbox is absent when empty, so a placeholder would only flash and vanish. */}
+      {/* Probes and operations insights in one ranked inbox. No skeleton: it is absent when empty. */}
       <Suspense fallback={null}>
         <AttentionSection actor={actor} />
-      </Suspense>
-
-      {/* Operations insights: renders nothing while the feature is off or there is nothing to say. */}
-      <Suspense fallback={null}>
-        <InsightsInboxSection actor={actor} />
       </Suspense>
 
       <div className="grid gap-4 lg:grid-cols-2" key={range.key}>

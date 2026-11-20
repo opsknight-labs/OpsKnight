@@ -7,6 +7,8 @@ import { getAiSettings } from '@/lib/intelligence/ai/settings';
 import { collectSquireTurn } from '@/lib/intelligence/squire/surfaces';
 import { executeSquireAction } from '@/lib/intelligence/squire/actions/execute';
 import { isChatConfirmableAction } from '@/lib/intelligence/squire/actions/catalog';
+import { redactSecrets } from '@/lib/intelligence/ai/redact';
+import type { SquireEvent, SquireRequest } from '@/lib/intelligence/squire/contract';
 import type { ChatSquireAnswer } from './render';
 
 /**
@@ -53,6 +55,87 @@ export async function isSquireChatOpsEnabled(): Promise<boolean> {
   }
 }
 
+/** Thread history passed to a chat turn: the newest messages that fit both bounds. */
+export const CHAT_HISTORY_LIMITS = { messages: 20, bytes: 8_192 } as const;
+
+/**
+ * Earlier messages of a chat thread (oldest first) as conversation history. Every message is a `user` turn
+ * labelled with who wrote it: chat messages carry no context proof, so an assistant turn would be dropped,
+ * and other people's words must never read as the assistant's own. Secrets are redacted before the model.
+ */
+export function boundChatHistory(
+  messages: ReadonlyArray<{ speaker: string; text: string }>
+): SquireRequest['history'] {
+  const turns: SquireRequest['history'] = [];
+  let bytes = 0;
+  for (const message of messages.slice(-CHAT_HISTORY_LIMITS.messages).reverse()) {
+    const text = message.text.trim();
+    if (!text) continue;
+    const content = redactSecrets(`[Earlier in this thread] ${message.speaker}: ${text}`);
+    const size = Buffer.byteLength(content, 'utf8');
+    if (bytes + size > CHAT_HISTORY_LIMITS.bytes) break;
+    bytes += size;
+    turns.unshift({ role: 'user', content });
+  }
+  return turns;
+}
+
+/** Shortest gap between two edits of a progress message (Slack allows about one update per second). */
+export const CHAT_PROGRESS_INTERVAL_MS = 2_000;
+
+/**
+ * Rate-limited, serialised edits of one progress message: at most one edit in flight, at most one per
+ * interval, and only the newest text is sent. Edit failures are ignored; the final answer is delivered anyway.
+ */
+export function progressEditor(
+  edit: (text: string) => Promise<unknown>,
+  intervalMs = CHAT_PROGRESS_INTERVAL_MS,
+  now: () => number = Date.now
+) {
+  let pending: string | null = null;
+  let last = 0;
+  let sent = '';
+  let running: Promise<void> | null = null;
+  const pump = async () => {
+    while (pending !== null && now() - last >= intervalMs) {
+      const text = pending;
+      pending = null;
+      if (text === sent) continue;
+      last = now();
+      sent = text;
+      await edit(text).catch(() => undefined);
+    }
+    running = null;
+  };
+  return {
+    push(text: string) {
+      pending = text;
+      if (!running) running = pump();
+    },
+    /** Waits for an edit in flight, so the final answer is never overwritten by a late progress edit. */
+    async settle() {
+      pending = null;
+      await running;
+    },
+  };
+}
+
+const PREVIEW_MAX = 2_800;
+
+/** Folds turn events into what a chat surface shows while the answer is written; null when unchanged. */
+export function progressTracker() {
+  let text = '';
+  let step: string | null = null;
+  return (event: SquireEvent): string | null => {
+    if (event.type === 'delta' && text.length < PREVIEW_MAX) text += event.text;
+    else if (event.type === 'tool') step = event.label;
+    else if (event.type === 'investigation') step = event.step.title;
+    else return null;
+    if (text.trim()) return redactSecrets(text.slice(0, PREVIEW_MAX));
+    return step ? `_${step.slice(0, 200)}…_` : null;
+  };
+}
+
 const failure = (error: string): ChatSquireAnswer => ({
   name: 'Squire',
   mode: 'basic',
@@ -70,6 +153,10 @@ export async function answerChatQuestion(input: {
   userId: string | null;
   question: string;
   incidentId: string | null;
+  /** Earlier messages of the thread, already bounded (boundChatHistory). */
+  history?: SquireRequest['history'];
+  /** Called with a preview of the answer as it is written; the caller rate-limits its edits. */
+  onProgress?: (text: string) => void;
 }): Promise<ChatSquireAnswer> {
   if (!(await isSquireChatOpsEnabled())) return failure(SQUIRE_CHAT_DISABLED);
   if (!input.userId) return failure(SQUIRE_CHAT_NOT_LINKED);
@@ -83,10 +170,24 @@ export async function answerChatQuestion(input: {
   if (!rate.allowed) return failure(SQUIRE_CHAT_RATE_LIMITED);
   const actor = await resolveUserActor(input.userId);
   if (!actor || actor.status !== 'ACTIVE') return failure(SQUIRE_CHAT_NOT_LINKED);
-  const answer = await collectSquireTurn(actor, {
-    message: question,
-    ...(input.incidentId ? { incidentId: input.incidentId } : {}),
-  });
+  const onProgress = input.onProgress;
+  const track = progressTracker();
+  const answer = await collectSquireTurn(
+    actor,
+    {
+      message: question,
+      ...(input.incidentId ? { incidentId: input.incidentId } : {}),
+      ...(input.history?.length ? { history: input.history } : {}),
+    },
+    onProgress
+      ? {
+          onEvent: event => {
+            const preview = track(event);
+            if (preview) onProgress(preview);
+          },
+        }
+      : {}
+  );
   logger.info('[Squire] Chat question answered', {
     provider: input.provider,
     mode: answer.mode,

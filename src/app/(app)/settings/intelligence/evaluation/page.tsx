@@ -9,6 +9,7 @@ import AiUsageSpendSections from '../_sections/AiUsageSpendSections';
 import GroupingQualitySection from '../_sections/GroupingQualitySection';
 import InsightsSections from '../_sections/InsightsSections';
 import { requirePageAccess } from '@/lib/access/server';
+import MovedSectionRedirect from '@/components/settings/MovedSectionRedirect';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -38,6 +39,7 @@ export default async function IntelligenceEvaluationPage({
 
   return (
     <div className="space-y-6">
+      <MovedSectionRedirect group="evaluation" />
       <IntelligenceGroupHeader group="evaluation" visible={visible}>
         Measure before you trust: grouping decisions against human reviews, ratings on assistant
         answers, what the incident history says about repeated problems, and what AI usage costs.

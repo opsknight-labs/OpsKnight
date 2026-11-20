@@ -10,6 +10,8 @@ import {
 } from '@/components/settings/IntelligenceSettingsForms';
 import CorrelationRulesEditor from '@/components/settings/CorrelationRulesEditor';
 import OpsInsightsSettingsForm from '@/components/settings/OpsInsightsSettingsForm';
+import IntelligenceSetupChecklist from '@/components/settings/IntelligenceSetupChecklist';
+import DigestSection from './_sections/DigestSection';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
@@ -22,6 +24,8 @@ import {
   listPolicyVersions,
   resolveEffectivePolicy,
 } from '@/lib/intelligence/settings/service';
+import { getSetupState } from '@/lib/intelligence/settings/setup';
+import { setupChecklist } from '@/lib/intelligence/settings/setup-contract';
 import { detectCapabilities } from '@/lib/intelligence/similarity/capabilities';
 import { getOpsKnightProcessRole } from '@/lib/runtime-role';
 import { requirePageAccess } from '@/lib/access/server';
@@ -63,7 +67,7 @@ export default async function IntelligenceSettingsPage() {
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
 
-  const [settings, policy, versions, backlog, capabilities, criticalLagMs, deadLetters] =
+  const [settings, policy, versions, backlog, capabilities, criticalLagMs, deadLetters, setup] =
     await Promise.all([
       getIntelligenceSettings(),
       safely('policy', () => resolveEffectivePolicy(null)),
@@ -72,11 +76,13 @@ export default async function IntelligenceSettingsPage() {
       safely('capabilities', () => detectCapabilities()),
       safely('paging lag', () => getCriticalBacklogLagMs()),
       safely('dead letters', () => listDeadLetters({ limit: 10 })),
+      safely('setup checklist', () => getSetupState()),
     ]);
 
   const headVersion = versions?.headVersion ?? 0;
   const hasFailedWork = Boolean(deadLetters && deadLetters.length > 0);
   const triageEnabled = policy?.definition.triage.enabled ?? false;
+  const showSetup = Boolean(setup && setupChecklist(setup).some(item => !item.on));
 
   return (
     <div className="space-y-6">
@@ -84,8 +90,11 @@ export default async function IntelligenceSettingsPage() {
         group="engine"
         title="Intelligence"
         visible={[
+          ...(showSetup ? ['setup'] : []),
           'lane-health',
           'general',
+          'operations-insights',
+          'digest',
           'global-policy',
           'triage',
           'correlation-rules',
@@ -97,6 +106,8 @@ export default async function IntelligenceSettingsPage() {
         escalation or notifications. Certified service AUTO adds reversible related links after
         paging. Turning it off stops analysis; existing accepted links remain available to undo.
       </IntelligenceGroupHeader>
+
+      {setup && <IntelligenceSetupChecklist state={setup} canManage={canManage} />}
 
       <SettingsSection
         id="lane-health"
@@ -166,6 +177,8 @@ export default async function IntelligenceSettingsPage() {
       >
         <OpsInsightsSettingsForm settings={settings} canManage={canManage} />
       </SettingsSection>
+
+      <DigestSection canManage={canManage} />
 
       <SettingsSection
         id="global-policy"

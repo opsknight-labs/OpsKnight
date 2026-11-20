@@ -55,4 +55,9 @@ describe('AIOps overview navigation', () => {
       expect(hrefs.includes('/intelligence')).toBe(expected.includes(role));
     }
   });
+
+  it('is a top-level "Intelligence" entry, not part of the Analytics group', () => {
+    const item = NAVIGATION_ITEMS.find(entry => entry.href === '/intelligence');
+    expect(item).toMatchObject({ label: 'Intelligence', section: 'MAIN' });
+  });
 });

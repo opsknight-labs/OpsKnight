@@ -583,5 +583,66 @@
         "Ingestion A/B (processEvent p50/p99 vs OFF) not re-benchmarked after the resolve-path change"
       ]
     }
+  },
+  "gap-audit-2026-11-17 waves M3/M4/M5": {
+    "status": "partial",
+    "base": "a445b0c11 (origin/feat/intelligence-engine)",
+    "integration_branch": "wip/intel-gap3-int",
+    "done": [
+      "M5.1 incident 'Post status update' action + next-update-due chip; StatusPage.updateCadenceMinutes; announcements link to public incidents (m5-comms, behind opsHelpersEnabled)",
+      "M5.4 precomputed Incident.pageContext (rank-1 similar incident, change, runbook ids) in page/escalation emails; pageContextEnabled default off (m5-comms)",
+      "M5.2 one ranked Needs attention section on /intelligence and /m/intelligence, topbar badge, top-level Intelligence nav entry (m5-home)",
+      "M5.5 settings setup checklist, 'Turn on recommended' preset (no AUTO, no noise ON, no AI), weekly digest moved to Engine page (m5-home)",
+      "M5.12 InsightStrip removed, dead IncidentImpactCard mocks dropped (m5-home)",
+      "M5.3 ranked schedule-override cover candidates (m5-people, peopleInsightsEnabled default off)",
+      "M5.7 suggested experts on the incident responders card (m5-people)",
+      "M5.8 night pages + per-service tune links on the personal noise card; load and expertise card on /users/[id] (m5-people)",
+      "M4 Slack thread history and progressive answer edits (m4-chatops)",
+      "M4 deterministic war-room kickoff message (warRoomKickoffEnabled default off) (m4-chatops)",
+      "M4 war-room channel capture to the incident timeline as CHAT_MESSAGE (warRoomCaptureEnabled default off) (m4-chatops)"
+    ],
+    "remaining": {
+      "M3": [
+        "noise fail-open under storms",
+        "pre-page grouping in HOLD window (SHADOW first)",
+        "HIGH storm grouping",
+        "SHADOW defaults for new services",
+        "reachable AUTO certification evidence",
+        "event model fields + Alert.integrationId",
+        "change-to-service mapping and deploy mappers; change risk as cause prior",
+        "learning labels from implicit truth, time split, acceptance drift",
+        "Service.slaTier prior",
+        "proactive anomaly evaluation",
+        "scale: Alert partitioning plan, LISTEN/NOTIFY snapshots, lane reservation"
+      ],
+      "M4": [
+        "auto-investigation on page",
+        "hypotheses with verification checks",
+        "suspect change ranking",
+        "metric discovery tools and search_logs schema fix",
+        "Kubernetes and CI/CD connectors",
+        "MCP long-running investigation task",
+        "hybrid knowledge retrieval and fact TTL",
+        "persisted dialogue state, streamed conclusion",
+        "governance data class, per-tool PII redaction, readUntrusted scope",
+        "Teams thread history and progressive updates (Slack done)"
+      ],
+      "M5": [
+        "6 action item dedupe/owner/nudge",
+        "9 SLO burn forecast, change follow-on incidents",
+        "10 mobile parity",
+        "11 on-demand AI helpers",
+        "8 noisy rules on the personal noise card (no per-rule rollup) and the mobile noise card",
+        "4 page context rendered in channels other than email",
+        "5 remove the duplicate digest block from the Evaluation page (owned InsightsSections.tsx)"
+      ]
+    },
+    "note": "Run of 2026-11-20: merged the four slices with commits onto a445b0c11. m5-mobile-ai, m3-learning, m3-changes and m4-data stopped on a permission denial with no commits; m4-chatops item d (MCP long-running investigation) was designed but not built. The integrator split the CHAT_MESSAGE enum value into its own migration (20261117400050) so validate-migrations passes. No browser or visual check of any new UI was done. M5 learning (wip/intel-m5-learning) is integrated by a separate run and is not tracked here.",
+    "merged_slices": [
+      "wip/intel-m5-comms",
+      "wip/intel-m5-home",
+      "wip/intel-m5-people",
+      "wip/intel-m4-chatops"
+    ]
   }
 }

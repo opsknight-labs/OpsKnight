@@ -113,6 +113,7 @@ type StatusPageConfigProps = {
     statusApiRateLimitEnabled?: boolean;
     statusApiRateLimitMax?: number;
     statusApiRateLimitWindowSec?: number;
+    updateCadenceMinutes?: number | null;
     footerText?: string | null;
     contactEmail?: string | null;
     contactUrl?: string | null;
@@ -181,6 +182,8 @@ type StatusPageConfigProps = {
     region?: string | null;
   }>;
   liveSnapshot?: any;
+  /** From an incident's "Post status update": open Announcements with that incident's draft. */
+  draftIncidentId?: string;
 };
 
 const normalizeAnnouncementServiceIds = (value?: string[] | null) => {
@@ -194,6 +197,7 @@ export default function StatusPageConfig({
   statusPage,
   allServices,
   liveSnapshot,
+  draftIncidentId,
 }: StatusPageConfigProps) {
   const { browserTimeZone } = useTimezone();
   const router = useRouter();
@@ -208,7 +212,7 @@ export default function StatusPageConfig({
     stale?: boolean;
   } | null>(null);
   const [retryingPublication, setRetryingPublication] = useState(false);
-  const [activeSection, setActiveSection] = useState('general');
+  const [activeSection, setActiveSection] = useState(draftIncidentId ? 'announcements' : 'general');
   const [showPreview, setShowPreview] = useState(false);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [revision, setRevision] = useState(() =>
@@ -1007,6 +1011,8 @@ export default function StatusPageConfig({
                         setAnnouncements={setAnnouncements}
                         allServices={announcementServiceOptions ?? []}
                         browserTimeZone={browserTimeZone}
+                        draftIncidentId={draftIncidentId}
+                        updateCadenceMinutes={statusPage.updateCadenceMinutes ?? null}
                       />
                     )}
 

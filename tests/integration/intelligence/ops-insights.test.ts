@@ -17,6 +17,7 @@ import {
   countOpenInsightsForScopes,
   listInsightsForScope,
   listInsightsInbox,
+  countInsightsInboxBadge,
 } from '@/lib/intelligence/ops-insights/view';
 import {
   getIntelligenceSettings,
@@ -422,6 +423,11 @@ describe('reading insights', () => {
     const rest = await listInsightsInbox(admin, { cursor: adminInbox.nextCursor });
     expect(rest.items.map(row => row.key)).toEqual(['info']);
     expect(rest.nextCursor).toBeNull();
+    // A page that ends exactly on the last visible row has no next page.
+    expect((await listInsightsInbox(responder, { limit: 2 })).nextCursor).toBeNull();
+
+    expect(await countInsightsInboxBadge(responder)).toEqual({ count: 2, more: false });
+    expect(await countInsightsInboxBadge(admin)).toEqual({ count: 3, more: false });
   });
 
   it('hides everything while the feature or the area is off, without deleting it', async () => {

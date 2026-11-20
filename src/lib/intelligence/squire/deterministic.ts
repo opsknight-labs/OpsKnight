@@ -2,6 +2,7 @@ import 'server-only';
 import type { EvidenceSnapshot } from './evidence';
 type Collect = (source: EvidenceSnapshot) => void;
 import prisma from '@/lib/prisma';
+import { LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
 import { readIncidentAnalysisState } from '../analysis/view';
 import { redactSecrets } from '../ai/redact';
 import { getAiSettings } from '../ai/settings';
@@ -267,7 +268,7 @@ const HELP = [
 
 async function timeline(incident: ReadableIncident, collect?: Collect): Promise<string> {
   const events = await prisma.incidentEvent.findMany({
-    where: { incidentId: incident.id },
+    where: { incidentId: incident.id, ...LIFECYCLE_EVENT_WHERE },
     take: 8,
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: { type: true, createdAt: true },

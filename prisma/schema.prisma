@@ -375,6 +375,7 @@ enum IncidentEventType {
   RUNBOOK_SKIPPED
   RUNBOOK_VERIFIED
   RUNBOOK_UNVERIFIED
+  CHAT_MESSAGE
 }
 
 enum ActionItemStatus {
@@ -1516,6 +1517,9 @@ model Incident {
   warRoomProvisioningStatus           WarRoomProvisioningStatus       @default(NONE)
   warRoomProvisioningToken            String?
   warRoomProvisioningAt               DateTime?
+  /// Written by the intelligence lane when findings change (see intelligence/helpers/page-context.ts); read by
+  /// page notifications from the incident row they already load. Ids and scores only, never text.
+  pageContext                         Json?
   createdAt                           DateTime                        @default(now())
   updatedAt                           DateTime                        @updatedAt
   service                             Service                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
@@ -2668,6 +2672,8 @@ model StatusPage {
   enableUptimeExports         Boolean                    @default(false)
   statusApiRequireToken       Boolean                    @default(false)
   statusApiRateLimitEnabled   Boolean                    @default(false)
+  /// Minutes between status updates while an incident is open (incident page "next update due"). Null = 30.
+  updateCadenceMinutes        Int?
   statusApiRateLimitMax       Int                        @default(120)
   statusApiRateLimitWindowSec Int                        @default(60)
   uptimeExcellentThreshold    Float                      @default(99.9)
@@ -2745,6 +2751,7 @@ model StatusPageService {
 
   @@unique([statusPageId, serviceId])
   @@index([statusPageId, order])
+  @@index([serviceId])
 }
 
 model StatusPageAnnouncement {
@@ -5231,6 +5238,14 @@ model IntelligenceSettings {
   /// Intelligence fields (inMaintenance, recentRiskyChange, sloBurning, flapping, stormActive) as
   /// automation rule conditions, read from the 30 s pre-paging snapshot. Default off.
   automationIntelligenceFieldsEnabled Boolean @default(false)
+  /// Top similar incident, likely change and best runbook in page notifications, precomputed by the lane. Default off.
+  pageContextEnabled          Boolean  @default(false)
+  /// People suggestions: cover candidates on overrides, experts on incidents, personal noise and load cards.
+  peopleInsightsEnabled       Boolean  @default(false)
+  /// Post one deterministic kickoff message (similar incidents, likely causes, runbooks) when a war room opens.
+  warRoomKickoffEnabled       Boolean  @default(false)
+  /// Save war-room channel messages to the incident timeline (bounded, secrets redacted). Default off.
+  warRoomCaptureEnabled       Boolean  @default(false)
   revision                    Int      @default(1)
   updatedBy                   String?
   createdAt                   DateTime @default(now())

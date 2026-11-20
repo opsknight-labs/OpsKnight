@@ -91,7 +91,10 @@ const AXIS_TYPE: Record<string, { type: DraftTimelineEvent['type']; label: strin
   CHANGE: { type: 'DETECTION', label: 'Change' },
   UPSTREAM_INCIDENT: { type: 'ESCALATION', label: 'Upstream incident' },
   GROUPING: { type: 'ESCALATION', label: 'Grouping' },
+  CHAT: { type: 'MITIGATION', label: 'War room' },
 };
+/** War-room messages in a draft timeline; the rest stay on the incident timeline. */
+const DRAFT_CHAT_MAX = 10;
 
 const RUN_SUCCEEDED = new Set(['SUCCEEDED']);
 const RUN_FAILED = new Set(['FAILED', 'TIMED_OUT']);
@@ -99,9 +102,11 @@ const RUN_FAILED = new Set(['FAILED', 'TIMED_OUT']);
 function evidenceTimeline(evidence: PostmortemEvidence): DraftTimelineEvent[] {
   const entries: DraftTimelineEvent[] = [];
   let firstAlertSeen = false;
+  let chat = 0;
   evidence.axis.forEach((entry, index) => {
     const mapped = AXIS_TYPE[entry.kind];
     if (!mapped) return;
+    if (entry.kind === 'CHAT' && ++chat > DRAFT_CHAT_MAX) return;
     // One alert marks detection; an alert storm would bury the rest of the timeline.
     if (entry.kind === 'ALERT') {
       if (firstAlertSeen) return;

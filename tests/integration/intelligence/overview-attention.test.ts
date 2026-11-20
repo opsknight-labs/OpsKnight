@@ -131,6 +131,7 @@ describe('overview needs-attention inbox', () => {
         title: 'checkout latency',
         detail: '2 triage suggestions awaiting a decision',
         href: `/incidents/${open.id}?insights=triage`,
+        at: expect.any(Date),
       },
       {
         id: `related:${open.id}`,
@@ -138,6 +139,7 @@ describe('overview needs-attention inbox', () => {
         title: 'checkout latency',
         detail: '1 related-incident suggestion awaiting review',
         href: `/incidents/${open.id}?insights=related`,
+        at: expect.any(Date),
       },
     ]);
     expect((await getOverviewAttention(admin)).items.map(item => item.id)).toEqual(

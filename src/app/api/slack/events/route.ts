@@ -109,6 +109,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      // War-room channel capture (off unless enabled). Slack redelivers an event it thinks was not
+      // acknowledged in time, with a retry header; a redelivery is skipped so a message is saved once.
+      if (event.type === 'message') {
+        if (!request.headers.get('x-slack-retry-num')) {
+          const { captureSlackChannelMessage } = await import('@/lib/chatops/war-room-capture');
+          await captureSlackChannelMessage(payload).catch(error =>
+            logger.warn('[Slack Events] War-room message not captured', {
+              error: error instanceof Error ? error.name : 'error',
+            })
+          );
+        }
+        return NextResponse.json({ ok: true });
+      }
+
       const rawEmoji = (event.reaction || '').split('::')[0];
 
       // Reaction Added (📌 Emoji Reaction Sync)

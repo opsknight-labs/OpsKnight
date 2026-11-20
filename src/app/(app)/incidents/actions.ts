@@ -19,6 +19,7 @@ import {
 } from '@/lib/incidents/operator-lifecycle';
 import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/incidents/creation';
 import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
+import { purgePrivateChannelCaptures } from '@/lib/chatops/war-room-capture';
 import { applyIncidentUrgencyChange } from '@/lib/incidents/urgency-command';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { setIncidentWatcher, deleteIncidentWatcher } from '@/lib/incidents/watchers';
@@ -253,17 +254,23 @@ export async function removeWatcher(incidentId: string, watcherId: string) {
 export async function updateIncidentVisibility(id: string, visibility: 'PUBLIC' | 'PRIVATE') {
   await assertResponderOrAbove();
 
-  await prisma.incident.update({
-    where: { id },
-    data: {
-      visibility,
-      events: {
-        create: {
-          type: 'STATUS_CHANGE',
-          message: `Visibility updated to ${visibility}`,
+  await prisma.$transaction(async tx => {
+    const purged = visibility === 'PUBLIC' ? await purgePrivateChannelCaptures(tx, id) : 0;
+    await tx.incident.update({
+      where: { id },
+      data: {
+        visibility,
+        events: {
+          create: {
+            type: 'STATUS_CHANGE',
+            message:
+              purged > 0
+                ? `Visibility updated to ${visibility}; ${purged} messages saved from a private Slack channel were removed`
+                : `Visibility updated to ${visibility}`,
+          },
         },
       },
-    },
+    });
   });
 
   revalidatePath(`/incidents/${id}`);

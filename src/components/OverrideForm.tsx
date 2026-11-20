@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
 import ResponderCombobox, { type ResponderOption } from './ResponderCombobox';
+import OverrideCoverSuggestions from './OverrideCoverSuggestions';
 import { formatDateForInput, formatDateTime, parseDateTimeInTimeZone } from '@/lib/timezone';
 import { AlertCircle, Clock, Loader2, ShieldPlus, UserRoundCog } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -280,6 +281,15 @@ export default function OverrideForm({
               )}
             </div>
           )}
+
+          <OverrideCoverSuggestions
+            scheduleId={scheduleId}
+            start={startInstant}
+            end={endInstant}
+            replacesUserId={mode === 'replacement' && replacesUserId ? replacesUserId : null}
+            selectedUserId={selectedUserId}
+            onPick={setSelectedUserId}
+          />
 
           <div className="flex justify-end gap-3 border-t pt-4">
             <Button

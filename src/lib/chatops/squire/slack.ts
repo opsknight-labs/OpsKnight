@@ -3,10 +3,14 @@ import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getSlackBotToken } from '@/lib/slack';
 import { resolveOpsKnightUser } from '@/lib/chatops/slash-commands';
+import { slackApiCall } from '@/lib/war-room/providers/slack/client';
+import type { SquireRequest } from '@/lib/intelligence/squire/contract';
 import {
   answerChatQuestion,
+  boundChatHistory,
   chatBaseUrl,
   confirmChatProposal,
+  progressEditor,
   SQUIRE_CHAT_NOT_OWNER,
 } from './handler';
 import {
@@ -42,6 +46,77 @@ export interface SlackSquireReply {
   text: string;
   blocks: Record<string, unknown>[];
   __serviceId: string | null;
+  /** The "looking into it" message posted in the thread; the answer replaces it. */
+  __placeholderTs?: string;
+}
+
+const SQUIRE_THINKING = ':hourglass_flowing_sand: Squire is looking into it…';
+/** Replies read to find the last messages of a thread (Slack returns a thread oldest first). */
+const THREAD_READ_LIMIT = 200;
+
+type SlackThreadMessage = {
+  ts?: string;
+  text?: string;
+  user?: string;
+  bot_id?: string;
+  subtype?: string;
+};
+
+/**
+ * The asker's own earlier messages in the thread, oldest first, as bounded conversation history. History
+ * becomes `user` turns run with the asker's access and answered in a public channel, so anyone else's words
+ * (people without that access, bots relaying alert text) would be instructions the asker never gave.
+ */
+export function slackThreadHistory(
+  messages: readonly SlackThreadMessage[],
+  questionTs: string,
+  askerId: string
+): SquireRequest['history'] {
+  return boundChatHistory(
+    messages
+      .filter(
+        message =>
+          message.ts &&
+          message.ts !== questionTs &&
+          !message.subtype &&
+          !message.bot_id &&
+          message.user === askerId
+      )
+      .map(message => ({ speaker: `Slack user ${askerId}`, text: message.text ?? '' }))
+  );
+}
+
+async function readSlackThread(
+  token: string,
+  channel: string,
+  threadTs: string,
+  questionTs: string,
+  askerId: string
+): Promise<SquireRequest['history']> {
+  try {
+    // shortcut: reads the first THREAD_READ_LIMIT replies before the question; a longer thread loses its tail.
+    const query = new URLSearchParams({
+      channel,
+      ts: threadTs,
+      latest: questionTs,
+      inclusive: 'false',
+      limit: String(THREAD_READ_LIMIT),
+    });
+    const response = await fetch(`https://slack.com/api/conversations.replies?${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    const body = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      messages?: SlackThreadMessage[];
+    } | null;
+    return body?.ok && Array.isArray(body.messages)
+      ? slackThreadHistory(body.messages, questionTs, askerId)
+      : [];
+  } catch {
+    // History is context only; the question is still answered without it.
+    return [];
+  }
 }
 
 /** The channel's incident, bound to the signed workspace exactly as the /incident commands bind it. */
@@ -60,7 +135,7 @@ export async function findSlackIncidentForChannel(workspaceId: string, channelId
         },
       ],
     },
-    select: { id: true, serviceId: true, title: true },
+    select: { id: true, serviceId: true, title: true, visibility: true },
     orderBy: { createdAt: 'desc' },
   });
 }
@@ -84,24 +159,70 @@ export async function answerSlackSquireMention(
   if (!incident) return reply(NOT_AN_INCIDENT_CHANNEL);
   const botToken = await getSlackBotToken(incident.serviceId);
   const user = botToken ? await resolveOpsKnightUser(payload.user_id, botToken) : null;
+  const [history, placeholder] = botToken
+    ? await Promise.all([
+        payload.thread_ts
+          ? readSlackThread(
+              botToken,
+              payload.channel_id,
+              payload.thread_ts,
+              payload.ts,
+              payload.user_id
+            )
+          : Promise.resolve([]),
+        slackApiCall('chat.postMessage', botToken, {
+          channel: payload.channel_id,
+          thread_ts: thread,
+          text: SQUIRE_THINKING,
+        })
+          .then(result => (result.ok ? (result as { ts?: string }).ts : undefined))
+          .catch(() => undefined),
+      ])
+    : [[], undefined];
+  const editor =
+    botToken && placeholder
+      ? progressEditor(text =>
+          slackApiCall('chat.update', botToken, {
+            channel: payload.channel_id,
+            ts: placeholder,
+            text: escapeSlack(text),
+          })
+        )
+      : null;
   const answer = await answerChatQuestion({
     provider: 'SLACK',
     userId: user?.id ?? null,
     question: questionFromMention(payload.text),
     incidentId: incident.id,
+    history,
+    ...(editor ? { onProgress: (text: string) => editor.push(text) } : {}),
   });
+  await editor?.settle();
   const rendered = renderSlackAnswer(answer, {
     baseUrl: chatBaseUrl(),
     ownerUserId: user?.id ?? '',
   });
-  return reply(rendered.text, rendered.blocks);
+  return {
+    ...reply(rendered.text, rendered.blocks),
+    ...(placeholder ? { __placeholderTs: placeholder } : {}),
+  };
 }
 
 /** Worker: posts the stored reply in the thread. A failure is retried by the intent pipeline. */
 export async function deliverSlackSquireReply(reply: SlackSquireReply): Promise<void> {
   const token = await getSlackBotToken(reply.__serviceId ?? undefined);
   if (!token) throw new Error('Slack bot token is not available');
-  const { __serviceId: _service, ...message } = reply;
+  const { __serviceId: _service, __placeholderTs: placeholder, ...message } = reply;
+  if (placeholder) {
+    // The answer replaces the progress message; if that message is gone it is posted as a new reply.
+    const updated = await slackApiCall('chat.update', token, {
+      channel: message.channel,
+      ts: placeholder,
+      text: message.text,
+      blocks: message.blocks,
+    }).catch(() => null);
+    if (updated?.ok) return;
+  }
   const response = await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
     headers: {

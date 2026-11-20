@@ -1,15 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { IncidentImpactView } from '@/lib/intelligence/impact/view';
-
-const mocks = vi.hoisted(() => ({ view: vi.fn(), actor: vi.fn() }));
-vi.mock('@/lib/rbac', () => ({ getCurrentAuthorizationActor: mocks.actor }));
-vi.mock('@/lib/intelligence/impact/view', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/intelligence/impact/view')>(
-    '@/lib/intelligence/impact/view'
-  );
-  return { ...actual, getIncidentImpactForActor: mocks.view };
-});
 
 import { ImpactCardBody } from '@/components/incident/IncidentImpactCard';
 
@@ -57,11 +48,6 @@ const full: IncidentImpactView = {
     ],
   },
 };
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.actor.mockResolvedValue({ userId: 'u', role: 'RESPONDER' });
-});
 
 describe('IncidentImpactCard', () => {
   it('renders dependent services, components with status and the budget at risk', () => {

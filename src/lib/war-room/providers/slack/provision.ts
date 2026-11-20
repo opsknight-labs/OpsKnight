@@ -1028,6 +1028,9 @@ export async function provisionSlackWarRoom(
     blocks: welcomeBlocks,
     text: '👋 Welcome to your Incident War Room! Use 1-click buttons, 📌 emoji pins, or /incident slash commands.',
   }).catch(err => logger.warn('[ChatOps] Failed to post welcome card', { error: err }));
+  // Off unless the war-room kickoff switch is on; best effort, never fails provisioning.
+  const { postWarRoomKickoff } = await import('@/lib/chatops/war-room-kickoff');
+  await postWarRoomKickoff({ incidentId: incident.id, channelId, botToken, baseUrl: appUrl });
 
   const adoption = await runSerializableTransaction(tx =>
     adoptWarRoomChannel(tx, {

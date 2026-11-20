@@ -69,6 +69,10 @@ describe('Noise section', () => {
   it('shows the report and suggestions that open the existing editors', () => {
     render(<NoiseSection overview={noisy} suggestions={panel} />);
     expect(screen.getByText(/10 pages, 10% acted on, 6 resolved by themselves/)).toBeTruthy();
+    expect(screen.getByText(/10 at night/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Tune Payments' }).getAttribute('href')).toBe(
+      '/services/svc-a/notifications'
+    );
     expect(screen.getByText(/Most pages arrive around/).textContent).toContain('02:00');
     expect(screen.getByRole('cell', { name: 'Payments' })).toBeTruthy();
     expect(screen.getByText('Suggestions')).toBeTruthy();
