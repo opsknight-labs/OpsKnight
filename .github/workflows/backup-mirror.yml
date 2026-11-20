@@ -57,6 +57,9 @@ jobs:
           }
           only_image_build
           remote="https://x-access-token:${BACKUP_TOKEN}@github.com/${BACKUP_REPO}.git"
+          # The LFS locks API returns 403 to fine-grained PATs even with push access, and
+          # this repo never uses LFS locks, so skip the verification.
+          git config lfs.locksverify false
           git lfs push "$remote" "${GITHUB_SHA}"
           # The backup mirrors this repo exactly, so refs are force-updated. A tag run's
           # GITHUB_SHA is the tagged commit, not main's tip, so it only syncs tags.
