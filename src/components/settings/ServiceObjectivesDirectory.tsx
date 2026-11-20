@@ -264,15 +264,16 @@ function subtitle(item: ServiceObjectiveItem) {
 function ObjectiveCell({ item }: { item: ServiceObjectiveItem }) {
   return (
     <div className="min-w-0">
-      <span className="block truncate font-medium text-foreground">{item.name}</span>
+      {/* Description stays one hover away here (and visible in card view) to keep rows dense. */}
+      <span
+        className="block truncate font-medium text-foreground"
+        title={item.description ?? undefined}
+      >
+        {item.name}
+      </span>
       <span className="block truncate text-xs tabular-nums text-muted-foreground">
         {subtitle(item)}
       </span>
-      {item.description && (
-        <span className="block truncate text-xs text-muted-foreground" title={item.description}>
-          {item.description}
-        </span>
-      )}
     </div>
   );
 }
@@ -314,12 +315,10 @@ const columns: DirectoryColumn<ServiceObjectiveItem>[] = [
 function mobileRow(item: ServiceObjectiveItem) {
   return (
     <div className="min-w-0 space-y-1">
-      <div className="flex min-w-0 items-start justify-between gap-2">
-        <span className="truncate font-medium text-foreground">{item.name}</span>
-        <HealthBadge health={item.health} />
-      </div>
+      <p className="truncate font-medium text-foreground">{item.name}</p>
       <p className="truncate text-xs text-muted-foreground">{subtitle(item)}</p>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <HealthBadge health={item.health} />
         <TargetText item={item} />
         <span aria-hidden="true">·</span>
         <span>{formatObjectiveWindow(item.windowType, item.windowValue)}</span>
