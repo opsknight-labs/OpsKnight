@@ -153,8 +153,9 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
                       size="sm"
                       className="h-8 w-8 p-0 rounded-full bg-ink-50 hover:bg-ink-100 border border-ink-200"
                       onClick={e => e.stopPropagation()}
+                      aria-label={`Actions for ${policy.name}`}
                     >
-                      <MoreHorizontal className="h-4 w-4 text-ink-600" />
+                      <MoreHorizontal className="h-4 w-4 text-ink-600" aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">

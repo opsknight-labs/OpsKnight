@@ -1,5 +1,6 @@
 'use client';
 
+import { notify } from '@/lib/toast';
 import { useState } from 'react';
 import {
   AlertCircle,
@@ -98,9 +99,13 @@ function DiffPane({
 
   const handleCopy = () => {
     if (!side?.configuration) return;
-    navigator.clipboard.writeText(side.configuration);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard.writeText(side.configuration).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => notify.error("Couldn't copy the configuration; select it and copy it manually.")
+    );
   };
 
   if (!side) {
