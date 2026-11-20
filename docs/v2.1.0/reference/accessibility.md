@@ -8,7 +8,7 @@ verification:
   level: source
   verified_at: 2026-10-02
   evidence:
-    - src/components/SkipLinks.tsx
+    - src/components/SkipLink.tsx
     - src/components/KeyboardShortcuts.tsx
     - src/components/TopbarNotifications.tsx
     - src/app/globals.css
