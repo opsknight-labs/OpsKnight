@@ -1,5 +1,6 @@
 'use client';
 import { useId, useMemo, useState } from 'react';
+import type { Data } from './presentation-types';
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -95,6 +96,7 @@ export function AutomationReviewDialog({
   enabled,
   counts,
   candidateFallbacks = 0,
+  candidateReadiness,
   busy,
   error,
   onCancel,
@@ -117,6 +119,7 @@ export function AutomationReviewDialog({
     fallbacks?: number;
   };
   candidateFallbacks?: number;
+  candidateReadiness?: Data['candidateReadiness'];
   busy: boolean;
   error?: string;
   onCancel: () => void;
@@ -132,7 +135,10 @@ export function AutomationReviewDialog({
   const [acknowledgeDifferences, setAcknowledgeDifferences] = useState(false);
   const liveReview = action === 'LIVE' || action === 'activateCandidate';
   const fallbacksCount = candidateFallbacks || (counts?.fallbacks ?? 0);
-  const hasObservedFailures = !!counts?.errors || fallbacksCount > 0;
+  const readiness = action === 'activateCandidate' ? candidateReadiness : null;
+  const hasObservedFailures = readiness
+    ? !readiness.errorsWithinPolicy
+    : !!counts?.errors || fallbacksCount > 0;
   // Only diff and compile while the dialog is open; the closed dialog re-renders on every edit.
   const changes = useMemo(
     () =>
@@ -144,21 +150,26 @@ export function AutomationReviewDialog({
   const issues = useMemo(() => (action ? lint(snapshot) : []), [action, snapshot]);
   const errors = issues.filter(issue => issue.level === 'ERROR');
   const warnings = issues.filter(issue => issue.level === 'WARNING');
-  const noShadowEvidence = !counts?.evaluated;
+  const noShadowEvidence = readiness ? !readiness.sufficientRecentEvidence : !counts?.evaluated;
   const materialDifferences = !!(counts?.routes || counts?.priorities || counts?.skips);
-  const blockedReason = errors.length
-    ? 'Fix the blocking issues above before confirming.'
-    : liveReview && !version
-      ? 'Publish a version before enabling LIVE.'
-      : liveReview && !enabled
-        ? 'An administrator must turn on the global automation switch first.'
-        : liveReview && noShadowEvidence && !acknowledge
-          ? 'Acknowledge the missing Shadow evidence to continue.'
-          : liveReview && hasObservedFailures && !acknowledgeErrors
-            ? 'Accept the observed Shadow errors and fallbacks to continue.'
-            : action === 'activateCandidate' && materialDifferences && !acknowledgeDifferences
-              ? 'Approve the observed material differences to continue.'
-              : null;
+  const blockedReason =
+    readiness && !readiness.policyValid
+      ? 'Repair the global readiness policy before activating this candidate.'
+      : readiness && !readiness.backlogWithinPolicy
+        ? 'Wait for candidate observations to finish before activating this candidate.'
+        : errors.length
+          ? 'Fix the blocking issues above before confirming.'
+          : liveReview && !version
+            ? 'Publish a version before enabling LIVE.'
+            : liveReview && !enabled
+              ? 'An administrator must turn on the global automation switch first.'
+              : liveReview && noShadowEvidence && !acknowledge
+                ? 'Acknowledge the missing Shadow evidence to continue.'
+                : liveReview && hasObservedFailures && !acknowledgeErrors
+                  ? 'Accept the observed Shadow errors and fallbacks to continue.'
+                  : action === 'activateCandidate' && materialDifferences && !acknowledgeDifferences
+                    ? 'Approve the observed material differences to continue.'
+                    : null;
   const TitleIcon = liveReview ? Zap : action === 'restore' ? History : Rocket;
   const { title, description } = copy.get(action ?? 'publish')!;
   return (
@@ -307,6 +318,13 @@ export function AutomationReviewDialog({
                 Review context mapping and deployment queue/latency metrics before enabling. These
                 metrics are not measured by this dialog.
               </p>
+              {readiness && (
+                <p>
+                  Readiness policy: at least {readiness.policy.minimumEvaluations} evaluations
+                  within {readiness.policy.maximumEvidenceAgeHours} hours;{' '}
+                  {readiness.pendingObservations} pending observations.
+                </p>
+              )}
               <div className="space-y-1 rounded-md bg-muted/40 p-3">
                 <p className="font-medium">When you confirm</p>
                 <ul className="list-disc space-y-0.5 pl-5">
@@ -319,7 +337,9 @@ export function AutomationReviewDialog({
                 <div className={cn('space-y-2 rounded-md border p-3', noticeClasses.warn)}>
                   <p className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    No Shadow evidence is available yet.
+                    {readiness
+                      ? 'Recent Shadow evidence does not meet the configured readiness policy.'
+                      : 'No Shadow evidence is available yet.'}
                   </p>
                   <label className="flex min-h-10 cursor-pointer items-start gap-2">
                     <input
@@ -328,7 +348,9 @@ export function AutomationReviewDialog({
                       checked={acknowledge}
                       onChange={event => setAcknowledge(event.target.checked)}
                     />
-                    I understand this version has not been observed against real Shadow traffic.
+                    {readiness
+                      ? 'I understand this version has insufficient recent Shadow evidence under the configured policy.'
+                      : 'I understand this version has not been observed against real Shadow traffic.'}
                   </label>
                 </div>
               )}

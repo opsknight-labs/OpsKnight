@@ -447,6 +447,7 @@ export default function AutomationWorkspace({
           ? {
               action: 'activateCandidate',
               expectedCandidateVersionId: reviewData?.candidateVersionId,
+              expectedReadinessPolicyRevision: reviewData?.candidateReadiness?.settingsRevision,
               acknowledgeNoShadow,
               acknowledgeShadowErrors,
               acknowledgeMaterialDifferences,
@@ -571,6 +572,7 @@ export default function AutomationWorkspace({
             ? (reviewData?.candidateAggregates?.reduce((sum, row) => sum + row.fallbacks, 0) ?? 0)
             : (counts?.fallbacks ?? 0)
         }
+        candidateReadiness={reviewData?.candidateReadiness}
         enabled={status?.enabled ?? false}
         counts={counts}
         busy={busy}

@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-const mocks = vi.hoisted(() => ({ save: vi.fn() }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), readCleanup: vi.fn(), retryCleanup: vi.fn() }));
 vi.mock('@/app/(app)/settings/system/automation-actions', () => ({
   saveAutomationSettings: mocks.save,
+  readAutomationPrivacyCleanupStatus: mocks.readCleanup,
+  retryAutomationPrivacyCleanupAction: mocks.retryCleanup,
 }));
 
 import AutomationSettings from '@/components/settings/AutomationSettings';
+import { DEFAULT_AUTOMATION_READINESS_POLICY } from '@/lib/automation/readiness-policy';
 
 const initial = {
   automationEnabled: true,
@@ -16,12 +19,16 @@ const initial = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.readCleanup.mockResolvedValue(null);
+  mocks.retryCleanup.mockResolvedValue(null);
   mocks.save.mockImplementation(async (input: Record<string, unknown>) => ({
     ok: true,
     settings: {
       automationEnabled: input.automationEnabled,
       automationTraceRetentionDays: input.automationTraceRetentionDays,
       automationSettingsRevision: 5,
+      automationStoreObservationPreviews: input.automationStoreObservationPreviews,
+      automationReadinessPolicy: input.automationReadinessPolicy,
     },
   }));
 });
@@ -43,6 +50,8 @@ describe('AutomationSettings', () => {
       automationEnabled: true,
       automationTraceRetentionDays: 120,
       expectedRevision: 4,
+      automationStoreObservationPreviews: false,
+      automationReadinessPolicy: DEFAULT_AUTOMATION_READINESS_POLICY,
     });
     fireEvent.change(retention(), { target: { value: '90' } });
     fireEvent.click(save());
@@ -88,6 +97,8 @@ describe('AutomationSettings', () => {
         automationEnabled: false,
         automationTraceRetentionDays: 30,
         expectedRevision: 4,
+        automationStoreObservationPreviews: false,
+        automationReadinessPolicy: DEFAULT_AUTOMATION_READINESS_POLICY,
       })
     );
   });
@@ -175,4 +186,35 @@ describe('AutomationSettings', () => {
     expect(alert.textContent).not.toContain('Server Components');
     expect(screen.getByRole('button', { name: 'Reload settings' })).toBeTruthy();
   });
+});
+
+it('saves explicit preview consent and reviewed readiness limits with the revision', async () => {
+  render(<AutomationSettings initialSettings={initial} />);
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Store diagnostic field-value previews' }));
+  fireEvent.change(screen.getByLabelText('Minimum candidate evaluations'), {
+    target: { value: '101' },
+  });
+  fireEvent.click(save());
+  await waitFor(() =>
+    expect(mocks.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedRevision: 4,
+        automationStoreObservationPreviews: true,
+        automationReadinessPolicy: {
+          ...DEFAULT_AUTOMATION_READINESS_POLICY,
+          minimumEvaluations: 101,
+        },
+      })
+    )
+  );
+});
+
+it('loads failed cleanup and retries through the authorized action', async () => {
+  mocks.readCleanup.mockResolvedValue({ status: 'FAILED', attempts: 10, batchesCompleted: 0 });
+  mocks.retryCleanup.mockResolvedValue({ status: 'PENDING', attempts: 0, batchesCompleted: 0 });
+  render(<AutomationSettings initialSettings={initial} />);
+  await screen.findByText('Diagnostic cleanup: FAILED');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry diagnostic cleanup' }));
+  await screen.findByText('Diagnostic cleanup: PENDING');
+  expect(mocks.retryCleanup).toHaveBeenCalledTimes(1);
 });

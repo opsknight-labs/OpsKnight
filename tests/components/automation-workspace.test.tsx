@@ -414,3 +414,64 @@ it('switches area via 1-5 keyboard shortcuts only when no dialog or interactive 
 
   document.body.removeChild(input);
 });
+
+it('requires review of insufficient recent candidate evidence and blocks an observation backlog', () => {
+  const readiness = {
+    settingsRevision: 4,
+    policy: {
+      minimumEvaluations: 100,
+      maximumEvidenceAgeHours: 48,
+      maximumPendingObservations: 0,
+      maximumErrorRate: 0,
+    },
+    policyValid: true,
+    windowDays: 7,
+    evaluated: 1,
+    errorRate: 0,
+    latestEvidenceBucketDate: '2026-10-30T00:00:00.000Z',
+    evidenceAgeHours: 1,
+    sufficientRecentEvidence: false,
+    pendingObservations: 0,
+    pendingObservationsTruncated: false,
+    backlogWithinPolicy: true,
+    errorsWithinPolicy: true,
+    counts: {
+      evaluated: 1,
+      same: 1,
+      routeDifferent: 0,
+      priorityDifferent: 0,
+      noEscalationDifferent: 0,
+      errors: 0,
+      fallbacks: 0,
+    },
+  };
+  const props = {
+    snapshot: emptySnapshot,
+    version: 2,
+    enabled: true,
+    busy: false,
+    onCancel: vi.fn(),
+    onConfirm: vi.fn(),
+    counts: { evaluated: 1, routes: 0, priorities: 0, skips: 0, errors: 0 },
+  };
+  const { rerender } = render(
+    <AutomationReviewDialog {...props} action="activateCandidate" candidateReadiness={readiness} />
+  );
+  const confirm = screen.getByRole('button', { name: 'Confirm LIVE' });
+  expect(confirm).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: /insufficient recent Shadow evidence/ }));
+  expect(confirm).toBeEnabled();
+  fireEvent.click(confirm);
+  expect(props.onConfirm).toHaveBeenCalledWith(true, false, false);
+  rerender(
+    <AutomationReviewDialog
+      {...props}
+      action="activateCandidate"
+      candidateReadiness={{ ...readiness, pendingObservations: 1, backlogWithinPolicy: false }}
+    />
+  );
+  expect(confirm).toBeDisabled();
+  expect(confirm).toHaveAccessibleDescription(
+    'Wait for candidate observations to finish before activating this candidate.'
+  );
+});

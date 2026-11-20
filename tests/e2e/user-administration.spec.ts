@@ -53,11 +53,15 @@ test('administrator UI and REST share role, deactivation and reactivation outcom
     await page.locator('form button[type="submit"]').click();
     await expect(page).not.toHaveURL(/\/login/);
     await page.goto(`/users?q=${encodeURIComponent(target.email)}`);
-    await page.getByRole('button', { name: 'Open user actions', exact: true }).click();
+    await page
+      .getByRole('button', { name: `Open user actions for ${target.name}`, exact: true })
+      .click();
     await page.getByRole('menuitem', { name: 'Change Role', exact: true }).hover();
     await page.getByRole('menuitem', { name: 'Responder', exact: true }).click();
     await expect.poll(async () => (await security()).role).toBe('RESPONDER');
-    await page.getByRole('button', { name: 'Open user actions', exact: true }).click();
+    await page
+      .getByRole('button', { name: `Open user actions for ${target.name}`, exact: true })
+      .click();
     await page.getByRole('menuitem', { name: 'Deactivate User', exact: true }).click();
     await page
       .getByRole('alertdialog')
@@ -80,7 +84,9 @@ test('administrator UI and REST share role, deactivation and reactivation outcom
     expect(replay.headers()['idempotency-replayed']).toBe('true');
     await expect.poll(async () => (await security()).status).toBe('ACTIVE');
     await page.reload();
-    await page.getByRole('button', { name: 'Open user actions', exact: true }).click();
+    await page
+      .getByRole('button', { name: `Open user actions for ${target.name}`, exact: true })
+      .click();
     await expect(
       page.getByRole('menuitem', { name: 'Deactivate User', exact: true })
     ).toBeVisible();

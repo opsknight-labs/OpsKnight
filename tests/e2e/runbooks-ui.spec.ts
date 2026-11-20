@@ -783,7 +783,10 @@ test('independent rule wizard, paused duplicate and rule evidence stay truthful 
   await page
     .getByRole('button', { name: 'Validate configuration · No execution', exact: true })
     .click();
-  await expect(page.getByRole('status')).toContainText('This check does not activate the rule');
+  // Scoped to main: the global status bar has its own realtime live region.
+  await expect(page.getByRole('main').getByRole('status')).toContainText(
+    'This check does not activate the rule'
+  );
   await expect(page.getByRole('button', { name: 'Run now · Preview plan' })).not.toBeVisible();
   expect(
     (await prisma.serviceAutomationRule.findUniqueOrThrow({ where: { id: rule.id } })).enabled
@@ -1524,7 +1527,10 @@ test('detached-rule suggestions stay visible with disabled execution and can be 
   await expect(
     history.getByRole('link', { name: /view archived (?:rule )?evidence/i })
   ).not.toBeVisible();
-  await history.getByRole('combobox', { name: 'Rule history', exact: true }).filter({ visible: true }).selectOption('archived');
+  await history
+    .getByRole('combobox', { name: 'Rule history', exact: true })
+    .filter({ visible: true })
+    .selectOption('archived');
   await expect(history).toHaveURL(/rulesState=archived/);
   await history
     .getByPlaceholder('Search rules by name, runbook, or target agent…')
