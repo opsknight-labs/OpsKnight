@@ -76,10 +76,12 @@ jobs:
           else
             git push --force "$remote" "${GITHUB_SHA}:refs/heads/main" 'refs/tags/*:refs/tags/*'
           fi
-          only_image_build
-          # A workflow added by this push was triggered before it could be disabled, and
-          # disabling does not cancel runs, so cancel everything but the image build.
+          # GitHub registers workflows added by this push a few seconds later; disabling
+          # right away missed them, so wait first.
           sleep 15
+          only_image_build
+          # Those workflows were already triggered by the push, and disabling does not
+          # cancel runs, so cancel everything but the image build.
           gh api "repos/${BACKUP_REPO}/actions/runs?head_sha=${GITHUB_SHA}&per_page=100" \
             --jq '.workflow_runs[] | select(.status != "completed") | [.id, .path] | @tsv' |
             while IFS=$'\t' read -r id path; do
