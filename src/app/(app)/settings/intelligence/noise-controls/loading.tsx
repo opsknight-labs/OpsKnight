@@ -1,15 +1,5 @@
-import { Skeleton } from '@/components/ui/shadcn/skeleton';
+import { SettingsPageSkeleton } from '@/components/patterns';
 
 export default function NoiseControlsLoading() {
-  return (
-    <div className="space-y-6 animate-pulse" aria-busy="true" aria-label="Loading noise controls">
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-56" />
-        <Skeleton className="h-4 w-full max-w-xl" />
-      </div>
-      <Skeleton className="h-28 w-full rounded-lg" />
-      <Skeleton className="h-64 w-full rounded-lg" />
-      <Skeleton className="h-64 w-full rounded-lg" />
-    </div>
-  );
+  return <SettingsPageSkeleton label="Loading noise controls" variant="table" rows={6} />;
 }

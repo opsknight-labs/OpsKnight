@@ -42,9 +42,7 @@ export default function AiopsPulseTile({ pulse }: { pulse: AiopsPulse | null }) 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
           {stats.map(stat => (
             <div key={stat.key} className="min-w-0" data-pulse-stat={stat.key}>
-              <dt className="truncate text-[11px] font-medium text-muted-foreground">
-                {stat.label}
-              </dt>
+              <dt className="truncate text-2xs font-medium text-muted-foreground">{stat.label}</dt>
               <dd className="text-lg font-semibold tabular-nums text-foreground">
                 {format(stat.value)}
               </dd>

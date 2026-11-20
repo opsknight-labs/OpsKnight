@@ -26,7 +26,7 @@ export default function WallboardLargestGroupTile({
         <h2 id="wallboard-largest-group-heading" className="text-sm font-semibold">
           Largest open group
         </h2>
-        <span className="ml-auto text-[11px] text-muted-foreground">now</span>
+        <span className="ml-auto text-2xs text-muted-foreground">now</span>
       </div>
       <div className="flex items-end justify-between gap-3">
         <p className="min-w-0 text-sm">
@@ -36,7 +36,7 @@ export default function WallboardLargestGroupTile({
           >
             {group.parentTitle}
           </Link>
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+          <span className="mt-0.5 block truncate text-2xs text-muted-foreground">
             {group.parentRef}
             {group.serviceName ? ` · ${group.serviceName}` : ''}
           </span>
@@ -45,7 +45,7 @@ export default function WallboardLargestGroupTile({
           <span className="block text-xl font-semibold tabular-nums text-foreground">
             {new Intl.NumberFormat('en-US').format(group.childCount)}
           </span>
-          <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="block text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             grouped incident{group.childCount === 1 ? '' : 's'}
           </span>
         </p>

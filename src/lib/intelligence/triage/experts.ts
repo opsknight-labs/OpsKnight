@@ -87,6 +87,7 @@ export async function loadIncidentExperts(
   const credit = (userId: string, weight: number, field: 'resolved' | 'noted') => {
     const row = scores.get(userId) ?? { score: 0, resolved: 0, noted: 0 };
     row.score += field === 'resolved' ? weight : weight * NOTE_WEIGHT;
+    // eslint-disable-next-line security/detect-object-injection -- field is the closed union resolved | noted
     row[field] += 1;
     scores.set(userId, row);
   };

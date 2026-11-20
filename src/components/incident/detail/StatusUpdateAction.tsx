@@ -80,7 +80,7 @@ export default function StatusUpdateAction({
       {due && (
         <span
           className={cn(
-            'inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium tabular-nums whitespace-nowrap',
+            'inline-flex items-center rounded-md border px-2 py-0.5 text-2xs font-medium tabular-nums whitespace-nowrap',
             mobile && 'self-start',
             due.overdue
               ? 'border-status-elevated-border/40 bg-status-elevated-soft text-status-elevated-deep dark:bg-status-elevated/10 dark:text-foreground'

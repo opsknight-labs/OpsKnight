@@ -61,7 +61,7 @@ export default function PaletteKnowledgeResults({
             </div>
             <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
               <span className="truncate text-sm font-medium">{hit.title}</span>
-              <span className="truncate text-[10px] text-muted-foreground">
+              <span className="truncate text-2xs text-muted-foreground">
                 {LABELS[hit.kind]} · {hit.snippet}
               </span>
             </div>

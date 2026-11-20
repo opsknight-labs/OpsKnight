@@ -67,8 +67,8 @@ export function escapeCsvCell(value: Cell): string {
 const UNIT_SUFFIX = { count: '', duration: ' (min)', percent: ' (%)', ratio: '', hours: ' (h)' };
 
 /** Column header for a metric, from the registry. */
-// eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
 export const metricHeader = (id: MetricId) =>
+  // eslint-disable-next-line security/detect-object-injection -- id is a typed MetricId and unit a closed union, not user input
   `${METRICS[id].label}${UNIT_SUFFIX[METRICS[id].unit]}`;
 
 const round = (value: number, digits: number) => Number(value.toFixed(digits));
@@ -122,11 +122,11 @@ export function buildAnalyticsCsv(data: AnalyticsExportData): string {
 
   section('Summary', ['Metric', 'Current', 'Previous period', 'Definition']);
   const kpi = (id: MetricId, current: number | null, previous: number | null) =>
-    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
     rows.push([
       metricHeader(id),
       metricValue(id, current),
       metricValue(id, previous),
+      // eslint-disable-next-line security/detect-object-injection -- id is a typed MetricId, not user input
       METRICS[id].description,
     ]);
   kpi('incidents', kpis.current.incidents, kpis.previous.incidents);

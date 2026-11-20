@@ -81,7 +81,7 @@ export default memo(function SquireMessage({
       aria-label={assistant ? `${name} response` : 'Your question'}
       className={assistant ? 'min-w-0 space-y-2' : 'ml-8 flex flex-col items-end gap-1'}
     >
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         {assistant ? name : 'You'}
       </p>
       <div
@@ -190,7 +190,7 @@ export default memo(function SquireMessage({
                 </Button>
               )}
               {turn.mode === 'basic' && (
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-2xs text-muted-foreground">
                   Basic answer from your incident data
                 </span>
               )}
@@ -256,12 +256,12 @@ export default memo(function SquireMessage({
                 </form>
               )}
               {feedback === 'sent' && (
-                <span role="status" className="text-[11px] text-muted-foreground">
+                <span role="status" className="text-2xs text-muted-foreground">
                   Thanks for the feedback.
                 </span>
               )}
               {feedback === 'failed' && (
-                <span role="status" className="text-[11px] text-muted-foreground">
+                <span role="status" className="text-2xs text-muted-foreground">
                   Could not send feedback.
                 </span>
               )}

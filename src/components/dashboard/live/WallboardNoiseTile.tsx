@@ -7,11 +7,11 @@ const formatNumber = (value: number) => new Intl.NumberFormat('en-US').format(va
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <dt className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
       <dd className="text-xl font-semibold tabular-nums text-foreground">{value}</dd>
-      {hint && <dd className="text-[11px] text-muted-foreground">{hint}</dd>}
+      {hint && <dd className="text-2xs text-muted-foreground">{hint}</dd>}
     </div>
   );
 }
@@ -35,7 +35,7 @@ export default function WallboardNoiseTile({ tile }: { tile: TileData }) {
         <h2 id="wallboard-noise-heading" className="text-sm font-semibold">
           Noise reduction
         </h2>
-        <span className="ml-auto text-[11px] text-muted-foreground">last 24 h</span>
+        <span className="ml-auto text-2xs text-muted-foreground">last 24 h</span>
       </div>
       {tile.state === 'off' ? (
         <p className="text-xs text-muted-foreground">

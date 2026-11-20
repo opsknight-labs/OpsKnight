@@ -59,7 +59,7 @@ export default function SquireAppearancePreview({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
             Appearance preview
           </p>
           <p className="mt-1 truncate font-display text-lg font-semibold">
@@ -90,7 +90,7 @@ export default function SquireAppearancePreview({
         </select>
         <SquireAvatar kind={avatar} animated={animated} state={state} size="md" />
       </div>
-      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+      <p className="mt-2 text-2xs leading-5 text-muted-foreground">
         Preview only. Save below to apply your appearance settings. Reduced motion is always
         respected.
       </p>

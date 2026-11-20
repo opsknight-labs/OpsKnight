@@ -338,6 +338,7 @@ describe('storm parent', () => {
     expect((await incident(clear.id)).status).toBe('OPEN');
 
     expect((await send(service.id, 'edge-1', {}, 'resolve')).action).toBe('resolved');
+    expect((await incident(parent.id)).status).toBe('RESOLVED');
     await runStormCascadeSweep(budget);
     expect((await incident(clear.id)).status).toBe('RESOLVED');
     expect((await incident(firing.id)).status).toBe('OPEN');

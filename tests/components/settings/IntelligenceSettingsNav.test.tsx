@@ -128,6 +128,10 @@ describe('IntelligenceGroupHeader', () => {
     );
     expect(container.querySelector('#insights')?.className).toMatch(/scroll-mt-24/);
     expect(container.querySelector('#alert-quality')?.className).toMatch(/scroll-mt-24/);
-    expect(container.querySelectorAll('[id]')).toHaveLength(2);
+    // Only the named sections are anchors; generated heading ids (useId) are not.
+    const anchors = Array.from(container.querySelectorAll('[id]'))
+      .map(el => el.id)
+      .filter(id => /^[a-z][a-z-]*$/.test(id));
+    expect(anchors).toEqual(['insights', 'alert-quality']);
   });
 });

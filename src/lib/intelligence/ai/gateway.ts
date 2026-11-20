@@ -1061,6 +1061,7 @@ export async function resolveGatewayPort(
   const tiered =
     capability &&
     (settings.spendControlsEnabled ||
+      // eslint-disable-next-line security/detect-object-injection -- capability is a closed AiCapability union
       (capability !== 'EMBED' && CAPABILITY_TIERS[capability] === 'small'))
       ? applyDefaultTiers(eligible, capability)
       : eligible;

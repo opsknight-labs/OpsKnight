@@ -30,7 +30,7 @@ const BURN_CLASS = {
 function StatusPill({ status }: { status: string }) {
   const tone = SERVICE_STATUS.get(status) ?? { label: status, className: 'bg-muted' };
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${tone.className}`}>
+    <span className={`rounded px-1.5 py-0.5 text-2xs font-medium ${tone.className}`}>
       {tone.label}
     </span>
   );

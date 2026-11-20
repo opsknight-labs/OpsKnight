@@ -42,6 +42,7 @@ export async function clearPageContextKinds(
   hidden: readonly IntelligenceFindingKind[],
   scope: { serviceId: string } | 'global' | null
 ): Promise<void> {
+  // eslint-disable-next-line security/detect-object-injection -- kind is a closed finding-kind union
   const keys = [...new Set(hidden.map(kind => FIELD[kind]).filter(Boolean))] as string[];
   if (keys.length === 0) return;
   const where =
@@ -82,6 +83,7 @@ export async function refreshPageContext(
     });
     for (const row of top) {
       const field = FIELD[row.kind];
+      // eslint-disable-next-line security/detect-object-injection -- field comes from the fixed FIELD table
       if (field && row.subjectRef) (context ??= {})[field] = row.subjectRef;
     }
   }

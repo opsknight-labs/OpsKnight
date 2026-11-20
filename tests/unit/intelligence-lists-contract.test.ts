@@ -183,7 +183,9 @@ describe('one noise-decision vocabulary across incident, lists and service surfa
     for (const kind of ALERT_DECISION_KINDS) expect(explain.NOISE_DECISION_KINDS).toContain(kind);
     // Every kind has a label and a status tone, so no surface invents its own.
     for (const kind of explain.NOISE_DECISION_KINDS) {
+      // eslint-disable-next-line security/detect-object-injection -- kind iterates a fixed exported list
       expect(explain.NOISE_DECISION_LABELS[kind]).toBeTruthy();
+      // eslint-disable-next-line security/detect-object-injection -- kind iterates a fixed exported list
       expect(['neutral', 'info', 'shift']).toContain(explain.NOISE_DECISION_TONE[kind]);
     }
   });

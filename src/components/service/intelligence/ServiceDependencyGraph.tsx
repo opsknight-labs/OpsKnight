@@ -71,7 +71,7 @@ function Node({
       <text
         x={x + (node.openIncidents > 0 ? 26 : 12)}
         y={y + NODE_H / 2 + 4}
-        className={cn('fill-foreground text-[12px]', focus && 'font-semibold')}
+        className={cn('fill-foreground text-xs', focus && 'font-semibold')}
       >
         {clip(node.name, node.openIncidents > 0 ? 17 : 22)}
       </text>
@@ -80,7 +80,7 @@ function Node({
           x={x + NODE_W - 10}
           y={y + NODE_H / 2 + 4}
           textAnchor="end"
-          className="fill-muted-foreground text-[11px]"
+          className="fill-muted-foreground text-2xs"
         >
           {node.openIncidents} open
         </text>
@@ -129,7 +129,7 @@ export default function ServiceDependencyGraph({ data }: { data: ServiceDependen
           x={direction === 'UPSTREAM' ? x : x + NODE_W}
           y={14}
           textAnchor={direction === 'UPSTREAM' ? 'start' : 'end'}
-          className="fill-muted-foreground text-[11px] font-medium"
+          className="fill-muted-foreground text-2xs font-medium"
         >
           {heading}
         </text>
@@ -155,7 +155,7 @@ export default function ServiceDependencyGraph({ data }: { data: ServiceDependen
                   x={midX}
                   y={(y + focusY) / 2 + NODE_H / 2 - 5}
                   textAnchor="middle"
-                  className="fill-muted-foreground text-[10px]"
+                  className="fill-muted-foreground text-2xs"
                 >
                   Suggested
                 </text>
@@ -174,7 +174,7 @@ export default function ServiceDependencyGraph({ data }: { data: ServiceDependen
             x={direction === 'UPSTREAM' ? x : x + NODE_W}
             y={height - 4}
             textAnchor={direction === 'UPSTREAM' ? 'start' : 'end'}
-            className="fill-muted-foreground text-[11px]"
+            className="fill-muted-foreground text-2xs"
           >
             +{group.more} more in the list
           </text>

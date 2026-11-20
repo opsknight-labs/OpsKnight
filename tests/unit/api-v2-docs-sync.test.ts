@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyGeneratedSections } from '@/lib/api-v2/docs-render';
 
-const DOC = join(process.cwd(), 'docs/v2.1.0/reference/api/v2.md');
+const DOC = join(process.cwd(), 'docs/v2.2.0/reference/api/v2.md');
 
 describe('REST v2 reference documentation', () => {
   it('matches the registries it is generated from', () => {

@@ -15,7 +15,9 @@ export function parsePageContext(value: unknown): PageContext | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const context: PageContext = {};
   for (const key of PAGE_CONTEXT_KEYS) {
+    // eslint-disable-next-line security/detect-object-injection -- key comes from the fixed PAGE_CONTEXT_KEYS list
     const id = (value as Record<string, unknown>)[key];
+    // eslint-disable-next-line security/detect-object-injection -- key comes from the fixed PAGE_CONTEXT_KEYS list
     if (typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id)) context[key] = id;
   }
   return Object.keys(context).length > 0 ? context : null;

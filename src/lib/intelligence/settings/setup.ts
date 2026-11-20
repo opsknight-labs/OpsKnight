@@ -56,6 +56,7 @@ export async function applyRecommendedPreset(
     const done: string[] = [];
     const { revision, ...settings } = await getIntelligenceSettings(tx);
     if (revision !== expected.settingsRevision) throw new AppError({ code: 'PRECONDITION_FAILED' });
+    // eslint-disable-next-line security/detect-object-injection -- keys come from the fixed OPS_INSIGHT_SWITCHES list
     const switches = ['enabled' as const, ...OPS_INSIGHT_SWITCHES].filter(key => !settings[key]);
     if (switches.length > 0) {
       await updateIntelligenceSettings(

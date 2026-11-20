@@ -897,7 +897,7 @@ export default function SquireLauncher({
               <div className="min-w-0">
                 <h2 className="truncate font-display text-base font-semibold">{name}</h2>
                 <p
-                  className="mt-0.5 truncate text-[11px] text-muted-foreground"
+                  className="mt-0.5 truncate text-2xs text-muted-foreground"
                   title={presence.label}
                 >
                   {statusLabel}
@@ -1332,7 +1332,7 @@ export default function SquireLauncher({
                 className="max-h-40 min-h-11 resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
               />
               <div className="flex items-center justify-between gap-2 pl-2">
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-2xs text-muted-foreground">
                   <span className="hidden sm:inline">
                     Enter to send · Shift + Enter for a new line
                   </span>
@@ -1364,7 +1364,7 @@ export default function SquireLauncher({
                 )}
               </div>
             </div>
-            <p className="mt-2 flex items-start justify-center gap-1.5 px-1 text-center text-[10px] leading-4 text-muted-foreground">
+            <p className="mt-2 flex items-start justify-center gap-1.5 px-1 text-center text-2xs leading-4 text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
               {history
                 ? `Private to you · saved for ${history.retentionDays} days. `

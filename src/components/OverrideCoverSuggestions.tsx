@@ -26,18 +26,20 @@ export default function OverrideCoverSuggestions({
   onPick: (userId: string) => void;
 }) {
   const titleId = useId();
-  const [result, setResult] = useState<CoverSuggestions | null>(null);
   const startIso = start?.toISOString() ?? null;
   const endIso = end?.toISOString() ?? null;
+  // Answers are keyed by the request, so a changed window never shows the previous window's people.
+  const requestKey = `${scheduleId}|${startIso}|${endIso}|${replacesUserId}`;
+  const [answer, setAnswer] = useState<{ key: string; result: CoverSuggestions } | null>(null);
+  const result = answer?.key === requestKey ? answer.result : null;
 
   useEffect(() => {
-    setResult(null);
     if (!startIso || !endIso || endIso <= startIso) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       suggestOverrideCover({ scheduleId, start: startIso, end: endIso, replacesUserId })
         .then(next => {
-          if (!cancelled) setResult(next);
+          if (!cancelled) setAnswer({ key: requestKey, result: next });
         })
         .catch(() => undefined);
     }, 400);
@@ -45,7 +47,7 @@ export default function OverrideCoverSuggestions({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [scheduleId, startIso, endIso, replacesUserId]);
+  }, [scheduleId, startIso, endIso, replacesUserId, requestKey]);
 
   if (!result || result.candidates.length === 0) return null;
 
@@ -60,7 +62,7 @@ export default function OverrideCoverSuggestions({
           Suggested cover
         </h3>
       </div>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">
+      <p className="mt-0.5 text-2xs text-muted-foreground">
         {result.gap ? 'Part of this window has nobody on call. ' : ''}
         Not on call then; lightest load over the last {result.windowDays} days first.
       </p>

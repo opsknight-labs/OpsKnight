@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 export type ServiceIntelligenceBadgeData = ServiceListBadges;
 
 const chip =
-  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium leading-4';
+  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium leading-4';
 
 /**
  * Up to three small badges on a service row: in maintenance, SLO burning, noise controls on or in

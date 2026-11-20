@@ -240,7 +240,10 @@ test.describe.serial('intelligence on the service, service list and team pages',
   }) => {
     const page = await signIn(browser, adminEmail);
     await page.goto(`/services?search=${encodeURIComponent(prefix)}`);
-    const badges = page.getByTestId(`service-intelligence-badges-${ids.checkout}`);
+    // The status cell renders in the table and in the narrow-screen card; check the one on screen.
+    const badges = page
+      .getByTestId(`service-intelligence-badges-${ids.checkout}`)
+      .filter({ visible: true });
     await expect(badges.getByText('In maintenance')).toBeVisible();
     await expect(badges.getByText('SLO burning fast')).toBeVisible();
     await expect(badges.getByText('Noise controls on')).toBeVisible();

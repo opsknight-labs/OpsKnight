@@ -35,6 +35,7 @@ describe('Recommended intelligence preset', () => {
 
     const settings = await getIntelligenceSettings();
     expect(settings.enabled).toBe(true);
+    // eslint-disable-next-line security/detect-object-injection -- keys come from the fixed OPS_INSIGHT_SWITCHES list
     for (const key of OPS_INSIGHT_SWITCHES) expect(settings[key]).toBe(true);
     const policy = await resolveEffectivePolicy(null);
     expect(policy.mode).toBe('SUGGEST');

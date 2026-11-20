@@ -116,7 +116,15 @@ function ServiceStatusBadge({ status }: { status: string }) {
 function StatusCell({ service }: { service: ServiceListItem }) {
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      <ServiceIntelligenceBadges serviceId={service.id} badges={service.intelligenceBadges} />
+      <ServiceIntelligenceBadges
+        serviceId={service.id}
+        // One "In maintenance" chip per row: the service's own window wins over a noise-control window.
+        badges={
+          service.maintenanceTitle && service.intelligenceBadges
+            ? { ...service.intelligenceBadges, maintenance: undefined }
+            : service.intelligenceBadges
+        }
+      />
       <ServiceStatusBadge status={service.dynamicStatus} />
       {service.maintenanceTitle && (
         <Badge variant="info" size="xs" title={service.maintenanceTitle}>

@@ -62,6 +62,7 @@ export async function loadPolicyIntelligence(
     'USER',
     people.filter((person): person is string => person !== null)
   );
+  // eslint-disable-next-line security/detect-object-injection -- index is the array position from map
   const personByStep = new Map(targets.map((target, index) => [target.id, people[index]]));
   const stepStats: Record<string, PolicyStepStat> = {};
   for (const outcome of steps) {

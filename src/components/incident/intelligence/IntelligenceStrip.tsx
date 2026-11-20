@@ -62,7 +62,7 @@ export default function IntelligenceStrip({
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               Insights
               <kbd
-                className="hidden rounded border border-border bg-muted px-1 font-mono text-[10px] font-normal lg:inline"
+                className="hidden rounded border border-border bg-muted px-1 font-mono text-2xs font-normal lg:inline"
                 title="Keyboard shortcut: I"
               >
                 I

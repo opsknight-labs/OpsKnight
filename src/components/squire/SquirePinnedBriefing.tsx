@@ -56,7 +56,7 @@ function Row({ href, title, detail }: { href?: string; title: string; detail: st
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <h4 className="px-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <h4 className="px-2 pt-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </h4>
       <ul>{children}</ul>

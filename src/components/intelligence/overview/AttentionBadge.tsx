@@ -35,7 +35,7 @@ export default async function AttentionBadge({ actor }: { actor: AuthorizationAc
       <Inbox className="h-5 w-5" aria-hidden="true" />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute left-[19px] top-0 flex h-[18px] min-w-[18px] select-none items-center justify-center rounded-full bg-status-elevated px-1 text-[10px] font-bold leading-none tabular-nums text-slate-950 ring-2 ring-[#09090b]"
+        className="pointer-events-none absolute left-[19px] top-0 flex h-[18px] min-w-[18px] select-none items-center justify-center rounded-full bg-status-elevated px-1 text-2xs font-bold leading-none tabular-nums text-slate-950 ring-2 ring-[#09090b]"
       >
         {badge.count}
         {badge.more && '+'}

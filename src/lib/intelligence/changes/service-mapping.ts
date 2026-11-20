@@ -18,6 +18,7 @@ export function changeMappingKey(value: string): string {
 }
 
 function candidateValues(change: Pick<MappedChange, 'component' | 'labels'>): string[] {
+  // eslint-disable-next-line security/detect-object-injection -- keys come from the fixed APP_LABEL_KEYS list
   const values = [change.component, ...APP_LABEL_KEYS.map(key => change.labels[key])]
     .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
     .map(value => value.trim().slice(0, 128));
@@ -47,6 +48,7 @@ export async function resolveChangeService(
   const keys = values.map(changeMappingKey);
   const table = (mapping.mappings ?? {}) as Record<string, unknown>;
   const explicit = keys
+    // eslint-disable-next-line security/detect-object-injection -- own-property check above; the table is a parsed JSON record
     .map(key => (Object.hasOwn(table, key) ? table[key] : undefined))
     .filter((id): id is string => typeof id === 'string');
   const [services, aliases] = await Promise.all([

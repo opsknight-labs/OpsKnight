@@ -200,6 +200,7 @@ export const INTELLIGENCE_LANE_DATA_ENV = 'OPSKNIGHT_INTELLIGENCE_LANE_DATA';
 export function intelligenceLaneThreadData<T extends object>(
   env: NodeJS.ProcessEnv = process.env
 ): Partial<T> {
+  // eslint-disable-next-line security/detect-object-injection -- constant environment variable name
   return JSON.parse(env[INTELLIGENCE_LANE_DATA_ENV] || '{}') as Partial<T>;
 }
 

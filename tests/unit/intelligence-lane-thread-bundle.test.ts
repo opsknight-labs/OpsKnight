@@ -23,6 +23,7 @@ describe('intelligence lane thread bundle', () => {
     const out = await script.buildIntelligenceLaneThread({
       outfile: 'scripts/dist/intelligence-lane-thread-bundle-test.cjs',
     });
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- path returned by the build script under scripts/dist
     const source = readFileSync(out, 'utf8');
     const loaded = new Set(
       [...source.matchAll(/\b(?:require|import)\("([^"]+)"\)/g)].map(match => match[1])
@@ -47,8 +48,10 @@ describe('intelligence lane thread bundle', () => {
     try {
       // A bundle from older code is replaced (a source install that pulled new code must not run the old lane).
       const existing = join(directory, 'existing.cjs');
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- temporary directory created by this test
       writeFileSync(existing, '// stale');
       execFileSync(process.execPath, [script, '--outfile', existing, '--optional']);
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- temporary directory created by this test
       expect(readFileSync(existing, 'utf8')).toContain('lane-thread-entry');
       // A bundle that cannot be built is a warning with --optional and an error without it.
       const missing = join(directory, 'missing.cjs');

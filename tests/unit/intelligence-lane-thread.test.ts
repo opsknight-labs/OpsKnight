@@ -354,6 +354,7 @@ describe('lane thread host', () => {
     expect(getIntelligenceLaneStatus().lastCycleAt).not.toBeNull();
     expect(delays).toEqual([1, 2]); // consecutive failures back off
     await until(() => getIntelligenceLaneStatus().totals.cycles > carried + 2);
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- temporary file created by this test
     expect(readFileSync(crashes, 'utf8')).toBe('2');
   });
 

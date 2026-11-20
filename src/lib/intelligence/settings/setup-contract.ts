@@ -71,6 +71,7 @@ export function setupChecklist(state: SetupState): SetupChecklistItem[] {
       label: 'Operations insights',
       benefit:
         'Points out silent integrations, noisy policies, overloaded schedules and failing runbooks.',
+      // eslint-disable-next-line security/detect-object-injection -- keys come from the fixed OPS_INSIGHT_SWITCHES list
       on: OPS_INSIGHT_SWITCHES.every(key => state.settings[key]),
       href: intelligenceSettingsHref('engine', 'operations-insights'),
       inPreset: true,

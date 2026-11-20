@@ -50,7 +50,7 @@ function Tile({
         <h3 id={`${id}-title`} className="text-sm font-semibold">
           {title}
         </h3>
-        <span className="ml-auto text-[11px] text-muted-foreground">{period}</span>
+        <span className="ml-auto text-2xs text-muted-foreground">{period}</span>
       </header>
       {children}
       {href && linkLabel && (

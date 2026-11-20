@@ -60,7 +60,7 @@ export default function IncidentExpertsLine({
           Experts
         </h3>
       </div>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">
+      <p className="mt-0.5 text-2xs text-muted-foreground">
         Fixed similar incidents in the last 180 days.
       </p>
       <ul className="mt-2 divide-y divide-border/60">

@@ -59,7 +59,7 @@ export default function HeatStrip({ data, maxValue, height = 24, label }: HeatSt
           />
         ))}
       </div>
-      <div className="analytics-heat-strip-axis flex justify-between text-[0.7rem] uppercase tracking-wider text-muted-foreground">
+      <div className="analytics-heat-strip-axis flex justify-between text-2xs uppercase tracking-wider text-muted-foreground">
         <span>{startLabel}</span>
         <span>{endLabel}</span>
       </div>

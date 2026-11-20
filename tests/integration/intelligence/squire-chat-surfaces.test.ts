@@ -572,6 +572,7 @@ describe('ask_squire over the MCP protocol', () => {
     const off = await callTool(actor, { question: 'help' });
     expect(off.result.isError).toBe(true);
     // Tool errors carry their machine-readable details in _meta, not structuredContent (#971).
+    // eslint-disable-next-line security/detect-object-injection -- constant meta key
     expect(off.result._meta?.[MCP_ERROR_META_KEY]).toMatchObject({
       code: 'MCP_CAPABILITY_DISABLED',
     });
