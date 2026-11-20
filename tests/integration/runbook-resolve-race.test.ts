@@ -252,6 +252,12 @@ describeIfRealDB('automatic runbook start vs incident resolve (real PostgreSQL)'
   it(`never creates an execution after a committed resolve (${ITERATIONS} concurrent iterations)`, async () => {
     const outcomes = { executedBeforeResolve: 0, skipped: 0 };
     for (let i = 0; i < ITERATIONS; i++) {
+      // Earlier iterations' runs age out of the per-rule automatic rate window (5 per 10 minutes); this test
+      // is about resolve ordering, not the rate limit.
+      await testPrisma.runbookExecution.updateMany({
+        where: { createdAt: { gte: new Date(Date.now() - 11 * 60_000) } },
+        data: { createdAt: new Date(Date.now() - 11 * 60_000) },
+      });
       const incident = await createTestIncident(`Race ${i}`, fixture.service.id);
       const viaJob = i % 2 === 0;
       const start = async () => {
