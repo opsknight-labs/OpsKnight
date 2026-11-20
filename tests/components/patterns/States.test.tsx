@@ -10,7 +10,6 @@ import {
 } from '@/components/patterns/Skeletons';
 import LegacyEmptyState from '@/components/ui/EmptyState';
 import LegacyErrorState from '@/components/ui/ErrorState';
-import AnalyticsEmptyState from '@/components/analytics/EmptyState';
 
 describe('EmptyState', () => {
   it('teaches the next step: title, description, primary + secondary action and help link', () => {
@@ -32,10 +31,8 @@ describe('EmptyState', () => {
     );
   });
 
-  it('is what the legacy ui and analytics empty states render', () => {
+  it('is what the legacy ui empty state renders', () => {
     expect(LegacyEmptyState).toBe(EmptyState);
-    render(<AnalyticsEmptyState title="No data in range" description="Widen the range." />);
-    expect(screen.getByRole('heading', { name: 'No data in range' })).toBeInTheDocument();
   });
 });
 

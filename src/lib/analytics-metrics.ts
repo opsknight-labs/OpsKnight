@@ -63,20 +63,6 @@ export function calculateMtbfMs(
   return Math.max(0, totalOperatingTimeMs) / failureCount;
 }
 
-export function smoothSeries(values: number[], windowSize: number): number[] {
-  if (!Number.isFinite(windowSize) || windowSize <= 1 || values.length <= 1) {
-    return values;
-  }
-
-  const window = Math.max(1, Math.floor(windowSize));
-  return values.map((_, index) => {
-    const start = Math.max(0, index - window + 1);
-    const slice = values.slice(start, index + 1);
-    const sum = slice.reduce((acc, val) => acc + val, 0);
-    return slice.length ? sum / slice.length : 0;
-  });
-}
-
 export function buildStatusAges(
   incidents: Array<{
     status: string;
