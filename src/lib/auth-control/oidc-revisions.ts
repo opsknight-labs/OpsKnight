@@ -593,7 +593,11 @@ export async function completeOidcRevisionTest(
       }
       const resolved = resolveSignInRole(
         role,
-        { role: admin.role, roleSource: admin.roleSource },
+        {
+          role: admin.role,
+          roleSource: admin.roleSource,
+          scimRoleMappingAdopted: admin.scimRoleMappingAdopted,
+        },
         { firstLink: !identity }
       );
       const denied = role.deny && resolved.roleSource !== 'MANUAL';
@@ -841,7 +845,15 @@ async function roleChangeImpact(tx: Prisma.TransactionClient, config: ProviderCo
     select: {
       claimSnapshot: true,
       user: {
-        select: { id: true, name: true, email: true, role: true, roleSource: true, status: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          roleSource: true,
+          scimRoleMappingAdopted: true,
+          status: true,
+        },
       },
     },
     orderBy: { lastLoginAt: 'desc' },
@@ -861,6 +873,7 @@ async function roleChangeImpact(tx: Prisma.TransactionClient, config: ProviderCo
     const resolved = resolveSignInRole(evaluation, {
       role: user.role,
       roleSource: user.roleSource,
+      scimRoleMappingAdopted: user.scimRoleMappingAdopted,
     });
     if (evaluation.deny && resolved.roleSource !== 'MANUAL') {
       denied += 1;

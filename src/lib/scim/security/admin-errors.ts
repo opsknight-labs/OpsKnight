@@ -1,7 +1,10 @@
+import { AppError } from '@/lib/errors';
 import { ZodError } from 'zod/v3';
 export type ScimAdminFailure = { scimError: string };
 /** Return actionable expected failures without leaking database errors through Server Actions. */
 export function adminFailure(error: unknown): ScimAdminFailure {
+  if (error instanceof AppError && error.exposure === 'public')
+    return { scimError: error.userMessage };
   if (error instanceof ZodError)
     return {
       scimError: error.issues

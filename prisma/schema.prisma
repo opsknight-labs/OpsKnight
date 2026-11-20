@@ -492,6 +492,8 @@ model UserEmailReservation {
 }
 
 model User {
+  // True only after an approved group role mapping has adopted this account.
+  scimRoleMappingAdopted Boolean @default(false)
   scimGivenName String?
   scimFamilyName String?
   scimIdentities ScimIdentity[]
@@ -4828,6 +4830,7 @@ model ScimGroup {
   updatedAt      DateTime               @updatedAt
   memberships    ScimGroupMembership[]
   bindings       ScimGroupTeamBinding[]
+  systemRole     Role? // Explicit administrator-approved system role mapping.
 
   @@unique([connectorId, scimExternalId])
   @@index([connectorId, name, id])

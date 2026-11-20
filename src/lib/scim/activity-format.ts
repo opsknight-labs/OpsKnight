@@ -16,6 +16,8 @@ const LABELS: Record<string, string> = {
   'user.deleted': 'Person removed by the directory',
   'user.binding.approved': 'Existing account connected',
   'user.restoration.approved': 'Rehire restoration approved',
+  'user.role.synced': 'System role synchronized',
+  'role.mapping.updated': 'Group role mapping updated',
   'group.created': 'Group created',
   'group.updated': 'Group updated',
   'group.deleted': 'Group deleted',

@@ -77,6 +77,7 @@ const targetUser = {
   name: 'Real User',
   role: 'USER',
   roleSource: 'OIDC',
+  scimRoleMappingAdopted: false,
   status: 'ACTIVE',
   department: null,
   jobTitle: null,
@@ -986,6 +987,39 @@ describe('provider activation across auth option caches', () => {
         credentials: undefined,
       });
     };
+
+    it.each([false, true])(
+      'uses persisted SCIM adoption provenance at sign-in (first link: %s)',
+      async firstLink => {
+        vi.mocked(getOidcConfig).mockResolvedValue(baseConfig);
+        for (const adopted of [false, true]) {
+          vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue({
+            ...successfulResolution({
+              role: 'RESPONDER',
+              roleSource: 'SCIM',
+              scimRoleMappingAdopted: adopted,
+            }),
+            identityCreated: firstLink,
+          });
+          vi.mocked(updateUserSecurityState)
+            .mockReset()
+            .mockResolvedValue(undefined as never);
+          expect(await signInWith({ groups: ['ops-admins'] })).toBe(true);
+          const mutations = vi.mocked(updateUserSecurityState).mock.calls.map(call => call[1]);
+          if (adopted) {
+            expect(
+              mutations.some(
+                mutation => mutation.role !== undefined || mutation.roleSource !== undefined
+              )
+            ).toBe(false);
+          } else {
+            expect(mutations).toContainEqual(
+              expect.objectContaining({ role: 'ADMIN', roleSource: 'OIDC' })
+            );
+          }
+        }
+      }
+    );
 
     it('refuses unmatched directory-managed people when the workspace denies them', async () => {
       vi.mocked(getOidcConfig).mockResolvedValue({ ...baseConfig, unmatchedPolicy: 'DENY' });
