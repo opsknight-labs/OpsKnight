@@ -26,3 +26,15 @@ export { default as CreateTrigger, type CreateTriggerProps } from './CreateTrigg
 export { default as ErrorState, type ErrorStateProps } from './ErrorState';
 export { TableRowsSkeleton, CardGridSkeleton, DetailPageSkeleton } from './Skeletons';
 export { toneClasses, type ToneKey } from './status-tone';
+export {
+  DirectoryHeader,
+  DirectoryTable,
+  DirectoryPrimaryCell,
+  DirectoryCardGrid,
+  DirectoryViewToggle,
+  useDirectoryView,
+  type DirectoryView,
+  type DirectoryColumn,
+  type DirectoryTableProps,
+  type DirectorySelectAll,
+} from './Directory';

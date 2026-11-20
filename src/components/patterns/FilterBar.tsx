@@ -193,7 +193,13 @@ export default function FilterBar({
           <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between">
             <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               {search && <FilterSearchInput search={search} />}
-              {filters && <div className="flex flex-wrap items-center gap-2">{filters}</div>}
+              {filters && (
+                // Phones: an even two-column grid, each control filling its cell
+                // (callers give triggers fixed desktop widths).
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center max-sm:[&_[role=combobox]]:w-full max-sm:[&_button]:w-full">
+                  {filters}
+                </div>
+              )}
               {!hasHeader && clearButton}
             </div>
             {!hasHeader && actions && (
@@ -256,7 +262,7 @@ export function FilterField({
 }) {
   const fallbackId = useId();
   return (
-    <div className={cn('flex min-w-[9rem] flex-col', className)}>
+    <div className={cn('flex min-w-0 flex-col sm:min-w-[9rem]', className)}>
       {/* Compact bar: the label names the control for assistive tech; the
           selected value ("All statuses") already says what it filters. */}
       <Label htmlFor={htmlFor} id={htmlFor ? undefined : fallbackId} className="sr-only">
