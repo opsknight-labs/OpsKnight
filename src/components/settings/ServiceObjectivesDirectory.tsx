@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -62,6 +62,8 @@ export type ServiceObjectiveItem = {
   health: ObjectiveHealth;
   value: number | null;
   budgetRemaining: number | null;
+  /** Server-rendered error budget forecast (burn rate and top consumers), when the viewer may read it. */
+  forecast?: ReactNode;
 };
 
 const HEALTH: Record<
@@ -395,6 +397,7 @@ function ObjectiveCard({ item, admin }: { item: ServiceObjectiveItem; admin: boo
           </dd>
         </div>
       </dl>
+      {item.forecast && <div className="mt-3">{item.forecast}</div>}
     </div>
   );
 }

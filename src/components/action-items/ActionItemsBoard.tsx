@@ -69,6 +69,7 @@ import {
   ChevronsUpDown,
   Check,
   Loader2,
+  RotateCcw,
 } from 'lucide-react';
 
 export interface BoardActionItem extends ActionItem {
@@ -84,6 +85,20 @@ export interface BoardActionItem extends ActionItem {
   incidentJiraIssues: JiraIssueReference[];
   createdAt: Date;
   completedAt?: Date | string | null;
+  /** The incident's problem came back on its service after this item was written. */
+  causeRecurred?: boolean;
+}
+
+function CauseRecurredBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+      title="The problem behind this follow-up happened again on the same service after it was written"
+    >
+      <RotateCcw aria-hidden="true" className="h-3 w-3" />
+      Cause recurred
+    </span>
+  );
 }
 
 export interface ActionItemsBoardProps {
@@ -373,6 +388,7 @@ function ActionItemCard({
             status={item.status}
             userTimeZone={userTimeZone}
           />
+          {item.causeRecurred && <CauseRecurredBadge />}
         </div>
 
         {canManage && (
@@ -743,6 +759,7 @@ export default function ActionItemsBoard({
             <DirectoryPrimaryCell
               href={`/postmortems/${item.incidentId}`}
               title={<span title={item.description || item.title}>{item.title}</span>}
+              titleAddon={item.causeRecurred ? <CauseRecurredBadge /> : undefined}
               subtitle={
                 <>
                   <Link
@@ -1081,6 +1098,7 @@ export default function ActionItemsBoard({
                   </Badge>
                   <PriorityPill item={item} />
                   <DueCell item={item} />
+                  {item.causeRecurred && <CauseRecurredBadge />}
                 </div>
               </div>
             )}

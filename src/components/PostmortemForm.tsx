@@ -697,6 +697,7 @@ export default function PostmortemForm({
           users={users}
           jiraCapability={jiraCapability}
           incidentJiraIssues={effectiveIncidentJiraIssues}
+          incidentId={assistIncidentId || undefined}
         />
         <PostmortemActionSuggestions suggestions={suggestions} onAdd={addSuggestion} />
 

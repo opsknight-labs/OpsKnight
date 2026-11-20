@@ -10,6 +10,7 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
 import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
+import { recurredActionItemIds } from '@/lib/intelligence/helpers/action-item-suggest-loader';
 import { formatActionItemDueDate } from '@/lib/action-items';
 import { parsePageParam, calculatePaginationBounds, parseEnumValue } from '@/lib/pagination-parser';
 import { requirePageAccess } from '@/lib/access/server';
@@ -235,7 +236,11 @@ export default async function ActionItemsPage({
     skip: pagination.skip,
     take: pagination.take,
   });
-  const filteredItems = records.map(mapRecordToBoardItem);
+  const recurred = await recurredActionItemIds(records.map(record => record.id));
+  const filteredItems = records.map(record => ({
+    ...mapRecordToBoardItem(record),
+    causeRecurred: recurred.has(record.id),
+  }));
 
   const canManage = permissions.isResponderOrAbove;
   const jiraCapabilitiesByServiceId = await getJiraCapabilitiesByServiceIds(
