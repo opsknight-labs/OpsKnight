@@ -32,6 +32,9 @@ jobs:
         with:
           fetch-depth: 0
           lfs: true
+          # The persisted GITHUB_TOKEN auth header would override BACKUP_TOKEN for LFS
+          # uploads to the backup ("Resource not accessible by integration").
+          persist-credentials: false
       - name: Push main, tags and LFS objects to the backup
         env:
           BACKUP_TOKEN: ${{ secrets.BACKUP_TOKEN }}
