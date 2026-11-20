@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -63,6 +63,7 @@ type Props = {
   destinations: DestinationRow[];
 };
 
+const noopSubscribe = () => () => {};
 const GUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function MicrosoftTeamsSetupWizard({
@@ -143,7 +144,13 @@ export default function MicrosoftTeamsSetupWizard({
     }
   };
 
-  const originUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  // Server snapshot is '' so hydration matches; reading window during render made
+  // React discard the server HTML and re-render the whole page on the client.
+  const originUrl = useSyncExternalStore(
+    noopSubscribe,
+    () => window.location.origin,
+    () => ''
+  );
   const botEndpoint = `${originUrl}/api/microsoft-teams/messages`;
   const callbackUrl = `${originUrl}/api/microsoft-teams/auth/callback`;
 
