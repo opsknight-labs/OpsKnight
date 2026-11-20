@@ -1,7 +1,7 @@
 name: Docker Image (build + push)
 
 on:
-  # Pull requests build the image only when labelled `ci:full`; main always does.
+  # Pull requests build the image once each time `ci:full` is added; main always does.
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, labeled]
@@ -240,7 +240,7 @@ jobs:
     needs: [release-quality, integration-certification]
     if: >-
       !cancelled() && !inputs.certification_archive &&
-      (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')) &&
+      (github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')) &&
       (!startsWith(github.ref, 'refs/tags/v') ||
         (needs.release-quality.result == 'success' && needs.integration-certification.result == 'success'))
     runs-on: ubuntu-22.04

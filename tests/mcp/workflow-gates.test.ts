@@ -5,7 +5,7 @@ const prWorkflow = readFileSync('.github/workflows/mcp-certification.yml', 'utf8
 const releaseWorkflow = readFileSync('.github/workflows/mcp-release-certification.yml', 'utf8');
 
 describe('MCP CI/release gate separation', () => {
-  it('runs on main and on `ci:full` pull requests without path filters that leave checks pending', () => {
+  it('runs on main and once per `ci:full` label add, without path filters that leave checks pending', () => {
     expect(prWorkflow).toContain('name: Enterprise MCP PR validation');
     expect(prWorkflow).toMatch(
       /on:\s*pull_request:\s*types: \[opened, synchronize, reopened, labeled\]\s*push:\s*branches: \[main\]\s*workflow_dispatch:/
@@ -13,8 +13,10 @@ describe('MCP CI/release gate separation', () => {
     expect(prWorkflow.split('\njobs:')[0]).not.toContain('paths:');
     expect(prWorkflow).toContain('name: Detect MCP-related changes');
     expect(prWorkflow).toContain(
-      "if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')"
+      "if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')"
     );
+    // A sticky label re-ran the heavy suites on every agent push, which got the org flagged.
+    expect(prWorkflow).not.toContain("labels.*.name, 'ci:full'");
     // A push to main diffs against the previous main commit; an unusable base still validates.
     expect(prWorkflow).toContain(
       'BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}'

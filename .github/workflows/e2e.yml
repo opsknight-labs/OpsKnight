@@ -1,7 +1,7 @@
 name: Browser E2E
 
 # Browser certification runs on main. On a pull request it runs only when the
-# `ci:full` label is present, so the required PR gate in tests.yml stays light.
+# `ci:full` label is added (one run per add), so the required PR gate in tests.yml stays light.
 on:
   pull_request:
     branches: [main]
@@ -20,7 +20,7 @@ concurrency:
 jobs:
   build:
     name: Application build (E2E artifact)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    if: github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
