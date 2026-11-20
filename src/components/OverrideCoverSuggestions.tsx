@@ -30,7 +30,9 @@ export default function OverrideCoverSuggestions({
   const endIso = end?.toISOString() ?? null;
   // Answers are keyed by the request, so a changed window never shows the previous window's people.
   const requestKey = `${scheduleId}|${startIso}|${endIso}|${replacesUserId}`;
-  const [answer, setAnswer] = useState<{ key: string; result: CoverSuggestions } | null>(null);
+  const [answer, setAnswer] = useState<{ key: string; result: CoverSuggestions | null } | null>(
+    null
+  );
   const result = answer?.key === requestKey ? answer.result : null;
 
   useEffect(() => {
