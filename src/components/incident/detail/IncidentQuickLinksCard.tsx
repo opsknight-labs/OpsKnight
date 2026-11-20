@@ -114,7 +114,7 @@ export default function IncidentQuickLinksCard({
 
         {/* Analytics */}
         <Link
-          href={`/analytics?service=${encodeURIComponent(service.id)}`}
+          href={`/insights?service=${encodeURIComponent(service.id)}`}
           className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 hover:border-slate-200 dark:hover:border-zinc-700 transition-all text-left"
         >
           <div className="flex items-center gap-2.5 min-w-0">

@@ -8,8 +8,8 @@ const adoptedPaths = [
     readFileSync('src/app/api/widgets/stream/route.ts', 'utf8'),
   ],
   [
-    'src/app/api/analytics/export/route.ts',
-    readFileSync('src/app/api/analytics/export/route.ts', 'utf8'),
+    'src/app/api/insights/export/route.ts',
+    readFileSync('src/app/api/insights/export/route.ts', 'utf8'),
   ],
   ['src/lib/analytics/window.ts', readFileSync('src/lib/analytics/window.ts', 'utf8')],
   [

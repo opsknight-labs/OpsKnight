@@ -565,7 +565,7 @@ function InsightsContent() {
         variant="inline"
         title="Trends are temporarily unavailable"
         message="They retry on their own. The live feed above is unaffected."
-        backHref={`/analytics?range=${query.range}`}
+        backHref={`/insights?range=${query.range}`}
         backLabel="Open full analytics"
         className={card}
       />
@@ -720,7 +720,7 @@ export default function DashboardHistorySection() {
             ))}
           </div>
           <Link
-            href={`/analytics?range=${query.range}d`}
+            href={`/insights?range=${query.range}d`}
             className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             Full analytics

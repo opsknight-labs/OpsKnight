@@ -36,7 +36,7 @@ test('captures current mobile PWA surfaces in WebKit', async ({ page }, testInfo
   await expect(page.getByText(DOCS_FIXTURES.schedule, { exact: true }).first()).toBeVisible();
   await capture(page, scheme, 'on-call');
 
-  await page.goto('/analytics');
+  await page.goto('/insights');
   await expect(page.getByRole('heading', { level: 1, name: 'Analytics' })).toBeVisible();
   await capture(page, scheme, 'analytics');
 });

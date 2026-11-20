@@ -9,7 +9,7 @@
       "kind": "ui"
     },
     {
-      "route": "/analytics",
+      "route": "/insights",
       "file": "src/app/(app)/analytics/page.tsx",
       "kind": "ui"
     },
@@ -192232,14 +192232,14 @@
       {
         "id": "ui:/analytics",
         "kind": "ui",
-        "name": "/analytics",
+        "name": "/insights",
         "owner": "analytics",
         "classification": "PUBLIC_FEATURE",
         "sources": [
           "src/app/(app)/analytics/page.tsx"
         ],
         "contract": {
-          "route": "/analytics",
+          "route": "/insights",
           "file": "src/app/(app)/analytics/page.tsx",
           "kind": "ui"
         },

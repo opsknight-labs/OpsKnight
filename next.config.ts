@@ -53,7 +53,7 @@ const withPWA = withPWAInit({
           url.pathname.startsWith('/users') ||
           url.pathname.startsWith('/schedules') ||
           url.pathname.startsWith('/policies') ||
-          url.pathname.startsWith('/analytics') ||
+          url.pathname.startsWith('/insights') ||
           url.pathname.startsWith('/reports') ||
           url.pathname.startsWith('/runbooks') ||
           url.pathname.startsWith('/postmortems') ||
@@ -173,6 +173,14 @@ const nextConfig: NextConfig = {
         hostname: 'api.dicebear.com',
       },
     ],
+  },
+  // Ad blockers drop "/analytics?…" URLs, so the page and its API live under
+  // /insights; old bookmarks and already-sent emails keep working.
+  async redirects() {
+    return [
+      { source: '/analytics', destination: '/insights', permanent: true },
+      { source: '/api/analytics/:path*', destination: '/api/insights/:path*', permanent: true },
+    ];
   },
   async headers() {
     const scriptSource =

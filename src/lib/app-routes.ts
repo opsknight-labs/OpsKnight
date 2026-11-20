@@ -26,7 +26,7 @@ export const appRoutes = {
   schedules: (surface: AppSurface) => `${root(surface)}/schedules`,
   schedule: (surface: AppSurface, id: string) => `${root(surface)}/schedules/${idSegment(id)}`,
   // Analytics is responsive with no /m twin, so phones load the desktop page.
-  analytics: () => '/analytics',
+  analytics: () => '/insights',
   notifications: (surface: AppSurface) =>
     surface === 'mobile' ? '/m/notifications' : '/notifications',
   postmortems: (surface: AppSurface) => `${root(surface)}/postmortems`,

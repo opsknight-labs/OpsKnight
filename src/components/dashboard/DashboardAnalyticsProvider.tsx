@@ -52,7 +52,7 @@ export function DashboardAnalyticsProvider({
       state: previous.data ? 'updating' : 'loading',
     }));
     try {
-      const response = await fetch(`/api/dashboard/analytics?${stableQuery}`, {
+      const response = await fetch(`/api/dashboard/insights?${stableQuery}`, {
         signal: controller.signal,
         credentials: 'same-origin',
         cache: 'no-store',

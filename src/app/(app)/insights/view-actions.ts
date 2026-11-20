@@ -20,7 +20,7 @@ export type ViewActionResult = { ok: true; query?: string } | { ok: false; error
 async function run(work: () => Promise<string | void>): Promise<ViewActionResult> {
   try {
     const query = await work();
-    revalidatePath('/analytics');
+    revalidatePath('/insights');
     return { ok: true, ...(query !== undefined ? { query } : {}) };
   } catch (error) {
     if (error instanceof AppError) return { ok: false, error: error.userMessage };

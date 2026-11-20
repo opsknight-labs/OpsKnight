@@ -29,7 +29,7 @@ describe('IncidentQuickLinksCard', () => {
     expect(screen.getByText('Current service default: Critical Escalation')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Service analytics/ })).toHaveAttribute(
       'href',
-      '/analytics?service=srv-1'
+      '/insights?service=srv-1'
     );
     expect(screen.getByText('Core Infra')).toBeInTheDocument();
   });

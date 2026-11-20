@@ -10,9 +10,9 @@ vi.mock('@/lib/dashboard/dashboard-analytics-cache', () => ({
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 
-import { GET } from '@/app/api/dashboard/analytics/route';
+import { GET } from '@/app/api/dashboard/insights/route';
 
-describe('GET /api/dashboard/analytics', () => {
+describe('GET /api/dashboard/insights', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getActor.mockResolvedValue({ id: 'user-1', role: 'USER', status: 'ACTIVE', teamIds: ['team-1'] });

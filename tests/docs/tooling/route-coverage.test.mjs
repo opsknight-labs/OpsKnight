@@ -52,7 +52,7 @@ test('high-risk configuration and mutation routes require task guides', () => {
 test('audited product routes map to purpose-built task guides', () => {
   const expected = {
     '/': 'guides/dashboard/use-command-center.md',
-    '/analytics': 'guides/analytics/use-analytics.md',
+    '/insights': 'guides/analytics/use-analytics.md',
     '/events': 'guides/administration/review-event-logs.md',
     '/postmortems': 'guides/postmortems/create-review-publish.md',
     '/services': 'guides/services/manage-service.md',

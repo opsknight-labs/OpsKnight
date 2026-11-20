@@ -41,7 +41,7 @@ import {
   setAnalyticsViewWeeklyEmailAction,
   setDefaultAnalyticsViewAction,
   type ViewActionResult,
-} from '@/app/(app)/analytics/view-actions';
+} from '@/app/(app)/insights/view-actions';
 import {
   DEFAULT_ANALYTICS_RANGE,
   parseAnalyticsParams,
