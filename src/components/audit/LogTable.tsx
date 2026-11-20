@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { notify } from '@/lib/toast';
 import { formatDateTime } from '@/lib/timezone';
 import { RelativeTime } from '@/components/patterns';
 import TablePaginationFooter, {
@@ -111,6 +112,7 @@ export function MonoId({
       timer.current = window.setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
+      notify.error(`Couldn't copy the ${label}; select it and copy manually.`);
     }
   };
 
