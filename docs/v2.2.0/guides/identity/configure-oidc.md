@@ -147,6 +147,10 @@ See [map groups to roles and teams](./map-roles-and-teams/).
 See [test and turn on single sign-on](./test-and-enforce-sso/). You sign in once yourself
 through the provider. If it fails, the result page says exactly why and links to the fix.
 
+To confirm the setup works, check that the result page says **Administrator sign-in verified**
+before you turn on single sign-on. After you turn it on, people see **Continue with …** on the
+sign-in page.
+
 ## What OpsKnight checks
 
 When you save, OpsKnight checks the issuer is HTTPS and matches its discovery document, that the

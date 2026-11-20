@@ -7,7 +7,7 @@ product_area: mcp
 audience: [operator, developer, administrator]
 verification:
   level: source
-  verified_at: 2026-11-09
+  verified_at: 2026-11-20
   evidence:
     - src/app/mcp/route.ts
     - src/lib/mcp/auth/principal.ts
@@ -19,7 +19,7 @@ verification:
 
 Historical foundation baseline: `f9f772a1fb43798bf45400c8e2ec7a0a823fa43f`. Generate the current source-labelled inventory with `npm run --silent mcp:coverage`; inventory counts and local test passes do not certify a release.
 
-Status: development implementation. Gates A–F are not certified. MCP defaults to disabled. This document records engineering decisions and remaining work, not a GA claim.
+Status: shipped in OpsKnight 2.2.0, **off by default** (an administrator turns it on). The formal release-certification manifest (the 15 gates in [release status](certification.md#running-the-release-only-gate)) has not been signed for 2.2.0, so treat MCP as a supported but not release-certified feature. What has and has not been verified is listed in [release status](certification.md#release-status-for-220). This document records engineering decisions and remaining work.
 
 ## Execution boundary
 

@@ -22,6 +22,19 @@ Some MCP clients only start local servers over standard input and output (stdio)
 
 Clients that can connect to a remote server with OAuth should do that instead; see [self-hosted setup](self-hosted-setup.md#users-connect-and-sign-in).
 
+## Before you begin
+
+- An administrator has turned on AI assistant access in **Settings → Integrations & ChatOps → MCP (AI Assistants)**, and allowed either personal access tokens or **Device sign-in** (see [Sign in](#sign-in)).
+- Node.js 20 or later on the machine that runs your MCP client.
+- Your OpsKnight App URL, for example `https://ops.your-company.com`.
+
+The steps are:
+
+1. [Get the bridge](#get-the-bridge).
+2. [Sign in](#sign-in) with a personal access token or device sign-in.
+3. [Configure your client](#configure-your-client) to start the bridge.
+4. [Verify the connection](#verify-the-connection).
+
 ## Get the bridge
 
 The bridge is not published to a package registry. It lives in the OpsKnight repository under `sdk/mcp-bridge`. Copy that folder to the machine that runs your MCP client and run `node <folder>/bin/opsknight-mcp.js`, or link it once with `npm link` from inside the folder to get an `opsknight-mcp` command.
@@ -88,6 +101,12 @@ codex mcp add opsknight -- opsknight-mcp --url https://ops.your-company.com
 ```
 
 Keep a personal token in the client's own secret store or environment where it has one, not in a shared or committed file.
+
+## Verify the connection
+
+1. Restart or reload your client so it starts the bridge.
+2. Ask the assistant "Who am I in OpsKnight, and what can you do for me?". It calls `whoami` and answers with your role, teams and enabled tools.
+3. If the call fails, read the bridge's diagnostics on standard error (your client's MCP log) and see [Troubleshooting](#troubleshooting).
 
 ## Options
 

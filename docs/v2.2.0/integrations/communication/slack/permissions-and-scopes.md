@@ -45,5 +45,5 @@ Workspaces connected on 2.1 show `commands` as a missing required scope under
 3. Run `/incident help` in a channel the bot is in to confirm the command
    reaches OpsKnight.
 
-Other Slack setup is unchanged; see the
-[2.1.0 Slack guide](../../../../v2.1.0/integrations/communication/slack/connect-with-oauth.md).
+Other Slack setup is unchanged; see
+[Connect Slack with OAuth](./connect-with-oauth.md).

@@ -19,23 +19,35 @@ verification:
 
 Vendor documentation: [MCP servers with the Gemini CLI](https://geminicli.com/docs/tools/mcp-server/) (fetched 12 November 2026). That page notes that Gemini CLI was replaced by Antigravity CLI for unpaid-tier and Google One users on 18 June 2026; these steps apply where Gemini CLI is still in use.
 
+## Before you begin
+
+- An administrator has turned on AI assistant access in **Settings → Integrations & ChatOps → MCP (AI Assistants)** (see [MCP setup](../self-hosted-setup.md)).
+- Copy the **MCP server URL** from the **Connect** tab on that page; the examples below use `https://ops.your-company.com/mcp`.
+- You have your own OpsKnight account, Gemini CLI installed and a local browser.
+
 ## Connect with OAuth (recommended)
 
-```bash
-gemini mcp add --transport http opsknight 'https://ops.your-company.com/mcp'
-```
+1. Add the server:
 
-Or in `~/.gemini/settings.json` (all projects) or `.gemini/settings.json`:
+   ```bash
+   gemini mcp add --transport http opsknight 'https://ops.your-company.com/mcp'
+   ```
 
-```json
-{
-  "mcpServers": {
-    "opsknight": { "httpUrl": "https://ops.your-company.com/mcp" }
-  }
-}
-```
+   Or in `~/.gemini/settings.json` (all projects) or `.gemini/settings.json`:
 
-Use `httpUrl`, not `url`: `url` selects the older SSE transport. Then, inside Gemini CLI, run `/mcp auth opsknight`. Gemini CLI discovers OpsKnight's authorization server from the 401 answer and registers itself; it needs a local browser and does not work headless. Tokens are stored in `~/.gemini/mcp-oauth-tokens.json`.
+   ```json
+   {
+     "mcpServers": {
+       "opsknight": { "httpUrl": "https://ops.your-company.com/mcp" }
+     }
+   }
+   ```
+
+   Use `httpUrl`, not `url`: `url` selects the older SSE transport.
+
+2. Inside Gemini CLI, run `/mcp auth opsknight`, sign in to OpsKnight and approve the connection.
+
+Gemini CLI discovers OpsKnight's authorization server from the 401 answer and registers itself; it needs a local browser and does not work headless. Tokens are stored in `~/.gemini/mcp-oauth-tokens.json`.
 
 If **Automatic connections** is off, an administrator registers a manual client and you add `"oauth": { "enabled": true, "clientId": "<client id>" }`.
 
@@ -53,6 +65,12 @@ If **Automatic connections** is off, an administrator registers a manual client 
 ```
 
 The vendor page documents `$VAR` expansion for the `env` block but does not say whether it applies to `headers`, so this example uses the literal token. Keep that file private (it is in your home directory, not the project).
+
+## Verify the connection
+
+1. Run `/mcp list` (or `gemini mcp list`) and check the state of `opsknight`.
+2. Ask Gemini CLI "Who am I in OpsKnight, and what can you do for me?". It calls `whoami` and answers with your role, teams and enabled tools.
+3. In OpsKnight, select **Check connection** on the **Connect** tab to see the connection you just made.
 
 ## Known limits
 

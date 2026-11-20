@@ -19,25 +19,33 @@ verification:
 
 Vendor documentation (fetched 12 November 2026): [MCP configuration reference](https://code.visualstudio.com/docs/agents/reference/mcp-configuration), [Manage MCP servers](https://code.visualstudio.com/docs/agents/run/manage-mcp-servers) and [Tools](https://code.visualstudio.com/docs/agents/run/tools).
 
+## Before you begin
+
+- An administrator has turned on AI assistant access in **Settings → Integrations & ChatOps → MCP (AI Assistants)** (see [MCP setup](../self-hosted-setup.md)).
+- Copy the **MCP server URL** from the **Connect** tab on that page; the examples below use `https://ops.your-company.com/mcp`.
+- You have your own OpsKnight account and VS Code with GitHub Copilot installed.
+
 ## Connect with OAuth (recommended)
 
-Use **Add to VS Code** on OpsKnight's **Connect** tab; or on macOS and Linux:
+1. Use **Add to VS Code** on OpsKnight's **Connect** tab; or on macOS and Linux:
 
-```bash
-code --add-mcp '{"name":"opsknight","type":"http","url":"https://ops.your-company.com/mcp"}'
-```
+   ```bash
+   code --add-mcp '{"name":"opsknight","type":"http","url":"https://ops.your-company.com/mcp"}'
+   ```
 
-Or run **MCP: Add Server** from the Command Palette, or add to `.vscode/mcp.json` (one workspace) or your user `mcp.json`:
+   Or run **MCP: Add Server** from the Command Palette, or add to `.vscode/mcp.json` (one workspace) or your user `mcp.json`:
 
-```json
-{
-  "servers": {
-    "opsknight": { "type": "http", "url": "https://ops.your-company.com/mcp" }
-  }
-}
-```
+   ```json
+   {
+     "servers": {
+       "opsknight": { "type": "http", "url": "https://ops.your-company.com/mcp" }
+     }
+   }
+   ```
 
-On first use VS Code opens the browser to sign in to OpsKnight; select **Authenticate** if it asks. If **Automatic connections** is off, an administrator registers a manual client with VS Code's loopback redirect (`http://127.0.0.1:33418/`) and you add `"oauth": { "clientId": "<client id>" }` to the entry.
+2. On first use VS Code opens the browser to sign in to OpsKnight; select **Authenticate** if it asks, then approve the connection.
+
+If **Automatic connections** is off, an administrator registers a manual client with VS Code's loopback redirect (`http://127.0.0.1:33418/`) and you add `"oauth": { "clientId": "<client id>" }` to the entry.
 
 ## Personal access token (alternative)
 
@@ -64,6 +72,12 @@ Let VS Code prompt for the token once and keep it in its secret storage:
 ```
 
 `${env:NAME}` also works in editor-managed files. The newer portable Copilot file (`~/.copilot/mcp-config.json`) uses `${NAME}` instead and does not support `inputs`.
+
+## Verify the connection
+
+1. Run **MCP: List Servers** from the Command Palette and check that `opsknight` is listed.
+2. Ask Copilot "Who am I in OpsKnight, and what can you do for me?". It calls `whoami` and answers with your role, teams and enabled tools.
+3. In OpsKnight, select **Check connection** on the **Connect** tab to see the connection you just made.
 
 ## Known limits
 

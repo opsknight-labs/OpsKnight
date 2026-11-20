@@ -68,4 +68,4 @@ retries in the controller so a failed gate is reported instead of retried in a
 loop.
 
 For the full upgrade procedure see the
-[2.1.0 Helm upgrade guide](../../../../v2.1.0/operate/deploy/helm/upgrade.md).
+[Helm upgrade guide](./upgrade.md).
