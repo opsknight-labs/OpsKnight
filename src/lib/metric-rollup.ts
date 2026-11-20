@@ -1279,7 +1279,8 @@ export const OPS_ROLLUP_SOURCES: Partial<Record<OpsRollupName, OpsRollupSource>>
       FROM "RunbookExecution" e
       LEFT JOIN "Incident" i ON i."id" = e."incidentId"
       WHERE e."completedAt" >= ${dayStart} AND e."completedAt" < ${dayEnd}
-        AND e."status" IN ('SUCCEEDED', 'FAILED', 'TIMED_OUT')
+        -- ::text keeps the planner off the (status, updatedAt) index, which is not bounded by the day.
+        AND e."status"::text IN ('SUCCEEDED', 'FAILED', 'TIMED_OUT')
     ) run
     GROUP BY run."runbookId", run."status", run."onIncident", run."fixMinutes", run."durationBucket"`,
   // idx_runbook_execution_completed, then RunbookExecutionStep ("executionId") and the attempt by its
