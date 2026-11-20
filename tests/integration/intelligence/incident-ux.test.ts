@@ -489,7 +489,9 @@ describe('incident page actions', () => {
 
   it('refuses to post for a viewer without the note permission, and rejects malformed input', async () => {
     const s = await seedList();
-    session.userId = s.scoped.id;
+    // Team members may note their team's incidents now; an auditor reads everything and writes nothing.
+    const auditor = await createTestUser({ role: 'AUDITOR', name: 'Ada Auditor' });
+    session.userId = auditor.id;
     const denied = await postSummaryAsNoteAction(s.childA.id, { summary });
     expect(denied.ok).toBe(false);
     expect(denied.message).toMatch(/Responders and Admins|permission/i);

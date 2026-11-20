@@ -184,26 +184,26 @@ describeIfRealDB('runbook evaluation for monitoring incidents (real PostgreSQL)'
     expect(await evaluationJobs(result.incident!.id)).toHaveLength(0);
   });
 
-  it('queues nothing for a flapping incident created SUPPRESSED', async () => {
+  it('queues nothing for an incident created SUPPRESSED', async () => {
+    // Flapping is a policy noise control now (no fixed-threshold path in processEvent), so the
+    // suppression here comes from an active service maintenance window.
     const service = await newService();
     const key = crypto.randomUUID();
-    const scoped = `${INTEGRATION_ID}:${key}`;
     const now = Date.now();
-    // Linked to an earlier incident so the buffered out-of-order resolve path does not apply.
-    const earlier = await db.incident.create({
-      data: { title: 'Earlier', serviceId: service.id, status: 'RESOLVED', resolvedAt: new Date() },
-    });
-    for (let i = 0; i < 6; i++)
-      await db.alert.create({
-        data: {
-          dedupKey: scoped,
-          serviceId: service.id,
-          incidentId: earlier.id,
-          status: i % 2 === 0 ? 'TRIGGERED' : 'RESOLVED',
-          payload: {},
-          createdAt: new Date(now - (6 - i) * 1000),
+    await db.maintenanceWindow.create({
+      data: {
+        title: 'Planned work',
+        startsAt: new Date(now - 60_000),
+        endsAt: new Date(now + 3_600_000),
+        services: {
+          create: {
+            serviceId: service.id,
+            startsAt: new Date(now - 60_000),
+            endsAt: new Date(now + 3_600_000),
+          },
         },
-      });
+      },
+    });
     const result = await ingest(service.id, alert(key));
     expect(result.action).toBe('suppressed');
     expect(result.incident!.status).toBe('SUPPRESSED');
