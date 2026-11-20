@@ -99,7 +99,7 @@ describeIfRealDB('default weekly analytics digest', { timeout: 60_000 }, () => {
     expect(payload.html).toContain('/settings/profile');
     expect(payload.html).toContain('payments-api');
     expect(payload.html).not.toContain('hidden-svc');
-    expect(payload.listUnsubscribeUrl).toMatch(/\/api\/analytics\/digest\/unsubscribe\/[A-Za-z0-9_-]{16,}$/);
+    expect(payload.listUnsubscribeUrl).toMatch(/\/api\/insights\/digest\/unsubscribe\/[A-Za-z0-9_-]{16,}$/);
 
     // Outsider had nothing to report; opted-out and disabled users are never emailed.
     const ids = [outsider.id, optedOut.id, disabled.id];
@@ -134,7 +134,7 @@ describeIfRealDB('default weekly analytics digest', { timeout: 60_000 }, () => {
     const [{ payload }] = await sent();
     const token = payload.listUnsubscribeUrl!.split('/').pop()!;
     const request = (body: string) =>
-      new NextRequest(`http://localhost/api/analytics/digest/unsubscribe/${token}`, {
+      new NextRequest(`http://localhost/api/insights/digest/unsubscribe/${token}`, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body,
