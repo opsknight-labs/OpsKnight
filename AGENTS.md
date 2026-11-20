@@ -40,6 +40,15 @@
 
 ## 3. Brand Identity & Design System Standards
 
+The full design system is in [`DESIGN.md`](DESIGN.md): colour roles, type scale, spacing, radius, elevation, motion, z-index, density, the component vocabulary (PageHeader, FilterBar, DataTable, EmptyState, ErrorState, Skeleton, StatusBadge, RelativeTime) and accessibility rules. Users, jobs and surfaces (console and mobile = Operate, docs and status pages = Read) are in [`PRODUCT.md`](PRODUCT.md). Read both before building UI.
+
+### Design Tokens
+
+- **One source**: every scale (type, spacing, radius, elevation, motion, z-index, density) and the light/dark semantic colour roles (`--ui-*`) are defined once in `src/styles/foundation/tokens.css`, which `src/styles/index.css` imports first. Other stylesheets may only alias a token (`--x: var(--token)`). The `ink-*` ramp and `.ok-inverse-surface` live in `src/styles/index.css`; status hues live in `src/lib/design/status-palette.ts`. Enforced by `tests/architecture/design-tokens-contract.test.ts`.
+- **Type scale**: Tailwind `text-2xs` … `text-5xl` resolve the CSS variables `--font-size-<step>` (`src/lib/design/type-scale.ts`), so CSS and Tailwind share one rem scale. Use a scale step, not arbitrary `text-[Npx]` sizes, and use `tabular-nums` for numbers that are compared or tick.
+- **Weights**: body text is 400. Emphasis is explicit: `font-medium` for interactive/primary row text and nav labels, `font-semibold` for titles and labels, `font-extrabold` for page headlines.
+- **Density**: the root font size comes from `--density-scale` (viewport-driven by default; pin with `html[data-density="compact"|"comfortable"]`). Never set `html { font-size }` anywhere else.
+
 ### Aesthetic Principles
 
 - **Subtle, Elegant, and SRE-Focused**: Clean, high-contrast, modern engineering aesthetic.
@@ -48,7 +57,7 @@
 ### Typography
 
 - **Inter** is the UI and body face; **Space Grotesk** is the display face for headings, badges and brand marks. Both are bundled with `next/font/local` in `src/app/layout.tsx` (no Google Fonts fetch at build or runtime).
-- Never hard-code a font family. Use the tokens `--font-family-sans`, `--font-family-display` and `--font-family-mono` (`src/styles/foundation/variables.css`) in CSS, and `font-sans`, `font-display` and `font-mono` in Tailwind. `h1`–`h6` pick up the display face automatically.
+- Never hard-code a font family. Use the tokens `--font-family-sans`, `--font-family-display` and `--font-family-mono` (`src/styles/foundation/tokens.css`) in CSS, and `font-sans`, `font-display` and `font-mono` in Tailwind. `h1`–`h6` pick up the display face automatically.
 - Transactional emails are the one exception: mail clients cannot load the bundled files, so email templates name `'Space Grotesk'` and Inter with system fallbacks.
 
 ### Official Brand Logo

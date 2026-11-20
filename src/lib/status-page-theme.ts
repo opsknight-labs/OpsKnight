@@ -23,7 +23,8 @@ export const STATUS_PAGE_FONTS: StatusPageFontOption[] = [
   {
     id: 'inter',
     name: 'Inter / Clean Sans',
-    fontFamily: 'var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontFamily:
+      'var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     category: 'sans',
     previewText: 'Aa Bb Cc 123',
   },
@@ -63,6 +64,27 @@ export function resolveStatusPageFontFamily(fontIdOrStack?: string | null): stri
   const matched = STATUS_PAGE_FONTS.find(f => f.id === fontIdOrStack);
   if (matched) return matched.fontFamily;
   return fontIdOrStack;
+}
+
+/**
+ * `color-mix(in srgb, a w%, b)` computed up front, so dark status pages keep
+ * their panels on browsers without color-mix() (Safari < 16.2). Both inputs
+ * must be 3- or 6-digit hex.
+ */
+export function mixHex(colorHex: string, otherHex: string, weight: number): string {
+  const rgb = (value: string) => {
+    const hex = value.replace('#', '').trim();
+    const full = hex.length === 3 ? hex.replace(/./g, c => c + c) : hex;
+    const num = parseInt(full, 16);
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+  };
+  const [r1, g1, b1] = rgb(colorHex);
+  const [r2, g2, b2] = rgb(otherHex);
+  const mix = (x: number, y: number) =>
+    Math.round(x * weight + y * (1 - weight))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${mix(r1, r2)}${mix(g1, g2)}${mix(b1, b2)}`;
 }
 
 export function isDarkHex(colorHex?: string | null): boolean {
@@ -183,10 +205,10 @@ export function computeStatusPageTheme(params: {
 
   const font = resolveStatusPageFontFamily(params.fontFamily);
 
-  const panelBg = isDark ? `color-mix(in srgb, ${bg} 84%, #ffffff 16%)` : '#ffffff';
-  const panelBorder = isDark ? `color-mix(in srgb, ${bg} 60%, #ffffff 40%)` : '#e2e8f0';
-  const panelMutedBg = isDark ? `color-mix(in srgb, ${bg} 90%, #ffffff 10%)` : '#f8fafc';
-  const panelMutedBorder = isDark ? `color-mix(in srgb, ${bg} 75%, #ffffff 25%)` : '#e2e8f0';
+  const panelBg = isDark ? mixHex(bg, '#ffffff', 0.84) : '#ffffff';
+  const panelBorder = isDark ? mixHex(bg, '#ffffff', 0.6) : '#e2e8f0';
+  const panelMutedBg = isDark ? mixHex(bg, '#ffffff', 0.9) : '#f8fafc';
+  const panelMutedBorder = isDark ? mixHex(bg, '#ffffff', 0.75) : '#e2e8f0';
   const textMuted = isDark ? '#94a3b8' : '#64748b';
   const textSubtle = isDark ? '#64748b' : '#94a3b8';
   const cardShadow = isDark

@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useState, useEffect, useMemo } from 'react';
+import { notify } from '@/lib/toast';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { saveChatOpsConfig } from '@/app/(app)/settings/integrations/chatops/actions';
@@ -11,7 +12,6 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Switch } from '@/components/ui/shadcn/switch';
 import {
-  CheckCircle2,
   Loader2,
   XCircle,
   Video,
@@ -213,9 +213,10 @@ export default function ChatOpsSettingsPage({
 
   useEffect(() => {
     if (state?.success) {
+      notify.success('War room settings saved', { id: 'settings:chatops:saved' });
       router.refresh();
     }
-  }, [state?.success, router]);
+  }, [state, router]);
 
   const isDirty = useMemo(() => {
     if (!config) return Boolean(enabled || channelPrefix !== 'inc');
@@ -327,20 +328,6 @@ export default function ChatOpsSettingsPage({
           <div className="space-y-1 min-w-0">
             <p className="font-semibold">Configuration Error</p>
             <p>{state.error}</p>
-          </div>
-        </div>
-      )}
-
-      {state?.success && (
-        <div
-          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-800 dark:text-emerald-200 flex items-start gap-3 shadow-sm"
-          role="status"
-          aria-live="polite"
-        >
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-          <div className="space-y-1 min-w-0">
-            <p className="font-semibold">Configuration Saved</p>
-            <p>War room collaboration policies and video bridge settings updated successfully.</p>
           </div>
         </div>
       )}

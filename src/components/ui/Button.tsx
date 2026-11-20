@@ -1,7 +1,8 @@
 'use client';
 
-import { ButtonHTMLAttributes, ReactNode } from 'react';
-import Spinner from './Spinner';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { Button as ShadcnButton, type ButtonProps as ShadcnButtonProps } from './shadcn/button';
+import { cn } from '@/lib/utils';
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'link';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -16,159 +17,100 @@ interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'siz
   children: ReactNode;
 }
 
+function shadcnVariant(variant: ButtonVariant): ShadcnButtonProps['variant'] {
+  switch (variant) {
+    case 'secondary':
+      return 'outline';
+    case 'danger':
+      return 'destructive';
+    case 'ghost':
+      return 'ghost';
+    case 'link':
+      return 'link';
+    default:
+      return 'default';
+  }
+}
+
+// The legacy scale: 32 / 40 / 48px tall, semibold, roomier padding than shadcn.
+function sizeClass(size: ButtonSize, variant: ButtonVariant): string {
+  if (variant === 'link') return 'h-auto p-0';
+  switch (size) {
+    case 'sm':
+      return 'h-8 px-4 text-sm';
+    case 'lg':
+      return 'h-12 px-8 text-lg';
+    default:
+      return 'h-10 px-6 text-base';
+  }
+}
+
+function variantClass(variant: ButtonVariant): string {
+  switch (variant) {
+    case 'primary':
+    case 'danger':
+      return 'shadow-sm hover:shadow-md';
+    case 'secondary':
+      return 'bg-card shadow-xs hover:border-ink-300 hover:bg-muted';
+    case 'link':
+      return 'underline';
+    default:
+      return '';
+  }
+}
+
 /**
- * Button component with variants, sizes, and loading states
+ * Compatibility wrapper over the canonical shadcn `Button`
+ * (`@/components/ui/shadcn/button`). New code should use the shadcn button directly.
  *
  * @example
- * <Button variant="primary" size="md" isLoading={false}>
- *   Click Me
- * </Button>
+ * <Button variant="primary" size="md" isLoading={false}>Click Me</Button>
  */
-export default function Button({
-  variant = 'primary',
-  size = 'md',
-  isLoading = false,
-  leftIcon,
-  rightIcon,
-  fullWidth = false,
-  disabled,
-  className = '',
-  children,
-  ...props
-}: ButtonProps) {
-  const isDisabled = disabled || isLoading;
-
-  const baseStyles: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 'var(--spacing-2)',
-    fontFamily: 'inherit',
-    fontWeight: 'var(--font-weight-semibold)',
-    borderRadius: 'var(--radius-md)',
-    border: 'none',
-    cursor: isDisabled ? 'not-allowed' : 'pointer',
-    transition: 'all var(--transition-base) var(--ease-out)',
-    textDecoration: 'none',
-    width: fullWidth ? '100%' : 'auto',
-    opacity: isDisabled ? 0.6 : 1,
-    position: 'relative',
-  };
-
-  const sizeStyles: Record<ButtonSize, React.CSSProperties> = {
-    sm: {
-      padding: 'var(--spacing-2) var(--spacing-4)',
-      fontSize: 'var(--font-size-sm)',
-      height: '32px',
-    },
-    md: {
-      padding: 'var(--spacing-3) var(--spacing-6)',
-      fontSize: 'var(--font-size-base)',
-      height: '40px',
-    },
-    lg: {
-      padding: 'var(--spacing-4) var(--spacing-8)',
-      fontSize: 'var(--font-size-lg)',
-      height: '48px',
-    },
-  };
-
-  const variantStyles: Record<ButtonVariant, React.CSSProperties> = {
-    primary: {
-      background: 'var(--primary-color)',
-      // Filled with a dark fill in both themes, so the label stays white.
-      color: '#ffffff',
-      boxShadow: 'var(--shadow-sm)',
-    },
-    secondary: {
-      background: 'var(--bg-secondary)',
-      color: 'var(--text-primary)',
-      border: '1px solid var(--border)',
-      boxShadow: 'var(--shadow-xs)',
-    },
-    danger: {
-      background: 'var(--color-error)',
-      color: '#ffffff',
-      boxShadow: 'var(--shadow-sm)',
-    },
-    ghost: {
-      background: 'transparent',
-      color: 'var(--text-primary)',
-    },
-    link: {
-      background: 'transparent',
-      color: 'var(--primary-color)',
-      padding: 0,
-      height: 'auto',
-      textDecoration: 'underline',
-    },
-  };
-
-  const hoverStyles: Record<ButtonVariant, React.CSSProperties> = {
-    primary: {
-      background: 'var(--button-primary-hover, var(--primary-hover))',
-      boxShadow: 'var(--shadow-md)',
-    },
-    secondary: {
-      background: 'var(--color-neutral-50)',
-      borderColor: 'var(--border-hover)',
-    },
-    danger: {
-      background: 'var(--color-error-dark)',
-      boxShadow: 'var(--shadow-md)',
-    },
-    ghost: {
-      background: 'var(--color-neutral-100)',
-    },
-    link: {
-      color: 'var(--primary-hover)',
-    },
-  };
-
-  const sizeStyle = new Map(Object.entries(sizeStyles)).get(size);
-  const variantStyle = new Map(Object.entries(variantStyles)).get(variant);
-  const hoverStyle = new Map(Object.entries(hoverStyles)).get(variant);
-
-  const combinedStyles: React.CSSProperties = {
-    ...baseStyles,
-    ...sizeStyle,
-    ...variantStyle,
-  };
-
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = 'primary',
+    size = 'md',
+    isLoading = false,
+    leftIcon,
+    rightIcon,
+    fullWidth = false,
+    disabled,
+    className,
+    children,
+    ...props
+  },
+  ref
+) {
   return (
-    <button
-      className={`ui-button ui-button-${variant} ui-button-${size} ${className}`}
-      style={combinedStyles}
-      disabled={isDisabled}
-      aria-disabled={isDisabled}
-      aria-busy={isLoading}
-      onMouseEnter={e => {
-        if (!isDisabled) {
-          Object.assign(e.currentTarget.style, hoverStyle);
-        }
-      }}
-      onMouseLeave={e => {
-        if (!isDisabled) {
-          Object.assign(e.currentTarget.style, variantStyle);
-        }
-      }}
+    <ShadcnButton
+      ref={ref}
+      variant={shadcnVariant(variant)}
+      loading={isLoading}
+      disabled={disabled}
+      aria-disabled={disabled || isLoading}
+      className={cn(
+        'ui-button font-semibold transition-[color,background-color,border-color,box-shadow] duration-150',
+        `ui-button-${variant} ui-button-${size}`,
+        sizeClass(size, variant),
+        variantClass(variant),
+        fullWidth && 'w-full',
+        className
+      )}
       {...props}
     >
-      {isLoading ? (
-        <>
-          <Spinner
-            size={size === 'sm' ? 'sm' : 'md'}
-            variant={variant === 'primary' || variant === 'danger' ? 'white' : 'default'}
-          />
-          <span style={{ opacity: 0 }}>{children}</span>
-        </>
-      ) : (
-        <>
-          {leftIcon && <span className="ui-button-icon-left">{leftIcon}</span>}
-          {children}
-          {rightIcon && <span className="ui-button-icon-right">{rightIcon}</span>}
-        </>
+      {leftIcon && (
+        <span className="ui-button-icon-left inline-flex shrink-0" aria-hidden="true">
+          {leftIcon}
+        </span>
       )}
-    </button>
+      {children}
+      {rightIcon && (
+        <span className="ui-button-icon-right inline-flex shrink-0" aria-hidden="true">
+          {rightIcon}
+        </span>
+      )}
+    </ShadcnButton>
   );
-}
+});
+
+export default Button;

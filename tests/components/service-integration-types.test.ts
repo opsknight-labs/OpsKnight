@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { INTEGRATION_TYPES, IntegrationType } from '@/components/service/integration-types';
+import { INTEGRATION_TYPES } from '@/components/service/integration-types';
 
 describe('Service Integration Types UI Registry', () => {
   it('should include all 28 integration types', () => {
@@ -12,6 +12,7 @@ describe('Service Integration Types UI Registry', () => {
     expect(values).toContain('GOOGLE_CLOUD_MONITORING');
     expect(values).toContain('DATADOG');
     expect(values).toContain('GRAFANA');
+    expect(values).toContain('BASE14');
     expect(values).toContain('PROMETHEUS');
     expect(values).toContain('NEWRELIC');
     expect(values).toContain('SENTRY');

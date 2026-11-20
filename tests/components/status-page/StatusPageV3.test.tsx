@@ -7,6 +7,8 @@ import type {
 } from '@/lib/status-pages/public-contract';
 import { deriveOverallPublicHealth } from '@/lib/status-pages/status-presentation';
 import { aggregatePublicRegions } from '@/lib/status-pages/history';
+import { STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
+import { STATUS_PAGE_THEMES } from '@/lib/status-pages/theme-contract';
 
 vi.mock('@/components/status-page/StatusPageSubscribe', () => ({ default: () => null }));
 
@@ -618,5 +620,38 @@ describe('StatusPageV3', () => {
     expect(pdfLink).toBeInTheDocument();
     expect(csvLink).toHaveAttribute('href', expect.stringContaining('format=csv'));
     expect(pdfLink).toHaveAttribute('href', expect.stringContaining('format=pdf'));
+  });
+
+  describe('surface theme follows the page theme, not the visitor', () => {
+    const withBranding = (branding: Record<string, unknown>) => {
+      const snapshot = snapshotOf([service()]);
+      return { ...snapshot, page: { ...snapshot.page, branding } } as PublicStatusPageSnapshot;
+    };
+    const surface = (container: HTMLElement) =>
+      container.querySelector(`.${STATUS_PAGE_SURFACE_CLASS}`);
+
+    it('marks every dark built-in theme as a dark surface', () => {
+      const darkThemes = STATUS_PAGE_THEMES.filter(theme => theme.mode === 'dark');
+      expect(darkThemes.length).toBeGreaterThan(0);
+      for (const theme of darkThemes) {
+        const { container, unmount } = render(
+          <StatusPageV3 snapshot={withBranding({ themeId: theme.id })} />
+        );
+        expect(surface(container), theme.id).toHaveAttribute('data-surface-theme', 'dark');
+        unmount();
+      }
+    });
+
+    it('keeps the default theme light without a dark background', () => {
+      const { container } = render(<StatusPageV3 snapshot={snapshotOf([service()])} />);
+      expect(surface(container)).toHaveAttribute('data-surface-theme', 'light');
+    });
+
+    it('treats the default theme with a dark custom background as dark', () => {
+      const { container } = render(
+        <StatusPageV3 snapshot={withBranding({ backgroundColor: '#0b1020' })} />
+      );
+      expect(surface(container)).toHaveAttribute('data-surface-theme', 'dark');
+    });
   });
 });

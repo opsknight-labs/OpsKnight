@@ -1,7 +1,18 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { trapFocus } from '@/lib/focus-trap';
+import { AlertTriangle, Info } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
+import { buttonVariants } from '@/components/ui/shadcn/button';
+import { cn } from '@/lib/utils';
 
 type ConfirmDialogProps = {
   isOpen: boolean;
@@ -14,6 +25,25 @@ type ConfirmDialogProps = {
   onCancel: () => void;
 };
 
+// Theme tokens only, so the dialog reads correctly in light and dark.
+const VARIANTS = {
+  danger: {
+    Icon: AlertTriangle,
+    icon: 'bg-destructive/10 text-destructive',
+    action: buttonVariants({ variant: 'destructive' }),
+  },
+  warning: {
+    Icon: AlertTriangle,
+    icon: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    action: 'bg-amber-700 text-white hover:bg-amber-800',
+  },
+  info: {
+    Icon: Info,
+    icon: 'bg-primary/10 text-primary',
+    action: buttonVariants(),
+  },
+} as const;
+
 export default function ConfirmDialog({
   isOpen,
   title,
@@ -24,214 +54,40 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const confirmButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      if (dialogRef.current) {
-        const cleanup = trapFocus(dialogRef.current, onCancel);
-        return () => {
-          document.body.style.overflow = '';
-          cleanup();
-        };
-      }
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isOpen, onCancel]);
-
-  if (!isOpen) return null;
-
-  const variantStyles = {
-    danger: {
-      confirmBg: 'linear-gradient(180deg, #be123c 0%, #9f1239 100%)',
-      confirmHover: '#881337',
-      borderColor: '#fecaca',
-      iconBg: '#fef2f2',
-      iconColor: '#be123c',
-    },
-    warning: {
-      confirmBg: 'linear-gradient(180deg, #d97706 0%, #b45309 100%)',
-      confirmHover: '#92400e',
-      borderColor: '#fde68a',
-      iconBg: '#fffbeb',
-      iconColor: '#d97706',
-    },
-    info: {
-      confirmBg: 'linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)',
-      confirmHover: '#1d4ed8',
-      borderColor: '#dbeafe',
-      iconBg: '#dbeafe',
-      iconColor: '#3b82f6',
-    },
-  };
-
-  const styles =
-    variant === 'warning'
-      ? variantStyles.warning
-      : variant === 'info'
-        ? variantStyles.info
-        : variantStyles.danger;
+  const { Icon, icon, action } =
+    variant === 'warning' ? VARIANTS.warning : variant === 'info' ? VARIANTS.info : VARIANTS.danger;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '1rem',
-        background: 'rgba(0, 0, 0, 0.5)',
-        backdropFilter: 'blur(4px)',
-      }}
-      onClick={onCancel}
-    >
-      <div
-        ref={dialogRef}
-        className="bg-card text-card-foreground"
-        style={{
-          borderRadius: '16px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-          maxWidth: '500px',
-          width: '100%',
-          padding: '2rem',
-          border: `2px solid ${styles.borderColor}`,
-          position: 'relative',
-          animation: 'fadeIn 0.2s ease-out',
-        }}
-        onClick={e => e.stopPropagation()}
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="dialog-title"
-        aria-describedby="dialog-message"
-      >
-        <style>{`
-                    @keyframes fadeIn {
-                        from {
-                            opacity: 0;
-                            transform: scale(0.95);
-                        }
-                        to {
-                            opacity: 1;
-                            transform: scale(1);
-                        }
-                    }
-                `}</style>
-
-        {/* Icon */}
-        <div
-          style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            background: styles.iconBg,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '1rem',
-          }}
-        >
-          {variant === 'danger' && <span style={{ fontSize: '24px' }}>⚠️</span>}
-          {variant === 'warning' && <span style={{ fontSize: '24px' }}>⚠️</span>}
-          {variant === 'info' && <span style={{ fontSize: '24px' }}>ℹ️</span>}
-        </div>
-
-        {/* Title */}
-        <h3
-          id="dialog-title"
-          style={{
-            fontSize: '1.25rem',
-            fontWeight: '700',
-            color: 'var(--text-primary)',
-            marginBottom: '0.75rem',
-            lineHeight: 1.3,
-          }}
-        >
-          {title}
-        </h3>
-
-        {/* Message */}
-        <p
-          id="dialog-message"
-          style={{
-            fontSize: '0.95rem',
-            color: 'var(--text-secondary)',
-            lineHeight: 1.6,
-            marginBottom: '1.5rem',
-          }}
-        >
-          {message}
-        </p>
-
-        {/* Actions */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '0.75rem',
-            justifyContent: 'flex-end',
-          }}
-        >
-          <button
-            type="button"
-            onClick={onCancel}
-            style={{
-              padding: '0.625rem 1.25rem',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              background: 'hsl(var(--ui-card))',
-              color: 'var(--text-primary)',
-              fontSize: '0.875rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = '#f9fafb';
-              e.currentTarget.style.borderColor = '#d1d5db';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = '#ffffff';
-              e.currentTarget.style.borderColor = 'var(--border)';
-            }}
+    <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
+      <AlertDialogContent className="max-w-md">
+        <AlertDialogHeader className="sm:flex-row sm:items-start sm:gap-4 sm:space-y-0">
+          <span
+            className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full', icon)}
+            aria-hidden="true"
           >
-            {cancelText}
-          </button>
-          <button
-            ref={confirmButtonRef}
-            type="button"
-            onClick={onConfirm}
-            style={{
-              padding: '0.625rem 1.25rem',
-              borderRadius: '8px',
-              border: 'none',
-              background: styles.confirmBg,
-              color: '#ffffff',
-              fontSize: '0.875rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = styles.confirmHover;
-              e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = styles.confirmBg;
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+            <Icon className="h-5 w-5" />
+          </span>
+          <div className="space-y-2">
+            <AlertDialogTitle>{title}</AlertDialogTitle>
+            <AlertDialogDescription className="whitespace-pre-line">
+              {message}
+            </AlertDialogDescription>
+          </div>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{cancelText}</AlertDialogCancel>
+          <AlertDialogAction
+            className={action}
+            onClick={event => {
+              // The caller owns closing, as before: keep the dialog open until it does.
+              event.preventDefault();
+              onConfirm();
             }}
           >
             {confirmText}
-          </button>
-        </div>
-      </div>
-    </div>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

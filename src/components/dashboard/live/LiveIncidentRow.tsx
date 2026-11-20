@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { Check, Clock3, Loader2, PanelRight, Plus, Star, UserPlus, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PriorityBadge from '@/components/incident/PriorityBadge';
-import {
-  formatCountdown,
-  formatIncidentAge,
-  type LiveIncident,
-} from '@/lib/dashboard/live-incidents-shared';
+import StatusBadge from '@/components/patterns/StatusBadge';
+import SeverityBadge from '@/components/patterns/SeverityBadge';
+import RelativeTime from '@/components/patterns/RelativeTime';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { formatCountdown, type LiveIncident } from '@/lib/dashboard/live-incidents-shared';
 
 /**
  * Shared column templates so the header and rows always align. They respond to the panel's
@@ -17,10 +17,11 @@ import {
  * keeps its room whether the panel sits beside the rail or spans the page.
  */
 export const LIVE_ROW_GRID =
-  '[@container(min-width:40rem)]:grid-cols-[5.75rem_minmax(0,1fr)_7rem_minmax(0,7rem)_7.75rem] [@container(min-width:50rem)]:grid-cols-[5.75rem_minmax(0,1fr)_6.25rem_6.75rem_minmax(0,8.25rem)_8.25rem]';
+  '[@container(min-width:40rem)]:grid-cols-[5.75rem_minmax(0,1fr)_7.5rem_minmax(0,7rem)_7.75rem] [@container(min-width:50rem)]:grid-cols-[5.75rem_minmax(0,1fr)_7.5rem_6.75rem_minmax(0,8.25rem)_8.25rem]';
 export const LIVE_ROW_GRID_TV = 'md:grid-cols-[6.5em_minmax(0,1fr)_7.5em_9.5em_minmax(0,10em)]';
 
 const HOUR = 3_600_000;
+const TV_BADGE_CLASS = 'h-auto py-1 text-[0.7em] [&_svg]:h-[1.1em] [&_svg]:w-[1.1em]';
 
 export function UrgencyBadge({
   urgency,
@@ -31,27 +32,14 @@ export function UrgencyBadge({
   size?: 'sm' | 'tv';
   className?: string;
 }) {
-  const isHigh = urgency === 'HIGH';
-  const isMed = urgency === 'MEDIUM';
-  const label = isHigh ? 'HIGH' : isMed ? 'MED' : 'LOW';
-
   return (
-    <span
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded border font-mono font-bold tracking-wider uppercase tabular-nums transition-colors',
-        size === 'tv' ? 'px-1.5 py-0.5 text-[0.7em]' : 'px-1.5 py-0.5 text-[9px] leading-none',
-        isHigh
-          ? 'border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-400'
-          : isMed
-            ? 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-400'
-            : 'border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-400',
-        className
-      )}
-      title={`${urgency} urgency`}
-      aria-label={`${urgency} urgency`}
-    >
-      {label}
-    </span>
+    <SeverityBadge
+      urgency={urgency}
+      size="xs"
+      abbreviate
+      hideIcon
+      className={cn(size === 'tv' && TV_BADGE_CLASS, className)}
+    />
   );
 }
 
@@ -195,25 +183,12 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
   const actionIconClass = compact ? 'h-3 w-3 shrink-0' : 'h-3.5 w-3.5 shrink-0';
 
   const status = (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 whitespace-nowrap font-medium',
-        tv ? 'text-[0.9em]' : 'text-xs',
-        incident.status === 'OPEN'
-          ? 'text-rose-700 dark:text-rose-400'
-          : 'text-amber-700 dark:text-amber-400'
-      )}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          'shrink-0 rounded-full',
-          tv ? 'h-[0.45em] w-[0.45em]' : 'h-1.5 w-1.5',
-          incident.status === 'OPEN' ? 'bg-rose-500' : 'bg-amber-500'
-        )}
-      />
-      {incident.status === 'OPEN' ? 'Triggered' : 'Acknowledged'}
-    </span>
+    <StatusBadge
+      status={incident.status}
+      size="xs"
+      live={incident.status === 'OPEN'}
+      className={tv ? TV_BADGE_CLASS : undefined}
+    />
   );
 
   const owner = incident.assignee ? (
@@ -272,9 +247,9 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
       className={cn(
         'group relative cursor-pointer border-l-[3px] transition-colors duration-150',
         incident.status === 'OPEN'
-          ? 'border-l-rose-500 bg-rose-500/[0.02]'
+          ? cn(toneClasses('critical').borderLeft, 'bg-status-critical/[0.02]')
           : incident.sla.warning === 'APPROACHING' || incident.sla.warning === 'BREACHED'
-            ? 'border-l-amber-500 bg-amber-500/[0.02]'
+            ? cn(toneClasses('elevated').borderLeft, 'bg-status-elevated/[0.02]')
             : 'border-l-transparent',
         'hover:bg-muted/40 focus-within:bg-muted/40',
         highlighted ? 'bg-primary/[0.07]' : '',
@@ -305,9 +280,10 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
             {incident.priority ? (
               <PriorityBadge
                 priority={incident.priority}
-                size={tv ? 'md' : 'sm'}
+                size="sm"
                 showLabel={false}
-                className={tv ? '!h-auto !px-2.5 !py-1 !text-[0.8em]' : undefined}
+                hideIcon
+                className={tv ? TV_BADGE_CLASS : undefined}
               />
             ) : (
               <span
@@ -358,16 +334,12 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
               <span aria-hidden className="text-muted-foreground/40 font-mono">
                 /
               </span>
-              <time
-                dateTime={incident.createdAt}
-                title={new Date(incident.createdAt).toLocaleString()}
-                className={cn(
-                  'shrink-0 font-mono tabular-nums',
-                  tv ? 'text-[0.9em]' : 'text-[11px]'
-                )}
-              >
-                {formatIncidentAge(incident.createdAt, now)}
-              </time>
+              <RelativeTime
+                date={incident.createdAt}
+                now={now}
+                format="narrow"
+                className={cn('shrink-0 font-mono', tv ? 'text-[0.9em]' : 'text-[11px]')}
+              />
               {incident.alertCount > 1 && (
                 <>
                   <span aria-hidden className="text-muted-foreground/40 font-mono">
