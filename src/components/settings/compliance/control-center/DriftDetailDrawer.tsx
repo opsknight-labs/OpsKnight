@@ -139,10 +139,10 @@ export function DriftDetailDrawer({
             <button
               type="button"
               onClick={handleCopyId}
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+              className="inline-flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground"
             >
               {copiedId ? (
-                <Check className="h-3 w-3 text-emerald-500" />
+                <Check className="h-3 w-3 text-status-ok" />
               ) : (
                 <Copy className="h-3 w-3" />
               )}
@@ -174,7 +174,7 @@ export function DriftDetailDrawer({
               {event.currentStatus ?? 'UNKNOWN'}
             </Badge>
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-2xs text-muted-foreground">
             This drift episode represents an observed technical state change. It does not certify
             compliance or non-compliance.
           </div>
@@ -183,25 +183,25 @@ export function DriftDetailDrawer({
         {/* Timestamps & Occurrence */}
         <div className="grid grid-cols-3 gap-3 text-xs">
           <div className="rounded-md border border-border p-3 space-y-1">
-            <div className="text-muted-foreground text-[11px]">First Detected</div>
+            <div className="text-muted-foreground text-2xs">First Detected</div>
             <div className="font-medium">
               {new Date(event.firstDetectedAt).toLocaleDateString()}
             </div>
-            <div className="text-[10px] text-muted-foreground">
+            <div className="text-2xs text-muted-foreground">
               {new Date(event.firstDetectedAt).toLocaleTimeString()}
             </div>
           </div>
           <div className="rounded-md border border-border p-3 space-y-1">
-            <div className="text-muted-foreground text-[11px]">Last Observed</div>
+            <div className="text-muted-foreground text-2xs">Last Observed</div>
             <div className="font-medium">{new Date(event.lastObservedAt).toLocaleDateString()}</div>
-            <div className="text-[10px] text-muted-foreground">
+            <div className="text-2xs text-muted-foreground">
               {new Date(event.lastObservedAt).toLocaleTimeString()}
             </div>
           </div>
           <div className="rounded-md border border-border p-3 space-y-1">
-            <div className="text-muted-foreground text-[11px]">Occurrence Count</div>
+            <div className="text-muted-foreground text-2xs">Occurrence Count</div>
             <div className="font-semibold text-sm">{event.occurrenceCount}x</div>
-            <div className="text-[10px] text-muted-foreground">Deduplicated episode</div>
+            <div className="text-2xs text-muted-foreground">Deduplicated episode</div>
           </div>
         </div>
 
@@ -209,7 +209,7 @@ export function DriftDetailDrawer({
         <div className="rounded-lg border border-border p-4 space-y-2 text-xs">
           <div className="font-semibold text-foreground">Operator & Technical Lifecycle</div>
           {event.acknowledgedAt ? (
-            <div className="flex items-center gap-2 text-amber-500">
+            <div className="flex items-center gap-2 text-status-elevated-deep dark:text-amber-300">
               <CheckCircle2 className="h-4 w-4" />
               <span>
                 Acknowledged on {new Date(event.acknowledgedAt).toLocaleString()}
@@ -224,7 +224,7 @@ export function DriftDetailDrawer({
           )}
 
           {event.status === 'RESOLVED' && event.resolvedAt && (
-            <div className="flex items-center gap-2 text-emerald-500 pt-1 border-t border-border">
+            <div className="flex items-center gap-2 text-status-ok-deep dark:text-emerald-300 pt-1 border-t border-border">
               <CheckCircle2 className="h-4 w-4" />
               <span>
                 Factual technical recovery confirmed on{' '}
@@ -241,12 +241,12 @@ export function DriftDetailDrawer({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div className="p-3 rounded-md border border-border bg-muted/10 space-y-1">
-              <div className="text-[11px] text-muted-foreground">Baseline Evaluation</div>
-              <div className="font-mono text-[11px] truncate">
+              <div className="text-2xs text-muted-foreground">Baseline Evaluation</div>
+              <div className="font-mono text-2xs truncate">
                 {event.baselineEvaluationId ?? 'Established baseline'}
               </div>
               {event.baselineEvaluation && (
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-2xs text-muted-foreground">
                   Status:{' '}
                   <span className="font-medium text-foreground">
                     {event.baselineEvaluation.status}
@@ -256,12 +256,12 @@ export function DriftDetailDrawer({
             </div>
 
             <div className="p-3 rounded-md border border-border bg-muted/10 space-y-1">
-              <div className="text-[11px] text-muted-foreground">Detected Evaluation</div>
-              <div className="font-mono text-[11px] truncate">
+              <div className="text-2xs text-muted-foreground">Detected Evaluation</div>
+              <div className="font-mono text-2xs truncate">
                 {event.detectedEvaluationId ?? 'N/A'}
               </div>
               {event.detectedEvaluation && (
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-2xs text-muted-foreground">
                   Status:{' '}
                   <span className="font-medium text-foreground">
                     {event.detectedEvaluation.status}
@@ -279,7 +279,7 @@ export function DriftDetailDrawer({
               size="sm"
               onClick={handleAcknowledge}
               disabled={isAcknowledging}
-              className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-8"
+              className="text-xs h-8"
             >
               {isAcknowledging ? 'Acknowledging...' : 'Acknowledge Drift'}
             </Button>

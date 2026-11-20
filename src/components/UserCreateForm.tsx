@@ -528,7 +528,7 @@ export default function UserCreateForm({ action, className = '', disabled = fals
                 </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ADMIN" className="py-2">
+                <SelectItem value="ADMIN">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-md shrink-0">
                       <ShieldAlert className="h-3.5 w-3.5" />
@@ -539,7 +539,7 @@ export default function UserCreateForm({ action, className = '', disabled = fals
                     </div>
                   </div>
                 </SelectItem>
-                <SelectItem value="RESPONDER" className="py-2">
+                <SelectItem value="RESPONDER">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md shrink-0">
                       <Shield className="h-3.5 w-3.5" />
@@ -550,7 +550,7 @@ export default function UserCreateForm({ action, className = '', disabled = fals
                     </div>
                   </div>
                 </SelectItem>
-                <SelectItem value="AUDITOR" className="py-2">
+                <SelectItem value="AUDITOR">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-md shrink-0">
                       <Shield className="h-3.5 w-3.5" />
@@ -563,7 +563,7 @@ export default function UserCreateForm({ action, className = '', disabled = fals
                     </div>
                   </div>
                 </SelectItem>
-                <SelectItem value="USER" className="py-2">
+                <SelectItem value="USER">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1 bg-muted text-muted-foreground rounded-md shrink-0">
                       <Users className="h-3.5 w-3.5" />

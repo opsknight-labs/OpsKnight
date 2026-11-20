@@ -8,6 +8,7 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { incidentReadWhere } from '@/lib/authorization-filters';
+import { getMyIncidentCounts, getWorkspaceHealth } from '@/lib/status-bar-data';
 
 const RATE_LIMIT_MAX = 30; // 30 requests per minute
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
@@ -33,7 +34,7 @@ export async function GET() {
     };
 
     // Group by Urgency to get breakdown
-    const [urgencyCounts, enabledStatusPages] = await Promise.all([
+    const [urgencyCounts, enabledStatusPages, my, health] = await Promise.all([
       prisma.incident.groupBy({
         by: ['urgency'],
         where,
@@ -46,6 +47,10 @@ export async function GET() {
         select: { id: true, name: true, slug: true, isDefault: true },
         orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
       }),
+      // The status bar's "my work" counts: one groupBy on the (assigneeId, status) index.
+      getMyIncidentCounts(actor),
+      // Status bar: awaiting-ack, SLA-at-risk and active-maintenance signals, all read-scoped.
+      getWorkspaceHealth(actor),
     ]);
 
     const activeIncidentsCount = urgencyCounts.reduce((acc, curr) => acc + curr._count._all, 0);
@@ -62,6 +67,8 @@ export async function GET() {
         lowIncidentsCount,
         statusPages: enabledStatusPages,
         isStatusPageAdmin,
+        my,
+        health,
         scope: 'current',
         dataState: 'available',
         calculatedAt: new Date().toISOString(),

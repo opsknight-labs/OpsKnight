@@ -7,7 +7,12 @@ import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
-import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
+import {
+  incidentReadWhere,
+  runbookReadWhere,
+  scheduleReadWhere,
+  serviceReadWhere,
+} from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 
@@ -75,7 +80,18 @@ type SearchResponses = [
   UserSearchResult[],
   PolicySearchResult[],
   PostmortemSearchResult[] | [],
+  Array<{ id: string; name: string; timeZone: string }>,
+  Array<{ id: string; name: string; description: string }>,
 ];
+
+/** Read scope for a resource, or null when the actor may not read it at all. */
+function readScope<T>(scope: () => T): T | null {
+  try {
+    return scope();
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -116,6 +132,8 @@ export async function GET(req: NextRequest) {
     const teamIds = [...actor.teamIds];
     const incidentAccess = incidentReadWhere(actor);
     const serviceAccess = serviceReadWhere(actor);
+    const scheduleAccess = readScope(() => scheduleReadWhere(actor));
+    const runbookAccess = readScope(() => runbookReadWhere(actor));
 
     const rate = await checkRateLimit(`api:search:user:${currentUser.id}`, 30, 60_000);
     if (!rate.allowed) {
@@ -350,11 +368,43 @@ export async function GET(req: NextRequest) {
           return [];
         }
       })(),
+
+      // Search on-call schedules (skipped when the actor has no schedule read)
+      scheduleAccess
+        ? prisma.onCallSchedule.findMany({
+            where: {
+              AND: [scheduleAccess, { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } }],
+            },
+            take: 5,
+            orderBy: { name: 'asc' },
+            select: { id: true, name: true, timeZone: true },
+          })
+        : Promise.resolve([]),
+
+      // Search runbooks (skipped when the actor has no runbook read)
+      runbookAccess
+        ? prisma.runbook.findMany({
+            where: {
+              AND: [
+                runbookAccess,
+                { archivedAt: null },
+                {
+                  OR: [
+                    { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                    { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                  ],
+                },
+              ],
+            },
+            take: 5,
+            orderBy: { updatedAt: 'desc' },
+            select: { id: true, name: true, description: true },
+          })
+        : Promise.resolve([]),
     ];
 
-    const [incidents, services, teams, users, policies, postmortemsResult] = (await Promise.all(
-      searchPromises
-    )) as SearchResponses;
+    const [incidents, services, teams, users, policies, postmortemsResult, schedules, runbooks] =
+      (await Promise.all(searchPromises)) as SearchResponses;
 
     // Handle postmortems result (unwrap promise if needed)
     const postmortems = Array.isArray(postmortemsResult) ? postmortemsResult : [];
@@ -416,6 +466,22 @@ export async function GET(req: NextRequest) {
         subtitle: `Postmortem for ${visibleIncidentSource(pm.incident, canReadSensitive).title} - ${pm.status}`,
         href: `/postmortems/${pm.incidentId}`,
         priority: 8,
+      })),
+      ...schedules.map(s => ({
+        type: 'schedule' as const,
+        id: s.id,
+        title: s.name,
+        subtitle: `On-call schedule - ${s.timeZone}`,
+        href: `/schedules/${s.id}`,
+        priority: 9,
+      })),
+      ...runbooks.map(r => ({
+        type: 'runbook' as const,
+        id: r.id,
+        title: r.name,
+        subtitle: r.description || 'Runbook',
+        href: `/runbooks/${r.id}`,
+        priority: 10,
       })),
     ]
       .sort((a, b) => {

@@ -461,12 +461,12 @@ print(response.json())`;
                 <CardTitle className="text-sm font-bold">Developer API Quickstart</CardTitle>
                 <Badge
                   variant="outline"
-                  className="text-[10px] font-mono font-medium text-muted-foreground"
+                  className="text-2xs font-mono font-medium text-muted-foreground"
                 >
                   {baseUrl}
                 </Badge>
                 {revealedSecret && (
-                  <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-medium gap-1">
+                  <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-2xs font-medium gap-1">
                     <Sparkles className="h-3 w-3" />
                     New Token Active
                   </Badge>
@@ -496,7 +496,7 @@ print(response.json())`;
       <CardContent className="p-4 sm:p-5 space-y-4">
         {/* Live-test credential: kept in memory only */}
         <div className="flex flex-col gap-1.5 rounded-xl border border-border/70 bg-muted/20 p-2.5">
-          <label htmlFor="quickstart-live-key" className="text-[11px] font-medium text-foreground">
+          <label htmlFor="quickstart-live-key" className="text-2xs font-medium text-foreground">
             API key for live tests
           </label>
           <input
@@ -510,7 +510,7 @@ print(response.json())`;
             className="h-8 w-full rounded-md border border-input bg-background px-2.5 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-describedby="quickstart-live-key-help"
           />
-          <p id="quickstart-live-key-help" className="text-[11px] text-muted-foreground">
+          <p id="quickstart-live-key-help" className="text-2xs text-muted-foreground">
             Used only for &quot;Run Live Test&quot; requests from this page. It is not saved or
             shown in the code samples. Requests that change data ask for confirmation first.
           </p>
@@ -519,7 +519,7 @@ print(response.json())`;
         {/* 2. Interactive Header Format Switcher & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-xl border border-border/70 bg-muted/20">
           <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="text-muted-foreground text-[11px] font-medium">
+            <span className="text-muted-foreground text-2xs font-medium">
               Header formats supported:
             </span>
             <div className="inline-flex rounded-lg border border-border/60 bg-background p-0.5 shadow-2xs">
@@ -546,8 +546,8 @@ print(response.json())`;
                 X-API-Key
               </button>
             </div>
-            <span className="text-[11px] text-muted-foreground">or</span>
-            <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+            <span className="text-2xs text-muted-foreground">or</span>
+            <Badge variant="outline" className="text-2xs font-mono text-muted-foreground">
               {authFormat === 'BEARER' ? 'Authorization: Bearer <token>' : 'X-API-Key: <token>'}
             </Badge>
           </div>
@@ -558,7 +558,7 @@ print(response.json())`;
               variant={viewMode === 'request' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('request')}
-              className="h-7 text-[11px] px-2.5"
+              className="h-7 text-2xs px-2.5"
             >
               Request Code
             </Button>
@@ -567,7 +567,7 @@ print(response.json())`;
               variant={viewMode === 'response' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('response')}
-              className="h-7 text-[11px] px-2.5"
+              className="h-7 text-2xs px-2.5"
             >
               Expected Response
             </Button>
@@ -577,10 +577,10 @@ print(response.json())`;
         {/* 3. Scenario Selector Pills */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-foreground text-[11px] uppercase tracking-wider">
+            <span className="font-semibold text-foreground text-2xs uppercase tracking-wider">
               Common Developer Scenarios
             </span>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-2xs text-muted-foreground">
               Required Scope:{' '}
               <code className="font-mono text-foreground font-medium">{activeScenario.scope}</code>
             </span>
@@ -606,7 +606,7 @@ print(response.json())`;
                 >
                   <div className="flex items-center gap-1.5 w-full">
                     <Badge
-                      className={`text-[9px] font-bold px-1 py-0 ${
+                      className={`text-2xs font-bold px-1 py-0 ${
                         sc.method === 'POST'
                           ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                           : 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30'
@@ -614,7 +614,7 @@ print(response.json())`;
                     >
                       {sc.method}
                     </Badge>
-                    <span className="text-[11px] font-semibold truncate text-foreground">
+                    <span className="text-2xs font-semibold truncate text-foreground">
                       {sc.id === 'events'
                         ? '1. Ingest Alert'
                         : sc.id === 'incidents'
@@ -626,7 +626,7 @@ print(response.json())`;
                               : '5. Services'}
                     </span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground truncate w-full font-mono">
+                  <span className="text-2xs text-muted-foreground truncate w-full font-mono">
                     {sc.path.split('?')[0]}
                   </span>
                 </button>
@@ -639,11 +639,11 @@ print(response.json())`;
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-foreground">{activeScenario.title}</span>
-            <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+            <Badge variant="outline" className="text-2xs font-mono text-muted-foreground">
               {activeScenario.method} {activeScenario.path.split('?')[0]}
             </Badge>
           </div>
-          <p className="text-[11px] text-muted-foreground">{activeScenario.description}</p>
+          <p className="text-2xs text-muted-foreground">{activeScenario.description}</p>
         </div>
 
         {/* 5. Language Tabs & Code Display */}
@@ -749,11 +749,11 @@ print(response.json())`;
               </>
             ) : (
               <div>
-                <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/50 text-[11px] text-muted-foreground">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/50 text-2xs text-muted-foreground">
                   <span>Expected Status:</span>
                   <Badge
                     variant="outline"
-                    className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px]"
+                    className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-2xs"
                   >
                     HTTP {activeScenario.expectedStatus}{' '}
                     {activeScenario.expectedStatus === 202 ? 'Accepted' : 'OK'}
@@ -805,7 +805,7 @@ print(response.json())`;
         {activeScenario.params && activeScenario.params.length > 0 && (
           <div className="grid gap-2 sm:grid-cols-2 rounded-xl border border-border/70 bg-muted/20 p-2.5">
             {activeScenario.params.map(param => (
-              <label key={param.name} className="flex flex-col gap-1 text-[11px] font-medium">
+              <label key={param.name} className="flex flex-col gap-1 text-2xs font-medium">
                 {param.label} (required for live test)
                 <input
                   type="text"
@@ -822,7 +822,7 @@ print(response.json())`;
                 {invalidParams(activeScenario).some(p => p.name === param.name) && (
                   <span
                     role="alert"
-                    className="text-[11px] font-normal text-rose-600 dark:text-rose-400"
+                    className="text-2xs font-normal text-rose-600 dark:text-rose-400"
                   >
                     IDs contain only letters, numbers, hyphens and underscores.
                   </span>
@@ -839,8 +839,8 @@ print(response.json())`;
                 <Badge
                   className={
                     resultSucceeded
-                      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 text-[10px]'
-                      : 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40 text-[10px]'
+                      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 text-2xs'
+                      : 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40 text-2xs'
                   }
                 >
                   {testResult.status === 0
@@ -850,11 +850,11 @@ print(response.json())`;
                     ? ' · not authenticated'
                     : ''}
                 </Badge>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-2xs text-muted-foreground">
                   Latency:{' '}
                   <span className="font-semibold text-foreground">{testResult.durationMs}ms</span>
                 </span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-2xs text-muted-foreground">
                   Route:{' '}
                   <code className="font-mono text-foreground">{resolve(activeScenario).path}</code>
                 </span>
@@ -865,14 +865,14 @@ print(response.json())`;
                 variant="ghost"
                 size="sm"
                 onClick={() => setTestResult(null)}
-                className="h-6 text-[10px] text-muted-foreground hover:text-foreground"
+                className="h-6 text-2xs text-muted-foreground hover:text-foreground"
               >
                 Close
               </Button>
             </div>
 
             <div className="rounded-lg bg-background/90 border border-border/60 p-2.5 font-mono text-xs overflow-x-auto">
-              <pre className="text-foreground text-[11px] leading-relaxed">
+              <pre className="text-foreground text-2xs leading-relaxed">
                 {JSON.stringify(testResult.data, null, 2)}
               </pre>
             </div>

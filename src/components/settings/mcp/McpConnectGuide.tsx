@@ -33,7 +33,7 @@ function Steps({ children }: { children: ReactNode }) {
 
 function Step({ children }: { children: ReactNode }) {
   return (
-    <li className="relative pl-8 pr-0 py-0 [counter-increment:step] before:absolute before:left-0 before:top-0 before:flex before:h-5 before:w-5 before:items-center before:justify-center before:rounded-full before:bg-primary/10 before:text-[11px] before:font-semibold before:text-primary before:content-[counter(step)]">
+    <li className="relative pl-8 pr-0 py-0 [counter-increment:step] before:absolute before:left-0 before:top-0 before:flex before:h-5 before:w-5 before:items-center before:justify-center before:rounded-full before:bg-primary/10 before:text-2xs before:font-semibold before:text-primary before:content-[counter(step)]">
       <div className="space-y-2 leading-relaxed">{children}</div>
     </li>
   );
@@ -48,7 +48,7 @@ const ASSISTANTS = [
   { id: 'claude', label: 'Claude', icon: <ClaudeLogo className="h-3.5 w-3.5 shrink-0" /> },
   { id: 'chatgpt', label: 'ChatGPT', icon: <ChatGptLogo className="h-3.5 w-3.5 shrink-0" /> },
   { id: 'cursor', label: 'Cursor', icon: <CursorLogo className="h-3.5 w-3.5 shrink-0" /> },
-  { id: 'vscode', label: 'VS Code', icon: <Code2 className="h-3.5 w-3.5 shrink-0 text-sky-500" /> },
+  { id: 'vscode', label: 'VS Code', icon: <Code2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> },
   {
     id: 'other',
     label: 'Other clients',

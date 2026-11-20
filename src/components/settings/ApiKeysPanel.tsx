@@ -365,7 +365,7 @@ export default function ApiKeysPanel({
                           <div className="space-y-0.5">
                             <span className="font-bold text-foreground">{key.name}</span>
                             {(key.ownerLabel || key.ownerEmail) && (
-                              <span className="block text-[11px] text-muted-foreground font-normal">
+                              <span className="block text-2xs text-muted-foreground font-normal">
                                 {key.ownerLabel || key.ownerEmail}
                               </span>
                             )}
@@ -384,7 +384,7 @@ export default function ApiKeysPanel({
                               <Badge
                                 key={scope}
                                 variant="outline"
-                                className="text-[10px] px-1.5 py-0 bg-background font-mono border-border/80"
+                                className="text-2xs px-1.5 py-0 bg-background font-mono border-border/80"
                               >
                                 {scope}
                               </Badge>
@@ -396,7 +396,7 @@ export default function ApiKeysPanel({
                           {isActive ? (
                             <Badge
                               variant="outline"
-                              className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1"
+                              className="text-2xs font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1"
                             >
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                               Active
@@ -404,7 +404,7 @@ export default function ApiKeysPanel({
                           ) : isRevoked ? (
                             <Badge
                               variant="outline"
-                              className="text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 inline-flex items-center gap-1"
+                              className="text-2xs font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 inline-flex items-center gap-1"
                             >
                               <ShieldAlert className="h-3 w-3" />
                               Revoked
@@ -412,7 +412,7 @@ export default function ApiKeysPanel({
                           ) : (
                             <Badge
                               variant="outline"
-                              className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 inline-flex items-center gap-1"
+                              className="text-2xs font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 inline-flex items-center gap-1"
                             >
                               <Clock className="h-3 w-3" />
                               Expired
@@ -508,7 +508,7 @@ export default function ApiKeysPanel({
                   placeholder="e.g., Datadog Ingest or GitHub CI"
                   className="h-9 text-xs"
                 />
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                   Recognizable name for audit trails and rotation
                 </p>
               </div>
@@ -530,7 +530,7 @@ export default function ApiKeysPanel({
                   <option value="180">180 days</option>
                   <option value="365">1 year</option>
                 </select>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                   Key is automatically rejected after expiration
                 </p>
               </div>

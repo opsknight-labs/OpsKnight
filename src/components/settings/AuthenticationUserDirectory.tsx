@@ -202,7 +202,7 @@ export default function AuthenticationUserDirectory() {
                   }}
                 />
                 {user.linkingState === 'approved' && user.approvalExpiresAt && (
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-2xs text-muted-foreground">
                     until {new Date(user.approvalExpiresAt).toLocaleDateString()}
                   </span>
                 )}

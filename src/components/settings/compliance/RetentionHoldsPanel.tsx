@@ -208,11 +208,11 @@ export default function RetentionHoldsPanel() {
   };
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-6 shadow-xs space-y-6">
+    <div className="rounded-lg border border-border/70 bg-card p-6 shadow-xs space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <ShieldAlert className="h-5 w-5 text-amber-500" />
+            <ShieldAlert className="h-5 w-5 text-muted-foreground" />
             <h3 className="text-base font-semibold text-foreground">Retention Holds</h3>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -276,7 +276,7 @@ export default function RetentionHoldsPanel() {
       {/* Holds Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-xs text-left">
-          <thead className="text-[11px] text-muted-foreground uppercase bg-muted/40 border-b border-border/60">
+          <thead className="text-2xs text-muted-foreground uppercase bg-muted/40 border-b border-border/60">
             <tr>
               <th className="px-3 py-2.5">Scope</th>
               <th className="px-3 py-2.5">Resource ID</th>
@@ -305,7 +305,7 @@ export default function RetentionHoldsPanel() {
               holds.map(hold => (
                 <tr key={hold.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-3 py-2.5 font-mono">
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-2xs">
                       {hold.scopeType}
                     </Badge>
                   </td>
@@ -321,17 +321,17 @@ export default function RetentionHoldsPanel() {
                   </td>
                   <td className="px-3 py-2.5">
                     {hold.status === 'ACTIVE' && (
-                      <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px]">
+                      <Badge className="border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15 text-status-ok-deep dark:text-emerald-300 text-2xs">
                         ACTIVE
                       </Badge>
                     )}
                     {hold.status === 'EXPIRED' && (
-                      <Badge variant="secondary" className="text-[10px]">
+                      <Badge variant="secondary" className="text-2xs">
                         EXPIRED
                       </Badge>
                     )}
                     {hold.status === 'RELEASED' && (
-                      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                      <Badge variant="outline" className="text-2xs text-muted-foreground">
                         RELEASED
                       </Badge>
                     )}
@@ -348,13 +348,13 @@ export default function RetentionHoldsPanel() {
                           setSelectedHold(hold);
                           setReleaseOpen(true);
                         }}
-                        className="h-7 px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 text-xs dark:hover:text-rose-400"
+                        className="h-7 px-2 text-status-critical-deep dark:text-rose-300 hover:text-status-critical-deep hover:bg-status-critical/10 text-xs"
                       >
                         <Unlock className="h-3 w-3 mr-1" />
                         Release
                       </Button>
                     ) : (
-                      <span className="text-muted-foreground/60 text-[11px]">No action</span>
+                      <span className="text-muted-foreground/60 text-2xs">No action</span>
                     )}
                   </td>
                 </tr>
@@ -387,8 +387,8 @@ export default function RetentionHoldsPanel() {
 
       {/* Create Modal */}
       {createOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4 animate-in fade-in-50">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 animate-in fade-in-50">
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-border/50 pb-3">
               <h4 className="text-base font-semibold text-foreground">Create Retention Hold</h4>
               <button
@@ -466,7 +466,7 @@ export default function RetentionHoldsPanel() {
                   onChange={e => setCreateExpiresAt(e.target.value)}
                   className="text-xs"
                 />
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                   Leave blank for hold to remain active indefinitely until explicitly released.
                 </p>
               </div>
@@ -493,10 +493,10 @@ export default function RetentionHoldsPanel() {
 
       {/* Release Confirmation Dialog */}
       {releaseOpen && selectedHold && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4 animate-in fade-in-50">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 animate-in fade-in-50">
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-xl space-y-4">
             <div className="flex items-start gap-3">
-              <div className="p-2 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+              <div className="p-2 rounded-full border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 text-status-elevated-deep dark:text-amber-300 shrink-0 mt-0.5">
                 <AlertCircle className="h-5 w-5" />
               </div>
               <div className="space-y-1">
@@ -529,7 +529,7 @@ export default function RetentionHoldsPanel() {
               </div>
             </div>
 
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               After release, this resource may become eligible for the organization&apos;s
               configured retention cleanup. The hold record itself is preserved as compliance
               evidence.

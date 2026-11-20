@@ -1,5 +1,5 @@
-import LogPageSkeleton from '@/components/audit/LogPageSkeleton';
+import { LogPageSkeleton } from '@/components/patterns';
 
 export default function SystemLogsLoading() {
-  return <LogPageSkeleton label="Loading system logs" statsCount={4} columns={5} />;
+  return <LogPageSkeleton label="Loading system logs" />;
 }

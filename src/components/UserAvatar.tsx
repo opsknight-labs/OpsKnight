@@ -30,34 +30,34 @@ const SIZE_CLASSES = new Map<AvatarSize, { container: string; text: string }>([
 
 const AVATAR_PALETTES = [
   {
-    bg: 'bg-blue-50 dark:bg-blue-950/40',
-    text: 'text-blue-700 dark:text-blue-300',
-    border: 'border-blue-200/80 dark:border-blue-800/60',
+    bg: 'bg-blue-50 dark:bg-blue-900/70',
+    text: 'text-blue-700 dark:text-blue-100',
+    border: 'border-blue-200/80 dark:border-blue-700/70',
   },
   {
-    bg: 'bg-indigo-50 dark:bg-indigo-950/40',
-    text: 'text-indigo-700 dark:text-indigo-300',
-    border: 'border-indigo-200/80 dark:border-indigo-800/60',
+    bg: 'bg-indigo-50 dark:bg-indigo-900/70',
+    text: 'text-indigo-700 dark:text-indigo-100',
+    border: 'border-indigo-200/80 dark:border-indigo-700/70',
   },
   {
-    bg: 'bg-violet-50 dark:bg-violet-950/40',
-    text: 'text-violet-700 dark:text-violet-300',
-    border: 'border-violet-200/80 dark:border-violet-800/60',
+    bg: 'bg-violet-50 dark:bg-violet-900/70',
+    text: 'text-violet-700 dark:text-violet-100',
+    border: 'border-violet-200/80 dark:border-violet-700/70',
   },
   {
-    bg: 'bg-sky-50 dark:bg-sky-950/40',
-    text: 'text-sky-700 dark:text-sky-300',
-    border: 'border-sky-200/80 dark:border-sky-800/60',
+    bg: 'bg-sky-50 dark:bg-sky-900/70',
+    text: 'text-sky-700 dark:text-sky-100',
+    border: 'border-sky-200/80 dark:border-sky-700/70',
   },
   {
-    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
-    text: 'text-emerald-700 dark:text-emerald-300',
-    border: 'border-emerald-200/80 dark:border-emerald-800/60',
+    bg: 'bg-emerald-50 dark:bg-emerald-900/70',
+    text: 'text-emerald-700 dark:text-emerald-100',
+    border: 'border-emerald-200/80 dark:border-emerald-700/70',
   },
   {
-    bg: 'bg-teal-50 dark:bg-teal-950/40',
-    text: 'text-teal-700 dark:text-teal-300',
-    border: 'border-teal-200/80 dark:border-teal-800/60',
+    bg: 'bg-teal-50 dark:bg-teal-900/70',
+    text: 'text-teal-700 dark:text-teal-100',
+    border: 'border-teal-200/80 dark:border-teal-700/70',
   },
 ];
 
@@ -113,7 +113,11 @@ export default function UserAvatar({
   return (
     <span
       aria-hidden={ariaHidden || undefined}
-      className={cn('relative inline-flex shrink-0 select-none', sizeConfig.container, className)}
+      className={cn(
+        'relative inline-flex shrink-0 select-none rounded-full',
+        sizeConfig.container,
+        className
+      )}
     >
       <Avatar
         className={cn(

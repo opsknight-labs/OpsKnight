@@ -33,7 +33,7 @@ export default async function RecoveryPage() {
         <div className="rounded-2xl border bg-card p-5 sm:p-6 shadow-xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+              <div className="p-3 rounded-2xl bg-status-elevated/10 text-status-elevated shrink-0">
                 <KeyRound className="h-6 w-6" />
               </div>
               <div className="space-y-1">
@@ -57,10 +57,10 @@ export default async function RecoveryPage() {
           {/* Three Operational Callout Chips */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/60">
             <div className="flex items-start gap-2.5 p-3 rounded-xl border bg-muted/20">
-              <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+              <ShieldCheck className="h-4 w-4 text-status-ok shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-semibold text-foreground">Strict Isolation</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                <p className="text-2xs text-muted-foreground mt-0.5 leading-snug">
                   Operational incidents, alerts, responders, and production API keys remain securely
                   inaccessible.
                 </p>
@@ -71,7 +71,7 @@ export default async function RecoveryPage() {
               <Lock className="h-4 w-4 text-primary shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-semibold text-foreground">Freshness Protection</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                <p className="text-2xs text-muted-foreground mt-0.5 leading-snug">
                   Sensitive changes require verifying your recovery credential again after five
                   minutes.
                 </p>
@@ -79,10 +79,10 @@ export default async function RecoveryPage() {
             </div>
 
             <div className="flex items-start gap-2.5 p-3 rounded-xl border bg-muted/20">
-              <Clock className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <Clock className="h-4 w-4 text-status-elevated shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-semibold text-foreground">Inactivity Timeout</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                <p className="text-2xs text-muted-foreground mt-0.5 leading-snug">
                   Sessions automatically terminate after 15 minutes of inactivity or at hard expiry.
                 </p>
               </div>

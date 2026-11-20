@@ -34,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { updateIncidentStatus } from '@/app/(app)/incidents/actions';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 
 // Helper to format relative time
 function formatDistanceToNow(date: Date, timeZone: string): string {
@@ -134,7 +134,6 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
   const { userTimeZone } = useTimezone();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const { showToast } = useToast();
   const [resolvingIncident, setResolvingIncident] = useState<ResolvingIncidentData | null>(null);
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
 
@@ -154,11 +153,11 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
     startTransition(async () => {
       try {
         await updateIncidentStatus(incidentId, newStatus);
-        showToast(`Incident ${newStatus.toLowerCase()} successfully`, 'success');
+        notify.success(`Incident ${newStatus.toLowerCase()} successfully`);
         router.refresh();
       } catch (error) {
         const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
-        showToast(getUserFacingErrorMessage(error) || 'Failed to update status', 'error');
+        notify.error(getUserFacingErrorMessage(error) || 'Failed to update status');
       }
     });
   };
@@ -377,14 +376,14 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-52">
+                      <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
                           <Link
                             href={`/incidents/${incident.id}`}
                             onClick={e => e.stopPropagation()}
                             className="flex items-center gap-2 cursor-pointer"
                           >
-                            <Eye className="h-4 w-4 text-ink-500" />
+                            <Eye />
                             View details
                           </Link>
                         </DropdownMenuItem>
@@ -401,9 +400,8 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                                 service: serviceName ? { name: serviceName } : null,
                               });
                             }}
-                            className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium cursor-pointer"
                           >
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            <CheckCircle2 />
                             Resolve
                           </DropdownMenuItem>
                         )}
@@ -411,9 +409,8 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                         {incident.status !== 'ACKNOWLEDGED' && incident.status !== 'RESOLVED' && (
                           <DropdownMenuItem
                             onSelect={() => handleStatusChange(incident.id, 'ACKNOWLEDGED')}
-                            className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium cursor-pointer"
                           >
-                            <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <CheckCircle2 />
                             Acknowledge
                           </DropdownMenuItem>
                         )}
@@ -421,9 +418,8 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                         {incident.status === 'ACKNOWLEDGED' && (
                           <DropdownMenuItem
                             onSelect={() => handleStatusChange(incident.id, 'OPEN')}
-                            className="flex items-center gap-2 cursor-pointer"
                           >
-                            <Circle className="h-4 w-4 text-muted-foreground" />
+                            <Circle />
                             Unacknowledge
                           </DropdownMenuItem>
                         )}

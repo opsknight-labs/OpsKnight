@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -53,7 +53,6 @@ export default function DeleteScheduleCard({
   deleteScheduleAction,
 }: DeleteScheduleCardProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [confirmName, setConfirmName] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -80,9 +79,9 @@ export default function DeleteScheduleCard({
         if (!res.success) {
           const msg = res.error || 'Failed to delete schedule.';
           setErrorMessage(msg);
-          showToast(msg, 'error');
+          notify.error(msg);
         } else {
-          showToast(`Schedule "${scheduleName}" deleted successfully`, 'success');
+          notify.success(`Schedule "${scheduleName}" deleted successfully`);
           setOpen(false);
           router.push('/schedules');
           router.refresh();
@@ -90,7 +89,7 @@ export default function DeleteScheduleCard({
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Failed to delete schedule.';
         setErrorMessage(msg);
-        showToast(msg, 'error');
+        notify.error(msg);
       }
     });
   };
@@ -123,8 +122,8 @@ export default function DeleteScheduleCard({
                   <strong>
                     {policies.length} escalation {policies.length === 1 ? 'policy' : 'policies'}
                   </strong>
-                  . To prevent silent notification failures, you must remove or reassign this schedule
-                  from all escalation steps before deleting it.
+                  . To prevent silent notification failures, you must remove or reassign this
+                  schedule from all escalation steps before deleting it.
                 </p>
               </div>
             </div>
@@ -189,7 +188,9 @@ export default function DeleteScheduleCard({
         ) : (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1.5">
-              <p className="text-xs font-semibold text-foreground">Permanently delete this schedule</p>
+              <p className="text-xs font-semibold text-foreground">
+                Permanently delete this schedule
+              </p>
               <p className="text-[11px] text-muted-foreground max-w-lg leading-relaxed">
                 Permanently deletes <strong>{scheduleName}</strong>, including all rotation layers,
                 user assignments, and schedule overrides. This action is irreversible.
@@ -201,7 +202,8 @@ export default function DeleteScheduleCard({
                 </Badge>
                 <Badge variant="outline" size="xs" className="text-[10px] gap-1">
                   <Users className="h-3 w-3 text-muted-foreground" />
-                  {stats.participantCount} {stats.participantCount === 1 ? 'participant' : 'participants'}
+                  {stats.participantCount}{' '}
+                  {stats.participantCount === 1 ? 'participant' : 'participants'}
                 </Badge>
                 <Badge variant="outline" size="xs" className="text-[10px] gap-1">
                   <Clock className="h-3 w-3 text-muted-foreground" />
@@ -246,10 +248,12 @@ export default function DeleteScheduleCard({
                         {stats.layerCount} rotation {stats.layerCount === 1 ? 'layer' : 'layers'}
                       </li>
                       <li>
-                        {stats.participantCount} responder {stats.participantCount === 1 ? 'assignment' : 'assignments'}
+                        {stats.participantCount} responder{' '}
+                        {stats.participantCount === 1 ? 'assignment' : 'assignments'}
                       </li>
                       <li>
-                        {stats.overrideCount} active and historical {stats.overrideCount === 1 ? 'override' : 'overrides'}
+                        {stats.overrideCount} active and historical{' '}
+                        {stats.overrideCount === 1 ? 'override' : 'overrides'}
                       </li>
                     </ul>
                     <span className="block text-destructive font-medium pt-1">
@@ -260,7 +264,8 @@ export default function DeleteScheduleCard({
 
                 <div className="space-y-2 py-2">
                   <label htmlFor="confirm-schedule-name" className="text-xs text-muted-foreground">
-                    To confirm, please type <strong className="text-foreground">{scheduleName}</strong>:
+                    To confirm, please type{' '}
+                    <strong className="text-foreground">{scheduleName}</strong>:
                   </label>
                   <Input
                     id="confirm-schedule-name"

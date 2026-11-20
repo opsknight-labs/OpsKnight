@@ -1,26 +1,29 @@
 /* ========================================
    Notification toasts (Sonner)
 
-   One source of truth for toast colour and motion. Tokens are keyed only off
-   the toaster's own data-sonner-theme, which <Toaster> sets from the theme the
-   page is actually painted in (useEffectiveTheme). Do not key toast colours off
-   prefers-color-scheme, .dark or data-theme: the OS preference and the app
-   theme disagree on the forced-light desktop, which is what made the close
-   button vanish in browser dark mode.
+   One source of truth for toast colour and motion. The card surface uses the
+   design tokens (popover, border, muted, ring), which next-themes' `.dark`
+   class switches, the same source useEffectiveTheme reads. Status hues and
+   shadows stay keyed off the toaster's own data-sonner-theme. Never key them
+   off prefers-color-scheme: the OS preference and the app theme can disagree.
    ======================================== */
 
+.ok-toaster {
+  font-family: inherit;
+  --toast-bg: hsl(var(--ui-popover));
+  --toast-border: hsl(var(--ui-border));
+  --toast-fg: hsl(var(--ui-popover-foreground));
+  --toast-muted: hsl(var(--ui-muted-foreground));
+  --toast-close-fg: hsl(var(--ui-muted-foreground));
+  --toast-close-hover-bg: hsl(var(--ui-muted));
+  --toast-close-hover-fg: hsl(var(--ui-foreground));
+  --toast-focus: hsl(var(--ui-ring));
+}
+
 .ok-toaster[data-sonner-theme='light'] {
-  --toast-bg: #ffffff;
-  --toast-border: rgb(15 23 42 / 0.09);
-  --toast-fg: #18181b;
-  --toast-muted: #52525b;
   --toast-shadow:
     0 1px 2px rgb(15 23 42 / 0.05), 0 6px 16px -4px rgb(15 23 42 / 0.1),
     0 20px 40px -12px rgb(15 23 42 / 0.16);
-  --toast-close-fg: #64748b;
-  --toast-close-hover-bg: #f1f5f9;
-  --toast-close-hover-fg: #18181b;
-  --toast-focus: #2563eb;
 
   --toast-success: #059669;
   --toast-success-soft: #ecfdf5;
@@ -40,17 +43,9 @@
 }
 
 .ok-toaster[data-sonner-theme='dark'] {
-  --toast-bg: #1e293b;
-  --toast-border: rgb(255 255 255 / 0.09);
-  --toast-fg: #f1f5f9;
-  --toast-muted: #cbd5e1;
   --toast-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.05), 0 8px 20px -6px rgb(0 0 0 / 0.55),
     0 24px 48px -12px rgb(0 0 0 / 0.6);
-  --toast-close-fg: #94a3b8;
-  --toast-close-hover-bg: rgb(255 255 255 / 0.08);
-  --toast-close-hover-fg: #ffffff;
-  --toast-focus: #60a5fa;
 
   --toast-success: #34d399;
   --toast-success-soft: rgb(16 185 129 / 0.14);
@@ -67,10 +62,6 @@
   --toast-loading: #cbd5e1;
   --toast-loading-soft: rgb(148 163 184 / 0.14);
   --toast-loading-ring: rgb(148 163 184 / 0.28);
-}
-
-.ok-toaster {
-  font-family: inherit;
 }
 
 /* ---- Shield from legacy element rules ----
@@ -113,6 +104,13 @@
   .ok-toaster [data-sonner-toast] {
     width: calc(100% - var(--mobile-offset-left) * 2);
   }
+}
+
+/* Incident alerts draw a priority stripe on their left edge. Clip the card to its own
+   radius so the stripe follows the rounded corners (Sonner nests custom content, so
+   the inner rounded-[inherit] wrapper can't rely on the card's radius). */
+.ok-toaster [data-sonner-toast].ok-toast-item--incident {
+  overflow: hidden;
 }
 
 .ok-toaster [data-sonner-toast].ok-toast-item--error {
@@ -200,13 +198,15 @@
   background: none;
   font-weight: 600;
   line-height: 18px;
-  color: var(--toast-focus);
+  color: var(--toast-fg);
+  text-decoration: underline;
+  text-decoration-color: var(--toast-border);
+  text-underline-offset: 3px;
   cursor: pointer;
   border-radius: 4px;
 }
 .ok-toast__action:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration-color: currentColor;
 }
 
 /* Always visible (not hover-revealed) so touch users and dark mode both get it. */
@@ -280,4 +280,9 @@
   .ok-toast__close {
     transition: none;
   }
+}
+
+/* Bottom-positioned toasts clear the desktop status bar (0 when it is absent). */
+.ok-toaster[data-sonner-toaster][data-y-position='bottom'] {
+  bottom: calc(var(--offset-bottom) + var(--status-bar-height, 0px));
 }

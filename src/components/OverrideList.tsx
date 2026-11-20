@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import type { ScheduleActionState } from '@/lib/schedule-action-errors';
 import type { OverrideStatus } from '@/lib/schedules/detail-view-model';
 import { formatDateTime } from '@/lib/timezone';
@@ -54,7 +54,6 @@ export default function OverrideList({
   emptyMessage,
 }: OverrideListProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [deleteOverrideId, setDeleteOverrideId] = useState<string | null>(null);
 
@@ -63,11 +62,14 @@ export default function OverrideList({
     startTransition(async () => {
       try {
         const result = await deleteOverride(scheduleId, overrideId);
-        if (result?.error) return showToast(result, 'error');
-        showToast('Override deleted successfully.', 'success');
+        if (result?.error) {
+          notify.error(result);
+          return;
+        }
+        notify.success('Override deleted successfully.');
         router.refresh();
       } catch (error) {
-        showToast(error, 'error');
+        notify.error(error);
       }
     });
   };

@@ -32,6 +32,7 @@ import {
   DirectoryTable,
   EmptyState,
   toneClasses,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
   type ToneKey,
@@ -282,30 +283,40 @@ const columns: DirectoryColumn<ServiceObjectiveItem>[] = [
   {
     id: 'objective',
     header: 'Objective',
+    sortKey: 'name',
+    sortValue: item => item.name,
     className: 'max-w-0 w-[32%]',
     cell: item => <ObjectiveCell item={item} />,
   },
   {
     id: 'target',
+    hideable: true,
     header: 'Target',
+    sortKey: 'target',
+    sortValue: item => item.target,
     className: 'whitespace-nowrap',
     cell: item => <TargetText item={item} />,
   },
   {
     id: 'window',
+    hideable: true,
     header: 'Window',
     className: 'hidden whitespace-nowrap md:table-cell',
     cell: item => formatObjectiveWindow(item.windowType, item.windowValue),
   },
   {
     id: 'current',
+    hideable: true,
     header: 'Current',
     className: 'hidden whitespace-nowrap lg:table-cell',
     cell: item => <CurrentValue item={item} />,
   },
   {
     id: 'budget',
+    hideable: true,
     header: 'Error budget',
+    sortKey: 'budget',
+    sortValue: item => item.budgetRemaining,
     className: 'hidden whitespace-nowrap lg:table-cell',
     cell: item => <BudgetMeter item={item} />,
   },
@@ -464,6 +475,7 @@ export function ServiceObjectivesDirectory({
   nextHref: string | null;
 }) {
   const [view, setView] = useDirectoryView('service-objectives');
+  const columnVisibility = useDirectoryColumns('service-objectives', columns);
   return (
     <section
       aria-labelledby="active-objectives-heading"
@@ -472,6 +484,8 @@ export function ServiceObjectivesDirectory({
       <DirectoryHeader
         title={<span id="active-objectives-heading">Active objectives</span>}
         summary={`${total} ${total === '1' ? 'objective' : 'objectives'}`}
+        columns={columnVisibility}
+        density
         view={{ value: view, onChange: setView }}
         guide={
           <DirectoryGuide
@@ -502,6 +516,7 @@ export function ServiceObjectivesDirectory({
           rows={items}
           getRowId={item => item.id}
           columns={columns}
+          hiddenColumns={columnVisibility.hidden}
           label="Service objectives"
           rowActions={admin ? item => <ObjectiveActions item={item} /> : undefined}
           mobileRow={mobileRow}

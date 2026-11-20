@@ -44,14 +44,12 @@ export default function ScheduleExportMenu({
           <span>Export</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56 text-xs">
-        <DropdownMenuItem onClick={handleDownload} className="cursor-pointer gap-2 py-2">
-          <Download className="h-3.5 w-3.5 text-muted-foreground" />
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={handleDownload}>
+          <Download />
           <div>
-            <p className="font-medium">Download .ics File</p>
-            <p className="text-[10px] text-muted-foreground">
-              Import into Apple, Outlook or Google
-            </p>
+            <p>Download .ics File</p>
+            <p className="text-xs text-muted-foreground">Import into Apple, Outlook or Google</p>
           </div>
         </DropdownMenuItem>
       </DropdownMenuContent>

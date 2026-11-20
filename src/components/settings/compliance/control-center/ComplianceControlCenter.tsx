@@ -188,9 +188,9 @@ export function ComplianceControlCenter({
               <span>{tab.label}</span>
               {tab.badge && (
                 <span
-                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                  className={`text-2xs font-mono px-1.5 py-0.2 rounded-full ${
                     tab.badgeVariant === 'destructive'
-                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold'
+                      ? 'border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 font-bold'
                       : 'bg-muted text-muted-foreground'
                   }`}
                 >

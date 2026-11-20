@@ -22,9 +22,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import UserAvatar from '@/components/UserAvatar';
 import EscalationStepEditModal from './EscalationStepEditModal';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 
 type EscalationStep = {
   id: string;
@@ -87,25 +88,14 @@ export default function EscalationStepItem({
 }: EscalationStepItemProps) {
   const [isPending, startTransition] = useTransition();
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const { showToast } = useToast();
 
-  const handleDelete = () => {
-    // eslint-disable-next-line no-alert -- destructive policy edits require explicit confirmation
-    if (globalThis.confirm('Are you sure you want to delete this step?')) {
-      startTransition(async () => {
-        const res = await deleteStep(step.id);
-        if (res?.error) {
-          showToast(res.error, 'error');
-        }
-      });
-    }
-  };
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const handleMove = (direction: 'up' | 'down') => {
     startTransition(async () => {
       const res = await moveStep(step.id, direction);
       if (res?.error) {
-        showToast(res.error, 'error');
+        notify.error(res.error);
       }
     });
   };
@@ -234,27 +224,24 @@ export default function EscalationStepItem({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
-                      <Edit2 className="mr-2 h-4 w-4" /> Edit Step
+                      <Edit2 /> Edit Step
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       disabled={isFirst || isPending}
                       onClick={() => handleMove('up')}
                     >
-                      <ArrowUp className="mr-2 h-4 w-4" /> Move Up
+                      <ArrowUp /> Move Up
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       disabled={isLast || isPending}
                       onClick={() => handleMove('down')}
                     >
-                      <ArrowDown className="mr-2 h-4 w-4" /> Move Down
+                      <ArrowDown /> Move Down
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
-                      onClick={handleDelete}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete Step
+                    <DropdownMenuItem variant="destructive" onClick={() => setIsDeleteOpen(true)}>
+                      <Trash2 /> Delete Step
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -263,6 +250,15 @@ export default function EscalationStepItem({
           </div>
         </div>
       </div>
+
+      <DeleteConfirmDialog
+        open={isDeleteOpen}
+        onOpenChange={setIsDeleteOpen}
+        title={`Delete step ${step.stepOrder + 1}?`}
+        description="Incidents on this policy will no longer escalate to this step's target. This cannot be undone."
+        confirmText="Delete step"
+        onConfirm={() => deleteStep(step.id)}
+      />
 
       {/* Edit Modal */}
       {isEditOpen && (

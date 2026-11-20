@@ -10,11 +10,8 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock useToast hook
-vi.mock('@hooks/use-product-notification', () => ({
-  useToast: () => ({
-    showToast: vi.fn(),
-  }),
+vi.mock('@/lib/toast', () => ({
+  notify: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
 describe('DeletePolicyCard', () => {

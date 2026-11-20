@@ -694,6 +694,23 @@ function deriveCoverage(
 }
 
 /**
+ * Schedules in the actor's read scope with nobody on call, for the status bar. Same cached loaders
+ * (`live-oncall:` / `live-schedules:` keys) and `deriveCoverage` as the dashboard, so the answer and
+ * the cache entries are shared. Returns null when either read fails, so callers hide the signal.
+ */
+export async function getCoverageGapSummary(
+  actor: AuthorizationActor
+): Promise<{ count: number; first: { id: string; name: string } | null } | null> {
+  const [onCall, schedules] = await Promise.all([
+    loadOnCall(actor).catch(() => null),
+    loadSchedules(actor).catch(() => null),
+  ]);
+  if (!onCall || !schedules) return null;
+  const { gaps } = deriveCoverage(actor.id, onCall.data, schedules.data);
+  return { count: gaps.length, first: gaps[0] ?? null };
+}
+
+/**
  * In-process memo for derived projections. Derivation is synchronous CPU work over the whole
  * working set (tens of milliseconds at thousands of incidents), so identical work requested by
  * many viewers inside one short window is done once. Entries are never shared across different

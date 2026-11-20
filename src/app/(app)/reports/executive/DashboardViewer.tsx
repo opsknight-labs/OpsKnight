@@ -47,6 +47,7 @@ import type { DashboardTemplate } from '@/lib/reports/dashboard-templates';
 import type { WidgetDefinition } from '@/lib/reports/widget-registry';
 import WidgetLibrary from '@/components/reports/WidgetLibrary';
 import DashboardShareModal from '@/components/reports/DashboardShareModal';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import WidgetConfigModal, { ConfigurableWidget } from '@/components/reports/WidgetConfigModal';
 
 type Widget = {
@@ -119,6 +120,7 @@ export default function DashboardViewer({
   const [savedBaseline, setSavedBaseline] = useState(widgets);
   const [localWidgets, setLocalWidgets] = useState(widgets);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   // Share modal state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -905,31 +907,7 @@ export default function DashboardViewer({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
-                      onClick={async () => {
-                        if (
-                          // eslint-disable-next-line no-alert
-                          !confirm(
-                            'Are you sure you want to delete this dashboard? This action cannot be undone.'
-                          )
-                        ) {
-                          return;
-                        }
-                        setIsDeleting(true);
-                        try {
-                          const response = await fetch(`/api/dashboards/${dashboardId}`, {
-                            method: 'DELETE',
-                          });
-                          if (!response.ok) {
-                            throw new Error('Failed to delete dashboard');
-                          }
-                          router.push('/reports');
-                        } catch (error) {
-                          console.error('Failed to delete dashboard:', error);
-                          notify.error('Failed to delete dashboard. Please try again.');
-                        } finally {
-                          setIsDeleting(false);
-                        }
-                      }}
+                      onClick={() => setIsDeleteOpen(true)}
                       disabled={isDeleting}
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
@@ -1214,6 +1192,31 @@ export default function DashboardViewer({
         onClose={() => setIsWidgetLibraryOpen(false)}
         onAddWidget={handleAddWidget}
         existingWidgetDefIds={existingWidgetDefIds}
+      />
+
+      <DeleteConfirmDialog
+        open={isDeleteOpen}
+        onOpenChange={setIsDeleteOpen}
+        title="Delete dashboard?"
+        description="The dashboard and its widget layout are removed for everyone it is shared with. This cannot be undone."
+        confirmText="Delete dashboard"
+        onConfirm={async () => {
+          setIsDeleting(true);
+          try {
+            const response = await fetch(`/api/dashboards/${dashboardId}`, {
+              method: 'DELETE',
+            });
+            if (!response.ok) {
+              throw new Error('Failed to delete dashboard');
+            }
+            router.push('/reports');
+          } catch (error) {
+            console.error('Failed to delete dashboard:', error);
+            notify.error('Failed to delete dashboard. Please try again.');
+          } finally {
+            setIsDeleting(false);
+          }
+        }}
       />
 
       {/* Share Modal */}

@@ -8,8 +8,14 @@ import { AlertCircle, Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 import { setPassword, type SetPasswordState } from './actions';
 import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/PasswordStrengthMeter';
 import Spinner from '@/components/ui/Spinner';
+import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
+import { cn } from '@/lib/utils';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
+
+const passwordFieldClass =
+  'h-11 min-h-11 2xl:h-12 pl-10 pr-10 rounded-xl bg-card text-sm shadow-xs hover:border-ring/50 transition-colors';
 
 function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
   const { pending } = useFormStatus();
@@ -17,7 +23,8 @@ function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
     <button
       type="submit"
       disabled={pending || !canSubmit}
-      className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
+      aria-busy={pending || undefined}
+      className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       {pending ? (
         <>
@@ -44,6 +51,7 @@ export default function SetPasswordForm({ token }: { token: string }) {
   });
   const passwordsMatch = Object.is(password, confirmPassword);
   const canSubmit = isPasswordStrong(password) && passwordsMatch;
+  const mismatch = !!confirmPassword && !passwordsMatch;
 
   const handleProceedToLogin = useCallback(async () => {
     try {
@@ -70,19 +78,17 @@ export default function SetPasswordForm({ token }: { token: string }) {
   if (state.success) {
     return (
       <div className="space-y-4" role="status" aria-live="polite">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center dark:border-emerald-500/20 dark:bg-emerald-500/10">
-          <ShieldCheck className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-          <h3 className="mt-3 font-display font-semibold text-emerald-800 dark:text-emerald-300">
-            Account activated
-          </h3>
-          <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-200/80">
+        <div className="rounded-xl border border-status-ok/30 bg-status-ok-soft p-5 text-center">
+          <ShieldCheck className="mx-auto h-8 w-8 text-status-ok" />
+          <h3 className="mt-3 font-display font-semibold text-status-ok-deep">Account activated</h3>
+          <p className="mt-1 text-sm text-status-ok-deep">
             Your password has been set. Redirecting to sign in…
           </p>
         </div>
         <button
           type="button"
           onClick={() => void handleProceedToLogin()}
-          className="flex w-full items-center justify-center rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
+          className="flex w-full items-center justify-center rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Continue to sign in
         </button>
@@ -98,25 +104,24 @@ export default function SetPasswordForm({ token }: { token: string }) {
         <div
           role="alert"
           aria-live="assertive"
-          className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm dark:border-red-500/20 dark:bg-red-500/10"
+          className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3.5 text-sm"
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
-          <p className="text-red-700 dark:text-red-300">{state.error}</p>
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <p id="invite-form-error" className="text-destructive">
+            {state.error}
+          </p>
         </div>
       )}
 
       <div className="space-y-1.5">
-        <label
-          htmlFor="invite-password"
-          className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
-        >
+        <Label htmlFor="invite-password" className="text-xs text-foreground">
           New password
-        </label>
+        </Label>
         <div className="group relative flex items-center">
-          <div className="absolute left-3.5 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+          <div className="absolute left-3.5 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
             <Lock className="h-4 w-4" aria-hidden="true" />
           </div>
-          <input
+          <Input
             id="invite-password"
             name="password"
             type={showPassword ? 'text' : 'password'}
@@ -126,36 +131,41 @@ export default function SetPasswordForm({ token }: { token: string }) {
             onChange={event => setPasswordValue(event.target.value)}
             autoComplete="new-password"
             placeholder="Enter your password"
-            className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-10 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            aria-invalid={state.error ? true : undefined}
+            aria-describedby={cn('invite-password-help', state.error && 'invite-form-error')}
+            className={cn(passwordFieldClass, state.error && 'border-destructive')}
             autoFocus
           />
           <button
             type="button"
             onClick={() => setShowPassword(value => !value)}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
-            className="absolute right-2.5 z-10 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
+            aria-pressed={showPassword}
+            aria-controls="invite-password"
+            className="absolute right-2.5 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPassword ? (
+              <EyeOff className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden="true" />
+            )}
           </button>
         </div>
         <PasswordStrengthMeter password={password} />
-        <p className="text-[11px] text-slate-400">
+        <p id="invite-password-help" className="text-xs text-muted-foreground">
           Account-specific password checks are enforced on activation.
         </p>
       </div>
 
       <div className="space-y-1.5">
-        <label
-          htmlFor="invite-confirm-password"
-          className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
-        >
+        <Label htmlFor="invite-confirm-password" className="text-xs text-foreground">
           Confirm password
-        </label>
+        </Label>
         <div className="group relative flex items-center">
-          <div className="absolute left-3.5 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+          <div className="absolute left-3.5 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
             <Lock className="h-4 w-4" aria-hidden="true" />
           </div>
-          <input
+          <Input
             id="invite-confirm-password"
             name="confirmPassword"
             type={showConfirmPassword ? 'text' : 'password'}
@@ -165,7 +175,12 @@ export default function SetPasswordForm({ token }: { token: string }) {
             onChange={event => setConfirmPassword(event.target.value)}
             autoComplete="new-password"
             placeholder="Re-enter your password"
-            className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-10 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            aria-invalid={mismatch || state.error ? true : undefined}
+            aria-describedby={
+              cn(mismatch && 'invite-confirm-error', state.error && 'invite-form-error') ||
+              undefined
+            }
+            className={cn(passwordFieldClass, (mismatch || state.error) && 'border-destructive')}
           />
           <button
             type="button"
@@ -173,13 +188,21 @@ export default function SetPasswordForm({ token }: { token: string }) {
             aria-label={
               showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'
             }
-            className="absolute right-2.5 z-10 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
+            aria-pressed={showConfirmPassword}
+            aria-controls="invite-confirm-password"
+            className="absolute right-2.5 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showConfirmPassword ? (
+              <EyeOff className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden="true" />
+            )}
           </button>
         </div>
-        {confirmPassword && !passwordsMatch && (
-          <p className="text-xs text-red-600 dark:text-red-400">Passwords do not match.</p>
+        {mismatch && (
+          <p id="invite-confirm-error" className="text-xs text-destructive">
+            Passwords do not match.
+          </p>
         )}
       </div>
 

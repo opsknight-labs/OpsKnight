@@ -306,16 +306,11 @@ export function FormSelect({
       >
         <SelectValue placeholder={label} />
       </SelectTrigger>
-      <SelectContent className="rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl p-1.5">
+      <SelectContent>
         {options
           .filter(option => option.value !== '')
           .map(option => (
-            <SelectItem
-              key={option.value}
-              value={option.value}
-              disabled={option.disabled}
-              className="rounded-xl pl-3 pr-8 py-2 text-xs font-medium cursor-pointer transition-colors focus:bg-primary/10 focus:text-primary data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary"
-            >
+            <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
               {option.label}
             </SelectItem>
           ))}

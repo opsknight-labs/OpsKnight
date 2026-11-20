@@ -7,6 +7,7 @@ import UserAvatar from '@/components/UserAvatar';
 import OidcLinkingApprovalButton from './OidcLinkingApprovalButton';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
+import { Skeleton } from '@/components/ui/shadcn/skeleton';
 import { errorFromResponse } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
 import {
@@ -248,77 +249,47 @@ export function UserActionsMenu({
             <span className="sr-only">Open user actions for {user.name}</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64 p-1.5 rounded-xl border shadow-xl">
-          <DropdownMenuLabel className="px-2 py-1.5 text-xs text-muted-foreground font-semibold">
-            User Actions
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator className="my-1" />
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>User Actions</DropdownMenuLabel>
+          <DropdownMenuSeparator />
 
-          <DropdownMenuItem
-            onClick={() => router.push(`/users/${user.id}`)}
-            className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium text-primary focus:bg-primary/10"
-          >
-            <User className="h-4 w-4 text-primary" /> View Full Profile
+          <DropdownMenuItem onClick={() => router.push(`/users/${user.id}`)}>
+            <User /> View Full Profile
           </DropdownMenuItem>
 
           {!isCurrentUser && isAdmin && onUpdateRole && (
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium">
-                <Shield className="h-4 w-4 text-muted-foreground" />
+              <DropdownMenuSubTrigger>
+                <Shield />
                 <span>Change Role</span>
               </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="rounded-xl p-1 shadow-xl w-44">
-                <DropdownMenuLabel className="px-2 py-1 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                  Select Role
-                </DropdownMenuLabel>
+              <DropdownMenuSubContent>
+                <DropdownMenuLabel>Select Role</DropdownMenuLabel>
                 {[
-                  { role: 'ADMIN', label: 'Admin', dot: 'bg-rose-500' },
-                  { role: 'RESPONDER', label: 'Responder', dot: 'bg-indigo-500' },
-                  { role: 'AUDITOR', label: 'Auditor', dot: 'bg-violet-500' },
-                  { role: 'USER', label: 'User', dot: 'bg-sky-500' },
+                  { role: 'ADMIN', label: 'Admin' },
+                  { role: 'RESPONDER', label: 'Responder' },
+                  { role: 'AUDITOR', label: 'Auditor' },
+                  { role: 'USER', label: 'User' },
                 ].map(r => (
                   <DropdownMenuItem
                     key={r.role}
                     onClick={() => onUpdateRole(r.role)}
                     disabled={user.role === r.role}
-                    className="flex items-center justify-between py-1.5 px-2 rounded-lg text-xs cursor-pointer"
+                    className="justify-between"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className={cn('h-1.5 w-1.5 rounded-full', r.dot)} />
-                      <span
-                        className={
-                          user.role === r.role
-                            ? 'font-semibold text-foreground'
-                            : 'text-muted-foreground'
-                        }
-                      >
-                        {r.label}
-                      </span>
-                    </div>
-                    {user.role === r.role && <Check className="h-3.5 w-3.5 text-primary" />}
+                    <span>{r.label}</span>
+                    {user.role === r.role && <Check aria-label="Current role" />}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           )}
 
-          <DropdownMenuSeparator className="my-1" />
+          <DropdownMenuSeparator />
 
           {(user.status === 'INVITED' || (user.status === 'ACTIVE' && passwordResetAvailable)) && (
-            <DropdownMenuItem
-              onClick={handleGenerateLink}
-              className={cn(
-                'flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium',
-                user.status === 'INVITED'
-                  ? 'text-blue-600 focus:text-blue-700 focus:bg-blue-50 dark:focus:bg-blue-950/40'
-                  : 'text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50 dark:focus:bg-emerald-950/40'
-              )}
-            >
-              {user.status === 'INVITED' ? (
-                <LinkIcon className="h-4 w-4" />
-              ) : (
-                <Key className="h-4 w-4" />
-              )}
+            <DropdownMenuItem onClick={handleGenerateLink}>
+              {user.status === 'INVITED' ? <LinkIcon /> : <Key />}
               <span>{user.status === 'INVITED' ? 'Get Invite Link' : 'Reset Password'}</span>
             </DropdownMenuItem>
           )}
@@ -329,18 +300,14 @@ export function UserActionsMenu({
 
           {onAddToTeam && availableTeams.length > 0 && (
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium">
-                <Users className="h-4 w-4 text-muted-foreground" />
+              <DropdownMenuSubTrigger>
+                <Users />
                 <span>Add to Team</span>
               </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="max-h-[300px] overflow-y-auto rounded-xl p-1 shadow-xl">
+              <DropdownMenuSubContent className="max-h-[300px] overflow-y-auto">
                 {availableTeams.map(team => (
-                  <DropdownMenuItem
-                    key={team.id}
-                    onClick={() => onAddToTeam(team.id)}
-                    className="py-1.5 px-2 rounded-lg text-xs cursor-pointer"
-                  >
-                    {team.name}
+                  <DropdownMenuItem key={team.id} onClick={() => onAddToTeam(team.id)}>
+                    <span className="truncate">{team.name}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuSubContent>
@@ -348,33 +315,24 @@ export function UserActionsMenu({
           )}
 
           {user.status === 'DISABLED' && onActivate && (
-            <DropdownMenuItem
-              onClick={onActivate}
-              className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50 dark:focus:bg-emerald-950/40"
-            >
-              <UserCheck className="h-4 w-4" />
+            <DropdownMenuItem onClick={onActivate}>
+              <UserCheck />
               <span>Activate User</span>
             </DropdownMenuItem>
           )}
 
           {user.status === 'ACTIVE' && onDeactivate && (
-            <DropdownMenuItem
-              onClick={() => setShowDeactivateDialog(true)}
-              className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium text-amber-600 focus:text-amber-700 focus:bg-amber-50 dark:focus:bg-amber-950/40"
-            >
-              <UserX className="h-4 w-4" />
+            <DropdownMenuItem variant="destructive" onClick={() => setShowDeactivateDialog(true)}>
+              <UserX />
               <span>Deactivate User</span>
             </DropdownMenuItem>
           )}
 
           {onDelete && (user.status === 'DISABLED' || user.status === 'INVITED') && (
             <>
-              <DropdownMenuSeparator className="my-1" />
-              <DropdownMenuItem
-                onClick={() => void inspectDependencies()}
-                className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-950/40"
-              >
-                <Trash2 className="h-4 w-4" />
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => void inspectDependencies()}>
+                <Trash2 />
                 <span>{user.status === 'INVITED' ? 'Delete Invitation' : 'Delete User'}</span>
               </DropdownMenuItem>
             </>
@@ -566,8 +524,9 @@ export function UserActionsMenu({
 
           <div className="flex flex-col gap-4 py-4">
             {isLoadingLink && (
-              <div className="flex items-center justify-center p-4">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <div role="status" aria-busy="true">
+                <span className="sr-only">Generating link</span>
+                <Skeleton className="h-11 w-full rounded-md" />
               </div>
             )}
 
@@ -739,16 +698,9 @@ export function UserTeams({
             {label && <span>{label}</span>}
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          className="max-h-56 overflow-y-auto rounded-xl p-1 shadow-xl"
-        >
+        <DropdownMenuContent align="start" className="max-h-56 overflow-y-auto">
           {availableTeams.map(team => (
-            <DropdownMenuItem
-              key={team.id}
-              onClick={() => onAddToTeam(team.id)}
-              className="py-1.5 px-2 rounded-lg text-xs cursor-pointer"
-            >
+            <DropdownMenuItem key={team.id} onClick={() => onAddToTeam(team.id)}>
               {team.name}
             </DropdownMenuItem>
           ))}

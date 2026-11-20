@@ -49,8 +49,8 @@ export function FrameworksView({
   return (
     <div className="space-y-6">
       {/* Scope Disclaimer */}
-      <div className="p-4 rounded-xl border border-border/80 bg-muted/20 flex items-start gap-3 text-xs text-muted-foreground">
-        <Shield className="h-4 w-4 text-sky-500 shrink-0 mt-0.5" />
+      <div className="p-4 rounded-lg border border-border/80 bg-muted/20 flex items-start gap-3 text-xs text-muted-foreground">
+        <Shield className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
         <div className="space-y-1">
           <p className="font-semibold text-foreground">Versioned Framework Mapping Engine</p>
           <p className="leading-relaxed">
@@ -81,7 +81,7 @@ export function FrameworksView({
                         {fw.title}
                       </CardTitle>
                       {fw.version && (
-                        <Badge variant="outline" className="font-mono text-[10px] py-0 px-1.5">
+                        <Badge variant="outline" className="font-mono text-2xs py-0 px-1.5">
                           {fw.version}
                         </Badge>
                       )}
@@ -122,20 +122,20 @@ export function FrameworksView({
 
                     <div className="flex items-center justify-between p-2 rounded bg-muted/30">
                       <span className="text-muted-foreground flex items-center gap-1">
-                        <Cpu className="h-3 w-3 text-sky-500" />
+                        <Cpu className="h-3 w-3 text-muted-foreground" />
                         Runtime:
                       </span>
-                      <span className="font-mono font-bold text-sky-700 dark:text-sky-400">
+                      <span className="font-mono font-bold text-muted-foreground">
                         {summary.runtimeBackedCount}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between p-2 rounded bg-muted/30">
                       <span className="text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-3 w-3 text-indigo-500" />
+                        <Clock className="h-3 w-3 text-muted-foreground" />
                         Future:
                       </span>
-                      <span className="font-mono font-bold text-indigo-700 dark:text-indigo-400">
+                      <span className="font-mono font-bold text-muted-foreground">
                         {summary.futureRequirementsCount}
                       </span>
                     </div>

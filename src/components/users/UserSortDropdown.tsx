@@ -51,7 +51,7 @@ export default function UserSortDropdown() {
           {sortLabels.get(currentSort) ?? currentSort}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end">
+      <DropdownMenuContent align="end">
         <DropdownMenuLabel>Sort By</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={currentSort} onValueChange={handleSortChange}>
@@ -67,13 +67,13 @@ export default function UserSortDropdown() {
         <DropdownMenuRadioGroup value={currentOrder} onValueChange={handleOrderChange}>
           <DropdownMenuRadioItem value="asc">
             <div className="flex items-center">
-              <ArrowUp className="mr-2 h-4 w-4 text-muted-foreground" />
+              <ArrowUp />
               Ascending
             </div>
           </DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="desc">
             <div className="flex items-center">
-              <ArrowDown className="mr-2 h-4 w-4 text-muted-foreground" />
+              <ArrowDown />
               Descending
             </div>
           </DropdownMenuRadioItem>

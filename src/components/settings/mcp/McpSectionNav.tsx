@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
 
 export type McpNavItem = {
   id: string;
@@ -28,7 +29,7 @@ export default function McpSectionNav({
       aria-label="MCP settings sections"
       className="relative -mx-1 overflow-x-auto px-1 pb-1 scrollbar-none"
     >
-      <ul className="inline-flex min-w-max items-center gap-1 rounded-xl border border-border/80 bg-muted/60 p-1 shadow-2xs sm:gap-1.5 sm:p-1.5">
+      <ul className="inline-flex min-w-max items-center gap-1 rounded-lg border border-border/80 bg-muted/60 p-1 shadow-2xs sm:gap-1.5 sm:p-1.5">
         {items.map(item => {
           const active = item.id === current;
           return (
@@ -56,16 +57,16 @@ export default function McpSectionNav({
                 {item.count !== undefined && (
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums',
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold tabular-nums',
                       item.attention && item.count > 0
-                        ? 'border border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/70 dark:text-amber-300'
+                        ? cn('border', toneClasses('elevated').soft)
                         : active
                           ? 'bg-primary/10 text-primary'
                           : 'bg-muted-foreground/10 text-muted-foreground'
                     )}
                   >
                     {item.attention && item.count > 0 && (
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-status-elevated motion-safe:animate-pulse" />
                     )}
                     {item.count}
                     {item.attention && item.count > 0 && <span className="sr-only"> pending</span>}

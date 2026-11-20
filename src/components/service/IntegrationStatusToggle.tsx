@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { toggleIntegrationStatus } from '@/app/(app)/services/actions';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Badge } from '@/components/ui/shadcn/badge';
 
 interface IntegrationStatusToggleProps {
@@ -21,7 +21,6 @@ export default function IntegrationStatusToggle({
 }: IntegrationStatusToggleProps) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [loading, setLoading] = useState(false);
-  const { showToast } = useToast();
 
   const handleToggle = async (checked: boolean) => {
     if (!canManage) return;
@@ -32,14 +31,12 @@ export default function IntegrationStatusToggle({
 
     try {
       await toggleIntegrationStatus(integrationId, serviceId, checked);
-      showToast(
-        checked ? 'Integration enabled' : 'Integration disabled',
-        checked ? 'success' : 'info'
-      );
+      if (checked) notify.success('Integration enabled');
+      else notify.info('Integration disabled');
     } catch (error) {
       // Revert on error
       setEnabled(!checked);
-      showToast('Failed to update status', 'error');
+      notify.error('Failed to update status');
       console.error(error);
     } finally {
       setLoading(false);

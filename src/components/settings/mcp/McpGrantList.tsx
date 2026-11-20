@@ -137,7 +137,7 @@ export default function McpGrantList({
                   empty="No calls yet"
                 />
                 {row.lastCallAt && row.lastTool && (
-                  <code className="break-all font-mono text-[11px] text-muted-foreground">
+                  <code className="break-all font-mono text-2xs text-muted-foreground">
                     {row.lastTool}
                   </code>
                 )}

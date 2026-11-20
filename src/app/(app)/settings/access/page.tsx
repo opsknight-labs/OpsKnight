@@ -59,7 +59,7 @@ const ROLE_SOURCE_LABELS = new Map<string, string>([
 ]);
 
 const heroBadgeClass =
-  'bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-[10px] font-bold uppercase tracking-wider';
+  'bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-2xs font-bold uppercase tracking-wider';
 
 export default async function MyAccessPage() {
   const access = await requirePageAccessSnapshot('/settings/access');
@@ -170,7 +170,7 @@ export default async function MyAccessPage() {
 
           {access.grants.length > 0 && (
             <div className="space-y-3">
-              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <h4 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Temporary access
               </h4>
               <ul className="space-y-2">

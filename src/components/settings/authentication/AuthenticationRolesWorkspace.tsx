@@ -135,7 +135,7 @@ export default function AuthenticationRolesWorkspace() {
             </label>
           ))}
           {configuration.unmatchedPolicy === 'DENY' && (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               Accounts whose role an administrator set by hand can still sign in.
             </p>
           )}

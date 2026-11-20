@@ -19,10 +19,8 @@ vi.mock('@/contexts/TimezoneContext', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-product-notification', () => ({
-  useToast: () => ({
-    showToast: vi.fn(),
-  }),
+vi.mock('@/lib/toast', () => ({
+  notify: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock('@/app/(app)/incidents/actions', () => ({

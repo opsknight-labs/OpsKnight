@@ -12,6 +12,7 @@ import {
   DirectoryPrimaryCell,
   DirectoryTable,
   RelativeTime,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
 } from '@/components/patterns';
@@ -244,7 +245,11 @@ const GUIDE_STEPS = [
 ] as const;
 
 const GUIDE_LINKS = [
-  { label: 'Executions', href: '/runbooks/executions', icon: <PlayCircle className="h-3.5 w-3.5" /> },
+  {
+    label: 'Executions',
+    href: '/runbooks/executions',
+    icon: <PlayCircle className="h-3.5 w-3.5" />,
+  },
   { label: 'Fleet agents', href: '/runbooks/agents', icon: <Server className="h-3.5 w-3.5" /> },
   { label: 'Services', href: '/services', icon: <Layers className="h-3.5 w-3.5" /> },
 ] as const;
@@ -375,15 +380,17 @@ export default function RunbookLibrary({
         />
       ),
     },
-    { id: 'lifecycle', header: 'Lifecycle', cell: r => <Lifecycle runbook={r} /> },
+    { id: 'lifecycle', header: 'Lifecycle', hideable: true, cell: r => <Lifecycle runbook={r} /> },
     {
       id: 'bindings',
+      hideable: true,
       header: 'Service bindings',
       className: 'hidden md:table-cell max-w-[14rem]',
       cell: r => <Bindings runbook={r} />,
     },
     {
       id: 'team',
+      hideable: true,
       header: 'Owning team',
       className: 'hidden lg:table-cell',
       cell: r =>
@@ -395,18 +402,21 @@ export default function RunbookLibrary({
     },
     {
       id: 'tags',
+      hideable: true,
       header: 'Tags',
       className: 'hidden xl:table-cell',
       cell: r => <TagLinks tags={r.tags ?? []} max={MAX_TABLE_TAGS} />,
     },
     {
       id: 'activity',
+      hideable: true,
       header: 'Last run / updated',
       className: 'hidden md:table-cell',
       cell: r => <LastActivity runbook={r} timeZone={userTimeZone} />,
     },
   ];
 
+  const columnVisibility = useDirectoryColumns('runbooks', columns);
   const mobileRow = (r: RunbookCardData) => (
     <div className="min-w-0 space-y-1">
       <Link
@@ -468,6 +478,8 @@ export default function RunbookLibrary({
           </span>
         }
         guide={<DirectoryGuide title="How runbooks work" steps={GUIDE_STEPS} links={GUIDE_LINKS} />}
+        columns={columnVisibility}
+        density
         view={runbooks.length > 0 ? { value: view, onChange: setView } : undefined}
       />
       {runbooks.length === 0 ? (
@@ -477,6 +489,7 @@ export default function RunbookLibrary({
           rows={runbooks}
           getRowId={r => r.id}
           columns={columns}
+          hiddenColumns={columnVisibility.hidden}
           label="Runbooks"
           rowActions={rowActions}
           mobileRow={mobileRow}

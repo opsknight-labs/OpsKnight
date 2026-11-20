@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -55,7 +56,7 @@ export function SlackChannelToolbar({
             <span className="text-xs">•</span>
             <Badge
               variant={scopeHealthy ? 'default' : 'destructive'}
-              className={cn('text-xs', scopeHealthy && 'bg-emerald-600 hover:bg-emerald-600')}
+              className={cn('text-xs', scopeHealthy && toneClasses('ok').filled)}
             >
               {scopeHealthy ? 'Scopes healthy' : 'Scopes missing'}
             </Badge>

@@ -704,7 +704,7 @@ export default function ScimSettingsSection({
                   <p className="font-medium text-sm flex items-center gap-2">
                     {row.label}
                     {attention && (
-                      <Badge variant="outline" className="border-amber-500/40 text-[10px]">
+                      <Badge variant="outline" className="border-amber-500/40 text-2xs">
                         Needs coverage review
                       </Badge>
                     )}

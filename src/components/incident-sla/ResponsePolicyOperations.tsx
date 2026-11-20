@@ -177,7 +177,7 @@ export default function ResponsePolicyOperations({
                   </SelectTrigger>
                   <SelectContent>
                     {services.map(item => (
-                      <SelectItem key={item.id} value={item.id} className="text-xs">
+                      <SelectItem key={item.id} value={item.id}>
                         {item.name}
                       </SelectItem>
                     ))}
@@ -194,11 +194,9 @@ export default function ResponsePolicyOperations({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none" className="text-xs">
-                      No integration override
-                    </SelectItem>
+                    <SelectItem value="none">No integration override</SelectItem>
                     {eligible.map(item => (
-                      <SelectItem key={item.id} value={item.id} className="text-xs">
+                      <SelectItem key={item.id} value={item.id}>
                         {item.name}
                       </SelectItem>
                     ))}
@@ -214,7 +212,7 @@ export default function ResponsePolicyOperations({
                   </SelectTrigger>
                   <SelectContent>
                     {['critical', 'error', 'warning', 'info'].map(value => (
-                      <SelectItem key={value} value={value} className="text-xs capitalize">
+                      <SelectItem key={value} value={value} className="capitalize">
                         {value}
                       </SelectItem>
                     ))}
@@ -334,13 +332,9 @@ export default function ResponsePolicyOperations({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="LEGACY" className="text-xs">
-                      Legacy (Poll-Based)
-                    </SelectItem>
-                    <SelectItem value="SHADOW" className="text-xs">
-                      Shadow (Dual Verification)
-                    </SelectItem>
-                    <SelectItem value="INDEXED" disabled={!schedulerIndexReady} className="text-xs">
+                    <SelectItem value="LEGACY">Legacy (Poll-Based)</SelectItem>
+                    <SelectItem value="SHADOW">Shadow (Dual Verification)</SelectItem>
+                    <SelectItem value="INDEXED" disabled={!schedulerIndexReady}>
                       Indexed (Production Optimized)
                     </SelectItem>
                   </SelectContent>
@@ -440,16 +434,10 @@ export default function ResponsePolicyOperations({
                 </SelectTrigger>
                 <SelectContent>
                   {supportScopeKey !== 'workspace' && (
-                    <SelectItem value="INHERIT" className="text-xs">
-                      Inherit workspace schedule
-                    </SelectItem>
+                    <SelectItem value="INHERIT">Inherit workspace schedule</SelectItem>
                   )}
-                  <SelectItem value="ALWAYS" className="text-xs">
-                    24×7 Continuous Coverage
-                  </SelectItem>
-                  <SelectItem value="SCHEDULED" className="text-xs">
-                    Custom Scheduled Windows
-                  </SelectItem>
+                  <SelectItem value="ALWAYS">24×7 Continuous Coverage</SelectItem>
+                  <SelectItem value="SCHEDULED">Custom Scheduled Windows</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -667,12 +655,8 @@ export default function ResponsePolicyOperations({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="UNAVAILABLE" className="text-xs">
-                          Unavailable (Holiday)
-                        </SelectItem>
-                        <SelectItem value="AVAILABLE" className="text-xs">
-                          Special Coverage
-                        </SelectItem>
+                        <SelectItem value="UNAVAILABLE">Unavailable (Holiday)</SelectItem>
+                        <SelectItem value="AVAILABLE">Special Coverage</SelectItem>
                       </SelectContent>
                     </Select>
                     <Input

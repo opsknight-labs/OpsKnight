@@ -798,7 +798,7 @@ export default function Sidebar({
             </div>
           )}
 
-          {/* Metadata version info */}
+          {/* Metadata version info (the collapsed rail shows it in the status bar instead) */}
           {!isDesktopCollapsed && (
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-[10px] text-ink-400">
               <a

@@ -1,5 +1,5 @@
-import PageLoadingSkeleton from '@/components/ui/PageLoadingSkeleton';
+import { DetailPageSkeleton } from '@/components/patterns';
 
-export default function Loading() {
-  return <PageLoadingSkeleton type="detail" />;
+export default function AutomationRuleLoading() {
+  return <DetailPageSkeleton label="Loading automation rule" />;
 }

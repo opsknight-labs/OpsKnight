@@ -3,7 +3,7 @@
 import UserAvatar from '@/components/UserAvatar';
 import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 
 import {
   Sheet,
@@ -39,7 +39,6 @@ export default function LayerCreateForm({
   users,
 }: LayerCreateFormProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
 
@@ -79,9 +78,9 @@ export default function LayerCreateForm({
       try {
         const result = await createLayer(scheduleId, formData);
         if (result?.error) {
-          showToast(result.error, 'error');
+          notify.error(result.error);
         } else {
-          showToast('Layer created successfully', 'success');
+          notify.success('Layer created successfully');
           setOpen(false);
           // Reset form state
           setSelectedDays([]);
@@ -93,7 +92,7 @@ export default function LayerCreateForm({
           router.refresh();
         }
       } catch {
-        showToast('Failed to create layer', 'error');
+        notify.error('Failed to create layer');
       }
     });
   };

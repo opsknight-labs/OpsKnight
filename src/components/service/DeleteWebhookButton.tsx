@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/shadcn/alert-dialog';
 import { Trash2, Loader2 } from 'lucide-react';
 import { logger } from '@/lib/logger';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 
 type Props = {
   deleteAction: () => Promise<void>;
@@ -27,13 +27,12 @@ export default function DeleteWebhookButton({ deleteAction, redirectTo }: Props)
   const [isDeleting, setIsDeleting] = useState(false);
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { showToast } = useToast();
 
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
       await deleteAction();
-      showToast('Webhook deleted successfully', 'success');
+      notify.success('Webhook deleted successfully');
       if (redirectTo) {
         router.push(redirectTo);
         router.refresh();
@@ -44,7 +43,7 @@ export default function DeleteWebhookButton({ deleteAction, redirectTo }: Props)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('Failed to delete webhook', { error: errorMessage });
-      showToast('Failed to delete webhook', 'error');
+      notify.error('Failed to delete webhook');
       setIsDeleting(false);
       setOpen(false);
     }

@@ -25,6 +25,7 @@ import {
   FilterChip,
   RelativeTime,
   toneClasses,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
 } from '@/components/patterns';
@@ -109,6 +110,7 @@ const columns: DirectoryColumn<ScheduleItem>[] = [
   },
   {
     id: 'oncall',
+    hideable: true,
     header: 'On call now',
     cell: s =>
       s.onCallNow ? (
@@ -121,6 +123,7 @@ const columns: DirectoryColumn<ScheduleItem>[] = [
   },
   {
     id: 'next',
+    hideable: true,
     header: 'Next',
     className: 'hidden md:table-cell',
     cell: s =>
@@ -139,6 +142,7 @@ const columns: DirectoryColumn<ScheduleItem>[] = [
   },
   {
     id: 'rotation',
+    hideable: true,
     header: 'Rotation',
     className: 'hidden lg:table-cell',
     cell: s => (
@@ -150,6 +154,7 @@ const columns: DirectoryColumn<ScheduleItem>[] = [
   },
   {
     id: 'timezone',
+    hideable: true,
     header: 'Timezone',
     className: 'hidden md:table-cell',
     cell: s => <span className="text-muted-foreground">{s.timeZone}</span>,
@@ -229,6 +234,7 @@ export default function ScheduleDirectoryList({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [view, setView] = useDirectoryView('schedules');
+  const columnVisibility = useDirectoryColumns('schedules', columns);
 
   const updateFilters = (newParams: { q?: string; status?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -386,6 +392,8 @@ export default function ScheduleDirectoryList({
         <DirectoryHeader
           title="Schedule directory"
           summary={`Showing ${from}–${to} of ${shownTotal}`}
+          columns={columnVisibility}
+          density
           view={{ value: view, onChange: setView }}
           guide={
             <DirectoryGuide title="How schedules work" steps={GUIDE_STEPS} links={GUIDE_LINKS} />
@@ -398,6 +406,7 @@ export default function ScheduleDirectoryList({
             rows={schedules}
             getRowId={s => s.id}
             columns={columns}
+            hiddenColumns={columnVisibility.hidden}
             label="Schedules"
             mobileRow={mobileRow}
           />

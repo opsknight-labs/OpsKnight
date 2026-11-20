@@ -48,21 +48,19 @@ export default function ConfirmDialog({
     const variantStyles = {
         danger: {
             confirmBg: 'var(--danger)',
-            confirmHover: '#b91c1c',
             icon: '!'
         },
         warning: {
-            confirmBg: '#f59e0b',
-            confirmHover: '#d97706',
+            confirmBg: 'var(--warning)',
             icon: '!'
         },
         info: {
-            confirmBg: '#3b82f6',
-            confirmHover: '#2563eb',
+            confirmBg: 'var(--info)',
             icon: 'i'
         }
     };
 
+    // eslint-disable-next-line security/detect-object-injection -- variant is a closed union
     const style = variantStyles[variant];
 
     return (
@@ -89,7 +87,7 @@ export default function ConfirmDialog({
                         className="confirm-dialog-button confirm"
                         style={{
                             background: style.confirmBg,
-                            color: '#ffffff'
+                            color: 'white'
                         }}
                     >
                         {confirmLabel}

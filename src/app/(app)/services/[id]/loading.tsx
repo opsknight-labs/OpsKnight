@@ -1,5 +1,5 @@
-import PageLoadingSkeleton from '@/components/ui/PageLoadingSkeleton';
+import { DetailPageSkeleton } from '@/components/patterns';
 
 export default function ServiceDetailLoading() {
-  return <PageLoadingSkeleton type="detail" />;
+  return <DetailPageSkeleton label="Loading service" />;
 }

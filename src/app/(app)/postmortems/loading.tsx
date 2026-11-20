@@ -1,5 +1,5 @@
-import PageLoadingSkeleton from '@/components/ui/PageLoadingSkeleton';
+import { ListPageSkeleton } from '@/components/patterns';
 
 export default function PostmortemsLoading() {
-  return <PageLoadingSkeleton type="list" itemCount={4} />;
+  return <ListPageSkeleton label="Loading postmortems" stats={4} actions rows={6} columns={5} />;
 }

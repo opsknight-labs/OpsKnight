@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -30,7 +30,6 @@ export default function DeleteTeamCard({
   deleteTeamAction,
 }: DeleteTeamCardProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -39,14 +38,14 @@ export default function DeleteTeamCard({
       try {
         const res = await deleteTeamAction(teamId);
         if (res?.error) {
-          showToast(res.error, 'error');
+          notify.error(res.error);
         } else {
-          showToast(`Team "${teamName}" deleted successfully`, 'success');
+          notify.success(`Team "${teamName}" deleted successfully`);
           router.push('/teams');
           router.refresh();
         }
       } catch {
-        showToast('Failed to delete team', 'error');
+        notify.error('Failed to delete team');
       } finally {
         setOpen(false);
       }

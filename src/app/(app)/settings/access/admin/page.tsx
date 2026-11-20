@@ -327,7 +327,7 @@ export default async function AccessManagementPage() {
             )}
             {pastReviews.length > 0 && (
               <div className="space-y-3">
-                <h4 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <h4 className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <History className="h-3.5 w-3.5" aria-hidden="true" />
                   Past reviews
                 </h4>

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import {
   Dialog,
   DialogContent,
@@ -83,7 +83,6 @@ export default function EscalationStepEditModal({
   updateStep,
 }: EscalationStepEditModalProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
 
   const [targetType, setTargetType] = useState<'USER' | 'TEAM' | 'SCHEDULE'>(step.targetType);
@@ -127,14 +126,14 @@ export default function EscalationStepEditModal({
       try {
         const result = await updateStep(step.id, formData);
         if (result?.error) {
-          showToast(result.error, 'error');
+          notify.error(result.error);
         } else {
-          showToast(`Step ${step.stepOrder + 1} updated successfully`, 'success');
+          notify.success(`Step ${step.stepOrder + 1} updated successfully`);
           onClose();
           router.refresh();
         }
       } catch (error) {
-        showToast(error instanceof Error ? error.message : 'Failed to update step', 'error');
+        notify.error(error instanceof Error ? error.message : 'Failed to update step');
       }
     });
   };
@@ -166,19 +165,19 @@ export default function EscalationStepEditModal({
                 <SelectValue placeholder="Select target type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="USER" className="text-xs">
+                <SelectItem value="USER">
                   <div className="flex items-center gap-2">
                     <User className="h-3.5 w-3.5 text-blue-500" />
                     Specific User
                   </div>
                 </SelectItem>
-                <SelectItem value="TEAM" className="text-xs">
+                <SelectItem value="TEAM">
                   <div className="flex items-center gap-2">
                     <Users className="h-3.5 w-3.5 text-purple-500" />
                     Team
                   </div>
                 </SelectItem>
-                <SelectItem value="SCHEDULE" className="text-xs">
+                <SelectItem value="SCHEDULE">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-3.5 w-3.5 text-emerald-500" />
                     On-Call Schedule

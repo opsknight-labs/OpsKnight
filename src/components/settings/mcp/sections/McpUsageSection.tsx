@@ -218,7 +218,7 @@ export default function McpUsageSection({
 
       <dl className="mb-4 grid grid-cols-1 gap-3 text-sm min-[420px]:grid-cols-3">
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-          <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <dt className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
             Calls
           </dt>
           <dd className="text-lg font-semibold tabular-nums">
@@ -226,7 +226,7 @@ export default function McpUsageSection({
           </dd>
         </div>
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-          <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <dt className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
             Failed
           </dt>
           <dd className="text-lg font-semibold tabular-nums">
@@ -237,7 +237,7 @@ export default function McpUsageSection({
           </dd>
         </div>
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-          <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <dt className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
             Slowest 5% of calls
           </dt>
           <dd className="text-lg font-semibold tabular-nums">

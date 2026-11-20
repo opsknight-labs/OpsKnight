@@ -42,7 +42,7 @@ export type McpAssistantUsageWindow = Pick<McpUsage, 'window' | 'totals' | 'rows
 function Fact({ term, children }: { term: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0 space-y-0.5">
-      <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <dt className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         {term}
       </dt>
       <dd className="break-words text-sm text-foreground">{children}</dd>
@@ -320,7 +320,7 @@ export default function McpAssistantDetail({
                   <span className="flex shrink-0 flex-wrap items-center gap-1.5">
                     <StatusPill tone={meta.tone}>{meta.label}</StatusPill>
                     {call.errorCode && (
-                      <code className="break-all font-mono text-[11px] text-muted-foreground">
+                      <code className="break-all font-mono text-2xs text-muted-foreground">
                         {call.errorCode}
                       </code>
                     )}

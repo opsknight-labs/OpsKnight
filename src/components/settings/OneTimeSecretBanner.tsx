@@ -42,7 +42,7 @@ export default function OneTimeSecretBanner({
         </div>
         <Badge
           variant="outline"
-          className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold uppercase tracking-wider"
+          className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-2xs font-bold uppercase tracking-wider"
         >
           {badge}
         </Badge>

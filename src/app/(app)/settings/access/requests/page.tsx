@@ -65,7 +65,7 @@ function RequestDetails({
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Route className="h-3.5 w-3.5" aria-hidden="true" />
           Blocked while opening{' '}
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-2xs text-foreground">
             {request.originPath}
           </code>
         </p>

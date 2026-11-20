@@ -210,7 +210,7 @@ select option {
     min-width: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    height: calc(100dvh - var(--header-height, 56px));
+    height: calc(100dvh - var(--header-height, 56px) - var(--status-bar-height, 0px));
     background-color: var(--bg-primary);
     /* Position content to start exactly where sidebar ends */
     margin-left: var(--sidebar-width);
@@ -232,10 +232,31 @@ select option {
     }
 }
 
+/* Desktop status bar (StatusBar.tsx, `h-7`, shown from lg). Everything pinned to the bottom of
+   the content column reserves its height: the scroll area ends above it, so no page content,
+   sticky footer or toast is ever underneath it. */
+@media (min-width: 1024px) {
+    :root:has(#status-bar) {
+        --status-bar-height: 1.75rem;
+    }
+}
+
+/* The bar starts where the sidebar ends (the sidebar runs the full height) and follows its
+   collapse with the same transition as the sidebar's width, so there is no overlap or gap. */
+.status-bar {
+    left: var(--sidebar-width, 240px);
+    transition: left var(--transition-base);
+}
+
+.app-shell:has(.sidebar-collapsed) .status-bar,
+.app-shell:has(.sidebar[data-collapsed='true']) .status-bar {
+    left: var(--sidebar-width-collapsed, 64px);
+}
+
 /* Dashboard Editing Bottom Bar - Stays above content and respects sidebar width */
 .dashboard-edit-footer {
     position: fixed;
-    bottom: 0;
+    bottom: var(--status-bar-height, 0px);
     right: 0;
     left: var(--sidebar-width, 240px);
     transition: left var(--transition-base, 200ms ease-in-out);

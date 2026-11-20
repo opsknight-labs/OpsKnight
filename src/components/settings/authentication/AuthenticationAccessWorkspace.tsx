@@ -156,7 +156,7 @@ export default function AuthenticationAccessWorkspace() {
           <span className="space-y-0.5">
             <span className="flex flex-wrap items-center gap-2 font-medium">
               Connect accounts automatically for verified company emails
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-2xs">
                 Recommended
               </Badge>
             </span>
@@ -290,7 +290,7 @@ export default function AuthenticationAccessWorkspace() {
                   <span className="block font-medium text-foreground">
                     {request.name || request.email}
                     {request.role === 'ADMIN' && (
-                      <Badge variant="outline" className="ml-2 text-[10px]">
+                      <Badge variant="outline" className="ml-2 text-2xs">
                         Administrator
                       </Badge>
                     )}

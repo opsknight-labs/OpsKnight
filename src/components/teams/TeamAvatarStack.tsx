@@ -47,7 +47,7 @@ export default function TeamAvatarStack({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className={cn('flex items-center -space-x-2 py-0.5', className)}>
+      <div className={cn('flex items-center -space-x-1.5 py-0.5', className)}>
         {visibleMembers.map((member, index) => {
           const user = member.user;
           const fallbackId = user.id || member.userId || user.name;

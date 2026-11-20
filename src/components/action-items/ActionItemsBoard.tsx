@@ -36,6 +36,7 @@ import {
   DirectoryPrimaryCell,
   DirectoryTable,
   RelativeTime,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
 } from '@/components/patterns';
@@ -388,7 +389,7 @@ function ActionItemCard({
                   <span className="sr-only">Actions</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44 text-xs">
+              <DropdownMenuContent align="end">
                 <StatusMenuItems item={item} onStatusChange={onStatusChange} />
               </DropdownMenuContent>
             </DropdownMenu>
@@ -704,16 +705,16 @@ export default function ActionItemsBoard({
           <span className="sr-only">Actions for {item.title}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48 text-xs">
-        <DropdownMenuItem asChild className="gap-2">
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem asChild>
           <Link href={`/postmortems/${item.incidentId}`}>
-            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+            <FileText />
             <span>Open postmortem</span>
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild className="gap-2">
+        <DropdownMenuItem asChild>
           <Link href={`/incidents/${item.incidentId}`}>
-            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+            <ExternalLink />
             <span>Open incident</span>
           </Link>
         </DropdownMenuItem>
@@ -778,6 +779,7 @@ export default function ActionItemsBoard({
     },
     {
       id: 'owner',
+      hideable: true,
       header: 'Owner',
       className: 'hidden w-36 md:table-cell',
       cell: item => (
@@ -786,12 +788,14 @@ export default function ActionItemsBoard({
     },
     {
       id: 'priority',
+      hideable: true,
       header: 'Priority',
       className: 'hidden w-24 lg:table-cell',
       cell: item => <PriorityPill item={item} />,
     },
     {
       id: 'status',
+      hideable: true,
       header: 'Status',
       className: 'w-36',
       cell: item =>
@@ -819,11 +823,14 @@ export default function ActionItemsBoard({
     },
     {
       id: 'due',
+      hideable: true,
       header: 'Due',
       className: 'w-32 whitespace-nowrap',
       cell: item => <DueCell item={item} />,
     },
   ];
+
+  const columnVisibility = useDirectoryColumns('action-items', columns);
 
   return (
     <div className="space-y-4">
@@ -989,6 +996,8 @@ export default function ActionItemsBoard({
               ? `Showing ${rangeStart}–${rangeStart + filteredItems.length - 1} of ${pagination?.totalItems ?? filteredItems.length}`
               : 'No matching action items'
           }
+          columns={columnVisibility}
+          density
           view={{
             value: view,
             onChange: setView,
@@ -1057,6 +1066,7 @@ export default function ActionItemsBoard({
             rows={filteredItems}
             getRowId={item => item.id}
             columns={columns}
+            hiddenColumns={columnVisibility.hidden}
             rowActions={rowMenu}
             mobileRow={item => (
               <div className="min-w-0 space-y-1">

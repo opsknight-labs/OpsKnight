@@ -387,10 +387,10 @@ export default function ServiceAccountsPanel({
                           variant="outline"
                           className={
                             sa.role === 'ADMIN'
-                              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 text-[10px]'
+                              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 text-2xs'
                               : sa.role === 'RESPONDER'
-                              ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px]'
-                              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]'
+                              ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-2xs'
+                              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-2xs'
                           }
                         >
                           {sa.role}
@@ -399,8 +399,8 @@ export default function ServiceAccountsPanel({
                           variant="outline"
                           className={
                             sa.status === 'ACTIVE'
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]'
-                              : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20 text-[10px]'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-2xs'
+                              : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20 text-2xs'
                           }
                         >
                           {sa.status}
@@ -409,7 +409,7 @@ export default function ServiceAccountsPanel({
 
                       <p className="text-xs font-mono text-muted-foreground truncate">Account ID: {sa.id}</p>
 
-                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap pt-0.5">
+                      <div className="flex items-center gap-2 text-2xs text-muted-foreground flex-wrap pt-0.5">
                         <span>Created {sa.createdAt}</span>
                         <span>•</span>
                         <span>{sa.activeTokensCount} active {sa.activeTokensCount === 1 ? 'token' : 'tokens'}</span>
@@ -489,7 +489,7 @@ export default function ServiceAccountsPanel({
                             setIssueTokenTargetId(sa.id);
                             applyPreset('RESPONDER');
                           }}
-                          className="h-7 text-[11px] gap-1"
+                          className="h-7 text-2xs gap-1"
                         >
                           <Plus className="h-3 w-3" />
                           Issue Token
@@ -532,7 +532,7 @@ export default function ServiceAccountsPanel({
                                       <Badge
                                         key={sc}
                                         variant="outline"
-                                        className="text-[10px] px-1.5 py-0 bg-background font-mono border-border/80"
+                                        className="text-2xs px-1.5 py-0 bg-background font-mono border-border/80"
                                       >
                                         {sc}
                                       </Badge>
@@ -544,8 +544,8 @@ export default function ServiceAccountsPanel({
                                     variant="outline"
                                     className={
                                       token.status === 'EXPIRED'
-                                        ? 'text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
-                                        : 'text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
+                                        ? 'text-2xs bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                                        : 'text-2xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
                                     }
                                   >
                                     {token.status === 'EXPIRED' ? 'Expired' : 'Active'}
@@ -793,7 +793,7 @@ export default function ServiceAccountsPanel({
                   <p
                     id="token-expiry-warning"
                     role="note"
-                    className="text-[11px] text-amber-700 dark:text-amber-400"
+                    className="text-2xs text-amber-700 dark:text-amber-400"
                   >
                     This token stays valid until you revoke it. Use it only when rotation is not
                     possible, and record who owns it.
@@ -807,7 +807,7 @@ export default function ServiceAccountsPanel({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <Label className="text-xs font-semibold">Granular Permission Scopes</Label>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-2xs text-muted-foreground">
                     Selected: {offeredScopes.filter(scope => selectedScopes.has(scope.value)).length} of {offeredScopes.length} scopes
                   </p>
                 </div>
@@ -818,7 +818,7 @@ export default function ServiceAccountsPanel({
                     variant="outline"
                     size="sm"
                     onClick={() => applyPreset('ADMIN')}
-                    className="h-7 text-[10px] px-2"
+                    className="h-7 text-2xs px-2"
                   >
                     Admin Full
                   </Button>
@@ -827,7 +827,7 @@ export default function ServiceAccountsPanel({
                     variant="outline"
                     size="sm"
                     onClick={() => applyPreset('RESPONDER')}
-                    className="h-7 text-[10px] px-2"
+                    className="h-7 text-2xs px-2"
                   >
                     Responder
                   </Button>
@@ -836,7 +836,7 @@ export default function ServiceAccountsPanel({
                     variant="outline"
                     size="sm"
                     onClick={() => applyPreset('READ_ONLY')}
-                    className="h-7 text-[10px] px-2"
+                    className="h-7 text-2xs px-2"
                   >
                     Read-Only
                   </Button>
@@ -845,7 +845,7 @@ export default function ServiceAccountsPanel({
                     variant="ghost"
                     size="sm"
                     onClick={() => applyPreset('CLEAR')}
-                    className="h-7 text-[10px] px-2"
+                    className="h-7 text-2xs px-2"
                   >
                     Clear
                   </Button>
@@ -887,10 +887,10 @@ export default function ServiceAccountsPanel({
                         }}
                       />
                       <div className="min-w-0">
-                        <span className="block text-[11px] font-semibold text-foreground truncate">
+                        <span className="block text-2xs font-semibold text-foreground truncate">
                           {scope.title}
                         </span>
-                        <code className="text-[10px] font-mono text-muted-foreground">
+                        <code className="text-2xs font-mono text-muted-foreground">
                           {scope.value}
                         </code>
                       </div>

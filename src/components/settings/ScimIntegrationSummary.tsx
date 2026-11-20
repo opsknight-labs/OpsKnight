@@ -24,16 +24,16 @@ export default function ScimIntegrationSummary({
 }) {
   const ready = enabled && hasSecretToken;
   return (
-    <div className="min-w-0 rounded-xl border bg-card p-4 sm:p-5 shadow-2xs space-y-4">
+    <div className="min-w-0 rounded-lg border bg-card p-4 sm:p-5 space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="rounded-lg bg-blue-500/10 p-2.5 text-blue-600 dark:text-blue-400 shrink-0">
+          <div className="rounded-lg bg-muted p-2.5 text-muted-foreground shrink-0">
             <UserCheck className="h-5 w-5" aria-hidden />
           </div>
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-semibold text-foreground">SCIM 2.0 provisioning</h3>
-              <Badge variant={ready ? 'success' : 'neutral'} className="text-[10px]">
+              <Badge variant={ready ? 'success' : 'neutral'} className="text-2xs">
                 {ready ? 'Enabled' : enabled ? 'Token required' : 'Disabled'}
               </Badge>
             </div>
@@ -54,7 +54,7 @@ export default function ScimIntegrationSummary({
       <dl className="grid gap-3 text-xs sm:grid-cols-3">
         <div className="min-w-0">
           <dt className="text-muted-foreground">Tenant URL</dt>
-          <dd className="mt-0.5 break-all font-mono text-[11px] text-foreground">{tenantUrl}</dd>
+          <dd className="mt-0.5 break-all font-mono text-2xs text-foreground">{tenantUrl}</dd>
         </div>
         <div className="min-w-0">
           <dt className="text-muted-foreground">Bearer token</dt>

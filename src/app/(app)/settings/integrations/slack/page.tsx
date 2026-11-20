@@ -10,6 +10,8 @@ import { SLACK_REQUIRED_BOT_SCOPES } from '@/lib/slack/app-manifest';
 import SlackIntegrationPage from '@/components/settings/SlackIntegrationPage';
 import { getAppUrl } from '@/lib/app-url';
 import { requirePageAccess } from '@/lib/access/server';
+import { toneClasses } from '@/components/patterns';
+import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -144,9 +146,10 @@ export default async function GlobalSlackIntegrationPage(props: {
       />
 
       {oauthError && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 sm:p-5 text-xs text-rose-800 dark:text-rose-300 space-y-1.5">
+        <div className={cn('rounded-lg border p-4 sm:p-5 text-xs space-y-1.5', toneClasses('critical').soft)}
+          role="alert">
           <div className="flex items-center gap-2 font-semibold">
-            <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
               {oauthMessage === 'bad_client_secret'
                 ? 'Slack Connection Failed: Bad Client Secret'

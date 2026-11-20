@@ -307,7 +307,7 @@ export default function AuthenticationOverview({
                           ? 'outline'
                           : 'neutral'
                     }
-                    className="text-[10px]"
+                    className="text-2xs"
                   >
                     {step.state}
                   </Badge>

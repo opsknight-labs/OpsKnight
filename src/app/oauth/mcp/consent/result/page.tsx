@@ -20,16 +20,16 @@ export default async function McpConsentResult({
   // Only a known code is echoed as a reference, never arbitrary query text.
   const reference = known ? code : null;
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 font-sans text-slate-900 sm:px-6 dark:bg-slate-950 dark:text-slate-100">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-8 font-sans text-foreground sm:px-6">
       <div className="w-full max-w-md space-y-6">
         <AuthBrand />
         <section
           role="alert"
-          className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+          className="space-y-3 rounded-2xl border border-border bg-card p-6 shadow-sm"
         >
           <h1 className="font-display text-xl font-bold tracking-tight">{title}</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-300">{body}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-muted-foreground">{body}</p>
+          <p className="text-xs text-muted-foreground">
             {reference && <>Reference: {reference}. </>}
             <a
               href={MCP_DOCS_LINKS.troubleshooting}
@@ -43,7 +43,7 @@ export default async function McpConsentResult({
         </section>
         <Link
           href="/settings/integrations/mcp"
-          className="inline-block rounded text-sm font-medium text-slate-700 underline underline-offset-2 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:text-slate-300 dark:hover:text-white"
+          className="inline-block rounded text-sm font-medium text-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Back to OpsKnight
         </Link>

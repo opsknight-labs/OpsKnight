@@ -11,6 +11,9 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Switch } from '@/components/ui/shadcn/switch';
+import McpUnsavedChangesGuard from '@/components/settings/mcp/McpUnsavedChangesGuard';
+import { toneClasses } from '@/components/patterns';
+import { cn } from '@/lib/utils';
 import {
   Loader2,
   XCircle,
@@ -290,9 +293,10 @@ export default function ChatOpsSettingsPage({
 
   return (
     <form action={formAction} className="space-y-6">
+      <McpUnsavedChangesGuard dirty={isDirty} />
       {state?.code === 'SETTINGS_CHANGED' && (
         <div
-          className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-900 dark:text-amber-100 flex flex-col sm:flex-row sm:items-start justify-between gap-3 shadow-sm"
+          className={cn('rounded-lg border p-4 text-xs flex flex-col sm:flex-row sm:items-start justify-between gap-3', toneClasses('elevated').soft)}
           role="alert"
           aria-live="assertive"
         >
@@ -321,10 +325,10 @@ export default function ChatOpsSettingsPage({
 
       {state?.error && state.code !== 'SETTINGS_CHANGED' && (
         <div
-          className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-3 shadow-sm"
+          className={cn('rounded-lg border p-4 text-xs flex items-start gap-3', toneClasses('critical').soft)}
           role="alert"
         >
-          <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+          <XCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
           <div className="space-y-1 min-w-0">
             <p className="font-semibold">Configuration Error</p>
             <p>{state.error}</p>
@@ -336,7 +340,7 @@ export default function ChatOpsSettingsPage({
       <WarRoomProviderStatus slack={providerStatus.slack} teams={providerStatus.teams} />
 
       {/* Global War Room Policy Section */}
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
+      <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
@@ -349,7 +353,7 @@ export default function ChatOpsSettingsPage({
                 </h3>
                 <Badge
                   variant={enabled ? 'default' : 'secondary'}
-                  className="text-[10px] font-medium"
+                  className="text-2xs font-medium"
                 >
                   {enabled ? 'Active' : 'Paused'}
                 </Badge>
@@ -372,7 +376,7 @@ export default function ChatOpsSettingsPage({
               <Zap className="h-3.5 w-3.5 text-primary" />
               Enable War Room Provisioning
             </Label>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               Allows OpsKnight to provision incident collaboration rooms and sync responders across
               connected providers.
             </p>
@@ -415,20 +419,20 @@ export default function ChatOpsSettingsPage({
                   {providerStatus.slack.connected ? (
                     <Badge
                       variant="outline"
-                      className="text-[9px] px-1.5 py-0 font-normal border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5"
+                      className={cn('text-2xs px-1.5 py-0 font-normal', toneClasses('ok').soft)}
                     >
                       Connected
                     </Badge>
                   ) : (
                     <Badge
                       variant="outline"
-                      className="text-[9px] px-1.5 py-0 font-normal border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/5"
+                      className={cn('text-2xs px-1.5 py-0 font-normal', toneClasses('elevated').soft)}
                     >
                       Unavailable
                     </Badge>
                   )}
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-snug">
+                <p className="text-2xs text-muted-foreground leading-snug">
                   Provision dedicated incident channels in Slack by default.
                 </p>
               </div>
@@ -460,20 +464,20 @@ export default function ChatOpsSettingsPage({
                   {providerStatus.teams.connected ? (
                     <Badge
                       variant="outline"
-                      className="text-[9px] px-1.5 py-0 font-normal border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5"
+                      className={cn('text-2xs px-1.5 py-0 font-normal', toneClasses('ok').soft)}
                     >
                       Connected
                     </Badge>
                   ) : (
                     <Badge
                       variant="outline"
-                      className="text-[9px] px-1.5 py-0 font-normal border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/5"
+                      className={cn('text-2xs px-1.5 py-0 font-normal', toneClasses('elevated').soft)}
                     >
                       Unavailable
                     </Badge>
                   )}
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-snug">
+                <p className="text-2xs text-muted-foreground leading-snug">
                   Provision dedicated incident channels in Microsoft Teams by default.
                 </p>
               </div>
@@ -506,12 +510,12 @@ export default function ChatOpsSettingsPage({
                   </div>
                   <Badge
                     variant="outline"
-                    className="text-[9px] px-1.5 py-0 font-normal border-primary/40 text-primary"
+                    className="text-2xs px-1.5 py-0 font-normal border-primary/40 text-primary"
                   >
                     Multi-platform
                   </Badge>
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-snug">
+                <p className="text-2xs text-muted-foreground leading-snug">
                   Simultaneously provision incident war rooms across both Slack and Teams.
                 </p>
               </div>
@@ -532,13 +536,10 @@ export default function ChatOpsSettingsPage({
         <div className="grid gap-5 md:grid-cols-2">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label
-                htmlFor="channelPrefix"
-                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
+              <Label htmlFor="channelPrefix" className="text-sm font-medium">
                 Room Name Prefix
               </Label>
-              <span className="text-[10px] text-muted-foreground">Max 20 chars</span>
+              <span className="text-xs text-muted-foreground">Max 20 chars</span>
             </div>
             <Input
               id="channelPrefix"
@@ -549,8 +550,9 @@ export default function ChatOpsSettingsPage({
               placeholder="inc"
               className="font-mono text-sm h-10"
               maxLength={20}
+              aria-describedby="channelPrefix-help"
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p id="channelPrefix-help" className="text-xs text-muted-foreground">
               Prefix applied when naming incident collaboration channels.
             </p>
           </div>
@@ -610,7 +612,7 @@ export default function ChatOpsSettingsPage({
                       }`}
                     >
                       <span>{opt.label}</span>
-                      <span className="text-[10px] font-normal opacity-80">{opt.name}</span>
+                      <span className="text-2xs font-normal opacity-80">{opt.name}</span>
                     </button>
                   );
                 })}
@@ -677,7 +679,7 @@ export default function ChatOpsSettingsPage({
                 <Archive className="h-3.5 w-3.5 text-primary" />
                 Close Collaboration on Resolution
               </Label>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 When an incident is resolved, automatically initiate channel closing and archival
                 where supported.
               </p>
@@ -690,7 +692,7 @@ export default function ChatOpsSettingsPage({
             />
             <input type="hidden" name="archiveOnResolve" value={archiveOnResolve ? 'on' : 'off'} />
           </div>
-          <div className="grid sm:grid-cols-2 gap-2 text-[11px] text-muted-foreground bg-muted/20 p-3 rounded-lg border">
+          <div className="grid sm:grid-cols-2 gap-2 text-2xs text-muted-foreground bg-muted/20 p-3 rounded-lg border">
             <div>
               <span className="font-semibold text-foreground block">Slack</span>
               <span>Channel is automatically archived if bot permissions allow.</span>
@@ -704,7 +706,7 @@ export default function ChatOpsSettingsPage({
       </div>
 
       {/* Video Collaboration Section */}
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+      <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
@@ -735,11 +737,11 @@ export default function ChatOpsSettingsPage({
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-foreground">{opt.label}</span>
-                    <Badge variant="outline" className="text-[9px] px-1 py-0 font-normal">
+                    <Badge variant="outline" className="text-2xs px-1 py-0 font-normal">
                       {opt.badge}
                     </Badge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-snug">{opt.desc}</p>
+                  <p className="text-2xs text-muted-foreground leading-snug">{opt.desc}</p>
                 </div>
                 <input
                   type="radio"
@@ -759,7 +761,7 @@ export default function ChatOpsSettingsPage({
           <div className="space-y-2 pt-2">
             <Label
               htmlFor="customBridgeUrlTemplate"
-              className="text-xs font-semibold text-foreground"
+              className="text-sm font-medium"
             >
               Bridge URL Template (Optional)
             </Label>
@@ -771,16 +773,19 @@ export default function ChatOpsSettingsPage({
               disabled={!isAdmin}
               placeholder={activeHint.placeholder}
               className="text-xs font-mono h-9"
+              aria-describedby="customBridgeUrlTemplate-help"
             />
-            <p className="text-[11px] text-muted-foreground">{activeHint.hint}</p>
+            <p id="customBridgeUrlTemplate-help" className="text-xs text-muted-foreground">
+              {activeHint.hint}
+            </p>
             {activeHint.examples.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
+              <div className="flex flex-wrap items-center gap-1.5 pt-1 text-2xs">
                 <span className="text-muted-foreground">Insert variable:</span>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-6 text-[10px] font-mono px-2"
+                  className="h-6 text-2xs font-mono px-2"
                   onClick={() => insertVariable('{incidentId}')}
                   disabled={!isAdmin}
                 >
@@ -797,7 +802,7 @@ export default function ChatOpsSettingsPage({
 
       {/* Form Submission Footer */}
       {isAdmin && (
-        <div className="flex items-center justify-between p-4 rounded-xl border bg-card shadow-xs">
+        <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-card">
           <span className="text-xs text-muted-foreground">
             {isDirty ? 'You have unsaved changes' : 'All settings saved'}
           </span>

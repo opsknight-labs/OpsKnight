@@ -408,7 +408,7 @@ export default function AuthenticationDiagnostics({
         {pagination('Bottom diagnostic pagination')}
 
         {page && (
-          <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+          <p className="text-2xs text-muted-foreground/80 leading-relaxed">
             Live pagination started {new Date(page.snapshotAt).toLocaleString()}. Active sessions
             can leave later pages when used, renewed or revoked. This is not an immutable sign-in
             history. Start again to see current activity.

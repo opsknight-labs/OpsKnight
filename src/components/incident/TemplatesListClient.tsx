@@ -42,7 +42,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/shadcn/alert-dialog';
-import CreateIncidentButton from '@/components/incident/CreateIncidentButton';
+import CreateIncidentButton, {
+  CreateIncidentMenuItem,
+} from '@/components/incident/CreateIncidentButton';
 import { deleteTemplate } from '@/app/(app)/incidents/template-actions';
 import { notify } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -590,25 +592,20 @@ export default function TemplatesListClient({
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <CreateIncidentButton
-                              templateId={template.id}
-                              variant="ghost"
-                              size="sm"
-                              className="w-full justify-start text-xs font-medium px-2 py-1.5 h-auto text-left"
-                            >
-                              <ArrowUpRight className="h-3.5 w-3.5 mr-2" />
+                          <DropdownMenuContent align="end">
+                            <CreateIncidentMenuItem templateId={template.id}>
+                              <ArrowUpRight />
                               Declare Incident
-                            </CreateIncidentButton>
+                            </CreateIncidentMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
+                              variant="destructive"
                               disabled={isDeleting}
                               onClick={() =>
                                 setTemplateToDelete({ id: template.id, name: template.name })
                               }
-                              className="text-xs text-rose-600 dark:text-rose-400 focus:text-rose-600 focus:bg-rose-500/10 cursor-pointer"
                             >
-                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                              <Trash2 />
                               Delete Template
                             </DropdownMenuItem>
                           </DropdownMenuContent>

@@ -53,7 +53,7 @@ function DurationField({
         </legend>
         <Badge
           variant={isDefaultActive ? 'neutral' : 'outline'}
-          className="text-[10px] font-medium py-0"
+          className="text-2xs font-medium py-0"
         >
           {isDefaultActive ? 'Inherited Default' : isCustomActive ? 'Custom Value' : 'Preset'}
         </Badge>

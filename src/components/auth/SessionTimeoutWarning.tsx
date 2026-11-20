@@ -125,9 +125,9 @@ export default function SessionTimeoutWarning({
 
           <div className="p-6">
             {/* Icon */}
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/15">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-status-elevated/15">
               <svg
-                className="h-7 w-7 text-amber-600 dark:text-amber-400"
+                className="h-7 w-7 text-status-elevated"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -151,20 +151,16 @@ export default function SessionTimeoutWarning({
                 /* Hard-cap mode: renewal would be a no-op — direct the user to sign in again */
                 <p id="session-warning-description" className="mt-2 text-sm text-ink-500">
                   Your session expires in{' '}
-                  <span className="font-semibold text-amber-600 dark:text-amber-400">
-                    {timeDisplay}
-                  </span>
-                  . For security, this trusted session has reached its maximum lifetime. Please sign
-                  in again to continue.
+                  <span className="font-semibold text-status-elevated">{timeDisplay}</span>. For
+                  security, this trusted session has reached its maximum lifetime. Please sign in
+                  again to continue.
                 </p>
               ) : (
                 /* Normal mode: renewal is possible */
                 <p id="session-warning-description" className="mt-2 text-sm text-ink-500">
                   Your session will expire in{' '}
-                  <span className="font-semibold text-amber-600 dark:text-amber-400">
-                    {timeDisplay}
-                  </span>
-                  . Would you like to stay signed in?
+                  <span className="font-semibold text-status-elevated">{timeDisplay}</span>. Would
+                  you like to stay signed in?
                 </p>
               )}
             </div>
@@ -181,7 +177,7 @@ export default function SessionTimeoutWarning({
               {isAtHardCap ? (
                 <button
                   onClick={handleReauthenticate}
-                  className="flex-1 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
                   autoFocus
                 >
                   Sign In Again
@@ -189,7 +185,7 @@ export default function SessionTimeoutWarning({
               ) : (
                 <button
                   onClick={handleExtendSession}
-                  className="flex-1 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
                   autoFocus
                 >
                   Stay Signed In
