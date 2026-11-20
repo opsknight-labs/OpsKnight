@@ -9,11 +9,11 @@ verification:
   level: source
   verified_at: 2026-11-20
   evidence:
-    - src/app/(app)/analytics/page.tsx
+    - src/app/(app)/insights/page.tsx
     - src/lib/analytics/definitions.ts
     - src/lib/analytics/params.ts
     - src/lib/analytics/window.ts
-    - src/app/api/analytics/export/route.ts
+    - src/app/api/insights/export/route.ts
 ---
 
 # Analytics

@@ -13,7 +13,7 @@ verification:
     - src/lib/analytics/params.ts
     - src/lib/analytics/window.ts
     - src/lib/analytics-export.ts
-    - src/app/api/analytics/export/route.ts
+    - src/app/api/insights/export/route.ts
 ---
 
 # Use Analytics
