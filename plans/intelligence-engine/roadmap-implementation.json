@@ -515,7 +515,7 @@
     "scope": "Expanded roadmap still in progress. Incremental indexing, bounded observer, shared alert shape/backfill and foundation benchmark now implemented and verified locally."
   },
   "gap_audit": {
-    "branch": "wip/intel-m12-int (merges wip/intel-m1-engine, wip/intel-m1-ingest, wip/intel-m2-bg, wip/intel-m2-chat onto feat/intelligence-engine a445b0c11)",
+    "branch": "wip/intel-final (wip/intel-m12-int + wip/intel-gap3-int + wip/intel-m5-learning + wip/intel-m5-mobile-ai + wip/intel-m3-learning-v2 + wip/intel-m3-changes-b + wip/intel-m4-data + wip/intel-m4-mcp-investigate, on origin/main 2b27d173b) -> feat/intelligence-engine",
     "M1": {
       "status": "implemented_pending_full_ci",
       "done": [
@@ -581,6 +581,39 @@
       ],
       "gaps": [
         "Ingestion A/B (processEvent p50/p99 vs OFF) not re-benchmarked after the resolve-path change"
+      ]
+    },
+    "M3": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "Reachable AUTO: certification evidence pooled across services by rule signature; evidence survives edits that do not change the rule",
+        "Learning labels: implicit positives from rollback-after-incident and postmortem root cause into cause and runbook weight fits; time-based train/test split",
+        "Acceptance-drift OpsInsight per finding kind (area intelligence, opsInsightsIntelligenceEnabled default off)",
+        "Proactive anomaly: scheduled EVALUATE_METRIC_TEMPLATE lane job feeds a metric early-warning OpsInsight (never pages; default off)",
+        "SHADOW defaults: new services get one CONTENT_TEMPLATE correlation rule in SHADOW while intelligence is on",
+        "Changes: versioned label->service mapping with Backstage alias and exact-name fallback, unmapped list and one-click mapping on /changes",
+        "Changes: GitHub/GitLab deployment and Kubernetes rollout mappers with signature verification and startedAt"
+      ],
+      "gaps": [
+        "Noise-under-storm, pre-page grouping, HIGH storms, event model, service tier and scale items tracked by earlier waves; Alert partitioning remains design-only"
+      ]
+    },
+    "M4": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "list_metrics, label_values and per-service saved queries (list_metric_templates); search_logs schema/description fixed",
+        "Read-only Kubernetes connector, get_k8s_state tool and connection UI",
+        "Hybrid lexical + vector knowledge retrieval (RRF), section-aware chunking, 180-day learned-fact re-confirmation",
+        "Basic-mode dialogue state persisted encrypted in the database (10 minute TTL)",
+        "MCP long-running investigation: squire_start_investigation / squire_get_investigation, caller-scoped, encrypted, 1 h expiry, 2 per person, squireMcpEnabled + capability catalog"
+      ],
+      "gaps": ["CI/CD pipeline connector not started"]
+    },
+    "M5": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "Mobile parity: Needs attention with mobile links, create-incident suggestions, Squire on /m entity pages, postmortem/policy/status page context",
+        "On-demand AI: explain runbook failure, weekly report narrative, plain-words analytics filter on /insights"
       ]
     }
   },
