@@ -237,7 +237,6 @@
       "tier": 2,
       "acceptedActions": [
         "trigger",
-        "acknowledge",
         "resolve"
       ],
       "authentication": [
@@ -864,7 +863,6 @@
         "mode": "conditional-when-secret-configured",
         "provider": "grafana",
         "headers": [
-          "x-grafana-alerting-signature",
           "x-grafana-signature"
         ]
       },

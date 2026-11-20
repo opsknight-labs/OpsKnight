@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["AppDynamics webhook", "connect AppDynamics", "AppDynamics alerts", "AppDynamics integration"]
 verification:
   level: source
-  verified_at: 2026-11-20
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/appdynamics.ts
     - src/app/api/integrations/appdynamics/route.ts

@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Honeycomb webhook", "connect Honeycomb", "Honeycomb alerts", "Honeycomb integration"]
 verification:
   level: source
-  verified_at: 2026-11-20
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/honeycomb.ts
     - src/app/api/integrations/honeycomb/route.ts

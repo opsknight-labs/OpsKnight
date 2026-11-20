@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Icinga webhook", "connect Icinga", "Icinga alerts", "Icinga integration"]
 verification:
   level: source
-  verified_at: 2026-11-20
+  verified_at: 2026-10-21
   evidence:
     - src/lib/integrations/icinga.ts
     - src/app/api/integrations/icinga/route.ts
