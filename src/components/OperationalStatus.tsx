@@ -181,7 +181,9 @@ export default function OperationalStatus({
             currentTheme.text
           )}
         >
-          <span className="relative flex h-2 w-2 shrink-0">
+          {/* Textless dot: the ping ring scales past its 8px box by design, so the pill's
+              nowrap (meant for the label) must not treat that as clipped text. */}
+          <span className="relative flex h-2 w-2 shrink-0 whitespace-normal">
             <span
               className={cn(
                 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-60',
