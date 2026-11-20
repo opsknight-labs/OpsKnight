@@ -1,11 +1,7 @@
--- Additive only: enum values, nullable columns, a constant-default boolean and one small new table.
+-- Additive only (enum values live in 20261110015900): nullable columns, a constant-default boolean and one small new table.
 SET lock_timeout = '2s';
 SET statement_timeout = '10s';
 
-ALTER TYPE "IntelligenceFindingKind" ADD VALUE IF NOT EXISTS 'TRIAGE_URGENCY';
-ALTER TYPE "IntelligenceFindingKind" ADD VALUE IF NOT EXISTS 'TRIAGE_ASSIGNMENT';
-ALTER TYPE "IntelligenceFindingKind" ADD VALUE IF NOT EXISTS 'TRIAGE_DUPLICATE';
-ALTER TYPE "IntelligenceFindingKind" ADD VALUE IF NOT EXISTS 'TRIAGE_RESOLUTION_TIME';
 
 ALTER TABLE "ChangeEvent"
   ADD COLUMN "riskScore" DOUBLE PRECISION,
