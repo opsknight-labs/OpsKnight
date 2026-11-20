@@ -85,7 +85,7 @@ describe('change service mapping', () => {
       'upload'
     );
 
-    const record = async (change: ReturnType<typeof deploy>) =>
+    const record = async (change: Parameters<typeof recordIntegrationChange>[1]) =>
       db.changeEvent.findUniqueOrThrow({
         where: { id: (await recordIntegrationChange(integration, change)).id },
       });
@@ -100,7 +100,9 @@ describe('change service mapping', () => {
         labels: { 'app.kubernetes.io/name': 'cart-api' },
       },
     })!;
-    expect((await record({ ...deploy('x'), ...rollout, kind: 'DEPLOY' })).serviceId).toBe(cart.id);
+    expect((await record({ ...deploy('x'), ...rollout, kind: 'DEPLOY' } as never)).serviceId).toBe(
+      cart.id
+    );
     expect((await record(deploy('payments-gateway'))).serviceId).toBe(payments.id);
     expect((await record(deploy('worker', { app: search.name.toUpperCase() }))).serviceId).toBe(
       search.id

@@ -651,7 +651,7 @@ describe('observability tools inside a Squire turn', () => {
       templates: [
         {
           serviceId: service.id,
-          serviceName: 'Checkout',
+          serviceName: service.name,
           name: 'Error rate',
           query: 'rate(errors[5m])',
           connectionId: prom,

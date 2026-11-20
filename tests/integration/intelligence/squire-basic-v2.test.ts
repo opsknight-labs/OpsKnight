@@ -408,6 +408,7 @@ describe('caching and dialogue state persistence', () => {
 
   it('keeps the pending clarification in the database without history, encrypted, for ten minutes', async () => {
     const w = await world();
+    await db.aiSettings.create({ data: { id: 'default', enabled: false, squireEnabled: true } });
     const first = await collect(streamSquire(w.actor, { message: 'who owns pay', history: [] }));
     expect(first.text).toContain('Several services match');
     const [row] = await db.squireDialogueState.findMany({ where: { userId: w.responder.id } });

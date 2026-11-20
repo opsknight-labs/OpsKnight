@@ -43,8 +43,19 @@ async function switches(intelligence: boolean) {
   return { admin, settings: await getIntelligenceSettings() };
 }
 
-async function feedback(serviceId: string, actorId: string, accepted: number, total: number, ageDays: number) {
+async function feedback(
+  serviceId: string,
+  actorId: string,
+  accepted: number,
+  total: number,
+  ageDays: number
+) {
   const incident = await createTestIncident(`Incident ${ageDays}`, serviceId);
+  // Opened when the verdicts were given, so it predates the metric deviation below.
+  await db.incident.update({
+    where: { id: incident.id },
+    data: { createdAt: new Date(Date.now() - ageDays * DAY) },
+  });
   for (let i = 0; i < total; i += 1) {
     const finding = await db.intelligenceFinding.create({
       data: {
@@ -115,8 +126,11 @@ describe('intelligence-area operations insights', () => {
     await createTestIncident('Latency', service.id);
     await runOpsInsights(item(service.id, 3), on);
     expect(
-      (await db.opsInsight.findFirstOrThrow({ where: { kind: 'intelligence.metric-early-warning' } }))
-        .status
+      (
+        await db.opsInsight.findFirstOrThrow({
+          where: { kind: 'intelligence.metric-early-warning' },
+        })
+      ).status
     ).toBe('RESOLVED');
   });
 });

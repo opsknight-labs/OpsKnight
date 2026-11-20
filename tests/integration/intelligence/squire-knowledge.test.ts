@@ -249,6 +249,9 @@ describe('knowledge sync', () => {
     expect(chunks.map(chunk => chunk.sourceKind).sort()).toEqual([
       'INCIDENT_NOTE',
       'INCIDENT_NOTE',
+      // Section-aware: summary, root cause and resolution are separate chunks.
+      'POSTMORTEM',
+      'POSTMORTEM',
       'POSTMORTEM',
       'RESOLUTION_NOTE',
       'RUNBOOK_STEP',
@@ -261,9 +264,9 @@ describe('knowledge sync', () => {
       teamId: w.teamA.id,
       incidentId: w.incidentA.id,
     });
-    expect(chunks.find(chunk => chunk.postmortemId === postmortem.id)?.text).toMatch(
-      /Root cause: maxmemory too low/
-    );
+    expect(
+      chunks.filter(chunk => chunk.postmortemId === postmortem.id).map(chunk => chunk.text)
+    ).toContainEqual(expect.stringMatching(/Root cause: maxmemory too low/));
 
     // Idempotent: nothing changed, nothing rewritten (the cursors moved past every source).
     const before = await db.knowledgeChunk.findMany({ select: { id: true, updatedAt: true } });
@@ -280,12 +283,11 @@ describe('knowledge sync', () => {
     });
     const third = await syncKnowledgePass(await budget(), later());
     expect(third.written).toBe(1);
-    const updated = await db.knowledgeChunk.findFirstOrThrow({
-      where: { postmortemId: postmortem.id },
-    });
-    expect(updated.text).toMatch(/larger instance class/);
-    expect(updated.embeddingModel).toBeNull();
-    expect(await db.knowledgeChunk.count({ where: { postmortemId: postmortem.id } })).toBe(1);
+    const sections = await db.knowledgeChunk.findMany({ where: { postmortemId: postmortem.id } });
+    const updated = sections.find(chunk => /larger instance class/.test(chunk.text));
+    expect(updated?.text).toMatch(/^Resolution: Moved the cache to a larger instance class/);
+    expect(updated?.embeddingModel).toBeNull();
+    expect(sections).toHaveLength(3);
 
     // Deleting a source removes its knowledge at once (cascade); archiving a runbook on the next pass.
     await db.incidentNote.delete({ where: { id: w.noteA.id } });
@@ -517,6 +519,10 @@ describe('learned service facts', () => {
     const { admin } = await setup({ ai: true });
     const w = await world();
     const responder = await createTestUser({ role: 'RESPONDER' });
+    // Curating a service's knowledge is for the people who run it: the responder is on its team.
+    await db.teamMember.create({
+      data: { userId: responder.id, teamId: w.teamA.id, role: 'MEMBER' },
+    });
     const fact = 'Cache A failover takes about four minutes; wait before restarting pods.';
 
     // The model can only propose; the card names the service and nothing is stored yet.
