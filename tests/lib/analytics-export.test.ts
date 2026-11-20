@@ -33,6 +33,7 @@ function data(overrides: Partial<AnalyticsExportData> = {}): AnalyticsExportData
       timeZone: 'UTC',
       businessTimeZone: 'UTC',
       isClipped: false,
+      hasPrevious: true,
     },
     generatedAt: new Date('2026-01-15T00:00:00Z'),
     kpis: { current: { ...empty, incidents: 3, mttaP50: 90_000, ackSla: 66.666 }, previous: empty, openNow: 1 },

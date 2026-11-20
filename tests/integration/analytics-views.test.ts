@@ -154,22 +154,27 @@ describeIfRealDB('weekly analytics email', { timeout: 60_000 }, () => {
     const other = await testPrisma.service.create({ data: { name: 'ledger', teamId: team.id } });
     // Outside the recipient's teams: must not leak into their report.
     const hidden = await testPrisma.service.create({ data: { name: 'hidden-svc' } });
-    const incident = (serviceId: string, ageDays: number, urgency: 'HIGH' | 'LOW') => ({
-      title: 'x',
-      serviceId,
-      urgency,
-      status: 'RESOLVED' as const,
-      createdAt: new Date(now.getTime() - ageDays * DAY),
-      acknowledgedAt: new Date(now.getTime() - ageDays * DAY + 120_000),
-      resolvedAt: new Date(now.getTime() - ageDays * DAY + 3_600_000),
-    });
+    // The report covers last calendar week (Mon–Sun, recipient timezone = UTC here).
+    const lastMonday = analyticsReportWeekStart(now).getTime() - 7 * DAY;
+    const incident = (serviceId: string, dayOfWeek: number, urgency: 'HIGH' | 'LOW') => {
+      const createdAt = lastMonday + dayOfWeek * DAY + 12 * 3_600_000;
+      return {
+        title: 'x',
+        serviceId,
+        urgency,
+        status: 'RESOLVED' as const,
+        createdAt: new Date(createdAt),
+        acknowledgedAt: new Date(createdAt + 120_000),
+        resolvedAt: new Date(createdAt + 3_600_000),
+      };
+    };
     await testPrisma.incident.createMany({
       data: [
         incident(service.id, 1, 'HIGH'),
         incident(service.id, 2, 'HIGH'),
         incident(other.id, 3, 'HIGH'),
         incident(service.id, 3, 'LOW'), // filtered out by the view
-        incident(service.id, 9, 'HIGH'), // previous week
+        incident(service.id, -3, 'HIGH'), // the week before
         incident(hidden.id, 1, 'HIGH'),
       ],
     });
@@ -200,24 +205,25 @@ describeIfRealDB('weekly analytics email', { timeout: 60_000 }, () => {
 
     const context = await createAnalyticsContext(
       await actorFor(user.id),
-      weeklyReportParams(view.query),
+      weeklyReportParams(view.query, now, user.timeZone),
       user.timeZone
     );
     const kpis = await getAnalyticsSection(context, 'kpis');
     const services = await getAnalyticsSection(context, 'services');
+    const trend = await getAnalyticsSection(context, 'trend');
     expect(kpis.current.incidents).toBe(3);
     expect(kpis.previous.incidents).toBe(1);
 
     const [{ row, payload }] = await sentPayloads();
     expect(row.userId).toBe(user.id);
     expect(payload.to).toBe(user.email);
-    expect(payload.html).toContain(`3 (was 1)`);
-    expect(payload.html).toContain(
-      `${formatMetric(kpis.current.mttaP50, 'duration')} (was ${formatMetric(kpis.previous.mttaP50, 'duration')})`
-    );
-    expect(payload.html).toContain(`${services[0].name}`);
-    expect(payload.html).toContain('2 incidents (was 1)');
-    expect(payload.html).toContain('urgency=HIGH&amp;range=7d');
+    // 3 incidents vs 1: +200%, worse (fewer incidents is better).
+    expect(payload.html).toContain('▲ 200% worse');
+    expect(payload.html).toContain(formatMetric(kpis.current.mttaP50, 'duration'));
+    expect(payload.html).toContain(services[0].name);
+    expect(trend).toHaveLength(7);
+    expect(payload.html).toContain('Incidents rose to 3 from 1');
+    expect(payload.html).toMatch(/from=\d{4}-\d{2}-\d{2}&amp;to=\d{4}-\d{2}-\d{2}&amp;urgency=HIGH/);
     expect(payload.html).not.toContain('hidden-svc');
 
     // Restart in the same week: nothing new, even if lastSentAt was lost.
