@@ -294,7 +294,7 @@ export default async function MobileDashboard() {
       </section>
 
       <Link
-        href="/m/analytics"
+        href={appRoutes.analytics()}
         className="flex min-h-11 items-center justify-between rounded-xl px-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
       >
         <span className="inline-flex items-center gap-1.5">
