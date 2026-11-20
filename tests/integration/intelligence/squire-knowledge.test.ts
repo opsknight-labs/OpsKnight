@@ -1,3 +1,4 @@
+import { detectCapabilities } from '@/lib/intelligence/similarity/capabilities';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const session = vi.hoisted(() => ({ userId: '' }));
@@ -455,19 +456,22 @@ describe('knowledge search', () => {
       expect(result.coverage).toBe('SEMANTIC');
       expect(result.items[0].source.id).toBe(w.incidentB.id);
       // Hybrid: a passage that shares no word with the query is still found through its vector.
-      const vectorOnly = await searchKnowledgeForActor(await actorOf(admin.id), {
-        query: 'zebra quokka',
-        personal: true,
-      });
-      expect(vectorOnly.coverage).toBe('SEMANTIC');
-      expect(vectorOnly.items.map(item => item.source.id)).toContain(w.incidentB.id);
-      expect(vectorOnly.items.map(item => item.source.id)).not.toContain(w.incidentA.id);
-      // Vector candidates go through the same visibility checks as lexical ones.
-      const hidden = await searchKnowledgeForActor(await actorOf(w.memberA.id), {
-        query: 'zebra quokka',
-        personal: true,
-      });
-      expect(hidden.items.map(item => item.source.id)).not.toContain(w.incidentB.id);
+      // Needs pgvector; without it only lexical candidates are re-ranked in memory.
+      if ((await detectCapabilities()).vectorAvailable) {
+        const vectorOnly = await searchKnowledgeForActor(await actorOf(admin.id), {
+          query: 'zebra quokka',
+          personal: true,
+        });
+        expect(vectorOnly.coverage).toBe('SEMANTIC');
+        expect(vectorOnly.items.map(item => item.source.id)).toContain(w.incidentB.id);
+        expect(vectorOnly.items.map(item => item.source.id)).not.toContain(w.incidentA.id);
+        // Vector candidates go through the same visibility checks as lexical ones.
+        const hidden = await searchKnowledgeForActor(await actorOf(w.memberA.id), {
+          query: 'zebra quokka',
+          personal: true,
+        });
+        expect(hidden.items.map(item => item.source.id)).not.toContain(w.incidentB.id);
+      }
     } finally {
       registerEmbeddingResolver(async () => null);
     }
