@@ -620,6 +620,17 @@ async function runOnce() {
       logger.warn('[Cron] Maintenance schedule materialization failed', { error });
     }
 
+    // Weekly analytics emails: bounded per tick, idempotent per view and week.
+    try {
+      const { sendWeeklyAnalyticsReports } = await import('./analytics/weekly-report');
+      const weekly = await sendWeeklyAnalyticsReports(new Date());
+      if (weekly.sent > 0 || weekly.failed > 0) {
+        logger.info('[Cron] Weekly analytics reports processed', weekly);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Weekly analytics reports failed', { error });
+    }
+
     // Group 3: Maintenance tasks (low priority, run last)
     const { processAuthenticationAlerts } = await import('./auth-control/security-events');
     await processAuthenticationAlerts();
