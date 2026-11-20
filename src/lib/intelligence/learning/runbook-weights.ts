@@ -20,6 +20,7 @@ import {
   coordinateDescent,
   hasMinimumSupport,
   holdOutSplit,
+  IMPLICIT_LABEL_WEIGHT,
   logLoss,
   sigmoid,
 } from './bounded-fit';
@@ -41,7 +42,9 @@ import {
 
 export interface RunbookExample extends RunbookScoreFeatures {
   helpful: boolean;
-  source: 'FEEDBACK' | 'OUTCOME';
+  /** IMPLICIT: the runbook is named in the incident's postmortem; weighted below stated labels. */
+  source: 'FEEDBACK' | 'OUTCOME' | 'IMPLICIT';
+  weight?: number;
 }
 
 export interface RunbookWeightsProposal {
@@ -52,6 +55,7 @@ export interface RunbookWeightsProposal {
   /** Labels by origin, so a reviewer can see what the proposal rests on. */
   fromFeedback: number;
   fromOutcomes: number;
+  fromImplicit: number;
 }
 
 export const RUNBOOK_FIT_LIMITS = {
@@ -120,6 +124,7 @@ export function fitRunbookWeights(
     support: rows.length,
     fromFeedback: rows.filter(row => row.source === 'FEEDBACK').length,
     fromOutcomes: rows.filter(row => row.source === 'OUTCOME').length,
+    fromImplicit: rows.filter(row => row.source === 'IMPLICIT').length,
   };
 }
 
@@ -149,7 +154,7 @@ export async function loadRunbookExamples(
 ): Promise<RunbookExample[]> {
   const { lookbackDays, maxRows, statementTimeoutMs } = RUNBOOK_FIT_LIMITS;
   const resolvedWithinMinutes = (await getIntelligenceSettings(client)).runbookFixWindowMinutes;
-  const [feedback, outcomes] = await client.$transaction(async tx => {
+  const [feedback, outcomes, implicit] = await client.$transaction(async tx => {
     await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = ${statementTimeoutMs}`);
     const verdicts = await tx.$queryRaw<LabelRow[]>`
       SELECT DISTINCT ON (f."id") f."id" AS "findingId", f."incidentId", f."subjectRef" AS "runbookId",
@@ -190,15 +195,31 @@ export async function loadRunbookExamples(
           AND x."subjectRef" = d."runbookId" AND x."createdAt" <= d."createdAt"
         ORDER BY x."createdAt" DESC LIMIT 1
       ) f ON true`;
-    return [verdicts, observed] as const;
+    // Implicit: a recommended runbook the postmortem names in its resolution or root cause.
+    const named = await tx.$queryRaw<LabelRow[]>`
+      SELECT DISTINCT ON (f."id") f."id" AS "findingId", f."incidentId", f."subjectRef" AS "runbookId",
+             f."evidence", true AS helpful
+      FROM "Postmortem" p
+      JOIN "IntelligenceFinding" f ON f."incidentId" = p."incidentId" AND f."kind" = 'RUNBOOK_RECOMMENDATION'
+      JOIN "Runbook" rb ON rb."id" = f."subjectRef"
+      WHERE p."updatedAt" >= now() - make_interval(days => ${lookbackDays}::int)
+        AND length(rb."name") >= 6
+        AND strpos(lower(coalesce(p."resolution", '') || ' ' || coalesce(p."rootCause", '')), lower(rb."name")) > 0
+      ORDER BY f."id", f."createdAt" DESC
+      LIMIT ${maxRows}`;
+    return [verdicts, observed, named] as const;
   });
-  return mergeRunbookLabels(feedback, outcomes);
+  return mergeRunbookLabels(feedback, outcomes, implicit);
 }
 
-/** One label per (incident, runbook); an observed outcome replaces a verdict on the same recommendation. */
+/**
+ * One label per (incident, runbook). Precedence: observed outcome over a stated verdict over an implicit
+ * postmortem mention.
+ */
 export function mergeRunbookLabels(
   feedback: readonly LabelRow[],
-  outcomes: readonly LabelRow[]
+  outcomes: readonly LabelRow[],
+  implicit: readonly LabelRow[] = []
 ): RunbookExample[] {
   const byKey = new Map<string, RunbookExample & { findingId: string }>();
   const add = (row: LabelRow, source: RunbookExample['source']) => {
@@ -215,8 +236,10 @@ export function mergeRunbookLabels(
       ...(parsed.data.sameProblem ? { sameProblem: parsed.data.sameProblem } : {}),
       helpful: row.helpful,
       source,
+      ...(source === 'IMPLICIT' ? { weight: IMPLICIT_LABEL_WEIGHT } : {}),
     });
   };
+  for (const row of implicit) add(row, 'IMPLICIT');
   for (const row of feedback) add(row, 'FEEDBACK');
   for (const row of outcomes) add(row, 'OUTCOME');
   return [...byKey.entries()]

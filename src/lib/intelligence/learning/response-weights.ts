@@ -18,6 +18,7 @@ import {
   coordinateDescent,
   hasMinimumSupport,
   holdOutSplit,
+  IMPLICIT_LABEL_WEIGHT,
   logLoss,
   sigmoid,
 } from './bounded-fit';
@@ -38,6 +39,9 @@ export interface CauseExample {
   proximity: number;
   chance: number;
   helpful: boolean;
+  /** Inferred from a rollback or a postmortem, not stated by a responder; carries a lower weight. */
+  implicit?: boolean;
+  weight?: number;
 }
 
 export interface ResponseWeightsProposal {
@@ -45,6 +49,8 @@ export interface ResponseWeightsProposal {
   heldOutLoss: number;
   baselineLoss: number;
   support: number;
+  /** Of `support`, labels inferred from rollbacks and postmortems. */
+  fromImplicit: number;
 }
 
 function predict(example: CauseExample, weights: ResponseWeights): number {
@@ -101,6 +107,7 @@ export function fitResponseWeights(
         heldOutLoss,
         baselineLoss,
         support: rows.length,
+        fromImplicit: rows.filter(row => row.implicit).length,
       }
     : null;
 }
@@ -113,16 +120,55 @@ const evidenceSchema = z.object({
   components: z.object({ proximity: z.number() }),
 });
 
+type CauseLabelRow = {
+  id: string;
+  kind: string;
+  evidence: Prisma.JsonValue;
+  helpful: boolean;
+  implicit?: boolean;
+};
+
+/**
+ * Implicit positive labels for change findings that carry no responder verdict: the suspected change was
+ * the latest of its kind on its service before the incident and was rolled back within a day, or the
+ * incident's postmortem root cause names the change (its version or summary). Never a negative label.
+ */
+export async function loadImplicitCauseLabels(client: typeof prisma = prisma) {
+  return client.$queryRaw<CauseLabelRow[]>`
+    SELECT f."id", f."kind", f."evidence", true AS helpful, true AS implicit
+    FROM "IntelligenceFinding" f
+    JOIN "Incident" i ON i."id" = f."incidentId"
+    JOIN "ChangeEvent" c ON c."id" = f."subjectRef"
+    WHERE f."kind" = 'CHANGE_CORRELATION' AND f."createdAt" >= now() - interval '90 days'
+      AND NOT EXISTS (
+        SELECT 1 FROM "IntelligenceFeedback" fb WHERE fb."subjectType" = 'FINDING' AND fb."subjectId" = f."id")
+      AND (
+        (c."occurredAt" <= i."createdAt"
+          AND NOT EXISTS (
+            SELECT 1 FROM "ChangeEvent" later WHERE later."serviceId" = c."serviceId" AND later."kind" = c."kind"
+              AND later."occurredAt" > c."occurredAt" AND later."occurredAt" <= i."createdAt")
+          AND EXISTS (
+            SELECT 1 FROM "ChangeEvent" r WHERE r."serviceId" = c."serviceId" AND r."kind" = c."kind"
+              AND r."occurredAt" > i."createdAt" AND r."occurredAt" <= i."createdAt" + interval '24 hours'
+              AND (lower(r."labels"->>'rollback') = 'true'
+                OR lower(r."labels"->>'action') IN ('rollback', 'revert')
+                OR r."summary" ~* '^(rollback|roll back|revert)')))
+        OR EXISTS (
+          SELECT 1 FROM "Postmortem" p WHERE p."incidentId" = i."id" AND p."rootCause" IS NOT NULL
+            AND ((length(c."version") >= 3 AND strpos(lower(p."rootCause"), lower(c."version")) > 0)
+              OR (length(c."summary") >= 8 AND strpos(lower(p."rootCause"), lower(c."summary")) > 0))))
+    ORDER BY f."id" LIMIT 2000`;
+}
+
 export async function suggestResponseWeights() {
-  const rows = await prisma.$queryRaw<
-    Array<{ id: string; kind: string; evidence: Prisma.JsonValue; helpful: boolean }>
-  >`
+  const explicit = await prisma.$queryRaw<CauseLabelRow[]>`
     SELECT DISTINCT ON (f."id") f."id", f."kind", f."evidence", fb."verdict" IN ('HELPFUL', 'CORRECT') AS helpful
     FROM "IntelligenceFeedback" fb JOIN "IntelligenceFinding" f ON f."id" = fb."subjectId"
     WHERE fb."subjectType" = 'FINDING' AND f."kind" IN ('CHANGE_CORRELATION', 'PROBABLE_CAUSE')
       AND fb."verdict" IN ('HELPFUL', 'NOT_HELPFUL', 'CORRECT', 'INCORRECT')
       AND fb."createdAt" >= now() - interval '90 days'
     ORDER BY f."id", fb."createdAt" DESC LIMIT 2000`;
+  const rows = [...explicit, ...(await loadImplicitCauseLabels())];
   const examples: CauseExample[] = [];
   for (const row of rows) {
     const parsed = evidenceSchema.safeParse(row.evidence);
@@ -135,6 +181,7 @@ export async function suggestResponseWeights() {
       proximity: parsed.data.components.proximity,
       chance: parsed.data.chanceFactor ?? 1,
       helpful: row.helpful,
+      ...(row.implicit ? { implicit: true, weight: IMPLICIT_LABEL_WEIGHT } : {}),
     });
   }
   const proposal = fitResponseWeights(examples);
@@ -175,7 +222,7 @@ export async function adoptResponseWeights(input: unknown, actor: IntelligenceAc
         ...current.definition,
         response: { ...current.definition.response, weights: suggestion.weights },
       },
-      reason: `Reviewed cause-ranking weights from ${suggestion.support} labelled causes; held-out loss ${suggestion.heldOutLoss.toFixed(4)} vs ${suggestion.baselineLoss.toFixed(4)}.`,
+      reason: `Reviewed cause-ranking weights from ${suggestion.support} labelled causes (${suggestion.fromImplicit} implicit); held-out loss ${suggestion.heldOutLoss.toFixed(4)} vs ${suggestion.baselineLoss.toFixed(4)}.`,
     },
     actor
   );
