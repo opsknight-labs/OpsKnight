@@ -36,8 +36,10 @@ const withPWA = withPWAInit({
         options: { cacheName: 'no-cache-apis' },
       },
       {
+        // API URLs (e.g. the CSV download link) never go through the worker, even as navigations.
         urlPattern: ({ request, url }: { request: Request; url: URL }) =>
-          request.mode === 'navigate' ||
+          !url.pathname.startsWith('/api/') &&
+          (request.mode === 'navigate' ||
           request.destination === 'document' ||
           url.pathname === '/' ||
           url.pathname === '/m' ||
@@ -60,7 +62,7 @@ const withPWA = withPWAInit({
           url.pathname.startsWith('/status') ||
           url.pathname.startsWith('/system-logs') ||
           url.pathname.startsWith('/help') ||
-          url.pathname.startsWith('/shortcuts'),
+          url.pathname.startsWith('/shortcuts')),
         handler: 'NetworkOnly',
         options: { cacheName: 'no-cache-pages' },
       },
