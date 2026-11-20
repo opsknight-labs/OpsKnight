@@ -3,9 +3,11 @@ import { authenticationDashboard } from '@/lib/auth-control/dashboard';
 import { authenticationOrigin } from '@/lib/auth-control/origin';
 import AuthenticationConsole from '@/components/settings/AuthenticationConsole';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import SettingsPageHeader from '@/components/settings/SettingsPageHeader';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { ArrowLeft, LifeBuoy } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { cn } from '@/lib/utils';
 import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
@@ -15,19 +17,24 @@ export default async function EmergencyAdministrationPage() {
   const origin = await authenticationOrigin();
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Link
-          href="/settings/system?section=sso"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          <span>Back to SSO &amp; Authentication</span>
-        </Link>
-      </div>
       <SettingsPageHeader
         title="Emergency Access"
+        icon={LifeBuoy}
         description="Manage independent recovery passwords and hardware keys, verify custody, and rehearse authentication recovery."
-        badge={<Badge variant="neutral">Independent recovery</Badge>}
+        badges={<span className={pageHeaderBadgeClass}>Independent recovery</span>}
+        secondaryActions={
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className={cn('gap-2', pageHeaderActionClass)}
+          >
+            <Link href="/settings/system?section=sso">
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              SSO &amp; authentication
+            </Link>
+          </Button>
+        }
       />
       <AuthenticationConsole
         initialData={await authenticationDashboard(actor, 'emergency')}

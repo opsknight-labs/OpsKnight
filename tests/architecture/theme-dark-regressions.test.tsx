@@ -5,7 +5,8 @@ import PublicStatusLayout from '@/app/(public)/status/layout';
 import { FORCE_LIGHT_THEME_SCRIPT } from '@/lib/theme-preference';
 import { STATUS_PAGE_PUBLIC_CSS, STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
 
-const indexCss = readFileSync('src/styles/index.css', 'utf8');
+// Theme tokens live in one source (tokens.css).
+const indexCss = readFileSync('src/styles/foundation/tokens.css', 'utf8');
 const baseCss = readFileSync('src/styles/foundation/base.css', 'utf8');
 
 /** Body of the first `{ ... }` block that follows `selector` (no nested braces inside). */
@@ -50,7 +51,7 @@ function contrast(block: string, fg: string, bg: string): number {
 
 describe('destructive token contrast (WCAG AA, 4.5:1)', () => {
   const light = blockAfter(indexCss, ':root {');
-  const dark = blockAfter(indexCss, ".dark,\n   [data-theme='dark'] {");
+  const dark = blockAfter(indexCss, ".dark,\n[data-theme='dark'] {");
 
   it('sanity-checks the contrast maths against known pairs', () => {
     expect(contrast('--ui-a: 0 0% 0%; --ui-b: 0 0% 100%;', 'a', 'b')).toBeCloseTo(21, 5);

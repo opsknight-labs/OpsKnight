@@ -1,6 +1,10 @@
 'use client';
 
-import { useActionState, useId } from 'react';
+import { useActionState, useEffect, useId, useRef, useState } from 'react';
+import { Archive } from 'lucide-react';
+import { notify } from '@/lib/toast';
+import { Button } from '@/components/ui/shadcn/button';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { saveObjective } from '@/app/(app)/settings/service-objectives/actions';
 import { SearchableRunbookSelect } from '@/components/runbooks/SearchableRunbookSelect';
 import { SERVICE_OBJECTIVE_CONTRACT } from '@/lib/slo/contract';
@@ -24,9 +28,19 @@ export function ServiceObjectiveForm({
 }) {
   const [state, action, pending] = useActionState(saveObjective, { message: '', ok: false });
   const prefix = useId();
-  const fieldClass = 'w-full rounded-md border border-border bg-background p-2';
+  const formRef = useRef<HTMLFormElement>(null);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const lastState = useRef(state);
+  useEffect(() => {
+    if (state === lastState.current) return;
+    lastState.current = state;
+    if (state.ok && state.message) notify.success(state.message);
+  }, [state]);
+  const fieldClass =
+    'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+  const labelClass = 'block text-sm font-medium text-foreground';
   return (
-    <form action={action} className="space-y-3">
+    <form ref={formRef} action={action} className="space-y-3">
       <input
         type="hidden"
         name="operation"
@@ -47,7 +61,7 @@ export function ServiceObjectiveForm({
                 name="serviceId"
                 label="Service (required for uptime and availability)"
               />
-              <label className="block" htmlFor={`${prefix}-metric`}>
+              <label className={labelClass} htmlFor={`${prefix}-metric`}>
                 Measurement
               </label>
               <select className={fieldClass} id={`${prefix}-metric`} name="metricType">
@@ -59,7 +73,7 @@ export function ServiceObjectiveForm({
               </select>
             </>
           )}
-          <label className="block" htmlFor={`${prefix}-name`}>
+          <label className={labelClass} htmlFor={`${prefix}-name`}>
             Name
           </label>
           <input
@@ -70,7 +84,7 @@ export function ServiceObjectiveForm({
             maxLength={100}
             defaultValue={objective?.name}
           />
-          <label className="block" htmlFor={`${prefix}-description`}>
+          <label className={labelClass} htmlFor={`${prefix}-description`}>
             Description
           </label>
           <textarea
@@ -80,7 +94,7 @@ export function ServiceObjectiveForm({
             maxLength={500}
             defaultValue={objective?.description ?? ''}
           />
-          <label className="block" htmlFor={`${prefix}-target`}>
+          <label className={labelClass} htmlFor={`${prefix}-target`}>
             Target (percent for uptime, minutes for MTTA/MTTR)
           </label>
           <input
@@ -93,7 +107,7 @@ export function ServiceObjectiveForm({
             required
             defaultValue={objective?.target ?? 99.9}
           />
-          <label className="block" htmlFor={`${prefix}-comparator`}>
+          <label className={labelClass} htmlFor={`${prefix}-comparator`}>
             Comparison
           </label>
           <select
@@ -105,7 +119,7 @@ export function ServiceObjectiveForm({
             <option value="GREATER_THAN_OR_EQUAL">At least</option>
             <option value="LESS_THAN_OR_EQUAL">At most</option>
           </select>
-          <label className="block" htmlFor={`${prefix}-window`}>
+          <label className={labelClass} htmlFor={`${prefix}-window`}>
             Rolling window
           </label>
           <select
@@ -120,7 +134,7 @@ export function ServiceObjectiveForm({
               </option>
             ))}
           </select>
-          <label className="block" htmlFor={`${prefix}-days`}>
+          <label className={labelClass} htmlFor={`${prefix}-days`}>
             Days (for ROLLING DAYS only)
           </label>
           <input
@@ -135,20 +149,38 @@ export function ServiceObjectiveForm({
           />
         </fieldset>
       )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md border border-border px-4 py-2 disabled:opacity-50"
-      >
-        {pending
-          ? 'Saving…'
-          : archive
-            ? 'Archive objective'
-            : objective
-              ? 'Save new version'
-              : 'Create objective'}
-      </button>
-      {state.message && <p role={state.ok ? 'status' : 'alert'}>{state.message}</p>}
+      {archive ? (
+        <>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            loading={pending}
+            className="gap-2"
+            onClick={() => setConfirmArchive(true)}
+          >
+            <Archive className="h-4 w-4" aria-hidden="true" />
+            Archive objective
+          </Button>
+          <DeleteConfirmDialog
+            open={confirmArchive}
+            onOpenChange={setConfirmArchive}
+            title={`Archive "${objective?.name ?? 'objective'}"?`}
+            description="The objective stops being evaluated and disappears from this list. Earlier versions and measurements stay available through the API."
+            confirmText="Archive objective"
+            onConfirm={() => formRef.current?.requestSubmit()}
+          />
+        </>
+      ) : (
+        <Button type="submit" size="sm" loading={pending}>
+          {objective ? 'Save new version' : 'Create objective'}
+        </Button>
+      )}
+      {state.message && !state.ok && (
+        <p role="alert" className="text-xs font-medium text-destructive">
+          {state.message}
+        </p>
+      )}
     </form>
   );
 }

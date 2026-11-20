@@ -9,11 +9,11 @@ const pagePath = path.resolve(__dirname, '../../src/app/(app)/settings/system/pa
 const tabsPath = path.resolve(__dirname, '../../src/components/settings/SystemSettingsTabs.tsx');
 
 describe('system settings redesign', () => {
-  it('uses DetailHeroBanner with stat capsules and env badge', () => {
+  it('uses the shared settings page header with stat capsules and env badge', () => {
     const page = readFileSync(pagePath, 'utf8');
 
-    // Centralized hero banner
-    expect(page).toContain('DetailHeroBanner');
+    // Shared settings page header
+    expect(page).toContain('SettingsPageHeader');
     expect(page).toContain('statsPlacement="bottom"');
 
     // Stat capsules — maps 1-to-1 to the 4 system settings tabs
@@ -23,8 +23,8 @@ describe('system settings redesign', () => {
     expect(page).toContain('Environment');
 
     // Encryption badge
-    expect(page).toContain('Encryption Key Set');
-    expect(page).toContain('Encryption Key Missing');
+    expect(page).toContain('Encryption key set');
+    expect(page).toContain('Encryption key missing');
   });
 
   it('uses SystemSettingsTabs (DetailTabs) for section navigation', () => {

@@ -10,8 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import SearchFilterBar from '@/components/ui/SearchFilterBar';
-import LivePulseBadge from '@/components/ui/LivePulseBadge';
+import { FilterBar, FilterField } from '@/components/patterns';
 import { exportToCsv } from '@/lib/export-csv';
 import { Download } from 'lucide-react';
 import { AUDIT_ENTITY_TYPES } from '@/lib/audit-filters';
@@ -94,59 +93,60 @@ export default function AuditFilters({
   };
 
   return (
-    <SearchFilterBar
-      searchValue={currentSearch}
-      onSearchChange={val => updateParam('search', val)}
-      searchPlaceholder="Search actor, action, or entity ID..."
-      searchDebounceMs={300}
-      hasActiveFilters={hasActiveFilters}
-      onResetFilters={handleReset}
+    <FilterBar
+      search={{
+        value: currentSearch,
+        onChange: val => updateParam('search', val),
+        placeholder: 'Search actor, action or entity ID…',
+        label: 'Search audit log',
+        debounceMs: 300,
+      }}
+      hasActiveFilters={Boolean(hasActiveFilters)}
+      onClearAll={handleReset}
       filters={
         <>
-          <Select value={currentVia} onValueChange={val => updateParam('via', val)}>
-            <SelectTrigger
-              className="h-9 w-[160px] bg-ink-50/60 text-xs"
-              aria-label="Filter by who made the change"
+          <FilterField label="Source" htmlFor="audit-filter-source">
+            <Select value={currentVia} onValueChange={val => updateParam('via', val)}>
+              <SelectTrigger id="audit-filter-source" className="h-9 w-[170px] text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All sources</SelectItem>
+                <SelectItem value="assistant">AI assistants</SelectItem>
+              </SelectContent>
+            </Select>
+          </FilterField>
+          <FilterField label="Entity type" htmlFor="audit-filter-entity">
+            <Select
+              value={currentEntityType || 'ALL'}
+              onValueChange={val => updateParam('entityType', val)}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All sources</SelectItem>
-              <SelectItem value="assistant">AI assistants</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={currentEntityType || 'ALL'}
-            onValueChange={val => updateParam('entityType', val)}
-          >
-            <SelectTrigger className="h-9 w-[160px] bg-ink-50/60 text-xs">
-              <SelectValue placeholder="All Entity Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Entity Types</SelectItem>
-              {AUDIT_ENTITY_TYPES.map(type => (
-                <SelectItem key={type} value={type}>
-                  {type.replace(/_/g, ' ')}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <SelectTrigger id="audit-filter-entity" className="h-9 w-[190px] text-sm">
+                <SelectValue placeholder="All entity types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All entity types</SelectItem>
+                {AUDIT_ENTITY_TYPES.map(type => (
+                  <SelectItem key={type} value={type}>
+                    {type.replace(/_/g, ' ')}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
         </>
       }
       actions={
-        <div className="flex items-center gap-2">
-          <LivePulseBadge isLive={true} label="Audit Active" />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportCsv}
-            disabled={logsData.length === 0}
-            className="h-9 gap-1.5 text-xs shadow-sm hover:bg-ink-100"
-          >
-            <Download className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>Export CSV</span>
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportCsv}
+          disabled={logsData.length === 0}
+          className="h-9 gap-1.5"
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+          Export page as CSV
+        </Button>
       }
     />
   );

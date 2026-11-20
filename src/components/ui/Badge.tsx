@@ -1,6 +1,6 @@
-'use client';
-
-import { ReactNode, memo, useMemo } from 'react';
+import { memo, type CSSProperties, type ReactNode } from 'react';
+import { badgeVariants } from './shadcn/badge';
+import { cn } from '@/lib/utils';
 
 type BadgeVariant = 'default' | 'primary' | 'success' | 'warning' | 'error' | 'danger' | 'info';
 type BadgeSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -11,11 +11,43 @@ interface BadgeProps {
   dot?: boolean;
   children: ReactNode;
   className?: string;
-  style?: React.CSSProperties;
+  style?: CSSProperties;
+}
+
+function variantClass(variant: BadgeVariant): string {
+  switch (variant) {
+    case 'primary':
+      return 'bg-primary text-primary-foreground';
+    case 'success':
+      return 'bg-emerald-100 text-status-ok-deep dark:bg-status-ok/20 dark:text-emerald-300';
+    case 'warning':
+      return 'bg-amber-100 text-amber-800 dark:bg-status-elevated/20 dark:text-amber-300';
+    case 'error':
+    case 'danger':
+      return 'bg-rose-100 text-status-critical-border dark:bg-status-critical/20 dark:text-rose-300';
+    case 'info':
+      return 'bg-blue-100 text-status-info-deep dark:bg-status-info/20 dark:text-blue-300';
+    default:
+      return 'bg-ink-200 text-ink-700';
+  }
+}
+
+function sizeClass(size: BadgeSize): string {
+  switch (size) {
+    case 'xs':
+      return 'h-4 px-1.5 text-2xs';
+    case 'sm':
+      return 'h-5 px-2 text-xs';
+    case 'lg':
+      return 'h-7 px-4 text-base';
+    default:
+      return 'h-6 px-3 text-sm';
+  }
 }
 
 /**
- * Badge component for labels and status indicators
+ * Compatibility wrapper over the canonical shadcn badge recipe
+ * (`@/components/ui/shadcn/badge`). Renders a `span`, so it is valid inside text.
  *
  * @example
  * <Badge variant="success" size="md" dot>Active</Badge>
@@ -25,108 +57,26 @@ function Badge({
   size = 'md',
   dot = false,
   children,
-  className = '',
-  style: customStyle = {},
+  className,
+  style,
 }: BadgeProps) {
-  // Memoize styles to prevent recreation on every render
-  const baseStyles: React.CSSProperties = useMemo(
-    () => ({
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 'var(--spacing-1)',
-      borderRadius: 'var(--radius-full)',
-      fontWeight: 'var(--font-weight-medium)',
-      whiteSpace: 'nowrap',
-    }),
-    []
-  );
-
-  const sizeStyles: Record<BadgeSize, React.CSSProperties> = useMemo(
-    () => ({
-      xs: {
-        padding: '2px 6px',
-        fontSize: '10px',
-        height: '16px',
-      },
-      sm: {
-        padding: 'var(--spacing-1) var(--spacing-2)',
-        fontSize: 'var(--font-size-xs)',
-        height: '18px',
-      },
-      md: {
-        padding: 'var(--spacing-1) var(--spacing-3)',
-        fontSize: 'var(--font-size-sm)',
-        height: '22px',
-      },
-      lg: {
-        padding: 'var(--spacing-2) var(--spacing-4)',
-        fontSize: 'var(--font-size-base)',
-        height: '26px',
-      },
-    }),
-    []
-  );
-
-  const variantStyles: Record<BadgeVariant, React.CSSProperties> = useMemo(
-    () => ({
-      default: {
-        background: 'var(--badge-neutral-bg)',
-        color: 'var(--badge-neutral-text)',
-      },
-      primary: {
-        background: 'var(--primary-color)',
-        color: 'var(--text-inverse)',
-      },
-      success: {
-        background: 'var(--badge-success-bg)',
-        color: 'var(--badge-success-text)',
-      },
-      warning: {
-        background: 'var(--badge-warning-bg)',
-        color: 'var(--badge-warning-text)',
-      },
-      error: {
-        background: 'var(--badge-error-bg)',
-        color: 'var(--badge-error-text)',
-      },
-      danger: {
-        background: 'var(--badge-error-bg)',
-        color: 'var(--badge-error-text)',
-      },
-      info: {
-        background: 'var(--badge-info-bg)',
-        color: 'var(--badge-info-text)',
-      },
-    }),
-    []
-  );
-
-  const dotStyles: React.CSSProperties = useMemo(
-    () => ({
-      width: '6px',
-      height: '6px',
-      borderRadius: 'var(--radius-full)',
-      background: 'currentColor',
-    }),
-    []
-  );
-
   return (
     <span
       data-badge="true"
-      className={`ui-badge ui-badge-${variant} ui-badge-${size} ${className}`}
-      style={{
-        ...baseStyles,
-        ...sizeStyles[size],
-        ...variantStyles[variant],
-        ...customStyle,
-      }}
+      className={cn(
+        badgeVariants({ variant: 'outline' }),
+        'ui-badge gap-1 whitespace-nowrap rounded-full border-transparent py-0 font-medium',
+        `ui-badge-${variant} ui-badge-${size}`,
+        sizeClass(size),
+        variantClass(variant),
+        className
+      )}
+      style={style}
     >
-      {dot && <span style={dotStyles} />}
+      {dot && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />}
       {children}
     </span>
   );
 }
 
-// Memoize Badge to prevent unnecessary re-renders (frequently used component)
 export default memo(Badge);

@@ -11,8 +11,7 @@ import ApiExplorerPanel, { type ApiEndpointDoc } from '@/components/settings/Api
 import ApiActivityPanel, { type ApiAuditLogItem } from '@/components/settings/ApiActivityPanel';
 import ApiKeysWorkspaceTabs from '@/components/settings/ApiKeysWorkspaceTabs';
 import { normalizeWorkspaceTab } from '@/lib/api-keys-workspace';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Badge } from '@/components/ui/shadcn/badge';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import {
   Card,
   CardHeader,
@@ -441,32 +440,11 @@ export default async function ApiKeysSettingsPage({
 
   return (
     <div className="space-y-6">
-      {/* Centralized Glassmorphic Hero Banner */}
-      <DetailHeroBanner
-        tag="Developer & Programmatic Access Workspace"
+      <SettingsPageHeader
+        eyebrow="Developer & Programmatic Access"
         title="Developer & API Access"
-        subtitle={`Manage personal API keys, machine service accounts, inspect all ${endpointCount} v2 REST endpoints, and monitor API gateway activity.`}
-        icon={
-          <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
-            <Key className="h-8 w-8" />
-          </div>
-        }
-        badges={
-          <>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-[10px] font-bold uppercase tracking-wider"
-            >
-              REST API v2
-            </Badge>
-            <Badge
-              variant="outline"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 text-xs"
-            >
-              {endpointCount} Endpoints Live
-            </Badge>
-          </>
-        }
+        description={`Manage personal API keys, machine service accounts, inspect all ${endpointCount} v2 REST endpoints, and monitor API gateway activity.`}
+        icon={Key}
         stats={
           isAdmin
             ? [

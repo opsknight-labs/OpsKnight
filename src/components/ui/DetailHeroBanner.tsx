@@ -24,6 +24,8 @@ export type DetailBreadcrumb = {
 
 export type DetailHeroBannerProps = {
   breadcrumb?: DetailBreadcrumb;
+  /** Custom breadcrumb trail rendered above the banner (e.g. `<Breadcrumbs>`); wins over `breadcrumb`. */
+  breadcrumbSlot?: ReactNode;
   tag?: string;
   title: string;
   subtitle?: ReactNode;
@@ -39,6 +41,7 @@ export type DetailHeroBannerProps = {
 
 export default function DetailHeroBanner({
   breadcrumb,
+  breadcrumbSlot,
   tag,
   title,
   subtitle,
@@ -55,7 +58,8 @@ export default function DetailHeroBanner({
   return (
     <header className={cn('space-y-4', className)}>
       {/* Breadcrumb Trail */}
-      {breadcrumb && (
+      {breadcrumbSlot}
+      {!breadcrumbSlot && breadcrumb && (
         <Link
           href={breadcrumb.href}
           className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
@@ -116,7 +120,13 @@ export default function DetailHeroBanner({
               )}
             >
               {statsPlacement !== 'bottom' && stats.length > 0 && (
-                <div className="overflow-x-auto pb-1 scrollbar-none w-full sm:w-auto">
+                <div
+                  // Scrolls sideways on phones, so keyboard users need to be able to focus it.
+                  role="region"
+                  aria-label={`${title} summary`}
+                  tabIndex={0}
+                  className="overflow-x-auto pb-1 scrollbar-none w-full sm:w-auto rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                >
                   <div
                     className={cn(
                       'flex sm:grid gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 backdrop-blur-xs shadow-xs',

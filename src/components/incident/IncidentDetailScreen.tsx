@@ -6,6 +6,7 @@ import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health'
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import { CAPABILITIES } from '@/lib/authorization';
 import Link from 'next/link';
+import ListReturnLink from '@/components/layout/ListReturnLink';
 import { notFound } from 'next/navigation';
 import {
   assertCanViewIncident,
@@ -48,6 +49,7 @@ import {
 } from '@/components/incident/detail/actions';
 import { projectIncidentSlaState } from '@/lib/incident-sla/state';
 import { Badge } from '@/components/ui/shadcn/badge';
+import StatusBadge from '@/components/patterns/StatusBadge';
 import CopyButton from '@/components/common/CopyButton';
 import { getAppUrl } from '@/lib/app-url';
 import { redactNotificationError } from '@/lib/notification-operations';
@@ -418,13 +420,13 @@ export default async function IncidentDetailScreen({
       {presentation === 'mobile' ? (
         <section className="rounded-xl border border-border bg-card p-3.5 text-card-foreground shadow-none">
           <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-border/70 pb-2">
-            <Link
+            <ListReturnLink
               href={backHref}
               className="inline-flex min-h-8 items-center gap-1.5 rounded-lg text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>{backLabel}</span>
-            </Link>
+            </ListReturnLink>
             <div className="flex shrink-0 items-center gap-1">
               <CopyButton text={id} label="ID" className="h-7 px-2 text-[10px]" />
               <CopyButton
@@ -477,13 +479,13 @@ export default async function IncidentDetailScreen({
           <div className={`h-1 w-full bg-gradient-to-r ${statusGradient}`} />
           <div className="p-3.5 sm:p-4.5">
             <div className="mb-2.5 flex min-w-0 items-center justify-between gap-3">
-              <Link
+              <ListReturnLink
                 href={backHref}
                 className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>{backLabel}</span>
-              </Link>
+              </ListReturnLink>
               <div className="flex min-w-0 items-center gap-1.5">
                 <Badge
                   variant="outline"
@@ -520,11 +522,7 @@ export default async function IncidentDetailScreen({
                   <h1 className="min-w-0 break-words text-base font-bold leading-snug tracking-tight text-foreground sm:text-xl">
                     {incident.title}
                   </h1>
-                  <Badge
-                    className={`shrink-0 border-0 bg-gradient-to-r text-[11px] font-bold text-white shadow-2xs ${statusGradient}`}
-                  >
-                    {incident.status}
-                  </Badge>
+                  <StatusBadge status={incident.status} live={incident.status === 'OPEN'} />
                 </div>
                 <IncidentSLABadges sla={incidentSla} />
               </div>

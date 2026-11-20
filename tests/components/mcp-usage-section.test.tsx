@@ -3,8 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import McpUsageSection from '@/components/settings/mcp/sections/McpUsageSection';
 import McpPolicySection from '@/components/settings/mcp/sections/McpPolicySection';
 import type { McpUsage } from '@/app/(app)/settings/integrations/mcp/usage';
+import { notify } from '@/lib/toast';
 
-vi.mock('@/lib/toast', () => ({ notify: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('@/lib/toast', () => ({ notify: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 afterEach(() => cleanup());
 
 const usage = (overrides: Partial<McpUsage> = {}): McpUsage => ({
@@ -233,7 +234,10 @@ describe('Usage tab', () => {
       expect(exportAction).toHaveBeenCalledWith({ window: '24h', q: 'oncall', format: 'csv' })
     );
     await waitFor(() =>
-      expect(screen.getByRole('status').textContent).toMatch(/newest 10,000 rows/)
+      expect(notify.warning).toHaveBeenCalledWith(
+        expect.stringMatching(/newest 10,000 rows/),
+        expect.objectContaining({ description: expect.stringMatching(/Narrow the window/) })
+      )
     );
   });
 });
