@@ -36,7 +36,7 @@ test('captures current desktop product surfaces', async ({ page }) => {
   await capture(page, 'incident-detail');
 
   await page.goto('/analytics');
-  await expect(page.getByText('Analytics & Insights', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Analytics' })).toBeVisible();
   await capture(page, 'analytics-overview');
 
   await page.goto('/schedules');

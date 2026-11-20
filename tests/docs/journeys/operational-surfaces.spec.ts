@@ -61,8 +61,8 @@ test.describe.serial('operational documentation surfaces', () => {
     await captureEvidence(page, testInfo, 'response', 'action-items');
 
     await page.goto('/analytics');
-    await expect(page.getByText(/Incidents \(\d+d\)/).first()).toBeVisible();
-    await expect(page.getByText(/Active Incidents · Current/).first()).toBeVisible();
+    await expect(page.getByText('Incidents', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Open now', { exact: true }).first()).toBeVisible();
     await captureEvidence(page, testInfo, 'analytics', 'overview');
 
     await page.goto('/reports');
