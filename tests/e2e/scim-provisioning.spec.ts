@@ -87,6 +87,16 @@ test('SCIM administrator provisions, reviews bindings, rotates credentials and d
     role: 'RESPONDER',
     roleSource: 'SCIM',
   });
+  // Return to User before the independent team-grant checks below: Responders
+  // already have broader team visibility, so team detachment alone cannot deny it.
+  await section.getByLabel('OpsKnight system role', { exact: true }).selectOption('');
+  await section.getByRole('button', { name: 'Preview role mapping', exact: true }).click();
+  await section.getByRole('button', { name: 'Apply role mapping', exact: true }).click();
+  await expect(section.getByText('Role mapping saved. 1 accounts updated.')).toBeVisible();
+  expect(await db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({
+    role: 'USER',
+    roleSource: 'SCIM',
+  });
   await section.getByRole('button', { name: 'Review team binding', exact: true }).click();
   await section
     .getByLabel('Find an operational team', { exact: true })
