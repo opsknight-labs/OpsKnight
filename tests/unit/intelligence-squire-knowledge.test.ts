@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  blendKnowledgeScore,
   buildChunks,
   chunkKnowledgeText,
   cleanKnowledgeText,
@@ -9,6 +8,7 @@ import {
   knowledgeTsQuery,
   postmortemKnowledgeBody,
   readRunbookSteps,
+  reciprocalRankFusion,
   runbookStepChunks,
   validateServiceFact,
 } from '@/lib/intelligence/memory/contract';
@@ -43,6 +43,26 @@ describe('knowledge chunking', () => {
       'x'.repeat(50),
     ]);
     expect(chunkKnowledgeText('   ')).toEqual([]);
+  });
+
+  it('splits at section headings first, so one chunk never spans two sections', () => {
+    const text = [
+      'Summary: Checkout failed for ten minutes.',
+      'Root cause: The redis pool was too small.',
+      '## Follow-up',
+      'Raise the pool.',
+    ].join('\n\n');
+    expect(chunkKnowledgeText(text)).toEqual([
+      'Summary: Checkout failed for ten minutes.',
+      'Root cause: The redis pool was too small.',
+      '## Follow-up\nRaise the pool.',
+    ]);
+    // A long section still falls back to the size windows, and the source-wide chunk cap still holds.
+    const long = `# Notes\n${'Words in a long section. '.repeat(80)}\n# Other\nShort.`;
+    const chunks = chunkKnowledgeText(long, { chunkChars: 200, maxChunks: 20 });
+    expect(chunks.at(-1)).toBe('# Other\nShort.');
+    for (const chunk of chunks) expect(chunk.length).toBeLessThanOrEqual(200);
+    expect(chunkKnowledgeText(long, { chunkChars: 200, maxChunks: 3 })).toHaveLength(3);
   });
 
   it('never stores credentials: every chunk is redacted before hashing', () => {
@@ -95,10 +115,15 @@ describe('knowledge chunking', () => {
     expect(knowledgeTsQuery('the a of')).toBeNull();
   });
 
-  it('blends lexical and semantic scores only when a semantic score exists', () => {
-    expect(blendKnowledgeScore(0.5, null)).toBe(0.5);
-    expect(blendKnowledgeScore(1, 0)).toBeCloseTo(0.4);
-    expect(blendKnowledgeScore(2, 2)).toBe(1);
+  it('fuses ranked lists by reciprocal rank: agreement beats a single first place', () => {
+    const fused = reciprocalRankFusion([
+      ['a', 'b', 'c'],
+      ['b', 'd'],
+    ]);
+    expect([...fused.entries()].sort((x, y) => y[1] - x[1])[0][0]).toBe('b');
+    expect(fused.get('b')!).toBeGreaterThan(fused.get('a')!);
+    expect(reciprocalRankFusion([['a'], ['a']]).get('a')).toBeCloseTo(1);
+    expect(reciprocalRankFusion([['a', 'b']]).get('a')).toBeCloseTo(1);
   });
 
   it('accepts short plain facts and refuses credentials instead of storing them redacted', () => {

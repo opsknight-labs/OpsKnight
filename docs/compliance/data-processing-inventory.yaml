@@ -173,6 +173,8 @@ domains:
         single-use-confirmed-action-receipts,
         observability-connector-credentials,
         summarised-metrics-logs-traces-errors-and-diffs-from-opt-in-connectors,
+        read-only-kubernetes-workload-status-and-events-from-opt-in-connectors,
+        encrypted-ten-minute-basic-mode-dialogue-state,
         aggregate-spend-by-day-team-capability-and-model,
         model-price-overrides-and-team-or-capability-budgets,
         opt-in-encrypted-short-lived-cache-of-ai-answers-scoped-by-team-and-data-class,

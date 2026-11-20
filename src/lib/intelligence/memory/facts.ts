@@ -10,7 +10,12 @@ import {
   AUTHORIZATION_ACTIONS,
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
-import { KNOWLEDGE_LIMITS, knowledgeContentHash, validateServiceFact } from './contract';
+import {
+  factStaleBefore,
+  KNOWLEDGE_LIMITS,
+  knowledgeContentHash,
+  validateServiceFact,
+} from './contract';
 import { getSquireMemorySettings } from './settings';
 
 type Client = Prisma.TransactionClient | typeof prisma;
@@ -20,6 +25,9 @@ export interface ServiceFactView {
   text: string;
   approvedBy: string | null;
   createdAt: Date;
+  /** Last confirmation; the fact goes stale `KNOWLEDGE_LIMITS.factTtlMs` after it. */
+  confirmedAt: Date;
+  stale: boolean;
 }
 
 /**
@@ -153,15 +161,46 @@ export async function listServiceFacts(
       id: true,
       text: true,
       createdAt: true,
+      sourceUpdatedAt: true,
       approvedBy: { select: { name: true, email: true } },
     },
   });
+  const staleBefore = factStaleBefore();
   return rows.map(row => ({
     id: row.id,
     text: row.text,
     createdAt: row.createdAt,
+    confirmedAt: row.sourceUpdatedAt,
+    stale: row.sourceUpdatedAt < staleBefore,
     approvedBy: row.approvedBy?.name || row.approvedBy?.email || null,
   }));
+}
+
+/** Re-confirms one learned fact: it is fresh again for another TTL, under the re-confirming person; audited. */
+export async function reconfirmServiceFact(
+  actor: AuthorizationActor,
+  input: { serviceId: string; factId: string }
+): Promise<boolean> {
+  return prisma.$transaction(async tx => {
+    if (!(await canCurateServiceKnowledge(actor, input.serviceId, tx))) throw denied();
+    const updated = await tx.knowledgeChunk.updateMany({
+      where: { id: input.factId, serviceId: input.serviceId, sourceKind: 'SERVICE_FACT' },
+      data: { sourceUpdatedAt: new Date(), approvedById: actor.id },
+    });
+    if (updated.count === 0) return false;
+    await logAudit(
+      {
+        action: 'intelligence.squire.fact.reconfirmed',
+        entityType: 'SERVICE',
+        entityId: input.serviceId,
+        actorId: actor.id,
+        source: 'UI',
+        details: { factId: input.factId },
+      },
+      tx
+    );
+    return true;
+  });
 }
 
 /** Removes one learned fact; audited. Removal works even while the index is off, so mistakes can be undone. */

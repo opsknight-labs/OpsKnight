@@ -4,6 +4,7 @@ import { datadogAdapter } from './datadog';
 import { elasticAdapter } from './elastic';
 import { githubAdapter, gitlabAdapter } from './git';
 import { grafanaAdapter, lokiAdapter, prometheusAdapter, tempoAdapter } from './grafana-stack';
+import { kubernetesAdapter } from './kubernetes';
 import { sentryAdapter } from './sentry';
 import type { ConnectorAdapter } from './types';
 
@@ -18,6 +19,7 @@ export const CONNECTOR_ADAPTERS: Readonly<Record<ObservabilityKind, ConnectorAda
   SENTRY: sentryAdapter,
   GITHUB: githubAdapter,
   GITLAB: gitlabAdapter,
+  KUBERNETES: kubernetesAdapter,
 };
 
 export type * from './types';

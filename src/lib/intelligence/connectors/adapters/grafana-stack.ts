@@ -176,6 +176,33 @@ async function tempoTraces(context: AdapterContext, query: TracesQuery) {
   return summarizeTraces(query.window, roots);
 }
 
+/** Label API reads, shared by Prometheus and the Grafana proxy. Inputs are validated names, never PromQL. */
+async function promLabelValues(
+  context: AdapterContext,
+  prefix: string,
+  label: string,
+  match: string
+): Promise<string[]> {
+  const http = httpFor(context, {
+    ...bearerOrBasic(context.connection.credential),
+    ...grafanaOrg(context),
+  });
+  const body = asRecord(
+    await http.getJson(`${prefix}/api/v1/label/${encodeURIComponent(label)}/values`, {
+      query: { 'match[]': match },
+    })
+  );
+  if (body.status !== 'success')
+    throw new ConnectorError('INVALID_RESPONSE', 'The label query was not accepted');
+  return asArray(body.data).filter((value): value is string => typeof value === 'string');
+}
+
+const metricNames = (context: AdapterContext, prefix: string, namePrefix: string) =>
+  // The prefix is restricted to metric-name characters, none of which are regex metacharacters.
+  promLabelValues(context, prefix, '__name__', `{__name__=~"${namePrefix}.*"}`).then(names =>
+    names.filter(name => name.startsWith(namePrefix))
+  );
+
 export const prometheusAdapter: ConnectorAdapter = {
   async test(context) {
     await httpFor(context, bearerOrBasic(context.connection.credential)).getJson(
@@ -184,6 +211,8 @@ export const prometheusAdapter: ConnectorAdapter = {
   },
   metrics: (context, query) => promRange(context, '', query),
   series: (context, query) => promSeries(context, '', query),
+  metricNames: (context, namePrefix) => metricNames(context, '', namePrefix),
+  labelValues: (context, metric, label) => promLabelValues(context, '', label, metric),
 };
 
 export const lokiAdapter: ConnectorAdapter = {
@@ -215,4 +244,6 @@ export const grafanaAdapter: ConnectorAdapter = {
   metrics: (context, query) => promRange(context, proxy(context), query),
   series: (context, query) => promSeries(context, proxy(context), query),
   logs: (context, query) => lokiRange(context, proxy(context), query),
+  metricNames: (context, namePrefix) => metricNames(context, proxy(context), namePrefix),
+  labelValues: (context, metric, label) => promLabelValues(context, proxy(context), label, metric),
 };

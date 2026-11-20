@@ -231,6 +231,7 @@ export class SquireEvidenceRegistry {
       case 'get_traces':
       case 'get_error_events':
       case 'get_change_diff':
+      case 'get_k8s_state':
         add('observability', {
           id: object.connectionId,
           name: object.connectionName,

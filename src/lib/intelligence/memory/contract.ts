@@ -61,7 +61,13 @@ export const KNOWLEDGE_LIMITS = {
   syncIntervalMs: 5 * 60_000,
   factChars: 500,
   maxFactsPerService: 50,
+  /** A learned fact not re-confirmed for this long is stale: kept and listed, but never shown to the model. */
+  factTtlMs: 180 * 24 * 3_600_000,
 } as const;
+
+/** Facts last confirmed before this are stale. A fact's `sourceUpdatedAt` is its last confirmation. */
+export const factStaleBefore = (now: Date = new Date()) =>
+  new Date(now.getTime() - KNOWLEDGE_LIMITS.factTtlMs);
 
 export const PROACTIVE_KINDS = ['BRIEFING', 'STAKEHOLDER_NUDGE', 'POSTMORTEM_DRAFT'] as const;
 export type ProactiveKind = (typeof PROACTIVE_KINDS)[number];
@@ -105,9 +111,28 @@ export function cleanKnowledgeText(text: string | null | undefined, max = 20_000
   return collapse(redactSecrets((text ?? '').slice(0, max)));
 }
 
+/** A Markdown heading, or a short capitalised label line such as "Root cause:" that opens a section. */
+const SECTION_HEADING = /^(?:#{1,6}\s+\S|[A-Z][A-Za-z ]{0,39}:(?:\s|$))/;
+
+/** Splits text before each heading line; each section keeps its heading. */
+function knowledgeSections(text: string): string[] {
+  const sections: string[] = [];
+  let current: string[] = [];
+  for (const line of text.split('\n')) {
+    if (SECTION_HEADING.test(line) && current.some(Boolean)) {
+      sections.push(current.join('\n').trim());
+      current = [];
+    }
+    current.push(line);
+  }
+  sections.push(current.join('\n').trim());
+  return sections.filter(Boolean);
+}
+
 /**
- * Splits text into bounded chunks at paragraph, then sentence, then word boundaries. Deterministic, so the
- * same source always yields the same chunks (and hashes).
+ * Splits text into bounded chunks: first at section headings (a chunk never spans two sections), then at
+ * paragraph, sentence and word boundaries. Deterministic, so the same source always yields the same chunks
+ * (and hashes).
  */
 export function chunkKnowledgeText(
   text: string,
@@ -117,6 +142,18 @@ export function chunkKnowledgeText(
   const maxChunks = options.maxChunks ?? KNOWLEDGE_LIMITS.maxChunksPerSource;
   const clean = collapse(text);
   if (!clean) return [];
+  const chunks: string[] = [];
+  for (const section of knowledgeSections(clean)) {
+    for (const chunk of packChunks(section, size)) {
+      chunks.push(chunk);
+      if (chunks.length >= maxChunks) return chunks;
+    }
+  }
+  return chunks;
+}
+
+/** Paragraph, then sentence, then word boundaries, packed greedily up to `size`. */
+function packChunks(clean: string, size: number): string[] {
   const pieces = clean
     .split(/\n{2,}/)
     .flatMap(paragraph =>
@@ -150,11 +187,10 @@ export function chunkKnowledgeText(
     else if (current.length + 1 + piece.length <= size) current = `${current}\n${piece}`;
     else {
       chunks.push(current);
-      if (chunks.length >= maxChunks) return chunks;
       current = piece;
     }
   }
-  if (current && chunks.length < maxChunks) chunks.push(current);
+  if (current) chunks.push(current);
   return chunks;
 }
 
@@ -180,7 +216,12 @@ export function buildChunks(title: string, body: string): KnowledgeChunkDraft[] 
 }
 
 /** Bounds of the structured postmortem sections added to the knowledge body. */
-export const POSTMORTEM_KNOWLEDGE_LIMITS = { timelineEntries: 12, fiveWhys: 5, actionItems: 10, lineChars: 160 } as const;
+export const POSTMORTEM_KNOWLEDGE_LIMITS = {
+  timelineEntries: 12,
+  fiveWhys: 5,
+  actionItems: 10,
+  lineChars: 160,
+} as const;
 
 const knowledgeLine = (text: string) => {
   const value = text.replace(/\s+/g, ' ').trim();
@@ -331,11 +372,20 @@ const STOP = new Set([
   'by',
 ]);
 
-/** Final score: the lexical rank, blended with cosine similarity only when a semantic re-rank ran. */
-export function blendKnowledgeScore(lexical: number, semantic: number | null): number {
-  const lex = Math.max(0, Math.min(1, lexical));
-  if (semantic === null) return lex;
-  return 0.4 * lex + 0.6 * Math.max(0, Math.min(1, semantic));
+/** The usual reciprocal rank fusion constant: damps the head so one list cannot dominate. */
+export const RRF_K = 60;
+
+/**
+ * Reciprocal rank fusion of ranked id lists (best first): each id scores the sum of 1 / (k + rank) over the
+ * lists it appears in, scaled so an id ranked first in every list scores 1.
+ */
+export function reciprocalRankFusion(lists: ReadonlyArray<readonly string[]>): Map<string, number> {
+  const scores = new Map<string, number>();
+  for (const list of lists)
+    list.forEach((id, index) => scores.set(id, (scores.get(id) ?? 0) + 1 / (RRF_K + index + 1)));
+  const best = lists.length / (RRF_K + 1);
+  for (const [id, score] of scores) scores.set(id, score / best);
+  return scores;
 }
 
 /** A learned fact must be a short, plain statement; anything credential-shaped is refused, not stored redacted. */

@@ -15,9 +15,15 @@ import {
   type ConnectorCapability,
 } from '../connectors/contract';
 import { ConnectorError, type ConnectorFetch } from '../connectors/http';
-import type { TimeWindow } from '../connectors/normalize';
+import { LIMITS, type TimeWindow } from '../connectors/normalize';
 import { contextFor, loadConnectionForActor, type EligibleConnection } from '../connectors/service';
 import { readIncidentForActor } from './deterministic';
+import {
+  buildDiscoveryTools,
+  DISCOVERY_TOOL_CAPABILITY,
+  DISCOVERY_TOOL_DATA_CLASS,
+  DISCOVERY_TOOL_LABELS,
+} from './tools-discovery';
 
 /**
  * Squire's observability read tools. Each one is offered only when the person has at least one enabled
@@ -31,6 +37,7 @@ export const OBSERVABILITY_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>
   get_traces: 'INTERNAL',
   get_error_events: 'INTERNAL',
   get_change_diff: 'INTERNAL',
+  ...DISCOVERY_TOOL_DATA_CLASS,
 };
 
 export const OBSERVABILITY_TOOL_LABELS: Readonly<Record<string, string>> = {
@@ -39,6 +46,7 @@ export const OBSERVABILITY_TOOL_LABELS: Readonly<Record<string, string>> = {
   get_traces: 'Reading traces',
   get_error_events: 'Checking error events',
   get_change_diff: 'Reading the change diff',
+  ...DISCOVERY_TOOL_LABELS,
 };
 
 export const OBSERVABILITY_TOOL_NAMES = Object.keys(OBSERVABILITY_TOOL_DATA_CLASS);
@@ -49,11 +57,13 @@ const TOOL_CAPABILITY: Readonly<Record<string, ConnectorCapability>> = {
   get_traces: 'traces',
   get_error_events: 'errors',
   get_change_diff: 'diff',
+  ...DISCOVERY_TOOL_CAPABILITY,
 };
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
 const HALF_HOUR = 30 * 60_000;
-const MAX_LOG_LINES = 50;
+/** The summary keeps at most this many lines, so the schema's maximum and default match it. */
+const MAX_LOG_LINES = LIMITS.logLines;
 
 const ERROR_MESSAGES: Record<ConnectorError['code'], string> = {
   BLOCKED: 'The connection address is not allowed.',
@@ -148,6 +158,25 @@ function connectionList(connections: readonly EligibleConnection[]): string {
     .join('; ');
 }
 
+type ConnectorAdapterOf = (typeof CONNECTOR_ADAPTERS)[keyof typeof CONNECTOR_ADAPTERS];
+export type ConnectorToolRunner = (
+  tool: string,
+  connectionId: string | undefined,
+  capability: ConnectorCapability,
+  call: (
+    adapter: ConnectorAdapterOf,
+    context: ReturnType<typeof contextFor>
+  ) => Promise<unknown> | undefined,
+  extra?: Record<string, unknown>
+) => Promise<unknown>;
+export type ConnectorToolAdder = (
+  name: string,
+  description: string,
+  properties: Record<string, unknown>,
+  required: string[],
+  execute: (input: unknown) => Promise<unknown>
+) => void;
+
 export function buildObservabilityTools(
   actor: AuthorizationActor,
   connections: readonly EligibleConnection[],
@@ -156,16 +185,7 @@ export function buildObservabilityTools(
   const capable = (capability: ConnectorCapability) =>
     connections.filter(connection => KIND_CAPABILITIES[connection.kind].includes(capability));
 
-  async function run(
-    tool: string,
-    connectionId: string | undefined,
-    capability: ConnectorCapability,
-    call: (
-      adapter: (typeof CONNECTOR_ADAPTERS)[keyof typeof CONNECTOR_ADAPTERS],
-      context: ReturnType<typeof contextFor>
-    ) => Promise<unknown> | undefined,
-    extra: Record<string, unknown> = {}
-  ): Promise<unknown> {
+  const run: ConnectorToolRunner = async (tool, connectionId, capability, call, extra = {}) => {
     const candidates = capable(capability);
     const id = connectionId ?? (candidates.length === 1 ? candidates[0].id : undefined);
     if (!id)
@@ -202,16 +222,10 @@ export function buildObservabilityTools(
       // eslint-disable-next-line security/detect-object-injection -- code is a member of the closed union
       return { error: ERROR_MESSAGES[code] };
     }
-  }
+  };
 
   const tools: AiToolDefinition[] = [];
-  const add = (
-    name: string,
-    description: string,
-    properties: Record<string, unknown>,
-    required: string[],
-    execute: (input: unknown) => Promise<unknown>
-  ) => {
+  const add: ConnectorToolAdder = (name, description, properties, required, execute) => {
     // eslint-disable-next-line security/detect-object-injection -- name is one of the fixed tool names
     const candidates = capable(TOOL_CAPABILITY[name]);
     if (candidates.length === 0) return;
@@ -257,10 +271,10 @@ export function buildObservabilityTools(
 
   add(
     'search_logs',
-    'Search logs (LogQL for Loki and Grafana, a Datadog or Lucene query for Elasticsearch, a CloudWatch filter pattern). Returns the newest matching lines with timestamps, at most 15. Same default window as query_metrics.',
+    `Search logs (LogQL for Loki and Grafana, a Datadog or Lucene query for Elasticsearch, a CloudWatch filter pattern). Returns the newest matching lines with timestamps, at most ${MAX_LOG_LINES}. Same default window as query_metrics.`,
     {
       query: { type: 'string', minLength: 1, maxLength: 1000 },
-      limit: { type: 'integer', minimum: 1, maximum: MAX_LOG_LINES },
+      limit: { type: 'integer', minimum: 1, maximum: MAX_LOG_LINES, default: MAX_LOG_LINES },
       ...windowFields,
     },
     ['query'],
@@ -281,7 +295,7 @@ export function buildObservabilityTools(
         adapter.logs?.(context, {
           query: parsed.data.query,
           window,
-          limit: parsed.data.limit ?? 30,
+          limit: parsed.data.limit ?? MAX_LOG_LINES,
         })
       );
     }
@@ -393,5 +407,6 @@ export function buildObservabilityTools(
     }
   );
 
+  buildDiscoveryTools(actor, connections, add, run);
   return tools;
 }

@@ -18,6 +18,7 @@ import {
 import { readSourceStates } from '@/lib/intelligence/squire/evidence-access';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
 import { buildSquireTools } from '@/lib/intelligence/squire/tools';
+import type { KubernetesSummary } from '@/lib/intelligence/connectors/adapters/types';
 import type { SquireEvent } from '@/lib/intelligence/squire/contract';
 import { publishPolicyVersion } from '@/lib/intelligence/settings/service';
 import { startFakeModel, type FakeServer } from '../../helpers/fake-model-server';
@@ -85,6 +86,89 @@ async function startBackend(): Promise<Backend> {
           ],
         },
       };
+    if (url.pathname === '/api/v1/label/__name__/values')
+      body = {
+        status: 'success',
+        // A backend that ignores match[] still gets filtered by prefix and capped.
+        data: [
+          'up',
+          ...Array.from(
+            { length: 60 },
+            (_, index) => `http_requests_${String(index).padStart(2, '0')}`
+          ),
+        ],
+      };
+    if (url.pathname === '/api/v1/label/job/values')
+      body = { status: 'success', data: ['checkout', 'api', 'checkout'] };
+    if (url.pathname === '/apis/apps/v1/namespaces/shop/deployments')
+      body = {
+        items: [
+          {
+            metadata: { name: 'web', generation: 2 },
+            spec: { replicas: 2 },
+            status: {
+              observedGeneration: 2,
+              replicas: 2,
+              readyReplicas: 2,
+              updatedReplicas: 2,
+              availableReplicas: 2,
+            },
+          },
+          {
+            metadata: { name: 'checkout', generation: 5 },
+            spec: { replicas: 3 },
+            status: {
+              observedGeneration: 5,
+              readyReplicas: 1,
+              updatedReplicas: 1,
+              availableReplicas: 1,
+              conditions: [
+                {
+                  type: 'Progressing',
+                  reason: 'ProgressDeadlineExceeded',
+                  message: 'ReplicaSet "checkout-7d" has timed out progressing.',
+                },
+              ],
+            },
+          },
+        ],
+      };
+    if (url.pathname === '/api/v1/namespaces/shop/pods')
+      body = {
+        items: [
+          {
+            metadata: { name: 'checkout-7d-a' },
+            spec: { containers: [{ env: [{ name: 'DB_PASSWORD', value: 'hunter2-never-read' }] }] },
+            status: {
+              phase: 'Running',
+              containerStatuses: [
+                {
+                  ready: false,
+                  restartCount: 7,
+                  state: { waiting: { reason: 'CrashLoopBackOff' } },
+                  lastState: { terminated: { reason: 'OOMKilled' } },
+                },
+              ],
+            },
+          },
+          {
+            metadata: { name: 'web-1' },
+            status: { phase: 'Running', containerStatuses: [{ ready: true, restartCount: 0 }] },
+          },
+        ],
+      };
+    if (url.pathname === '/api/v1/namespaces/shop/events')
+      body = {
+        items: Array.from({ length: 20 }, (_, index) => ({
+          type: 'Warning',
+          reason: 'BackOff',
+          message: `Back-off restarting failed container ${index}`,
+          involvedObject: { kind: 'Pod', name: 'checkout-7d-a' },
+          lastTimestamp: new Date(Date.UTC(2026, 10, 20, 0, index)).toISOString(),
+          count: index + 1,
+        })),
+      };
+    if (url.pathname === '/api/v1/namespaces') body = { items: [{ metadata: { name: 'shop' } }] };
     if (url.pathname.startsWith('/repos/acme/checkout/commits/'))
       body = {
         sha: 'abcdef1234567',
@@ -484,6 +568,154 @@ describe('observability tools inside a Squire turn', () => {
     expect(await diff.execute!({ changeId: 'missing' })).toEqual({
       error: 'Not found, or you do not have access to it.',
     });
+  });
+
+  it('discovers metric names and label values, capped, with validated names only', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    await setupAi(admin.id);
+    await addConnection(admin.id);
+    const actor = await actorOf(admin.id);
+    const tools = buildSquireTools(actor, {
+      personal: true,
+      observability: await listEligibleConnections(actor),
+    });
+    const list = tools.find(tool => tool.name === 'list_metrics')!;
+    const values = tools.find(tool => tool.name === 'label_values')!;
+    expect(list.dataClass).toBe('INTERNAL');
+
+    const names = (await list.execute!({ prefix: 'http_' })) as Record<string, unknown>;
+    expect(names).toMatchObject({ prefix: 'http_', total: 60, truncated: true });
+    expect(names.values).toHaveLength(50);
+    expect(names.values).not.toContain('up');
+    const asked = backend.requests.find(
+      request => request.path === '/api/v1/label/__name__/values'
+    );
+    expect(asked?.auth).toBe(`Bearer ${SECRET}`);
+
+    expect(await values.execute!({ metric: 'http_requests_00', label: 'job' })).toMatchObject({
+      values: ['api', 'checkout'],
+      total: 2,
+      truncated: false,
+    });
+    // PromQL or regex in a name never reaches the backend.
+    const before = backend.requests.length;
+    expect(await list.execute!({ prefix: 'a"}or vector(1)' })).toHaveProperty('error');
+    expect(await values.execute!({ metric: 'up', label: 'job"}' })).toHaveProperty('error');
+    expect(backend.requests).toHaveLength(before);
+  });
+
+  it('caps search_logs at the summary limit in both the schema and the default', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    await setupAi(admin.id);
+    await addConnection(admin.id, { name: 'Loki', kind: 'LOKI' });
+    const actor = await actorOf(admin.id);
+    const logs = buildSquireTools(actor, {
+      personal: true,
+      observability: await listEligibleConnections(actor),
+    }).find(tool => tool.name === 'search_logs')!;
+    const limit = (logs.inputSchema as { properties: Record<string, Record<string, unknown>> })
+      .properties.limit;
+    expect(limit).toMatchObject({ maximum: 15, default: 15 });
+    expect(logs.description).toContain('at most 15');
+    expect(await logs.execute!({ query: '{app="x"}', limit: 16 })).toEqual({
+      error: 'Invalid input',
+    });
+  });
+
+  it('lists saved metric queries only for readable services on usable connections', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    await setupAi(admin.id);
+    const prom = await addConnection(admin.id);
+    const disabled = await addConnection(admin.id, { name: 'Off', enabled: false });
+    const service = await createTestService('Checkout');
+    const other = await createTestService('Billing');
+    const incident = await createTestIncident('Checkout errors', service.id);
+    await db.serviceMetricTemplate.createMany({
+      data: [
+        {
+          serviceId: service.id,
+          connectionId: prom,
+          name: 'Error rate',
+          query: 'rate(errors[5m])',
+        },
+        { serviceId: service.id, connectionId: disabled, name: 'Hidden', query: 'up' },
+        { serviceId: other.id, connectionId: prom, name: 'Billing latency', query: 'latency' },
+      ],
+    });
+    const actor = await actorOf(admin.id);
+    const tool = buildSquireTools(actor, {
+      personal: true,
+      observability: await listEligibleConnections(actor),
+    }).find(item => item.name === 'list_metric_templates')!;
+    expect(await tool.execute!({ incidentId: incident.id })).toEqual({
+      templates: [
+        {
+          serviceId: service.id,
+          serviceName: 'Checkout',
+          name: 'Error rate',
+          query: 'rate(errors[5m])',
+          connectionId: prom,
+        },
+      ],
+    });
+    expect(await tool.execute!({ incidentId: 'missing' })).toEqual({
+      error: 'Not found, or you do not have access to it.',
+    });
+  });
+
+  it('reads Kubernetes state read-only: stalled rollouts first, restarting pods, newest events, capped', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    await setupAi(admin.id);
+    const k8s = await addConnection(admin.id, { name: 'Cluster', kind: 'KUBERNETES' });
+    const stored = await db.observabilityConnection.findUniqueOrThrow({ where: { id: k8s } });
+    expect(stored.credentialEncrypted).not.toContain(SECRET);
+    expect(await testObservabilityConnection(k8s)).toMatchObject({ ok: true });
+    expect(backend.requests.at(-1)?.path).toBe('/api/v1/namespaces');
+
+    const actor = await actorOf(admin.id);
+    const tools = buildSquireTools(actor, {
+      personal: true,
+      observability: await listEligibleConnections(actor),
+    });
+    expect(tools.map(tool => tool.name)).not.toContain('query_metrics');
+    const state = tools.find(tool => tool.name === 'get_k8s_state')!;
+    backend.requests.length = 0;
+    const result = (await state.execute!({
+      namespace: 'shop',
+      labelSelector: 'app in (checkout,web)',
+    })) as KubernetesSummary & { connectionId: string };
+    expect(backend.requests.every(request => request.method === 'GET')).toBe(true);
+    expect(backend.requests.every(request => request.auth === `Bearer ${SECRET}`)).toBe(true);
+    expect(result.connectionId).toBe(k8s);
+    expect(result.workloads[0]).toMatchObject({
+      kind: 'Deployment',
+      name: 'checkout',
+      rollout: 'stalled',
+      desired: 3,
+      ready: 1,
+    });
+    expect(result.workloads[1]).toMatchObject({ name: 'web', rollout: 'complete' });
+    expect(result.pods).toEqual([
+      {
+        name: 'checkout-7d-a',
+        phase: 'Running',
+        ready: false,
+        restarts: 7,
+        reason: 'CrashLoopBackOff',
+        lastTermination: 'OOMKilled',
+      },
+    ]);
+    expect(result.events).toHaveLength(15);
+    expect(result.events[0].message).toContain('container 19');
+    expect(result.truncated).toEqual({ workloads: false, pods: false, events: true });
+    expect(JSON.stringify(result)).not.toContain('hunter2');
+
+    const before = backend.requests.length;
+    expect(await state.execute!({ namespace: '../secrets' })).toHaveProperty('error');
+    expect(await state.execute!({ namespace: 'shop', labelSelector: 'a=b&x=1' })).toHaveProperty(
+      'error'
+    );
+    expect(backend.requests).toHaveLength(before);
   });
 
   it('turns connector failures into neutral tool errors', async () => {

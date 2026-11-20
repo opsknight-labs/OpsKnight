@@ -2,14 +2,15 @@ import 'server-only';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
+import { decrypt, encrypt } from '@/lib/encryption';
 import type { SquireIntent } from '../squire/intents';
-import { TtlCache } from './cache';
 
 /**
  * Dialogue state for basic mode: a pending clarification ("which service?"), the choices offered, and the
  * cursor of the list being paged. It holds no message text and no facts, only what is needed to interpret
- * the next short reply. It lives on the saved conversation when history is on, and otherwise in memory for a
- * few minutes keyed by the person, so slot filling works in both modes.
+ * the next short reply. It lives on the saved conversation when history is on, and otherwise in a small
+ * encrypted table for a few minutes keyed by the person and incident, so slot filling works in both modes and
+ * on every replica.
  */
 
 export const DIALOGUE_STATE_TTL_MS = 10 * 60_000;
@@ -51,9 +52,35 @@ export const dialogueStateSchema = z
   .strict();
 export type DialogueState = z.infer<typeof dialogueStateSchema>;
 
-const memory = new TtlCache<DialogueState>(DIALOGUE_STATE_TTL_MS, 2_000);
+const scopeKey = (incidentId: string | null) => incidentId ?? '';
 
-const memoryKey = (userId: string, incidentId: string | null) => `${userId}:${incidentId ?? ''}`;
+/** When the stored row may be forgotten: the latest expiry it carries, or one TTL from now. */
+function rowExpiry(state: DialogueState, now: Date): Date {
+  const times = [state.pending?.expiresAt, state.page?.expiresAt]
+    .map(value => (value ? Date.parse(value) : NaN))
+    .filter(Number.isFinite);
+  return new Date(times.length ? Math.max(...times) : now.getTime() + DIALOGUE_STATE_TTL_MS);
+}
+
+async function readStoredState(
+  userId: string,
+  incidentId: string | null,
+  now: Date
+): Promise<DialogueState | null> {
+  const row = await prisma.squireDialogueState
+    .findFirst({
+      where: { userId, scopeKey: scopeKey(incidentId), expiresAt: { gt: now } },
+      select: { stateEncrypted: true },
+    })
+    .catch(() => null);
+  if (!row) return null;
+  try {
+    const parsed = dialogueStateSchema.safeParse(JSON.parse(await decrypt(row.stateEncrypted)));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
 
 function fresh(state: DialogueState | null, now: Date): DialogueState | null {
   if (!state) return null;
@@ -82,7 +109,7 @@ export async function readDialogueState(input: {
     const parsed = dialogueStateSchema.safeParse(row?.state);
     if (parsed.success) return fresh(parsed.data, now);
   }
-  return fresh(memory.get(memoryKey(input.userId, input.incidentId)) ?? null, now);
+  return fresh(await readStoredState(input.userId, input.incidentId, now), now);
 }
 
 export async function writeDialogueState(input: {
@@ -91,16 +118,37 @@ export async function writeDialogueState(input: {
   incidentId: string | null;
   state: DialogueState | null;
 }): Promise<void> {
-  const key = memoryKey(input.userId, input.incidentId);
-  if (input.state) memory.set(key, input.state);
-  else memory.delete(key);
-  if (!input.conversationId) return;
+  if (!input.conversationId) {
+    await writeStoredState(input.userId, input.incidentId, input.state).catch(() => undefined);
+    return;
+  }
   await prisma.squireConversation
     .updateMany({
       where: { id: input.conversationId, userId: input.userId },
       data: { state: input.state ?? Prisma.DbNull },
     })
     .catch(() => undefined);
+}
+
+async function writeStoredState(
+  userId: string,
+  incidentId: string | null,
+  state: DialogueState | null,
+  now: Date = new Date()
+): Promise<void> {
+  const key = { userId, scopeKey: scopeKey(incidentId) };
+  // Sweeps this person's expired rows on every write, so the table never outgrows live dialogues.
+  await prisma.squireDialogueState.deleteMany({
+    where: { userId, OR: [{ expiresAt: { lte: now } }, ...(state ? [] : [key])] },
+  });
+  if (!state) return;
+  const stateEncrypted = await encrypt(JSON.stringify(state));
+  const expiresAt = rowExpiry(state, now);
+  await prisma.squireDialogueState.upsert({
+    where: { userId_scopeKey: key },
+    create: { ...key, stateEncrypted, expiresAt },
+    update: { stateEncrypted, expiresAt },
+  });
 }
 
 export function expiry(now: Date = new Date()): string {
@@ -137,7 +185,7 @@ export function pageState(
   };
 }
 
-/** Test hook: forgets every in-memory dialogue. */
-export function resetDialogueMemory(): void {
-  memory.clear();
+/** Test hook: forgets every stored dialogue that has no saved conversation. */
+export async function resetDialogueMemory(): Promise<void> {
+  await prisma.squireDialogueState.deleteMany({});
 }

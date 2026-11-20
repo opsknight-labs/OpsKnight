@@ -29,7 +29,7 @@ describe('Squire structural evaluation (no model)', () => {
     if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
       throw new Error('Dedicated test DB required');
     await resetDatabase();
-    resetDialogueMemory();
+    await resetDialogueMemory();
     resetEntityCache();
     resetBasicReadCaches();
     const team = await createTestTeam('Checkout');

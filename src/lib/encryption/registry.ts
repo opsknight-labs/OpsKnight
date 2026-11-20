@@ -98,6 +98,16 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     description: 'Title of an opt-in saved assistant conversation, taken from the first question',
   },
   {
+    id: 'squire.dialogue-state',
+    model: 'SquireDialogueState',
+    field: 'stateEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Assistant Dialogue State',
+    description:
+      'Pending clarification and list cursor of a basic-mode question without saved history; expires after ten minutes',
+  },
+  {
     id: 'squire.turn-envelope',
     model: 'SquireMessage',
     field: 'envelopeEncrypted',

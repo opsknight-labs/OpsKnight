@@ -2,6 +2,7 @@
 
 import { useActionState, useId, useState } from 'react';
 import {
+  reconfirmServiceFactAction,
   removeServiceFactAction,
   saveSquireMemorySettingsAction,
   saveSquireServicePolicyAction,
@@ -162,6 +163,20 @@ export function ProactivePolicyForm({
           {pending ? 'Saving…' : 'Save'}
         </Button>
       )}
+      <Status state={state} />
+    </form>
+  );
+}
+
+export function ReconfirmFactButton({ serviceId, factId }: { serviceId: string; factId: string }) {
+  const [state, action, pending] = useActionState(reconfirmServiceFactAction, initial);
+  return (
+    <form action={action} className="flex items-center gap-2">
+      <input type="hidden" name="serviceId" value={serviceId} />
+      <input type="hidden" name="factId" value={factId} />
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        {pending ? 'Saving…' : 'Still true'}
+      </Button>
       <Status state={state} />
     </form>
   );
