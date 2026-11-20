@@ -67,6 +67,8 @@ export type StatusBadgeProps = {
   /** Incident status: TRIGGERED/OPEN, ACKNOWLEDGED, SNOOZED, SUPPRESSED or RESOLVED. */
   status: string;
   size?: BadgeSize;
+  /** `solid` fills the pill with the tone; use for the row's primary signals. */
+  variant?: 'soft' | 'solid';
   /** Override the visible label; the tone and icon still follow `status`. */
   label?: string;
   /** Pulse the icon halo. Reserve for live, unacknowledged incidents. */
@@ -78,7 +80,14 @@ export type StatusBadgeProps = {
  * Incident status pill: icon + text on the tone's soft fill. The tone always comes
  * from `incidentStatusTone()`; SUPPRESSED and unknown values are neutral.
  */
-function StatusBadge({ status, size = 'sm', label, live = false, className }: StatusBadgeProps) {
+function StatusBadge({
+  status,
+  size = 'sm',
+  variant = 'soft',
+  label,
+  live = false,
+  className,
+}: StatusBadgeProps) {
   const key = (status ?? '').toUpperCase();
   const tone = incidentStatusTone(key);
   const meta = statusMeta(key);
@@ -90,7 +99,12 @@ function StatusBadge({ status, size = 'sm', label, live = false, className }: St
       data-status={key.toLowerCase()}
       data-tone={tone ?? 'neutral'}
       title={`Status: ${label ?? meta.label}`}
-      className={cn(BADGE_BASE_CLASS, badgeSizeClass(size), toneClasses(tone).soft, className)}
+      className={cn(
+        BADGE_BASE_CLASS,
+        badgeSizeClass(size),
+        variant === 'solid' ? toneClasses(tone).filled : toneClasses(tone).soft,
+        className
+      )}
     >
       <span className="relative inline-flex shrink-0" aria-hidden="true">
         {showPulse && (

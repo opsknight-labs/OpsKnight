@@ -149,6 +149,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <PageHeader
+        eyebrow="Security & Compliance"
         title="Audit log"
         icon={Shield}
         description="Who changed what, and when: users, teams, permissions, services and settings. Entries are append-only."

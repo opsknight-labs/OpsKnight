@@ -111,6 +111,7 @@ export default async function SecuritySettingsPage() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Identity & Protection"
         title="Security & Authentication"
         description="Control how you sign in, manage credentials, and review signed-in sessions across your account."
         icon={ShieldCheck}

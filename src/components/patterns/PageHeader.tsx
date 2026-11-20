@@ -70,8 +70,8 @@ export type PageHeaderProps = {
   /** One line on what this page is for. */
   description?: ReactNode;
   /**
-   * Small label above the title. Kept for parity with `DetailHeroBanner.tag`; new
-   * pages should leave it out (DESIGN.md: no eyebrow labels).
+   * Section line above the title ("Real-Time Response Center"), rendered as tracked
+   * uppercase micro-text. Every page sets one (DESIGN.md "Eyebrow").
    */
   eyebrow?: string;
   /** A lucide icon component (rendered in the standard tile) or a custom node. */

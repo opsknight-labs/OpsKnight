@@ -60,6 +60,7 @@ export default async function CustomFieldsPage() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Incident Metadata & Taxonomy"
         title="Custom Fields"
         description="Define structured metadata attributes, validation rules, and incident table columns."
         icon={SlidersHorizontal}

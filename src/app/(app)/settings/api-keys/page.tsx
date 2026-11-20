@@ -441,6 +441,7 @@ export default async function ApiKeysSettingsPage({
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Developer & Programmatic Access"
         title="Developer & API Access"
         description={`Manage personal API keys, machine service accounts, inspect all ${endpointCount} v2 REST endpoints, and monitor API gateway activity.`}
         icon={Key}

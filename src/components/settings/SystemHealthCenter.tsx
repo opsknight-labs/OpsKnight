@@ -342,6 +342,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Diagnostics & Telemetry"
         title="System Health Center"
         icon={Activity}
         badges={

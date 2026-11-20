@@ -209,6 +209,7 @@ export default async function McpSettings({
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="AI Agent Protocol & Integration"
         title="Model Context Protocol (MCP) Integration"
         description="Connect Claude, ChatGPT, Cursor and other assistants to OpsKnight. Each person consents, their own permissions apply, and higher-risk changes wait for human review."
         icon={McpLogo}

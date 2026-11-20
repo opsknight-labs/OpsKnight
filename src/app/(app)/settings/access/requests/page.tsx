@@ -124,6 +124,7 @@ export default async function AccessRequestsPage({
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Access"
         title="Access requests"
         description={
           isOrgAdmin

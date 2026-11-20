@@ -48,6 +48,7 @@ export default async function PrivacyRequestsPage() {
   return (
     <div className="space-y-6 pb-12">
       <SettingsPageHeader
+        eyebrow="Data subject access requests"
         title="Privacy Requests"
         description="Receive, verify, and fulfil data subject requests. Access, Portability, and Erasure are automated in this release; other request types require manual review."
         icon={ShieldCheck}

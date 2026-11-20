@@ -333,8 +333,10 @@ for chips inside controls, and `rounded-full` for status pills, avatars and dots
 (`--radius-sm` 8px, `--radius-md` 12px, `--radius` 14px, `--radius-lg` 16px, `--radius-xl` 20px) exist for
 legacy CSS and inline styles. Borders are 1px hairlines in `border-border`.
 
-Don't put a coloured `border-left` thicker than 1px on cards, list items or callouts. Show status with a
-badge, a dot or a tinted surface.
+**The Status Rail (signature).** Incident and service rows carry a 4px rounded status rail on the left
+edge (`data-status-rail`, `toneClasses(tone).solid`), which widens on hover, focus and selection, plus a
+tone-tinted hover border. It's reserved for status-bearing list rows. Don't use thick coloured borders on
+callouts or plain cards; use a badge, a dot or a tinted surface there.
 
 ## Components
 
@@ -358,7 +360,11 @@ cleaner API over `DetailHeroBanner`, which stays the implementation, so both ren
 - **Props:** `title`, `description`, `icon` (a lucide component, drawn in the standard tile, or any
   node), `badges`, `primaryAction` (one, rightmost), `secondaryActions`, `stats` (`DetailStatItem[]`,
   `statsPlacement` inline/bottom), `breadcrumbs` (`{label, href?}[]` → `<Breadcrumbs>` nav, last item
-  `aria-current="page"`, or a custom node), `alert`, `eyebrow` (legacy `tag`; leave it out on new pages).
+  `aria-current="page"`, or a custom node), `alert`, `eyebrow` (legacy `tag`).
+- **Eyebrow (signature).** Every page band carries a short section line above the title ("Real-Time
+  Response Center", "Infrastructure Directory", "Incident Learning"), rendered as tracked uppercase
+  micro-text. Settings pages default to "Workspace Settings". Write it in Title Case and keep it to
+  2–5 words; the band uppercases it.
 - **On the dark surface** default outline buttons and `text-primary` badges disappear. Use the exported
   `pageHeaderActionClass` / `pageHeaderBadgeClass`.
 - `DirectoryPageHeader` and `RunbookPageHeader` now render through `PageHeader` (deprecated wrappers).
@@ -373,6 +379,12 @@ cleaner API over `DetailHeroBanner`, which stays the implementation, so both ren
   (`<FilterChip active onClick>` toggles with `aria-pressed`, or `<FilterChip onRemove>` active-filter
   tokens), `hasActiveFilters` + `onClearAll` (+ `clearLabel`) for "Clear all", `advanced` content in a
   collapsible "Advanced filters" section (`advancedActiveCount`, `defaultAdvancedOpen`), `actions`.
+- **OpsKnight look (signature):** list pages pass a `title` ("Filter incidents") and a one-line
+  `description`; the title row shows a funnel tile (or `icon`). `FilterField` takes an `icon` and renders
+  its label as uppercase micro-text with that icon. Status quick filters use `<FilterChip tone icon>`
+  (`critical`, `elevated`, `ok`, `info`, `shift`): the icon carries the tone, hover tints, and the active
+  chip fills with the tone. List sections under the filter card use the same micro-label for their
+  heading ("Incident list", "Service directory").
 - Keep filter state in the URL. On phones it stacks; the mobile app keeps its sheet.
 - `SearchFilterBar` delegates to it (single row, "Reset" label).
 
@@ -397,6 +409,9 @@ which also gives the solid dot/accent-bar, hover border and left-rule colour for
   `priorityTone()`; `showLabel` → "P1 · Crisis"), `size`, `hideIcon` (densest rows only, e.g. the live
   dashboard). Screen readers hear "High urgency" / "Priority P1".
 - Neither sets `data-badge`, so Windows forced colours repaint them (border + icon + text survive).
+- **`variant="solid"`** (both badges) fills the pill with the tone (`toneClasses().filled`, AA text on
+  the fill). Use it for a row's primary signals (incident status and priority on list rows, service
+  health), and keep secondary signals (urgency, tags) soft, so the eye lands on the solid pair first.
 - `PriorityBadge`, `IncidentStatusBadge` and `IncidentUrgencyBadge` delegate to these. The generic
   `incident/StatusBadge` remains for non-incident states (status pages, postmortems).
 
@@ -538,4 +553,5 @@ keyframes are for decorative, non-blocking effects (login, wallboard). Easing: `
 - **Don't** animate longer than 250ms for a state change, or animate on page load.
 - **Don't** use Tailwind `green` for success, or incident hues for on-call layers.
 - **Don't** wrap the logo in a dark box (see AGENTS.md "Official Brand Logo").
-- **Don't** add eyebrow/kicker labels above headings, gradient text, or decorative glass.
+- **Don't** add gradient text or decorative glass. (Band eyebrows and section micro-labels are part of
+  the identity; don't sprinkle extra kicker labels inside cards.)

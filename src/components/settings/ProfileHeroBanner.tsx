@@ -111,6 +111,7 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
   return (
     <>
       <SettingsPageHeader
+        eyebrow="Personal Account"
         title={displayName}
         icon={
           <div className="relative shrink-0">

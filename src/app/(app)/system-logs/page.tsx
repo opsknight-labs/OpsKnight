@@ -85,6 +85,7 @@ export default async function SystemLogsPage({
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <PageHeader
+        eyebrow="Platform Diagnostics"
         title="System Logs"
         icon={Terminal}
         description="Application logs from this server: errors, warnings and diagnostics. Kept in memory (last 500 entries) and cleared when the server restarts."

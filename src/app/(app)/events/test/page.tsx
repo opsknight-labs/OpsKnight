@@ -76,6 +76,7 @@ export default function SendTestAlertPage() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 md:px-6 md:py-8">
       <PageHeader
+        eyebrow="Integration Testing"
         title="Send a test event"
         icon={FlaskConical}
         description="Post a simulated alert to the Events API to check a service's routing, deduplication and paging end to end."

@@ -4,7 +4,7 @@ import PageHeader, {
 } from '@/components/patterns/PageHeader';
 import SettingsSubpageNav from '@/components/settings/SettingsSubpageNav';
 
-export type SettingsPageHeaderProps = Omit<PageHeaderProps, 'breadcrumbs' | 'eyebrow'> & {
+export type SettingsPageHeaderProps = Omit<PageHeaderProps, 'breadcrumbs'> & {
   /** Crumbs after the settings page, e.g. `[{ label: statusPage.name }]` on a detail route. */
   trail?: BreadcrumbItem[];
   /** Hide the settings search in the breadcrumb row (focused flows such as consent). */
@@ -18,6 +18,7 @@ export type SettingsPageHeaderProps = Omit<PageHeaderProps, 'breadcrumbs' | 'eye
 export function SettingsPageHeader({ trail, hideSearch, ...props }: SettingsPageHeaderProps) {
   return (
     <PageHeader
+      eyebrow="Workspace Settings"
       {...props}
       breadcrumbs={
         <SettingsSubpageNav currentLabel={props.title} trail={trail} showSearch={!hideSearch} />

@@ -177,6 +177,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Collaboration Engine"
         icon={MicrosoftTeamsLogo}
         title="Microsoft Teams Integration"
         description="Deliver incident cards, lifecycle updates, and controlled collaboration workflows to Microsoft Teams."

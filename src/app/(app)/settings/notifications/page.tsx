@@ -200,6 +200,7 @@ export default async function NotificationProviderSettingsPage() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Outbound Delivery"
         title="Notification Providers"
         description="Configure SMS (Twilio, Amazon SNS), Email (Resend/SendGrid/SES/SMTP), Web Push, and WhatsApp Business outbound gateways."
         icon={BellRing}

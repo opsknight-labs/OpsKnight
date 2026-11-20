@@ -24,6 +24,7 @@ export default async function NotificationHistoryPage() {
     <div className="space-y-6">
       {/* 1. Shaded Top Hero Banner */}
       <SettingsPageHeader
+        eyebrow="Your Account Activity"
         title="Delivery History & Logs"
         description="Personal audit trail of outbound alerts, emails, and push notifications sent to you — not workspace-wide. Scoped to your account only."
         icon={History}

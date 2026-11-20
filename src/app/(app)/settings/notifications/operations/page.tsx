@@ -150,6 +150,7 @@ export default async function NotificationOperationsRoute() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Delivery Control Plane"
         title="Notification Operations"
         description="Real-time delivery telemetry, queue health, error diagnostics, and recovery engine for all alert channels."
         icon={Activity}

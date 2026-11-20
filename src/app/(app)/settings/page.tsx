@@ -171,6 +171,7 @@ export default async function SettingsOverviewPage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Workspace Configuration"
         title="Settings"
         icon={Settings}
         description="Your account, workspace configuration, integrations and platform operations."

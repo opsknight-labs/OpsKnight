@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, Filter, Search, SlidersHorizontal, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
@@ -154,16 +154,19 @@ export default function FilterBar({
         <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-1 pt-3.5">
           <div className="min-w-0">
             {title && (
-              <h2 className="flex items-center gap-2 font-sans text-sm font-semibold text-foreground">
-                {icon && (
-                  <span className="text-muted-foreground [&_svg]:h-4 [&_svg]:w-4" aria-hidden>
-                    {icon}
-                  </span>
-                )}
+              <h2 className="flex items-center gap-2 font-display text-base font-semibold tracking-tight text-foreground">
+                <span
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground ring-1 ring-inset ring-border [&_svg]:h-3.5 [&_svg]:w-3.5"
+                  aria-hidden
+                >
+                  {icon ?? <Filter />}
+                </span>
                 {title}
               </h2>
             )}
-            {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+            {description && (
+              <p className="mt-1 pl-9 text-xs text-muted-foreground">{description}</p>
+            )}
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {clearButton}
@@ -237,11 +240,14 @@ export default function FilterBar({
 export function FilterField({
   label,
   htmlFor,
+  icon,
   children,
   className,
 }: {
   label: string;
   htmlFor?: string;
+  /** Small lucide icon shown before the label. */
+  icon?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
@@ -251,8 +257,9 @@ export function FilterField({
       <Label
         htmlFor={htmlFor}
         id={htmlFor ? undefined : fallbackId}
-        className="text-xs text-muted-foreground"
+        className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground [&_svg]:h-3 [&_svg]:w-3"
       >
+        {icon && <span aria-hidden="true">{icon}</span>}
         {label}
       </Label>
       <div role={htmlFor ? undefined : 'group'} aria-labelledby={htmlFor ? undefined : fallbackId}>
@@ -260,6 +267,51 @@ export function FilterField({
       </div>
     </div>
   );
+}
+
+export type FilterChipTone = 'critical' | 'elevated' | 'ok' | 'info' | 'shift';
+
+const CHIP_TONES: Readonly<Record<FilterChipTone, { idle: string; active: string }>> = {
+  critical: {
+    idle: '[&_[data-chip-icon]]:text-rose-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800 dark:[&_[data-chip-icon]]:text-rose-400 dark:hover:border-rose-500/30 dark:hover:bg-rose-500/10 dark:hover:text-rose-200',
+    active:
+      'border-rose-600 bg-rose-600 text-white hover:bg-rose-700 dark:border-rose-500 dark:bg-rose-500/90',
+  },
+  elevated: {
+    idle: '[&_[data-chip-icon]]:text-amber-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-800 dark:[&_[data-chip-icon]]:text-amber-400 dark:hover:border-amber-500/30 dark:hover:bg-amber-500/10 dark:hover:text-amber-200',
+    active:
+      'border-amber-500 bg-amber-500 text-zinc-950 hover:bg-amber-400 dark:border-amber-400 dark:bg-amber-400',
+  },
+  ok: {
+    idle: '[&_[data-chip-icon]]:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 dark:[&_[data-chip-icon]]:text-emerald-400 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200',
+    active:
+      'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 dark:border-emerald-500 dark:bg-emerald-500/90',
+  },
+  info: {
+    idle: '[&_[data-chip-icon]]:text-blue-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800 dark:[&_[data-chip-icon]]:text-blue-400 dark:hover:border-blue-500/30 dark:hover:bg-blue-500/10 dark:hover:text-blue-200',
+    active:
+      'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 dark:border-blue-500 dark:bg-blue-500/90',
+  },
+  shift: {
+    idle: '[&_[data-chip-icon]]:text-violet-600 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-800 dark:[&_[data-chip-icon]]:text-violet-400 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10 dark:hover:text-violet-200',
+    active:
+      'border-violet-600 bg-violet-600 text-white hover:bg-violet-700 dark:border-violet-500 dark:bg-violet-500/90',
+  },
+};
+
+function chipToneClasses(tone: FilterChipTone) {
+  switch (tone) {
+    case 'critical':
+      return CHIP_TONES.critical;
+    case 'elevated':
+      return CHIP_TONES.elevated;
+    case 'ok':
+      return CHIP_TONES.ok;
+    case 'info':
+      return CHIP_TONES.info;
+    case 'shift':
+      return CHIP_TONES.shift;
+  }
 }
 
 /**
@@ -273,6 +325,7 @@ export function FilterChip({
   onRemove,
   count,
   icon,
+  tone,
   className,
 }: {
   children: ReactNode;
@@ -281,9 +334,12 @@ export function FilterChip({
   onRemove?: () => void;
   count?: number;
   icon?: ReactNode;
+  /** Status tone: tints the icon and hover state, and fills the chip when active. */
+  tone?: FilterChipTone;
   className?: string;
 }) {
   const removable = Boolean(onRemove);
+  const toneClasses = tone ? chipToneClasses(tone) : null;
   return (
     <button
       type="button"
@@ -297,12 +353,20 @@ export function FilterChip({
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'disabled:pointer-events-none disabled:opacity-50 [&_svg]:h-3.5 [&_svg]:w-3.5',
         active || removable
-          ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80'
-          : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground active:bg-ink-200',
+          ? toneClasses && active
+            ? toneClasses.active
+            : 'border-primary bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80'
+          : toneClasses
+            ? cn('border-border bg-background text-muted-foreground', toneClasses.idle)
+            : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground active:bg-ink-200',
         className
       )}
     >
-      {icon && <span aria-hidden="true">{icon}</span>}
+      {icon && (
+        <span data-chip-icon="" aria-hidden="true" className="inline-flex">
+          {icon}
+        </span>
+      )}
       <span>{children}</span>
       {typeof count === 'number' && <span className="tabular-nums opacity-80">{count}</span>}
       {removable && <X aria-hidden="true" />}

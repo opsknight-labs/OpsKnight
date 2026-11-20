@@ -13,6 +13,8 @@ type ToneRecipe = {
   soft: string;
   /** Solid dot / accent bar fill. */
   solid: string;
+  /** Filled pill (white or near-black text, AA on the fill) for high-signal row badges. */
+  filled: string;
   /** Hover border for rows tinted by tone. */
   hoverBorder: string;
   /** Left accent rule colour (pair with a `border-l-*` width). */
@@ -25,6 +27,7 @@ const TONE_RECIPES: Record<ToneKey, ToneRecipe> = {
   critical: {
     soft: 'border-status-critical-border/25 bg-status-critical-soft text-status-critical-deep dark:border-status-critical/35 dark:bg-status-critical/15 dark:text-rose-300',
     solid: 'bg-status-critical',
+    filled: 'border-transparent bg-status-critical text-white dark:bg-rose-600',
     hoverBorder: 'hover:border-status-critical-border/40',
     borderLeft: 'border-l-status-critical',
     text: 'text-status-critical-deep dark:text-rose-300',
@@ -32,6 +35,7 @@ const TONE_RECIPES: Record<ToneKey, ToneRecipe> = {
   elevated: {
     soft: 'border-status-elevated-border/30 bg-status-elevated-soft text-status-elevated-deep dark:border-status-elevated/35 dark:bg-status-elevated/15 dark:text-amber-300',
     solid: 'bg-status-elevated',
+    filled: 'border-transparent bg-amber-500 text-zinc-950 dark:bg-amber-400',
     hoverBorder: 'hover:border-status-elevated-border/40',
     borderLeft: 'border-l-status-elevated',
     text: 'text-status-elevated-deep dark:text-amber-300',
@@ -39,6 +43,7 @@ const TONE_RECIPES: Record<ToneKey, ToneRecipe> = {
   ok: {
     soft: 'border-status-ok-border/30 bg-status-ok-soft text-status-ok-deep dark:border-status-ok/35 dark:bg-status-ok/15 dark:text-emerald-300',
     solid: 'bg-status-ok',
+    filled: 'border-transparent bg-status-ok-deep text-white dark:bg-emerald-600',
     hoverBorder: 'hover:border-status-ok-border/40',
     borderLeft: 'border-l-status-ok',
     text: 'text-status-ok-deep dark:text-emerald-300',
@@ -46,6 +51,7 @@ const TONE_RECIPES: Record<ToneKey, ToneRecipe> = {
   info: {
     soft: 'border-status-info-border/25 bg-status-info-soft text-status-info-deep dark:border-status-info/35 dark:bg-status-info/15 dark:text-blue-300',
     solid: 'bg-status-info',
+    filled: 'border-transparent bg-blue-600 text-white dark:bg-blue-500',
     hoverBorder: 'hover:border-status-info-border/40',
     borderLeft: 'border-l-status-info',
     text: 'text-status-info-deep dark:text-blue-300',
@@ -53,6 +59,7 @@ const TONE_RECIPES: Record<ToneKey, ToneRecipe> = {
   shift: {
     soft: 'border-status-shift-border/25 bg-status-shift-soft text-status-shift-deep dark:border-status-shift/35 dark:bg-status-shift/15 dark:text-violet-300',
     solid: 'bg-status-shift',
+    filled: 'border-transparent bg-violet-600 text-white dark:bg-violet-500',
     hoverBorder: 'hover:border-status-shift-border/40',
     borderLeft: 'border-l-status-shift',
     text: 'text-status-shift-deep dark:text-violet-300',
@@ -61,6 +68,7 @@ const TONE_RECIPES: Record<ToneKey, ToneRecipe> = {
     // ink-600, not muted-foreground: muted text on the muted fill is only 4.3:1 in light mode.
     soft: 'border-border bg-muted text-ink-600',
     solid: 'bg-ink-400',
+    filled: 'border-transparent bg-ink-600 text-white dark:bg-ink-300 dark:text-zinc-950',
     hoverBorder: 'hover:border-ink-300',
     borderLeft: 'border-l-ink-400',
     text: 'text-muted-foreground',

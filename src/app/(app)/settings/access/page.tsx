@@ -88,6 +88,7 @@ export default async function MyAccessPage() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Account & Identity"
         title="My access"
         description="What you can see and do in OpsKnight, why, and how to get more."
         icon={KeyRound}

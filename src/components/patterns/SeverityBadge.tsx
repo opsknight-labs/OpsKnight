@@ -78,6 +78,8 @@ export type SeverityBadgeProps = {
   /** Incident priority (P1–P5). */
   priority?: string | null;
   size?: BadgeSize;
+  /** `solid` fills the pill with the tone; use for the row's primary signals. */
+  variant?: 'soft' | 'solid';
   /** Priority only: append the name ("P1 · Crisis"). */
   showLabel?: boolean;
   /** Urgency only: shorten Medium to Med for dense rows. */
@@ -95,6 +97,7 @@ function SeverityBadge({
   urgency,
   priority,
   size = 'sm',
+  variant = 'soft',
   showLabel = true,
   abbreviate = false,
   hideIcon = false,
@@ -120,7 +123,7 @@ function SeverityBadge({
         BADGE_BASE_CLASS,
         badgeSizeClass(size),
         'tabular-nums',
-        toneClasses(tone).soft,
+        variant === 'solid' ? toneClasses(tone).filled : toneClasses(tone).soft,
         className
       )}
     >

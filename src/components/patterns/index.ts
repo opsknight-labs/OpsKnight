@@ -14,7 +14,13 @@ export {
   type PageHeaderProps,
   type BreadcrumbItem,
 } from './PageHeader';
-export { default as FilterBar, FilterField, FilterChip, type FilterBarProps } from './FilterBar';
+export {
+  default as FilterBar,
+  FilterField,
+  FilterChip,
+  type FilterBarProps,
+  type FilterChipTone,
+} from './FilterBar';
 export { default as EmptyState, type EmptyStateProps } from './EmptyState';
 export { default as ErrorState, type ErrorStateProps } from './ErrorState';
 export { TableRowsSkeleton, CardGridSkeleton, DetailPageSkeleton } from './Skeletons';

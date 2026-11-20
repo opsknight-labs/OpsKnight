@@ -219,6 +219,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-6 md:px-6 md:py-8">
       <PageHeader
+        eyebrow="Documentation & Resources"
         title="Help Center"
         icon={HelpCircle}
         description="Documentation, self-hosting guides, answers to common questions and how to reach the maintainers."

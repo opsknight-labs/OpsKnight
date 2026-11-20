@@ -156,6 +156,7 @@ export function ComplianceControlCenter({
   return (
     <div className="space-y-6 pb-12 w-full">
       <SettingsPageHeader
+        eyebrow="Security Posture & Compliance Engine"
         title="Compliance Control Center"
         description="Continuous runtime control telemetry, integrity-verified evidence, and versioned regulatory mapping."
         icon={ShieldCheck}

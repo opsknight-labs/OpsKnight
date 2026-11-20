@@ -109,6 +109,7 @@ export default async function AccessManagementPage() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Workspace & Governance"
         title="Access management"
         description="Roles, custom roles, temporary and emergency access, access reviews, and a checker that explains any access decision."
         icon={ShieldCheck}

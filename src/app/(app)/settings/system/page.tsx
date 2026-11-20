@@ -147,6 +147,7 @@ export default async function SystemSettingsPage() {
     return (
       <div className="space-y-6">
         <SettingsPageHeader
+          eyebrow="System Administration"
           icon={Settings}
           title="System Settings"
           description="Application-wide configuration and defaults."
@@ -166,6 +167,7 @@ export default async function SystemSettingsPage() {
     return (
       <div className="space-y-6">
         <SettingsPageHeader
+          eyebrow="System Administration"
           icon={Settings}
           title="System Settings"
           description="Application-wide configuration and defaults."
@@ -514,6 +516,7 @@ export default async function SystemSettingsPage() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="System Administration"
         icon={Settings}
         title="System Settings"
         description="Core application configuration — App URL, SSO, data retention, and environment."

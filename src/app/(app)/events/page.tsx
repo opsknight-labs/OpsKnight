@@ -85,6 +85,7 @@ export default async function EventLogsPage({ searchParams }: EventLogsPageProps
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <PageHeader
+        eyebrow="Audit & Telemetry"
         title="Event Logs"
         icon={Activity}
         description="Every incident lifecycle event across services: triggers, acknowledgements, escalations and resolutions."

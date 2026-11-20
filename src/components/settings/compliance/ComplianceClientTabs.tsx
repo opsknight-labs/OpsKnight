@@ -342,6 +342,7 @@ export default function ComplianceClientTabs({
   return (
     <div className="space-y-6 pb-12 w-full">
       <SettingsPageHeader
+        eyebrow="Security Posture & Compliance Frameworks"
         title="Security & Compliance"
         description="Read-only readiness diagnostics across SOC 2, ISO 27001, HIPAA, GDPR, CRA, and workspace security controls."
         icon={ShieldCheck}

@@ -126,6 +126,7 @@ export default function IncidentSlaClientView({
   return (
     <div className="space-y-6 pb-12 w-full">
       <SettingsPageHeader
+        eyebrow="Governance & SLA Architecture"
         title="Incident SLAs & Response Policies"
         description="Define acknowledgement and resolution targets, provider alert severity normalization, and operational support windows."
         icon={ShieldCheck}

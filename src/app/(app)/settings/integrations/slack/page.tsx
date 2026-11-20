@@ -81,6 +81,7 @@ export default async function GlobalSlackIntegrationPage(props: {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Collaboration Engine"
         icon={SlackLogo}
         title="Slack Integration"
         description="Connect your Slack workspace for incident alerts, bi-directional triage, slash commands, and video war rooms."

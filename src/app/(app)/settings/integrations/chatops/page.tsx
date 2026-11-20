@@ -61,6 +61,7 @@ export default async function GlobalChatOpsIntegrationPage() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
+        eyebrow="Incident Collaboration"
         icon={MessageSquare}
         title="War Rooms & ChatOps"
         description="Centralize how OpsKnight creates and manages incident collaboration rooms across connected providers."
