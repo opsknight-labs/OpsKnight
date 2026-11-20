@@ -1,7 +1,6 @@
 name: SBOM artifact validation
 on:
   push:
-    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 permissions:

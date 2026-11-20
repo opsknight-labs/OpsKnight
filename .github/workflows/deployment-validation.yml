@@ -2,19 +2,6 @@ name: Deployment manifests
 
 on:
   workflow_call:
-  push:
-    branches: [main]
-    paths:
-      - 'Dockerfile'
-      - 'agent/**'
-      - 'docker-entrypoint.sh'
-      - 'scripts/auto-recover-migrations.ts'
-      - 'scripts/validate-release-tag.cjs'
-      - 'deploy/**'
-      - 'src/lib/runtime-capacity.ts'
-      - 'env.example'
-      - '.github/workflows/docker-image.yml'
-      - '.github/workflows/deployment-validation.yml'
 
 permissions:
   contents: read
