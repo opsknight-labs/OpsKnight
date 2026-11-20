@@ -1,12 +1,11 @@
--- Additive only: one enum value and two new, empty tables for lane-side metric anomaly evidence. Nothing
--- existing is altered beyond the enum value.
+-- Additive only (the enum value lives in 20261111205900): two new, empty tables for lane-side metric anomaly evidence. Nothing
+-- existing is altered.
 -- The plain CREATE INDEX statements below are an exception to the one-CREATE-INDEX-CONCURRENTLY-per-file
 -- rule, acceptable ONLY because every one of them is on a table this same migration creates (empty, not
 -- yet visible to any writer). An index on an existing table must go in its own CONCURRENTLY migration.
 SET lock_timeout = '2s';
 SET statement_timeout = '10s';
 
-ALTER TYPE "IntelligenceFindingKind" ADD VALUE IF NOT EXISTS 'METRIC_ANOMALY';
 
 CREATE TABLE "ServiceMetricTemplate" (
   "id" TEXT NOT NULL,
