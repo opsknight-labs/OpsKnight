@@ -175,23 +175,23 @@
    --ui-destructive-foreground: 210 40% 98%;
    --ui-ring: 215.3 25% 26.7%;
 
-   /* Data-viz (analytics). Validated for CVD + contrast in both modes with the
-      dataviz palette validator. series-* = categorical order; ordinal-* = one
-      blue ramp for ordered categories (low→high); seq-* = heatmap magnitude. */
-   --chart-series-1: #2a78d6;
-   --chart-series-2: #eb6834;
-   --chart-ordinal-1: #86b6ef;
-   --chart-ordinal-2: #2a78d6;
-   --chart-ordinal-3: #184f95;
+   /* Data-viz (analytics). Teal, because blue/amber/emerald/violet/crimson mean
+      status. One hue, validated (ordinal: monotone L, steps visible, ≥2:1 light end)
+      in both modes: series-1/2 = median/p90 (ordered, so light→dark); ordinal-* =
+      ordered categories (low→high); seq-* = heatmap magnitude. Context lines such as
+      the previous period use neutral ink (muted-foreground), dashed. */
+   --chart-series-1: #0d9488;
+   --chart-series-2: #134e4a;
+   --chart-ordinal-1: #14b8a6;
+   --chart-ordinal-2: #0f766e;
+   --chart-ordinal-3: #134e4a;
    --chart-seq-0: #f1f5f9;
-   --chart-seq-1: #cde2fb;
-   --chart-seq-2: #86b6ef;
-   --chart-seq-3: #3987e5;
-   --chart-seq-4: #1c5cab;
-   --chart-seq-5: #0d366b;
+   --chart-seq-1: #ccfbf1;
+   --chart-seq-2: #5eead4;
+   --chart-seq-3: #14b8a6;
+   --chart-seq-4: #0f766e;
+   --chart-seq-5: #134e4a;
    --chart-grid: #e1e0d9;
-   --chart-delta-good: #006300;
-   --chart-delta-bad: #b42318;
 }
 
 /*
@@ -224,20 +224,18 @@
    --ui-ring: 240 4.9% 83.9%;
 
    /* Data-viz (dark steps chosen for the dark surface, validated separately). */
-   --chart-series-1: #3987e5;
-   --chart-series-2: #d95926;
-   --chart-ordinal-1: #184f95;
-   --chart-ordinal-2: #3987e5;
-   --chart-ordinal-3: #9ec5f4;
+   --chart-series-1: #14b8a6;
+   --chart-series-2: #99f6e4;
+   --chart-ordinal-1: #115e59;
+   --chart-ordinal-2: #14b8a6;
+   --chart-ordinal-3: #99f6e4;
    --chart-seq-0: #1c1c1f;
-   --chart-seq-1: #104281;
-   --chart-seq-2: #1c5cab;
-   --chart-seq-3: #3987e5;
-   --chart-seq-4: #86b6ef;
-   --chart-seq-5: #cde2fb;
+   --chart-seq-1: #134e4a;
+   --chart-seq-2: #0f766e;
+   --chart-seq-3: #14b8a6;
+   --chart-seq-4: #5eead4;
+   --chart-seq-5: #ccfbf1;
    --chart-grid: #2c2c2a;
-   --chart-delta-good: #0ca30c;
-   --chart-delta-bad: #f97066;
 
    /* Elevation (dark): deeper, near-black shadows read on zinc surfaces. */
    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
