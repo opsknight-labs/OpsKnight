@@ -214,20 +214,19 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
             : ''}
         </p>
       )}
-      {!decided && !expired && (
-        <ReviewForm
-          action={reviewPreparedOperation}
-          hidden={{ id: approval.id, operationDigest: approval.operationDigest }}
-          noun="change"
-          approveLabel="Approve frozen change"
-          rejectLabel="Reject change"
-          freshSignInRequired={freshSignInRequired}
-          reviewPath={reviewPath}
-          selfReview={selfReview}
-        >
-          {selfReview && <SelfApprovalConfirm />}
-        </ReviewForm>
-      )}
+      <ReviewForm
+        closed={decided || expired}
+        action={reviewPreparedOperation}
+        hidden={{ id: approval.id, operationDigest: approval.operationDigest }}
+        noun="change"
+        approveLabel="Approve frozen change"
+        rejectLabel="Reject change"
+        freshSignInRequired={freshSignInRequired}
+        reviewPath={reviewPath}
+        selfReview={selfReview}
+      >
+        {selfReview && <SelfApprovalConfirm />}
+      </ReviewForm>
     </div>
   );
 }

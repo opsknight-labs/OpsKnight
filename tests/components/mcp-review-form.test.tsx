@@ -51,6 +51,24 @@ describe('review form', () => {
     expect(form.get('reason')).toBe('Wrong service');
   });
 
+  it('keeps the confirmation after the page revalidates the now-decided review', async () => {
+    const action = vi.fn(async (_previous: unknown, _form: FormData) => ({
+      ok: true as const,
+      decision: 'approve' as const,
+    }));
+    const { rerender } = render(<ReviewForm {...base} action={action} />);
+    fireEvent.click(screen.getByRole('button', { name: /Approve frozen change/ }));
+    expect(await screen.findByRole('status')).toHaveTextContent('You approved this change.');
+    // The action revalidates the page, which now renders the review as decided.
+    rerender(<ReviewForm {...base} action={action} closed />);
+    expect(screen.getByRole('status')).toHaveTextContent('You approved this change.');
+  });
+
+  it('shows nothing for a review that was already decided before this visit', () => {
+    const { container } = render(<ReviewForm {...base} action={vi.fn()} closed />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('does not claim the requester was notified when they reviewed their own request', async () => {
     const approve = async (_previous: unknown, _form: FormData) => ({
       ok: true as const,
