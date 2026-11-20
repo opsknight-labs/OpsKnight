@@ -127,6 +127,21 @@ describe('native change-source mappers', () => {
       dedupKey: 'run-123:applied',
       occurredAt: '2026-11-07T08:00:00Z',
     });
+    const applied = { run_status: 'applied', run_updated_at: '2026-11-07T08:00:00Z' };
+    const queued = { ...base, run_created_at: '2026-11-07T06:00:00Z' };
+    // Run creation includes queue and approval waits: never the change start.
+    expect(
+      mapTerraformChange({ ...queued, notifications: [applied] })?.labels.startedAt
+    ).toBeUndefined();
+    expect(
+      mapTerraformChange({
+        ...queued,
+        notifications: [
+          { run_status: 'applying', run_updated_at: '2026-11-07T07:55:00Z' },
+          applied,
+        ],
+      })?.labels.startedAt
+    ).toBe('2026-11-07T07:55:00Z');
     expect(mapTerraformChange({ ...base, notifications: [{ run_status: 'planning' }] })).toBeNull();
     expect(
       mapTerraformChange({ ...base, notifications: [{ run_status: 'discarded' }] })

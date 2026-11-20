@@ -137,7 +137,12 @@ export function mapTerraformChange(payload: unknown): MappedChange | null {
   label(labels, 'workspace', workspace);
   label(labels, 'status', status);
   label(labels, 'trigger', latest.trigger);
-  label(labels, 'startedAt', body.run_created_at);
+  // The apply start, only when the notification carries it: run_created_at includes queue and approval waits.
+  label(
+    labels,
+    'startedAt',
+    notifications.find(notification => notification.run_status === 'applying')?.run_updated_at
+  );
   return {
     source: 'terraform',
     kind: 'INFRA',
