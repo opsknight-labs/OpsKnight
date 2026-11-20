@@ -93,7 +93,7 @@ export function getAnalyticsSectionWithTime<K extends AnalyticsSectionKey>(
   context: AnalyticsContext,
   section: K
 ): Promise<Cached<AnalyticsSectionData<K>>> {
-  const query = SECTIONS[section] as (
+  const query = SECTIONS[section] as unknown as (
     scope: AnalyticsScope,
     window: AnalyticsWindow,
     params: AnalyticsParams

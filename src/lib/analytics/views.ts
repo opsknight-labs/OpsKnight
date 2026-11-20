@@ -60,7 +60,7 @@ function readWhere(actor: AuthorizationActor): Prisma.AnalyticsViewWhereInput {
   return {
     OR: [
       { userId: actor.id },
-      ...(actor.teamIds.length ? [{ visibility: 'TEAM' as const, teamId: { in: actor.teamIds } }] : []),
+      ...(actor.teamIds.length ? [{ visibility: 'TEAM' as const, teamId: { in: [...actor.teamIds] } }] : []),
     ],
   };
 }

@@ -110,7 +110,8 @@ describeIfRealDB('analytics drill-down', { timeout: 60_000 }, () => {
   });
 
   it('totals equal the KPI numerators for the same filters', async () => {
-    for (const query of [{}, { urgency: 'HIGH' }, { service: otherSvc }]) {
+    const queries: Record<string, string>[] = [{}, { urgency: 'HIGH' }, { service: otherSvc }];
+    for (const query of queries) {
       const ctx = context(admin, query);
       const [agg] = await run<AggregateRow[]>(
         Prisma.sql`WITH ${metricRowsCte(ctx.scope, ctx.window)} SELECT ${metricAggregates()} FROM metric_rows`
