@@ -16,4 +16,3 @@ export { default as ErrorBoundary } from './ErrorBoundary';
 export { default as ErrorState } from './ErrorState';
 export { default as Skeleton, SkeletonText, SkeletonCard } from './Skeleton';
 export { default as Spinner } from './Spinner';
-export { default as SettingsSidebar } from './SettingsSidebar';

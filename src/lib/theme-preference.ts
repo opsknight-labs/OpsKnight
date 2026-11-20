@@ -59,6 +59,17 @@ export const ACCOUNT_THEME_SYNC_SCRIPT =
  * script applies the class; this one only covers what it does not. Routes
  * listed (comma-separated) in the element's `data-light-routes` stay light.
  */
+/**
+ * Inline script for light-only surfaces reached through a rewrite (custom
+ * status-page domains serve `/status/<slug>` at `/`), where the head script
+ * cannot tell from `location.pathname` that the page must stay light. It runs
+ * at the top of the surface's layout, before any of its content paints.
+ */
+export const FORCE_LIGHT_THEME_SCRIPT =
+  '(function(){try{var d=document.documentElement;d.classList.remove("dark");d.classList.add("light");' +
+  'd.style.colorScheme="light";d.setAttribute("data-theme","light");' +
+  'var m=document.getElementById("opsknight-runtime-theme-color");if(m)m.setAttribute("content","#f8fafc")}catch(e){}})();';
+
 export const CHROME_THEME_BOOTSTRAP_SCRIPT =
   '(function(){try{var e=document.currentScript,l=(e&&e.getAttribute("data-light-routes")||"").split(","),p=location.pathname;' +
   'var pin=l.some(function(x){return x&&(p===x||p.indexOf(x+"/")===0)});' +

@@ -1010,7 +1010,7 @@ export default function StatusPageConfig({
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              background: '#f9fafb',
+              background: 'hsl(var(--ui-muted))',
               transition: 'flex 0.3s ease',
             }}
           >
@@ -1713,9 +1713,9 @@ export default function StatusPageConfig({
                                   style={{
                                     marginTop: 'var(--spacing-4)',
                                     padding: 'var(--spacing-4)',
-                                    background: '#f9fafb',
+                                    background: 'hsl(var(--ui-muted))',
                                     borderRadius: 'var(--radius-md)',
-                                    border: '1px solid #e5e7eb',
+                                    border: '1px solid hsl(var(--ui-border))',
                                   }}
                                 >
                                   <h4
@@ -1723,7 +1723,7 @@ export default function StatusPageConfig({
                                       fontSize: 'var(--font-size-sm)',
                                       fontWeight: '600',
                                       marginBottom: 'var(--spacing-3)',
-                                      color: '#374151',
+                                      color: 'hsl(var(--ui-foreground))',
                                     }}
                                   >
                                     Uptime Thresholds
@@ -1731,7 +1731,7 @@ export default function StatusPageConfig({
                                   <p
                                     style={{
                                       fontSize: 'var(--font-size-xs)',
-                                      color: '#6b7280',
+                                      color: 'hsl(var(--ui-muted-foreground))',
                                       marginBottom: 'var(--spacing-3)',
                                     }}
                                   >
@@ -1880,7 +1880,7 @@ export default function StatusPageConfig({
                               )}
                               <div
                                 style={{
-                                  borderTop: '1px solid #e5e7eb',
+                                  borderTop: '1px solid hsl(var(--ui-border))',
                                   paddingTop: 'var(--spacing-3)',
                                   display: 'flex',
                                   flexDirection: 'column',
@@ -1980,7 +1980,7 @@ export default function StatusPageConfig({
                               )}
                               <div
                                 style={{
-                                  borderTop: '1px solid #e5e7eb',
+                                  borderTop: '1px solid hsl(var(--ui-border))',
                                   paddingTop: 'var(--spacing-4)',
                                 }}
                               >
@@ -2086,8 +2086,8 @@ export default function StatusPageConfig({
                                         style={{
                                           padding: 'var(--spacing-3)',
                                           borderRadius: 'var(--radius-md)',
-                                          border: '1px solid #e5e7eb',
-                                          background: '#f9fafb',
+                                          border: '1px solid hsl(var(--ui-border))',
+                                          background: 'hsl(var(--ui-muted))',
                                           display: 'flex',
                                           alignItems: 'center',
                                           justifyContent: 'space-between',
@@ -2158,8 +2158,8 @@ export default function StatusPageConfig({
                                   marginTop: 'var(--spacing-4)',
                                   padding: 'var(--spacing-3)',
                                   borderRadius: 'var(--radius-md)',
-                                  border: '1px solid #e5e7eb',
-                                  background: '#f9fafb',
+                                  border: '1px solid hsl(var(--ui-border))',
+                                  background: 'hsl(var(--ui-muted))',
                                   display: 'flex',
                                   flexDirection: 'column',
                                   gap: 'var(--spacing-3)',
@@ -2201,7 +2201,7 @@ export default function StatusPageConfig({
                             <div
                               style={{
                                 marginTop: 'var(--spacing-5)',
-                                borderTop: '1px solid #e5e7eb',
+                                borderTop: '1px solid hsl(var(--ui-border))',
                                 paddingTop: 'var(--spacing-4)',
                               }}
                             >
@@ -2224,8 +2224,8 @@ export default function StatusPageConfig({
                                 <div
                                   style={{
                                     padding: 'var(--spacing-3)',
-                                    background: '#f9fafb',
-                                    border: '1px solid #e5e7eb',
+                                    background: 'hsl(var(--ui-muted))',
+                                    border: '1px solid hsl(var(--ui-border))',
                                     borderRadius: 'var(--radius-md)',
                                   }}
                                 >
@@ -2251,8 +2251,8 @@ export default function StatusPageConfig({
                                 <div
                                   style={{
                                     padding: 'var(--spacing-3)',
-                                    background: '#f9fafb',
-                                    border: '1px solid #e5e7eb',
+                                    background: 'hsl(var(--ui-muted))',
+                                    border: '1px solid hsl(var(--ui-border))',
                                     borderRadius: 'var(--radius-md)',
                                   }}
                                 >
