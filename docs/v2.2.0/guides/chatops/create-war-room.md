@@ -77,10 +77,8 @@ rooms. Both are off by default.
 - **Save war-room messages to the incident timeline** saves people's messages
   as timeline entries, so the time axis and the postmortem draft include the
   discussion. Secrets are redacted, and each incident keeps at most 2,000
-  messages of up to 4 KB each. A private Slack channel is captured only into a
-  private incident. If that incident is later made public, the messages saved
-  from the private channel are removed and the timeline notes how many. A
-  change to this switch can take up to 30 seconds to apply.
+  messages of up to 4 KB each. Public and private war-room channels are both
+  captured; incident visibility only controls the status page. A change to this switch can take up to 30 seconds to apply.
 
 When Squire in chat is turned on, people can mention `@squire` in incident
 channels and war rooms, or use `/incident ask <question>` in Slack, which

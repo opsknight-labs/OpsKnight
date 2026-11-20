@@ -7,7 +7,6 @@ import {
   CAPTURE_LIMITS,
   captureSlackChannelMessage,
   clipBytes,
-  purgePrivateChannelCaptures,
   resetCaptureSwitchCache,
 } from '@/lib/chatops/war-room-capture';
 import {
@@ -109,22 +108,14 @@ describe('war-room channel capture', () => {
     expect(await chatRows(w.incident.id)).toHaveLength(0);
   });
 
-  it('captures a private channel only into a private incident', async () => {
+  it('captures private and public war-room channels regardless of incident visibility', async () => {
     const w = await world();
-    expect(await captureSlackChannelMessage(message('x', { channel_type: 'group' }))).toBe(
-      'PRIVATE_CHANNEL'
-    );
-    await db.incident.update({ where: { id: w.incident.id }, data: { visibility: 'PRIVATE' } });
-    expect(await captureSlackChannelMessage(message('x', { channel_type: 'group' }))).toBe(
-      'CAPTURED'
-    );
+    // Visibility is a status-page setting only; it never gates war-room capture.
+    expect(
+      await captureSlackChannelMessage(message('from a private room', { channel_type: 'group' }))
+    ).toBe('CAPTURED');
     expect(await captureSlackChannelMessage(message('from a public room'))).toBe('CAPTURED');
-
-    // Making the incident PUBLIC removes what came from the private channel, and only that.
-    expect(await db.$transaction(tx => purgePrivateChannelCaptures(tx, w.incident.id))).toBe(1);
-    expect((await chatRows(w.incident.id)).map(row => row.message)).toEqual([
-      'Slack user U1: from a public room',
-    ]);
+    expect(await chatRows(w.incident.id)).toHaveLength(2);
   });
 
   it('stops at the per-incident cap and clips long messages to the byte budget', async () => {
