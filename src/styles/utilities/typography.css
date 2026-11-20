@@ -215,11 +215,6 @@ code, .font-mono {
     overflow: hidden;
 }
 
-.focus-border:focus,
-.focus-border:focus-visible {
-    border-color: var(--border-focus);
-}
-
 /* Enhanced Focus Styles for Accessibility */
 *:focus-visible {
     outline: 2px solid var(--border-focus);

@@ -7,9 +7,6 @@
 
 /* Mobile menu button visibility */
 @media (max-width: 768px) {
-    .mobile-menu-button {
-        display: flex !important;
-    }
 
     .app-shell {
         padding-left: 0;
@@ -17,16 +14,6 @@
 
     .content-shell {
         width: 100%;
-    }
-}
-
-@media (min-width: 769px) {
-    .mobile-menu-button {
-        display: none !important;
-    }
-
-    .mobile-sidebar-backdrop {
-        display: none !important;
     }
 }
 

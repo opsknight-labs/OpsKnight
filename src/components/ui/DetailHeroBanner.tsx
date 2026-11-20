@@ -41,7 +41,7 @@ export type DetailHeroBannerProps = {
 };
 
 /** One stat tile; shared by the inline strip and the bottom grid so both look the same. */
-function HeroStat({ stat }: { stat: DetailStatItem }) {
+function HeroStat({ stat, layoutClass }: { stat: DetailStatItem; layoutClass?: string }) {
   const content = (
     <>
       <span className="block truncate text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -73,10 +73,11 @@ function HeroStat({ stat }: { stat: DetailStatItem }) {
   );
 
   const className = cn(
-    'block min-w-0 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 sm:min-w-[7.5rem]',
+    'block min-w-0 bg-card px-3 py-2.5 text-left transition-colors duration-150',
+    layoutClass,
     stat.href &&
-      'hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-    stat.active && 'bg-muted ring-1 ring-inset ring-border',
+      'hover:bg-muted focus-visible:relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+    stat.active && 'bg-muted shadow-[inset_0_-2px_0_hsl(var(--ui-foreground))]',
     stat.className
   );
 
@@ -87,6 +88,33 @@ function HeroStat({ stat }: { stat: DetailStatItem }) {
   ) : (
     <div className={className}>{content}</div>
   );
+}
+
+/**
+ * Stat bar layout: stats share the full card width. Phones: 2 columns; tablets: one row
+ * for up to 4 stats, else 3 columns; desktop: one row. The last stat spans any leftover
+ * cells so the bar never shows a gap.
+ */
+function statBarLayout(count: number) {
+  const smSingleRow = count <= 4;
+  const container = cn(
+    'mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border',
+    smSingleRow
+      ? 'sm:grid-flow-col sm:auto-cols-fr sm:grid-cols-none'
+      : 'sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none'
+  );
+  const last = cn(
+    count % 2 === 1 && 'col-span-2',
+    smSingleRow
+      ? 'sm:col-span-1'
+      : count % 3 === 1
+        ? 'sm:col-span-3'
+        : count % 3 === 2
+          ? 'sm:col-span-2'
+          : 'sm:col-span-1',
+    'lg:col-span-1'
+  );
+  return { container, last };
 }
 
 /**
@@ -167,10 +195,16 @@ export default function DetailHeroBanner({
           <div
             aria-label={`${title} summary`}
             role="group"
-            className="-mx-2 mt-3 grid grid-cols-2 gap-1 border-t border-border pt-2.5 sm:flex sm:flex-wrap sm:gap-x-2"
+            className={statBarLayout(stats.length).container}
           >
             {stats.map((stat, idx) => (
-              <HeroStat key={stat.label || idx} stat={stat} />
+              <HeroStat
+                key={stat.label || idx}
+                stat={stat}
+                layoutClass={
+                  idx === stats.length - 1 ? statBarLayout(stats.length).last : undefined
+                }
+              />
             ))}
           </div>
         )}
@@ -195,8 +229,12 @@ export function DetailHeroBannerSkeleton({
   hasActions?: boolean;
   className?: string;
 }) {
+  const bar = statBarLayout(statsCount);
   const statTiles = Array.from({ length: statsCount }).map((_, idx) => (
-    <div key={idx} className="space-y-1.5 px-2 py-1.5 sm:min-w-[7.5rem]">
+    <div
+      key={idx}
+      className={cn('space-y-1.5 bg-card px-3 py-2.5', idx === statsCount - 1 && bar.last)}
+    >
       <Skeleton className="h-2.5 w-14 bg-muted" />
       <Skeleton className="h-5 w-10 bg-muted" />
     </div>
@@ -223,11 +261,7 @@ export function DetailHeroBannerSkeleton({
           </div>
           {hasActions && <Skeleton className="h-9 w-28 shrink-0 rounded-md bg-muted" />}
         </div>
-        {statsCount > 0 && (
-          <div className="-mx-2 mt-3 grid grid-cols-2 gap-1 border-t border-border pt-2.5 sm:flex sm:flex-wrap sm:gap-x-2">
-            {statTiles}
-          </div>
-        )}
+        {statsCount > 0 && <div className={bar.container}>{statTiles}</div>}
       </div>
     </header>
   );

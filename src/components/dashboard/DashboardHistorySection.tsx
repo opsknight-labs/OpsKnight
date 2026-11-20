@@ -54,11 +54,6 @@ export function useHistoryQuery(): HistoryContextValue {
   if (!value) throw new Error('useHistoryQuery must be used within DashboardHistoryProvider');
   return value;
 }
-
-export function useOptionalHistoryQuery(): HistoryContextValue | null {
-  return useContext(HistoryContext);
-}
-
 /**
  * Owns the dashboard reporting period. It lives in client state and the URL (replaceState), so a
  * change refetches the single analytics projection without re-rendering the server page or

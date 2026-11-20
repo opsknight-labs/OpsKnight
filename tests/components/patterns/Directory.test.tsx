@@ -1,7 +1,13 @@
 import React from 'react';
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DirectoryHeader, DirectoryTable, useDirectoryView } from '@/components/patterns/Directory';
+import {
+  DirectoryGuide,
+  DirectoryGuideSteps,
+  DirectoryHeader,
+  DirectoryTable,
+  useDirectoryView,
+} from '@/components/patterns/Directory';
 
 type Row = { id: string; name: string };
 const rows: Row[] = [
@@ -64,5 +70,57 @@ describe('Directory pattern', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Card view' }));
     expect(onChange).toHaveBeenCalledWith('cards');
+  });
+
+  const steps = [
+    { title: 'First', description: 'Do the first thing.' },
+    { title: 'Second', description: 'Then the second.' },
+  ];
+  const links = [
+    { label: 'Escalation Policies', href: '/policies' },
+    { label: 'Team Directory', href: '/teams' },
+  ];
+
+  it('guide shows quick links and opens a named popover with steps and links', () => {
+    render(<DirectoryGuide title="How things work" steps={steps} links={links} />);
+    expect(screen.getByRole('link', { name: 'Escalation Policies' }).getAttribute('href')).toBe(
+      '/policies'
+    );
+    expect(screen.queryByText('Do the first thing.')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'How things work' }));
+    const popover = screen.getByRole('dialog', { name: 'How things work' });
+    const items = within(popover).getAllByRole('listitem');
+    expect(items.map(item => item.textContent)).toEqual([
+      '1FirstDo the first thing.',
+      '2SecondThen the second.',
+    ]);
+    expect(
+      within(popover)
+        .getByRole('link', { name: /Team Directory/ })
+        .getAttribute('href')
+    ).toBe('/teams');
+
+    fireEvent.keyDown(popover, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('guide steps render on their own for empty states', () => {
+    render(<DirectoryGuideSteps steps={steps} />);
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('header renders the guide before the view toggle', () => {
+    render(
+      <DirectoryHeader
+        title="Things"
+        view={{ value: 'table', onChange: vi.fn() }}
+        guide={<DirectoryGuide title="How things work" steps={steps} />}
+      />
+    );
+    const guide = screen.getByRole('button', { name: 'How things work' });
+    const toggle = screen.getByRole('group', { name: 'Directory view' });
+    expect(guide.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

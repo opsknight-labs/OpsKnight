@@ -19,14 +19,7 @@ import {
 import InviteUserModal from '@/components/users/InviteUserModal';
 import UserFilters from '@/components/users/UserFilters';
 import UserList from '@/components/users/UserList';
-import UserSortDropdown from '@/components/users/UserSortDropdown';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
+import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Users, UserCheck, UserPlus, UserX } from 'lucide-react';
@@ -254,21 +247,15 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
 
       {/* User List */}
       <Card className="border-border/70 shadow-2xs">
-        <CardHeader className="p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-base font-bold">User Directory</CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                {formatPaginationSummary(
-                  pagination.startItem,
-                  pagination.endItem,
-                  totalCount,
-                  'users'
-                )}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <UserSortDropdown />
+        <CardContent className="p-0">
+          <UserList
+            summary={formatPaginationSummary(
+              pagination.startItem,
+              pagination.endItem,
+              totalCount,
+              'users'
+            )}
+            actions={
               <RestrictedAction allowed={isAdmin} anyOf="admin.manage">
                 <InviteUserModal
                   action={addUser}
@@ -277,11 +264,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                   label="Invite User"
                 />
               </RestrictedAction>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-5 pt-0">
-          <UserList
+            }
             users={users}
             currentUserId={currentUserId}
             isAdmin={isAdmin}
@@ -299,7 +282,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between mt-6 pt-6 border-t gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between border-t px-4 py-4 gap-4">
               <div className="text-sm text-muted-foreground">
                 Page {page} of {totalPages}
               </div>

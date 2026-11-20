@@ -6,16 +6,6 @@ import { cn } from '@/lib/utils';
 type IconType = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
 export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'brand';
-
-export const TONE_TEXT: Record<Tone, string> = {
-  neutral: 'text-muted-foreground',
-  success: 'text-emerald-600 dark:text-emerald-400',
-  warning: 'text-amber-600 dark:text-amber-400',
-  danger: 'text-rose-600 dark:text-rose-400',
-  info: 'text-sky-600 dark:text-sky-400',
-  brand: 'text-primary',
-};
-
 export const TONE_SURFACE: Record<Tone, string> = {
   neutral: 'bg-muted/60 text-muted-foreground ring-border',
   success: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-300',

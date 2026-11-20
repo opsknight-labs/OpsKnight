@@ -45,35 +45,8 @@
    background-color: var(--bg-secondary);
 }
 
-.bg-surface {
-   background-color: var(--bg-surface);
-}
-
-.bg-dark {
-   background-color: var(--bg-dark);
-}
-
-.bg-success {
-   background-color: var(--color-success);
-}
-
 .bg-warning {
    background-color: var(--color-warning);
 }
 
-.bg-error {
-   background-color: var(--color-error);
-}
-
 /* Border colors */
-.border-default {
-   border-color: var(--border);
-}
-
-.border-hover {
-   border-color: var(--border-hover);
-}
-
-.border-error {
-   border-color: var(--border-error);
-}

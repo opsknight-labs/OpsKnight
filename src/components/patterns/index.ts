@@ -32,9 +32,13 @@ export {
   DirectoryPrimaryCell,
   DirectoryCardGrid,
   DirectoryViewToggle,
+  DirectoryGuide,
+  DirectoryGuideSteps,
   useDirectoryView,
   type DirectoryView,
   type DirectoryColumn,
   type DirectoryTableProps,
   type DirectorySelectAll,
+  type DirectoryGuideStep,
+  type DirectoryGuideLink,
 } from './Directory';

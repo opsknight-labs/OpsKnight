@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { cn } from '@/lib/utils';
-import { builtinFields, LIMITS, type Field, type Rule } from '@/lib/automation/contract';
+import { LIMITS, type Field, type Rule } from '@/lib/automation/contract';
 import { CanonicalValuesEditor } from '../CanonicalValuesEditor';
 import { AliasEditor } from '../AliasEditor';
 import { FIELD_TYPE_LABELS } from './rule-language';
@@ -353,9 +353,6 @@ export const FieldDetail = memo(function FieldDetail({
     </section>
   );
 });
-
-export const builtinFieldKeys = new Set(builtinFields.map(field => field.key));
-
 export function deriveFieldKey(label: string) {
   return label
     .trim()

@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import Modal from '@/components/ui/Modal';
 import Select from '@/components/ui/Select';
 
 describe('UI Components', () => {
@@ -54,38 +53,6 @@ describe('UI Components', () => {
             render(<Input disabled />);
             const input = screen.getByRole('textbox');
             expect(input).toHaveProperty('disabled', true);
-        });
-    });
-
-    describe('Modal', () => {
-        it('should render modal when open', () => {
-            render(
-                <Modal isOpen={true} onClose={() => { }}>
-                    <div>Modal Content</div>
-                </Modal>
-            );
-            expect(screen.getByText('Modal Content')).toBeDefined();
-        });
-
-        it('should not render when closed', () => {
-            const { container } = render(
-                <Modal isOpen={false} onClose={() => { }}>
-                    <div>Modal Content</div>
-                </Modal>
-            );
-            expect(container.textContent).toBe('');
-        });
-
-        it('should call onClose when close button is clicked', () => {
-            const handleClose = vi.fn();
-            render(
-                <Modal isOpen={true} onClose={handleClose} title="Test Modal">
-                    <div>Content</div>
-                </Modal>
-            );
-            const closeButton = screen.getByLabelText(/close/i);
-            fireEvent.click(closeButton);
-            expect(handleClose).toHaveBeenCalledTimes(1);
         });
     });
 

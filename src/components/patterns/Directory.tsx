@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { useSyncExternalStore, type ReactNode } from 'react';
-import { LayoutGrid, List } from 'lucide-react';
+import { ArrowUpRight, CircleHelp, LayoutGrid, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 
 /**
  * Shared list-page directory: one header row, a dense table (default) or a
@@ -119,11 +121,14 @@ export function DirectoryHeader({
   selectAll,
   sort,
   view,
+  guide,
   actions,
   className,
 }: {
   title: ReactNode;
   summary?: ReactNode;
+  /** A `DirectoryGuide`; rendered first on the right, before the controls. */
+  guide?: ReactNode;
   selectAll?: DirectorySelectAll;
   sort?: ReactNode;
   view?: {
@@ -147,6 +152,7 @@ export function DirectoryHeader({
         {summary && <p className="text-xs text-muted-foreground tabular-nums">{summary}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        {guide}
         {selectAll && (
           <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground hover:text-foreground">
             <Checkbox
@@ -161,6 +167,105 @@ export function DirectoryHeader({
         {view && <DirectoryViewToggle {...view} />}
         {actions}
       </div>
+    </div>
+  );
+}
+
+export type DirectoryGuideStep = { title: string; description: string };
+export type DirectoryGuideLink = { label: string; href: string; icon?: ReactNode };
+
+const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+/** Numbered how-it-works steps, with optional links underneath. Shared by the header popover and empty states. */
+export function DirectoryGuideSteps({
+  steps,
+  links,
+  className,
+}: {
+  steps: readonly DirectoryGuideStep[];
+  links?: readonly DirectoryGuideLink[];
+  className?: string;
+}) {
+  return (
+    <div className={cn('space-y-3 text-left', className)}>
+      <ol className="space-y-2.5">
+        {steps.map((step, index) => (
+          <li key={step.title} className="flex items-start gap-2.5 text-xs">
+            <span
+              aria-hidden="true"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary"
+            >
+              {index + 1}
+            </span>
+            <span>
+              <span className="block font-semibold text-foreground">{step.title}</span>
+              <span className="mt-0.5 block leading-snug text-muted-foreground">
+                {step.description}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      {links && links.length > 0 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-3 text-xs">
+          {links.map(link => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-sm font-medium text-primary hover:underline',
+                focusRing
+              )}
+            >
+              {link.label} <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Directory-header help: quick links inline (from `sm` up) and a "How … works"
+ * popover with numbered steps and the same links, so phones still reach them.
+ */
+export function DirectoryGuide({
+  title,
+  steps,
+  links = [],
+}: {
+  /** Button label and accessible name, e.g. "How schedules work". */
+  title: string;
+  steps: readonly DirectoryGuideStep[];
+  links?: readonly DirectoryGuideLink[];
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {links.map(link => (
+        <Link
+          key={link.href}
+          href={link.href}
+          className={cn(
+            'hidden h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground sm:inline-flex',
+            focusRing
+          )}
+        >
+          {link.icon}
+          {link.label}
+        </Link>
+      ))}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs">
+            <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
+            {title}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" aria-label={title} className="w-80 p-4">
+          <DirectoryGuideSteps steps={steps} links={links} />
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

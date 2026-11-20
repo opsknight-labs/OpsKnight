@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, type ReactNode } from 'react';
-import { RUNBOOK_EXECUTION_STATUSES, TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
+import { TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
 import { SearchableRunbookSelect } from '../SearchableRunbookSelect';
 import { SearchField } from '../ui/primitives';
 import { useRouter, usePathname } from 'next/navigation';
@@ -30,11 +30,6 @@ export type ExecutionFilterBarProps = {
   /** Rendered beneath the search row, e.g. status chips. */
   children?: ReactNode;
 };
-
-export const STATUS_OPTIONS = [
-  { value: 'all', label: 'All statuses' },
-  ...RUNBOOK_EXECUTION_STATUSES.map(value => ({ value, label: value.replaceAll('_', ' ') })),
-];
 const TRIGGER_OPTIONS = [
   { value: 'all', label: 'All triggers' },
   ...Object.entries(TRIGGER_LABELS).map(([value, label]) => ({ value, label })),

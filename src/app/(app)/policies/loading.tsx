@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader } from '@/components/ui/shadcn/card';
 import { Skeleton } from '@/components/ui/shadcn/skeleton';
+import { TableRowsSkeleton } from '@/components/patterns/Skeletons';
 
 export default function PoliciesLoading() {
   return (
@@ -26,85 +26,20 @@ export default function PoliciesLoading() {
         <Skeleton className="h-4 w-44 bg-ink-200" />
       </div>
 
-      {/* Main Grid: Directory + Sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Directory Skeleton */}
-        <div className="lg:col-span-3 space-y-4">
-          {/* Search Toolbar */}
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <Skeleton className="h-8.5 w-full max-w-md rounded-md" />
-            <div className="flex gap-1.5">
-              <Skeleton className="h-7 w-16 rounded-lg" />
-              <Skeleton className="h-7 w-20 rounded-lg" />
-              <Skeleton className="h-7 w-24 rounded-lg" />
-            </div>
-          </div>
-
-          {/* Directory Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[1, 2, 3, 4].map(i => (
-              <Card key={i} className="border-ink-200/80 bg-card p-5 space-y-4">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1.5 flex-1">
-                    <Skeleton className="h-5 w-40" />
-                    <Skeleton className="h-3.5 w-60" />
-                  </div>
-                  <Skeleton className="h-8 w-8 rounded-full" />
-                </div>
-
-                <div className="p-3 rounded-lg border border-ink-100 bg-ink-50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Skeleton className="h-3 w-28" />
-                    <Skeleton className="h-3 w-20" />
-                  </div>
-                  <div className="flex gap-1.5 pt-1">
-                    <Skeleton className="h-5 w-20 rounded" />
-                    <Skeleton className="h-5 w-24 rounded" />
-                    <Skeleton className="h-5 w-20 rounded" />
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  <Skeleton className="h-3 w-28" />
-                  <div className="flex gap-1.5">
-                    <Skeleton className="h-5 w-16 rounded" />
-                    <Skeleton className="h-5 w-20 rounded" />
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t flex items-center justify-between">
-                  <Skeleton className="h-3 w-16" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-              </Card>
-            ))}
+      {/* Directory (full width) */}
+      <div className="space-y-4">
+        {/* Search Toolbar */}
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <Skeleton className="h-8.5 w-full max-w-md rounded-md" />
+          <div className="flex gap-1.5">
+            <Skeleton className="h-7 w-16 rounded-lg" />
+            <Skeleton className="h-7 w-20 rounded-lg" />
+            <Skeleton className="h-7 w-24 rounded-lg" />
           </div>
         </div>
 
-        {/* Sidebar Skeleton */}
-        <div className="space-y-4">
-          <Card className="border-ink-200/80 bg-card">
-            <CardHeader className="pb-3">
-              <Skeleton className="h-4 w-32" />
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-5/6" />
-              <Skeleton className="h-3 w-4/6" />
-            </CardContent>
-          </Card>
-
-          <Card className="border-ink-200/80 bg-card">
-            <CardHeader className="pb-2">
-              <Skeleton className="h-4 w-36" />
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Skeleton className="h-8 w-full rounded-lg" />
-              <Skeleton className="h-8 w-full rounded-lg" />
-              <Skeleton className="h-8 w-full rounded-lg" />
-            </CardContent>
-          </Card>
-        </div>
+        {/* Directory table (the default view) */}
+        <TableRowsSkeleton rows={6} columns={5} label="Loading escalation policies" />
       </div>
     </div>
   );

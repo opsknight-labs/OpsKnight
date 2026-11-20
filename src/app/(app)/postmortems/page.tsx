@@ -14,7 +14,6 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { FileText, CheckCircle2, Clock, Archive, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import PostmortemsListTable from '@/components/postmortem/PostmortemsListTable';
-import { getUserTimeZone } from '@/lib/timezone';
 
 import PostmortemsFilters from '@/components/postmortem/PostmortemsFilters';
 import { parsePageParam, parseEnumValue } from '@/lib/pagination-parser';
@@ -50,16 +49,6 @@ export default async function PostmortemsPage({
     }),
   ]);
   const canCreate = permissions.isResponderOrAbove;
-
-  // Get user timezone for date formatting
-  const email = session?.user?.email ?? null;
-  const user = email
-    ? await prisma.user.findUnique({
-        where: { email },
-        select: { timeZone: true },
-      })
-    : null;
-  const userTimeZone = getUserTimeZone(user ?? undefined);
 
   // Get resolved incidents without postmortems for quick create
   const resolvedIncidentsWithoutPostmortems = canCreate
@@ -169,7 +158,6 @@ export default async function PostmortemsPage({
         <PostmortemsListTable
           postmortems={postmortems}
           pagination={pagination}
-          userTimeZone={userTimeZone}
           canManage={canCreate}
         />
       </div>

@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { FilterBar, FilterChip, FilterField } from '@/components/patterns';
-import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowUpDown, CheckCircle2, XCircle } from 'lucide-react';
 
 type ServicesFiltersProps = {
   currentSearch?: string;
@@ -20,13 +20,7 @@ type ServicesFiltersProps = {
   teams: Array<{ id: string; name: string }>;
 };
 
-export default function ServicesFilters({
-  currentSearch = '',
-  currentStatus = 'all',
-  currentTeam = 'all',
-  currentSort = 'name_asc',
-  teams,
-}: ServicesFiltersProps) {
+function useServicesParams() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
@@ -54,6 +48,17 @@ export default function ServicesFilters({
     },
     [router, searchParams]
   );
+  return { updateParams, startTransition, router };
+}
+
+export default function ServicesFilters({
+  currentSearch = '',
+  currentStatus = 'all',
+  currentTeam = 'all',
+  currentSort = 'name_asc',
+  teams,
+}: ServicesFiltersProps) {
+  const { updateParams, startTransition, router } = useServicesParams();
 
   const clearFilters = () => {
     startTransition(() => {
@@ -163,22 +168,36 @@ export default function ServicesFilters({
               </SelectContent>
             </Select>
           </FilterField>
-          <FilterField label="Sort by" htmlFor="services-filter-sort">
-            <Select value={currentSort} onValueChange={value => updateParams({ sort: value })}>
-              <SelectTrigger id="services-filter-sort" className="h-9 w-[170px] text-sm">
-                <SelectValue placeholder="Sort order" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name_asc">Name (A-Z)</SelectItem>
-                <SelectItem value="name_desc">Name (Z-A)</SelectItem>
-                <SelectItem value="status">Status health</SelectItem>
-                <SelectItem value="incidents_desc">Most incidents</SelectItem>
-                <SelectItem value="incidents_asc">Least incidents</SelectItem>
-              </SelectContent>
-            </Select>
-          </FilterField>
         </>
       }
     />
+  );
+}
+
+const SORT_OPTIONS = [
+  ['name_asc', 'Name (A-Z)'],
+  ['name_desc', 'Name (Z-A)'],
+  ['status', 'Status health'],
+  ['incidents_desc', 'Most incidents'],
+  ['incidents_asc', 'Least incidents'],
+] as const;
+
+/** Sort control for the service directory header. */
+export function ServicesSortSelect({ currentSort = 'name_asc' }: { currentSort?: string }) {
+  const { updateParams } = useServicesParams();
+  return (
+    <Select value={currentSort} onValueChange={value => updateParams({ sort: value })}>
+      <SelectTrigger aria-label="Sort services" className="h-8 w-auto gap-1.5 text-xs">
+        <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <SelectValue placeholder="Sort order" />
+      </SelectTrigger>
+      <SelectContent>
+        {SORT_OPTIONS.map(([value, label]) => (
+          <SelectItem key={value} value={value}>
+            {label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

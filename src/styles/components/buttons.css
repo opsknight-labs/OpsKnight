@@ -31,48 +31,6 @@
     cursor: not-allowed;
 }
 
-.btn-primary {
-    background: var(--primary-color);
-    color: #fff;
-}
-
-.btn-danger {
-    background: #b91c1c;
-    color: #fff;
-}
-
-.btn-outline {
-    background: transparent;
-    border-color: var(--border);
-    color: var(--text-primary);
-}
-
-.btn-ghost {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-}
-
-.btn-sm {
-    font-size: 0.75rem;
-    font-weight: 800;
-    letter-spacing: 0;
-    padding: 0.3rem 0.85rem;
-}
-
-.btn-md {
-    font-size: 0.875rem;
-    font-weight: 800;
-    letter-spacing: -0.005em;
-}
-
-.btn-lg {
-    font-size: 0.9375rem;
-    font-weight: 800;
-    letter-spacing: -0.01em;
-    padding: 0.6rem 1.4rem;
-}
-
 .copy-button {
     display: inline-flex;
     align-items: center;
@@ -101,16 +59,3 @@
 }
 
 /* Explicit utility for intentionally light-only embedded surfaces. */
-.force-light-surface {
-    color-scheme: light;
-    background: rgb(var(--ink-200)) !important;
-    color: rgb(var(--ink-700)) !important;
-    border-color: rgb(var(--ink-300)) !important;
-    filter: none !important;
-    -webkit-filter: none !important;
-}
-
-.force-light-surface:hover {
-    background: rgb(var(--ink-300)) !important;
-    border-color: rgb(var(--ink-400)) !important;
-}
