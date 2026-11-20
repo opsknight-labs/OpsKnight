@@ -13,6 +13,8 @@ try {
 } catch {}
 
 const docsRoot = process.argv[2] || defaultRoot;
+// Released versions are frozen as shipped; only the current release must match today's source.
+const checkEvidence = docsRoot === defaultRoot;
 const schema = JSON.parse(readRepositoryFile(`${docsRoot}/metadata.schema.json`));
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 addFormats(ajv);
@@ -49,11 +51,11 @@ for (const file of markdownFiles) {
   }
   const verification = metadata.verification;
   if (verification.level !== 'draft') {
-    for (const evidence of verification.evidence) if (!exists(evidence)) failures.push(`${file}: missing verification evidence ${evidence}`);
+    for (const evidence of verification.evidence) if (checkEvidence && !exists(evidence)) failures.push(`${file}: missing verification evidence ${evidence}`);
   }
   const reader = metadata.reader;
   if (reader?.status === 'SOURCE_VERIFIED' || reader?.status === 'RUNTIME_VERIFIED') {
-    for (const evidence of reader.evidence ?? []) if (!exists(evidence)) failures.push(`${file}: missing reader evidence ${evidence}`);
+    for (const evidence of reader.evidence ?? []) if (checkEvidence && !exists(evidence)) failures.push(`${file}: missing reader evidence ${evidence}`);
   }
   if (reader?.status === 'RUNTIME_VERIFIED' && reader.journey && !exists(reader.journey)) {
     failures.push(`${file}: missing reader journey ${reader.journey}`);
