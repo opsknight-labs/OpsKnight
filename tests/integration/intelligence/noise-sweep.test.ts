@@ -7,6 +7,7 @@ import {
   resetPrePagingSnapshot,
   setPrePagingDeadlineMs,
 } from '@/lib/intelligence/noise-controls';
+import { prismaLookups } from '@/lib/intelligence/noise-controls/cache';
 import { disconnectNoiseLookupClient } from '@/lib/intelligence/noise-controls/lookup-client';
 import {
   resetNoiseSweepSchedule,
@@ -292,6 +293,25 @@ describe('storm parent', () => {
     const child = await send(service.id, 'edge-3', { severity: 'critical' });
     expect(child.action).toBe('grouped');
     expect((await incident(parent.id)).urgency).toBe('HIGH');
+  });
+
+  it('never picks an unpaged storm child as the parent of a new incident', async () => {
+    const service = await createTestService('Storm child parent');
+    await policy(service.id, { storm: { enabled: true, threshold: 2, windowSeconds: 60 } });
+    const parent = incidentOf(await send(service.id, 'edge-1'));
+    const second = incidentOf(await send(service.id, 'edge-2'));
+    const child = incidentOf(await send(service.id, 'edge-3'));
+    expect((await incident(child.id)).escalationStatus).toBe('COMPLETED');
+    await db.incident.updateMany({
+      where: { id: { in: [parent.id, second.id] } },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
+
+    const since = new Date(Date.now() - 60_000);
+    expect(await prismaLookups(db).findStormParent([service.id], since, service.id)).toBeNull();
+    const next = await send(service.id, 'edge-4');
+    expect(next.action).toBe('triggered');
+    expect((await incident(incidentOf(next).id)).escalationStatus).not.toBe('COMPLETED');
   });
 
   it('on parent resolve, resolves clear children and re-pages the ones still firing', async () => {

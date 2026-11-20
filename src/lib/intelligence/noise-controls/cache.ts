@@ -40,6 +40,17 @@ let current: PrePagingSnapshot | null = null;
 let loading: Promise<PrePagingSnapshot | null> | null = null;
 
 const WINDOW_HORIZON_MS = 8 * 86_400_000;
+/**
+ * A storm parent is open, and is not itself a storm child that was never paged (the cascade pages those
+ * once their parent resolves): grouping under one would leave the new child silent too.
+ */
+const STORM_PARENT_ELIGIBLE = `AND "status" IN ('OPEN', 'ACKNOWLEDGED')
+          AND NOT EXISTS (
+            SELECT 1 FROM "IncidentRelationship" r
+            WHERE r."sourceIncidentId" = "Incident"."id" AND r."type" = 'PARENT_CHILD'
+              AND r."evidence"->>'kind' = 'prepaging_storm'
+              AND "Incident"."status" = 'OPEN' AND "Incident"."escalationStatus" = 'COMPLETED'
+          )`;
 
 function parseMatchers(raw: unknown): Matcher[] {
   return Array.isArray(raw) ? (raw as Matcher[]) : [];
@@ -328,10 +339,15 @@ export function prismaLookups(tx: Pick<Prisma.TransactionClient, '$queryRaw'>): 
     },
     async findStormParent(serviceIds, since, preferServiceId) {
       const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-        SELECT "id" FROM "Incident"
+        (SELECT "id" FROM "Incident"
+        WHERE "serviceId" = ${preferServiceId ?? null}::text AND "createdAt" >= ${since}
+          ${Prisma.raw(STORM_PARENT_ELIGIBLE)}
+        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)
+        UNION ALL
+        (SELECT "id" FROM "Incident"
         WHERE "serviceId" = ANY(${[...serviceIds]}::text[]) AND "createdAt" >= ${since}
-          AND "status" IN ('OPEN', 'ACKNOWLEDGED')
-        ORDER BY ("serviceId" = ${preferServiceId ?? null}::text) DESC NULLS LAST, "createdAt" ASC, "id" ASC
+          ${Prisma.raw(STORM_PARENT_ELIGIBLE)}
+        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)
         LIMIT 1`);
       return rows[0] ?? null;
     },
@@ -405,13 +421,20 @@ const STORM_COUNT_PART = [
   `)`,
 ] as const;
 const STORM_PARENT_PART = [
-  `(SELECT "id" FROM "Incident"
+  `(SELECT "id" FROM (
+        (SELECT "id" FROM "Incident"
+        WHERE "serviceId" = `,
+  `::text AND "createdAt" >= `,
+  `
+          ${STORM_PARENT_ELIGIBLE}
+        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)
+        UNION ALL
+        (SELECT "id" FROM "Incident"
         WHERE "serviceId" = ANY(`,
   `::text[]) AND "createdAt" >= `,
   `
-          AND "status" IN ('OPEN', 'ACKNOWLEDGED')
-        ORDER BY ("serviceId" = `,
-  `::text) DESC NULLS LAST, "createdAt" ASC, "id" ASC LIMIT 1)`,
+          ${STORM_PARENT_ELIGIBLE}
+        ORDER BY "createdAt" ASC, "id" ASC LIMIT 1)) parent LIMIT 1)`,
 ] as const;
 const NULL_PART = ['NULL'] as const;
 
@@ -456,7 +479,14 @@ export function prefetchStatement(plan: PrePagingLookupPlan): Prisma.Sql {
     );
   if (plan.storm) {
     const serviceIds = [...plan.storm.serviceIds];
-    values.push(serviceIds, plan.storm.since, serviceIds, plan.storm.since, plan.serviceId);
+    values.push(
+      serviceIds,
+      plan.storm.since,
+      plan.serviceId,
+      plan.storm.since,
+      serviceIds,
+      plan.storm.since
+    );
   }
   // The tag accepts any string list; called directly it does exactly what a template literal would.
   const text = statementText(!!plan.dedup, !!plan.flapping, !!plan.storm);
