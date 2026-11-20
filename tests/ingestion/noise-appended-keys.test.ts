@@ -101,3 +101,25 @@ it('a single-key incident resolves on its own resolve, as before', async () => {
   expect(resolved.action).toBe('resolved');
   expect(await status(opened.incident.id)).toBe('RESOLVED');
 });
+
+it('an appended key that later opens its own incident no longer holds the original open', async () => {
+  const serviceId = await service({ contentDedup: { enabled: true, windowSeconds: 600 } });
+  for (const firstResolved of ['own', 'appended'] as const) {
+    const summary = `Checkout 5xx ${randomUUID()}`;
+    const own = randomUUID();
+    const appended = randomUUID();
+    const opened = await send(serviceId, 'trigger', own, summary);
+    if (!('incident' in opened) || !opened.incident) throw new Error('expected an incident');
+    const incidentId = opened.incident.id;
+    expect((await send(serviceId, 'trigger', appended, summary)).action).toBe('deduplicated');
+    // Different content: the appended key now opens an incident of its own.
+    const split = await send(serviceId, 'trigger', appended, `Payments down ${randomUUID()}`);
+    if (!('incident' in split) || !split.incident) throw new Error('expected an incident');
+    expect(split.incident.id).not.toBe(incidentId);
+
+    for (const key of firstResolved === 'own' ? [own, appended] : [appended, own])
+      await send(serviceId, 'resolve', key, summary);
+    expect(await status(incidentId)).toBe('RESOLVED');
+    expect(await status(split.incident.id)).toBe('RESOLVED');
+  }
+});

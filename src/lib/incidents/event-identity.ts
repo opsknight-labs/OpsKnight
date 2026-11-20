@@ -88,16 +88,25 @@ export async function findOpenEventIncident(
   const keys = Prisma.join([...dedupKeys]);
   // Appended alerts are stored under the canonical key, the first one. shortcut: only the key's latest
   // 20 alerts are searched for an appended link; widen if keys re-trigger that often while appended.
+  // No ORDER BY over the UNION ALL: Append runs the owned-key branch first and the appended-key branch
+  // only when it found nothing.
   const [incident] = await tx.$queryRaw<OpenEventIncident[]>`
     SELECT ${hitColumns}, (
       SELECT count(*)::int FROM (
-        SELECT DISTINCT ON (a."dedupKey") a.status FROM "Alert" a
+        SELECT DISTINCT ON (a."dedupKey") a."dedupKey", a.status, a."createdAt" FROM "Alert" a
         WHERE a."incidentId" = hit.id AND a."dedupKey" NOT IN (${keys})
         ORDER BY a."dedupKey", a."createdAt" DESC, a.id DESC
-      ) latest WHERE latest.status = 'TRIGGERED'
+      ) latest
+      WHERE latest.status = 'TRIGGERED'
+        -- A key that later opened an incident of its own is tracked (and resolved) there, not here.
+        AND NOT EXISTS (
+          SELECT 1 FROM "Incident" own
+          WHERE own."dedupKey" = latest."dedupKey" AND own."serviceId" = hit."serviceId"
+            AND own.id <> hit.id AND own."createdAt" > latest."createdAt"
+        )
     ) AS "openOtherAlertKeys"
     FROM (
-      (SELECT candidate.*, 0 AS "matchRank" FROM (
+      (SELECT candidate.* FROM (
         SELECT ${incidentScalarColumns} FROM "Incident"
         WHERE "dedupKey" IN (${keys})
         OFFSET 0
@@ -107,7 +116,7 @@ export async function findOpenEventIncident(
       ORDER BY candidate."createdAt" ASC, candidate.id ASC
       LIMIT 1)
       UNION ALL
-      (SELECT ${appendedColumns}, 1 FROM (
+      (SELECT ${appendedColumns} FROM (
         SELECT "incidentId" FROM "Alert"
         WHERE "dedupKey" = ${dedupKeys[0]}
         ORDER BY "createdAt" DESC, id DESC
@@ -117,7 +126,6 @@ export async function findOpenEventIncident(
       WHERE i."serviceId" = ${serviceId}
         AND i.status IN ('OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED')
       LIMIT 1)
-      ORDER BY "matchRank"
       LIMIT 1
     ) hit
   `;
