@@ -1,54 +1,15 @@
-'use client';
+// Visually hidden until focused. A negative `top` offset left both links peeking into the
+// viewport once touch styles raised links to 44px, overlapping each other at the top edge.
+const skipLinkClass =
+  'sr-only focus:not-sr-only focus:fixed focus:left-0 focus:top-0 focus:z-[10000] focus:rounded-br-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:no-underline';
 
 export default function SkipLinks() {
   return (
     <>
-      <a
-        href="#main-content"
-        style={{
-          position: 'absolute',
-          top: '-40px',
-          left: '0',
-          background: 'var(--primary-color)',
-          color: 'white',
-          padding: '0.5rem 1rem',
-          textDecoration: 'none',
-          borderRadius: '0 0 var(--radius-sm) 0',
-          zIndex: 10000,
-          fontSize: '0.875rem',
-          fontWeight: '600',
-        }}
-        onFocus={e => {
-          e.currentTarget.style.top = '0';
-        }}
-        onBlur={e => {
-          e.currentTarget.style.top = '-40px';
-        }}
-      >
+      <a href="#main-content" className={skipLinkClass}>
         Skip to main content
       </a>
-      <a
-        href="#navigation"
-        style={{
-          position: 'absolute',
-          top: '-40px',
-          left: '120px',
-          background: 'var(--primary-color)',
-          color: 'white',
-          padding: '0.5rem 1rem',
-          textDecoration: 'none',
-          borderRadius: '0 0 var(--radius-sm) 0',
-          zIndex: 10000,
-          fontSize: '0.875rem',
-          fontWeight: '600',
-        }}
-        onFocus={e => {
-          e.currentTarget.style.top = '0';
-        }}
-        onBlur={e => {
-          e.currentTarget.style.top = '-40px';
-        }}
-      >
+      <a href="#navigation" className={skipLinkClass}>
         Skip to navigation
       </a>
     </>

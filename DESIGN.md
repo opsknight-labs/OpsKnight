@@ -298,7 +298,8 @@ px tokens (legacy radius, shadows, hairlines) stay fixed.
 | `compact`                 | 16px            | 14.4px                          | 14.4px                    | 14.4px         |
 | `comfortable`             | 16px            | 16px                            | 16px                      | 16px           |
 
-Phones always get 16px so iOS never zooms a focused field. The default reproduces the console's historical
+Phones always get 16px so iOS never zooms a focused field, and only fine pointers (mouse, trackpad)
+shrink, so a phone or tablet in landscape keeps 16px fields and 44px targets. The default reproduces the console's historical
 sizing. Setting the attribute on `<html>` pins a density; there is no preference UI yet. Defined in
 `tokens.css` (`--density-scale`).
 
