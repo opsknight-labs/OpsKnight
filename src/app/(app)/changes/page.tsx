@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { GitCommitHorizontal } from 'lucide-react';
+import ChangeMappingSection from '@/components/intelligence/lists/ChangeMappingSection';
 import ChangesTable from '@/components/intelligence/lists/ChangesTable';
 import ListFilterBar from '@/components/intelligence/lists/ListFilterBar';
 import { ListPagination } from '@/components/intelligence/lists/shared';
 import { SectionError, actionLinkClass } from '@/components/intelligence/overview/primitives';
 import EmptyState from '@/components/ui/EmptyState';
-import { CAPABILITIES } from '@/lib/authorization';
+import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { listChangesForActor } from '@/lib/intelligence/lists/changes';
 import {
   CHANGE_RISK_OPTIONS,
@@ -34,7 +35,8 @@ export default async function ChangesPage({
   searchParams?: Promise<Record<string, ListParam>>;
 }) {
   await requirePageAccess('/changes');
-  await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
+  const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
+  const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
   const actor = await getCurrentAuthorizationActor();
   const filters = parseChangeListFilters((await searchParams) ?? {});
   const result = await loadSection('changes', () => listChangesForActor(actor, filters));
@@ -145,6 +147,8 @@ export default async function ChangesPage({
           />
         </>
       )}
+
+      {canManage && <ChangeMappingSection />}
     </div>
   );
 }

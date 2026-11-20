@@ -97,10 +97,10 @@ export async function getIncidentTimeAxisForActor(
       ? client.changeEvent.findMany({
           where: {
             occurredAt: { gte: windowStart, lte: until },
-            OR: [{ serviceId: { in: serviceIds } }, { serviceId: null }],
+            OR: [{ serviceId: { in: serviceIds } }, { serviceId: null, unmappedIntegrationId: null }],
             ...(Object.keys(services).length === 0
               ? {}
-              : { OR: [{ serviceId: null }, { service: services }] }),
+              : { OR: [{ serviceId: null, unmappedIntegrationId: null }, { service: services }] }),
           },
           orderBy: { occurredAt: 'asc' },
           take: MAX_ROWS + 1,

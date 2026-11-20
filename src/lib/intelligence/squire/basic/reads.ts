@@ -614,7 +614,7 @@ async function changes(ctx: Context): Promise<string> {
   const rows = await prisma.changeEvent.findMany({
     where: {
       AND: [
-        Object.keys(readable).length ? { OR: [{ serviceId: null }, { service: readable }] } : {},
+        Object.keys(readable).length ? { OR: [{ serviceId: null, unmappedIntegrationId: null }, { service: readable }] } : {},
         ...(ctx.incident &&
         !ctx.query.terms.length &&
         !/\b(all services|workspace|across services|all postmortems|all follow[- ]?ups)\b/i.test(

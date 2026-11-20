@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 const record = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/intelligence/changes/service', () => ({ recordChange: record }));
+// No change service mapping: the integration is single-service.
+vi.mock('@/lib/prisma', () => ({
+  default: { changeServiceMapping: { findUnique: vi.fn().mockResolvedValue(null) } },
+}));
 vi.mock('@/lib/integrations/handler', () => ({
   createIntegrationHandler:
     (
@@ -11,7 +15,7 @@ vi.mock('@/lib/integrations/handler', () => ({
     (body: unknown) =>
       handle({
         payload: options.schema.parse(body),
-        integration: { serviceId: 'trusted-service' },
+        integration: { id: 'integration', serviceId: 'trusted-service' },
       }),
 }));
 import { POST } from '@/app/api/integrations/changes/route';

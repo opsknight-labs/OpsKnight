@@ -31,7 +31,7 @@ export async function loadChangeBaselines(
     SELECT "source", "serviceId", count(*)::int AS count FROM "ChangeEvent"
     WHERE "occurredAt" >= ${new Date(+onset - CHANGE_BASELINE_DAYS * DAY)}
       AND "occurredAt" < ${new Date(+onset - 6 * 3_600_000)}
-      AND ("serviceId" = ANY(${[...serviceIds]}) OR "serviceId" IS NULL)
+      AND ("serviceId" = ANY(${[...serviceIds]}) OR ("serviceId" IS NULL AND "unmappedIntegrationId" IS NULL))
     GROUP BY "source", "serviceId"`);
   const values = new Map(
     rows.map(row => [

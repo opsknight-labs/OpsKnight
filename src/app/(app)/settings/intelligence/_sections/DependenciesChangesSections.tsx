@@ -128,7 +128,7 @@ export default async function DependenciesChangesSections({ canManage }: { canMa
       <SettingsSection
         id="change-sources"
         title="Recent changes"
-        description="Deploys, config and flag changes recorded for probable-cause analysis. Native sources: Argo CD, LaunchDarkly, Unleash and HCP Terraform have their own endpoints under /api/integrations/."
+        description="Deploys, config and flag changes recorded for probable-cause analysis. Native sources: Argo CD, LaunchDarkly, Unleash, HCP Terraform, GitHub and GitLab deployments and Kubernetes rollouts (github-deployments, gitlab-deployments, kubernetes-rollouts) have their own endpoints under /api/integrations/."
       >
         <div className="space-y-2 py-3 text-sm text-muted-foreground">
           <p>
@@ -137,7 +137,8 @@ export default async function DependenciesChangesSections({ canManage }: { canMa
               POST /api/integrations/changes?integrationId=…
             </code>{' '}
             using a generic webhook integration&apos;s key. A change belongs to that
-            integration&apos;s service.
+            integration&apos;s service, unless the integration maps changes to services on the
+            Changes page.
           </p>
           <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{`{ "kind": "DEPLOY", "summary": "api v2.4.1", "version": "2.4.1",
   "source": "github-actions", "dedupKey": "run-8841", "occurredAt": "2026-01-01T12:00:00Z" }`}</pre>
