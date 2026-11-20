@@ -27,6 +27,7 @@ import {
   DirectoryTable,
   RelativeTime,
   toneClasses,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
 } from '@/components/patterns';
@@ -58,6 +59,7 @@ const POLICY_COLUMNS: DirectoryColumn<PolicyDirectoryItem>[] = [
   },
   {
     id: 'team',
+    hideable: true,
     header: 'Teams notified',
     className: 'hidden w-36 lg:table-cell',
     cell: policy => {
@@ -80,6 +82,7 @@ const POLICY_COLUMNS: DirectoryColumn<PolicyDirectoryItem>[] = [
   },
   {
     id: 'steps',
+    hideable: true,
     header: 'Steps',
     className: 'w-48',
     cell: policy => {
@@ -114,6 +117,7 @@ const POLICY_COLUMNS: DirectoryColumn<PolicyDirectoryItem>[] = [
   },
   {
     id: 'services',
+    hideable: true,
     header: 'Services',
     className: 'hidden w-36 md:table-cell',
     cell: policy =>
@@ -134,6 +138,7 @@ const POLICY_COLUMNS: DirectoryColumn<PolicyDirectoryItem>[] = [
   },
   {
     id: 'updated',
+    hideable: true,
     header: 'Updated',
     className: 'hidden w-24 xl:table-cell',
     cell: policy => (
@@ -207,6 +212,7 @@ export default function PolicyDirectoryList({
   const [searchQuery, setSearchQuery] = useState(currentSearch);
   const [isPending, startTransition] = useTransition();
   const [view, setView] = useDirectoryView('policies');
+  const columnVisibility = useDirectoryColumns('policies', POLICY_COLUMNS);
   const rangeStart = pagination ? (pagination.currentPage - 1) * pagination.itemsPerPage + 1 : 1;
 
   const [syncedSearch, setSyncedSearch] = useState(currentSearch);
@@ -456,6 +462,8 @@ export default function PolicyDirectoryList({
               ? `Showing ${rangeStart}–${rangeStart + policies.length - 1} of ${pagination?.totalItems ?? policies.length}`
               : 'No matching policies'
           }
+          columns={columnVisibility}
+          density
           view={{ value: view, onChange: setView }}
           guide={
             <DirectoryGuide title="How escalation works" steps={GUIDE_STEPS} links={GUIDE_LINKS} />
@@ -498,6 +506,7 @@ export default function PolicyDirectoryList({
             rows={policies}
             getRowId={policy => policy.id}
             columns={POLICY_COLUMNS}
+            hiddenColumns={columnVisibility.hidden}
             rowActions={policy => <PolicyActionsMenu policy={policy} />}
             mobileRow={policy => (
               <DirectoryPrimaryCell

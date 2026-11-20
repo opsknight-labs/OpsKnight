@@ -103,7 +103,7 @@ export default function AuthenticationWorkflowSteps() {
               ? `Next: ${current.label}`
               : 'Ready to activate'}
         </p>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           {data.mode === 'PASSWORD_ONLY'
             ? 'Everyone keeps using passwords until the last step.'
             : 'Your current sign-in settings keep working while you edit.'}
@@ -132,7 +132,7 @@ export default function AuthenticationWorkflowSteps() {
               />
               <span className="flex min-w-0 items-center gap-1">
                 <span
-                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-2xs font-bold ${
                     step.state === 'done'
                       ? 'bg-emerald-500 text-white'
                       : step.state === 'current'
@@ -154,7 +154,7 @@ export default function AuthenticationWorkflowSteps() {
                   )}
                 </span>
                 <span
-                  className={`hidden truncate text-[11px] font-medium md:inline ${
+                  className={`hidden truncate text-2xs font-medium md:inline ${
                     step.state === 'upcoming' ? 'text-muted-foreground' : 'text-foreground'
                   }`}
                 >
@@ -173,7 +173,7 @@ export default function AuthenticationWorkflowSteps() {
                 }. ${step.hint}.`}
               </span>
               <span
-                className="hidden text-[10px] leading-snug text-muted-foreground lg:block"
+                className="hidden text-2xs leading-snug text-muted-foreground lg:block"
                 aria-hidden
               >
                 {step.hint}

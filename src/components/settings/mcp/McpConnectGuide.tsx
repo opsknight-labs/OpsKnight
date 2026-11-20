@@ -4,7 +4,8 @@ import { useMemo, useState, useSyncExternalStore, useTransition, type ReactNode 
 import Link from 'next/link';
 import { CheckCircle2, Code2, ExternalLink, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import { TabsContent } from '@/components/ui/shadcn/tabs';
+import DetailTabs from '@/components/ui/DetailTabs';
 import { ClaudeLogo, CursorLogo, ChatGptLogo } from '@/components/common/BrandLogos';
 import McpCopyField from '@/components/settings/mcp/McpCopyField';
 import McpDocsLinks from '@/components/settings/mcp/McpDocsLinks';
@@ -33,7 +34,7 @@ function Steps({ children }: { children: ReactNode }) {
 
 function Step({ children }: { children: ReactNode }) {
   return (
-    <li className="relative pl-8 pr-0 py-0 [counter-increment:step] before:absolute before:left-0 before:top-0 before:flex before:h-5 before:w-5 before:items-center before:justify-center before:rounded-full before:bg-primary/10 before:text-[11px] before:font-semibold before:text-primary before:content-[counter(step)]">
+    <li className="relative pl-8 pr-0 py-0 [counter-increment:step] before:absolute before:left-0 before:top-0 before:flex before:h-5 before:w-5 before:items-center before:justify-center before:rounded-full before:bg-primary/10 before:text-2xs before:font-semibold before:text-primary before:content-[counter(step)]">
       <div className="space-y-2 leading-relaxed">{children}</div>
     </li>
   );
@@ -48,7 +49,11 @@ const ASSISTANTS = [
   { id: 'claude', label: 'Claude', icon: <ClaudeLogo className="h-3.5 w-3.5 shrink-0" /> },
   { id: 'chatgpt', label: 'ChatGPT', icon: <ChatGptLogo className="h-3.5 w-3.5 shrink-0" /> },
   { id: 'cursor', label: 'Cursor', icon: <CursorLogo className="h-3.5 w-3.5 shrink-0" /> },
-  { id: 'vscode', label: 'VS Code', icon: <Code2 className="h-3.5 w-3.5 shrink-0 text-sky-500" /> },
+  {
+    id: 'vscode',
+    label: 'VS Code',
+    icon: <Code2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />,
+  },
   {
     id: 'other',
     label: 'Other clients',
@@ -179,25 +184,19 @@ export default function McpConnectGuide({
   );
   return (
     <div className="space-y-5">
-      <Tabs value={tab} onValueChange={choose} className="space-y-5">
-        <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">
-          <TabsList
-            aria-label="Assistant"
-            className="h-auto min-w-max gap-1 rounded-lg border border-border/80 bg-muted/50 p-1"
-          >
-            {ASSISTANTS.map(assistant => (
-              <TabsTrigger
-                key={assistant.id}
-                value={assistant.id}
-                className="h-8 gap-1.5 rounded-md px-3 text-xs data-[state=active]:font-semibold data-[state=active]:ring-1 data-[state=active]:ring-border"
-              >
-                {assistant.icon}
-                <span>{assistant.label}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
-
+      <DetailTabs
+        label="Assistant"
+        layout="auto"
+        syncWithUrl={false}
+        activeTab={tab}
+        onTabChange={choose}
+        className="space-y-5"
+        tabs={ASSISTANTS.map(assistant => ({
+          id: assistant.id,
+          label: assistant.label,
+          icon: assistant.icon,
+        }))}
+      >
         <TabsContent value="claude-code" className="mt-0">
           <Steps>
             <Step>
@@ -388,7 +387,7 @@ export default function McpConnectGuide({
             .
           </p>
         </TabsContent>
-      </Tabs>
+      </DetailTabs>
       {checkConnection && hrefs && <CheckConnection check={checkConnection} hrefs={hrefs} />}
       <McpDocsLinks />
     </div>

@@ -15,65 +15,49 @@ type UserAvatarProps = {
   showOnlineStatus?: boolean;
   className?: string;
   fallbackClassName?: string;
+  /** Set when the name is shown next to the avatar, so screen readers don't read it twice. */
+  'aria-hidden'?: boolean;
 };
 
-const sizeClasses: Record<AvatarSize, { container: string; text: string }> = {
-  xs: {
-    container: 'h-6 w-6',
-    text: 'text-[9px]',
-  },
-  sm: {
-    container: 'h-8 w-8',
-    text: 'text-[10px]',
-  },
-  md: {
-    container: 'h-10 w-10',
-    text: 'text-xs',
-  },
-  lg: {
-    container: 'h-12 w-12',
-    text: 'text-sm',
-  },
-  xl: {
-    container: 'h-16 w-16',
-    text: 'text-base',
-  },
-  '2xl': {
-    container: 'h-24 w-24',
-    text: 'text-xl',
-  },
-};
+const SIZE_CLASSES = new Map<AvatarSize, { container: string; text: string }>([
+  ['xs', { container: 'h-6 w-6', text: 'text-2xs' }],
+  ['sm', { container: 'h-8 w-8', text: 'text-2xs' }],
+  ['md', { container: 'h-10 w-10', text: 'text-xs' }],
+  ['lg', { container: 'h-12 w-12', text: 'text-sm' }],
+  ['xl', { container: 'h-16 w-16', text: 'text-base' }],
+  ['2xl', { container: 'h-24 w-24', text: 'text-xl' }],
+]);
 
 const AVATAR_PALETTES = [
   {
-    bg: 'bg-blue-50 dark:bg-blue-950/40',
-    text: 'text-blue-700 dark:text-blue-300',
-    border: 'border-blue-200/80 dark:border-blue-800/60',
+    bg: 'bg-blue-50 dark:bg-blue-900/70',
+    text: 'text-blue-700 dark:text-blue-100',
+    border: 'border-blue-200/80 dark:border-blue-700/70',
   },
   {
-    bg: 'bg-indigo-50 dark:bg-indigo-950/40',
-    text: 'text-indigo-700 dark:text-indigo-300',
-    border: 'border-indigo-200/80 dark:border-indigo-800/60',
+    bg: 'bg-indigo-50 dark:bg-indigo-900/70',
+    text: 'text-indigo-700 dark:text-indigo-100',
+    border: 'border-indigo-200/80 dark:border-indigo-700/70',
   },
   {
-    bg: 'bg-violet-50 dark:bg-violet-950/40',
-    text: 'text-violet-700 dark:text-violet-300',
-    border: 'border-violet-200/80 dark:border-violet-800/60',
+    bg: 'bg-violet-50 dark:bg-violet-900/70',
+    text: 'text-violet-700 dark:text-violet-100',
+    border: 'border-violet-200/80 dark:border-violet-700/70',
   },
   {
-    bg: 'bg-sky-50 dark:bg-sky-950/40',
-    text: 'text-sky-700 dark:text-sky-300',
-    border: 'border-sky-200/80 dark:border-sky-800/60',
+    bg: 'bg-sky-50 dark:bg-sky-900/70',
+    text: 'text-sky-700 dark:text-sky-100',
+    border: 'border-sky-200/80 dark:border-sky-700/70',
   },
   {
-    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
-    text: 'text-emerald-700 dark:text-emerald-300',
-    border: 'border-emerald-200/80 dark:border-emerald-800/60',
+    bg: 'bg-emerald-50 dark:bg-emerald-900/70',
+    text: 'text-emerald-700 dark:text-emerald-100',
+    border: 'border-emerald-200/80 dark:border-emerald-700/70',
   },
   {
-    bg: 'bg-teal-50 dark:bg-teal-950/40',
-    text: 'text-teal-700 dark:text-teal-300',
-    border: 'border-teal-200/80 dark:border-teal-800/60',
+    bg: 'bg-teal-50 dark:bg-teal-900/70',
+    text: 'text-teal-700 dark:text-teal-100',
+    border: 'border-teal-200/80 dark:border-teal-700/70',
   },
 ];
 
@@ -117,16 +101,23 @@ export default function UserAvatar({
   size = 'md',
   className,
   fallbackClassName,
+  'aria-hidden': ariaHidden,
 }: UserAvatarProps) {
   const contextAvatarUrl = useUserAvatarSafe(userId, gender, name, directAvatarUrl);
   const avatarUrl = directAvatarUrl || contextAvatarUrl;
-  const sizeConfig = sizeClasses[size];
-  const initials = getInitials(name);
+  const sizeConfig = SIZE_CLASSES.get(size) ?? { container: 'h-10 w-10', text: 'text-xs' };
   const palette = getAvatarPalette(name || userId);
 
+  // A span (not a div) so the avatar is valid inside <p>, <a>, <button> and <label>;
+  // a div inside <p> makes the browser split the paragraph and breaks hydration.
   return (
-    <div
-      className={cn('relative inline-flex shrink-0 select-none', sizeConfig.container, className)}
+    <span
+      aria-hidden={ariaHidden || undefined}
+      className={cn(
+        'relative inline-flex shrink-0 select-none rounded-full',
+        sizeConfig.container,
+        className
+      )}
     >
       <Avatar
         className={cn(
@@ -137,7 +128,7 @@ export default function UserAvatar({
         {avatarUrl && (
           <AvatarImage
             src={avatarUrl}
-            alt={name || 'User avatar'}
+            alt={ariaHidden ? '' : name || 'User avatar'}
             className="h-full w-full object-cover"
           />
         )}
@@ -150,58 +141,9 @@ export default function UserAvatar({
             fallbackClassName
           )}
         >
-          {initials}
+          {getInitials(name)}
         </AvatarFallback>
       </Avatar>
-    </div>
-  );
-}
-
-// Export a version that works with direct avatar URL for special cases
-type DirectUserAvatarProps = Omit<UserAvatarProps, 'userId' | 'gender'> & {
-  avatarUrl: string;
-};
-
-export function DirectUserAvatar({
-  avatarUrl,
-  name,
-  size = 'md',
-  className,
-  fallbackClassName,
-}: DirectUserAvatarProps) {
-  const sizeConfig = sizeClasses[size];
-  const initials = getInitials(name);
-  const palette = getAvatarPalette(name);
-
-  return (
-    <div
-      className={cn('relative inline-flex shrink-0 select-none', sizeConfig.container, className)}
-    >
-      <Avatar
-        className={cn(
-          'h-full w-full rounded-full overflow-hidden border shadow-2xs',
-          palette.border
-        )}
-      >
-        {avatarUrl && (
-          <AvatarImage
-            src={avatarUrl}
-            alt={name || 'User avatar'}
-            className="h-full w-full object-cover"
-          />
-        )}
-        <AvatarFallback
-          className={cn(
-            'flex h-full w-full items-center justify-center rounded-full font-bold',
-            palette.bg,
-            palette.text,
-            sizeConfig.text,
-            fallbackClassName
-          )}
-        >
-          {initials}
-        </AvatarFallback>
-      </Avatar>
-    </div>
+    </span>
   );
 }

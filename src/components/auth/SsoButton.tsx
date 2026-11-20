@@ -13,14 +13,10 @@ type Props = {
   disabled?: boolean;
 };
 
-// Map provider types to Tailwind class strings and icons
-const providerConfig: Record<
-  string,
-  { classes: string; icon: React.ReactNode; defaultLabel: string }
-> = {
+// Provider marks on one neutral token button. Google/Microsoft marks keep their
+// vendor-mandated multi-colour fills; Okta/Auth0 use their monochrome marks.
+const providerConfig: Record<string, { icon: React.ReactNode; defaultLabel: string }> = {
   google: {
-    classes:
-      'bg-white hover:bg-slate-50 dark:bg-zinc-900 dark:hover:bg-zinc-800/80 text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 shadow-xs hover:shadow-sm',
     defaultLabel: 'Google',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
@@ -44,16 +40,14 @@ const providerConfig: Record<
     ),
   },
   okta: {
-    classes: 'bg-[#00297A] hover:bg-[#001d5c] text-white border-transparent',
     defaultLabel: 'Okta',
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 0C5.389 0 0 5.35 0 12s5.35 12 12 12 12-5.35 12-12S18.611 0 12 0zm0 18c-3.315 0-6-2.685-6-6s2.685-6 6-6 6 2.685 6 6-2.685 6-6 6z" />
       </svg>
     ),
   },
   azure: {
-    classes: 'bg-[#0078D4] hover:bg-[#005a9e] text-white border-transparent',
     defaultLabel: 'Microsoft',
     icon: (
       <svg width="20" height="20" viewBox="0 0 21 21" aria-hidden="true">
@@ -65,17 +59,14 @@ const providerConfig: Record<
     ),
   },
   auth0: {
-    classes: 'bg-[#EB5424] hover:bg-[#c44118] text-white border-transparent',
     defaultLabel: 'Auth0',
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M21.98 7.448L19.62 0H4.347L2.02 7.448c-1.352 4.312.03 9.206 3.815 12.015L12.007 24l6.157-4.552c3.755-2.81 5.182-7.688 3.815-12.015l-6.16 4.58 2.343 7.45-6.157-4.597-6.158 4.58 2.358-7.433-6.188-4.55 7.63-.045L12.008 0l2.356 7.404 7.615.044z" />
       </svg>
     ),
   },
   custom: {
-    classes:
-      'bg-white hover:bg-slate-50 dark:bg-zinc-900 dark:hover:bg-zinc-800/80 text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 shadow-xs hover:shadow-sm',
     defaultLabel: 'SSO',
     icon: (
       <svg
@@ -109,7 +100,6 @@ export default function SsoButton({
   const providerKey = providerType && providerConfigs.has(providerType) ? providerType : 'custom';
   const config = providerConfigs.get(providerKey) ?? providerConfig.custom;
   const label = providerLabel || config.defaultLabel;
-  const isGoogle = providerKey === 'google';
 
   return (
     <button
@@ -122,12 +112,13 @@ export default function SsoButton({
         'rounded-lg text-sm font-medium border select-none cursor-pointer',
         'transition-all duration-150 transform',
         'active:scale-[0.995] disabled:opacity-50 disabled:cursor-not-allowed',
-        config.classes
+        'border-input bg-card text-foreground shadow-xs hover:bg-muted hover:shadow-sm',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
       )}
     >
       {loading ? (
         <>
-          <Spinner size="sm" variant={isGoogle ? 'default' : 'white'} />
+          <Spinner size="sm" />
           <span>Connecting...</span>
         </>
       ) : (

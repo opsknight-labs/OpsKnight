@@ -108,7 +108,9 @@ describe('DashboardViewer Component', () => {
 
     expect(screen.getByText('Executive Operations')).toBeDefined();
     expect(screen.getByText('High level reliability overview')).toBeDefined();
-    expect(screen.getByText('2 widgets')).toBeDefined();
+    expect(
+      screen.getByRole('group', { name: 'Executive Operations summary' }).textContent
+    ).toContain('Widgets2');
   });
 
   it('preserves dashboardId in filter navigation URL for custom dashboards', async () => {
@@ -121,12 +123,8 @@ describe('DashboardViewer Component', () => {
     const teamOption = await screen.findByText('Infrastructure');
     fireEvent.click(teamOption);
 
-    expect(pushMock).toHaveBeenCalledWith(
-      expect.stringContaining('/reports/executive/dash-123')
-    );
-    expect(pushMock).toHaveBeenCalledWith(
-      expect.stringContaining('teamId=team-infra')
-    );
+    expect(pushMock).toHaveBeenCalledWith(expect.stringContaining('/reports/executive/dash-123'));
+    expect(pushMock).toHaveBeenCalledWith(expect.stringContaining('teamId=team-infra'));
   });
 
   it('navigates to another saved dashboard when chosen from selector', async () => {
@@ -139,9 +137,7 @@ describe('DashboardViewer Component', () => {
     const targetOption = await screen.findByText('SRE Dashboard');
     fireEvent.click(targetOption);
 
-    expect(pushMock).toHaveBeenCalledWith(
-      expect.stringContaining('/reports/executive/dash-456')
-    );
+    expect(pushMock).toHaveBeenCalledWith(expect.stringContaining('/reports/executive/dash-456'));
   });
 
   it('enters edit mode, renames dashboard, tracks dirty state, and saves via PUT API', async () => {
@@ -333,10 +329,10 @@ describe('DashboardViewer Component', () => {
     expect(printHeader?.textContent).toContain('7 days');
 
     // Screen header and filters bar have print:hidden
-    const screenHeader = container.querySelector('.executive-screen-header, [class*="print:hidden"]');
+    const screenHeader = container.querySelector(
+      '.executive-screen-header, [class*="print:hidden"]'
+    );
     expect(screenHeader).not.toBeNull();
     expect(screenHeader?.className).toContain('print:hidden');
   });
 });
-
-

@@ -94,7 +94,7 @@ export function MonitoringStatusCard({
           ) : status.healthState === 'STARTING' ? (
             <Badge
               variant="secondary"
-              className="bg-sky-500/10 text-sky-500 border-sky-500/20 font-semibold"
+              className="border-border bg-muted text-ink-600 font-semibold"
             >
               <Clock className="h-3 w-3 mr-1" />
               Starting ({status.intervalMinutes}m cycle)
@@ -102,7 +102,7 @@ export function MonitoringStatusCard({
           ) : isDegraded ? (
             <Badge
               variant="secondary"
-              className="bg-amber-500/10 text-amber-500 border-amber-500/20 font-semibold"
+              className="border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 text-status-elevated-deep dark:text-amber-300 font-semibold"
             >
               Monitoring Degraded
             </Badge>
@@ -113,7 +113,7 @@ export function MonitoringStatusCard({
           ) : (
             <Badge
               variant="outline"
-              className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-semibold"
+              className="border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15 text-status-ok-deep dark:text-emerald-300 font-semibold"
             >
               <CheckCircle2 className="h-3 w-3 mr-1" />
               Active ({status.intervalMinutes}m cycle)
@@ -143,7 +143,7 @@ export function MonitoringStatusCard({
                 ? new Date(status.lastRun.completedAt).toLocaleTimeString()
                 : 'None yet'}
             </div>
-            <div className="text-muted-foreground text-[11px]">
+            <div className="text-muted-foreground text-2xs">
               {status.lastRun
                 ? `${status.lastRun.controlsEvaluated} evaluated / ${status.lastRun.controlsFailed} failed`
                 : 'Awaiting initial sweep'}
@@ -158,7 +158,7 @@ export function MonitoringStatusCard({
                 ? new Date(status.nextRunAt).toLocaleTimeString()
                 : `${status.intervalMinutes}m interval`}
             </div>
-            <div className="text-muted-foreground text-[11px]">
+            <div className="text-muted-foreground text-2xs">
               {status.isStale ? 'Expected cycle delayed' : 'On schedule'}
             </div>
           </div>
@@ -166,19 +166,19 @@ export function MonitoringStatusCard({
           <div className="rounded-lg border border-border p-3 space-y-1">
             <div className="text-muted-foreground">Open Drift Episodes</div>
             <div
-              className={`font-semibold text-sm ${status.openDriftCount > 0 ? 'text-rose-500' : 'text-emerald-500'}`}
+              className={`font-semibold text-sm ${status.openDriftCount > 0 ? 'text-status-critical-deep dark:text-rose-300' : 'text-status-ok-deep dark:text-emerald-300'}`}
             >
               {status.openDriftCount} active
             </div>
-            <div className="text-muted-foreground text-[11px]">Requires operator attention</div>
+            <div className="text-muted-foreground text-2xs">Requires operator attention</div>
           </div>
 
           <div className="rounded-lg border border-border p-3 space-y-1">
             <div className="text-muted-foreground">Acknowledged Drift</div>
-            <div className="font-semibold text-sm text-amber-500">
+            <div className="font-semibold text-sm text-status-elevated-deep dark:text-amber-300">
               {status.acknowledgedDriftCount} acknowledged
             </div>
-            <div className="text-muted-foreground text-[11px]">Pending technical recovery</div>
+            <div className="text-muted-foreground text-2xs">Pending technical recovery</div>
           </div>
         </div>
       </CardContent>

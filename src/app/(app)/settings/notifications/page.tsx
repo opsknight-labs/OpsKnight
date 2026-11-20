@@ -294,7 +294,7 @@ export default async function NotificationProviderSettingsPage() {
       {/* 2. Runtime Overview Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl border border-border/80 bg-card shadow-xs text-xs">
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+          <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider block">
             Email Route
           </span>
           <span
@@ -305,7 +305,7 @@ export default async function NotificationProviderSettingsPage() {
           </span>
         </div>
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+          <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider block">
             SMS Provider
           </span>
           <span className="font-semibold text-foreground truncate block mt-0.5">
@@ -313,7 +313,7 @@ export default async function NotificationProviderSettingsPage() {
           </span>
         </div>
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+          <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider block">
             WhatsApp
           </span>
           <span className="font-semibold text-foreground truncate block mt-0.5">
@@ -321,7 +321,7 @@ export default async function NotificationProviderSettingsPage() {
           </span>
         </div>
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+          <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider block">
             Web Push
           </span>
           <span className="font-semibold text-foreground truncate block mt-0.5">

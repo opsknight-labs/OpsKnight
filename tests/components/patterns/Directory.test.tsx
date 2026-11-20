@@ -6,7 +6,10 @@ import {
   DirectoryGuideSteps,
   DirectoryHeader,
   DirectoryTable,
+  useDirectoryColumns,
+  useDirectoryDensity,
   useDirectoryView,
+  type DirectoryColumn,
 } from '@/components/patterns/Directory';
 
 type Row = { id: string; name: string };
@@ -122,5 +125,169 @@ describe('Directory pattern', () => {
     const guide = screen.getByRole('button', { name: 'How things work' });
     const toggle = screen.getByRole('group', { name: 'Directory view' });
     expect(guide.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  describe('power-user features', () => {
+    const people: Row[] = [
+      { id: 'b', name: 'Bo' },
+      { id: 'a', name: 'Ada' },
+      { id: 'c', name: 'Cy' },
+    ];
+    const cols: DirectoryColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        sortKey: 'name',
+        sortValue: r => r.name,
+        cell: r => <a href={`/u/${r.id}`}>{r.name}</a>,
+      },
+      { id: 'email', header: 'Email', hideable: true, cell: r => `${r.id}@x.io` },
+    ];
+    const bodyNames = () =>
+      screen
+        .getAllByRole('row')
+        .slice(1)
+        .map(r => r.textContent);
+
+    it('remembers density across every directory', () => {
+      const { result } = renderHook(() => useDirectoryDensity());
+      expect(result.current[0]).toBe('comfortable');
+      render(<DirectoryHeader title="Users" density />);
+      fireEvent.click(screen.getByRole('button', { name: 'Compact rows' }));
+      expect(result.current[0]).toBe('compact');
+      expect(window.localStorage.getItem('opsknight:directory-density')).toBe('compact');
+      expect(
+        screen.getByRole('button', { name: 'Compact rows' }).getAttribute('aria-pressed')
+      ).toBe('true');
+    });
+
+    it('persists hidden columns per directory and does not render them', () => {
+      const { result } = renderHook(() => useDirectoryColumns('people', cols));
+      act(() => result.current.onToggle('email', false));
+      expect(window.localStorage.getItem('opsknight:directory-columns:people')).toBe('email');
+      expect(renderHook(() => useDirectoryColumns('other', cols)).result.current.hidden.size).toBe(
+        0
+      );
+      render(
+        <DirectoryTable
+          label="People"
+          rows={people}
+          getRowId={r => r.id}
+          columns={cols}
+          hiddenColumns={result.current.hidden}
+          mobileRow={r => r.name}
+        />
+      );
+      expect(screen.queryByRole('columnheader', { name: 'Email' })).toBeNull();
+      expect(screen.queryByText('a@x.io')).toBeNull();
+    });
+
+    it('never hides the primary column, even if marked hideable', () => {
+      render(
+        <DirectoryTable
+          label="People"
+          rows={people}
+          getRowId={r => r.id}
+          columns={[{ ...cols[0], hideable: true }, cols[1]]}
+          hiddenColumns={new Set(['name', 'email'])}
+          mobileRow={r => r.name}
+        />
+      );
+      expect(screen.getByRole('columnheader', { name: /Name/ })).toBeTruthy();
+    });
+
+    it('cycles aria-sort and sorts client-side without onSortChange', () => {
+      render(
+        <DirectoryTable
+          label="People"
+          rows={people}
+          getRowId={r => r.id}
+          columns={cols}
+          mobileRow={r => r.name}
+        />
+      );
+      const header = screen.getByRole('columnheader', { name: /Name/ });
+      expect(header.getAttribute('aria-sort')).toBeNull();
+      fireEvent.click(within(header).getByRole('button'));
+      expect(header.getAttribute('aria-sort')).toBe('ascending');
+      expect(bodyNames()[0]).toContain('Ada');
+      fireEvent.click(within(header).getByRole('button'));
+      expect(header.getAttribute('aria-sort')).toBe('descending');
+      expect(bodyNames()[0]).toContain('Cy');
+    });
+
+    it('hands sorting to onSortChange and leaves row order alone', () => {
+      const onSortChange = vi.fn();
+      render(
+        <DirectoryTable
+          label="People"
+          rows={people}
+          getRowId={r => r.id}
+          columns={cols}
+          sort={{ key: 'name', direction: 'asc' }}
+          onSortChange={onSortChange}
+          mobileRow={r => r.name}
+        />
+      );
+      const header = screen.getByRole('columnheader', { name: /Name/ });
+      expect(header.getAttribute('aria-sort')).toBe('ascending');
+      expect(bodyNames()[0]).toContain('Bo');
+      fireEvent.click(within(header).getByRole('button'));
+      expect(onSortChange).toHaveBeenCalledWith({ key: 'name', direction: 'desc' });
+    });
+
+    it('moves row focus with j/k and arrows, toggles with x, opens with Enter', () => {
+      const onToggle = vi.fn();
+      const onOpen = vi.fn((e: Event) => e.preventDefault());
+      render(
+        <>
+          <input aria-label="Search" />
+          <DirectoryTable
+            label="People"
+            rows={people}
+            getRowId={r => r.id}
+            columns={cols}
+            selection={{ selected: new Set(), onToggle, rowLabel: r => `Select ${r.name}` }}
+            mobileRow={r => r.name}
+          />
+        </>
+      );
+      const [first, second, third] = screen.getAllByRole('row').slice(1);
+      expect(first.tabIndex).toBe(0);
+      expect(second.tabIndex).toBe(-1);
+      first.focus();
+      fireEvent.keyDown(first, { key: 'j' });
+      expect(document.activeElement).toBe(second);
+      fireEvent.keyDown(second, { key: 'ArrowDown' });
+      expect(document.activeElement).toBe(third);
+      fireEvent.keyDown(third, { key: 'k' });
+      expect(document.activeElement).toBe(second);
+      expect(second.tabIndex).toBe(0);
+
+      fireEvent.keyDown(second, { key: 'x' });
+      expect(onToggle).toHaveBeenCalledWith('a', true);
+
+      within(second).getByRole('link').addEventListener('click', onOpen);
+      fireEvent.keyDown(second, { key: 'Enter' });
+      expect(onOpen).toHaveBeenCalled();
+
+      // Typing elsewhere is never intercepted.
+      const search = screen.getByRole('textbox', { name: 'Search' });
+      search.focus();
+      fireEvent.keyDown(search, { key: 'j' });
+      expect(document.activeElement).toBe(search);
+    });
+
+    it('columns menu lists only hideable, non-primary columns', () => {
+      const { result } = renderHook(() => useDirectoryColumns('menu', cols));
+      render(<DirectoryHeader title="People" columns={result.current} />);
+      const trigger = screen.getByRole('button', { name: /Columns/ });
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+      const items = screen.getAllByRole('menuitemcheckbox');
+      expect(items.map(i => i.textContent)).toEqual(['Email']);
+      expect(items[0].getAttribute('aria-checked')).toBe('true');
+      fireEvent.click(items[0]);
+      expect(window.localStorage.getItem('opsknight:directory-columns:menu')).toBe('email');
+    });
   });
 });

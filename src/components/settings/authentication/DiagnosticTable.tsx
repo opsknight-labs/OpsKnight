@@ -50,7 +50,7 @@ export default function DiagnosticTable({
                       ? 'warning'
                       : 'neutral'
                 }
-                className="text-[11px] font-semibold uppercase tracking-wider"
+                className="text-2xs font-semibold uppercase tracking-wider"
               >
                 {item.state.replaceAll('_', ' ')}
               </Badge>

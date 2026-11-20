@@ -63,14 +63,10 @@ function SessionIdleSelect({ defaultValue = 30 }: { defaultValue?: number }) {
             </SelectTrigger>
             <SelectContent
               position="popper"
-              className="max-h-60 overflow-y-auto overscroll-contain rounded-xl border-border/80 shadow-xl"
+              className="max-h-60 overflow-y-auto overscroll-contain"
             >
               {PRESETS.map(preset => (
-                <SelectItem
-                  key={preset.value}
-                  value={preset.value}
-                  className="rounded-lg text-xs font-medium cursor-pointer"
-                >
+                <SelectItem key={preset.value} value={preset.value}>
                   {preset.label}
                 </SelectItem>
               ))}
@@ -81,6 +77,7 @@ function SessionIdleSelect({ defaultValue = 30 }: { defaultValue?: number }) {
         {selected === 'custom' && (
           <div className="flex items-center gap-2">
             <Input
+              aria-label="Custom session lifetime in days"
               id="mcp-custom-idle-days"
               type="number"
               min="1"

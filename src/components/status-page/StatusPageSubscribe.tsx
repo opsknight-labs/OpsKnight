@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 
 interface ServiceOption {
   id: string;
@@ -19,6 +19,8 @@ interface StatusPageSubscribeProps {
 }
 
 const MAX_EMAIL_LEN = 254;
+const EMAIL_ERROR = 'Please enter a valid email address';
+const SERVICES_ERROR = 'Select at least one service to subscribe to';
 
 function getApiErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object' || !('error' in payload)) return null;
@@ -230,6 +232,7 @@ export default function StatusPageSubscribe({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const emailRef = useRef<HTMLInputElement>(null);
 
   const hasPicker = services.length > 0;
   const selectedCount = selectedIds.size;
@@ -250,11 +253,12 @@ export default function StatusPageSubscribe({
 
     const trimmed = email.trim();
     if (!isValidEmail(trimmed)) {
-      setError('Please enter a valid email address');
+      setError(EMAIL_ERROR);
+      emailRef.current?.focus();
       return;
     }
     if (hasPicker && mode === 'selected' && selectedIds.size === 0) {
-      setError('Select at least one service to subscribe to');
+      setError(SERVICES_ERROR);
       return;
     }
 
@@ -333,11 +337,15 @@ export default function StatusPageSubscribe({
   const emailErrorId = `status-subscribe-error-${statusPageId}-${variant}`;
   const hintId = `status-subscribe-hint-${statusPageId}-${variant}`;
   const describedBy = error ? `${hintId} ${emailErrorId}` : hintId;
+  // The service-picker error is not about the email field, so it must not mark the field invalid.
+  const emailInvalid = Boolean(error) && error !== SERVICES_ERROR;
+  const emailId = `status-subscribe-email-${statusPageId}-${variant}`;
 
   return (
     <form
       onSubmit={handleSubmit}
       noValidate
+      aria-busy={isPending || undefined}
       className={isCard ? 'status-subscribe' : 'status-subscribe status-subscribe--modal'}
       aria-labelledby={isCard ? undefined : 'subscribe-modal-heading'}
     >
@@ -451,29 +459,39 @@ export default function StatusPageSubscribe({
         </div>
       )}
 
+      <label className="status-subscribe__label" htmlFor={emailId}>
+        Email address
+      </label>
       <div className="status-subscribe__controls">
-        <label className="sr-only" htmlFor={`status-subscribe-email-${statusPageId}-${variant}`}>
-          Email address
-        </label>
         <input
-          id={`status-subscribe-email-${statusPageId}-${variant}`}
+          ref={emailRef}
+          id={emailId}
           type="email"
           value={email}
           onChange={e => {
             setEmail(e.target.value);
             if (error) setError(null);
           }}
+          onBlur={() => {
+            // Validate on blur only once something is typed; an empty field is caught on submit.
+            if (email.trim() && !isValidEmail(email)) setError(EMAIL_ERROR);
+          }}
           placeholder="name@company.com"
           className="status-subscribe__input"
           autoComplete="email"
           inputMode="email"
           required
-          aria-invalid={error ? 'true' : undefined}
+          aria-invalid={emailInvalid ? 'true' : undefined}
           aria-describedby={describedBy}
           maxLength={MAX_EMAIL_LEN}
           disabled={isPending}
         />
-        <button type="submit" className="status-subscribe__button" disabled={isPending}>
+        <button
+          type="submit"
+          className="status-subscribe__button"
+          disabled={isPending}
+          aria-busy={isPending || undefined}
+        >
           {isPending ? (
             <>
               <SpinnerIcon />

@@ -119,11 +119,11 @@ export default function ApiActivityPanel({
           </select>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="text-[11px] text-muted-foreground flex flex-col gap-1">
+          <label className="text-2xs text-muted-foreground flex flex-col gap-1">
             From
             <Input type="date" name="from" defaultValue={filters.from} className="h-9 text-xs bg-background" />
           </label>
-          <label className="text-[11px] text-muted-foreground flex flex-col gap-1">
+          <label className="text-2xs text-muted-foreground flex flex-col gap-1">
             To
             <Input type="date" name="to" defaultValue={filters.to} className="h-9 text-xs bg-background" />
           </label>
@@ -192,11 +192,11 @@ export default function ApiActivityPanel({
                       </TableCell>
                       <TableCell className="py-3">
                         <div className="space-y-0.5">
-                          <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground">
+                          <Badge variant="outline" className="text-2xs bg-muted text-muted-foreground">
                             {act.entityType}
                           </Badge>
                           {act.entityId && (
-                            <code className="block text-[11px] font-mono text-muted-foreground truncate max-w-[140px]">
+                            <code className="block text-2xs font-mono text-muted-foreground truncate max-w-[140px]">
                               {act.entityId}
                             </code>
                           )}
@@ -208,7 +208,7 @@ export default function ApiActivityPanel({
                             {act.actorName || act.actorEmail || 'Machine Token'}
                           </span>
                           {act.ip && (
-                            <span className="block text-[10px] text-muted-foreground font-mono">
+                            <span className="block text-2xs text-muted-foreground font-mono">
                               {act.ip}
                             </span>
                           )}
@@ -216,7 +216,7 @@ export default function ApiActivityPanel({
                       </TableCell>
                       <TableCell className="py-3 text-xs max-w-xs">
                         {act.details ? (
-                          <pre className="text-[10px] font-mono bg-muted/40 p-1 rounded border border-border/50 overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px]">
+                          <pre className="text-2xs font-mono bg-muted/40 p-1 rounded border border-border/50 overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px]">
                             {JSON.stringify(act.details)}
                           </pre>
                         ) : (
@@ -242,7 +242,7 @@ export default function ApiActivityPanel({
                 events
               </span>
               {filters.hasCursor && (
-                <Badge variant="outline" className="text-[10px] bg-muted/60 text-muted-foreground font-medium">
+                <Badge variant="outline" className="text-2xs bg-muted/60 text-muted-foreground font-medium">
                   Older results
                 </Badge>
               )}
@@ -264,7 +264,7 @@ export default function ApiActivityPanel({
                   </Link>
                 </Button>
               ) : activities.length > 0 && filters.hasCursor ? (
-                <span className="text-[11px] text-muted-foreground italic px-2">
+                <span className="text-2xs text-muted-foreground italic px-2">
                   End of recorded activity
                 </span>
               ) : null}

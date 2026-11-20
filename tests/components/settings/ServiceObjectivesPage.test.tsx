@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { SETTINGS_NAV_ITEMS, SETTINGS_NAV_SECTIONS } from '@/components/settings/navConfig';
 import ServiceObjectivesPage from '@/app/(app)/settings/service-objectives/page';
 const mocks = vi.hoisted(() => ({ actor: vi.fn(), list: vi.fn() }));
 vi.mock('@/lib/rbac', () => ({ getCurrentAuthorizationActor: mocks.actor }));
 vi.mock('@/lib/prisma', () => ({ default: { serviceObjective: { findMany: mocks.list } } }));
 vi.mock('@/components/settings/ServiceObjectiveForm', () => ({
-  ServiceObjectiveForm: () => <div>Objective mutation form</div>,
+  ServiceObjectiveForm: ({ archive }: { archive?: boolean }) => (
+    <div>{archive ? 'Archive objective' : 'Objective mutation form'}</div>
+  ),
 }));
 beforeEach(() => {
   cleanup();
@@ -28,6 +30,7 @@ describe('Service objectives management', () => {
   it('offers administrators creation and explains measurement limits', async () => {
     render(await ServiceObjectivesPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole('heading', { name: 'Service objectives' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Create New Objective/ }));
     expect(screen.getByText('Objective mutation form')).toBeInTheDocument();
     expect(screen.getByText(/Availability measures uptime/)).toBeInTheDocument();
     expect(screen.getByText(/No measurement is not compliance/)).toBeInTheDocument();
@@ -40,6 +43,7 @@ describe('Service objectives management', () => {
       teamIds: ['team'],
     });
     render(await ServiceObjectivesPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.queryByRole('button', { name: /Create New Objective/ })).not.toBeInTheDocument();
     expect(screen.queryByText('Objective mutation form')).not.toBeInTheDocument();
     expect(mocks.list).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -69,10 +73,42 @@ describe('Service objectives management', () => {
       },
     ]);
     render(await ServiceObjectivesPage({ searchParams: Promise.resolve({}) }));
-    expect(screen.getByRole('heading', { name: 'Legacy latency' })).toBeInTheDocument();
-    expect(screen.queryByText('Edit objective')).not.toBeInTheDocument();
-    expect(screen.getByText('Archive objective')).toBeInTheDocument();
-    expect(screen.getByText(/legacy target; evaluation unavailable/)).toBeInTheDocument();
+    expect(screen.getAllByText('Legacy latency').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Edit objective/ })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Archive objective').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/legacy target; evaluation unavailable/).length).toBeGreaterThan(0);
+  });
+  it('shows status and error budget from the latest snapshot for global metric readers', async () => {
+    mocks.list.mockResolvedValue([
+      {
+        id: 'up',
+        lineageId: 'up',
+        version: 2,
+        name: 'Checkout uptime',
+        service: { name: 'Checkout' },
+        metricType: 'UPTIME',
+        target: 99,
+        comparator: 'GREATER_THAN_OR_EQUAL',
+        windowType: 'ROLLING_DAYS',
+        windowValue: 14,
+        description: 'Customer checkout path',
+        snapshots: [
+          { value: 99.1, breached: false, dataState: 'AVAILABLE', periodEnd: new Date() },
+        ],
+      },
+    ]);
+    render(await ServiceObjectivesPage({ searchParams: Promise.resolve({}) }));
+    expect(mocks.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({ snapshots: expect.objectContaining({ take: 1 }) }),
+      })
+    );
+    expect(screen.getAllByText('At risk').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Rolling 14 days').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('meter', { name: 'Error budget remaining' })[0]).toHaveAttribute(
+      'aria-valuenow',
+      '10'
+    );
   });
   it('requires authentication before querying objective definitions', async () => {
     mocks.actor.mockRejectedValue(new Error('Authentication required'));

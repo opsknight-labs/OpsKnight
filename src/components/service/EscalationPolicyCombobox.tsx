@@ -95,7 +95,7 @@ export default function EscalationPolicyCombobox({
         </PopoverTrigger>
 
         <PopoverContent
-          className="w-[var(--radix-popover-trigger-width)] min-w-[320px] p-0 shadow-lg rounded-xl border border-border/80"
+          className="w-[var(--radix-popover-trigger-width)] min-w-[320px] p-0 shadow-lg border"
           align="start"
         >
           <Command className="rounded-xl">

@@ -1,5 +1,6 @@
 'use client';
 
+import { EmptyState } from '@/components/patterns';
 import {
   ArrowUpDown,
   CalendarPlus,
@@ -21,8 +22,7 @@ import {
   CardDescription,
   CardContent,
 } from '@/components/ui/shadcn/card';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { formatDateTime } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 
@@ -211,15 +211,13 @@ export default function ScheduleActivityFeed({
 
       <CardContent className="p-0">
         {auditLogs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground mb-3">
-              <History className="h-5 w-5 opacity-60" />
-            </div>
-            <p className="text-sm font-medium text-foreground">No recorded changes yet</p>
-            <p className="mt-1 text-xs text-muted-foreground max-w-sm">
-              Modifications to layers, overrides, and schedule settings will appear here.
-            </p>
-          </div>
+          <EmptyState
+            variant="simple"
+            size="sm"
+            icon={<History />}
+            title="No recorded changes yet"
+            description="Modifications to layers, overrides, and schedule settings will appear here."
+          />
         ) : (
           <div className="divide-y divide-border/60">
             {auditLogs.map(log => {
@@ -258,14 +256,14 @@ export default function ScheduleActivityFeed({
                       <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
                         {log.actor ? (
                           <div className="flex items-center gap-1.5 font-medium text-foreground/80">
-                            <DirectUserAvatar
-                              avatarUrl={
-                                log.actor.avatarUrl ||
-                                getDefaultAvatar(log.actor.gender, log.actor.id || log.actor.name)
-                              }
+                            <UserAvatar
+                              userId={log.actor.id || log.actor.name}
+                              avatarUrl={log.actor.avatarUrl}
+                              gender={log.actor.gender}
                               name={log.actor.name}
                               size="xs"
                               className="h-3.5 w-3.5"
+                              aria-hidden
                             />
                             <span>{actorName}</span>
                           </div>

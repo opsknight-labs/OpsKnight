@@ -17,6 +17,7 @@ import {
   DirectoryTable,
   RelativeTime,
   SeverityBadge,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
 } from '@/components/patterns';
@@ -136,6 +137,7 @@ function Author({ pm }: { pm: PostmortemListItem }) {
         name={pm.createdBy?.name}
         avatarUrl={pm.createdBy?.avatarUrl}
         size="sm"
+        aria-hidden
       />
       <span className="truncate text-xs text-foreground">
         {pm.createdBy?.name || pm.createdBy?.email || 'Unknown'}
@@ -255,17 +257,6 @@ export default function PostmortemsListTable({
     }
   };
 
-  if (postmortems.length === 0) {
-    return (
-      <EmptyState
-        icon={<FileText className="h-6 w-6 text-muted-foreground/60" />}
-        title="No postmortems found"
-        description="Try adjusting your filters or create a new postmortem report."
-        size="md"
-      />
-    );
-  }
-
   const rowMenu = (pm: PostmortemListItem) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -276,21 +267,21 @@ export default function PostmortemsListTable({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => router.push(`/postmortems/${pm.incidentId}`)}>
-          <Eye className="mr-2 h-4 w-4" />
+          <Eye />
           View
         </DropdownMenuItem>
         {canManage && (
           <>
             <DropdownMenuItem onClick={() => router.push(`/postmortems/${pm.incidentId}`)}>
-              <Edit2 className="mr-2 h-4 w-4" />
+              <Edit2 />
               Edit
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
+              variant="destructive"
               onClick={() => handleDeleteSingle(pm.incidentId)}
-              className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:text-red-400 dark:focus:text-red-400 dark:focus:bg-red-500/10"
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 />
               Delete
             </DropdownMenuItem>
           </>
@@ -315,6 +306,7 @@ export default function PostmortemsListTable({
     },
     {
       id: 'status',
+      hideable: true,
       header: 'Status',
       className: 'w-32',
       cell: pm => (
@@ -326,6 +318,7 @@ export default function PostmortemsListTable({
     },
     {
       id: 'author',
+      hideable: true,
       header: 'Author',
       className: 'hidden w-40 lg:table-cell',
       cell: pm => (
@@ -336,6 +329,7 @@ export default function PostmortemsListTable({
     },
     {
       id: 'severity',
+      hideable: true,
       header: 'Severity',
       className: 'hidden w-24 md:table-cell',
       cell: pm =>
@@ -352,18 +346,32 @@ export default function PostmortemsListTable({
     },
     {
       id: 'date',
+      hideable: true,
       header: 'Created',
       className: 'w-24',
       cell: pm => <RelativeTime date={pm.createdAt} className="text-xs text-muted-foreground" />,
     },
     {
       id: 'actions',
+      hideable: true,
       header: 'Items',
       className: 'hidden w-16 xl:table-cell',
       cell: pm => <ActionItemCount pm={pm} />,
     },
   ];
 
+  const columnVisibility = useDirectoryColumns('postmortems', columns);
+
+  if (postmortems.length === 0) {
+    return (
+      <EmptyState
+        icon={<FileText className="h-6 w-6 text-muted-foreground/60" />}
+        title="No postmortems found"
+        description="Try adjusting your filters or create a new postmortem report."
+        size="md"
+      />
+    );
+  }
   const rangeStart = (pagination.currentPage - 1) * pagination.itemsPerPage + 1;
 
   return (
@@ -405,6 +413,8 @@ export default function PostmortemsListTable({
                 }
               : undefined
           }
+          columns={columnVisibility}
+          density
           view={{ value: view, onChange: setView }}
           guide={
             <DirectoryGuide title="How postmortems work" steps={GUIDE_STEPS} links={GUIDE_LINKS} />
@@ -454,6 +464,7 @@ export default function PostmortemsListTable({
             rows={postmortems}
             getRowId={pm => pm.id}
             columns={columns}
+            hiddenColumns={columnVisibility.hidden}
             selection={
               canManage
                 ? {

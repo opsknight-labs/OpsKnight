@@ -413,7 +413,7 @@ export default function ProviderCard({
       return (
         <Badge
           variant="outline"
-          className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+          className="text-2xs font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
         >
           {enabled ? 'Will be Enabled' : 'Will be Disabled'}
         </Badge>
@@ -428,7 +428,7 @@ export default function ProviderCard({
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1.5"
+            className="text-2xs font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1.5"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Primary (Active)
@@ -438,7 +438,7 @@ export default function ProviderCard({
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 inline-flex items-center gap-1.5"
+            className="text-2xs font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 inline-flex items-center gap-1.5"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
             Fallback #1
@@ -448,7 +448,7 @@ export default function ProviderCard({
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 inline-flex items-center gap-1.5"
+            className="text-2xs font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 inline-flex items-center gap-1.5"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
             Fallback #2
@@ -458,7 +458,7 @@ export default function ProviderCard({
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 inline-flex items-center gap-1.5"
+            className="text-2xs font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 inline-flex items-center gap-1.5"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
             Fallback #3
@@ -468,7 +468,7 @@ export default function ProviderCard({
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1.5"
+            className="text-2xs font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1.5"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Active &amp; Routing
@@ -478,7 +478,7 @@ export default function ProviderCard({
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 inline-flex items-center gap-1"
+            className="text-2xs font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 inline-flex items-center gap-1"
           >
             <AlertOctagon className="h-3 w-3" />
             Configuration Error
@@ -488,7 +488,7 @@ export default function ProviderCard({
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80"
+            className="text-2xs font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80"
           >
             Configured (Standby)
           </Badge>
@@ -498,7 +498,7 @@ export default function ProviderCard({
         return (
           <Badge
             variant="outline"
-            className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+            className="text-2xs font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
           >
             Setup Required
           </Badge>
@@ -638,13 +638,13 @@ export default function ProviderCard({
                 {testResult.status === 'UNKNOWN' && 'Delivery Status Unconfirmed'}
                 {testResult.status === 'FAILED' && 'Test Delivery Failed'}
               </span>
-              <span className="text-[11px] opacity-75">
+              <span className="text-2xs opacity-75">
                 {formatDateTime(testResult.testedAt.toISOString(), userTimeZone, {
                   format: 'time',
                 })}
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] opacity-90 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-2xs opacity-90 pt-1">
               <div>
                 Provider: <span className="font-mono font-medium">{testResult.provider}</span>
               </div>
@@ -665,7 +665,7 @@ export default function ProviderCard({
               )}
             </div>
             {testResult.message && (
-              <p className="text-[11px] pt-1 border-t border-current/10 opacity-90">
+              <p className="text-2xs pt-1 border-t border-current/10 opacity-90">
                 {testResult.message}
               </p>
             )}
@@ -684,7 +684,7 @@ export default function ProviderCard({
                       <Key className="h-4 w-4 text-primary" />
                       <p className="text-xs font-bold text-foreground">VAPID Cryptographic Keys</p>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-2xs text-muted-foreground">
                       Generate or rotate the Web Push application server keys. Existing registered
                       devices continue to receive alerts after rotation.
                     </p>
@@ -707,7 +707,7 @@ export default function ProviderCard({
                   </Button>
                 </div>
                 {hasVapidKeys && (
-                  <div className="text-[11px] text-muted-foreground font-mono">
+                  <div className="text-2xs text-muted-foreground font-mono">
                     Legacy active key versions retained: {legacyKeyCount}
                   </div>
                 )}
@@ -736,7 +736,11 @@ export default function ProviderCard({
                   <div key={field.name} className="space-y-1.5">
                     <Label htmlFor={fieldId} className="text-xs font-semibold text-foreground">
                       {field.label}
-                      {field.required && <span className="text-destructive ml-1">*</span>}
+                      {field.required && (
+                        <span className="text-destructive ml-1" aria-hidden="true">
+                          *
+                        </span>
+                      )}
                     </Label>
                     {field.type === 'textarea' ? (
                       <Textarea
@@ -852,7 +856,7 @@ export default function ProviderCard({
       {existing && !isExpanded && (
         <CardContent className="px-4 sm:px-5 pb-4 pt-0">
           <div className="flex flex-col gap-1.5 border-t border-border/40 pt-2.5">
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <div className="flex items-center justify-between text-2xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <ShieldCheck className="h-3 w-3 text-emerald-500" />
                 Sensitive credentials are masked
@@ -869,7 +873,7 @@ export default function ProviderCard({
                 type="button"
                 onClick={() => void copyVapid()}
                 aria-label="Copy VAPID public key"
-                className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors mt-0.5 w-fit"
+                className="flex items-center gap-1.5 text-2xs text-muted-foreground hover:text-foreground transition-colors mt-0.5 w-fit"
               >
                 <Copy className="h-3 w-3" />
                 Copy VAPID public key

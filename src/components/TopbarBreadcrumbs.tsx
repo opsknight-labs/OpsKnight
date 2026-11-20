@@ -75,20 +75,13 @@ export default function TopbarBreadcrumbs() {
                     <BreadcrumbEllipsis className="h-4 w-4 text-zinc-400 hover:text-zinc-100" />
                     <span className="sr-only">Toggle menu</span>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="bg-[#18181b] border-zinc-800 text-zinc-200 shadow-xl [&_a]:!text-zinc-200 [&_a:hover]:!text-white [&_a]:no-underline min-w-[120px]"
-                  >
+                  <DropdownMenuContent align="start">
                     {breadcrumbs.slice(0, -2).map(breadcrumb => (
-                      <DropdownMenuItem
-                        key={breadcrumb.href}
-                        asChild
-                        className="focus:bg-zinc-800 focus:text-zinc-100 text-xs text-zinc-200 !text-zinc-200 cursor-pointer"
-                      >
+                      <DropdownMenuItem key={breadcrumb.href} asChild>
                         <Link
                           href={breadcrumb.href}
                           title={breadcrumb.label}
-                          className="text-zinc-200 hover:text-white !text-zinc-200 hover:!text-white block w-full transition-colors no-underline"
+                          className="truncate no-underline"
                         >
                           {breadcrumb.label}
                         </Link>

@@ -126,7 +126,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
     return (
       // The Sonner <li> paints the card surface (toasts.css); this only clips the
       // priority stripe to its rounded corners.
-      <div className="relative w-full overflow-hidden rounded-[inherit] text-[var(--toast-fg)]">
+      <div className="relative w-full overflow-hidden rounded-[13px] text-[var(--toast-fg)]">
         {/* Left priority accent stripe */}
         <div className={cn('absolute left-0 top-0 bottom-0 w-1', theme.bar)} />
 
@@ -231,7 +231,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
 
   // Compact Multiple Incidents Alert Card
   return (
-    <div className="relative w-full overflow-hidden rounded-[inherit] text-[var(--toast-fg)]">
+    <div className="relative w-full overflow-hidden rounded-[13px] text-[var(--toast-fg)]">
       {/* Left accent bar */}
       <div className={cn('absolute left-0 top-0 bottom-0 w-1', multiTheme.bar)} />
 

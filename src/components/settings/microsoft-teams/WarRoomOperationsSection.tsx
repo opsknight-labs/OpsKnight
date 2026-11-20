@@ -175,7 +175,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <div className="flex items-center gap-2">
           <Layers className="h-4 w-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold">War-room Operations</h3>
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-2xs">
             No rooms
           </Badge>
         </div>
@@ -193,13 +193,13 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <div className="flex items-center gap-2">
           <Layers className="h-4 w-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold">War-room Operations</h3>
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-2xs">
             {snapshots.length} total
           </Badge>
           {cleanupPending > 0 && (
             <Badge
               variant="outline"
-              className="border-amber-300 text-amber-700 bg-amber-50 text-[10px] dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10"
+              className="border-amber-300 text-amber-700 bg-amber-50 text-2xs dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10"
             >
               <AlertTriangle className="h-3 w-3 mr-1" />
               {cleanupPending} cleanup pending
@@ -210,6 +210,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         {/* Search Bar */}
         <div className="relative w-full sm:w-64">
           <Input
+            aria-label="Search incident or room"
             placeholder="Search incident or room…"
             value={searchQuery}
             onChange={e => {
@@ -223,13 +224,13 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
 
       {/* Filter status pills */}
       <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
-        <span className="text-[11px] text-muted-foreground mr-1 flex items-center gap-1">
+        <span className="text-2xs text-muted-foreground mr-1 flex items-center gap-1">
           <Filter className="h-3 w-3" /> Filter:
         </span>
         <Button
           variant={healthFilter === 'ALL' ? 'default' : 'outline'}
           size="sm"
-          className="h-7 text-[11px] px-2.5"
+          className="h-7 text-2xs px-2.5"
           onClick={() => {
             setHealthFilter('ALL');
             setPage(1);
@@ -240,7 +241,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <Button
           variant={healthFilter === 'HEALTHY' ? 'default' : 'outline'}
           size="sm"
-          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'HEALTHY' ? 'border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/10' : ''}`}
+          className={`h-7 text-2xs px-2.5 ${healthFilter !== 'HEALTHY' ? 'border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/10' : ''}`}
           onClick={() => {
             setHealthFilter('HEALTHY');
             setPage(1);
@@ -251,7 +252,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <Button
           variant={healthFilter === 'DEGRADED' ? 'default' : 'outline'}
           size="sm"
-          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'DEGRADED' ? 'border-amber-300 text-amber-700 bg-amber-50/50 hover:bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10 dark:hover:bg-amber-500/10' : ''}`}
+          className={`h-7 text-2xs px-2.5 ${healthFilter !== 'DEGRADED' ? 'border-amber-300 text-amber-700 bg-amber-50/50 hover:bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10 dark:hover:bg-amber-500/10' : ''}`}
           onClick={() => {
             setHealthFilter('DEGRADED');
             setPage(1);
@@ -262,7 +263,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <Button
           variant={healthFilter === 'DRIFTED' ? 'default' : 'outline'}
           size="sm"
-          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'DRIFTED' ? 'border-violet-300 text-violet-700 bg-violet-50/50 hover:bg-violet-50 dark:border-violet-500/30 dark:text-violet-300 dark:bg-violet-500/10 dark:hover:bg-violet-500/10' : ''}`}
+          className={`h-7 text-2xs px-2.5 ${healthFilter !== 'DRIFTED' ? 'border-violet-300 text-violet-700 bg-violet-50/50 hover:bg-violet-50 dark:border-violet-500/30 dark:text-violet-300 dark:bg-violet-500/10 dark:hover:bg-violet-500/10' : ''}`}
           onClick={() => {
             setHealthFilter('DRIFTED');
             setPage(1);
@@ -274,7 +275,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
           <Button
             variant={healthFilter === 'CLEANUP_PENDING' ? 'default' : 'outline'}
             size="sm"
-            className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'CLEANUP_PENDING' ? 'border-amber-400 text-amber-800 bg-amber-100/60 hover:bg-amber-100 dark:text-amber-300 dark:bg-amber-500/15 dark:hover:bg-amber-500/15' : ''}`}
+            className={`h-7 text-2xs px-2.5 ${healthFilter !== 'CLEANUP_PENDING' ? 'border-amber-400 text-amber-800 bg-amber-100/60 hover:bg-amber-100 dark:text-amber-300 dark:bg-amber-500/15 dark:hover:bg-amber-500/15' : ''}`}
             onClick={() => {
               setHealthFilter('CLEANUP_PENDING');
               setPage(1);
@@ -286,7 +287,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <Button
           variant={healthFilter === 'UNAVAILABLE' ? 'default' : 'outline'}
           size="sm"
-          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'UNAVAILABLE' ? 'border-ink-300 text-ink-600 bg-ink-50 hover:bg-ink-100' : ''}`}
+          className={`h-7 text-2xs px-2.5 ${healthFilter !== 'UNAVAILABLE' ? 'border-ink-300 text-ink-600 bg-ink-50 hover:bg-ink-100' : ''}`}
           onClick={() => {
             setHealthFilter('UNAVAILABLE');
             setPage(1);
@@ -297,7 +298,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         <Button
           variant={healthFilter === 'UNKNOWN' ? 'default' : 'outline'}
           size="sm"
-          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'UNKNOWN' ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-500/30 dark:text-blue-300 dark:bg-blue-500/10 dark:hover:bg-blue-500/15' : ''}`}
+          className={`h-7 text-2xs px-2.5 ${healthFilter !== 'UNKNOWN' ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-500/30 dark:text-blue-300 dark:bg-blue-500/10 dark:hover:bg-blue-500/15' : ''}`}
           onClick={() => {
             setHealthFilter('UNKNOWN');
             setPage(1);
@@ -332,7 +333,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-[11px] text-muted-foreground border-b bg-muted/30">
+                <tr className="text-2xs text-muted-foreground border-b bg-muted/30">
                   <th className="text-left font-semibold py-2.5 px-3 whitespace-nowrap">
                     Incident
                   </th>
@@ -370,7 +371,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
                       <td className="py-2.5 px-3">
                         <Badge
                           variant="outline"
-                          className="text-[10px] inline-flex items-center gap-1"
+                          className="text-2xs inline-flex items-center gap-1"
                         >
                           {s.provider === 'MICROSOFT_TEAMS' && (
                             <MicrosoftTeamsLogo className="h-3 w-3 shrink-0" />
@@ -382,14 +383,14 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <Badge
                             variant="outline"
-                            className={`text-[10px] ${stateBadgeVariant(s.state)}`}
+                            className={`text-2xs ${stateBadgeVariant(s.state)}`}
                           >
                             {s.state}
                           </Badge>
                           {isLocked && (
                             <Badge
                               variant="outline"
-                              className="text-[10px] border-ink-300 text-ink-600 bg-ink-50 gap-1"
+                              className="text-2xs border-ink-300 text-ink-600 bg-ink-50 gap-1"
                             >
                               <Lock className="h-2.5 w-2.5" /> Locked
                             </Badge>
@@ -399,12 +400,12 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
                       <td className="py-2.5 px-3">
                         <Badge
                           variant="outline"
-                          className={`text-[10px] ${healthBadgeVariant(s.operationalHealth)}`}
+                          className={`text-2xs ${healthBadgeVariant(s.operationalHealth)}`}
                         >
                           {s.operationalHealth}
                         </Badge>
                         {s.externalCleanupPending && (
-                          <div className="text-[10px] text-amber-700 mt-0.5 dark:text-amber-300">
+                          <div className="text-2xs text-amber-700 mt-0.5 dark:text-amber-300">
                             cleanup pending
                           </div>
                         )}
@@ -420,7 +421,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
                           {s.lastProjectedVersion}/{s.projectionVersion}
                         </span>
                         {s.projectionBehind && (
-                          <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-300">
+                          <span className="ml-1 text-2xs text-amber-700 dark:text-amber-300">
                             lag {s.projectionLag}
                           </span>
                         )}
@@ -431,12 +432,12 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
                           {s.participantCounts.present}/{s.participantCounts.desired}
                         </span>
                         {s.participantDrift > 0 && (
-                          <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-300">
+                          <span className="ml-1 text-2xs text-amber-700 dark:text-amber-300">
                             drift {s.participantDrift}
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 whitespace-nowrap text-muted-foreground text-[11px]">
+                      <td className="py-2.5 px-3 whitespace-nowrap text-muted-foreground text-2xs">
                         {s.lastReconciledAt
                           ? new Date(s.lastReconciledAt).toLocaleString()
                           : s.lastProjectedAt
@@ -447,7 +448,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[11px] px-2"
+                          className="h-6 text-2xs px-2"
                           onClick={() => toggle(s.warRoomId)}
                         >
                           {expandedId === s.warRoomId ? (
@@ -499,7 +500,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-2xs text-muted-foreground">
         Deterministic health: HEALTHY = authorized + permissions + healthy + no debt + current;
         DEGRADED = recoverable; UNAVAILABLE = integration/destination/bot disabled; DRIFTED =
         resource identity drift or externalCleanupPending; UNKNOWN = provider API unavailable (not
@@ -553,7 +554,7 @@ function RepairActions({
       <div className="flex items-center gap-2 text-xs font-semibold">
         <Wrench className="h-3.5 w-3.5" /> Safe repair actions
       </div>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-2xs text-muted-foreground">
         UI → Admin API → RBAC + state gate → enqueue canonical durable job → existing engine →
         adapter. Verify Teams channel runs Graph channel health probe (marker scan), then health
         reconcile. Idempotent; never calls Graph directly. Duplicate requests reuse the pending job.
@@ -562,7 +563,7 @@ function RepairActions({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px]"
+          className="h-7 text-2xs"
           disabled={pending !== null}
           onClick={() => run('TEST_CONNECTION')}
           title="Graph Teams channel health probe (marker scan) via durable job, then health reconcile."
@@ -573,7 +574,7 @@ function RepairActions({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px]"
+          className="h-7 text-2xs"
           disabled={pending !== null}
           onClick={() => run('RECONCILE')}
         >
@@ -583,7 +584,7 @@ function RepairActions({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px]"
+          className="h-7 text-2xs"
           disabled={pending !== null || projectionDisabled}
           onClick={() => run('RETRY_PROJECTION')}
           title={projectionDisabled ? 'Only while READY or CLOSING' : undefined}
@@ -594,7 +595,7 @@ function RepairActions({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px]"
+          className="h-7 text-2xs"
           disabled={pending !== null || participantDisabled}
           onClick={() => run('RETRY_PARTICIPANT_SYNC')}
           title={participantDisabled ? 'Only while READY or CLOSING' : undefined}
@@ -605,7 +606,7 @@ function RepairActions({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px]"
+          className="h-7 text-2xs"
           disabled={pending !== null || cleanupDisabled}
           onClick={() => run('RETRY_EXTERNAL_CLEANUP')}
           title={cleanupDisabled ? 'Only when cleanup pending and CLOSED/ARCHIVED' : undefined}
@@ -616,7 +617,7 @@ function RepairActions({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px]"
+          className="h-7 text-2xs"
           disabled={pending !== null}
           onClick={() => run('REFRESH_PERMISSIONS')}
         >
@@ -646,7 +647,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
         {diag.externalCleanupPending && (
           <Badge
             variant="outline"
-            className="border-amber-300 text-amber-700 bg-amber-50 text-[10px] dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10"
+            className="border-amber-300 text-amber-700 bg-amber-50 text-2xs dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10"
           >
             externalCleanupPending
           </Badge>
@@ -654,7 +655,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
             Incident / Provider
           </div>
           <DiagnosticsRow
@@ -680,7 +681,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
           />
         </div>
         <div className="space-y-1">
-          <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
             Destination / Channel
           </div>
           <DiagnosticsRow
@@ -712,7 +713,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
           />
         </div>
         <div className="space-y-1">
-          <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
             Projection
           </div>
           <DiagnosticsRow
@@ -723,7 +724,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
           <DiagnosticsRow label="Last reconciled" value={diag.lastReconciledAt} />
         </div>
         <div className="space-y-1">
-          <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
             Participant sync
           </div>
           <DiagnosticsRow
@@ -745,7 +746,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
           />
         </div>
         <div className="space-y-1">
-          <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
             Provisioning
           </div>
           <DiagnosticsRow label="Create attempted" value={diag.provisioning.createAttemptedAt} />
@@ -760,7 +761,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
           />
         </div>
         <div className="space-y-1">
-          <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
             Closing / Cleanup
           </div>
           <DiagnosticsRow label="Close requested" value={diag.closing?.closeRequestedAt ?? '—'} />
@@ -787,7 +788,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
         state={diag.state}
         externalCleanupPending={diag.externalCleanupPending}
       />
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+      <div className="flex items-center gap-2 text-2xs text-muted-foreground">
         <ShieldCheck className="h-3 w-3" />
         No secrets or tokens are surfaced in diagnostics.
       </div>

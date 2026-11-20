@@ -135,7 +135,7 @@ export default function AuthenticationRolesWorkspace() {
             </label>
           ))}
           {configuration.unmatchedPolicy === 'DENY' && (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               Accounts whose role an administrator set by hand can still sign in.
             </p>
           )}
@@ -257,13 +257,17 @@ export default function AuthenticationRolesWorkspace() {
                 }
                 placeholder={placeholder}
                 maxLength={128}
+                aria-invalid={Boolean(fieldErrors.profileMapping)}
+                aria-describedby={
+                  fieldErrors.profileMapping ? 'auth-profileMapping-error' : undefined
+                }
                 onChange={event => setProfileField(key, event.target.value)}
               />
             </label>
           ))}
         </div>
         {fieldErrors.profileMapping && (
-          <p role="alert" className="text-xs text-destructive">
+          <p id="auth-profileMapping-error" role="alert" className="text-xs text-destructive">
             {fieldErrors.profileMapping}
           </p>
         )}

@@ -63,6 +63,7 @@ jobs:
           build-args: |
             SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
           provenance: false
           sbom: false
       - name: Verify source and architecture and export checksummed archive
@@ -323,6 +324,7 @@ jobs:
           build-args: |
             SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
           cache-from: type=gha,scope=opsknight-main-amd64
           provenance: false
           sbom: false
@@ -722,6 +724,7 @@ jobs:
           build-args: |
             SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
           cache-from: type=gha,scope=opsknight-main-amd64
           cache-to: type=gha,scope=opsknight-main-amd64,mode=max
           provenance: false
@@ -741,6 +744,7 @@ jobs:
           build-args: |
             SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
           cache-from: |
             type=gha,scope=opsknight-release
             type=gha,scope=opsknight-main-amd64

@@ -10,6 +10,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/shadcn/tooltip';
 
+/**
+ * Incident volume is not a status, so the ramp is the theme-aware neutral ink scale (darker =
+ * more in light, brighter = more in dark) rather than a status hue.
+ */
+const HEAT_LEVELS = ['bg-muted', 'bg-ink-300', 'bg-ink-400', 'bg-ink-600', 'bg-ink-800'] as const;
+
 interface HeatmapDataPoint {
   date: string; // YYYY-MM-DD
   count: number;
@@ -97,17 +103,9 @@ export function IncidentHeatmapWidget({
 
   const getColor = useCallback(
     (count: number) => {
-      if (count === 0)
-        return 'bg-slate-200/60 hover:bg-slate-300/80 border border-slate-300/60 dark:bg-zinc-800/60 dark:hover:bg-zinc-700/80 dark:border-zinc-700/50';
-      const scale = Math.max(maxCount, 4);
-      const v = count / scale;
-      if (v <= 0.25)
-        return 'bg-emerald-100 hover:bg-emerald-200 border border-emerald-300/70 dark:bg-emerald-950/40 dark:border-emerald-800/40';
-      if (v <= 0.5)
-        return 'bg-emerald-300 hover:bg-emerald-400 border border-emerald-500/70 dark:bg-emerald-800/60 dark:border-emerald-600/50';
-      if (v <= 0.75)
-        return 'bg-emerald-500 hover:bg-emerald-600 border border-emerald-600/70 text-white dark:bg-emerald-600';
-      return 'bg-emerald-700 hover:bg-emerald-800 border border-emerald-800 shadow-2xs text-white dark:bg-emerald-500';
+      if (count === 0) return HEAT_LEVELS[0];
+      const v = count / Math.max(maxCount, 4);
+      return HEAT_LEVELS[v <= 0.25 ? 1 : v <= 0.5 ? 2 : v <= 0.75 ? 3 : 4];
     },
     [maxCount]
   );
@@ -118,25 +116,28 @@ export function IncidentHeatmapWidget({
         className={cn(
           'group relative overflow-hidden p-4 sm:p-5',
           variant === 'dashboard'
-            ? 'rounded-xl border border-border bg-card shadow-xs'
-            : 'rounded-xl border border-border bg-muted/40 shadow-none'
+            ? 'rounded-lg border border-border bg-card shadow-sm'
+            : 'rounded-lg border border-border bg-muted/40'
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between mb-3.5">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-              <Activity className="w-4 h-4" />
+            <div
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-muted-foreground"
+              aria-hidden
+            >
+              <Activity className="h-3.5 w-3.5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-foreground">Incident Activity</h3>
-              <p className="text-[11px] text-muted-foreground font-medium">
+              <h3 className="dash-heading-sm">Incident activity</h3>
+              <p className="text-xs text-muted-foreground tabular-nums">
                 {totalCount.toLocaleString()} incidents in {year}
               </p>
             </div>
           </div>
-          <div className="text-[11px] text-muted-foreground font-medium bg-muted/60 px-2.5 py-1 rounded-md border border-border">
-            Peak: <span className="font-bold text-foreground">{maxCount} / day</span>
+          <div className="text-xs tabular-nums text-muted-foreground">
+            Peak <span className="font-semibold text-foreground">{maxCount} / day</span>
           </div>
         </div>
 
@@ -169,7 +170,7 @@ export function IncidentHeatmapWidget({
                     <TooltipTrigger asChild>
                       <div
                         className={cn(
-                          'rounded-[1.5px] transition-all duration-150 hover:scale-125 hover:ring-1 hover:ring-zinc-400 dark:hover:ring-zinc-500 cursor-pointer',
+                          'cursor-pointer rounded-[1.5px] transition-shadow duration-150 hover:ring-1 hover:ring-ring',
                           getColor(day.count),
                           day.date > today && 'opacity-35'
                         )}
@@ -180,8 +181,8 @@ export function IncidentHeatmapWidget({
                         }}
                       />
                     </TooltipTrigger>
-                    <TooltipContent className="text-xs font-medium bg-slate-900 text-white shadow-lg border-slate-800">
-                      <span className="font-bold">{day.count}</span> incident
+                    <TooltipContent className="text-xs font-medium tabular-nums">
+                      <span className="font-semibold">{day.count}</span> incident
                       {day.count === 1 ? '' : 's'} ·{' '}
                       {day.date.toLocaleDateString('en-US', {
                         month: 'short',
@@ -197,19 +198,12 @@ export function IncidentHeatmapWidget({
         </div>
 
         {/* Legend */}
-        <div className="flex items-center justify-end gap-2 mt-3.5 text-[10px] text-muted-foreground font-medium">
+        <div className="mt-3 flex items-center justify-end gap-2 text-2xs text-muted-foreground">
           <span>Fewer</span>
-          <div className="flex gap-1 items-center">
-            {/* 0 incidents */}
-            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-slate-200/60 border border-slate-300/60 dark:bg-zinc-800/60 dark:border-zinc-700/50" />
-            {/* Low intensity (<25%) */}
-            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-100 border border-emerald-300/70 dark:bg-emerald-500/15 dark:border-emerald-500/30" />
-            {/* Medium intensity (<50%) */}
-            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-300 border border-emerald-500/70" />
-            {/* High intensity (<75%) */}
-            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-500 border border-emerald-600/70" />
-            {/* Peak intensity (>75%) */}
-            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-700 shadow-2xs" />
+          <div className="flex items-center gap-1" aria-hidden>
+            {HEAT_LEVELS.map(level => (
+              <div key={level} className={cn('h-2.5 w-2.5 rounded-[1.5px]', level)} />
+            ))}
           </div>
           <span>More</span>
         </div>

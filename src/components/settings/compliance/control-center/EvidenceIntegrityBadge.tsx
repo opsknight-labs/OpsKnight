@@ -19,7 +19,7 @@ export function EvidenceIntegrityBadge({
       <Badge
         variant="outline"
         className={cn(
-          'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium text-xs gap-1 py-0.5 px-2',
+          'border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15 text-status-ok-deep dark:text-emerald-300 font-medium text-xs gap-1 py-0.5 px-2',
           className
         )}
       >
@@ -37,7 +37,7 @@ export function EvidenceIntegrityBadge({
       <Badge
         variant="destructive"
         className={cn(
-          'border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-400 font-semibold text-xs gap-1 py-0.5 px-2',
+          'border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 font-semibold text-xs gap-1 py-0.5 px-2',
           className
         )}
       >

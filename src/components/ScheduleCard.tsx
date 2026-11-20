@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { RelativeTime } from '@/components/patterns';
 import { Clock, Layers, Users, Calendar } from 'lucide-react';
 import type { ScheduleOnCallSummary } from '@/components/schedules/schedule-oncall-summary';
@@ -57,16 +56,18 @@ export function ScheduleResponderStack({
       title={responders.map(r => r.name).join(', ')}
     >
       {responders.slice(0, 3).map(r => (
-        <DirectUserAvatar
+        <UserAvatar
           key={r.userId}
-          avatarUrl={r.avatarUrl || getDefaultAvatar(r.gender, r.userId || r.name)}
+          userId={r.userId}
+          avatarUrl={r.avatarUrl}
           name={r.name}
+          gender={r.gender}
           size="xs"
           className="h-5 w-5 ring-1.5 ring-background"
         />
       ))}
       {responders.length > 3 && (
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground ring-1.5 ring-background">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-2xs font-bold text-muted-foreground ring-1.5 ring-background">
           +{responders.length - 3}
         </span>
       )}
@@ -101,16 +102,37 @@ export default function ScheduleCard({ schedule }: { schedule: ScheduleCardSched
       </div>
 
       <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-        <div className="truncate">
-          On call now:{' '}
-          <span className="font-medium text-foreground">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="shrink-0">On call now:</span>
+          {schedule.onCallNow && (
+            <UserAvatar
+              userId={schedule.onCallNow.userId}
+              avatarUrl={schedule.onCallNow.avatarUrl}
+              name={schedule.onCallNow.name}
+              gender={schedule.onCallNow.gender}
+              size="xs"
+              aria-hidden
+            />
+          )}
+          <span className="truncate font-medium text-foreground">
             {schedule.onCallNow?.name ?? (uniqueUsers.length ? 'No one' : '—')}
           </span>
         </div>
         {schedule.next && (
-          <div className="truncate">
-            Next: <span className="font-medium text-foreground">{schedule.next.name}</span>{' '}
-            <RelativeTime date={schedule.next.start} format="long" />
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="shrink-0">Next:</span>
+            <UserAvatar
+              userId={schedule.next.userId}
+              avatarUrl={schedule.next.avatarUrl}
+              name={schedule.next.name}
+              gender={schedule.next.gender}
+              size="xs"
+              aria-hidden
+            />
+            <span className="truncate">
+              <span className="font-medium text-foreground">{schedule.next.name}</span>{' '}
+              <RelativeTime date={schedule.next.start} format="long" />
+            </span>
           </div>
         )}
       </div>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { updateQuietHoursPreferences } from '@/app/(app)/settings/quiet-hours-actions';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { Input } from '@/components/ui/shadcn/input';
-import { SettingsRow } from '@/components/settings/layout/SettingsRow';
+import { SettingsRow, settingsRowDescribedBy } from '@/components/settings/layout/SettingsRow';
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import { useAutosave } from '@/lib/hooks/use-autosave';
 import { notify } from '@/lib/toast';
@@ -104,36 +104,62 @@ export default function QuietHoursForm({
 
       <SettingsRow
         label="Enable Quiet Hours"
+        htmlFor="quiet-hours-enabled"
         description="Silence low-urgency alerts (SMS, Voice, Push, WhatsApp) during specified hours"
       >
-        <Switch checked={enabledChecked} onCheckedChange={setEnabledChecked} />
+        <Switch
+          id="quiet-hours-enabled"
+          aria-describedby={settingsRowDescribedBy('quiet-hours-enabled', { description: true })}
+          checked={enabledChecked}
+          onCheckedChange={setEnabledChecked}
+        />
       </SettingsRow>
 
       {enabledChecked && (
         <>
-          <SettingsRow label="Start Time" description="When quiet hours begin">
+          <SettingsRow
+            label="Start Time"
+            htmlFor="quiet-hours-start"
+            description="When quiet hours begin"
+          >
             <Input
+              id="quiet-hours-start"
+              aria-describedby={settingsRowDescribedBy('quiet-hours-start', { description: true })}
               type="time"
               value={startTime}
               onChange={e => setStartTime(e.target.value)}
-              className="max-w-[160px]"
+              className="max-w-40"
             />
           </SettingsRow>
 
-          <SettingsRow label="End Time" description="When quiet hours end">
+          <SettingsRow
+            label="End Time"
+            htmlFor="quiet-hours-end"
+            description="When quiet hours end"
+          >
             <Input
+              id="quiet-hours-end"
+              aria-describedby={settingsRowDescribedBy('quiet-hours-end', { description: true })}
               type="time"
               value={endTime}
               onChange={e => setEndTime(e.target.value)}
-              className="max-w-[160px]"
+              className="max-w-40"
             />
           </SettingsRow>
 
           <SettingsRow
             label="Weekend All Day"
+            htmlFor="quiet-hours-weekend"
             description="Extend quiet hours to all day on weekends"
           >
-            <Switch checked={weekendChecked} onCheckedChange={setWeekendChecked} />
+            <Switch
+              id="quiet-hours-weekend"
+              aria-describedby={settingsRowDescribedBy('quiet-hours-weekend', {
+                description: true,
+              })}
+              checked={weekendChecked}
+              onCheckedChange={setWeekendChecked}
+            />
           </SettingsRow>
 
           {/* Visual 24-Hour Timeline */}

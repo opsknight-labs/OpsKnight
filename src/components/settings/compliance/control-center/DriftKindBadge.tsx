@@ -13,7 +13,7 @@ export function DriftKindBadge({ kind, className }: DriftKindBadgeProps) {
       return (
         <Badge
           variant="outline"
-          className={`bg-rose-500/10 text-rose-500 border-rose-500/20 font-normal ${className || ''}`}
+          className={`border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 font-normal ${className || ''}`}
         >
           Status Regression
         </Badge>
@@ -22,7 +22,7 @@ export function DriftKindBadge({ kind, className }: DriftKindBadgeProps) {
       return (
         <Badge
           variant="outline"
-          className={`bg-amber-500/10 text-amber-500 border-amber-500/20 font-normal ${className || ''}`}
+          className={`border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 text-status-elevated-deep dark:text-amber-300 font-normal ${className || ''}`}
         >
           Verification Gap
         </Badge>
@@ -31,7 +31,7 @@ export function DriftKindBadge({ kind, className }: DriftKindBadgeProps) {
       return (
         <Badge
           variant="outline"
-          className={`bg-purple-500/10 text-purple-500 border-purple-500/20 font-normal ${className || ''}`}
+          className={`border-border bg-muted text-ink-600 font-normal ${className || ''}`}
         >
           Finding Changes
         </Badge>
@@ -40,7 +40,7 @@ export function DriftKindBadge({ kind, className }: DriftKindBadgeProps) {
       return (
         <Badge
           variant="outline"
-          className={`bg-red-500/10 text-red-500 border-red-500/20 font-normal ${className || ''}`}
+          className={`border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 font-normal ${className || ''}`}
         >
           Integrity Mismatch
         </Badge>
@@ -49,7 +49,7 @@ export function DriftKindBadge({ kind, className }: DriftKindBadgeProps) {
       return (
         <Badge
           variant="outline"
-          className={`bg-sky-500/10 text-sky-500 border-sky-500/20 font-normal ${className || ''}`}
+          className={`border-border bg-muted text-ink-600 font-normal ${className || ''}`}
         >
           Evaluator Version
         </Badge>
@@ -58,7 +58,7 @@ export function DriftKindBadge({ kind, className }: DriftKindBadgeProps) {
       return (
         <Badge
           variant="outline"
-          className={`bg-blue-500/10 text-blue-500 border-blue-500/20 font-normal ${className || ''}`}
+          className={`border-status-info-border/25 bg-status-info-soft dark:border-status-info/35 dark:bg-status-info/15 text-status-info-deep dark:text-blue-300 font-normal ${className || ''}`}
         >
           Framework Lifecycle
         </Badge>
@@ -67,7 +67,7 @@ export function DriftKindBadge({ kind, className }: DriftKindBadgeProps) {
       return (
         <Badge
           variant="outline"
-          className={`bg-slate-500/10 text-ink-500 border-slate-500/20 font-normal ${className || ''}`}
+          className={`bg-muted border-border text-ink-500 font-normal ${className || ''}`}
         >
           Applicability Changed
         </Badge>

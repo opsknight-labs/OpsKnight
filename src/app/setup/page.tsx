@@ -43,17 +43,17 @@ export default async function SetupPage({
             <div className="flex items-center justify-center mb-3.5">
               <AuthBrand size="hero" />
             </div>
-            <div className="mx-auto my-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400">
+            <div className="mx-auto my-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <ShieldAlert className="h-6 w-6" />
             </div>
-            <h2 className="text-[clamp(1.55rem,6vw,1.875rem)] 2xl:text-4xl font-bold text-slate-950 dark:text-white mb-2 tracking-tight min-h-[1.25em] flex items-center justify-center">
+            <h2 className="text-2xl sm:text-3xl 2xl:text-4xl font-bold text-foreground mb-2 tracking-tight min-h-[1.25em] flex items-center justify-center">
               Setup unavailable
             </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-normal transition-colors duration-300">
+            <p className="text-sm text-muted-foreground font-normal transition-colors duration-300">
               OpsKnight could not initialize the setup service. Check database connectivity and the
               server logs using the reference below.
             </p>
-            <p className="mt-4 font-mono text-xs text-slate-400">Reference: {requestId}</p>
+            <p className="mt-4 font-mono text-xs text-muted-foreground">Reference: {requestId}</p>
           </div>
         </AuthCard>
       </AuthLayout>
@@ -74,13 +74,13 @@ export default async function SetupPage({
           <div className="flex items-center justify-center mb-3.5">
             <AuthBrand size="hero" />
           </div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 mb-2">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground mb-2">
             System initialization
           </div>
-          <h2 className="text-[clamp(1.55rem,6vw,1.875rem)] 2xl:text-4xl font-bold text-slate-950 dark:text-white mb-2 tracking-tight min-h-[1.25em] flex items-center justify-center">
+          <h2 className="text-2xl sm:text-3xl 2xl:text-4xl font-bold text-foreground mb-2 tracking-tight min-h-[1.25em] flex items-center justify-center">
             Welcome to OpsKnight
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 font-normal transition-colors duration-300">
+          <p className="text-sm text-muted-foreground font-normal transition-colors duration-300">
             Create your administrator account to get started.
           </p>
         </div>

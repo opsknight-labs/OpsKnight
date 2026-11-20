@@ -20,7 +20,7 @@ type Props = {
 };
 
 const checkboxClass =
-  'mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-slate-300 accent-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 dark:border-slate-600 dark:accent-slate-100 dark:focus-visible:ring-white dark:focus-visible:ring-offset-slate-900';
+  'mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-input accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 export default function ConsentForm({
   action,
@@ -70,13 +70,13 @@ export default function ConsentForm({
       {all.length > 0 ? (
         <>
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <h2 className="text-sm font-semibold text-foreground">
               Choose what {clientName} can do
             </h2>
             <p
               id={summaryId}
               aria-live="polite"
-              className="text-xs font-medium tabular-nums text-slate-500 dark:text-slate-400"
+              className="text-xs font-medium tabular-nums text-muted-foreground"
             >
               {count} of {total} selected
             </p>
@@ -84,7 +84,7 @@ export default function ConsentForm({
           {changeScopes.size > 0 && (
             <label
               htmlFor={viewOnlyId}
-              className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-900/40"
+              className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm"
             >
               <input
                 id={viewOnlyId}
@@ -97,11 +97,11 @@ export default function ConsentForm({
                 className={checkboxClass}
               />
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100">
+                <span className="flex items-center gap-1.5 font-semibold text-foreground">
                   <Eye className="h-4 w-4" aria-hidden="true" />
                   View only
                 </span>
-                <span className="block text-xs text-slate-500 dark:text-slate-400">
+                <span className="block text-xs text-muted-foreground">
                   {clientName} can read but never change anything or run runbooks.
                 </span>
               </span>
@@ -123,21 +123,21 @@ export default function ConsentForm({
       ) : (
         <p
           id={summaryId}
-          className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+          className="rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground"
         >
           Your role can’t use any of the permissions this assistant asked for. Cancel and ask an
           administrator if you need access.
         </p>
       )}
       {unavailableNote && (
-        <p className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{unavailableNote}</span>
         </p>
       )}
       <DecisionButtons canAllow={all.length > 0} count={count} hintId={hintId} />
       {all.length > 0 && count === 0 && (
-        <p id={hintId} className="text-right text-xs text-slate-500 dark:text-slate-400">
+        <p id={hintId} className="text-right text-xs text-muted-foreground">
           {total > 0
             ? 'Select at least one permission to allow this connection.'
             : `${clientName} asked for changes only. Turn View only off, or cancel.`}
@@ -166,7 +166,7 @@ function DecisionButtons({
     // On phones a long list keeps the decision in reach.
     <div
       aria-busy={pending}
-      className="sticky bottom-0 -mx-5 flex flex-col-reverse gap-3 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur sm:static sm:mx-0 sm:flex-row sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none dark:border-slate-800 dark:bg-slate-900/95 sm:dark:bg-transparent"
+      className="sticky bottom-0 -mx-5 flex flex-col-reverse gap-3 border-t border-border bg-card/95 px-5 py-3 backdrop-blur sm:static sm:mx-0 sm:flex-row sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none sm:dark:bg-transparent"
     >
       <button
         name="decision"
@@ -174,7 +174,7 @@ function DecisionButtons({
         type="submit"
         formNoValidate
         disabled={pending}
-        className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white font-semibold text-slate-800 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800 dark:focus-visible:ring-white"
+        className="inline-flex items-center justify-center rounded-xl border border-input bg-card font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pending && !allowing ? 'Cancelling…' : 'Cancel'}
       </button>
@@ -185,7 +185,7 @@ function DecisionButtons({
           type="submit"
           disabled={count === 0 || pending}
           aria-describedby={count === 0 ? hintId : undefined}
-          className="inline-flex items-center justify-center rounded-xl bg-slate-950 font-semibold text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 dark:focus-visible:ring-white"
+          className="inline-flex items-center justify-center rounded-xl bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {allowing ? 'Connecting…' : 'Allow'}
         </button>
@@ -216,14 +216,14 @@ function ScopeGroup({
   }, [chosen, scopes.length]);
 
   return (
-    <fieldset className="relative min-w-0 rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-3 dark:border-slate-700 dark:bg-slate-900/40">
-      <legend className="float-left w-full pr-28 font-display text-sm font-semibold text-slate-900 dark:text-slate-100">
+    <fieldset className="relative min-w-0 rounded-xl border border-border bg-card px-4 pb-3 pt-3">
+      <legend className="float-left w-full pr-28 font-display text-sm font-semibold text-foreground">
         {group.label}
       </legend>
       {scopes.length > 1 && (
         <label
           htmlFor={allId}
-          className="absolute right-3 top-2.5 flex cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+          className="absolute right-3 top-2.5 flex cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
           <input
             ref={allRef}
@@ -276,7 +276,7 @@ function ScopeList({
 }) {
   return (
     <fieldset className="min-w-0">
-      <legend className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+      <legend className="mb-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         {title}
       </legend>
       <ul className="space-y-0.5 px-0">
@@ -288,8 +288,8 @@ function ScopeList({
               <label
                 htmlFor={id}
                 className={cn(
-                  'flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-slate-50 sm:min-h-0 dark:hover:bg-slate-800/60',
-                  changes && on && 'bg-amber-50/60 dark:bg-amber-950/20'
+                  'flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted sm:min-h-0',
+                  changes && on && 'bg-status-elevated-soft/60'
                 )}
               >
                 <input
@@ -302,23 +302,23 @@ function ScopeList({
                   onChange={event => onToggle([item.scope], event.target.checked)}
                   className={cn(checkboxClass, disabled && 'cursor-not-allowed opacity-50')}
                 />
-                <span className="min-w-0 flex-1 text-slate-800 dark:text-slate-100">
+                <span className="min-w-0 flex-1 text-foreground">
                   {item.label}
                   {/* An upgrade: what the existing connection did not have. */}
                   {item.added && (
-                    <span className="ml-2 inline-flex items-center whitespace-nowrap rounded-full border border-sky-300 bg-sky-50 px-1.5 py-px align-middle text-[11px] font-medium text-sky-800 dark:border-sky-700/60 dark:bg-sky-950/40 dark:text-sky-200">
+                    <span className="ml-2 inline-flex items-center whitespace-nowrap rounded-full border border-status-info/30 bg-status-info-soft px-1.5 py-px align-middle text-2xs font-medium text-status-info-deep">
                       New
                     </span>
                   )}
                   {/* Mark exactly the selected permissions that let the assistant change things. */}
                   {changes && on && writesEnabled && (
-                    <span className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px align-middle text-[11px] font-medium text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+                    <span className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-status-elevated/30 bg-status-elevated-soft px-1.5 py-px align-middle text-2xs font-medium text-status-elevated-deep">
                       <PencilLine className="h-3 w-3" aria-hidden="true" />
                       Can make changes
                     </span>
                   )}
                   {changes && on && !writesEnabled && (
-                    <span className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-slate-300 bg-slate-50 px-1.5 py-px align-middle text-[11px] font-medium text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <span className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-input bg-background px-1.5 py-px align-middle text-2xs font-medium text-muted-foreground">
                       Changes off
                     </span>
                   )}

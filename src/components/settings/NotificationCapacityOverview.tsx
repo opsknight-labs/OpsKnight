@@ -128,7 +128,7 @@ export default function NotificationCapacityOverview({
     if (!source) return null;
     const variant = source === 'DATABASE' ? 'secondary' : source === 'ENV' ? 'outline' : 'outline';
     return (
-      <Badge variant={variant as never} className="text-[10px] font-bold uppercase tracking-wider">
+      <Badge variant={variant as never} className="text-2xs font-bold uppercase tracking-wider">
         {source}
       </Badge>
     );
@@ -313,7 +313,7 @@ export default function NotificationCapacityOverview({
                         ? 'secondary'
                         : 'outline'
                   }
-                  className="text-[10px] font-bold uppercase"
+                  className="text-2xs font-bold uppercase"
                 >
                   {queueHealth.state === 'PAUSED'
                     ? 'Backpressure — paused'
@@ -321,7 +321,7 @@ export default function NotificationCapacityOverview({
                       ? 'Healthy'
                       : 'Throttled'}
                 </Badge>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-2xs text-muted-foreground">
                   {queueHealth.hasCapacity ? 'allow' : 'pause new bulk'} ·{' '}
                   {queueHealth.state === 'PAUSED'
                     ? `resumes < ${queueHealth.low.toLocaleString()}`
@@ -333,34 +333,34 @@ export default function NotificationCapacityOverview({
 
           <div className="grid gap-3 sm:grid-cols-3 text-xs">
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-              <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+              <div className="text-muted-foreground text-2xs font-semibold uppercase tracking-wider">
                 Low watermark
               </div>
               <div className="text-lg font-bold">{Number(low).toLocaleString()}</div>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-2xs text-muted-foreground">
                 Queue must drain below this to resume
               </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-              <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+              <div className="text-muted-foreground text-2xs font-semibold uppercase tracking-wider">
                 High watermark
               </div>
               <div className="text-lg font-bold">{Number(high).toLocaleString()}</div>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-2xs text-muted-foreground">
                 Hit high → pause; hysteresis prevents flap
               </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-              <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+              <div className="text-muted-foreground text-2xs font-semibold uppercase tracking-wider">
                 Source
               </div>
               <div className="mt-1 flex gap-1.5 flex-wrap">
                 {watermarks ? sourceBadge(watermarks.source) : null}
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-2xs">
                   rev {currentRevision ?? runtime?.revision ?? watermarks?.revision ?? '—'}
                 </Badge>
               </div>
-              <div className="text-[11px] text-muted-foreground mt-1">
+              <div className="text-2xs text-muted-foreground mt-1">
                 {runtime
                   ? 'DB-managed'
                   : watermarks?.source === 'ENV'
@@ -410,7 +410,7 @@ export default function NotificationCapacityOverview({
                     onChange={e => setDefaultShare(Number(e.target.value))}
                     className="w-full accent-primary"
                   />
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <div className="flex justify-between text-2xs text-muted-foreground">
                     <span>5% bulk</span>
                     <span>95% bulk</span>
                   </div>
@@ -475,13 +475,13 @@ export default function NotificationCapacityOverview({
                   {item.mode ? (
                     <Badge
                       variant="outline"
-                      className="text-[10px] font-bold uppercase tracking-wider"
+                      className="text-2xs font-bold uppercase tracking-wider"
                     >
                       {item.mode}
                     </Badge>
                   ) : null}
                   {sourceBadge(item.source)}
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" className="text-2xs">
                     {item.adaptiveBackpressure ? 'Adaptive' : 'Fixed'}
                   </Badge>
                 </div>
@@ -490,14 +490,14 @@ export default function NotificationCapacityOverview({
                 <div>
                   <span className="text-muted-foreground">Configured</span>
                   <div className="font-bold font-mono">{item.configuredRatePerSecond}/s</div>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-2xs text-muted-foreground">
                     effective {item.effectiveRatePerSecond}/s
                   </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Bulk max</span>
                   <div className="font-bold font-mono">{item.bulkRatePerSecond}/s</div>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-2xs text-muted-foreground">
                     {item.bulkShare != null
                       ? `${Math.round(item.bulkShare * 100)}% bulk`
                       : '80% bulk'}
@@ -506,12 +506,12 @@ export default function NotificationCapacityOverview({
                 <div>
                   <span className="text-muted-foreground">In flight</span>
                   <div className="font-bold font-mono">{item.maxInFlight}</div>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-2xs text-muted-foreground">
                     bulk {item.bulkMaxInFlight ?? '—'}
                   </span>
                 </div>
               </div>
-              <div className="mt-2 text-[11px] text-muted-foreground">
+              <div className="mt-2 text-2xs text-muted-foreground">
                 Per-provider overrides live on the Providers page (Capacity section in each card).
                 Use CUSTOM only when provider quota demands it.
               </div>

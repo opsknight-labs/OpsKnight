@@ -20,7 +20,7 @@ type ServicesFiltersProps = {
   teams: Array<{ id: string; name: string }>;
 };
 
-function useServicesParams() {
+export function useServicesParams() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();

@@ -53,6 +53,10 @@ export function preSendNetworkErrorCode(error: unknown): string | null {
 const graphTokenCache: TokenCache = new Map();
 const botTokenCache: TokenCache = new Map();
 const TOKEN_CACHE_MAX = 50;
+// Render-path budgets: the Teams settings page awaits token + RSC probes.
+const TOKEN_REQUEST_TIMEOUT_MS = 8_000;
+const RSC_PROBE_DEADLINE_MS = 8_000;
+const RSC_PROBE_CONCURRENCY = 8;
 
 function tokenCacheKey(clientId: string, tenantId: string): string {
   return `${clientId}:${tenantId}`;
@@ -136,6 +140,7 @@ async function acquireToken(
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
+        signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
       },
       { maxAttempts: 2, initialDelayMs: 800 }
     );
@@ -914,53 +919,78 @@ export async function getTeamsGrantedRscPermissions(options?: {
       };
     }
 
-    const installationStates: TeamsRscInstallationState[] = [];
-
-    for (const inst of installations) {
-      const res = await retryFetch(
-        `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(inst.teamId)}/channels?$select=id`,
-        { headers: { Authorization: `Bearer ${token}` } },
-        { maxAttempts: 2, initialDelayMs: 500 }
-      );
-      if (!res.ok) {
-        const error =
-          res.status === 401 || res.status === 403
-            ? 'CHANNEL_DISCOVERY_PERMISSION_DENIED'
-            : res.status === 404
-              ? 'TEAM_NOT_FOUND'
-              : `http_${res.status}`;
-        installationStates.push({
-          teamId: inst.teamId,
-          teamName: inst.teamName,
-          granted: res.status === 401 || res.status === 403 ? [] : null,
-          missing: required,
-          unknown: res.status !== 401 && res.status !== 403,
-          error,
-        });
-        continue;
-      }
+    // Probe Teams concurrently under one shared deadline: sequential, untimed
+    // probes held the settings page for one Graph round trip per installed Team
+    // and indefinitely when Graph hung. A probe cut off by the deadline stays
+    // unknown (fail-closed), exactly like any other unverified installation.
+    const deadline = AbortSignal.timeout(RSC_PROBE_DEADLINE_MS);
+    const deadlineHit = new Promise<never>((_, reject) =>
+      deadline.addEventListener('abort', () => reject(deadline.reason), { once: true })
+    );
+    deadlineHit.catch(() => {});
+    const probe = async (inst: {
+      teamId: string;
+      teamName: string | null;
+    }): Promise<TeamsRscInstallationState> => {
+      const unverified = (error: string): TeamsRscInstallationState => ({
+        teamId: inst.teamId,
+        teamName: inst.teamName,
+        granted: null,
+        missing: required,
+        unknown: true,
+        error,
+      });
       try {
-        const data = (await res.json()) as { value?: unknown[] };
-        if (!Array.isArray(data.value)) throw new Error('Invalid channels response');
-        installationStates.push({
+        // The race also covers retryFetch's Retry-After sleep, which ignores the signal.
+        const res = await Promise.race([
+          retryFetch(
+            `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(inst.teamId)}/channels?$select=id`,
+            { headers: { Authorization: `Bearer ${token}` }, signal: deadline },
+            { maxAttempts: 2, initialDelayMs: 500 }
+          ),
+          deadlineHit,
+        ]);
+        if (!res.ok) {
+          const denied = res.status === 401 || res.status === 403;
+          return {
+            teamId: inst.teamId,
+            teamName: inst.teamName,
+            granted: denied ? [] : null,
+            missing: required,
+            unknown: !denied,
+            error: denied
+              ? 'CHANNEL_DISCOVERY_PERMISSION_DENIED'
+              : res.status === 404
+                ? 'TEAM_NOT_FOUND'
+                : `http_${res.status}`,
+          };
+        }
+        try {
+          const data = (await Promise.race([res.json(), deadlineHit])) as { value?: unknown[] };
+          if (!Array.isArray(data.value)) throw new Error('Invalid channels response');
+        } catch {
+          return unverified(deadline.aborted ? 'GRAPH_TIMEOUT' : 'INVALID_RESPONSE');
+        }
+        // A successful channel list proves the required discovery capability.
+        // This is capability evidence, not an enumeration of every RSC grant.
+        return {
           teamId: inst.teamId,
           teamName: inst.teamName,
-          // A successful channel list proves the required discovery capability.
-          // This is capability evidence, not an enumeration of every RSC grant.
           granted: required,
           missing: [],
           unknown: false,
-        });
-      } catch {
-        installationStates.push({
-          teamId: inst.teamId,
-          teamName: inst.teamName,
-          granted: null,
-          missing: required,
-          unknown: true,
-          error: 'INVALID_RESPONSE',
-        });
+        };
+      } catch (e) {
+        if (deadline.aborted) return unverified('GRAPH_TIMEOUT');
+        const status = (e as { statusCode?: number }).statusCode;
+        return unverified(status ? `http_${status}` : 'GRAPH_REQUEST_FAILED');
       }
+    };
+
+    const installationStates: TeamsRscInstallationState[] = [];
+    for (let i = 0; i < installations.length; i += RSC_PROBE_CONCURRENCY) {
+      const batch = installations.slice(i, i + RSC_PROBE_CONCURRENCY);
+      installationStates.push(...(await Promise.all(batch.map(probe))));
     }
 
     const unknown = installationStates.some(state => state.unknown);

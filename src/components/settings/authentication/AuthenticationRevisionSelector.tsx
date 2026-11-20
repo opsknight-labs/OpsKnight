@@ -43,20 +43,20 @@ function providerName(revision: DashboardRevision) {
 function StatusBadge({ kind }: { kind: RevisionKind }) {
   if (kind === 'active')
     return (
-      <Badge variant="success" className="text-[10px] font-semibold shrink-0">
+      <Badge variant="success" className="text-2xs font-semibold shrink-0">
         Active
       </Badge>
     );
   if (kind === 'previous')
     return (
-      <Badge variant="outline" className="text-[10px] font-medium shrink-0">
+      <Badge variant="outline" className="text-2xs font-medium shrink-0">
         Previously active
       </Badge>
     );
   return (
     <Badge
       variant="outline"
-      className="text-[10px] font-medium shrink-0 border-primary/25 bg-primary/10 text-primary"
+      className="text-2xs font-medium shrink-0 border-primary/25 bg-primary/10 text-primary"
     >
       Draft
     </Badge>

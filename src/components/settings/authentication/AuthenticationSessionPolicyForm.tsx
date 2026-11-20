@@ -53,7 +53,7 @@ function DurationField({
         </legend>
         <Badge
           variant={isDefaultActive ? 'neutral' : 'outline'}
-          className="text-[10px] font-medium py-0"
+          className="text-2xs font-medium py-0"
         >
           {isDefaultActive ? 'Inherited Default' : isCustomActive ? 'Custom Value' : 'Preset'}
         </Badge>
@@ -102,6 +102,8 @@ function DurationField({
             <span>Custom value</span>
             <input
               aria-label={`${label} custom value`}
+              aria-invalid={Boolean(error)}
+              aria-describedby={`${id}-help`}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               type="number"
               step="any"

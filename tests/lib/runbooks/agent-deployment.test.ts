@@ -64,7 +64,7 @@ it('renders disjoint Kubernetes selectors, identities, policy, Secrets and PVC r
     }
   }
   expect([...inventories[0]].filter(name => inventories[1].has(name))).toEqual([]);
-});
+}, 120_000); // spawns helm/kustomize; slow on loaded CI runners
 
 it('passes the token file through Docker secret stdin without consuming the node prompt', async () => {
   const { agentSetupCommands } = await import('@/lib/runbooks/agent-setup-commands');

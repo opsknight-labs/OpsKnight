@@ -87,6 +87,7 @@ export default function ResponderCombobox({
                 gender={selectedUser.gender}
                 size="sm"
                 className="mr-1 h-6 w-6 shrink-0"
+                aria-hidden
               />
               <span className="truncate">{selectedUser.name}</span>
             </>
@@ -125,6 +126,7 @@ export default function ResponderCombobox({
                     gender={user.gender}
                     size="sm"
                     className="mr-2 shrink-0 border-ink-200"
+                    aria-hidden
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">

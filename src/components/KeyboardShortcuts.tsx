@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { Keyboard, X, Sparkles, Command as CommandIcon, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
+import { EmptyState } from '@/components/patterns';
 import { Input } from '@/components/ui/shadcn/input';
 import Link from 'next/link';
 import {
@@ -205,13 +206,12 @@ export default function KeyboardShortcuts({
         {/* Content list */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
           {Object.keys(grouped).length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground">
-              <Keyboard className="h-10 w-10 mx-auto mb-2 opacity-30" />
-              <p className="text-sm font-medium">No shortcuts found</p>
-              <p className="text-xs text-muted-foreground/80 mt-1">
-                Try searching for a different action or clearing filters
-              </p>
-            </div>
+            <EmptyState
+              variant="simple"
+              icon={<Keyboard />}
+              title="No shortcuts found"
+              description="Try searching for a different action or clearing filters."
+            />
           ) : (
             Object.entries(grouped).map(([category, items]) => (
               <div key={category} className="space-y-2">

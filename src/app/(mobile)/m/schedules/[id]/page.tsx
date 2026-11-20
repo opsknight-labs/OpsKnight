@@ -1,8 +1,7 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { MobileAvatar } from '@/components/mobile/MobileUtils';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft } from 'lucide-react';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
@@ -97,10 +96,13 @@ export default async function MobileScheduleDetailPage({ params }: PageProps) {
             <div className="mt-2 space-y-2">
               {currentOnCall.map(responder => (
                 <div key={responder.id} className="flex items-center gap-2">
-                  <MobileAvatar
+                  <UserAvatar
+                    userId={responder.id}
+                    avatarUrl={responder.avatarUrl}
                     name={responder.name || responder.email}
+                    gender={responder.gender}
                     size="sm"
-                    src={responder.avatarUrl || getDefaultAvatar(responder.gender, responder.id)}
+                    aria-hidden
                   />
                   <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                     {responder.name || responder.email}
@@ -139,13 +141,13 @@ export default async function MobileScheduleDetailPage({ params }: PageProps) {
                     <span className="w-6 text-[10px] font-semibold text-[color:var(--text-muted)]">
                       #{userIndex + 1}
                     </span>
-                    <MobileAvatar
+                    <UserAvatar
+                      userId={layerUser.user.id}
+                      avatarUrl={layerUser.user.avatarUrl}
                       name={layerUser.user.name || layerUser.user.email}
+                      gender={layerUser.user.gender}
                       size="sm"
-                      src={
-                        layerUser.user.avatarUrl ||
-                        getDefaultAvatar(layerUser.user.gender, layerUser.user.id)
-                      }
+                      aria-hidden
                     />
                     <span className="text-sm text-[color:var(--text-primary)]">
                       {layerUser.user.name || layerUser.user.email}

@@ -6,7 +6,12 @@ import { redirect } from 'next/navigation';
 import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
 import { IncidentUrgency } from '@prisma/client';
 import { assertIncidentTemplateNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
-import { createIncidentTemplate, deleteIncidentTemplate, incidentTemplateReadWhere, IncidentTemplateInputSchema } from '@/lib/incidents/templates';
+import {
+  createIncidentTemplate,
+  deleteIncidentTemplate,
+  incidentTemplateReadWhere,
+  IncidentTemplateInputSchema,
+} from '@/lib/incidents/templates';
 
 export async function createTemplate(formData: FormData) {
   try {
@@ -76,7 +81,7 @@ export async function getAllTemplates(userId?: string) {
   const templates = await prisma.incidentTemplate.findMany({
     where,
     include: {
-      createdBy: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true, avatarUrl: true, gender: true } },
       defaultService: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: 'desc' },

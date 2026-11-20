@@ -75,7 +75,7 @@ const TONE_RECIPES: Record<ToneKey, ToneRecipe> = {
   },
 };
 
-export function toneClasses(tone: StatusTone | null | undefined): ToneRecipe {
+export function toneClasses(tone: ToneKey | null | undefined): ToneRecipe {
   switch (tone) {
     case 'critical':
       return TONE_RECIPES.critical;

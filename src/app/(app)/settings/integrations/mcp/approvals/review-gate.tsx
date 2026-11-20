@@ -252,7 +252,7 @@ export function RequesterStatus({
         {heading}
       </h1>
       {children}
-      <div role="status" className="rounded border p-4">
+      <div role="status" className="rounded-lg border border-border p-4">
         <p className="font-medium">Status: {copy.label}</p>
         <p className="mt-1 text-sm">{copy.body}</p>
       </div>
@@ -287,7 +287,7 @@ export function RequesterStatus({
 export function DecisionReason({ reason }: { reason: string | null }) {
   if (!reason) return null;
   return (
-    <div className="rounded border p-4">
+    <div className="rounded-lg border border-border p-4">
       <p className="text-sm font-medium">Reviewer&apos;s note</p>
       <p className="mt-1 whitespace-pre-wrap break-words text-sm">{reason}</p>
     </div>

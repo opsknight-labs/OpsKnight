@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/shadcn/card';
 import EmptyState from '@/components/ui/EmptyState';
 import { Clock, ShieldAlert } from 'lucide-react';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import PolicyStepCreateForm from '@/components/PolicyStepCreateForm';
 
 type EscalationStep = {
@@ -93,7 +93,6 @@ export default function StepsList({
   schedules,
 }: StepsListProps) {
   const [steps, setSteps] = useState(initialSteps);
-  const { showToast } = useToast();
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -138,7 +137,7 @@ export default function StepsList({
           }));
           const result = await reorderSteps(policyId, reorderPayload);
           if (result?.error) {
-            showToast(result.error, 'error');
+            notify.error(result.error);
             router.refresh(); // Sync back on error
           }
         });

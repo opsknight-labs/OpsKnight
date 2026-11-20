@@ -12,12 +12,13 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import UserAvatar from '@/components/UserAvatar';
 import type { CapabilityGroup } from '@/lib/access/catalog';
 import { StatusPill, type PillTone } from '@/components/settings/mcp/McpListKit';
 
 /**
  * Small presentational building blocks shared by the access pages, so every list, status and
- * person reads the same way. Server-safe: no hooks.
+ * person reads the same way. Server-safe: no hooks (UserAvatar is a client island).
  */
 
 /** Vertical rhythm for content inside a SettingsSection (which only pads horizontally). */
@@ -42,47 +43,30 @@ export function RequestStatusPill({ status }: { status: string }) {
   );
 }
 
-function initials(name: string | null | undefined, email: string) {
-  const source = (name ?? '').trim() || email;
-  const parts = source.split(/[\s@._-]+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
-}
-
-export function PersonAvatar({
-  name,
-  email,
-  className,
-}: {
+type Person = {
+  userId?: string;
   name: string | null | undefined;
   email: string;
-  className?: string;
-}) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-[11px] font-semibold text-muted-foreground',
-        className
-      )}
-    >
-      {initials(name, email)}
-    </span>
-  );
-}
+  avatarUrl?: string | null;
+};
 
-/** Name with email underneath, beside an initials avatar. */
+/** Name with email underneath, beside the person's avatar. */
 export function PersonCell({
+  userId,
   name,
   email,
+  avatarUrl,
   meta,
-}: {
-  name: string | null | undefined;
-  email: string;
-  meta?: ReactNode;
-}) {
+}: Person & { meta?: ReactNode }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <PersonAvatar name={name} email={email} />
+      <UserAvatar
+        userId={userId ?? email}
+        avatarUrl={avatarUrl}
+        name={name ?? email}
+        size="sm"
+        aria-hidden
+      />
       <div className="min-w-0">
         <p className="truncate text-sm font-medium text-foreground">{name ?? email}</p>
         <p className="truncate text-xs text-muted-foreground">{meta ?? (name ? email : null)}</p>
@@ -93,14 +77,12 @@ export function PersonCell({
 
 /** Mail link to someone who can help, used for administrators and team owners. */
 export function ContactChip({
+  userId,
   name,
   email,
+  avatarUrl,
   subject,
-}: {
-  name: string | null;
-  email: string;
-  subject?: string;
-}) {
+}: Person & { subject?: string }) {
   const href = subject
     ? `mailto:${email}?subject=${encodeURIComponent(subject)}`
     : `mailto:${email}`;
@@ -109,7 +91,13 @@ export function ContactChip({
       href={href}
       className="group inline-flex items-center gap-2 rounded-full border border-border bg-background py-1 pl-1 pr-3 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <PersonAvatar name={name} email={email} className="h-6 w-6 text-[10px]" />
+      <UserAvatar
+        userId={userId ?? email}
+        avatarUrl={avatarUrl}
+        name={name ?? email}
+        size="xs"
+        aria-hidden
+      />
       {name ?? email}
       <Mail
         className="h-3 w-3 text-muted-foreground transition-colors group-hover:text-foreground"

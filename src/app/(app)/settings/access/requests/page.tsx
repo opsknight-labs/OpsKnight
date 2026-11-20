@@ -42,6 +42,8 @@ function RequestDetails({
     <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <PersonCell
+          userId={request.requester.id}
+          avatarUrl={request.requester.avatarUrl}
           name={request.requester.name}
           email={request.requester.email}
           meta={`${roleLabel(request.requester.role as AppRole)}${
@@ -63,7 +65,7 @@ function RequestDetails({
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Route className="h-3.5 w-3.5" aria-hidden="true" />
           Blocked while opening{' '}
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-2xs text-foreground">
             {request.originPath}
           </code>
         </p>
@@ -293,7 +295,12 @@ export default async function AccessRequestsPage({
                 return (
                   <ResponsiveRow key={request.id}>
                     <ResponsiveCell label="Person" primary>
-                      <PersonCell name={request.requester.name} email={request.requester.email} />
+                      <PersonCell
+                        userId={request.requester.id}
+                        name={request.requester.name}
+                        email={request.requester.email}
+                        avatarUrl={request.requester.avatarUrl}
+                      />
                     </ResponsiveCell>
                     <ResponsiveCell label="Request">
                       {describeAccessRequest(request)}

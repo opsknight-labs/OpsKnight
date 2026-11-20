@@ -49,6 +49,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { STATUS_PAGE_FONTS } from '@/lib/status-page-theme';
+import { toneClasses } from '@/components/patterns';
 import {
   STATUS_PAGE_THEME_VERSION,
   resolveStatusPageTheme,
@@ -926,7 +927,7 @@ export default function StatusPageConfig({
                       variant={isActive ? 'default' : 'neutral'}
                       size="xs"
                       className={cn(
-                        'ml-1 px-1.5 py-0 text-[10px] font-bold rounded-full',
+                        'ml-1 px-1.5 py-0 text-2xs font-bold rounded-full',
                         isActive
                           ? 'bg-primary-foreground/20 text-primary-foreground'
                           : 'bg-muted text-muted-foreground'
@@ -1285,11 +1286,11 @@ export default function StatusPageConfig({
                                     onChange={e => handleLogoUpload(e.target.files?.[0] || null)}
                                     className="w-full text-xs text-muted-foreground file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                                   />
-                                  <div className="text-[11px] text-muted-foreground mt-1">
+                                  <div className="text-2xs text-muted-foreground mt-1">
                                     Uploads stored as data URLs. Max size 2MB.
                                   </div>
                                   {logoUploadError && (
-                                    <div className="text-[11px] text-destructive mt-1 font-medium">
+                                    <div className="text-2xs text-destructive mt-1 font-medium">
                                       {logoUploadError}
                                     </div>
                                   )}
@@ -1383,26 +1384,8 @@ export default function StatusPageConfig({
                                 }))}
                                 helperText="Applies clean typography to the header, incident reports, service metrics, and subscriber forms."
                               />
-                              <div
-                                style={{
-                                  padding: 'var(--spacing-4)',
-                                  borderRadius: 'var(--radius-md)',
-                                  border: '1px solid #e2e8f0',
-                                  background: '#ffffff',
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: '6px',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: '11px',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.08em',
-                                    color: 'var(--text-muted)',
-                                    fontWeight: '600',
-                                  }}
-                                >
+                              <div className="flex flex-col gap-1.5 rounded-md border border-border bg-background p-4">
+                                <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                                   Live Font Preview
                                 </div>
                                 <div
@@ -1411,10 +1394,8 @@ export default function StatusPageConfig({
                                       STATUS_PAGE_FONTS.find(
                                         f => f.id === (formData.fontFamily || 'default')
                                       )?.fontFamily || 'inherit',
-                                    fontSize: '1.125rem',
-                                    fontWeight: '700',
-                                    color: '#0f172a',
                                   }}
+                                  className="text-lg font-bold text-foreground"
                                 >
                                   All Systems Operational — 99.98% 30-Day Uptime
                                 </div>
@@ -1424,9 +1405,8 @@ export default function StatusPageConfig({
                                       STATUS_PAGE_FONTS.find(
                                         f => f.id === (formData.fontFamily || 'default')
                                       )?.fontFamily || 'inherit',
-                                    fontSize: '0.875rem',
-                                    color: '#475569',
                                   }}
+                                  className="text-sm text-muted-foreground"
                                 >
                                   Incident communication, automated health telemetry, and service
                                   status tracking.
@@ -2007,15 +1987,11 @@ export default function StatusPageConfig({
                                 )}
                                 {apiTokenValue && (
                                   <div
-                                    style={{
-                                      marginTop: 'var(--spacing-3)',
-                                      padding: 'var(--spacing-3)',
-                                      borderRadius: 'var(--radius-md)',
-                                      background: '#ecfdf5',
-                                      border: '1px solid #a7f3d0',
-                                      color: '#065f46',
-                                      fontSize: 'var(--font-size-sm)',
-                                    }}
+                                    role="status"
+                                    className={cn(
+                                      'mt-3 rounded-md border p-3 text-sm',
+                                      toneClasses('ok').soft
+                                    )}
                                   >
                                     Copy this token now. You will not be able to view it again.
                                     <div
@@ -2305,7 +2281,7 @@ export default function StatusPageConfig({
             {!['announcements', 'integrations', 'subscribers', 'email-delivery'].includes(
               activeSection
             ) && (
-              <div className="status-page-config-sticky-bar flex items-center justify-between gap-3 px-5 py-3.5 border-t border-border bg-card/95 backdrop-blur-md shadow-lg">
+              <div className="status-page-config-sticky-bar flex items-center justify-between gap-3 px-5 py-3.5 border-t border-border bg-card shadow-md">
                 <div className="flex items-center gap-3">
                   <DeleteConfirmDialog
                     title="Delete Status Page"

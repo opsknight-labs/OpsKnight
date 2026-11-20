@@ -14,7 +14,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import PrivacyRequestDetailDialog from './PrivacyRequestDetailDialog';
 import { PRIVACY_REQUEST_TRANSITIONS } from '@/lib/privacy/state-machine';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -47,6 +47,7 @@ import {
   TableRow,
 } from '@/components/ui/shadcn/table';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { toneClasses } from '@/components/patterns';
 
 type PrivacyRequestType =
   'ACCESS' | 'RECTIFICATION' | 'ERASURE' | 'RESTRICTION' | 'OBJECTION' | 'PORTABILITY';
@@ -86,13 +87,13 @@ export function isAutomatedRequest(
 }
 
 const STATUS_BADGE_CLASS: Record<PrivacyRequestStatus, string> = {
-  RECEIVED: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-zinc-300',
-  IDENTITY_VERIFICATION: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  IN_REVIEW: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  PROCESSING: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
-  BLOCKED: 'border-orange-600/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
-  COMPLETED: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  REJECTED: 'border-rose-600/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
+  RECEIVED: toneClasses(null).soft,
+  IDENTITY_VERIFICATION: toneClasses('info').soft,
+  IN_REVIEW: toneClasses('elevated').soft,
+  PROCESSING: toneClasses(null).soft,
+  BLOCKED: toneClasses('elevated').soft,
+  COMPLETED: toneClasses('ok').soft,
+  REJECTED: toneClasses('critical').soft,
 };
 
 async function readJson(response: Response) {
@@ -121,7 +122,6 @@ export default function PrivacyRequestsBoard({
   canErase: boolean;
 }) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [requests, setRequests] = useState(initialRequests);
@@ -190,10 +190,10 @@ export default function PrivacyRequestsBoard({
       })
         .then(readJson)
         .then(body => setSubjectMatches((body?.data?.users as RequestUser[]) ?? []))
-        .catch(() => showToast('Failed to search subjects. Please try again.', 'error'));
+        .catch(() => notify.error('Failed to search subjects. Please try again.'));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [subjectQuery, subjectType, subjectUsers, showToast]);
+  }, [subjectQuery, subjectType, subjectUsers]);
 
   const openCount = useMemo(
     () => requests.filter(r => r.status !== 'COMPLETED' && r.status !== 'REJECTED').length,
@@ -237,13 +237,13 @@ export default function PrivacyRequestsBoard({
         );
         const body = await readJson(response);
         if (!response.ok) {
-          showToast(body?.error ?? 'Failed to load more requests.', 'error');
+          notify.error(body?.error ?? 'Failed to load more requests.');
           return;
         }
         setRequests(prev => [...prev, ...(body.data.requests as PrivacyRequestRow[])]);
         setNextCursor(body.data.nextCursor ?? null);
       } catch {
-        showToast('A network error occurred. Please try again.', 'error');
+        notify.error('A network error occurred. Please try again.');
       } finally {
         setIsLoadingMore(false);
       }
@@ -253,7 +253,7 @@ export default function PrivacyRequestsBoard({
   function handleCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!subjectId.trim()) {
-      showToast('Subject ID is required.', 'error');
+      notify.error('Subject ID is required.');
       return;
     }
     startTransition(async () => {
@@ -269,10 +269,10 @@ export default function PrivacyRequestsBoard({
       });
       const body = await readJson(response);
       if (!response.ok) {
-        showToast(body?.error ?? 'Failed to create privacy request.', 'error');
+        notify.error(body?.error ?? 'Failed to create privacy request.');
         return;
       }
-      showToast('Privacy request created.', 'success');
+      notify.success('Privacy request created.');
       setCreateOpen(false);
       setSubjectId('');
       setNotes('');
@@ -290,10 +290,10 @@ export default function PrivacyRequestsBoard({
       });
       const body = await readJson(response);
       if (!response.ok) {
-        showToast(body?.error ?? 'Failed to update request status.', 'error');
+        notify.error(body?.error ?? 'Failed to update request status.');
         return;
       }
-      showToast('Request status updated.', 'success');
+      notify.success('Request status updated.');
       router.refresh();
     });
   }
@@ -307,10 +307,10 @@ export default function PrivacyRequestsBoard({
       });
       const body = await readJson(response);
       if (!response.ok) {
-        showToast(body?.error ?? 'Failed to assign request.', 'error');
+        notify.error(body?.error ?? 'Failed to assign request.');
         return;
       }
-      showToast('Request reassigned.', 'success');
+      notify.success('Request reassigned.');
       router.refresh();
     });
   }
@@ -349,7 +349,7 @@ export default function PrivacyRequestsBoard({
                         setSubjectId('');
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Subject type">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -399,7 +399,7 @@ export default function PrivacyRequestsBoard({
                       value={requestType}
                       onValueChange={v => setRequestType(v as PrivacyRequestType)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Request type">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -423,7 +423,7 @@ export default function PrivacyRequestsBoard({
                       </SelectContent>
                     </Select>
                     {!isAutomatedRequest({ subjectType, requestType }) && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                      <p className="text-xs text-status-elevated-deep dark:text-amber-300">
                         {subjectType === 'STATUS_SUBSCRIBER'
                           ? 'Status-page subscriber export is not yet automated; this request requires manual review.'
                           : 'This request type requires manual review; OpsKnight does not automate it yet.'}
@@ -458,6 +458,7 @@ export default function PrivacyRequestsBoard({
           <div className="flex flex-1 flex-wrap items-center gap-2">
             <div className="relative w-full sm:w-64">
               <Input
+                aria-label="Search privacy requests"
                 placeholder="Search name, email, or ID…"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -477,7 +478,7 @@ export default function PrivacyRequestsBoard({
               value={statusFilter}
               onValueChange={v => setStatusFilter(v as typeof statusFilter)}
             >
-              <SelectTrigger className="h-9 w-40 text-xs">
+              <SelectTrigger aria-label="Filter by status" className="h-9 w-40 text-xs">
                 <SelectValue placeholder="Status: All" />
               </SelectTrigger>
               <SelectContent>
@@ -492,7 +493,7 @@ export default function PrivacyRequestsBoard({
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={v => setTypeFilter(v as typeof typeFilter)}>
-              <SelectTrigger className="h-9 w-36 text-xs">
+              <SelectTrigger aria-label="Filter by type" className="h-9 w-36 text-xs">
                 <SelectValue placeholder="Type: All" />
               </SelectTrigger>
               <SelectContent>
@@ -570,7 +571,7 @@ export default function PrivacyRequestsBoard({
                             <span className="text-xs text-muted-foreground">
                               {subjectUser.email}
                             </span>
-                            <span className="font-mono text-[10px] text-muted-foreground/70">
+                            <span className="font-mono text-2xs text-muted-foreground/70">
                               ID: {req.subjectId}
                             </span>
                           </>
@@ -585,20 +586,20 @@ export default function PrivacyRequestsBoard({
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1.5 text-xs font-medium">
                           {req.requestType === 'ERASURE' && (
-                            <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                           )}
                           {req.requestType === 'ACCESS' && (
-                            <FileArchive className="h-3.5 w-3.5 text-blue-500" />
+                            <FileArchive className="h-3.5 w-3.5 text-muted-foreground" />
                           )}
                           {req.requestType === 'PORTABILITY' && (
-                            <Download className="h-3.5 w-3.5 text-indigo-500" />
+                            <Download className="h-3.5 w-3.5 text-muted-foreground" />
                           )}
                           <span>{req.requestType}</span>
                         </div>
                         {!automated && (
                           <Badge
                             variant="outline"
-                            className="w-fit border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-300"
+                            className="w-fit border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15 text-status-elevated-deep dark:text-amber-300 text-2xs"
                           >
                             Requires manual review
                           </Badge>
@@ -621,7 +622,7 @@ export default function PrivacyRequestsBoard({
                         {req.status.replaceAll('_', ' ')}
                       </Badge>
                       {req.verifiedAt && req.status !== 'COMPLETED' && (
-                        <span className="mt-0.5 block text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                        <span className="mt-0.5 block text-2xs font-medium text-status-ok-deep dark:text-emerald-300">
                           ✓ Identity verified
                         </span>
                       )}
@@ -633,7 +634,7 @@ export default function PrivacyRequestsBoard({
                           onValueChange={v => assign(req.id, v === 'unassigned' ? null : v)}
                           disabled={isPending}
                         >
-                          <SelectTrigger className="h-8 w-40 text-xs">
+                          <SelectTrigger aria-label="Assignee" className="h-8 w-40 text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -701,7 +702,7 @@ export default function PrivacyRequestsBoard({
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-8 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/30"
+                                className="h-8 text-xs text-status-critical-deep dark:text-rose-300 hover:bg-status-critical/10 hover:text-status-critical-deep"
                                 disabled={isPending}
                                 onClick={() =>
                                   setRejectModalReq({

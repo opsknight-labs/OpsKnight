@@ -129,7 +129,7 @@ export default function AuthenticationRoleRules({
                     maxLength={512}
                   />
                 </label>
-                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <label className="flex items-center gap-1.5 text-2xs text-muted-foreground">
                   <input
                     type="checkbox"
                     className="h-3.5 w-3.5 rounded border-input"
@@ -140,7 +140,7 @@ export default function AuthenticationRoleRules({
                   Match letter case exactly
                 </label>
                 {unseen && (
-                  <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                  <p className="text-2xs text-amber-700 dark:text-amber-300">
                     No one has signed in with this value yet. Check the spelling, or that your
                     provider sends it.
                   </p>

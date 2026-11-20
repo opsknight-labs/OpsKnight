@@ -54,7 +54,7 @@ export function AuthenticationVerificationBadge({
   return (
     <Badge
       variant="outline"
-      className={`max-w-full gap-1 text-[11px] font-medium whitespace-normal text-left ${toneClass(state)}`}
+      className={`max-w-full gap-1 text-2xs font-medium whitespace-normal text-left ${toneClass(state)}`}
       title={oidcProofLabel(state).detail}
     >
       <Icon className="h-3 w-3 shrink-0" aria-hidden />

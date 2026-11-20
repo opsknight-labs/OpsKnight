@@ -24,6 +24,8 @@ import {
   type WidgetCategory,
 } from '@/lib/reports/widget-registry';
 import { getMetricDefinition, metricScopeLabel } from '@/lib/metric-contract';
+import { EmptyState } from '@/components/patterns';
+import { Button } from '@/components/ui/shadcn/button';
 
 interface WidgetLibraryProps {
   isOpen: boolean;
@@ -281,19 +283,24 @@ const WidgetLibrary = memo(function WidgetLibrary({
           ))}
 
           {filteredWidgets.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <Search className="h-12 w-12 mb-4 opacity-30" />
-              <p className="text-sm">No widgets found matching your search</p>
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategory('all');
-                }}
-                className="mt-2 text-xs text-primary hover:underline"
-              >
-                Clear filters
-              </button>
-            </div>
+            <EmptyState
+              variant="simple"
+              icon={<Search />}
+              title="No widgets match your search"
+              description="Try a different term or category."
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCategory('all');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              }
+            />
           )}
         </div>
 

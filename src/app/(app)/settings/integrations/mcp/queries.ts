@@ -82,14 +82,20 @@ function requireAdmin(viewer: McpViewer) {
 
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
-export type McpPerson = { id: string; name: string | null; email: string | null };
+export type McpPerson = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  avatarUrl?: string | null;
+  gender?: string | null;
+};
 
 async function peopleById(ids: Iterable<string>) {
   const unique = [...new Set(ids)];
   if (!unique.length) return new Map<string, McpPerson>();
   const people = await prisma.user.findMany({
     where: { id: { in: unique } },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
   });
   return new Map(people.map(person => [person.id, person]));
 }

@@ -32,7 +32,7 @@ import {
   type LiveSnapshot,
 } from '@/lib/dashboard/live-incidents-shared';
 import { reassignIncident, updateIncidentStatus } from '@/app/(app)/incidents/actions';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 
 const HIGHLIGHT_MS = 4_000;
 const REALTIME_DEBOUNCE_MS = 75;
@@ -934,7 +934,6 @@ export function LiveDashboardProvider({
   );
 
   const [busyMap, setBusyMap] = useState<Record<string, 'ack' | 'assign'>>({});
-  const { showToast } = useToast();
 
   const acknowledgeIncident = useCallback(
     async (incident: LiveIncident) => {
@@ -943,12 +942,12 @@ export function LiveDashboardProvider({
       const rollback = applyOptimistic(incident.id, { status: 'ACKNOWLEDGED' });
       try {
         await updateIncidentStatus(incident.id, 'ACKNOWLEDGED', 'OPEN');
-        showToast(`Acknowledged “${incident.title}”`, 'success');
+        notify.success(`Acknowledged “${incident.title}”`);
         refresh();
       } catch (error) {
         rollback();
         const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
-        showToast(getUserFacingErrorMessage(error) || 'Could not acknowledge incident', 'error');
+        notify.error(getUserFacingErrorMessage(error) || 'Could not acknowledge incident');
       } finally {
         setBusyMap(prev => {
           const next = { ...prev };
@@ -957,7 +956,7 @@ export function LiveDashboardProvider({
         });
       }
     },
-    [applyOptimistic, busyMap, refresh, showToast]
+    [applyOptimistic, busyMap, refresh]
   );
 
   const assignIncidentToMe = useCallback(
@@ -969,12 +968,12 @@ export function LiveDashboardProvider({
       });
       try {
         await reassignIncident(incident.id, currentUserId);
-        showToast(`Assigned “${incident.title}” to you`, 'success');
+        notify.success(`Assigned “${incident.title}” to you`);
         refresh();
       } catch (error) {
         rollback();
         const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
-        showToast(getUserFacingErrorMessage(error) || 'Could not assign incident', 'error');
+        notify.error(getUserFacingErrorMessage(error) || 'Could not assign incident');
       } finally {
         setBusyMap(prev => {
           const next = { ...prev };
@@ -983,7 +982,7 @@ export function LiveDashboardProvider({
         });
       }
     },
-    [applyOptimistic, busyMap, currentUserId, currentUserName, refresh, showToast]
+    [applyOptimistic, busyMap, currentUserId, currentUserName, refresh]
   );
 
   const olderKey = liveQueryKey(query);

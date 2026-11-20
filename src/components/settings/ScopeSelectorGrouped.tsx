@@ -357,7 +357,7 @@ export default function ScopeSelectorGrouped({
             </Label>
             <Badge
               variant="outline"
-              className={`text-[10px] font-bold uppercase tracking-wider ${securityPosture.badgeClass}`}
+              className={`text-2xs font-bold uppercase tracking-wider ${securityPosture.badgeClass}`}
             >
               {securityPosture.label}
             </Badge>
@@ -375,7 +375,7 @@ export default function ScopeSelectorGrouped({
               variant={activePreset === 'ADMIN' ? 'default' : 'outline'}
               size="sm"
               onClick={() => handleApplyPreset('ADMIN')}
-              className="h-7 text-[11px] px-2.5 font-medium transition-all"
+              className="h-7 text-2xs px-2.5 font-medium transition-all"
             >
               Admin Full
             </Button>
@@ -385,7 +385,7 @@ export default function ScopeSelectorGrouped({
             variant={activePreset === 'RESPONDER' ? 'default' : 'outline'}
             size="sm"
             onClick={() => handleApplyPreset('RESPONDER')}
-            className="h-7 text-[11px] px-2.5 font-medium transition-all"
+            className="h-7 text-2xs px-2.5 font-medium transition-all"
           >
             Responder
           </Button>
@@ -394,7 +394,7 @@ export default function ScopeSelectorGrouped({
             variant={activePreset === 'READ_ONLY' ? 'default' : 'outline'}
             size="sm"
             onClick={() => handleApplyPreset('READ_ONLY')}
-            className="h-7 text-[11px] px-2.5 font-medium transition-all"
+            className="h-7 text-2xs px-2.5 font-medium transition-all"
           >
             Read-Only
           </Button>
@@ -403,7 +403,7 @@ export default function ScopeSelectorGrouped({
             variant={activePreset === 'INGEST_ONLY' ? 'default' : 'outline'}
             size="sm"
             onClick={() => handleApplyPreset('INGEST_ONLY')}
-            className="h-7 text-[11px] px-2.5 font-medium transition-all"
+            className="h-7 text-2xs px-2.5 font-medium transition-all"
           >
             Ingest Only
           </Button>
@@ -412,7 +412,7 @@ export default function ScopeSelectorGrouped({
             variant="ghost"
             size="sm"
             onClick={() => handleApplyPreset('CLEAR')}
-            className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground"
+            className="h-7 text-2xs px-2.5 text-muted-foreground hover:text-foreground"
           >
             Clear
           </Button>
@@ -424,6 +424,7 @@ export default function ScopeSelectorGrouped({
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
+            aria-label="Search permissions"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search permissions (e.g., incidents:write, runbooks, read)..."
@@ -448,7 +449,7 @@ export default function ScopeSelectorGrouped({
             variant={filterType === 'ALL' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setFilterType('ALL')}
-            className="h-7 text-[11px] px-2"
+            className="h-7 text-2xs px-2"
           >
             All ({availableScopes.length})
           </Button>
@@ -457,7 +458,7 @@ export default function ScopeSelectorGrouped({
             variant={filterType === 'SELECTED' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setFilterType('SELECTED')}
-            className="h-7 text-[11px] px-2"
+            className="h-7 text-2xs px-2"
           >
             Selected ({selectedScopes.size})
           </Button>
@@ -466,7 +467,7 @@ export default function ScopeSelectorGrouped({
             variant={filterType === 'READ' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setFilterType('READ')}
-            className="h-7 text-[11px] px-2"
+            className="h-7 text-2xs px-2"
           >
             Read ({readCount})
           </Button>
@@ -475,7 +476,7 @@ export default function ScopeSelectorGrouped({
             variant={filterType === 'WRITE' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setFilterType('WRITE')}
-            className="h-7 text-[11px] px-2"
+            className="h-7 text-2xs px-2"
           >
             Write ({writeCount})
           </Button>
@@ -488,7 +489,7 @@ export default function ScopeSelectorGrouped({
           <div className="flex flex-col items-center justify-center py-10 text-center rounded-xl border border-dashed border-border/80 bg-background/50">
             <Search className="h-8 w-8 text-muted-foreground/60 mb-2" />
             <p className="text-xs font-semibold text-foreground">No permission scopes match your query</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5 max-w-xs">
+            <p className="text-2xs text-muted-foreground mt-0.5 max-w-xs">
               Try adjusting your search terms or clearing the active filters.
             </p>
             <Button
@@ -529,7 +530,7 @@ export default function ScopeSelectorGrouped({
                         </span>
                         <Badge
                           variant="outline"
-                          className={`text-[10px] font-medium px-1.5 py-0 ${
+                          className={`text-2xs font-medium px-1.5 py-0 ${
                             isAllCategorySelected
                               ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
                               : selectedInCategory > 0
@@ -540,7 +541,7 @@ export default function ScopeSelectorGrouped({
                           {selectedInCategory} of {totalCategoryScopes.length} selected
                         </Badge>
                       </div>
-                      <p className="text-[11px] text-muted-foreground truncate max-w-lg">
+                      <p className="text-2xs text-muted-foreground truncate max-w-lg">
                         {meta.description}
                       </p>
                     </div>
@@ -552,7 +553,7 @@ export default function ScopeSelectorGrouped({
                     variant="ghost"
                     size="sm"
                     onClick={() => handleToggleCategory(totalCategoryScopes)}
-                    className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground shrink-0 self-start sm:self-center"
+                    className="h-6 text-2xs px-2 text-muted-foreground hover:text-foreground shrink-0 self-start sm:self-center"
                   >
                     {isAllCategorySelected ? 'Deselect all' : 'Select all'}
                   </Button>
@@ -598,21 +599,21 @@ export default function ScopeSelectorGrouped({
                             </span>
                             <div className="shrink-0">
                               {isAdminScope ? (
-                                <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0">
+                                <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30 text-2xs font-bold uppercase tracking-wider px-1.5 py-0">
                                   Admin
                                 </Badge>
                               ) : isExecution ? (
-                                <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0">
+                                <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-2xs font-bold uppercase tracking-wider px-1.5 py-0">
                                   Execute
                                 </Badge>
                               ) : scope.write ? (
-                                <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0">
+                                <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-2xs font-bold uppercase tracking-wider px-1.5 py-0">
                                   Write
                                 </Badge>
                               ) : (
                                 <Badge
                                   variant="outline"
-                                  className="text-muted-foreground border-border/70 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0"
+                                  className="text-muted-foreground border-border/70 text-2xs font-semibold uppercase tracking-wider px-1.5 py-0"
                                 >
                                   Read
                                 </Badge>
@@ -620,12 +621,12 @@ export default function ScopeSelectorGrouped({
                             </div>
                           </div>
 
-                          <p className="text-[11px] leading-relaxed text-muted-foreground line-clamp-2">
+                          <p className="text-2xs leading-relaxed text-muted-foreground line-clamp-2">
                             {scope.detail}
                           </p>
 
                           <div className="pt-0.5">
-                            <code className="inline-block font-mono text-[10px] text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded border border-border/40">
+                            <code className="inline-block font-mono text-2xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded border border-border/40">
                               {scope.value}
                             </code>
                           </div>

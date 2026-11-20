@@ -54,6 +54,7 @@ export function DriftView({
   }, [statusFilter, kindFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
     fetchDriftEvents();
   }, [fetchDriftEvents]);
 
@@ -94,6 +95,7 @@ export function DriftView({
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <input
+              aria-label="Search drift"
               type="text"
               placeholder="Search control ID or summary..."
               value={searchQuery}
@@ -105,6 +107,7 @@ export function DriftView({
           <div className="flex items-center gap-1.5 text-xs">
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             <select
+              aria-label="Filter by status"
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as ComplianceDriftStatus | 'ALL')}
               className="py-1.5 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-none"
@@ -116,6 +119,7 @@ export function DriftView({
             </select>
 
             <select
+              aria-label="Filter by drift kind"
               value={kindFilter}
               onChange={e => setKindFilter(e.target.value)}
               className="py-1.5 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-none"
@@ -154,7 +158,7 @@ export function DriftView({
         </div>
       ) : filteredEvents.length === 0 ? (
         <div className="text-center py-12 border border-dashed rounded-lg text-muted-foreground text-xs space-y-2">
-          <CheckCircle2 className="h-8 w-8 mx-auto text-emerald-500 opacity-80" />
+          <CheckCircle2 className="h-8 w-8 mx-auto text-status-ok opacity-80" />
           <div className="font-semibold text-foreground">No Compliance Drift Episodes</div>
           <div>No technical state changes match the selected filter criteria.</div>
         </div>
@@ -175,7 +179,7 @@ export function DriftView({
                     <DriftKindBadge kind={event.kind} />
                     <DriftStatusBadge status={event.status} />
                     {event.occurrenceCount > 1 && (
-                      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                      <Badge variant="outline" className="text-2xs text-muted-foreground">
                         {event.occurrenceCount} occurrences
                       </Badge>
                     )}
@@ -184,7 +188,7 @@ export function DriftView({
                   <div className="text-xs text-foreground font-medium">{event.summary}</div>
 
                   {event.previousStatus && event.currentStatus && (
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-2 text-2xs text-muted-foreground">
                       <span>Transition:</span>
                       <span className="font-mono">{event.previousStatus}</span>
                       <ArrowRight className="h-3 w-3" />
@@ -195,7 +199,7 @@ export function DriftView({
                   )}
                 </div>
 
-                <div className="flex sm:flex-col items-end justify-between sm:justify-center text-[11px] text-muted-foreground shrink-0 space-y-1">
+                <div className="flex sm:flex-col items-end justify-between sm:justify-center text-2xs text-muted-foreground shrink-0 space-y-1">
                   <div className="flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
                     <span>First: {new Date(event.firstDetectedAt).toLocaleDateString()}</span>

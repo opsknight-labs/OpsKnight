@@ -4,14 +4,14 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateNotificationPreferences, sendTestNotification } from '@/app/(app)/settings/actions';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import { SettingsRow } from '@/components/settings/layout/SettingsRow';
+import { SettingsRow, settingsRowDescribedBy } from '@/components/settings/layout/SettingsRow';
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import { useAutosave } from '@/lib/hooks/use-autosave';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { notify as toast } from '@/lib/toast';
-import { Send, Loader2 } from 'lucide-react';
+import { Send } from 'lucide-react';
 
 type Props = {
   emailEnabled: boolean;
@@ -121,15 +121,19 @@ export default function NotificationPreferencesForm({
   const phoneRow = (
     <SettingsRow
       label="Phone Number"
+      htmlFor="notify-phone"
       description="E.164 format (e.g., +1234567890)"
-      className="bg-muted/10 border-l-2 border-l-primary/30 ml-4 pl-4"
+      className="ml-4 border-l border-l-border pl-4"
     >
       <Input
+        id="notify-phone"
+        aria-describedby={settingsRowDescribedBy('notify-phone', { description: true })}
         type="tel"
+        autoComplete="tel"
         value={phone}
         onChange={e => setPhone(e.target.value)}
         placeholder="+1234567890"
-        className="max-w-[250px]"
+        className="max-w-64"
       />
     </SettingsRow>
   );
@@ -148,7 +152,11 @@ export default function NotificationPreferencesForm({
       }
     >
       <div className="flex flex-col">
-        <SettingsRow label="Email Notifications" description="Receive alerts via email">
+        <SettingsRow
+          label="Email Notifications"
+          htmlFor="notify-email"
+          description="Receive alerts via email"
+        >
           <div className="flex items-center gap-3">
             {emailChecked && (
               <Button
@@ -157,22 +165,25 @@ export default function NotificationPreferencesForm({
                 size="sm"
                 onClick={() => handleSendTest('EMAIL')}
                 disabled={testButtonDisabled('EMAIL')}
-                className="h-7 text-xs gap-1.5 px-2.5 font-medium"
+                loading={testingChannel === 'EMAIL'}
+                className="h-7 gap-1.5 px-2.5 text-xs"
               >
-                {testingChannel === 'EMAIL' ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Send className="h-3 w-3" />
-                )}
+                <Send aria-hidden="true" className="h-3 w-3" />
                 Send Test
               </Button>
             )}
-            <Switch checked={emailChecked} onCheckedChange={setEmailChecked} />
+            <Switch
+              id="notify-email"
+              aria-describedby={settingsRowDescribedBy('notify-email', { description: true })}
+              checked={emailChecked}
+              onCheckedChange={setEmailChecked}
+            />
           </div>
         </SettingsRow>
 
         <SettingsRow
           label="SMS Notifications"
+          htmlFor="notify-sms"
           description="Receive text message alerts for incidents"
         >
           <div className="flex items-center gap-3">
@@ -183,17 +194,19 @@ export default function NotificationPreferencesForm({
                 size="sm"
                 onClick={() => handleSendTest('SMS')}
                 disabled={testButtonDisabled('SMS')}
-                className="h-7 text-xs gap-1.5 px-2.5 font-medium"
+                loading={testingChannel === 'SMS'}
+                className="h-7 gap-1.5 px-2.5 text-xs"
               >
-                {testingChannel === 'SMS' ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Send className="h-3 w-3" />
-                )}
+                <Send aria-hidden="true" className="h-3 w-3" />
                 Send Test
               </Button>
             )}
-            <Switch checked={smsChecked} onCheckedChange={setSmsChecked} />
+            <Switch
+              id="notify-sms"
+              aria-describedby={settingsRowDescribedBy('notify-sms', { description: true })}
+              checked={smsChecked}
+              onCheckedChange={setSmsChecked}
+            />
           </div>
         </SettingsRow>
 
@@ -201,6 +214,7 @@ export default function NotificationPreferencesForm({
 
         <SettingsRow
           label="Voice Calls"
+          htmlFor="notify-voice"
           description="Receive phone calls for incidents when voice paging is selected by your escalation policy"
         >
           <div className="flex items-center gap-3">
@@ -211,17 +225,19 @@ export default function NotificationPreferencesForm({
                 size="sm"
                 onClick={() => handleSendTest('VOICE')}
                 disabled={testButtonDisabled('VOICE')}
-                className="h-7 text-xs gap-1.5 px-2.5 font-medium"
+                loading={testingChannel === 'VOICE'}
+                className="h-7 gap-1.5 px-2.5 text-xs"
               >
-                {testingChannel === 'VOICE' ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Send className="h-3 w-3" />
-                )}
+                <Send aria-hidden="true" className="h-3 w-3" />
                 Send Test
               </Button>
             )}
-            <Switch checked={voiceChecked} onCheckedChange={setVoiceChecked} />
+            <Switch
+              id="notify-voice"
+              aria-describedby={settingsRowDescribedBy('notify-voice', { description: true })}
+              checked={voiceChecked}
+              onCheckedChange={setVoiceChecked}
+            />
           </div>
         </SettingsRow>
 
@@ -229,6 +245,7 @@ export default function NotificationPreferencesForm({
 
         <SettingsRow
           label="Push Notifications"
+          htmlFor="notify-push"
           description="Receive real-time incident alerts and paging on your registered devices"
         >
           <div className="flex items-center gap-3">
@@ -239,22 +256,25 @@ export default function NotificationPreferencesForm({
                 size="sm"
                 onClick={() => handleSendTest('PUSH')}
                 disabled={testButtonDisabled('PUSH')}
-                className="h-7 text-xs gap-1.5 px-2.5 font-medium"
+                loading={testingChannel === 'PUSH'}
+                className="h-7 gap-1.5 px-2.5 text-xs"
               >
-                {testingChannel === 'PUSH' ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Send className="h-3 w-3" />
-                )}
+                <Send aria-hidden="true" className="h-3 w-3" />
                 Send Test
               </Button>
             )}
-            <Switch checked={pushChecked} onCheckedChange={setPushChecked} />
+            <Switch
+              id="notify-push"
+              aria-describedby={settingsRowDescribedBy('notify-push', { description: true })}
+              checked={pushChecked}
+              onCheckedChange={setPushChecked}
+            />
           </div>
         </SettingsRow>
 
         <SettingsRow
           label="WhatsApp Notifications"
+          htmlFor="notify-whatsapp"
           description="Receive alerts via WhatsApp messaging"
         >
           <div className="flex items-center gap-3">
@@ -265,17 +285,19 @@ export default function NotificationPreferencesForm({
                 size="sm"
                 onClick={() => handleSendTest('WHATSAPP')}
                 disabled={testButtonDisabled('WHATSAPP')}
-                className="h-7 text-xs gap-1.5 px-2.5 font-medium"
+                loading={testingChannel === 'WHATSAPP'}
+                className="h-7 gap-1.5 px-2.5 text-xs"
               >
-                {testingChannel === 'WHATSAPP' ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Send className="h-3 w-3" />
-                )}
+                <Send aria-hidden="true" className="h-3 w-3" />
                 Send Test
               </Button>
             )}
-            <Switch checked={whatsappChecked} onCheckedChange={setWhatsappChecked} />
+            <Switch
+              id="notify-whatsapp"
+              aria-describedby={settingsRowDescribedBy('notify-whatsapp', { description: true })}
+              checked={whatsappChecked}
+              onCheckedChange={setWhatsappChecked}
+            />
           </div>
         </SettingsRow>
 

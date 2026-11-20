@@ -257,7 +257,7 @@ export default async function SystemSettingsPage() {
       action={
         <div className="flex items-center gap-2">
           <div
-            className={`p-1.5 rounded-md ${scimConfig.enabled && scimConfig.hasSecretToken ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}
+            className={`p-1.5 rounded-md ${scimConfig.enabled && scimConfig.hasSecretToken ? 'bg-muted text-muted-foreground' : 'bg-muted text-muted-foreground'}`}
           >
             <UserCheck className="h-4 w-4" />
           </div>
@@ -407,10 +407,10 @@ export default async function SystemSettingsPage() {
           {envRows.map(row => (
             <div
               key={row.key}
-              className={`relative flex flex-col justify-between rounded-xl border p-4 transition-all duration-150 hover:shadow-sm ${
+              className={`relative flex flex-col justify-between rounded-xl border p-4 transition-all duration-150 ${
                 row.ok
-                  ? 'border-border/80 bg-card hover:border-emerald-500/40'
-                  : 'border-rose-500/40 bg-rose-500/5 hover:border-rose-500/60'
+                  ? 'border-border bg-card'
+                  : 'border-rose-500/40 bg-rose-500/5'
               }`}
             >
               <div className="space-y-2">
@@ -419,8 +419,8 @@ export default async function SystemSettingsPage() {
                     <div
                       className={`p-1.5 rounded-md shrink-0 ${
                         row.ok
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                          ? 'bg-muted text-muted-foreground'
+                          : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {row.icon}
@@ -431,7 +431,7 @@ export default async function SystemSettingsPage() {
                   </div>
                   <Badge
                     variant={row.ok ? 'success' : 'destructive'}
-                    className="text-[10px] shrink-0 font-medium"
+                    className="text-2xs shrink-0 font-medium"
                   >
                     {row.ok ? (
                       <>
@@ -450,12 +450,12 @@ export default async function SystemSettingsPage() {
                 <p className="text-xs text-muted-foreground leading-relaxed">{row.note}</p>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground gap-2 flex-wrap">
+              <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-2xs text-muted-foreground gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-[10px] text-muted-foreground/80">
+                  <span className="font-mono text-2xs text-muted-foreground/80">
                     {row.scope}
                   </span>
-                  <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 border border-border/50 text-muted-foreground font-medium">
+                  <span className="text-2xs rounded bg-muted/60 px-1.5 py-0.5 border border-border/50 text-muted-foreground font-medium">
                     {row.source}
                   </span>
                 </div>
@@ -464,14 +464,14 @@ export default async function SystemSettingsPage() {
                   {row.actionHref && (
                     <Link
                       href={row.actionHref}
-                      className="text-[11px] font-medium text-primary hover:underline"
+                      className="text-2xs font-medium text-primary hover:underline"
                     >
                       {row.actionLabel}
                     </Link>
                   )}
                   <Badge
                     variant="outline"
-                    className="text-[10px] font-normal text-muted-foreground border-border/70"
+                    className="text-2xs font-normal text-muted-foreground border-border"
                   >
                     {row.impact}
                   </Badge>

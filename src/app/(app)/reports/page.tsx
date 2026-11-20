@@ -89,7 +89,7 @@ export default async function ReportsPage() {
       },
       include: {
         _count: { select: { widgets: true } },
-        user: { select: { name: true, email: true } },
+        user: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
       },
       orderBy: { updatedAt: 'desc' },
     }),
@@ -269,6 +269,7 @@ export default async function ReportsPage() {
                 widgetCount={dashboard._count.widgets}
                 isDefault={dashboard.isDefault}
                 ownerName={dashboard.user?.name || dashboard.user?.email || 'Team member'}
+                owner={dashboard.user}
                 visibility={dashboard.visibility}
                 canDelete={false}
                 updatedAt={formatDateTime(dashboard.updatedAt, userTimeZone, {

@@ -134,7 +134,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
   return (
     <section
       aria-label="Global automation settings"
-      className="min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+      className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm"
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
         <div className="min-w-0 space-y-1">
@@ -168,7 +168,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
       <form noValidate onSubmit={onSubmit} className="space-y-6 px-4 py-5 sm:px-5">
         <fieldset className="space-y-3" disabled={busy}>
           <legend className="sr-only">Global switch</legend>
-          <div className="flex min-h-11 items-start justify-between gap-4 rounded-lg border border-border/70 p-3">
+          <div className="flex min-h-11 items-start justify-between gap-4 rounded-lg border border-border p-3">
             <div className="min-w-0 space-y-1">
               <Label htmlFor={switchId} className="cursor-pointer text-sm font-medium">
                 Enable service automation globally

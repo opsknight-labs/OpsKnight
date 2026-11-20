@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -35,7 +35,6 @@ export default function DeletePolicyCard({
   deletePolicyAction,
 }: DeletePolicyCardProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -46,15 +45,15 @@ export default function DeletePolicyCard({
       try {
         const res = await deletePolicyAction(policyId);
         if (res?.error) {
-          showToast(res.error, 'error');
+          notify.error(res.error);
         } else {
-          showToast(`Escalation policy "${policyName}" deleted successfully`, 'success');
+          notify.success(`Escalation policy "${policyName}" deleted successfully`);
           router.push('/policies');
           router.refresh();
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Failed to delete escalation policy';
-        showToast(msg, 'error');
+        notify.error(msg);
       } finally {
         setOpen(false);
       }

@@ -419,6 +419,8 @@ export async function searchAuthenticationUsers(
       id: true,
       name: true,
       email: true,
+      avatarUrl: true,
+      gender: true,
       role: true,
       roleSource: true,
       status: true,

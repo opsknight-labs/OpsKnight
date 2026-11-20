@@ -2,7 +2,6 @@
 
 import { useTransition, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-product-notification';
 import LayerEditSheet from './LayerEditSheet';
 import ResponderCombobox, { type ResponderOption } from './ResponderCombobox';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
@@ -226,7 +225,6 @@ export default function LayerCard({
   layerCount,
 }: LayerCardProps) {
   const router = useRouter();
-  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -253,13 +251,13 @@ export default function LayerCard({
     startTransition(async () => {
       const result = await deleteLayer(scheduleId, layer.id);
       if (result?.error) {
-        showToast(result.error, 'error');
+        notify.error(result.error);
       } else {
-        showToast('Layer deleted', 'success');
+        notify.success('Layer deleted');
         router.refresh();
       }
     });
-  }, [scheduleId, layer.id, deleteLayer, showToast, router]);
+  }, [scheduleId, layer.id, deleteLayer, router]);
 
   const handleAddUser = useCallback(
     (userId: string) => {
@@ -270,12 +268,12 @@ export default function LayerCard({
         if (result?.error) {
           notify.error('Responder could not be added', { description: result.error });
         } else {
-          showToast('Responder added', 'success');
+          notify.success('Responder added');
           router.refresh();
         }
       });
     },
-    [layer.id, addLayerUser, showToast, router]
+    [layer.id, addLayerUser, router]
   );
 
   const handleMoveUser = useCallback(
@@ -283,13 +281,13 @@ export default function LayerCard({
       startTransition(async () => {
         const result = await moveLayerUser(layer.id, userId, direction);
         if (result?.error) {
-          showToast(result.error, 'error');
+          notify.error(result.error);
         } else {
           router.refresh();
         }
       });
     },
-    [layer.id, moveLayerUser, showToast, router]
+    [layer.id, moveLayerUser, router]
   );
 
   const handleRemoveUser = useCallback(
@@ -297,14 +295,14 @@ export default function LayerCard({
       startTransition(async () => {
         const result = await removeLayerUser(layer.id, userId);
         if (result?.error) {
-          showToast(result.error, 'error');
+          notify.error(result.error);
         } else {
-          showToast('Responder removed', 'success');
+          notify.success('Responder removed');
           router.refresh();
         }
       });
     },
-    [layer.id, removeLayerUser, showToast, router]
+    [layer.id, removeLayerUser, router]
   );
 
   const handleMovePrecedence = useCallback(
@@ -312,14 +310,14 @@ export default function LayerCard({
       startTransition(async () => {
         const result = await moveLayerPrecedence(layer.id, direction);
         if (result?.error) {
-          showToast(result.error, 'error');
+          notify.error(result.error);
           return;
         }
-        showToast('Layer precedence updated', 'success');
+        notify.success('Layer precedence updated');
         router.refresh();
       });
     },
-    [layer.id, moveLayerPrecedence, router, showToast]
+    [layer.id, moveLayerPrecedence, router]
   );
 
   // Parent pages should already supply schedule-wide assignable users. Keep a
@@ -559,6 +557,7 @@ export default function LayerCard({
                           avatarUrl={layerUser.user.avatarUrl}
                           size="xs"
                           className="h-6 w-6 shrink-0"
+                          aria-hidden
                         />
                         <span className="truncate text-sm font-medium text-foreground">
                           {layerUser.user.name}

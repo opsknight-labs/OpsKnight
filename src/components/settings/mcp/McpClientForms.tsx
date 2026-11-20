@@ -97,7 +97,12 @@ export function McpRegisterClientForm({
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="mcp-client-name">Display name</Label>
+          <span className="flex items-center gap-0.5">
+            <Label htmlFor="mcp-client-name">Display name</Label>
+            <span aria-hidden="true" className="text-sm text-destructive">
+              *
+            </span>
+          </span>
           <Input
             id="mcp-client-name"
             name="name"
@@ -115,7 +120,12 @@ export function McpRegisterClientForm({
           )}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="mcp-client-redirect">Exact redirect URI</Label>
+          <span className="flex items-center gap-0.5">
+            <Label htmlFor="mcp-client-redirect">Exact redirect URI</Label>
+            <span aria-hidden="true" className="text-sm text-destructive">
+              *
+            </span>
+          </span>
           <Input
             id="mcp-client-redirect"
             name="redirectUri"

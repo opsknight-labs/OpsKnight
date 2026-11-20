@@ -6,6 +6,8 @@ import AuthenticationDraftCoordinator from './authentication/AuthenticationDraft
 import AuthenticationDiagnostics from './AuthenticationDiagnostics';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { cn } from '@/lib/utils';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/shadcn/alert';
 import {
   Shield,
@@ -189,7 +191,7 @@ function AuthenticationWorkspace() {
             {isCooldown && remainingSeconds > 0 && (
               <Badge
                 variant="outline"
-                className="border-destructive/30 bg-destructive/10 text-destructive text-[11px] font-semibold py-0"
+                className="border-destructive/30 bg-destructive/10 text-destructive text-2xs font-semibold py-0"
               >
                 <Timer className="h-3 w-3 mr-1" />
                 Retry in {formatRemainingTime(remainingSeconds)}
@@ -223,7 +225,10 @@ function AuthenticationWorkspace() {
                   badge: data.activeProvider ? (
                     <span
                       aria-hidden="true"
-                      className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-400"
+                      className={cn(
+                        'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+                        toneClasses('ok').soft
+                      )}
                     >
                       Active
                     </span>
@@ -237,7 +242,10 @@ function AuthenticationWorkspace() {
                     data.linkingRequestCount > 0 ? (
                       <span
                         aria-hidden="true"
-                        className="rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400"
+                        className={cn(
+                          'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+                          toneClasses('elevated').soft
+                        )}
                       >
                         {data.linkingRequestCount} request
                         {data.linkingRequestCount === 1 ? '' : 's'}
@@ -264,7 +272,10 @@ function AuthenticationWorkspace() {
               data.mode === 'SSO_REQUIRED' && data.verifiedEmergencyAccounts < 2 ? (
                 <span
                   aria-hidden="true"
-                  className="rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400"
+                  className={cn(
+                    'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+                    toneClasses('elevated').soft
+                  )}
                 >
                   Needs attention
                 </span>
@@ -278,7 +289,10 @@ function AuthenticationWorkspace() {
               data.failedEmailAlertCount > 0 ? (
                 <span
                   aria-hidden="true"
-                  className="rounded-full border border-rose-500/30 bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700 dark:text-rose-400"
+                  className={cn(
+                    'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+                    toneClasses('critical').soft
+                  )}
                 >
                   {data.failedEmailAlertCount} alert{data.failedEmailAlertCount > 1 ? 's' : ''}
                 </span>

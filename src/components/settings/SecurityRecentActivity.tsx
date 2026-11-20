@@ -89,12 +89,12 @@ export default function SecurityRecentActivity({ events, userEmail }: Props) {
                     <span className="font-medium text-xs text-foreground">{config.label}</span>
                     <Badge
                       variant={config.variant}
-                      className="text-[10px] uppercase font-semibold px-1.5 py-0"
+                      className="text-2xs uppercase font-semibold px-1.5 py-0"
                     >
                       {event.action.split('.')[0]}
                     </Badge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{config.description}</p>
+                  <p className="text-2xs text-muted-foreground mt-0.5">{config.description}</p>
                 </div>
               </div>
 

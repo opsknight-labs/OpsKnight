@@ -35,6 +35,7 @@ export function EvidenceView({
   const [selectedEvidence, setSelectedEvidence] = useState<ComplianceEvidenceRecord | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
     setControlFilter(initialControlFilter);
   }, [initialControlFilter]);
 
@@ -67,6 +68,7 @@ export function EvidenceView({
   }, [controlFilter, canReadEvidence, searchQuery]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state is reset when the controlling inputs change
     fetchEvidence();
   }, [fetchEvidence]);
 
@@ -139,7 +141,7 @@ export function EvidenceView({
     <div className="space-y-4">
       {/* Error alert banner with retry */}
       {error && (
-        <div className="flex items-center justify-between p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs text-rose-700 dark:text-rose-400">
+        <div className="flex items-center justify-between p-3.5 rounded-lg border border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 text-xs">
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-4 w-4 shrink-0" />
             <span>{error}</span>
@@ -148,7 +150,7 @@ export function EvidenceView({
             variant="outline"
             size="sm"
             onClick={fetchEvidence}
-            className="h-7 text-xs border-rose-500/30 hover:bg-rose-500/20"
+            className="h-7 text-xs border-status-critical-border/30 hover:bg-status-critical/10"
           >
             Retry
           </Button>
@@ -157,7 +159,7 @@ export function EvidenceView({
 
       {/* Control Filter Alert if set */}
       {controlFilter && (
-        <div className="flex items-center justify-between p-3 rounded-lg border border-sky-500/30 bg-sky-500/10 text-xs text-sky-800 dark:text-sky-300">
+        <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted text-ink-600 text-xs">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 shrink-0" />
             <span>
@@ -180,9 +182,10 @@ export function EvidenceView({
       )}
 
       {/* Filter Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3.5 rounded-xl border bg-card/60">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3.5 rounded-lg border bg-card">
         <div className="relative flex-1">
           <Input
+            aria-label="Search evidence"
             placeholder="Search by title, control ID, collector, or SHA-256 hash..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
@@ -236,7 +239,7 @@ export function EvidenceView({
       {/* Ledger Header */}
       <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
         <span>Showing {filteredEvidence.length} evidence record(s)</span>
-        <span className="text-[11px]">Integrity checked using canonical SHA-256 digests</span>
+        <span className="text-2xs">Integrity checked using canonical SHA-256 digests</span>
       </div>
 
       {/* Evidence Table / List */}
@@ -257,17 +260,17 @@ export function EvidenceView({
             <div
               key={item.id}
               onClick={() => setSelectedEvidence(item)}
-              className="p-3.5 rounded-xl border border-border/80 bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-3 group"
+              className="p-3.5 rounded-lg border border-border/80 bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-3 group"
             >
               <div className="space-y-1.5 min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs font-bold text-foreground bg-muted/60 px-2 py-0.5 rounded border border-border/60">
                     {item.controlId}
                   </span>
-                  <Badge variant="outline" className="text-[11px] py-0">
+                  <Badge variant="outline" className="text-2xs py-0">
                     {item.type}
                   </Badge>
-                  <span className="font-mono text-[11px] text-muted-foreground">
+                  <span className="font-mono text-2xs text-muted-foreground">
                     collector: {item.collectorId} v{item.collectorVersion}
                   </span>
                 </div>
@@ -280,7 +283,7 @@ export function EvidenceView({
                   <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
                 )}
 
-                <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-3 pt-1 text-2xs text-muted-foreground">
                   <span>Collected: {new Date(item.collectedAt).toLocaleString()}</span>
                   <span>•</span>
                   <span className="font-mono truncate max-w-xs">
@@ -293,7 +296,7 @@ export function EvidenceView({
                 {item.integrityValid ? (
                   <Badge
                     variant="outline"
-                    className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold text-xs gap-1 py-1 px-2"
+                    className="border-status-ok-border/30 bg-status-ok-soft dark:border-status-ok/35 dark:bg-status-ok/15 text-status-ok-deep dark:text-emerald-300 font-semibold text-xs gap-1 py-1 px-2"
                   >
                     <ShieldCheck className="h-3.5 w-3.5" />
                     <span>Verified</span>
@@ -301,7 +304,7 @@ export function EvidenceView({
                 ) : (
                   <Badge
                     variant="destructive"
-                    className="border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-400 font-semibold text-xs gap-1 py-1 px-2"
+                    className="border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 font-semibold text-xs gap-1 py-1 px-2"
                   >
                     <ShieldAlert className="h-3.5 w-3.5" />
                     <span>Integrity Mismatch</span>

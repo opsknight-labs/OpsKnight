@@ -13,6 +13,8 @@ import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
 import HelloGreeting from '@/components/auth/HelloGreeting';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, X, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/shadcn/input';
+import { Label } from '@/components/ui/shadcn/label';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { detectResponderSessionPolicy } from '@/lib/pwa-session-policy';
@@ -41,6 +43,9 @@ type Props = {
   localAuthEnabled: boolean;
   breakGlassOnly?: boolean;
 };
+
+const authFieldClass =
+  'h-11 min-h-11 2xl:h-12 pl-12 rounded-xl bg-card text-base sm:text-sm 2xl:text-base shadow-xs hover:border-ring/50 transition-colors';
 
 function plainMessage(detail: string): AuthMessage {
   return { title: 'Couldn’t sign you in', detail, action: '' };
@@ -101,6 +106,7 @@ export default function LoginClient({
 
   // Email validation
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const emailInvalid = emailTouched && !!email && !isEmailValid;
 
   const dismissError = () => {
     setError(null);
@@ -204,10 +210,10 @@ export default function LoginClient({
           <div className="flex items-center justify-center mb-3.5">
             <AuthBrand size="hero" />
           </div>
-          <h2 className="text-[clamp(1.55rem,6vw,1.875rem)] 2xl:text-4xl font-bold text-slate-950 dark:text-white mb-2 tracking-tight min-h-[1.25em] flex items-center justify-center">
+          <h2 className="text-2xl sm:text-3xl 2xl:text-4xl font-bold text-foreground mb-2 tracking-tight min-h-[1.25em] flex items-center justify-center">
             {isSuccess ? 'Station online.' : <HelloGreeting />}
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 font-normal transition-colors duration-300">
+          <p className="text-sm text-muted-foreground font-normal transition-colors duration-300">
             {isSuccess
               ? 'Pledge acknowledged. The bridge is yours.'
               : 'The watch never ends. Take your post.'}
@@ -220,8 +226,8 @@ export default function LoginClient({
             className={cn(
               'mb-6 rounded-lg border p-3 text-sm',
               endedNotice.tone === 'notice'
-                ? 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100'
-                : 'border-red-200 bg-red-50 text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100'
+                ? 'border-status-elevated/30 bg-status-elevated-soft text-status-elevated-deep'
+                : 'border-destructive/30 bg-destructive/5 text-destructive'
             )}
           >
             <p className="text-xs font-semibold">{endedNotice.title}</p>
@@ -233,7 +239,7 @@ export default function LoginClient({
         {sessionRevoked && !error && (
           <div
             role="status"
-            className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"
+            className="mb-6 rounded-lg border border-status-ok/30 bg-status-ok-soft p-3 text-sm text-status-ok-deep"
           >
             Your session was revoked successfully. Sign in again to continue.
           </div>
@@ -242,16 +248,16 @@ export default function LoginClient({
         {showPasswordSet && !error && (
           <div
             role="status"
-            className="mb-6 p-3 rounded-lg border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/30 dark:bg-emerald-950/20 shadow-xs flex items-start gap-3"
+            className="mb-6 p-3 rounded-lg border border-status-ok/30 bg-status-ok-soft/30 shadow-xs flex items-start gap-3"
           >
-            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 mt-0.5">
+            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-status-ok/15 text-status-ok mt-0.5">
               <CheckCircle2 className="h-3.5 w-3.5" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-slate-900 dark:text-white mb-0.5">
+              <p className="text-xs font-semibold text-foreground mb-0.5">
                 Password set successfully
               </p>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Your account is active. Please sign in with your new password.
               </p>
             </div>
@@ -259,7 +265,7 @@ export default function LoginClient({
               type="button"
               data-icon-button
               onClick={() => setShowPasswordSet(false)}
-              className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border border-slate-300/70 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 dark:border-white/25 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border border-input/70 bg-muted hover:bg-accent text-foreground transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Dismiss message"
               title="Dismiss"
             >
@@ -276,8 +282,8 @@ export default function LoginClient({
             className={cn(
               'mb-6 p-3 rounded-lg border shadow-xs flex items-start gap-3 transition-all',
               error.tone === 'notice'
-                ? 'border-amber-200/80 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20'
-                : 'border-red-200/80 dark:border-red-900/50 bg-red-50/30 dark:bg-red-950/20',
+                ? 'border-status-elevated/30 bg-status-elevated-soft/40'
+                : 'border-destructive/30 bg-destructive/5',
               isShaking && 'animate-shake'
             )}
           >
@@ -285,26 +291,20 @@ export default function LoginClient({
               className={cn(
                 'flex h-5 w-5 shrink-0 items-center justify-center rounded-md mt-0.5',
                 error.tone === 'notice'
-                  ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300'
-                  : 'bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400'
+                  ? 'bg-status-elevated/15 text-status-elevated-deep'
+                  : 'bg-destructive/10 text-destructive'
               )}
             >
               <AlertCircle className="h-3.5 w-3.5" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-slate-900 dark:text-white mb-0.5">
-                {error.title}
-              </p>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                {error.detail}
-              </p>
+              <p className="text-xs font-semibold text-foreground mb-0.5">{error.title}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">{error.detail}</p>
               {error.action && (
-                <p className="mt-1 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                  {error.action}
-                </p>
+                <p className="mt-1 text-xs text-foreground leading-relaxed">{error.action}</p>
               )}
               {(reference || error.docsHref) && (
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground">
                   {reference && (
                     <span>
                       Reference <code className="font-mono">{reference}</code>
@@ -314,7 +314,7 @@ export default function LoginClient({
                     <button
                       type="button"
                       onClick={copyDetails}
-                      className="font-semibold text-slate-700 underline-offset-2 hover:underline dark:text-slate-200"
+                      className="font-semibold text-foreground underline-offset-2 hover:underline"
                     >
                       {copied ? 'Copied' : 'Copy details for your administrator'}
                     </button>
@@ -324,7 +324,7 @@ export default function LoginClient({
                       href={error.docsHref}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-semibold text-slate-700 underline-offset-2 hover:underline dark:text-slate-200"
+                      className="font-semibold text-foreground underline-offset-2 hover:underline"
                     >
                       Learn more
                     </a>
@@ -339,8 +339,8 @@ export default function LoginClient({
               className={cn(
                 "relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2",
                 error.tone === 'notice'
-                  ? 'border-amber-300/80 bg-amber-100 hover:bg-amber-200 text-amber-800 hover:text-amber-950 dark:border-amber-500/50 dark:bg-amber-900/60 dark:hover:bg-amber-800/80 dark:text-amber-100 dark:hover:text-white focus-visible:ring-amber-500/50'
-                  : 'border-red-300/80 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-950 dark:border-red-500/50 dark:bg-red-900/60 dark:hover:bg-red-800/80 dark:text-red-100 dark:hover:text-white focus-visible:ring-red-500/50'
+                  ? 'border-status-elevated/30 bg-status-elevated/15 hover:bg-status-elevated/25 text-status-elevated-deep focus-visible:ring-status-elevated/50'
+                  : 'border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-destructive focus-visible:ring-destructive/50'
               )}
               aria-label="Dismiss error"
               title="Dismiss"
@@ -364,9 +364,9 @@ export default function LoginClient({
             {localAuthEnabled && (
               <div className="relative my-4 flex items-center justify-center">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200 dark:border-slate-800" />
+                  <div className="w-full border-t border-border" />
                 </div>
-                <span className="relative px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 bg-background">
+                <span className="relative px-3 text-2xs font-semibold uppercase tracking-wider text-muted-foreground bg-background">
                   {breakGlassOnly ? 'or break-glass recovery' : 'or'}
                 </span>
               </div>
@@ -377,7 +377,7 @@ export default function LoginClient({
         {!ssoEnabled && !localAuthEnabled && (
           <div
             role="alert"
-            className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+            className="rounded-xl border border-status-elevated/30 bg-status-elevated-soft p-4 text-sm text-status-elevated-deep"
           >
             No authentication method is available. Contact your administrator to configure SSO or
             enable local login.
@@ -389,12 +389,12 @@ export default function LoginClient({
             {breakGlassOnly && (
               <div
                 role="alert"
-                className="rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2"
+                className="rounded-xl border border-status-elevated/30 bg-status-elevated-soft p-3 text-xs text-status-elevated-deep flex items-start gap-2"
               >
-                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                <AlertCircle className="h-4 w-4 shrink-0 text-status-elevated mt-0.5" />
                 <div>
                   <p className="font-semibold">Emergency Break-Glass Recovery</p>
-                  <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+                  <p className="mt-0.5 text-status-elevated-deep">
                     Standard local login is disabled. Only the designated break-glass administrator
                     account is authorized.
                   </p>
@@ -402,25 +402,21 @@ export default function LoginClient({
               </div>
             )}
             {/* Work Email */}
-            <div>
-              <label
+            <div className="space-y-1.5">
+              <Label
                 htmlFor="login-email"
-                className={cn(
-                  'block text-xs font-medium mb-1.5 transition-colors',
-                  emailTouched && email && !isEmailValid
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-slate-700 dark:text-slate-300'
-                )}
+                className={cn('text-xs', emailInvalid ? 'text-destructive' : 'text-foreground')}
               >
                 Email
-              </label>
+              </Label>
               <div className="group relative flex items-center">
-                <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
-                  <Mail className="h-4 w-4" />
+                <div className="absolute left-4 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
+                  <Mail className="h-4 w-4" aria-hidden="true" />
                 </div>
-                <input
+                <Input
                   id="login-email"
                   type="email"
+                  autoComplete="username"
                   required
                   value={email}
                   onChange={e => {
@@ -428,38 +424,38 @@ export default function LoginClient({
                     if (error) dismissError();
                   }}
                   onBlur={() => setEmailTouched(true)}
-                  className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-12 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+                  aria-invalid={emailInvalid || undefined}
+                  aria-describedby={emailInvalid ? 'login-email-error' : undefined}
+                  className={cn(authFieldClass, 'pr-4', emailInvalid && 'border-destructive')}
                   placeholder="you@company.com"
                   disabled={!hydrated || isSubmitting || isSuccess}
                 />
-                {emailTouched && email && !isEmailValid && (
-                  <div className="absolute right-3 z-10 text-red-500">
+                {emailInvalid && (
+                  <div className="absolute right-3 z-10 text-destructive" aria-hidden="true">
                     <AlertCircle className="w-4 h-4" />
                   </div>
                 )}
               </div>
-              {emailTouched && email && !isEmailValid && (
-                <p className="text-[10px] text-red-500 dark:text-red-400 font-medium pl-1 mt-1">
+              {emailInvalid && (
+                <p id="login-email-error" className="text-xs text-destructive font-medium">
                   Please enter a valid email address
                 </p>
               )}
             </div>
 
             {/* Password */}
-            <div>
-              <label
-                htmlFor="login-password"
-                className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
-              >
+            <div className="space-y-1.5">
+              <Label htmlFor="login-password" className="text-xs text-foreground">
                 Password
-              </label>
+              </Label>
               <div className="group relative flex items-center">
-                <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
-                  <Lock className="h-4 w-4" />
+                <div className="absolute left-4 z-10 text-muted-foreground group-focus-within:text-foreground transition-colors pointer-events-none">
+                  <Lock className="h-4 w-4" aria-hidden="true" />
                 </div>
-                <input
+                <Input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
                   required
                   value={password}
                   onChange={e => {
@@ -469,17 +465,24 @@ export default function LoginClient({
                   onKeyDown={e => {
                     setCapsLockOn(e.getModifierState('CapsLock'));
                   }}
-                  className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-12 pr-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+                  aria-describedby={capsLockOn ? 'login-password-capslock' : undefined}
+                  className={cn(authFieldClass, 'pr-11')}
                   placeholder="Enter your password"
                   disabled={!hydrated || isSubmitting || isSuccess}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 z-10 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
-                  aria-label="Toggle password visibility"
+                  className="absolute right-3 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  aria-controls="login-password"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
                 </button>
               </div>
 
@@ -489,6 +492,7 @@ export default function LoginClient({
                     type="button"
                     role="checkbox"
                     aria-checked={rememberMe}
+                    aria-describedby={trustedPwa ? 'login-remember-help' : undefined}
                     onClick={() =>
                       !isSubmitting && !isSuccess && setRememberMeOverride(!rememberMe)
                     }
@@ -499,15 +503,15 @@ export default function LoginClient({
                     <span
                       className={cn(
                         'h-4 w-4 rounded flex items-center justify-center border transition-all duration-150 shrink-0',
-                        'group-focus-visible:ring-2 group-focus-visible:ring-slate-900 group-focus-visible:ring-offset-1 dark:group-focus-visible:ring-white',
+                        'group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-1',
                         rememberMe
-                          ? 'bg-slate-900 border-slate-900 dark:bg-white dark:border-white'
-                          : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 group-hover:border-slate-500 dark:group-hover:border-slate-400'
+                          ? 'bg-primary border-primary'
+                          : 'border-input bg-card group-hover:border-ring'
                       )}
                     >
                       {rememberMe && (
                         <svg
-                          className="h-2.5 w-2.5 text-white dark:text-slate-900"
+                          className="h-2.5 w-2.5 text-primary-foreground"
                           viewBox="0 0 10 8"
                           fill="none"
                         >
@@ -521,12 +525,15 @@ export default function LoginClient({
                         </svg>
                       )}
                     </span>
-                    <span className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors font-medium">
+                    <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors font-medium">
                       {trustedPwa ? 'Trusted responder device' : 'Remember me'}
                     </span>
                   </button>
                   {trustedPwa && (
-                    <p className="mt-1 max-w-[18rem] text-[10px] leading-4 text-slate-500 dark:text-slate-500">
+                    <p
+                      id="login-remember-help"
+                      className="mt-1 max-w-[18rem] text-2xs leading-4 text-muted-foreground"
+                    >
                       Installed PWA: stay signed in for up to 90 days. Turn this off on a shared
                       device.
                     </p>
@@ -537,15 +544,18 @@ export default function LoginClient({
                   href={appRoutes.forgotPassword(
                     effectiveFallback.startsWith('/m') || trustedPwa ? 'mobile' : 'desktop'
                   )}
-                  className="shrink-0 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors py-0.5"
+                  className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors py-0.5"
                 >
                   Forgot password?
                 </Link>
               </div>
 
               {capsLockOn && (
-                <div className="flex items-center gap-1.5 text-amber-600 text-xs mt-1 font-medium">
-                  <AlertCircle className="h-3.5 w-3.5" />
+                <div
+                  id="login-password-capslock"
+                  className="flex items-center gap-1.5 text-status-elevated-deep text-xs mt-1 font-medium"
+                >
+                  <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>Caps Lock is ON</span>
                 </div>
               )}
@@ -555,11 +565,12 @@ export default function LoginClient({
             <button
               type="submit"
               disabled={isSubmitting || isSSOLoading || isSuccess}
+              aria-busy={isSubmitting || undefined}
               className={cn(
-                'group relative w-full h-11 2xl:h-12 px-4 rounded-lg font-semibold text-sm 2xl:text-base text-white transition-all duration-150 flex items-center justify-center gap-2 mt-3 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.995]',
+                'group relative w-full h-11 2xl:h-12 px-4 rounded-lg font-semibold text-sm 2xl:text-base transition-all duration-150 flex items-center justify-center gap-2 mt-3 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.995]',
                 isSuccess
-                  ? 'bg-emerald-600 shadow-emerald-600/20 shadow-md'
-                  : 'bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 border border-slate-900 dark:border-white shadow-sm shadow-slate-950/15 hover:shadow'
+                  ? 'bg-status-ok text-white shadow-md'
+                  : 'bg-primary hover:bg-primary/90 text-primary-foreground border border-primary shadow-sm hover:shadow'
               )}
             >
               {isSuccess ? (
@@ -595,18 +606,21 @@ export default function LoginClient({
         )}
 
         <p className="text-center text-sm pt-4">
-          <Link href="/login/emergency" className="underline">
+          <Link
+            href="/login/emergency"
+            className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
             Emergency Access
           </Link>
         </p>
         {/* Setup Guide Link */}
-        <div className="text-center text-xs text-slate-500 dark:text-slate-400 font-medium pt-3.5">
+        <div className="text-center text-xs text-muted-foreground font-medium pt-3.5">
           Setting up OpsKnight?{' '}
           <a
             href="https://opsknight.com/docs"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-semibold inline-flex items-center gap-0.5 hover:underline transition-colors ml-0.5"
+            className="text-foreground font-semibold inline-flex items-center gap-0.5 hover:underline transition-colors ml-0.5"
           >
             Installation guide →
           </a>

@@ -160,6 +160,7 @@ function parseRealtimeIncident(raw: Record<string, unknown>): IncidentListItem {
           name: String(rawAssignee.name || 'Unassigned'),
           email: String(rawAssignee.email || ''),
           avatarUrl: typeof rawAssignee.avatarUrl === 'string' ? rawAssignee.avatarUrl : null,
+          gender: typeof rawAssignee.gender === 'string' ? rawAssignee.gender : null,
         }
       : null,
   };

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import UserAvatar from '@/components/UserAvatar';
 import Link from 'next/link';
 import { KeyRound, Plug, SearchX, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
@@ -293,9 +294,14 @@ export default function McpConnectionsSection({
                     {isAdmin && (
                       <ResponsiveCell label="Person" primary>
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
-                            {(who.charAt(0) || 'U').toUpperCase()}
-                          </div>
+                          <UserAvatar
+                            userId={row.user.id}
+                            name={who}
+                            avatarUrl={row.user.avatarUrl}
+                            gender={row.user.gender}
+                            size="xs"
+                            aria-hidden
+                          />
                           <div className="min-w-0">
                             <p className="truncate font-medium text-foreground">{who}</p>
                             {row.user.name && row.user.email && (
@@ -359,7 +365,7 @@ export default function McpConnectionsSection({
                           empty="No calls yet"
                         />
                         {row.lastCallAt && row.lastTool && (
-                          <code className="font-mono text-[11px] text-muted-foreground">
+                          <code className="font-mono text-2xs text-muted-foreground">
                             {row.lastTool}
                           </code>
                         )}
@@ -472,7 +478,7 @@ export default function McpConnectionsSection({
 
       <section
         aria-labelledby="mcp-credentials-title"
-        className="rounded-xl border border-border bg-card p-4 shadow-2xs md:p-6"
+        className="rounded-lg border border-border bg-card p-4 shadow-2xs md:p-6"
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">

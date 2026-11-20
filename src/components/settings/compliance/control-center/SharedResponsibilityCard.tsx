@@ -30,10 +30,10 @@ export function SharedResponsibilityCard({
           {/* Platform / Product */}
           <div className="p-2.5 rounded-lg border border-border/50 bg-background/60 space-y-1">
             <div className="flex items-center gap-1.5 font-medium text-foreground">
-              <Cpu className="h-3.5 w-3.5 text-sky-500" />
+              <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
               <span>OpsKnight Platform</span>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-2xs text-muted-foreground leading-relaxed">
               {productScope ||
                 'Provides runtime control evaluation, verifiable evidence generation, and audit logging.'}
             </p>
@@ -42,10 +42,10 @@ export function SharedResponsibilityCard({
           {/* Operator / Engineering */}
           <div className="p-2.5 rounded-lg border border-border/50 bg-background/60 space-y-1">
             <div className="flex items-center gap-1.5 font-medium text-foreground">
-              <Wrench className="h-3.5 w-3.5 text-amber-500" />
+              <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
               <span>Operator & Infra</span>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-2xs text-muted-foreground leading-relaxed">
               {operatorResponsibility ||
                 'Maintains KMS key rings, env secrets, TLS endpoints, and operational deployment hygiene.'}
             </p>
@@ -54,10 +54,10 @@ export function SharedResponsibilityCard({
           {/* Organization / Legal */}
           <div className="p-2.5 rounded-lg border border-border/50 bg-background/60 space-y-1">
             <div className="flex items-center gap-1.5 font-medium text-foreground">
-              <Building2 className="h-3.5 w-3.5 text-purple-500" />
+              <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
               <span>Organization & Legal</span>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-2xs text-muted-foreground leading-relaxed">
               {organizationalResponsibility ||
                 'Executes privacy policies, DPA agreements, RoPA governance, and external auditor signoffs.'}
             </p>

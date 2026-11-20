@@ -265,7 +265,12 @@ export type LiveIncidentCore = {
   updatedAt: string;
   service: { id: string; name: string; teamId: string | null };
   team: { id: string; name: string } | null;
-  assignee: { id: string; name: string } | null;
+  assignee: {
+    id: string;
+    name: string;
+    avatarUrl?: string | null;
+    gender?: string | null;
+  } | null;
   /** Dedup key if assigned by inbound alert grouping, otherwise null. */
   dedupKey?: string | null;
   /** Service escalation policy name if configured. */

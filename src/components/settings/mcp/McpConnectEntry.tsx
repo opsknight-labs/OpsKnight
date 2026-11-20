@@ -11,7 +11,7 @@ export default function McpConnectEntry({ className }: { className?: string }) {
   return (
     <section
       aria-labelledby="mcp-connect-entry-title"
-      className={`flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-2xs sm:flex-row sm:items-center sm:justify-between md:px-6 ${className ?? ''}`}
+      className={`flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-2xs sm:flex-row sm:items-center sm:justify-between md:px-6 ${className ?? ''}`}
     >
       <div className="flex min-w-0 items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">

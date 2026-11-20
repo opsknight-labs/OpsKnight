@@ -11,6 +11,7 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { ShieldCheck, Clock, Sliders, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import DetailTabs from '@/components/ui/DetailTabs';
 import IncidentSlaPolicySettings from '@/components/incident-sla/IncidentSlaPolicySettings';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
 import ServiceSupportHoursSettings from '@/components/service/ServiceSupportHoursSettings';
@@ -121,50 +122,19 @@ export default function ServiceResponsePolicyHub({
           </div>
         </div>
 
-        {/* Segmented Sub-Tab Switcher */}
-        <div className="flex items-center gap-1 pt-2 border-t border-border/40 mt-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setActiveTab('sla')}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer select-none',
-              activeTab === 'sla'
-                ? 'bg-primary text-primary-foreground shadow-2xs'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-            )}
-          >
-            <Clock className="h-3 w-3" />
-            <span>SLA Targets & Deadlines</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('classification')}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer select-none',
-              activeTab === 'classification'
-                ? 'bg-primary text-primary-foreground shadow-2xs'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-            )}
-          >
-            <Sliders className="h-3 w-3" />
-            <span>Alert Classification</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('hours')}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer select-none',
-              activeTab === 'hours'
-                ? 'bg-primary text-primary-foreground shadow-2xs'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-            )}
-          >
-            <Calendar className="h-3 w-3" />
-            <span>Support Hours & Coverage</span>
-          </button>
-        </div>
+        <DetailTabs
+          label="Response policy sections"
+          layout="auto"
+          syncWithUrl={false}
+          activeTab={activeTab}
+          onTabChange={next => setActiveTab(next as typeof activeTab)}
+          className="mt-2 border-t border-border/40 pt-2"
+          tabs={[
+            { id: 'sla', label: 'SLA Targets & Deadlines', icon: <Clock /> },
+            { id: 'classification', label: 'Alert Classification', icon: <Sliders /> },
+            { id: 'hours', label: 'Support Hours & Coverage', icon: <Calendar /> },
+          ]}
+        />
       </CardHeader>
 
       <CardContent className="p-3.5 sm:p-4">

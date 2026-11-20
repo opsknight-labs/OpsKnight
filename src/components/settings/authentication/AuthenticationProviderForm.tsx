@@ -110,7 +110,7 @@ export default function AuthenticationProviderForm() {
           <span className="font-semibold text-foreground text-xs uppercase tracking-wider flex items-center gap-1.5">
             {label}
             {required && (
-              <span className="text-destructive font-bold text-xs" title="Required field">
+              <span className="text-destructive font-bold text-xs" aria-hidden="true">
                 *
               </span>
             )}
@@ -118,7 +118,7 @@ export default function AuthenticationProviderForm() {
           {isSecret && hasSavedSecret && (
             <Badge
               variant="outline"
-              className="text-[10px] font-normal border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              className="text-2xs font-normal border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
             >
               <ShieldCheck className="h-3 w-3 mr-1" />
               Secret Encrypted at Rest
@@ -135,6 +135,7 @@ export default function AuthenticationProviderForm() {
             autoComplete={isSecret ? 'new-password' : 'off'}
             disabled={pending}
             aria-invalid={Boolean(error)}
+            aria-required={required || undefined}
             aria-describedby={`auth-help-${key}`}
             placeholder={
               isSecret && hasSavedSecret ? '•••••••••••••••• (Leave blank to retain)' : undefined
@@ -226,7 +227,7 @@ export default function AuthenticationProviderForm() {
                 <span className="font-bold text-xs truncate text-foreground block w-full mb-0.5">
                   {provider.label}
                 </span>
-                <span className="text-[10px] text-muted-foreground line-clamp-1 font-medium">
+                <span className="text-2xs text-muted-foreground line-clamp-1 font-medium">
                   {id === 'azure'
                     ? 'Microsoft 365'
                     : id === 'google'
@@ -265,7 +266,9 @@ export default function AuthenticationProviderForm() {
               <label className="block space-y-1.5 text-sm">
                 <span className="font-semibold text-foreground text-xs uppercase tracking-wider flex items-center gap-1">
                   Directory (tenant) ID
-                  <span className="text-destructive font-bold">*</span>
+                  <span className="text-destructive font-bold" aria-hidden="true">
+                    *
+                  </span>
                 </span>
                 <input
                   id="auth-field-issuer"
@@ -282,6 +285,7 @@ export default function AuthenticationProviderForm() {
                     )
                   }
                   aria-describedby="entra-tenant-help"
+                  aria-required="true"
                   aria-invalid={Boolean(fieldErrors.issuer)}
                 />
                 <span
@@ -356,7 +360,7 @@ export default function AuthenticationProviderForm() {
                   Register both callback URLs
                 </h3>
               </div>
-              <Badge variant="outline" className="text-[10px] w-fit">
+              <Badge variant="outline" className="text-2xs w-fit">
                 Required in IdP Redirect URIs
               </Badge>
             </div>

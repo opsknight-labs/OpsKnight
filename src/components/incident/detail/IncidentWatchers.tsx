@@ -270,6 +270,7 @@ export default function IncidentWatchers({
                               avatarUrl={selectedUser.avatarUrl}
                               size="xs"
                               className="shrink-0"
+                              aria-hidden
                             />
                             <span className="truncate font-semibold text-slate-900 dark:text-zinc-100">
                               {selectedUser.name}
@@ -309,6 +310,7 @@ export default function IncidentWatchers({
                                   avatarUrl={user.avatarUrl}
                                   size="xs"
                                   className="shrink-0"
+                                  aria-hidden
                                 />
                                 <div className="flex flex-col min-w-0">
                                   <span className="font-semibold truncate text-xs">
@@ -497,6 +499,7 @@ export default function IncidentWatchers({
                         avatarUrl={watcher.user.avatarUrl}
                         size="sm"
                         className="border border-slate-200 dark:border-zinc-700 shrink-0"
+                        aria-hidden
                       />
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">

@@ -13,6 +13,7 @@ import {
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import { Card } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -54,8 +55,8 @@ function StatTile({
     <Link
       href={href}
       className={cn(
-        'group relative flex min-w-0 flex-col rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs transition-all sm:p-4 hover:border-primary/40 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        tone === 'attention' && 'border-amber-300/80 dark:border-amber-800/70'
+        'group relative flex min-w-0 flex-col rounded-lg border border-border bg-card p-3.5 shadow-2xs transition-all sm:p-4 hover:border-primary/40 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        tone === 'attention' && 'border-status-elevated-border/40'
       )}
     >
       <span className="flex items-center justify-between gap-2">
@@ -64,10 +65,10 @@ function StatTile({
           className={cn(
             'rounded-lg p-1.5 [&_svg]:h-4 [&_svg]:w-4',
             tone === 'attention'
-              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+              ? toneClasses('elevated').soft
               : tone === 'success'
-                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                : 'bg-primary/10 text-primary'
+                ? toneClasses('ok').soft
+                : 'bg-muted text-muted-foreground'
           )}
           aria-hidden="true"
         >
@@ -77,7 +78,7 @@ function StatTile({
       <span className="mt-2 font-display text-2xl font-bold tabular-nums tracking-tight text-foreground">
         {value}
       </span>
-      <span className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground sm:text-xs">
+      <span className="mt-1 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
         <span className="truncate">{hint}</span>
         <ArrowRight
           className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
@@ -91,7 +92,7 @@ function StatTile({
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <dt className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </dt>
       <dd className="mt-1 text-sm text-foreground">{children}</dd>
@@ -198,7 +199,7 @@ export default function McpOverviewSection({
                 ).map(point => (
                   <li key={point} className="flex gap-2 py-0 pl-0 text-muted-foreground">
                     <Check
-                      className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
                     <span>{point}</span>
@@ -228,10 +229,10 @@ export default function McpOverviewSection({
 
       {/* Server identity: status and the two next steps. The facts live in Server endpoint. */}
       {enabled && (
-        <Card className="overflow-hidden border-border/80 shadow-2xs">
+        <Card className="overflow-hidden">
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between bg-card">
             <div className="flex items-start sm:items-center gap-3.5">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/15 via-primary/10 to-violet-500/15 border border-primary/25 shadow-inner">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border bg-muted">
                 <McpLogo className="h-6 w-6" />
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -241,10 +242,8 @@ export default function McpOverviewSection({
                 <Badge
                   variant="outline"
                   className={cn(
-                    'text-[10px] font-semibold',
-                    live
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                      : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                    'text-2xs font-semibold',
+                    toneClasses(live ? 'ok' : 'elevated').soft
                   )}
                 >
                   <span className="mr-1 h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
@@ -253,7 +252,7 @@ export default function McpOverviewSection({
                 {automaticReady && (
                   <Badge
                     variant="outline"
-                    className="text-[10px] font-semibold border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400"
+                    className={cn('text-2xs font-semibold', toneClasses('neutral').soft)}
                   >
                     <Sparkles className="mr-1 h-3 w-3" aria-hidden="true" />
                     Automatic connections on

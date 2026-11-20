@@ -191,7 +191,7 @@ export function SearchableRunbookSelect({
           )}
         </div>
         <PopoverContent
-          className="w-[280px] sm:w-[320px] p-1.5 rounded-2xl border border-border/80 dark:border-border/60 bg-popover/95 dark:bg-popover/90 backdrop-blur-md shadow-xl overflow-hidden"
+          className="w-[280px] sm:w-[320px] p-1.5 border overflow-hidden"
           align="start"
         >
           <Command shouldFilter={false} className="bg-transparent">

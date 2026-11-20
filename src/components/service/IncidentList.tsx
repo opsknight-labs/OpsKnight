@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
-import { getDefaultAvatar } from '@/lib/avatar';
 import StatusBadge from '../incident/StatusBadge';
 import PriorityBadge from '@/components/incident/PriorityBadge';
 import EscalationStatusBadge from '@/components/incident/EscalationStatusBadge';
@@ -14,7 +13,7 @@ import ResolveIncidentModal, {
   type ResolvingIncidentData,
 } from '@/components/incident/ResolveIncidentModal';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import {
   Clock,
   CheckCircle2,
@@ -35,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { updateIncidentStatus } from '@/app/(app)/incidents/actions';
-import { useToast } from '@/hooks/use-product-notification';
+import { notify } from '@/lib/toast';
 
 // Helper to format relative time
 function formatDistanceToNow(date: Date, timeZone: string): string {
@@ -135,7 +134,6 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
   const { userTimeZone } = useTimezone();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const { showToast } = useToast();
   const [resolvingIncident, setResolvingIncident] = useState<ResolvingIncidentData | null>(null);
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
 
@@ -155,11 +153,11 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
     startTransition(async () => {
       try {
         await updateIncidentStatus(incidentId, newStatus);
-        showToast(`Incident ${newStatus.toLowerCase()} successfully`, 'success');
+        notify.success(`Incident ${newStatus.toLowerCase()} successfully`);
         router.refresh();
       } catch (error) {
         const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
-        showToast(getUserFacingErrorMessage(error) || 'Failed to update status', 'error');
+        notify.error(getUserFacingErrorMessage(error) || 'Failed to update status');
       }
     });
   };
@@ -295,21 +293,15 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                 >
                   {/* Assignee / Team / Unassigned */}
                   {incident.assignee ? (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/40 border border-border/70 text-[11px] text-foreground font-medium">
-                      <Avatar className="h-3.5 w-3.5">
-                        <AvatarImage
-                          src={
-                            incident.assignee.avatarUrl ||
-                            getDefaultAvatar(
-                              incident.assignee.gender,
-                              incident.assignee.id || incident.assignee.name
-                            )
-                          }
-                        />
-                        <AvatarFallback className="text-[8px]">
-                          {incident.assignee.name.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                    <div className="flex items-center gap-1.5 rounded-full bg-muted/40 border border-border/70 py-0.5 pl-0.5 pr-2 text-2xs text-foreground font-medium">
+                      <UserAvatar
+                        userId={incident.assignee.id || incident.assignee.name}
+                        avatarUrl={incident.assignee.avatarUrl}
+                        name={incident.assignee.name}
+                        gender={incident.assignee.gender}
+                        size="xs"
+                        aria-hidden
+                      />
                       <span className="max-w-[100px] truncate">{incident.assignee.name}</span>
                     </div>
                   ) : incident.team ? (
@@ -384,14 +376,14 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-52">
+                      <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
                           <Link
                             href={`/incidents/${incident.id}`}
                             onClick={e => e.stopPropagation()}
                             className="flex items-center gap-2 cursor-pointer"
                           >
-                            <Eye className="h-4 w-4 text-ink-500" />
+                            <Eye />
                             View details
                           </Link>
                         </DropdownMenuItem>
@@ -408,9 +400,8 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                                 service: serviceName ? { name: serviceName } : null,
                               });
                             }}
-                            className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium cursor-pointer"
                           >
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            <CheckCircle2 />
                             Resolve
                           </DropdownMenuItem>
                         )}
@@ -418,9 +409,8 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                         {incident.status !== 'ACKNOWLEDGED' && incident.status !== 'RESOLVED' && (
                           <DropdownMenuItem
                             onSelect={() => handleStatusChange(incident.id, 'ACKNOWLEDGED')}
-                            className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium cursor-pointer"
                           >
-                            <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <CheckCircle2 />
                             Acknowledge
                           </DropdownMenuItem>
                         )}
@@ -428,9 +418,8 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
                         {incident.status === 'ACKNOWLEDGED' && (
                           <DropdownMenuItem
                             onSelect={() => handleStatusChange(incident.id, 'OPEN')}
-                            className="flex items-center gap-2 cursor-pointer"
                           >
-                            <Circle className="h-4 w-4 text-muted-foreground" />
+                            <Circle />
                             Unacknowledge
                           </DropdownMenuItem>
                         )}

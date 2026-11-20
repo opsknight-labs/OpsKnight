@@ -84,10 +84,10 @@ export function PolicyActionsMenu({ policy }: { policy: PolicyDirectoryItem }) {
           <span className="sr-only">Actions for {policy.name}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48 text-xs">
+      <DropdownMenuContent align="end">
         <DropdownMenuItem asChild>
           <Link href={`/policies/${policy.id}`} className="flex cursor-pointer items-center gap-2">
-            <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+            <Layers />
             View & Configure Policy
           </Link>
         </DropdownMenuItem>

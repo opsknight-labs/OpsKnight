@@ -1,4 +1,5 @@
 import type { McpRisk } from '@/lib/mcp/catalog/capabilities';
+import { toneClasses } from '@/components/patterns/status-tone';
 
 /**
  * One source for how MCP risk classes look and read on every screen: the approvals queue, the
@@ -8,31 +9,27 @@ export const MCP_RISK: Record<McpRisk, { title: string; short: string; className
   R0: {
     title: 'Read only',
     short: 'Read only',
-    className:
-      'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-500/50 dark:bg-blue-500/10 dark:text-blue-200',
+    className: toneClasses('info').soft,
   },
   R1: {
     title: 'Routine change',
     short: 'Routine',
-    className:
-      'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200',
+    className: toneClasses('elevated').soft,
   },
   R2: {
     title: 'Sensitive change',
     short: 'Sensitive',
-    className:
-      'border-orange-300 bg-orange-50 text-orange-900 dark:border-orange-500/50 dark:bg-orange-500/10 dark:text-orange-200',
+    className: toneClasses('critical').soft,
   },
   R3: {
     title: 'Destructive or high-impact change',
     short: 'Destructive',
-    className:
-      'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-200',
+    className: toneClasses('critical').filled,
   },
 };
 
 const RISKS = new Map(Object.entries(MCP_RISK));
-const NEUTRAL = 'border-border bg-muted/60 text-muted-foreground';
+const NEUTRAL = toneClasses('neutral').soft;
 
 /**
  * Display data for any risk value. R0–R3 get their class colours; anything else (runbook steps
@@ -50,7 +47,7 @@ export function riskLabel(risk: string) {
 
 /** The pill markup shared by every risk badge. */
 export const RISK_PILL_CLASS =
-  'inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold leading-4';
+  'inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-2xs font-semibold leading-4';
 
 /** Runbook step risk classes (src/lib/runbooks/types.ts), lowest first, in plain words. */
 const RUNBOOK_STEP_RISK = new Map([

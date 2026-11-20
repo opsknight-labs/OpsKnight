@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, type ReactNode } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   UserActionsMenu,
   UserCard,
@@ -18,9 +19,12 @@ import {
   DirectoryHeader,
   DirectoryPrimaryCell,
   DirectoryTable,
+  EmptyState,
   RelativeTime,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
+  type DirectorySort,
 } from '@/components/patterns';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
@@ -148,6 +152,20 @@ export default function UserList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkActionPending, setIsBulkActionPending] = useState(false);
   const [view, setView] = useDirectoryView('users');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // Same URL params as UserSortDropdown (sortBy / sortOrder, newest first by default).
+  const sort: DirectorySort = {
+    key: searchParams.get('sortBy') || 'createdAt',
+    direction: searchParams.get('sortOrder') === 'asc' ? 'asc' : 'desc',
+  };
+  const changeSort = (next: DirectorySort) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('sortBy', next.key);
+    params.set('sortOrder', next.direction);
+    params.delete('page');
+    router.push(`/users?${params.toString()}`);
+  };
 
   const toggleUser = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -300,6 +318,7 @@ export default function UserList({
           gender={user.gender}
           size="sm"
           className="rounded-full ring-1 ring-border/80"
+          aria-hidden
         />
       }
       title={user.name}
@@ -309,11 +328,19 @@ export default function UserList({
   );
 
   const columns: DirectoryColumn<User>[] = [
-    { id: 'user', header: 'User', cell: user => identity(user, true) },
-    { id: 'role', header: 'Role', className: 'w-32', cell: user => <UserRoleBadge user={user} /> },
+    { id: 'user', header: 'User', sortKey: 'name', cell: user => identity(user, true) },
+    {
+      id: 'role',
+      header: 'Role',
+      sortKey: 'role',
+      hideable: true,
+      className: 'w-32',
+      cell: user => <UserRoleBadge user={user} />,
+    },
     {
       id: 'teams',
       header: 'Teams',
+      hideable: true,
       className: 'hidden w-64 md:table-cell',
       cell: user => (
         <UserTeams
@@ -327,12 +354,16 @@ export default function UserList({
     {
       id: 'status',
       header: 'Status',
+      sortKey: 'status',
+      hideable: true,
       className: 'w-28',
       cell: user => <UserStatus status={user.status} />,
     },
     {
       id: 'joined',
       header: 'Joined',
+      sortKey: 'createdAt',
+      hideable: true,
       className: 'hidden w-28 lg:table-cell',
       cell: user => (
         <RelativeTime
@@ -344,10 +375,14 @@ export default function UserList({
     },
   ];
 
+  const columnVisibility = useDirectoryColumns('users', columns);
+
   const empty = (
-    <div className="px-4 py-12 text-center text-muted-foreground">
-      <p>No users found matching your filters.</p>
-    </div>
+    <EmptyState
+      variant="simple"
+      title="No users match your filters"
+      description="Clear a filter or widen the search to see more people."
+    />
   );
 
   return (
@@ -361,6 +396,8 @@ export default function UserList({
             : undefined
         }
         sort={<UserSortDropdown />}
+        columns={columnVisibility}
+        density
         view={{ value: view, onChange: setView }}
         guide={
           <DirectoryGuide title="How user access works" steps={GUIDE_STEPS} links={GUIDE_LINKS} />
@@ -392,21 +429,21 @@ export default function UserList({
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[160px]">
+            <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleBulkAction('ACTIVATE')}>
-                <UserCheck className="mr-2 h-4 w-4 text-emerald-500" />
+                <UserCheck />
                 <span>Activate</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleBulkAction('DEACTIVATE')}>
-                <UserX className="mr-2 h-4 w-4 text-orange-500" />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => handleBulkAction('DEACTIVATE')}
+              >
+                <UserX />
                 <span>Deactivate</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => handleBulkAction('DELETE')}
-                className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:text-red-400 dark:focus:text-red-400 dark:focus:bg-red-500/10"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
+              <DropdownMenuItem variant="destructive" onClick={() => handleBulkAction('DELETE')}>
+                <Trash2 />
                 <span>Delete</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -420,6 +457,9 @@ export default function UserList({
           rows={users}
           getRowId={user => user.id}
           columns={columns}
+          hiddenColumns={columnVisibility.hidden}
+          sort={sort}
+          onSortChange={changeSort}
           selection={
             isAdmin
               ? {
