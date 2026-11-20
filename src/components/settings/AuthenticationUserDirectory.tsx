@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import UserAvatar from '@/components/UserAvatar';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/shadcn/input';
@@ -149,9 +150,12 @@ export default function AuthenticationUserDirectory() {
               key={user.id}
               className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
             >
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{user.name || user.email}</p>
-                <p className="text-xs text-muted-foreground break-all">{user.email}</p>
+              <div className="flex min-w-0 items-center gap-3">
+                <UserAvatar userId={user.id} name={user.name || user.email} size="sm" aria-hidden />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{user.name || user.email}</p>
+                  <p className="text-xs text-muted-foreground break-all">{user.email}</p>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{user.role}</Badge>

@@ -2,8 +2,7 @@
 
 import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -258,14 +257,14 @@ export default function TeamMemberRosterTable({
               >
                 {/* User info */}
                 <div className="flex items-center gap-3 min-w-0">
-                  <DirectUserAvatar
-                    avatarUrl={
-                      member.user.avatarUrl ||
-                      getDefaultAvatar(member.user.gender, member.user.id || member.user.name)
-                    }
+                  <UserAvatar
+                    userId={member.user.id || member.user.name}
+                    avatarUrl={member.user.avatarUrl}
+                    gender={member.user.gender}
                     name={member.user.name}
                     size="sm"
                     className="h-8 w-8 shrink-0 ring-1 ring-border/80"
+                    aria-hidden
                   />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Tooltip,
@@ -9,7 +9,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/shadcn/tooltip';
-import { getDefaultAvatar } from '@/lib/avatar';
 import { formatDateTime, startOfDayInTimeZone, startOfNextDayInTimeZone } from '@/lib/timezone';
 import { Clock, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -274,20 +273,16 @@ export default function CoverageTimeline({
                               }}
                             >
                               {widthPercent > 8 && (
-                                <Avatar className="h-5 w-5 shrink-0 ring-1 ring-white/30">
-                                  <AvatarImage
-                                    src={
-                                      shift.userAvatar ||
-                                      getDefaultAvatar(
-                                        shift.userGender,
-                                        shift.userId || shift.userName
-                                      )
-                                    }
-                                  />
-                                  <AvatarFallback className="bg-white/20 text-[8px] text-white">
-                                    {shift.userName.charAt(0)}
-                                  </AvatarFallback>
-                                </Avatar>
+                                <UserAvatar
+                                  userId={shift.userId || shift.userName}
+                                  avatarUrl={shift.userAvatar}
+                                  name={shift.userName}
+                                  gender={shift.userGender}
+                                  size="xs"
+                                  className="h-5 w-5 ring-1 ring-white/30"
+                                  fallbackClassName="bg-white/20 text-white"
+                                  aria-hidden
+                                />
                               )}
                               {widthPercent > 15 && (
                                 <span className="truncate text-[10px] font-medium text-white">

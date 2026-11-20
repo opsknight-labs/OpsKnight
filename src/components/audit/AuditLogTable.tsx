@@ -11,8 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/shadcn/table';
 import { Button } from '@/components/ui/shadcn/button';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 import AuditActionBadge from './AuditActionBadge';
 import AuditDetailModal, { getEntityHref, AuditLogEntry } from './AuditDetailModal';
@@ -116,16 +115,12 @@ export default function AuditLogTable({
                       <TableCell className={logCellClass}>
                         <div className="flex items-center gap-3">
                           {log.actor ? (
-                            <DirectUserAvatar
-                              avatarUrl={
-                                log.actor.avatarUrl ||
-                                getDefaultAvatar(
-                                  undefined,
-                                  log.actor.id || log.actor.name || 'user'
-                                )
-                              }
+                            <UserAvatar
+                              userId={log.actor.id || log.actor.name || 'user'}
+                              avatarUrl={log.actor.avatarUrl}
                               name={log.actor.name}
                               size="sm"
+                              aria-hidden
                             />
                           ) : (
                             <div

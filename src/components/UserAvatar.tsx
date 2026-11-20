@@ -15,34 +15,18 @@ type UserAvatarProps = {
   showOnlineStatus?: boolean;
   className?: string;
   fallbackClassName?: string;
+  /** Set when the name is shown next to the avatar, so screen readers don't read it twice. */
+  'aria-hidden'?: boolean;
 };
 
-const sizeClasses: Record<AvatarSize, { container: string; text: string }> = {
-  xs: {
-    container: 'h-6 w-6',
-    text: 'text-[9px]',
-  },
-  sm: {
-    container: 'h-8 w-8',
-    text: 'text-[10px]',
-  },
-  md: {
-    container: 'h-10 w-10',
-    text: 'text-xs',
-  },
-  lg: {
-    container: 'h-12 w-12',
-    text: 'text-sm',
-  },
-  xl: {
-    container: 'h-16 w-16',
-    text: 'text-base',
-  },
-  '2xl': {
-    container: 'h-24 w-24',
-    text: 'text-xl',
-  },
-};
+const SIZE_CLASSES = new Map<AvatarSize, { container: string; text: string }>([
+  ['xs', { container: 'h-6 w-6', text: 'text-2xs' }],
+  ['sm', { container: 'h-8 w-8', text: 'text-2xs' }],
+  ['md', { container: 'h-10 w-10', text: 'text-xs' }],
+  ['lg', { container: 'h-12 w-12', text: 'text-sm' }],
+  ['xl', { container: 'h-16 w-16', text: 'text-base' }],
+  ['2xl', { container: 'h-24 w-24', text: 'text-xl' }],
+]);
 
 const AVATAR_PALETTES = [
   {
@@ -117,15 +101,16 @@ export default function UserAvatar({
   size = 'md',
   className,
   fallbackClassName,
+  'aria-hidden': ariaHidden,
 }: UserAvatarProps) {
   const contextAvatarUrl = useUserAvatarSafe(userId, gender, name, directAvatarUrl);
   const avatarUrl = directAvatarUrl || contextAvatarUrl;
-  const sizeConfig = sizeClasses[size];
-  const initials = getInitials(name);
+  const sizeConfig = SIZE_CLASSES.get(size) ?? { container: 'h-10 w-10', text: 'text-xs' };
   const palette = getAvatarPalette(name || userId);
 
   return (
     <div
+      aria-hidden={ariaHidden || undefined}
       className={cn('relative inline-flex shrink-0 select-none', sizeConfig.container, className)}
     >
       <Avatar
@@ -137,7 +122,7 @@ export default function UserAvatar({
         {avatarUrl && (
           <AvatarImage
             src={avatarUrl}
-            alt={name || 'User avatar'}
+            alt={ariaHidden ? '' : name || 'User avatar'}
             className="h-full w-full object-cover"
           />
         )}
@@ -150,56 +135,7 @@ export default function UserAvatar({
             fallbackClassName
           )}
         >
-          {initials}
-        </AvatarFallback>
-      </Avatar>
-    </div>
-  );
-}
-
-// Export a version that works with direct avatar URL for special cases
-type DirectUserAvatarProps = Omit<UserAvatarProps, 'userId' | 'gender'> & {
-  avatarUrl: string;
-};
-
-export function DirectUserAvatar({
-  avatarUrl,
-  name,
-  size = 'md',
-  className,
-  fallbackClassName,
-}: DirectUserAvatarProps) {
-  const sizeConfig = sizeClasses[size];
-  const initials = getInitials(name);
-  const palette = getAvatarPalette(name);
-
-  return (
-    <div
-      className={cn('relative inline-flex shrink-0 select-none', sizeConfig.container, className)}
-    >
-      <Avatar
-        className={cn(
-          'h-full w-full rounded-full overflow-hidden border shadow-2xs',
-          palette.border
-        )}
-      >
-        {avatarUrl && (
-          <AvatarImage
-            src={avatarUrl}
-            alt={name || 'User avatar'}
-            className="h-full w-full object-cover"
-          />
-        )}
-        <AvatarFallback
-          className={cn(
-            'flex h-full w-full items-center justify-center rounded-full font-bold',
-            palette.bg,
-            palette.text,
-            sizeConfig.text,
-            fallbackClassName
-          )}
-        >
-          {initials}
+          {getInitials(name)}
         </AvatarFallback>
       </Avatar>
     </div>

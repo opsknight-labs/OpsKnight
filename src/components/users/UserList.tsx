@@ -300,6 +300,7 @@ export default function UserList({
           gender={user.gender}
           size="sm"
           className="rounded-full ring-1 ring-border/80"
+          aria-hidden
         />
       }
       title={user.name}

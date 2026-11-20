@@ -154,7 +154,13 @@ export default function TeamMemberForm({
             {selectableUsers.map(user => (
               <SelectItem key={user.id} value={user.id}>
                 <div className="flex items-center gap-2">
-                  <UserAvatar userId={user.id} name={user.name} gender={user.gender} size="xs" />
+                  <UserAvatar
+                    userId={user.id}
+                    name={user.name}
+                    gender={user.gender}
+                    size="xs"
+                    aria-hidden
+                  />
                   <span className="truncate">{user.name}</span>
                   {user.status === 'DISABLED' && (
                     <Badge variant="secondary" size="xs">

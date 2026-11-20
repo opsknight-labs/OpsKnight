@@ -174,6 +174,7 @@ export default function EscalationStepItem({
                     avatarUrl={step.targetUser.avatarUrl}
                     gender={step.targetUser.gender}
                     size="md"
+                    aria-hidden
                   />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-ink-100 flex items-center justify-center text-ink-500">

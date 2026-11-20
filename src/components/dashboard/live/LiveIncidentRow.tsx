@@ -1,5 +1,6 @@
 'use client';
 
+import UserAvatar from '@/components/UserAvatar';
 import { memo } from 'react';
 import Link from 'next/link';
 import { Check, Clock3, Loader2, PanelRight, Plus, Star, UserPlus, UserRound } from 'lucide-react';
@@ -143,15 +144,6 @@ type RowProps = {
   tv?: boolean;
 };
 
-function initialsOf(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(part => part.charAt(0).toUpperCase())
-    .join('');
-}
-
 export const LiveIncidentRow = memo(function LiveIncidentRow({
   incident,
   index,
@@ -193,15 +185,15 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
 
   const owner = incident.assignee ? (
     <span className="flex min-w-0 items-center gap-1.5">
-      <span
+      <UserAvatar
+        userId={incident.assignee.id}
+        avatarUrl={incident.assignee.avatarUrl}
+        name={incident.assignee.name}
+        gender={incident.assignee.gender}
+        size="xs"
+        className={tv ? 'h-[2.5em] w-[2.5em]' : 'h-5 w-5'}
         aria-hidden
-        className={cn(
-          'flex shrink-0 items-center justify-center rounded-full bg-indigo-100 font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300',
-          tv ? 'h-[2.5em] w-[2.5em] text-[0.6em]' : 'h-5 w-5 text-[9px]'
-        )}
-      >
-        {initialsOf(incident.assignee.name)}
-      </span>
+      />
       <span className="truncate text-foreground">{incident.assignee.name}</span>
     </span>
   ) : canAssignSelf && !tv ? (

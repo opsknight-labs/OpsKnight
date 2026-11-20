@@ -211,6 +211,7 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
             gender={user.gender}
             size="xl"
             className="shrink-0 ring-2 ring-primary-foreground/20 rounded-full"
+            aria-hidden
           />
         }
         badges={

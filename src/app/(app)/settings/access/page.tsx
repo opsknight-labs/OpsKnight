@@ -425,7 +425,13 @@ export default async function MyAccessPage() {
             <ul className="flex flex-wrap gap-2">
               {grantors.people.map(person => (
                 <li key={person.id} className="p-0">
-                  <ContactChip name={person.name} email={person.email} subject="OpsKnight access" />
+                  <ContactChip
+                    userId={person.id}
+                    name={person.name}
+                    email={person.email}
+                    avatarUrl={person.avatarUrl}
+                    subject="OpsKnight access"
+                  />
                 </li>
               ))}
             </ul>

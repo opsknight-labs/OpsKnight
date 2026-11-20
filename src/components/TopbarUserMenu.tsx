@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/shadcn/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
 import { Button } from '@/components/ui/shadcn/button';
+import UserAvatar from '@/components/UserAvatar';
 import { Settings, LogOut, User, Keyboard, HelpCircle } from 'lucide-react';
 import { useUserAvatarSafe } from '@/hooks/useUserAvatar';
 import Link from 'next/link';
@@ -77,12 +78,14 @@ export default function TopbarUserMenu({
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_50%)]" />
 
           <div className="relative z-10 flex items-center gap-2.5">
-            <Avatar className="h-8 w-8 border border-zinc-700/60 shadow-xs shrink-0">
-              <AvatarImage src={finalAvatarUrl} />
-              <AvatarFallback className="bg-white/10 text-white backdrop-blur-md text-xs font-semibold">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar
+              userId={userId}
+              avatarUrl={finalAvatarUrl}
+              name={name}
+              gender={gender}
+              size="sm"
+              aria-hidden
+            />
             <div className="flex flex-col min-w-0 flex-1">
               <p className="text-sm font-semibold truncate leading-tight text-white">
                 {name || 'User'}

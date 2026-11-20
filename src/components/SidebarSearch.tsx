@@ -37,8 +37,7 @@ import {
 import { useThemePreference } from '@/hooks/use-theme-preference';
 import type { ThemeChoice } from '@/lib/theme-preference';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 
 type SearchResult = {
   type: 'incident' | 'service' | 'team' | 'user' | 'policy' | 'postmortem';
@@ -710,12 +709,13 @@ export default function SidebarSearch() {
                           >
                             {result.type === 'user' ? (
                               <div className="mr-3 shrink-0">
-                                <DirectUserAvatar
-                                  avatarUrl={
-                                    result.avatarUrl || getDefaultAvatar(result.gender, result.id)
-                                  }
+                                <UserAvatar
+                                  userId={result.id}
+                                  avatarUrl={result.avatarUrl}
+                                  gender={result.gender}
                                   name={result.title}
                                   size="sm"
+                                  aria-hidden
                                 />
                               </div>
                             ) : (

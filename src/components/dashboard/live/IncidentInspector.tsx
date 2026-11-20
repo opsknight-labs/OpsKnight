@@ -1,5 +1,6 @@
 'use client';
 
+import UserAvatar from '@/components/UserAvatar';
 import { useEffect } from 'react';
 import Link from 'next/link';
 import {
@@ -214,11 +215,21 @@ export function IncidentInspector({
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">Assignee</span>
-            <span className="font-medium text-foreground truncate">
-              {incident.assignee?.name ?? (
-                <span className="text-amber-600 dark:text-amber-400 font-semibold">Unassigned</span>
-              )}
-            </span>
+            {incident.assignee ? (
+              <span className="flex min-w-0 items-center gap-1.5 font-medium text-foreground">
+                <UserAvatar
+                  userId={incident.assignee.id}
+                  avatarUrl={incident.assignee.avatarUrl}
+                  name={incident.assignee.name}
+                  gender={incident.assignee.gender}
+                  size="xs"
+                  aria-hidden
+                />
+                <span className="truncate">{incident.assignee.name}</span>
+              </span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400 font-semibold">Unassigned</span>
+            )}
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">SLA Status</span>

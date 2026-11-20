@@ -89,7 +89,7 @@ const CompactTeamLoad = memo(function CompactTeamLoad({ assigneeLoad }: CompactT
             <div className="flex items-center justify-between">
               {/* Name */}
               <div className="flex min-w-0 flex-1 items-center gap-2">
-                <UserAvatar userId={assignee.id} name={assignee.name} size="xs" />
+                <UserAvatar userId={assignee.id} name={assignee.name} size="xs" aria-hidden />
                 <span
                   className="truncate text-xs font-semibold text-foreground"
                   title={displayName}

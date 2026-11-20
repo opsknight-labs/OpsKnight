@@ -596,7 +596,9 @@ async function reviewableWhere(approver: {
 }
 
 const reviewInclude = {
-  requester: { select: { id: true, name: true, email: true, role: true, roleSource: true } },
+  requester: {
+    select: { id: true, name: true, email: true, avatarUrl: true, role: true, roleSource: true },
+  },
 } as const;
 
 async function withTeamsAndDeciders<

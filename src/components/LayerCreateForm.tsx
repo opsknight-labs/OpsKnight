@@ -1,5 +1,6 @@
 'use client';
 
+import UserAvatar from '@/components/UserAvatar';
 import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-product-notification';
@@ -188,9 +189,17 @@ export default function LayerCreateForm({
                       key={responder.id}
                       className="flex items-center justify-between rounded-lg bg-muted/[0.45] px-3 py-2"
                     >
-                      <span className="min-w-0 truncate text-sm font-medium">
-                        <span className="mr-2 text-xs text-muted-foreground">{index + 1}.</span>
-                        {responder.name}
+                      <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                        <span className="text-xs text-muted-foreground">{index + 1}.</span>
+                        <UserAvatar
+                          userId={responder.id}
+                          avatarUrl={responder.avatarUrl}
+                          name={responder.name}
+                          gender={responder.gender}
+                          size="xs"
+                          aria-hidden
+                        />
+                        <span className="truncate">{responder.name}</span>
                       </span>
                       <Button
                         type="button"

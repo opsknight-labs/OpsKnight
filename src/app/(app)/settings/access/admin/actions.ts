@@ -104,6 +104,7 @@ export async function whoHasCapabilityAction(capability: string) {
           id: user.id,
           name: user.name,
           email: user.email,
+          avatarUrl: user.avatarUrl,
           role: user.role,
           customRole: user.customRole?.name ?? null,
         })),

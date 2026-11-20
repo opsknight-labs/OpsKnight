@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import UserAvatar from '@/components/UserAvatar';
 import Link from 'next/link';
 import { KeyRound, Plug, SearchX, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
@@ -293,9 +294,7 @@ export default function McpConnectionsSection({
                     {isAdmin && (
                       <ResponsiveCell label="Person" primary>
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
-                            {(who.charAt(0) || 'U').toUpperCase()}
-                          </div>
+                          <UserAvatar userId={row.user.id} name={who} size="xs" aria-hidden />
                           <div className="min-w-0">
                             <p className="truncate font-medium text-foreground">{who}</p>
                             {row.user.name && row.user.email && (

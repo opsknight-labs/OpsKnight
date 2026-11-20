@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import UserAvatar from '@/components/UserAvatar';
 import { incidentStatusTone, statusGradientClass } from '@/lib/design/status-palette';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
@@ -468,8 +469,18 @@ export default async function IncidentDetailScreen({
             </div>
             <div className="min-w-0">
               <span className="block text-muted-foreground">Assigned to</span>
-              <span className="mt-0.5 block truncate font-semibold text-foreground">
-                {incident.assignee?.name || 'Unassigned'}
+              <span className="mt-0.5 flex min-w-0 items-center gap-1.5 font-semibold text-foreground">
+                {incident.assignee && (
+                  <UserAvatar
+                    userId={incident.assignee.id}
+                    avatarUrl={incident.assignee.avatarUrl}
+                    name={incident.assignee.name}
+                    gender={incident.assignee.gender}
+                    size="xs"
+                    aria-hidden
+                  />
+                )}
+                <span className="truncate">{incident.assignee?.name || 'Unassigned'}</span>
               </span>
             </div>
           </div>

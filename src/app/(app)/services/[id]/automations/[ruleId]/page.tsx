@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import UserAvatar from '@/components/UserAvatar';
 import { notFound } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -113,7 +114,7 @@ export default async function AutomationRulePage({
       triggers: { include: { conditions: true } },
       defaultAgent: { select: { id: true, name: true } },
       defaultAgentPool: { select: { id: true, name: true } },
-      createdBy: { select: { name: true } },
+      createdBy: { select: { id: true, name: true, avatarUrl: true, gender: true } },
       service: { select: { name: true } },
       executions: {
         orderBy: { createdAt: 'desc' },
@@ -240,7 +241,20 @@ export default async function AutomationRulePage({
               </Link>
             </span>
             <span>·</span>
-            <span>created by {rule.createdBy?.name ?? 'OpsKnight Admin'}</span>
+            <span className="inline-flex items-center gap-1.5">
+              created by
+              {rule.createdBy && (
+                <UserAvatar
+                  userId={rule.createdBy.id}
+                  avatarUrl={rule.createdBy.avatarUrl}
+                  name={rule.createdBy.name}
+                  gender={rule.createdBy.gender}
+                  size="xs"
+                  aria-hidden
+                />
+              )}
+              {rule.createdBy?.name ?? 'OpsKnight Admin'}
+            </span>
             <span>·</span>
             <RuleTimestamp {...timestamp(rule.createdAt, userTimeZone)} className="text-ink-400" />
           </div>

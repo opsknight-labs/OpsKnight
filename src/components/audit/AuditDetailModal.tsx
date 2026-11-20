@@ -10,8 +10,7 @@ import {
   DialogDescription,
 } from '@/components/ui/shadcn/dialog';
 import { Button } from '@/components/ui/shadcn/button';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import AuditActionBadge from './AuditActionBadge';
 import { Copy, Check, ExternalLink, ShieldCheck, User, Layers } from 'lucide-react';
 import { formatDateTime } from '@/lib/timezone';
@@ -116,13 +115,12 @@ export default function AuditDetailModal({
               </div>
               <div className="flex items-center gap-2.5 pt-0.5 min-w-0">
                 {log.actor ? (
-                  <DirectUserAvatar
-                    avatarUrl={
-                      log.actor.avatarUrl ||
-                      getDefaultAvatar(undefined, log.actor.id || log.actor.name || 'user')
-                    }
+                  <UserAvatar
+                    userId={log.actor.id || log.actor.name || 'user'}
+                    avatarUrl={log.actor.avatarUrl}
                     name={log.actor.name}
                     size="sm"
+                    aria-hidden
                   />
                 ) : (
                   <div className="w-7 h-7 rounded-full bg-ink-200 flex items-center justify-center text-2xs font-semibold text-ink-600 shrink-0">

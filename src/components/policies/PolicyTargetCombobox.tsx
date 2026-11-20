@@ -104,6 +104,7 @@ export default function PolicyTargetCombobox({
                     gender={selectedUser.gender}
                     size="xs"
                     className="shrink-0"
+                    aria-hidden
                   />
                   <span className="font-medium truncate">{selectedUser.name}</span>
                   <span className="text-[10px] text-muted-foreground truncate">
@@ -185,6 +186,7 @@ export default function PolicyTargetCombobox({
                           gender={user.gender}
                           size="xs"
                           className="shrink-0"
+                          aria-hidden
                         />
                         <div className="flex flex-col truncate">
                           <span className="font-medium truncate">{user.name}</span>

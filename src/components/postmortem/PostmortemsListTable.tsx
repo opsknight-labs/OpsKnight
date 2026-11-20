@@ -136,6 +136,7 @@ function Author({ pm }: { pm: PostmortemListItem }) {
         name={pm.createdBy?.name}
         avatarUrl={pm.createdBy?.avatarUrl}
         size="sm"
+        aria-hidden
       />
       <span className="truncate text-xs text-foreground">
         {pm.createdBy?.name || pm.createdBy?.email || 'Unknown'}
