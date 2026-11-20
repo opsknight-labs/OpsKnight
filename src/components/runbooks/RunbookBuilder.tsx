@@ -124,8 +124,6 @@ export function getNextUnusedInputKey(
   return `input_${counter}`;
 }
 
-export { rewriteInputReferences as refactorInputReference } from '@/lib/runbooks/input-references';
-
 export default function RunbookBuilder({
   initialDefinition,
   initialInputs,

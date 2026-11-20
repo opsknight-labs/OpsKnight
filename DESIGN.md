@@ -365,6 +365,13 @@ cleaner API over `DetailHeroBanner`, which stays the implementation, so both ren
   Response Center", "Infrastructure Directory", "Incident Learning"), rendered as tracked uppercase
   micro-text. Settings pages default to "Workspace Settings". Write it in Title Case and keep it to
   2–5 words; the band uppercases it.
+- **One structure on every page.** Top: icon tile, eyebrow and badges, `h1`, one-line description, actions
+  top-right (below the title on phones). Bottom strip: `stats`, always under a divider, left-aligned as a
+  compact wrapping group (two columns on phones). `statsPlacement` is deprecated and ignored, so headers
+  never switch layout between pages. Stats with `href` are filters: they get a hover state, `active`
+  marks the current one (`aria-current`), and the label is announced as "Filter by …" with its value.
+- **Stat content:** label (micro-label), value (`text-base`, tabular), optional icon and `subtext`.
+  Long values truncate with the full text in `title`; extra stats wrap rather than scroll.
 - **On the dark surface** default outline buttons and `text-primary` badges disappear. Use the exported
   `pageHeaderActionClass` / `pageHeaderBadgeClass`.
 - `DirectoryPageHeader` and `RunbookPageHeader` now render through `PageHeader` (deprecated wrappers).

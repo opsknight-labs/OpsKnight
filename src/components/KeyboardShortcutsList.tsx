@@ -32,19 +32,6 @@ export function filterShortcuts(query: string): KeyboardShortcutDefinition[] {
       shortcut.keys.some(key => key.toLowerCase().includes(q))
   );
 }
-
-export function groupShortcuts(
-  shortcuts: readonly KeyboardShortcutDefinition[]
-): Array<[KeyboardShortcutCategory, KeyboardShortcutDefinition[]]> {
-  return SHORTCUT_CATEGORY_ORDER.map(
-    category =>
-      [category, shortcuts.filter(shortcut => shortcut.category === category)] as [
-        KeyboardShortcutCategory,
-        KeyboardShortcutDefinition[],
-      ]
-  ).filter(([, items]) => items.length > 0);
-}
-
 /**
  * G-prefixed shortcuts are sequences (press G, release, press the letter); the rest are
  * alternatives (J or ↓) or chords (⌘ K).

@@ -57,19 +57,6 @@ function getSizeConfig(size: ButtonSize) {
       return { size: 'default' as const, className: 'h-11 min-h-[44px] rounded-xl' };
   }
 }
-
-function getIconSize(size: ButtonSize) {
-  switch (size) {
-    case 'sm':
-      return 'h-10 w-10';
-    case 'lg':
-      return 'h-12 w-12';
-    case 'md':
-    default:
-      return 'h-11 w-11';
-  }
-}
-
 export default function MobileButton({
   children,
   variant = 'primary',
@@ -147,34 +134,5 @@ function LoadingSpinner() {
         strokeDashoffset="8"
       />
     </svg>
-  );
-}
-
-export function MobileIconButton({
-  icon,
-  variant = 'ghost',
-  size = 'md',
-  badge,
-  ...props
-}: {
-  icon: ReactNode;
-  badge?: number | string;
-} & Omit<MobileButtonProps, 'children'>) {
-  return (
-    <div className="relative inline-flex">
-      <MobileButton
-        variant={variant}
-        size={size}
-        className={cn('rounded-full p-0', getIconSize(size))}
-        {...props}
-      >
-        {icon}
-      </MobileButton>
-      {badge !== undefined && (
-        <span className="absolute -right-1 -top-1 flex h-5 min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[0.6rem] font-bold text-destructive-foreground">
-          {badge}
-        </span>
-      )}
-    </div>
   );
 }

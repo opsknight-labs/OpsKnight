@@ -237,46 +237,6 @@ export function OnCallCard() {
     </RailCard>
   );
 }
-
-export function ActivityCard() {
-  const { snapshot, now } = useLiveDashboard();
-  const items = snapshot?.rail.activity ?? [];
-  return (
-    <RailCard
-      title="Recent Activity"
-      subtitle="Acks, escalations and resolutions"
-      tone="slate"
-      icon={<Activity className="h-3.5 w-3.5" />}
-    >
-      <ol className="relative space-y-2 border-l border-border pl-3" data-testid="rail-activity">
-        {items.length === 0 ? (
-          <li className="text-xs text-muted-foreground">No recent activity</li>
-        ) : (
-          items.slice(0, 6).map(item => (
-            <li key={item.id} className="relative">
-              <span
-                aria-hidden
-                className="absolute -left-[17px] top-1.5 h-2 w-2 rounded-full border-2 border-card bg-primary/70"
-              />
-              <Link
-                href={`/incidents/${item.incidentId}`}
-                className="block rounded outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/50"
-              >
-                <span className="block truncate text-[11px] text-foreground" title={item.message}>
-                  {item.message}
-                </span>
-                <span className="block truncate text-[10px] text-muted-foreground">
-                  {item.incidentTitle} · {formatIncidentAge(item.createdAt, now)}
-                </span>
-              </Link>
-            </li>
-          ))
-        )}
-      </ol>
-    </RailCard>
-  );
-}
-
 function formatUntil(iso: string | null, now: number): string {
   if (!iso) return '';
   const minutes = Math.round((Date.parse(iso) - now) / 60_000);

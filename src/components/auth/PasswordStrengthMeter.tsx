@@ -6,7 +6,7 @@ import {
   getPasswordRequirements,
   isPasswordStrong as checkPasswordStrong,
 } from '@/lib/password-strength';
-import { validatePasswordStrength, type PasswordValidationContext } from '@/lib/passwords';
+import type { PasswordValidationContext } from '@/lib/passwords';
 
 interface PasswordStrengthMeterProps {
   password: string;
@@ -71,11 +71,3 @@ export default function PasswordStrengthMeter({
 }
 
 export { checkPasswordStrong as isPasswordStrong };
-
-export function getPasswordError(
-  password: string,
-  context?: PasswordValidationContext,
-  _minLength?: number
-): string | null {
-  return validatePasswordStrength(password, context);
-}

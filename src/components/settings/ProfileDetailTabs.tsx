@@ -27,9 +27,6 @@ import {
   Activity,
   CheckCircle2,
 } from 'lucide-react';
-
-export type ProfileDetailTab = 'profile' | 'notifications' | 'schedule' | 'teams';
-
 type TeamMembership = {
   id: string;
   role: string;

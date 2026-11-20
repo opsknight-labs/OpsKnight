@@ -4,7 +4,6 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import Link from 'next/link';
 
 import { getRoleCapabilities, type AppRole, type Capability } from '@/lib/authorization';
-import { canAccessPath } from '@/lib/access/pages';
 import { describeRequirement } from '@/lib/access/catalog';
 import type { AccessSnapshot } from '@/lib/access/server';
 import {
@@ -92,24 +91,6 @@ function toList(anyOf: Capability | readonly Capability[]): readonly Capability[
 export function useCan(anyOf: Capability | readonly Capability[]): boolean {
   const { capabilities } = useAccess();
   return toList(anyOf).some(capability => capabilities.has(capability));
-}
-
-export function useCanAccessPath(path: string): boolean {
-  const { capabilities } = useAccess();
-  return canAccessPath(path, capabilities);
-}
-
-/** Renders children only when allowed (or `fallback` otherwise). */
-export function Can({
-  anyOf,
-  children,
-  fallback = null,
-}: {
-  anyOf: Capability | readonly Capability[];
-  children: ReactNode;
-  fallback?: ReactNode;
-}) {
-  return useCan(anyOf) ? <>{children}</> : <>{fallback}</>;
 }
 
 /**

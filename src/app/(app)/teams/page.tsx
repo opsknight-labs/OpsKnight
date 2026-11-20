@@ -2,12 +2,9 @@ import prisma from '@/lib/prisma';
 import { getUserPermissions, getViewableTeamWhere } from '@/lib/rbac';
 import { createTeam } from './actions';
 import TeamDirectoryList from '@/components/teams/TeamDirectoryList';
-import TeamStatsCapsule from '@/components/teams/TeamStatsCapsule';
 import TeamCreateForm from '@/components/TeamCreateForm';
-import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
-import { Button } from '@/components/ui/shadcn/button';
-import { Users, Shield, ArrowUpRight, Sparkles, UserCheck } from 'lucide-react';
+import { AlertTriangle, Shield, UserCheck, Users } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 import { Prisma } from '@prisma/client';
@@ -170,134 +167,54 @@ export default async function TeamsPage({
             </div>
           </div>
 
-          <TeamStatsCapsule
-            totalTeams={allTeamsCount}
-            totalMembers={totalMembersCount}
-            totalServices={totalServicesCount}
-            configuredCount={configuredTeamsCount}
-          />
+          <dl className="grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 text-center shadow-xs lg:min-w-[330px]">
+            {[
+              { label: 'Members', value: totalMembersCount, icon: UserCheck, warn: false },
+              { label: 'Services', value: totalServicesCount, icon: Shield, warn: false },
+              {
+                label: 'Needs lead',
+                value: needsLeadTeamsCount,
+                icon: AlertTriangle,
+                warn: needsLeadTeamsCount > 0,
+              },
+            ].map(stat => (
+              <div key={stat.label} className="min-w-0 rounded-lg px-3 py-2">
+                <dt className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                  {stat.label}
+                </dt>
+                <dd
+                  className={cn(
+                    'mt-1 flex items-center justify-center gap-1.5 text-sm font-bold',
+                    stat.warn ? 'text-amber-300' : 'text-white'
+                  )}
+                >
+                  <stat.icon className="h-3.5 w-3.5" aria-hidden="true" /> {stat.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </div>
 
       {/* Top Action: Create Team Dashed Expander */}
       <TeamCreateForm action={createTeam} canCreate={canCreateTeam} />
 
-      {/* Main Grid: Directory + Sidebar */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
-        {/* Teams Directory List */}
-        <div className="xl:col-span-3 space-y-4">
-          <TeamDirectoryList
-            teams={teams}
-            pagination={{
-              currentPage: pagination.page,
-              totalPages: pagination.totalPages,
-              totalItems: pagination.totalItems,
-              itemsPerPage: pagination.pageSize,
-            }}
-            filterCounts={{
-              total: allTeamsCount,
-              configured: configuredTeamsCount,
-              needsLead: needsLeadTeamsCount,
-            }}
-            currentSearch={searchQuery}
-            currentStatus={statusFilter}
-          />
-        </div>
-
-        {/* Sidebar: Guide & Quick Links */}
-        <aside className="space-y-4">
-          {/* Team Lifecycle & Best Practices Guide */}
-          <Card className="overflow-hidden border-border/70 shadow-xs">
-            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
-                  <Sparkles className="h-3 w-3" />
-                </div>
-                <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Team Lifecycle
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  1
-                </span>
-                <div>
-                  <p className="font-semibold text-foreground">Assign Team Lead</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Designate an owner/lead to receive targeted escalation notifications.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  2
-                </span>
-                <div>
-                  <p className="font-semibold text-foreground">Build Responder Roster</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Add engineers with explicit roles (Owner, Admin, Member) and channel
-                    preferences.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5 text-xs">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  3
-                </span>
-                <div>
-                  <p className="font-semibold text-foreground">Connect Owned Services</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Link microservices and applications to automatically route incident alerts.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quick Links */}
-          <Card className="overflow-hidden border-border/70 shadow-xs">
-            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Quick Links
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-2 space-y-1">
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between h-8 text-xs font-medium"
-              >
-                <Link href="/users">
-                  <span className="flex items-center gap-2">
-                    <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                    All Responders
-                  </span>
-                  <ArrowUpRight className="h-3 w-3 opacity-60" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between h-8 text-xs font-medium"
-              >
-                <Link href="/services">
-                  <span className="flex items-center gap-2">
-                    <Shield className="h-3.5 w-3.5 text-muted-foreground" />
-                    Service Catalog
-                  </span>
-                  <ArrowUpRight className="h-3 w-3 opacity-60" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </aside>
-      </div>
+      <TeamDirectoryList
+        teams={teams}
+        pagination={{
+          currentPage: pagination.page,
+          totalPages: pagination.totalPages,
+          totalItems: pagination.totalItems,
+          itemsPerPage: pagination.pageSize,
+        }}
+        filterCounts={{
+          total: allTeamsCount,
+          configured: configuredTeamsCount,
+          needsLead: needsLeadTeamsCount,
+        }}
+        currentSearch={searchQuery}
+        currentStatus={statusFilter}
+      />
     </main>
   );
 }

@@ -16,10 +16,6 @@
     }
 }
 
-.animate-scale-in {
-    animation: scale-in 200ms var(--ease-out) forwards;
-}
-
 /* Fade Out Animation */
 @keyframes fade-out {
     from {
@@ -31,10 +27,6 @@
     }
 }
 
-.animate-fade-out {
-    animation: fade-out 200ms var(--ease-in) forwards;
-}
-
 /* Checkmark Draw Animation (for save indicator) */
 @keyframes checkmark-draw {
     0% {
@@ -44,12 +36,6 @@
     100% {
         stroke-dashoffset: 0;
     }
-}
-
-.animate-checkmark {
-    stroke-dasharray: 24;
-    stroke-dashoffset: 24;
-    animation: checkmark-draw 300ms var(--ease-out) forwards;
 }
 
 /* Shimmer Effect for Skeletons */
@@ -85,10 +71,6 @@
     }
 }
 
-.animate-pulse-subtle {
-    animation: pulse-subtle 2s ease-in-out infinite;
-}
-
 /* Spinner Animation */
 @keyframes spin {
     from {
@@ -98,10 +80,6 @@
     to {
         transform: rotate(360deg);
     }
-}
-
-.animate-spin-slow {
-    animation: spin 1.5s linear infinite;
 }
 
 /* Slide In Variations */
@@ -129,14 +107,6 @@
     }
 }
 
-.animate-slide-in-from-top {
-    animation: slide-in-from-top 200ms var(--ease-out) forwards;
-}
-
-.animate-slide-in-from-bottom {
-    animation: slide-in-from-bottom 200ms var(--ease-out) forwards;
-}
-
 /* Bounce (subtle) for success states */
 @keyframes bounce-subtle {
 
@@ -150,28 +120,11 @@
     }
 }
 
-.animate-bounce-subtle {
-    animation: bounce-subtle 400ms var(--ease-out);
-}
-
 /* ============================================
    INTERACTIVE COMPONENT ENHANCEMENTS
    ============================================ */
 
 /* Button Hover Enhancement */
-.btn-hover-lift {
-    transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
-}
-
-.btn-hover-lift:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.btn-hover-lift:active:not(:disabled) {
-    transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
 
 /* Card Hover Enhancement */
 .card-hover-scale {
@@ -184,19 +137,8 @@
 }
 
 /* Focus Ring for Form Fields */
-.focus-ring {
-    transition: box-shadow 150ms var(--ease-out), border-color 150ms var(--ease-out);
-}
-
-.focus-ring:focus {
-    box-shadow: 0 0 0 3px hsl(var(--primary-color) / 0.15);
-    border-color: hsl(var(--primary-color));
-}
 
 /* Switch Toggle Animation Enhancement */
-.switch-thumb-animate {
-    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
-}
 
 /* ============================================
    REDUCED MOTION SUPPORT

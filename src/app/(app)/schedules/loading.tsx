@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader } from '@/components/ui/shadcn/card';
 import { Skeleton } from '@/components/ui/shadcn/skeleton';
+import { TableRowsSkeleton } from '@/components/patterns';
 
 export default function SchedulesLoading() {
   return (
@@ -25,69 +25,36 @@ export default function SchedulesLoading() {
         <Skeleton className="h-4 w-40" />
       </div>
 
-      {/* Main Grid: Directory + Sidebar */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
+      {/* Directory (full width) */}
+      <div>
         {/* Directory Skeleton */}
-        <div className="xl:col-span-3 space-y-4">
-          {/* Search Toolbar */}
-          <div className="flex items-center justify-between gap-3">
-            <Skeleton className="h-8 w-64 rounded-md" />
-            <div className="flex gap-2">
-              <Skeleton className="h-7 w-16 rounded-lg" />
-              <Skeleton className="h-7 w-24 rounded-lg" />
+        <div className="space-y-4">
+          {/* Filter bar */}
+          <div className="space-y-2.5 rounded-lg border border-border bg-card p-2.5 shadow-sm">
+            <div className="flex gap-1.5">
+              <Skeleton className="h-7 w-14 rounded-full" />
+              <Skeleton className="h-7 w-28 rounded-full" />
             </div>
+            <Skeleton className="h-9 w-full max-w-md rounded-md" />
           </div>
 
-          {/* Directory Cards Grid */}
-          <div className="grid gap-3.5 sm:grid-cols-2">
-            {[1, 2, 3, 4].map(i => (
-              <Card key={i} className="overflow-hidden border-border/70">
-                <CardHeader className="border-b bg-muted/20 px-4 py-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <Skeleton className="h-8 w-8 rounded-lg" />
-                      <div className="space-y-1.5">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-20" />
-                      </div>
-                    </div>
-                    <Skeleton className="h-5 w-16 rounded-full" />
-                  </div>
-                </CardHeader>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Skeleton className="h-3.5 w-20" />
-                    <Skeleton className="h-6 w-24 rounded-full" />
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <Skeleton className="h-3.5 w-20" />
-                    <Skeleton className="h-5 w-24 rounded" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          {/* Directory: header row + dense table */}
+          <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <div className="space-y-1.5">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <Skeleton className="h-8 w-16 rounded-md" />
+            </div>
+            <TableRowsSkeleton
+              rows={6}
+              columns={5}
+              label="Loading schedules"
+              className="rounded-none border-0"
+            />
           </div>
         </div>
-
-        {/* Sidebar Skeleton */}
-        <aside className="space-y-4">
-          <Card className="border-border/70">
-            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
-              <Skeleton className="h-4 w-28" />
-            </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="flex gap-2.5 items-start">
-                  <Skeleton className="h-5 w-5 rounded-full shrink-0" />
-                  <div className="space-y-1 flex-1">
-                    <Skeleton className="h-3.5 w-24" />
-                    <Skeleton className="h-3 w-full" />
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </aside>
       </div>
     </main>
   );

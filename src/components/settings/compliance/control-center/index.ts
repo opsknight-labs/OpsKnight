@@ -14,6 +14,5 @@ export * from './ExportEvidencePackageModal';
 export * from './DriftStatusBadge';
 export * from './DriftKindBadge';
 export * from './MonitoringStatusCard';
-export * from './FrameworkLifecycleEvents';
 export * from './DriftDetailDrawer';
 export * from './DriftView';

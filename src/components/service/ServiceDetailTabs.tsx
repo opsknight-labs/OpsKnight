@@ -3,17 +3,6 @@
 import React, { type ReactNode } from 'react';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
 import { Flame, ShieldAlert, Zap, Bell, Settings, Workflow, Wrench } from 'lucide-react';
-
-export type ServiceDetailTab =
-  | 'automation'
-  | 'incidents'
-  | 'escalation'
-  | 'runbooks'
-  | 'integrations'
-  | 'notifications'
-  | 'maintenance'
-  | 'settings';
-
 export type ServiceDetailTabsProps = {
   defaultTab?: string;
   activeIncidentCount: number;
