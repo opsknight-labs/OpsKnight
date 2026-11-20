@@ -31,9 +31,7 @@ it('requires a preview, explains authority takeover, then applies the pinned rev
     target: { value: 'RESPONDER' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Preview role mapping' }));
-  expect(
-    await screen.findByText(/1 move from manual or OIDC roles to SCIM control/)
-  ).toBeInTheDocument();
+  expect(await screen.findByText(/1 move under SCIM group role control/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Apply role mapping' }));
   await waitFor(() =>
     expect(actions.saveScimRoleMappingAction).toHaveBeenCalledWith({

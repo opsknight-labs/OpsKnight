@@ -110,6 +110,71 @@ suite('SCIM group system roles through real provisioning and PostgreSQL', () => 
     await prisma.$disconnect();
   });
 
+  it('preserves upgraded legacy SCIM roles through routine unmapped PATCH, PUT and deletion', async () => {
+    for (const role of ['ADMIN', 'RESPONDER', 'AUDITOR'] as const) {
+      const id = await person();
+      await prisma.user.update({ where: { id }, data: { role, roleSource: 'SCIM' } });
+      const before = await account(id);
+      expect(before.scimRoleMappingAdopted).toBe(false);
+      const directory = await group([id]);
+      expect((await members(directory, [id])).status).toBe(200);
+      expect(
+        (
+          await call(
+            'Groups',
+            'PUT',
+            { displayName: 'Unmapped legacy group', members: [{ value: id }] },
+            directory
+          )
+        ).status
+      ).toBe(200);
+      expect((await call('Groups', 'DELETE', undefined, directory)).status).toBe(204);
+      expect(await account(id)).toMatchObject({
+        role,
+        roleSource: 'SCIM',
+        scimRoleMappingAdopted: false,
+        tokenVersion: before.tokenVersion,
+        mcpRevocationVersion: before.mcpRevocationVersion,
+      });
+      expect(
+        await prisma.scimEvent.count({ where: { resourceId: id, action: 'user.role.synced' } })
+      ).toBe(0);
+      // Historical SSO takeover is preserved until an administrator-approved mapping adopts it.
+      expect(
+        resolveSignInRole(
+          evaluateOidcRoleClaims({ groups: ['responders'] }, [
+            { claim: 'groups', value: 'responders', role: 'RESPONDER' },
+          ]),
+          await account(id)
+        )
+      ).toMatchObject({ role: 'RESPONDER', roleSource: 'OIDC', changed: true });
+    }
+  });
+
+  it('explicitly adopts a same-role legacy account and subsequently revokes only its mapped grant', async () => {
+    const id = await person();
+    await prisma.user.update({ where: { id }, data: { role: 'RESPONDER', roleSource: 'SCIM' } });
+    const directory = await group([id]);
+    const before = await account(id);
+    expect(
+      await previewScimRoleMappingAction({ connectorId, groupId: directory, role: 'RESPONDER' })
+    ).toMatchObject({ changedUsers: 1, adoptedUsers: 1 });
+    expect(await map(directory, 'RESPONDER')).toEqual({ changedUsers: 1 });
+    expect(await account(id)).toMatchObject({
+      role: 'RESPONDER',
+      roleSource: 'SCIM',
+      scimRoleMappingAdopted: true,
+      tokenVersion: before.tokenVersion + 1,
+      mcpRevocationVersion: before.mcpRevocationVersion,
+    });
+    expect((await members(directory, [])).status).toBe(200);
+    expect(await account(id)).toMatchObject({
+      role: 'USER',
+      roleSource: 'SCIM',
+      scimRoleMappingAdopted: true,
+    });
+  });
+
   it('requires explicit opt-in, previews authority takeover, and applies roles without sign-in', async () => {
     const id = await person();
     const groupId = await group([id]);
@@ -207,7 +272,26 @@ suite('SCIM group system roles through real provisioning and PostgreSQL', () => 
         )
       ).status
     ).toBe(400);
-    expect(await account(id)).toMatchObject({ role: 'USER', roleSource: 'MANUAL' });
+    expect(
+      (
+        await call(
+          'Users',
+          'PATCH',
+          { Operations: [{ op: 'replace', path: 'scimRoleMappingAdopted', value: true }] },
+          id
+        )
+      ).status
+    ).toBe(400);
+    const existing = await account(id);
+    expect(
+      (await call('Users', 'PUT', { userName: existing.email, scimRoleMappingAdopted: true }, id))
+        .status
+    ).toBe(200);
+    expect(await account(id)).toMatchObject({
+      role: 'USER',
+      roleSource: 'MANUAL',
+      scimRoleMappingAdopted: false,
+    });
   });
 
   it('rejects stale previews after membership, user authority or competing mapping changes', async () => {
@@ -269,7 +353,7 @@ suite('SCIM group system roles through real provisioning and PostgreSQL', () => 
   it.skipIf(process.env.SCIM_LOAD_TEST !== '1')(
     'maps 10,000 members with bounded batch writes and idempotent replay',
     async () => {
-      const prefix = `role-capacity-${crypto.randomUUID()}-`;
+      const prefix = `rolecap-${crypto.randomUUID().slice(0, 12)}-`;
       await prisma.$executeRaw`INSERT INTO "User" (id,email,name,role,status,"updatedAt")
       SELECT ${prefix} || i, ${prefix} || i || '@example.test', 'Role capacity', 'USER'::"Role", 'ACTIVE'::"UserStatus", CURRENT_TIMESTAMP
       FROM generate_series(1,10000) i`;
@@ -281,6 +365,27 @@ suite('SCIM group system roles through real provisioning and PostgreSQL', () => 
       await prisma.$executeRaw`INSERT INTO "ScimGroupMembership" ("groupId","userId")
       SELECT ${directory.id}, ${prefix} || i FROM generate_series(1,10000) i`;
       expect(await map(directory.id, 'RESPONDER')).toEqual({ changedUsers: 10000 });
+      const prefixGroups = `${prefix}groups-`;
+      await prisma.$executeRaw`INSERT INTO "ScimGroup" (id, "connectorId", name, "systemRole", "updatedAt")
+        SELECT ${prefixGroups} || g, ${connectorId}, 'Overlapping mapped auditors', 'AUDITOR'::"Role", CURRENT_TIMESTAMP
+        FROM generate_series(1,10) g`;
+      // Bound fixture insertion work per statement; keep production statement timeouts.
+      for (let first = 1; first <= 10; first += 10) {
+        await prisma.$executeRaw`INSERT INTO "ScimGroupMembership" ("groupId", "userId")
+          SELECT ${prefixGroups} || g, ${prefix} || u
+          FROM generate_series(${first}::integer, ${first + 9}::integer) g CROSS JOIN generate_series(1,10000) u`;
+      }
+      const { planScimRoles } = await import('@/lib/scim/lifecycle/roles');
+      const aggregated = await prisma.$transaction(
+        tx =>
+          planScimRoles(
+            tx,
+            connectorId,
+            Array.from({ length: 10000 }, (_, index) => `${prefix}${index + 1}`)
+          ),
+        { isolationLevel: 'RepeatableRead', timeout: 30000 }
+      );
+      expect(aggregated.changes).toEqual([]);
       expect(
         await prisma.user.count({
           where: {
@@ -298,7 +403,7 @@ suite('SCIM group system roles through real provisioning and PostgreSQL', () => 
         })
       ).toBe(10000);
     },
-    60000
+    120000
   );
 
   it('rolls back membership, mapping, role and events when the last active admin would be removed', async () => {
@@ -315,6 +420,28 @@ suite('SCIM group system roles through real provisioning and PostgreSQL', () => 
       data: { status: 'DISABLED' },
     });
     try {
+      // Rehearse an upgraded last administrator with no new role authority. Ordinary
+      // directory updates must succeed rather than demote it or fail the entire sync.
+      const legacyId = await person();
+      await prisma.user.update({
+        where: { id: legacyId },
+        data: { role: 'ADMIN', roleSource: 'SCIM' },
+      });
+      await prisma.user.update({ where: { id }, data: { status: 'DISABLED' } });
+      try {
+        const legacyGroup = await group([legacyId]);
+        expect((await members(legacyGroup, [legacyId])).status).toBe(200);
+        expect((await call('Groups', 'DELETE', undefined, legacyGroup)).status).toBe(204);
+        expect(await account(legacyId)).toMatchObject({
+          role: 'ADMIN',
+          roleSource: 'SCIM',
+          scimRoleMappingAdopted: false,
+          tokenVersion: 0,
+        });
+      } finally {
+        await prisma.user.update({ where: { id }, data: { status: 'ACTIVE' } });
+        await prisma.user.update({ where: { id: legacyId }, data: { role: 'USER' } });
+      }
       const before = await account(id);
       const events = await prisma.scimEvent.count({ where: { connectorId } });
       const response = await members(groupId, []);

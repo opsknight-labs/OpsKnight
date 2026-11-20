@@ -9,7 +9,11 @@ import { getControlActor, lockControlActor } from '@/lib/auth-control/actor';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { invalidateSessionSecurityProjections } from '@/lib/session-security-projection';
 import { adminFailure } from '@/lib/scim/security/admin-errors';
-import { planScimRoles, reconcileScimRoles } from '@/lib/scim/lifecycle/roles';
+import {
+  planScimRoles,
+  reconcileScimRoles,
+  summarizeScimRoleChanges,
+} from '@/lib/scim/lifecycle/roles';
 
 const selection = z
   .object({
@@ -61,10 +65,7 @@ async function preview(tx: Prisma.TransactionClient, input: Mapping) {
     currentRole: group.systemRole,
     role: input.role,
     members: group.memberships.length,
-    changedUsers: plan.changes.length,
-    adoptedUsers: plan.changes.filter(change => change.fromSource !== 'SCIM').length,
-    demotions: plan.changes.filter(change => change.from === 'ADMIN' && change.role !== 'ADMIN')
-      .length,
+    ...summarizeScimRoleChanges(plan.changes),
     revision: createHash('sha256').update(JSON.stringify({ group, input, plan })).digest('hex'),
   };
 }

@@ -40,6 +40,8 @@ verification:
     - src/lib/scim/protocol/validation.ts
     - src/lib/oidc/role-mapping.ts
     - src/lib/scim/lifecycle/roles.ts
+    - prisma/migrations/20261120000200_scim_role_mapping_provenance/migration.sql
+    - scripts/scim/certify-snapshot-upgrade.mjs
     - src/app/(app)/settings/system/scim-role-actions.ts
     - tests/integration/scim-group-roles.test.ts
     - src/lib/microsoft-teams/identity.ts
@@ -129,13 +131,12 @@ A role mapping supports up to 10,000 direct group members; split larger groups.
   Renaming a group keeps its mapping. Deleting and recreating a group requires a new mapping.
 - If several mapped groups match, precedence is **Admin → Responder → Auditor → User**.
   Removing a membership uses the remaining groups. Removing the last mapped membership,
-  deleting its group or selecting **No role mapping** returns an account whose role is
-  SCIM-managed to **User**, still under SCIM authority. Unmapped manual/OIDC accounts
-  retain their role.
+  deleting its group or selecting **No role mapping** returns an adopted role still
+  under SCIM authority to **User**. Roles currently owned by manual administration or
+  OIDC are retained when no mapped group matches, including previously adopted accounts.
 - Applying a mapping explicitly gives SCIM authority over the group's members, including
-  existing manual/OIDC roles and future members. OIDC sign-in cannot overwrite SCIM
-  roles, including on first link. Manual role edits can be reasserted by the next group
-  sync; manage these roles in Entra. To return an account to local/OIDC control, first
+  existing manual/OIDC roles and future members. OIDC sign-in cannot overwrite an adopted
+  role, including on first link. Manual role edits can be reasserted by the next group sync; manage these roles in Entra. To return an account to local/OIDC control, first
   remove its mapped memberships or mappings, then assign the local role or choose
   **Let role rules manage this role** in the authentication workspace.
 - OIDC still controls authentication and sign-in admission. SCIM role mappings do not
@@ -147,8 +148,24 @@ A role mapping supports up to 10,000 direct group members; split larger groups.
   back. Assign another administrator, then retry provisioning. The same protection
   applies when changing or removing a mapping in the UI.
 - Disabling an account blocks access. Deleting a SCIM user also clears group intent and
-  returns SCIM-managed roles to User; rehire requires approved restoration and fresh
+  returns mapping-adopted SCIM roles to User; rehire requires approved restoration and fresh
   group synchronization. Keep a separate administrator/recovery account for rollout.
+
+### Backward compatibility on upgrade
+
+The additive migrations create **no mappings**, change **no existing roles** and mark
+all accounts as **not yet adopted**. Historical `roleSource = SCIM` does not opt an
+account into group role management. Routine synchronization, removal or deletion of an
+unmapped group preserves these legacy roles, including the only active administrator.
+Legacy SCIM roles retain their previous OIDC behavior: a matching OIDC rule can take
+control, while unmatched or incomplete claims preserve the existing SCIM role.
+
+Only a matching, administrator-approved group role mapping records explicit adoption.
+This is recorded even when the mapped role equals the account's existing SCIM role;
+the preview counts the adoption and its sessions are revoked once. After adoption,
+removing the last mapped membership returns the SCIM-managed account to User. An
+account never adopted by a mapping is never demoted merely because no mapping matches.
+Deploy both migrations and all replicas before enabling mappings.
 
 ### Verify the Entra rollout
 

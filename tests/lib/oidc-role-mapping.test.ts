@@ -142,9 +142,13 @@ describe('resolving the role a person ends up with', () => {
     });
   });
 
-  it('preserves SCIM authority for matching, unmatched and first-link sign-ins', () => {
+  it('preserves adopted SCIM authority for matching, unmatched and first-link sign-ins', () => {
     expect(
-      resolveSignInRole(matched, { role: 'USER', roleSource: 'SCIM' }, { firstLink: true })
+      resolveSignInRole(
+        matched,
+        { role: 'USER', roleSource: 'SCIM', scimRoleMappingAdopted: true },
+        { firstLink: true }
+      )
     ).toEqual({
       role: 'USER',
       roleSource: 'SCIM',
@@ -161,6 +165,31 @@ describe('resolving the role a person ends up with', () => {
       roleSource: 'SCIM',
       changed: false,
     });
+  });
+
+  it('retains legacy matching-rule takeover until a SCIM group mapping adopts the account', () => {
+    for (const scimRoleMappingAdopted of [undefined, false]) {
+      const legacy = {
+        role: 'RESPONDER' as const,
+        roleSource: 'SCIM' as const,
+        scimRoleMappingAdopted,
+      };
+      expect(resolveSignInRole(matched, legacy)).toEqual({
+        role: 'ADMIN',
+        roleSource: 'OIDC',
+        changed: true,
+      });
+      expect(resolveSignInRole(unmatched, legacy)).toEqual({
+        role: 'RESPONDER',
+        roleSource: 'SCIM',
+        changed: false,
+      });
+      expect(resolveSignInRole(incomplete, legacy, { firstLink: true })).toEqual({
+        role: 'RESPONDER',
+        roleSource: 'SCIM',
+        changed: false,
+      });
+    }
   });
 
   it('fails safe when claims are incomplete: lowers only an elevated SSO role', () => {

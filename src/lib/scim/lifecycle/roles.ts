@@ -6,16 +6,17 @@ import { bulkUpdateUserSecurityState } from '@/lib/users/admin-invariants';
 
 // A fixed, visible precedence keeps overlapping group memberships deterministic.
 const precedence: readonly Role[] = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'];
-export function resolveScimRole(
-  roles: readonly Role[],
-  current: { role: Role; roleSource: RoleSource }
-): { role: Role; roleSource: RoleSource } {
+type RoleState = { role: Role; roleSource: RoleSource; scimRoleMappingAdopted: boolean };
+export function resolveScimRole(roles: readonly Role[], current: RoleState): RoleState {
   const role = precedence.find(candidate => roles.includes(candidate));
-  if (role) return { role, roleSource: 'SCIM' };
-  return current.roleSource === 'SCIM' ? { role: 'USER', roleSource: 'SCIM' } : current;
+  if (role) return { role, roleSource: 'SCIM', scimRoleMappingAdopted: true };
+  // Historical SCIM provenance alone grants no authority to the new mapping feature.
+  return current.roleSource === 'SCIM' && current.scimRoleMappingAdopted
+    ? { role: 'USER', roleSource: 'SCIM', scimRoleMappingAdopted: true }
+    : current;
 }
 
-/** Read all contributing groups in the identity's own connection, including competing rules. */
+/** Read every contributing group in the identity's own connection. */
 export async function planScimRoles(
   tx: Prisma.TransactionClient,
   connectorId: string,
@@ -23,43 +24,78 @@ export async function planScimRoles(
   override?: { groupId: string; role: Role | null }
 ) {
   if (!userIds.length) return { changes: [], revision: '' };
-  const identities = await tx.scimIdentity.findMany({
-    where: { connectorId, userId: { in: [...new Set(userIds)] } },
-    select: { user: { select: { id: true, role: true, roleSource: true, tokenVersion: true } } },
-    orderBy: { userId: 'asc' },
-  });
-  const memberships = await tx.scimGroupMembership.findMany({
-    where: {
-      userId: { in: identities.map(identity => identity.user.id) },
-      group: {
-        connectorId,
-        OR: [{ systemRole: { not: null } }, ...(override ? [{ id: override.groupId }] : [])],
-      },
-    },
-    select: { userId: true, group: { select: { id: true, systemRole: true } } },
-    orderBy: [{ userId: 'asc' }, { groupId: 'asc' }],
-  });
-  const grants = new Map<string, Role[]>();
-  for (const membership of memberships) {
-    const roles = grants.get(membership.userId) ?? [];
-    const role =
-      membership.group.id === override?.groupId ? override.role : membership.group.systemRole;
-    if (role) roles.push(role);
-    grants.set(membership.userId, roles);
-  }
+  const users = await tx.$queryRaw<(RoleState & { id: string; tokenVersion: number })[]>`
+    SELECT u.id, u.role::text AS role, u."roleSource"::text AS "roleSource",
+      u."tokenVersion", u."scimRoleMappingAdopted"
+    FROM "ScimIdentity" i JOIN "User" u ON u.id = i."userId"
+    WHERE i."connectorId" = ${connectorId}
+      AND i."userId" IN (SELECT jsonb_array_elements_text(${JSON.stringify([...new Set(userIds)])}::jsonb))
+    ORDER BY i."userId"`;
+  const identities = users.map(user => ({ user }));
+  // Collapse overlapping groups in PostgreSQL: return at most one row and four
+  // distinct roles per user, rather than groups × members in application memory.
+  const contributions = identities.length
+    ? await tx.$queryRaw<
+        {
+          userId: string;
+          roles: Role[];
+          revision: string;
+        }[]
+      >`
+    WITH selected_users AS MATERIALIZED (
+      SELECT jsonb_array_elements_text(${JSON.stringify(identities.map(identity => identity.user.id))}::jsonb) AS "userId"
+    ), selected_memberships AS MATERIALIZED (
+      SELECT m."userId", m."groupId" FROM "ScimGroupMembership" m
+      WHERE m."userId" IN (SELECT "userId" FROM selected_users)
+    ), grants AS (
+      SELECT m."userId", g.id AS "groupId", g."systemRole"::text AS "storedRole",
+        (CASE WHEN g.id = ${override?.groupId ?? null}
+          THEN ${override?.role ?? null}::"Role" ELSE g."systemRole" END)::text AS "effectiveRole"
+      FROM selected_memberships m JOIN "ScimGroup" g ON g.id = m."groupId"
+      WHERE g."connectorId" = ${connectorId}
+        AND (g."systemRole" IS NOT NULL OR g.id = ${override?.groupId ?? null})
+    )
+    SELECT "userId", coalesce(
+      array_agg(DISTINCT "effectiveRole" ORDER BY "effectiveRole") FILTER (WHERE "effectiveRole" IS NOT NULL),
+      ARRAY[]::text[]) AS roles,
+      encode(sha256(convert_to(string_agg("groupId" || ':' || coalesce("storedRole", ''), ',' ORDER BY "groupId"), 'UTF8')), 'hex') AS revision
+    FROM grants GROUP BY "userId" ORDER BY "userId"`
+    : [];
+  const grants = new Map(contributions.map(row => [row.userId, row.roles]));
   const changes = identities.flatMap(({ user }) => {
     const next = resolveScimRole(grants.get(user.id) ?? [], user);
-    return next.role === user.role && next.roleSource === user.roleSource
+    return next.role === user.role &&
+      next.roleSource === user.roleSource &&
+      next.scimRoleMappingAdopted === user.scimRoleMappingAdopted
       ? []
-      : [{ userId: user.id, from: user.role, fromSource: user.roleSource, ...next }];
+      : [
+          {
+            userId: user.id,
+            from: user.role,
+            fromSource: user.roleSource,
+            fromAdopted: user.scimRoleMappingAdopted,
+            ...next,
+          },
+        ];
   });
   const revision = createHash('sha256')
-    .update(JSON.stringify({ identities, memberships, override }))
+    .update(JSON.stringify({ identities, contributions, override }))
     .digest('hex');
   return { changes, revision };
 }
 
-/** Commit roles, session revocation and audit in the caller's serializable transaction. */
+export function summarizeScimRoleChanges(
+  changes: Awaited<ReturnType<typeof planScimRoles>>['changes']
+) {
+  return {
+    changedUsers: changes.length,
+    adoptedUsers: changes.filter(change => !change.fromAdopted || change.fromSource !== 'SCIM')
+      .length,
+    demotions: changes.filter(change => change.from === 'ADMIN' && change.role !== 'ADMIN').length,
+  };
+}
+
+/** Commit roles, adoption, session revocation and audit in one serializable transaction. */
 export async function reconcileScimRoles(
   tx: Prisma.TransactionClient,
   connectorId: string,
@@ -68,15 +104,15 @@ export async function reconcileScimRoles(
   actorId?: string
 ) {
   const { changes } = await planScimRoles(tx, connectorId, userIds);
-  // Four bounded writes, with promotions first for administrator handover. Reuse the
-  // shared last-admin/MCP invariant, and invalidate projections only after commit.
+  // Promotions first permit a safe administrator handover. Reuse shared last-admin
+  // and MCP protection; callers invalidate projections only after commit.
   for (const role of precedence) {
     const ids = changes.filter(change => change.role === role).map(change => change.userId);
     if (!ids.length) continue;
     await bulkUpdateUserSecurityState(
       ids,
       { role, roleSource: 'SCIM', tokenVersion: { increment: 1 } },
-      {},
+      { scimRoleMappingAdopted: true },
       undefined,
       tx
     );
@@ -93,6 +129,8 @@ export async function reconcileScimRoles(
           fromSource: change.fromSource,
           role: change.role,
           roleSource: change.roleSource,
+          fromAdopted: change.fromAdopted,
+          scimRoleMappingAdopted: true,
           ...(actorId ? { actorId } : {}),
         },
       })),

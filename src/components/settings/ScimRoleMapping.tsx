@@ -126,8 +126,7 @@ export default function ScimRoleMapping({
         <div className="rounded-md border p-3 space-y-3">
           <p role="status" className="text-sm">
             {impact.members} group members; {impact.changedUsers} accounts change;{' '}
-            {impact.adoptedUsers} move from manual or OIDC roles to SCIM control; {impact.demotions}{' '}
-            lose Admin.
+            {impact.adoptedUsers} move under SCIM group role control; {impact.demotions} lose Admin.
           </p>
           <p className="text-sm text-muted-foreground">
             SCIM will control mapped members’ roles, including future additions. OIDC cannot

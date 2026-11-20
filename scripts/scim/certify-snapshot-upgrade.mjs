@@ -59,6 +59,9 @@ try {
     `${ddl}
 INSERT INTO "User" (id,name,email,role,"roleSource",status,"scimExternalId","updatedAt")
 SELECT 'snapshot-user-'||i, 'Directory '||i, 'snapshot-'||i||'@example.test', 'USER', 'SCIM', 'ACTIVE', 'snapshot-object-'||i, CURRENT_TIMESTAMP FROM generate_series(1,100000) i;
+UPDATE "User" SET role='RESPONDER' WHERE id='snapshot-user-10001';
+UPDATE "User" SET role='AUDITOR' WHERE id='snapshot-user-10002';
+UPDATE "User" SET role='ADMIN' WHERE id='snapshot-user-10003';
 INSERT INTO "User" (id,name,email,role,"roleSource",status,"updatedAt") VALUES ('snapshot-owner','Manual owner','owner@snapshot.example.test','ADMIN','MANUAL','ACTIVE',CURRENT_TIMESTAMP);
 INSERT INTO "OidcIdentity" (id,issuer,subject,"userId","updatedAt") SELECT 'snapshot-oidc-'||i,'https://trusted.example.test','subject-'||i,'snapshot-user-'||i,CURRENT_TIMESTAMP FROM generate_series(1,10000) i;
 INSERT INTO "Team" (id,name,"scimExternalId","updatedAt") SELECT 'snapshot-team-'||i,'Directory team '||i,'snapshot-group-'||i,CURRENT_TIMESTAMP FROM generate_series(1,10000) i;
@@ -79,6 +82,8 @@ INSERT INTO "SystemConfig" (key,value,"updatedAt") VALUES ('scim_configuration',
     '20261022100000_scim_grant_revocation_policy',
     '20261022150000_scim_case_insensitive_lookup',
     '20261023010000_user_canonical_email_reservation',
+    '20261120000100_scim_group_system_roles',
+    '20261120000200_scim_role_mapping_provenance',
   ]
     // Snapshot invariants share an outer transaction; deploy certification uses
     // the original migration, including its explicit transaction boundaries.
@@ -92,6 +97,9 @@ INSERT INTO "SystemConfig" (key,value,"updatedAt") VALUES ('scim_configuration',
     restoredDb,
     `BEGIN; ${migrations}
 DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM "User" WHERE "scimRoleMappingAdopted") THEN RAISE EXCEPTION 'Snapshot upgrade silently adopted roles'; END IF;
+ IF EXISTS (SELECT 1 FROM "ScimGroup" WHERE "systemRole" IS NOT NULL) THEN RAISE EXCEPTION 'Snapshot upgrade created role mappings'; END IF;
+ IF (SELECT count(*) FROM "User" WHERE "roleSource"='SCIM' AND ((id='snapshot-user-10001' AND role='RESPONDER') OR (id='snapshot-user-10002' AND role='AUDITOR') OR (id='snapshot-user-10003' AND role='ADMIN'))) <> 3 THEN RAISE EXCEPTION 'Legacy snapshot roles changed'; END IF;
  IF (SELECT sum("holders") FROM "UserEmailReservation") <> (SELECT count(*) FROM "User") THEN RAISE EXCEPTION 'Canonical reservation snapshot mismatch'; END IF;
  IF (SELECT count(*) FROM "ScimIdentity") <> 100000 THEN RAISE EXCEPTION 'Identity snapshot lost'; END IF;
  IF (SELECT count(*) FROM "ScimGroup") <> 10000 THEN RAISE EXCEPTION 'Group snapshot lost'; END IF;

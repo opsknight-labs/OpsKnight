@@ -492,6 +492,8 @@ model UserEmailReservation {
 }
 
 model User {
+  // True only after an approved group role mapping has adopted this account.
+  scimRoleMappingAdopted Boolean @default(false)
   scimGivenName String?
   scimFamilyName String?
   scimIdentities ScimIdentity[]

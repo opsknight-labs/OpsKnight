@@ -84,8 +84,9 @@ people directory and the console show which.
 - A role you set by hand stays as you set it. Single sign-on never changes it.
 - New accounts created by single sign-on get their role from the rules.
 - An existing account moves under SSO control on its **first** SSO sign-in if a rule matches.
-- A role from SCIM stays under SCIM control; OIDC rules never overwrite it, even on first
-  SSO link. Use [SCIM group role mappings](./configure-scim/#assign-system-roles-from-microsoft-entra-groups)
+- A role explicitly adopted by a SCIM group role mapping stays under SCIM control; OIDC
+  rules never overwrite it, even on first SSO link. Legacy SCIM roles retain their previous
+  matching-rule takeover behavior until a group role mapping adopts the account. Use [SCIM group role mappings](./configure-scim/#assign-system-roles-from-microsoft-entra-groups)
   to manage roles at provisioning time without a sign-in.
 - To hand a role back to the rules, open the account's menu in **2 · Who can sign in** and
   choose **Let role rules manage this role**. It applies at their next SSO sign-in.
