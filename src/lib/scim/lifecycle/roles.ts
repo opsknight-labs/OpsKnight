@@ -24,12 +24,16 @@ export async function planScimRoles(
   override?: { groupId: string; role: Role | null }
 ) {
   if (!userIds.length) return { changes: [], revision: '' };
+  // unnest() of a text[] gives PostgreSQL the selection's real size; a jsonb set is
+  // estimated at 100 rows and, right after bulk provisioning (stale statistics), took
+  // 6-8 s for 10,000 ids and expired the 10 s serializable save transaction.
   const users = await tx.$queryRaw<(RoleState & { id: string; tokenVersion: number })[]>`
     SELECT u.id, u.role::text AS role, u."roleSource"::text AS "roleSource",
       u."tokenVersion", u."scimRoleMappingAdopted"
-    FROM "ScimIdentity" i JOIN "User" u ON u.id = i."userId"
+    FROM unnest(${[...new Set(userIds)]}::text[]) AS selected("userId")
+    JOIN "ScimIdentity" i ON i."userId" = selected."userId"
+    JOIN "User" u ON u.id = i."userId"
     WHERE i."connectorId" = ${connectorId}
-      AND i."userId" IN (SELECT jsonb_array_elements_text(${JSON.stringify([...new Set(userIds)])}::jsonb))
     ORDER BY i."userId"`;
   const identities = users.map(user => ({ user }));
   // Collapse overlapping groups in PostgreSQL: return at most one row and four
@@ -43,7 +47,7 @@ export async function planScimRoles(
         }[]
       >`
     WITH selected_users AS MATERIALIZED (
-      SELECT jsonb_array_elements_text(${JSON.stringify(identities.map(identity => identity.user.id))}::jsonb) AS "userId"
+      SELECT "userId" FROM unnest(${identities.map(identity => identity.user.id)}::text[]) AS selected("userId")
     ), selected_memberships AS MATERIALIZED (
       SELECT m."userId", m."groupId" FROM "ScimGroupMembership" m
       WHERE m."userId" IN (SELECT "userId" FROM selected_users)
