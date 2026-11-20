@@ -9,7 +9,22 @@ import {
 import { analyticsReportWeekStart } from '@/lib/analytics/weekly-report';
 import { decrypt } from '@/lib/encryption';
 import { POST as oneClickUnsubscribe } from '@/app/api/analytics/digest/unsubscribe/[token]/route';
-import { createTestTeam, createTestUser, resetDatabase, testPrisma } from '../helpers/test-db';
+import {
+  createTestNotificationProvider,
+  createTestTeam,
+  createTestUser,
+  resetDatabase,
+  testPrisma,
+} from '../helpers/test-db';
+
+const configureEmail = () =>
+  createTestNotificationProvider('smtp', {
+    host: '127.0.0.1',
+    port: 2525,
+    user: 'digest-local',
+    password: 'digest-local-only',
+    fromEmail: 'digest@example.com',
+  });
 
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -26,7 +41,8 @@ describeIfRealDB('default weekly analytics digest', { timeout: 60_000 }, () => {
   });
 
   /** Payments team with incidents last calendar week; users with different access. */
-  async function seed() {
+  async function seed({ email = true }: { email?: boolean } = {}) {
+    if (email) await configureEmail();
     const now = new Date();
     const lastMonday = analyticsReportWeekStart(now).getTime() - 7 * DAY;
     const team = await createTestTeam('payments');
@@ -77,6 +93,10 @@ describeIfRealDB('default weekly analytics digest', { timeout: 60_000 }, () => {
     const [{ payload }] = emails;
     expect(payload.subject).toBe('Your weekly summary · 2 incidents last week');
     expect(payload.html).toContain('Weekly summary');
+    // The email says it is on by default and how to opt out.
+    expect(payload.html).toContain('on by default for everyone with analytics');
+    expect(payload.html).toContain('Weekly analytics summary');
+    expect(payload.html).toContain('/settings/profile');
     expect(payload.html).toContain('payments-api');
     expect(payload.html).not.toContain('hidden-svc');
     expect(payload.listUnsubscribeUrl).toMatch(/\/api\/analytics\/digest\/unsubscribe\/[A-Za-z0-9_-]{16,}$/);
@@ -88,6 +108,17 @@ describeIfRealDB('default weekly analytics digest', { timeout: 60_000 }, () => {
     // Same week again: nothing new.
     expect(await sendWeeklyDigests(now)).toMatchObject({ sent: 0 });
     expect(await sent()).toHaveLength(1);
+  });
+
+  it('waits for an email provider, then sends without anyone having enabled alert emails', async () => {
+    const { now, member } = await seed({ email: false });
+    expect(await sendWeeklyDigests(now)).toMatchObject({ sent: 0, noEmailProvider: true });
+    expect(await testPrisma.analyticsDigestSubscription.count({ where: { lastSentAt: { not: null } } })).toBe(0);
+
+    await configureEmail();
+    expect(await sendWeeklyDigests(now)).toMatchObject({ sent: 1 });
+    const user = await testPrisma.user.findUniqueOrThrow({ where: { id: member.id } });
+    expect(user.emailNotificationsEnabled).toBe(false);
   });
 
   it('sends nothing when an admin turns it off for the workspace', async () => {

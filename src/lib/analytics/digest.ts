@@ -6,6 +6,7 @@ import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
+import { getAllConfiguredEmailProviders } from '@/lib/notification-providers';
 import prisma from '@/lib/prisma';
 import { analyticsReportWeekStart, composeWeeklyEmail } from './weekly-report';
 
@@ -20,6 +21,11 @@ export const DIGEST_CONFIG_KEY = 'analytics_weekly_digest';
 const TOKEN_BYTES = 24;
 
 const newToken = () => randomBytes(TOKEN_BYTES).toString('base64url');
+
+/** Sending needs at least one enabled, configured email provider (Resend, SendGrid, SES, SMTP). */
+export async function hasConfiguredEmailProvider(): Promise<boolean> {
+  return (await getAllConfiguredEmailProviders()).length > 0;
+}
 
 /** Workspace switch; on unless an admin turned it off. */
 export async function isWeeklyDigestEnabled(): Promise<boolean> {
@@ -70,8 +76,10 @@ export async function unsubscribeWeeklyDigestByToken(token: string): Promise<boo
  * The notification event key is per user and week, so a retry never double-sends.
  */
 export async function sendWeeklyDigests(now = new Date(), limit = 25) {
-  const result = { sent: 0, skipped: 0, failed: 0, disabled: false };
+  const result = { sent: 0, skipped: 0, failed: 0, disabled: false, noEmailProvider: false };
   if (!(await isWeeklyDigestEnabled())) return { ...result, disabled: true };
+  // Nothing is marked as sent, so users get the summary once an admin configures email.
+  if (!(await hasConfiguredEmailProvider())) return { ...result, noEmailProvider: true };
 
   const weekStart = analyticsReportWeekStart(now);
   const weekKey = weekStart.toISOString().slice(0, 10);

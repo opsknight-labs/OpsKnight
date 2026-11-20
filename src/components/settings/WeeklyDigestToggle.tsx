@@ -15,11 +15,14 @@ export default function WeeklyDigestToggle({
   scope,
   enabled,
   workspaceEnabled = true,
+  emailReady = true,
 }: {
   scope: 'me' | 'workspace';
   enabled: boolean;
   /** For scope="me": when an admin turned it off, the user's switch can't send anything. */
   workspaceEnabled?: boolean;
+  /** False when no email provider is configured: nothing can be sent yet. */
+  emailReady?: boolean;
 }) {
   const [checked, setChecked] = useState(enabled);
   const [isPending, startTransition] = useTransition();
@@ -52,7 +55,11 @@ export default function WeeklyDigestToggle({
         description={
           me && !workspaceEnabled
             ? 'Turned off for this workspace by an administrator.'
-            : 'Separate from incident alert emails. Saved weekly views are managed on the Analytics page.'
+            : !emailReady
+              ? me
+                ? 'No email provider is set up yet, so nothing is sent until an administrator configures one.'
+                : 'No email provider is configured yet. Summaries start once one is set up above.'
+              : 'On by default. Separate from incident alert emails; saved weekly views are managed on the Analytics page.'
         }
       >
         <Switch

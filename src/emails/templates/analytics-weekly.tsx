@@ -390,18 +390,25 @@ export function AnalyticsWeeklyEmail({
 
         <Button href={viewUrl}>Open full report</Button>
         <LinkFallback href={viewUrl} />
+        {digest ? (
+          <Callout tone="neutral" surface="muted" title="About this email">
+            You get this weekly summary because it is on by default for everyone with analytics
+            access. It is separate from incident alert emails. To stop it, turn off{' '}
+            <Strong>Weekly analytics summary</Strong> in{' '}
+            {manageUrl ? (
+              <TextLink href={manageUrl}>Profile → Notifications</TextLink>
+            ) : (
+              'Profile → Notifications'
+            )}
+            , or use Unsubscribe in your mail app.
+          </Callout>
+        ) : null}
         <Paragraph muted small>
           Off-hours counts incidents that reached each responder in their evening or overnight
-          (their own timezone).{' '}
-          {digest ? (
-            <>
-              To stop this summary, turn off Weekly analytics summary in{' '}
-              {manageUrl ? <TextLink href={manageUrl}>your notification settings</TextLink> : 'your notification settings'}, or
-              use your mail app&apos;s Unsubscribe.
-            </>
-          ) : (
-            'To stop this email, open the view and turn off Weekly email in the Views menu.'
-          )}
+          (their own timezone).
+          {digest
+            ? null
+            : ' To stop this email, open the view and turn off Weekly email in the Views menu.'}
         </Paragraph>
       </Content>
     </EmailLayout>

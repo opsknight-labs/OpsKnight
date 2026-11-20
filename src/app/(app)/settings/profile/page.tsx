@@ -6,7 +6,7 @@ import { userIdentityStatus } from '@/lib/users/identity-status';
 import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
 import WeeklyDigestToggle from '@/components/settings/WeeklyDigestToggle';
-import { isWeeklyDigestEnabled } from '@/lib/analytics/digest';
+import { hasConfiguredEmailProvider, isWeeklyDigestEnabled } from '@/lib/analytics/digest';
 import QuietHoursForm from '@/components/settings/QuietHoursForm';
 import ProfileDetailTabs from '@/components/settings/ProfileDetailTabs';
 import ProfileHeroBanner from '@/components/settings/ProfileHeroBanner';
@@ -250,6 +250,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
               scope="me"
               enabled={!user?.analyticsDigest?.optedOut}
               workspaceEnabled={await isWeeklyDigestEnabled()}
+              emailReady={await hasConfiguredEmailProvider()}
             />
           </>
         }
