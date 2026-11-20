@@ -129,7 +129,12 @@ test('UI and REST invitations share real onboarding and never redisclose a store
     await client.locator('form button[type="submit"]').click();
     await expect(client).not.toHaveURL(/\/login/);
     await page.goto(`/users?q=${encodeURIComponent(apiEmail)}`);
-    await expect(page.getByText('ACTIVE', { exact: true }).filter({ visible: true }).first()).toBeVisible();
+    await expect(
+      page
+        .getByRole('row')
+        .filter({ hasText: apiEmail })
+        .getByRole('cell', { name: 'Active', exact: true })
+    ).toBeVisible();
     expect(
       await db.auditLog.count({
         where: { action: 'user.invited', entityId: { in: [uiUser.id, created.userId] } },
