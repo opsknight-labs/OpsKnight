@@ -97,6 +97,7 @@ export function ControlsView({
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3.5 rounded-lg border bg-card">
         <div className="relative flex-1">
           <Input
+            aria-label="Search controls"
             placeholder="Search by ID, title, description, or category..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}

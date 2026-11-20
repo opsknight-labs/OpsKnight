@@ -563,7 +563,7 @@ export default function NotificationHistory() {
                 setOffset(0);
               }}
             >
-              <SelectTrigger className="h-8 text-xs bg-background">
+              <SelectTrigger aria-label="Filter by channel" className="h-8 text-xs bg-background">
                 <SelectValue placeholder="All Channels" />
               </SelectTrigger>
               <SelectContent>
@@ -586,7 +586,7 @@ export default function NotificationHistory() {
                 setOffset(0);
               }}
             >
-              <SelectTrigger className="h-8 text-xs bg-background">
+              <SelectTrigger aria-label="Filter by status" className="h-8 text-xs bg-background">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>

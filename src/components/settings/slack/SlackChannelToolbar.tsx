@@ -95,6 +95,7 @@ export function SlackChannelToolbar({
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
           <Input
+            aria-label="Search channels"
             type="text"
             placeholder="Search channels..."
             value={searchQuery}

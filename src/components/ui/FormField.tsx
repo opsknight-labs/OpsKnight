@@ -138,11 +138,17 @@ export default function FormField(props: FormFieldProps) {
         >
           {label}
           {required && (
-            <span style={{ color: 'var(--color-error)', marginLeft: 'var(--spacing-1)' }}>*</span>
+            <span
+              aria-hidden="true"
+              style={{ color: 'var(--color-error)', marginLeft: 'var(--spacing-1)' }}
+            >
+              *
+            </span>
           )}
         </label>
         <textarea
           id={id}
+          required={required}
           rows={props.rows || 4}
           placeholder={props.placeholder}
           value={props.value}
@@ -190,7 +196,7 @@ export default function FormField(props: FormFieldProps) {
               gap: 'var(--spacing-1)',
             }}
           >
-            <span>⚠️</span>
+            <span aria-hidden="true">⚠️</span>
             <span>{error}</span>
           </div>
         )}

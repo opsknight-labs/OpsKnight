@@ -330,7 +330,10 @@ export default function MicrosoftTeamsSetupWizard({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="mt-clientId" className="text-xs font-semibold">
-                    Application (Client) ID <span className="text-destructive">*</span>
+                    Application (Client) ID{' '}
+                    <span className="text-destructive" aria-hidden="true">
+                      *
+                    </span>
                   </Label>
                   {clientIdInput && !GUID_REGEX.test(clientIdInput.trim()) && (
                     <span className="text-2xs text-amber-600 flex items-center gap-1 dark:text-amber-400">
@@ -353,7 +356,10 @@ export default function MicrosoftTeamsSetupWizard({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="mt-tenantId" className="text-xs font-semibold">
-                    Directory (Tenant) ID <span className="text-destructive">*</span>
+                    Directory (Tenant) ID{' '}
+                    <span className="text-destructive" aria-hidden="true">
+                      *
+                    </span>
                   </Label>
                   {tenantIdInput && !GUID_REGEX.test(tenantIdInput.trim()) && (
                     <span className="text-2xs text-amber-600 flex items-center gap-1 dark:text-amber-400">
@@ -380,7 +386,9 @@ export default function MicrosoftTeamsSetupWizard({
                     {config?.clientId ? (
                       '(Optional update)'
                     ) : (
-                      <span className="text-destructive">*</span>
+                      <span className="text-destructive" aria-hidden="true">
+                        *
+                      </span>
                     )}
                   </Label>
                   <span className="text-2xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">

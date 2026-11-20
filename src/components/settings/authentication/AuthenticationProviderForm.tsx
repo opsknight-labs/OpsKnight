@@ -110,7 +110,7 @@ export default function AuthenticationProviderForm() {
           <span className="font-semibold text-foreground text-xs uppercase tracking-wider flex items-center gap-1.5">
             {label}
             {required && (
-              <span className="text-destructive font-bold text-xs" title="Required field">
+              <span className="text-destructive font-bold text-xs" aria-hidden="true">
                 *
               </span>
             )}
@@ -135,6 +135,7 @@ export default function AuthenticationProviderForm() {
             autoComplete={isSecret ? 'new-password' : 'off'}
             disabled={pending}
             aria-invalid={Boolean(error)}
+            aria-required={required || undefined}
             aria-describedby={`auth-help-${key}`}
             placeholder={
               isSecret && hasSavedSecret ? '•••••••••••••••• (Leave blank to retain)' : undefined
@@ -265,7 +266,9 @@ export default function AuthenticationProviderForm() {
               <label className="block space-y-1.5 text-sm">
                 <span className="font-semibold text-foreground text-xs uppercase tracking-wider flex items-center gap-1">
                   Directory (tenant) ID
-                  <span className="text-destructive font-bold">*</span>
+                  <span className="text-destructive font-bold" aria-hidden="true">
+                    *
+                  </span>
                 </span>
                 <input
                   id="auth-field-issuer"
@@ -282,6 +285,7 @@ export default function AuthenticationProviderForm() {
                     )
                   }
                   aria-describedby="entra-tenant-help"
+                  aria-required="true"
                   aria-invalid={Boolean(fieldErrors.issuer)}
                 />
                 <span

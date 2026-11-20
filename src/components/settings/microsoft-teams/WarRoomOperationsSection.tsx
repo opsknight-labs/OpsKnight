@@ -210,6 +210,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
         {/* Search Bar */}
         <div className="relative w-full sm:w-64">
           <Input
+            aria-label="Search incident or room"
             placeholder="Search incident or room…"
             value={searchQuery}
             onChange={e => {

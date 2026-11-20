@@ -95,6 +95,7 @@ export function DriftView({
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <input
+              aria-label="Search drift"
               type="text"
               placeholder="Search control ID or summary..."
               value={searchQuery}
@@ -106,6 +107,7 @@ export function DriftView({
           <div className="flex items-center gap-1.5 text-xs">
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             <select
+              aria-label="Filter by status"
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as ComplianceDriftStatus | 'ALL')}
               className="py-1.5 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-none"
@@ -117,6 +119,7 @@ export function DriftView({
             </select>
 
             <select
+              aria-label="Filter by drift kind"
               value={kindFilter}
               onChange={e => setKindFilter(e.target.value)}
               className="py-1.5 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-none"

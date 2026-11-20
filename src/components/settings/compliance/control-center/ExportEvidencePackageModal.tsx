@@ -283,6 +283,7 @@ export function ExportEvidencePackageModal({
             <div className="space-y-2 p-3 rounded-lg border bg-card">
               <Label className="text-xs font-semibold">Select Compliance Framework</Label>
               <select
+                aria-label="Compliance framework"
                 value={selectedFramework}
                 onChange={e => setSelectedFramework(e.target.value as ComplianceFramework)}
                 className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
@@ -381,6 +382,7 @@ export function ExportEvidencePackageModal({
               <div className="space-y-1">
                 <Label className="text-xs">From (Observed At)</Label>
                 <input
+                  aria-label="From (observed at)"
                   type="datetime-local"
                   value={fromDate}
                   onChange={e => setFromDate(e.target.value)}
@@ -390,6 +392,7 @@ export function ExportEvidencePackageModal({
               <div className="space-y-1">
                 <Label className="text-xs">To (Observed At)</Label>
                 <input
+                  aria-label="To (observed at)"
                   type="datetime-local"
                   value={toDate}
                   onChange={e => setToDate(e.target.value)}

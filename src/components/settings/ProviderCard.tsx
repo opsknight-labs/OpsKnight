@@ -736,7 +736,11 @@ export default function ProviderCard({
                   <div key={field.name} className="space-y-1.5">
                     <Label htmlFor={fieldId} className="text-xs font-semibold text-foreground">
                       {field.label}
-                      {field.required && <span className="text-destructive ml-1">*</span>}
+                      {field.required && (
+                        <span className="text-destructive ml-1" aria-hidden="true">
+                          *
+                        </span>
+                      )}
                     </Label>
                     {field.type === 'textarea' ? (
                       <Textarea

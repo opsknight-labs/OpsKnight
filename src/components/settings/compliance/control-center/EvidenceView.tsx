@@ -185,6 +185,7 @@ export function EvidenceView({
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3.5 rounded-lg border bg-card">
         <div className="relative flex-1">
           <Input
+            aria-label="Search evidence"
             placeholder="Search by title, control ID, collector, or SHA-256 hash..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}

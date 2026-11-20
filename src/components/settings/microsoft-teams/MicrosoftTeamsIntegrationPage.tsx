@@ -419,6 +419,7 @@ export default function MicrosoftTeamsIntegrationPage({
               <div className="flex items-center gap-2">
                 <div className="relative w-full sm:w-56">
                   <Input
+                    aria-label="Filter destinations"
                     placeholder="Filter destinations…"
                     value={destinationSearch}
                     onChange={e => setDestinationSearch(e.target.value)}

@@ -77,6 +77,7 @@ function SessionIdleSelect({ defaultValue = 30 }: { defaultValue?: number }) {
         {selected === 'custom' && (
           <div className="flex items-center gap-2">
             <Input
+              aria-label="Custom session lifetime in days"
               id="mcp-custom-idle-days"
               type="number"
               min="1"
