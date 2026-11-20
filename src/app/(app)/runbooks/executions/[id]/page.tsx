@@ -1,5 +1,8 @@
 import { redactRunbookDisplayName } from '@/lib/runbooks/display-name';
 import ExecutionTroubleshooting from '@/components/runbooks/executions/ExecutionTroubleshooting';
+import OnDemandExplain from '@/components/intelligence/OnDemandExplain';
+import { opsHelpersOn } from '@/lib/intelligence/helpers/on-demand';
+import { explainRunbookFailureAction } from '../helper-actions';
 import { getExecutionProgress, TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
 import { redactRunbookOutput } from '@/lib/runbooks/redaction';
 import { formatDiagnosticEvidence } from '@/lib/runbooks/presentation/diagnostics';
@@ -516,6 +519,12 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
             status={execution.status}
             code={execution.failureCode ?? failedStep?.errorCode}
           />
+          {(await opsHelpersOn().catch(() => false)) && (
+            <OnDemandExplain
+              label="Explain this failure"
+              load={explainRunbookFailureAction.bind(null, execution.id)}
+            />
+          )}
         </section>
       )}
 

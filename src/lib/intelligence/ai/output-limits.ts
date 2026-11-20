@@ -18,6 +18,12 @@ export const AI_OUTPUT_TOKENS = {
   'analytics.metric-change': 120,
   // Two sentences per team in the weekly digest.
   'digest.team-brief': 120,
+  // On demand only: a few sentences on why a runbook step failed.
+  'runbooks.failure-explain': 300,
+  // One analytics filter object; a handful of short fields.
+  'analytics.query': 120,
+  // One paragraph on the reports page from the weekly digest facts.
+  'reports.narrative': 220,
 } as const;
 
 export type AiFeature = keyof typeof AI_OUTPUT_TOKENS;
