@@ -1,7 +1,7 @@
 import 'server-only';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { collectSquireTurn } from '@/lib/intelligence/squire/surfaces';
+import { collectSquireTurn, type SquireSurfaceAnswer } from '@/lib/intelligence/squire/surfaces';
 import { askSquireAllowedTools, askSquireInputSchema, canAskSquire } from './ask-squire-contract';
 import { isAskSquireEnabled } from './ask-squire-settings';
 import { McpBoundaryError, requireMcp } from './errors';
@@ -22,7 +22,11 @@ const web = (href: string | undefined) => {
   return origin && href?.startsWith('/') ? `${origin}${href}` : undefined;
 };
 
-export async function askSquireForMcp(
+/**
+ * The checks every Squire turn over MCP passes before it runs: valid arguments, the role and scope
+ * gate, the AI-settings switch (read fresh) and the per-person rate limit. Returns the turn to run.
+ */
+export async function prepareSquireMcpTurn(
   actor: AuthorizationActor,
   args: unknown,
   /** The MCP policy's sensitive-read switch, as the server was created with. Off unless passed. */
@@ -52,12 +56,15 @@ export async function askSquireForMcp(
     teamIds: actor.teamIds,
   };
   const { question, incidentId } = parsed.data;
-  const answer = await collectSquireTurn(
+  return {
     person,
-    { message: question, ...(incidentId ? { incidentId } : {}) },
-    { timeoutMs: 30_000, scope: { readTools } }
-  );
-  if (answer.error) throw new McpBoundaryError('MCP_UNAVAILABLE', 503, true, answer.error);
+    input: { message: question, ...(incidentId ? { incidentId } : {}) },
+    readTools,
+  };
+}
+
+/** A collected Squire answer (without an error) as MCP returns it. */
+export function squireAnswerForMcp(answer: SquireSurfaceAnswer) {
   return {
     mode: answer.mode,
     // Answer text can quote alerts and notes: projected like any other business text.
@@ -84,4 +91,18 @@ export async function askSquireForMcp(
     }),
     note: 'Read-only. Suggested actions are not executed; the person confirms them in OpsKnight.',
   };
+}
+
+export async function askSquireForMcp(
+  actor: AuthorizationActor,
+  args: unknown,
+  options: { sensitiveReads?: boolean } = {}
+) {
+  const turn = await prepareSquireMcpTurn(actor, args, options);
+  const answer = await collectSquireTurn(turn.person, turn.input, {
+    timeoutMs: 30_000,
+    scope: { readTools: turn.readTools },
+  });
+  if (answer.error) throw new McpBoundaryError('MCP_UNAVAILABLE', 503, true, answer.error);
+  return squireAnswerForMcp(answer);
 }

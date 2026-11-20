@@ -27,6 +27,8 @@ const retention = vi.hoisted(() => ({ cleanupMcpCredentials: vi.fn() }));
 vi.mock('@/lib/mcp/auth/retention', () => retention);
 const tasks = vi.hoisted(() => ({ cleanupExpiredMcpTasks: vi.fn() }));
 vi.mock('@/lib/mcp/protocol/tasks', () => tasks);
+const investigations = vi.hoisted(() => ({ cleanupExpiredSquireInvestigations: vi.fn() }));
+vi.mock('@/lib/mcp/core/squire-investigation', () => investigations);
 const log = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }));
 vi.mock('@/lib/logger', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/logger')>()),
@@ -164,8 +166,9 @@ describe('OBS-8: MCP maintenance failures are logged and counted', () => {
       })
     );
     tasks.cleanupExpiredMcpTasks.mockResolvedValueOnce(3);
+    investigations.cleanupExpiredSquireInvestigations.mockResolvedValueOnce(2);
     const result = await runMcpMaintenance();
-    expect(result).toEqual({ credentials: null, tasks: 3 });
+    expect(result).toEqual({ credentials: null, tasks: 5 });
     expect(tasks.cleanupExpiredMcpTasks).toHaveBeenCalledTimes(1);
     expect(log.warn).toHaveBeenCalledWith('[Cron] MCP maintenance failed', {
       task: 'credentials',

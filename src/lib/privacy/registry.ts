@@ -396,6 +396,7 @@ export const personalDataRegistry = [
       'SquireDialogueState',
       'SquireMessage',
       'SquireActionReceipt',
+      'SquireMcpInvestigation',
       'SquireCheckTemplate',
       'SquireFeedback',
       'ObservabilityConnection',
@@ -417,6 +418,8 @@ export const personalDataRegistry = [
       'SquireMessage.dataClass',
       'SquireActionReceipt.intentEncrypted',
       'SquireActionReceipt.resultEncrypted',
+      'SquireMcpInvestigation.actorId',
+      'SquireMcpInvestigation.payloadEncrypted',
       'SquireConversation.state',
       'SquireDialogueState.stateEncrypted',
       'SquireFeedback.userId',
@@ -430,6 +433,7 @@ export const personalDataRegistry = [
       'Optional saved assistant conversations, visible only to the person who had them',
       'Per-person daily token share, so one person cannot use up the shared AI budget',
       'Making each assistant action a person confirmed run at most once',
+      'Answering longer questions from an assistant connected over MCP, polled by the person who asked',
       'Optional read-only observability connectors (metrics, logs, traces, errors, code diffs) the assistant queries during an AI answer',
       'Dollar cost accounting by team, capability and model, and optional team and capability budgets',
     ],
@@ -437,7 +441,7 @@ export const personalDataRegistry = [
     locations: ['DATABASE', 'EXTERNAL_PROVIDER'],
     retention: {
       current:
-        'Disabled by default. Conversations are held only in the browser unless an administrator turns on saved history; then questions and answers are stored encrypted for their owner only, capped at 50 conversations per person, deleted after the configured idle retention (1-365 days, default 30), all deleted when history is turned off, and deleted with the person. Interaction audit entries record metadata (user, capability, provider, model, token counts) and never prompts or answers. Daily usage totals are aggregate counters; per-person daily token counts hold only a count per person per day and are deleted with the person. Assistant actions run only after the person confirms them, through the same permission checks as the application, are audited, and keep a single-use receipt (person, action, incident) for one day. Atomic token reservations store the actor id and estimated token count while a request runs, then retain the settlement receipt for one day; the bounded sweep purges them even when intelligence is off. Cost governance adds aggregate spend per day, team, capability and model (no people, prompts or answers), a dollar total on the daily and per-person counters, administrator price overrides and optional team or capability budgets; none of these hold content, and the per-person cost is deleted with the person.',
+        'Disabled by default. Conversations are held only in the browser unless an administrator turns on saved history; then questions and answers are stored encrypted for their owner only, capped at 50 conversations per person, deleted after the configured idle retention (1-365 days, default 30), all deleted when history is turned off, and deleted with the person. Interaction audit entries record metadata (user, capability, provider, model, token counts) and never prompts or answers. Daily usage totals are aggregate counters; per-person daily token counts hold only a count per person per day and are deleted with the person. Assistant actions run only after the person confirms them, through the same permission checks as the application, are audited, and keep a single-use receipt (person, action, incident) for one day. Atomic token reservations store the actor id and estimated token count while a request runs, then retain the settlement receipt for one day; the bounded sweep purges them even when intelligence is off. Cost governance adds aggregate spend per day, team, capability and model (no people, prompts or answers), a dollar total on the daily and per-person counters, administrator price overrides and optional team or capability budgets; none of these hold content, and the per-person cost is deleted with the person. An investigation started over MCP keeps its steps and answer encrypted for its starter on that connection for one hour, then maintenance deletes it.',
       target: 'Audit entries follow the audit retention policy.',
     },
     discoverable: 'PARTIAL',

@@ -105,6 +105,12 @@ function typeOf(schema: JsonSchema): string {
 }
 
 const hint = (value: boolean | undefined) => (value === undefined ? '—' : value ? 'yes' : 'no');
+/** Tools listed only while Squire for MCP is on; they need every ASK_SQUIRE_SCOPES scope. */
+const SQUIRE_TOOLS = new Set([
+  'ask_squire',
+  'squire_start_investigation',
+  'squire_get_investigation',
+]);
 
 /** `verifiedAt` is the date the hand-written docs were last checked (MCP_DOCS_VERIFIED_AT). */
 export async function renderTools(verifiedAt: string) {
@@ -165,11 +171,11 @@ export async function renderTools(verifiedAt: string) {
         (operation && isMcpApprovalGated(operation)) || capability.get(tool.name)?.approval
           ? 'Approval'
           : null,
-        tool.name === 'ask_squire' ? 'Squire for MCP (AI settings)' : null,
+        SQUIRE_TOOLS.has(tool.name) ? 'Squire for MCP (AI settings)' : null,
       ].filter(Boolean);
       const scopes: readonly string[] = operation?.requiredScopes.length
         ? operation.requiredScopes
-        : tool.name === 'ask_squire'
+        : SQUIRE_TOOLS.has(tool.name)
           ? ASK_SQUIRE_SCOPES
           : [];
       lines.push(

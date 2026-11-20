@@ -7050,3 +7050,23 @@ model MaintenanceScheduleService {
   @@id([scheduleId, serviceId])
   @@index([serviceId])
 }
+
+// A Squire investigation started over MCP and polled until done. Only the person who started it, on
+// the same connection, can read it; it is unreadable after expiresAt and purged by MCP maintenance.
+model SquireMcpInvestigation {
+  // Unpredictable server-generated id.
+  id               String   @id
+  actorId          String
+  grantId          String
+  // RUNNING, COMPLETED or FAILED.
+  status           String   @default("RUNNING")
+  // Encrypted JSON { progress, result }: the steps seen so far and, once done, the answer for MCP.
+  payloadEncrypted String?
+  error            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  expiresAt        DateTime
+
+  @@index([actorId, status, createdAt])
+  @@index([expiresAt])
+}
