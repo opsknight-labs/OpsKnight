@@ -44,6 +44,7 @@ The response includes:
 - `scheduler` — healthy, unhealthy, or disabled based on role and `ENABLE_INTERNAL_CRON`.
 - `worker` — present when the role owns a local worker; evaluates running state and recent successful cycles.
 - `memory` — diagnostic process memory, excluded from the readiness-critical set.
+- `intelligence` — the optional intelligence lane: `healthy`, `degraded` or `disabled`, never `unhealthy`. It is `degraded` when the lane is paused (to protect paging or for database pool pressure), saturated, has not completed a cycle recently, is restarting its thread, or runs in-process beside ingestion (for example because `INTELLIGENCE_LANE_THREAD=off`). Like `memory`, it is reported but does not affect readiness or the overall status, so a paused lane never takes a replica out of rotation. Messages are fixed strings.
 
 Readiness returns HTTP `503` for a critical dependency failure. `degraded` returns HTTP `200`. The notification control-plane failure is critical only when `NOTIFICATION_CONTROL_PLANE_STRICT=true` on a `web` or `integrated` role; otherwise it degrades readiness without removing the replica.
 

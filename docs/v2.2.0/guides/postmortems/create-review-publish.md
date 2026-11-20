@@ -11,7 +11,13 @@ reader:
 verification:
   level: source
   verified_at: 2026-10-01
-  evidence: [src/app/(app)/postmortems/actions.ts, src/components/PostmortemForm.tsx, src/components/postmortem/PostmortemDetailView.tsx, src/components/postmortem/PostmortemActionItems.tsx]
+  evidence:
+    [
+      src/app/(app)/postmortems/actions.ts,
+      src/components/PostmortemForm.tsx,
+      src/components/postmortem/PostmortemDetailView.tsx,
+      src/components/postmortem/PostmortemActionItems.tsx,
+    ]
 ---
 
 # Create, review, and publish a postmortem
@@ -45,6 +51,22 @@ incident's **Postmortem** tab. Select the incident when prompted.
 8. Add action items with owner, due date, status, priority, and an observable
    completion outcome.
 9. Save, reopen, and confirm the draft retained all sections.
+
+### Drafting help
+
+- **AI draft**: offered in the editor only while an administrator has turned
+  AI on. It needs the same permission as **Auto-Draft** plus read access to
+  the incident. Nothing is saved until you review the text and save it.
+- **Evidence in the template draft**: when **Compute operations insights** and
+  its **Postmortems** area are on (both off by default), **Auto-Draft** fills
+  the template from what OpsKnight already knows about the incident, such as
+  its time axis, response, similar incidents and runbook runs. No AI model is
+  used. Sections with no evidence keep the template text, and the draft cites
+  only incidents that readers of this postmortem can also see.
+- **Editor side panel**: with the same switches on, the editor shows whether
+  the problem recurred, suggestions for the action item you are typing (open
+  look-alikes, a likely owner and the service) and the incident window for
+  the quality checklist. These are hints only; they never block saving.
 
 ## How the workflow works
 

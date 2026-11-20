@@ -42,6 +42,20 @@ Open **Settings → Status page** to review the single installation-wide page an
 
 OpsKnight projects deliberately selected incident/service state into one supported status page. The projection layer controls public fields; it does not serialize the internal incident directly. Subscriber and webhook delivery are asynchronous and separate from page rendering.
 
+### Drafts from open incidents
+
+When the intelligence master switch and **Show small helpers** are on (both off
+by default), the status page editor offers update drafts for the newest open
+incidents that affect the page's components or the services they depend on.
+Drafts are built without an AI model, only include incidents you may read, and
+never include private incidents. **Post status update** on an incident opens
+the editor with that incident's draft. Nothing is saved or published until an
+admin edits and publishes it.
+
+Admins can set an update cadence per page, from 5 to 1,440 minutes (default
+30). While an incident is open, its page shows when the next status update is
+due. The cadence is internal and never appears on the public page.
+
 ## Verify it worked
 
 Open the public or authenticated page through the same hostname/audience customers use, preferably in a signed-out/private browser. Confirm component state, wording, timestamps/history, privacy, and mobile layout. Inspect subscriber/webhook delivery separately and allow for documented cache/custom-domain delay.

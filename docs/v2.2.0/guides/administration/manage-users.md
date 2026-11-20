@@ -280,6 +280,17 @@ that support null authors retain their content with the direct user reference
 cleared. This is not a general privacy-erasure workflow; use the documented
 privacy-request process when that is the reason for the request.
 
+For intelligence and assistant data, deletion removes the person's saved
+assistant conversations and dialogue state, assistant feedback and action
+receipts, daily AI usage counts and on-call coverage days. Their intelligence feedback, policy
+versions, evaluation runs, operations-insight decisions and approved service
+facts are kept with the user reference cleared. Deactivation keeps all of it.
+
+When **Suggest people** is on, a user's profile shows a load and expertise card:
+pages and night pages over 28 days, their on-call insights and the services
+they resolved incidents on. Only the person, their team lead and admins see
+it.
+
 Bulk deletion evaluates each account through the same safeguards. It can
 partially succeed: the result reports how many deletions failed. Review the
 audit log and each remaining dependency before retrying.

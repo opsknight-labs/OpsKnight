@@ -406,6 +406,7 @@ See [Permissions guide](../guides/runbooks/permissions) for API scopes.
 | Auto remediation budget defaults | 3 executions / 3 writes / 0 non-idempotent |
 | Auto remediation budget max | 100 each |
 | Circuit breaker threshold | 3 failures in 15 minutes |
+| Automatic runs per rule | 5 in 10 minutes (per service rule) |
 
 ## Signing and effective capabilities
 
@@ -424,6 +425,17 @@ states: PAUSED, BLOCKED, CHECKS_REQUIRED, CONFIGURATION_VALID, UNKNOWN.
 
 Worker health states: HEALTHY, DEGRADED, UNKNOWN. Shared PostgreSQL evidence
 establishes dispatch and reconciliation freshness.
+
+Automatic starts are recorded as skips, not failures, in these cases:
+
+- `BINDING_RATE_LIMITED`: the rule already started 5 automatic runs in the
+  last 10 minutes. This stops an alert storm from starting one run per incident.
+- `STORM_CHILD`: the incident was grouped under a storm parent by noise
+  control. Automatic runs start on the parent only.
+
+A noise-control orchestration rule with the `ATTACH_RUNBOOK` action can attach
+a runbook only through a rule already bound to the service, and only as a
+suggestion. It never starts an automatic run on its own.
 
 ## Bounded nonce maintenance
 

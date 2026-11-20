@@ -9,7 +9,12 @@ reader: { status: READER_COMPLETE, task: Inspect operational context from the mo
 verification:
   level: source
   verified_at: 2026-10-01
-  evidence: ["src/app/(mobile)/m/layout.tsx", "src/components/mobile/mobileNavItems.tsx", "src/app/(mobile)/m/more/page.tsx"]
+  evidence:
+    [
+      'src/app/(mobile)/m/layout.tsx',
+      'src/components/mobile/mobileNavItems.tsx',
+      'src/app/(mobile)/m/more/page.tsx',
+    ]
 ---
 
 # Use mobile operational views
@@ -34,6 +39,22 @@ Open `/m`. Use bottom navigation for primary views and **More** for schedules, p
 ## What OpsKnight does
 
 Mobile pages query the same authorized product data with compact navigation and cached-state notices. Detail links keep the mobile route family; desktop preference can redirect when explicitly selected.
+
+### AIOps and assistant on mobile
+
+- **AIOps** (`/m/intelligence`, under **More**) shows the ranked
+  needs-attention inbox and the noise section from the desktop overview, for
+  users with `intelligence.read`. The other overview sections stay on the
+  desktop. Inbox links open their mobile page when one exists.
+- **More** shows your personal noise settings, including **Bundle low-urgency
+  pages**, when the notifications insight area is on.
+- When the on-call insight area is on, the schedules list shows your own
+  on-call load.
+- Creating an incident on mobile shows the same service, urgency and
+  likely-duplicate suggestions as the desktop form when small helpers are on.
+- The Squire assistant can appear on incident, policy, postmortem, schedule,
+  service, service automation and team pages when Squire on mobile is turned
+  on. It is off by default and never delays or breaks the page.
 
 ## Verify the view
 

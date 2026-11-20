@@ -57,6 +57,24 @@ Service scope controls incident routing and is reused by reports, dashboards,
 integrations, teams, and status communication. Changing its team or policy
 affects future routing; it does not rewrite historical incident ownership.
 
+## Service intelligence
+
+Users with the `intelligence.read` permission see an **Intelligence** tab on the
+service page (shareable as `/services/<id>/intelligence`). It shows SLO burn,
+dependencies, alert quality, recent changes, noise controls, recurring
+problems, grouping mode and learned facts for that service. Responders do not
+see the tab while both alert grouping and noise control are off for the
+service; users who can manage intelligence always see it. Users with
+`intelligence.manage` can approve or reject suggested dependencies from the tab.
+The team page shows matching tiles for AI usage against budget and noise load;
+they are hidden when there is nothing to report.
+
+When the global intelligence switch is on, a newly created service starts with
+its own alert-grouping policy in **Shadow** mode. Shadow only measures what
+grouping would do; it does not change incidents. Service creation never fails
+because of this step, and a global policy that already suggests or acts is not
+downgraded. See [Services, teams and dashboards](../intelligence/services-teams-and-dashboards.md).
+
 ## Verify the service
 
 Send a controlled test alert. Confirm it creates or updates the expected

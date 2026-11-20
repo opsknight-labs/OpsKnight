@@ -45,6 +45,26 @@ the schedule's displayed time zone and verify their stored UTC boundaries.
 
 The bounded override replaces effective ownership during its window without rewriting recurring layer order. After the window, schedule computation returns to the underlying layers.
 
+### Cover suggestions
+
+When the intelligence master switch and **Suggest people** are on (both off by
+default), the override form suggests up to five people to cover the window. It
+does so only when the window leaves time uncovered or the override replaces
+someone, and only for windows up to 14 days. Candidates come from the
+schedule's layer members and the teams whose services this schedule pages,
+minus whoever is already on call and the person being replaced. They are ranked
+by whether the window falls in their daytime, then by fewest pages and night
+pages over the last 28 days. Page counts are shown only for people whose load
+you may see (yourself, as team lead, or as an admin). Only users who can create
+overrides on the schedule get suggestions; picking one is still your decision.
+
+### Load and fairness
+
+When **Compute operations insights** and its **On-call schedules** area are on
+(both off by default), the schedule page shows a **Load & fairness** panel:
+pages and on-call time per person over a recent window, with nights counted as
+22:00–07:00 in each person's time zone.
+
 ## Verify it worked
 
 Inspect a timestamp before, inside, and after the window. Confirm the expected responder and run a controlled route test when the override affects production paging.

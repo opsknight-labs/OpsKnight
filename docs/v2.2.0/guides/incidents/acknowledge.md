@@ -8,7 +8,12 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Acknowledge an incident and verify ownership and escalation effects.
-  evidence: [docs/v2.2.0/assets/incident-detail.png, docs/v2.2.0/assets/incident-acknowledged.png, docs/v2.2.0/assets/incident-timeline.png]
+  evidence:
+    [
+      docs/v2.2.0/assets/incident-detail.png,
+      docs/v2.2.0/assets/incident-acknowledged.png,
+      docs/v2.2.0/assets/incident-timeline.png,
+    ]
 verification:
   level: test
   verified_at: 2026-09-29
@@ -74,6 +79,8 @@ Refresh the page once if the header and timeline disagree. If the source page is
 Mobile, supported ChatOps actions, voice workflows, and authenticated API clients can acknowledge an incident when the actor and integration have the required access. Regardless of channel, verify the canonical incident page when the action is operationally important. Provider cards and push notifications are views of incident state, not a separate source of truth.
 
 Never share an interactive action URL or authentication credential to let another person acknowledge as you.
+
+OpsKnight records who acknowledged and through which channel (web, mobile, API, ChatOps, voice and so on) on the incident. When the acknowledgement arrives through a specific page, such as a voice key press, a push action, an SMS reply or an acknowledge link, that page is also marked as acknowledged with its channel. Only the page that belongs to the acknowledging user is marked. Unacknowledging or reopening clears the recorded acknowledger. These fields feed analytics; they do not change who can act on the incident.
 
 ## Understand realtime incident alerts
 

@@ -31,3 +31,12 @@ evaluation with independently reviewable evidence.
 Exports are sensitive audit artifacts. Apply least privilege, retention, and
 external storage controls to them, and record the evaluation time and product
 revision so reviewers can distinguish historical evidence from current state.
+
+## Data-processing inventory
+
+The data-processing inventory (`docs/compliance/data-processing-inventory.yaml`)
+now has entries for five more areas: intelligence, AI assistant, Squire memory,
+operations insights and escalation step attempts. Each states the data it
+holds, its purpose, its current retention and deletion behaviour and the target
+state. The on-call entry also lists daily coverage seconds. These entries
+match the privacy data registry; see [Privacy requests and retention](./privacy.md#intelligence-and-assistant-data).

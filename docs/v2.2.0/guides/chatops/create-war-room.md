@@ -63,6 +63,31 @@ Participant synchronization depends on provider permissions, bot/app access,
 and identity availability. A missing participant should be investigated rather
 than worked around by repeatedly creating rooms.
 
+### Kickoff message, channel capture and Squire
+
+Two administrator switches on the intelligence settings page add to Slack war
+rooms. Both are off by default.
+
+- **Post a kickoff message in new war rooms** posts one message when the room
+  opens, listing similar past incidents, likely causes and recommended
+  runbooks that OpsKnight already found for the incident. It uses no AI and
+  posts nothing when there is nothing to say. Other incidents are named only
+  when they are public and share a team with this one, and stored text is
+  redacted.
+- **Save war-room messages to the incident timeline** saves people's messages
+  as timeline entries, so the time axis and the postmortem draft include the
+  discussion. Secrets are redacted, and each incident keeps at most 2,000
+  messages of up to 4 KB each. A private Slack channel is captured only into a
+  private incident. If that incident is later made public, the messages saved
+  from the private channel are removed and the timeline notes how many. A
+  change to this switch can take up to 30 seconds to apply.
+
+When Squire in chat is turned on, people can mention `@squire` in incident
+channels and war rooms, or use `/incident ask <question>` in Slack, which
+answers privately. Squire answers under the asker's own linked account and
+permissions, at most 6 questions per person per minute. See
+[Ask Squire in Slack, Microsoft Teams, MCP and on mobile](../intelligence/squire-everywhere.md).
+
 ## How synchronization works
 
 OpsKnight stores the durable provider room and operation identity, projects

@@ -23,6 +23,8 @@ try {
   baseGraph = JSON.parse(execFileSync('git', ['show', `${base}:generated/docs-contracts/current.json`], {
     cwd: repositoryRoot,
     encoding: 'utf8',
+    // The graph is several MB; the 1 MB default buffer throws ENOBUFS and made every node look new.
+    maxBuffer: 50 * 1024 * 1024,
   }));
 } catch {
   // A branch introducing the contract graph treats every current node as new.

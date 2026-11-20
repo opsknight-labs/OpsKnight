@@ -47,6 +47,25 @@ Processes high-volume or lower-urgency work. Scale only after determining whethe
 
 Executes claimed runbook steps in an isolated queue lane. Monitor claim age, execution latency, retries, reconciliation failures, and downstream provider errors. Keep its direct database pool in the capacity budget; Web or General Worker scaling does not increase runbook throughput.
 
+## Intelligence Worker
+
+Runs only the optional intelligence lane: advisory analysis such as similar
+incidents, correlation, probable cause and runbook ranking. It runs no
+scheduler, job worker or paging work. Split installs add it with
+`OPSKNIGHT_PROCESS_ROLE=intelligence-worker` and its own pool,
+`DATABASE_POOL_SIZE_INTELLIGENCE_WORKER` (Compose default 3, Helm
+`intelligenceWorker.database.poolSize` default 2). Each replica also holds one
+extra session for `LISTEN`, which the Helm connection budget includes. Default
+replicas: Helm 2 (with a PodDisruptionBudget of `minAvailable: 1`), Swarm 1
+(`SWARM_REPLICAS_INTELLIGENCE_WORKER`), Compose 1.
+
+Without a dedicated worker, the lane runs inside `integrated`, `worker` and
+`general-worker` processes. Setting `OPSKNIGHT_INTELLIGENCE_DEDICATED=true`
+keeps it on `intelligence-worker` only; the split profiles that ship an
+intelligence worker set it for you. While the lane shares a process with
+paging work, the intelligence settings page shows a notice. Whether analysis
+runs at all is still decided by the database-backed intelligence settings.
+
 ## Status Projector
 
 Projects internal incident/service state into public status-page state. Monitor projection lag and publication failures separately from the public web endpoint.
