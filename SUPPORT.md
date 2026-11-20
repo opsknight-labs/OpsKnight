@@ -9,7 +9,7 @@ Welcome to the OpsKnight support portal. Whether you are operating OpsKnight on 
 Before opening a ticket or posting a discussion, consult our official documentation and operational guides:
 
 - **Official Documentation**: [https://opsknight.com/docs/latest/](https://opsknight.com/docs/latest/)
-- **Repository Documentation**: [`docs/v2.0.0/README.md`](docs/v2.0.0/README.md)
+- **Repository Documentation**: [`docs/v2.2.0/README.md`](docs/v2.2.0/README.md)
 - **Deployment & Helm Reference**: [`deploy/README.md`](deploy/README.md)
 - **Interactive Browser Demo**: [Launch OpsKnight Demo](https://codespaces.new/opsknight-labs/OpsKnight?devcontainer_path=.devcontainer%2Fdemo%2Fdevcontainer.json)
 

@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-External-secrets support is an **implementation candidate, not certified support**. PR #931 remains draft. Live legacy Kubernetes startup, CSI synchronization/bootstrap and failure recovery, AWS/Azure workload identity, rotation (including decryption of stored data), and OpenShift arbitrary-UID/SCC/file-readability results are explicit merge and release blockers. Source/rendering tests and local filesystem probes do not clear these gates.
+## [2.2.0] - 2026-11-20
+
+The headline of 2.2.0 is the **AI assistant (MCP) server**. Workflow automation in this release is per-service automation rules (Services → Automations); an organisation-wide trigger-and-steps workflow builder and alert correlation (AIOps) are planned for the next release.
+
+Optional external-secrets (Secrets Store CSI) support is included but **not certified**: live Kubernetes CSI synchronization and recovery, AWS/Azure workload identity, rotation and OpenShift results are still pending, so validate it in your own environment before production use.
 
 ### Added
 
+- **SCIM group roles** (#989): administrators map a provisioned group to Admin, Responder, Auditor or User through a preview-and-apply workflow. Mappings survive group renames, overlapping grants follow the established role precedence, and role changes, session/MCP revocation and audit events commit atomically. Existing SCIM accounts keep their roles until a mapping adopts them, and the last active administrator is never removed.
+- **Analytics rebuilt on one exact metrics module** (#999): every Analytics figure comes from one central, streaming module instead of a 100-row sample for tenants with more than 500 incidents, and after-hours figures respect the business time zone.
 - **AI assistants (MCP)**: a native MCP server at `<App URL>/mcp` with per-person OAuth sign-in (PKCE, automatic registration or client metadata documents), serving revision 2026-07-28 and 2025-06-18 / 2025-11-25 clients statelessly. Includes `whoami`, `read_operation`, `execute_plan`, curated incident, on-call, service, automation, runbook, report and status-page tools, six prompts, structured tool errors with `requestId`, human-approved configuration changes (`operation_prepare`, `operation_get_approval`, `operation_commit_approved`) and runbook runs (`runbook_prepare_execution`, `runbook_get_approval`, `runbook_execute_approved`). The server reports the running release as its version. See `docs/v2.2.0/guides/mcp/`.
 - **MCP device sign-in** (OAuth 2.0 device authorization grant, RFC 8628) for CLIs, SSH sessions and headless servers: `POST /oauth/mcp/device_authorization`, the `/oauth/mcp/device` verification page (explicit code confirmation, the same consent with a "started this sign-in yourself" warning, lockout after five wrong codes) and the `urn:ietf:params:oauth:grant-type:device_code` token grant with `slow_down` pacing and single-use issuance. Off by default (**Device sign-in** in the access policy; turning it on needs a recent sign-in) and limited to clients registered for the grant. Adds the `mcp.device.*` audit events and the `pending`, `denied` and `expired` OAuth metric outcomes.
 - MCP operability: the `mcp.request.completed` log line, `X-Request-Id` on every MCP and OAuth response, OAuth endpoint metrics, capacity gauges, the `opsknight.mcp` alert and recording rules with a monitoring page, and the `MCP_FORCE_DISABLED` emergency stop.
@@ -40,6 +46,7 @@ External-secrets support is an **implementation candidate, not certified support
 
 ### Changed
 
+- **Interface** (#992, #995, #997): dark mode works in every browser (readable error text, light status pages on custom domains, print stylesheet, native date fields), layouts fit laptop screens, the settings pages are redesigned, Grafana alerts from ClickHouse datasources are readable, list pages (Incidents, Services, Users) use compact filter cards with search applied 300 ms after typing stops, and real avatars appear wherever a user is named.
 - MCP sessions: access tokens last five minutes and refresh with a 30-second reuse grace for a lost response; grants slide by the policy idle period and end after 90 days. Grants pin a revocation version that moves only on security events, so role and team changes apply live without signing anyone out. Approval review and commit windows are set in the access policy (240 and 30 minutes by default).
 - Roles set by an administrator are never overwritten by single sign-on; use **Let role rules manage this role** to hand one back. Existing role rules keep their case-sensitive, first-match behaviour.
 - Incomplete Entra group claims fail safe: they never raise a role, lower only SSO roles above the default role, and leave administrator-set and SCIM roles alone. A rule never demotes the last active administrator. Both alert administrators.
@@ -50,8 +57,30 @@ External-secrets support is an **implementation candidate, not certified support
 
 ### Fixed
 
+- **Deep-audit bug sweep (#986): 194 user-impacting fixes**, including all 13 critical findings. Integration keys created in the UI now authenticate (the service page showed the encrypted key, so every provider rejected it, while `/api/events` accepted the ciphertext). Escalation pages sent more than 30 minutes into an incident are no longer silently expired. Full user rows (including password hashes) are no longer sent to the browser on incident and escalation-policy pages. Current New Relic and Sentry payload formats are parsed instead of ignored with a 202. Okta's standard SCIM create is accepted. A late or repeated recovery after a manual resolve stays with the closed incident instead of pre-resolving the next outage unpaged. Plus fixes across 20+ provider parsers, Slack and Microsoft Teams delivery, Jira, outbound webhooks, schedules and overrides, notifications, team and user administration, postmortems, analytics, status pages, search authorization and the mobile app.
+- The account-wide failed sign-in limit now reserves each attempt atomically before the password check, so parallel attempts across replicas cannot exceed it.
+- MCP: approving or rejecting a change or runbook run keeps the "You approved this change." confirmation on screen instead of losing it when the page refreshes (#991).
+- Security: Next.js upgraded to 16.4.6 for GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8, GHSA-7qx7-33qx-rqx2, GHSA-f3mh-rxg3-f5g2, GHSA-pc58-hwjq-p385, GHSA-rhh4-g77r-r9qj and GHSA-vvgp-ww4w-46vf (#990).
 - The administrator who turned on SSO appeared as "not linked to the current provider".
 - The SSO button's accessible name now matches its visible text.
+
+### Upgrade notes
+
+- **Analytics numbers change on purpose** (#999): large installations see exact per-service, SLA, on-call and MTBF figures instead of sampled ones, and after-hours figures change for non-UTC business time zones. Ranges longer than your retention are clipped with a notice (for example "3 years" shows 2 years on default retention).
+- **SCIM role mapping is opt-in** (#989): a new `scimRoleMappingAdopted` marker defaults to false, so no SCIM account changes role until an administrator applies a group mapping.
+- Two additive migrations run on upgrade. Existing integrations keep accepting the routing key value the old UI displayed (`Integration.legacyStoredKeyAccepted`), so live alerting does not break; keys created or rotated afterwards never accept the stored ciphertext.
+- Outgoing service webhooks require HTTPS by default, checked when saved and when sent. An administrator can allow `http://` in **System Settings → Application URL → Outgoing webhooks**; installs that already have `http://` service webhooks get this switch turned on automatically. Private and internal network targets stay blocked.
+- A team with open incidents or escalation steps can no longer be deleted.
+- A snooze without an end time now ends after 60 minutes instead of lasting forever.
+- API v2 service updates are limited to the operator's own teams; administrators keep global access.
+- Incident `PUBLIC`/`PRIVATE` visibility controls the status page only; Slack and Microsoft Teams war rooms are unchanged.
+
+### Known limitations
+
+- The Analytics cache is per process: **Refresh** clears only the replica that served the request. Weekly Analytics emails need the recipient's email notifications on and have no one-click unsubscribe yet (turn them off from the Views menu).
+- Next.js 16.4.5 and later drop a route handler's `Content-Length` header (vercel/next.js#101854). Audit, report and dashboard export downloads complete and remain verifiable through `X-Content-SHA256`, but browsers show no size or progress until a Next.js release includes the upstream fix.
+- The service automation browser certification suite (`automation-validation.yml`) has failing tests that predate this release; the automation unit and integration tests pass.
+- High-throughput event ingestion is not certified; see `plans/event-ingestion/certification.md`.
 
 ### Removed
 

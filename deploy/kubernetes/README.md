@@ -91,7 +91,7 @@ PostgreSQL/PgBouncer running. HPA-managed web Deployments need their recorded re
 count restored only after the new template is applied (`--wait=false` permits that
 controlled sequence). Never resume old binaries on a migrated database or treat
 `--atomic` as database rollback. See
-[Upgrade existing SSO](../../docs/v2.1.0/guides/identity/upgrade-existing-sso.md).
+[Upgrade existing SSO](../../docs/v2.2.0/guides/identity/upgrade-existing-sso.md).
 
 When upgrading an older Helm release whose PgBouncer Deployment lacks the
 `app.kubernetes.io/component=pgbouncer` label, verify its container is the configured
@@ -109,4 +109,4 @@ label application Deployments as infrastructure or disable the cutover guard.
 
 ## Optional external secrets
 
-Kustomize `profiles/integrated-csi` and `profiles/split-csi` mount externally managed secrets with an external database and exclude the placeholder Secret. Reusable `secrets-store-csi`, `external-secrets`, and `openshift` components cover environment-owned overlays and the separate migration Job. See [Kustomize external secrets](../../docs/v2.1.0/operate/deploy/kustomize/external-secrets.md) for identity, provider examples, migration ordering, and rotation.
+Kustomize `profiles/integrated-csi` and `profiles/split-csi` mount externally managed secrets with an external database and exclude the placeholder Secret. Reusable `secrets-store-csi`, `external-secrets`, and `openshift` components cover environment-owned overlays and the separate migration Job. See [Kustomize external secrets](../../docs/v2.2.0/operate/deploy/kustomize/external-secrets.md) for identity, provider examples, migration ordering, and rotation.
