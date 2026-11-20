@@ -1,3 +1,4 @@
+import { completedIngestion } from './helpers/completed-ingestion';
 import { automationReadinessPolicySchema } from '../../src/lib/automation/readiness-policy';
 import { generateApiKey } from '@/lib/api-keys';
 import { test, expect } from '@playwright/test';
@@ -156,9 +157,7 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
       },
     });
     expect(ingestion.status()).toBe(202);
-    const accepted = (await ingestion.json()) as {
-      data: { result: { action: string; incident: { id: string } } };
-    };
+    const accepted = await completedIngestion(db, ingestion);
     expect(accepted.data.result.action).toBe('triggered');
     const incident = await db.incident.findUniqueOrThrow({
       where: { id: accepted.data.result.incident.id },
@@ -177,8 +176,21 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
         where: { type: 'ESCALATION', payload: { path: ['incidentId'], equals: incident.id } },
       })
     ).toBe(0);
+    // These owned destinations have no provider credentials. Wait for durable failures
+    // before rendering their status instead of racing the worker's queued state.
+    await expect
+      .poll(() =>
+        db.notification.count({
+          where: { incidentId: incident.id, sourceType: 'AUTOMATION', status: 'FAILED' },
+        })
+      )
+      .toBe(notificationCase === 'BOTH' ? 2 : 1);
     await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
-    await expect(page.getByRole('heading', { name: /Alert Context/ })).toBeVisible();
+    await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+    const alertContext = page.getByRole('region', { name: 'Alert Context', exact: true });
+    await expect(
+      alertContext.getByRole('heading', { name: 'Alert Context', exact: true })
+    ).toBeVisible();
     await expect(
       page.getByText('production', { exact: true }).filter({ visible: true }).first()
     ).toBeVisible();
@@ -193,7 +205,6 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
           incidentId: incident.id,
           channel: 'SLACK',
           sourceType: 'AUTOMATION',
-          status: 'PENDING',
         },
       })
     ).toBe(notificationCase === 'TEAMS' ? 0 : 1);
@@ -204,17 +215,17 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
       expect(operation.requestPayload).toMatchObject({ origin: 'AUTOMATION' });
     }
     const delivery = page.getByRole('region', { name: 'Channel notification status' });
-    if (notificationCase !== 'TEAMS') await expect(delivery).toContainText('Queued');
-    if (notificationCase !== 'SLACK') await expect(delivery).toContainText('Failed');
+    if (notificationCase !== 'TEAMS') await expect(delivery).toContainText('Slack · 1 · Failed');
+    if (notificationCase !== 'SLACK') await expect(delivery).toContainText('Teams · 1 · Failed');
     await expect(delivery).not.toContainText('Delivery confirmed');
-    await page.getByText(/^Show \d+ more context fields$/).click();
-    await expect(page.getByText('Captured field 6', { exact: true })).toBeVisible();
-    await page.getByText('Show full value', { exact: true }).click();
-    await expect(page.getByText('x'.repeat(1200), { exact: true })).toBeVisible();
+    await alertContext.getByText(/^Show \d+ more context fields$/).click();
+    await expect(alertContext.getByText('Captured field 6', { exact: true })).toBeVisible();
+    await alertContext.getByText('Show full value', { exact: true }).click();
+    await expect(alertContext.getByText('x'.repeat(1200), { exact: true })).toBeVisible();
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2))
       .toBe(true);
-    await page.getByText('Show full value', { exact: true }).click();
+    await alertContext.getByText('Show full value', { exact: true }).click();
     await page.screenshot({
       path: `/tmp/automation-context-${testInfo.project.name}.png`,
       fullPage: true,
@@ -237,6 +248,7 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
       auditorEmail
     );
     await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
+    await page.getByRole('tab', { name: 'Automation', exact: true }).click();
     await expect(
       page.getByText('Alert context is restricted.', { exact: true }).filter({ visible: true })
     ).toBeVisible();
@@ -391,7 +403,7 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
     },
   });
   expect(response.status()).toBe(202);
-  const accepted = (await response.json()) as { data: { result: { incident: { id: string } } } };
+  const accepted = await completedIngestion(db, response);
   const incident = await db.incident.findUniqueOrThrow({
     where: { id: accepted.data.result.incident.id },
   });
@@ -420,9 +432,7 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
     },
   });
   expect(missingResponse.status()).toBe(202);
-  const missing = (await missingResponse.json()) as {
-    data: { result: { incident: { id: string } } };
-  };
+  const missing = await completedIngestion(db, missingResponse);
   const unmatched = await db.incidentAutomationDecision.findUniqueOrThrow({
     where: { incidentId: missing.data.result.incident.id },
   });
@@ -436,6 +446,7 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
   await page.goto(
     `${isDesktop(testInfo) ? '' : '/m'}/incidents/${missing.data.result.incident.id}`
   );
+  await page.getByRole('tab', { name: 'Automation', exact: true }).click();
   await expect(
     page.getByText('Not provided', { exact: true }).filter({ visible: true }).first()
   ).toBeVisible();
@@ -468,6 +479,7 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
   await page.getByRole('button', { name: 'Archive policy', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Policy Dependencies · Archived' })).toBeVisible();
   await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
+  await page.getByRole('tab', { name: 'Automation', exact: true }).click();
   await expect(
     page.getByText('production', { exact: true }).filter({ visible: true }).first()
   ).toBeVisible();
@@ -643,7 +655,13 @@ test('100-rule policy remains bounded, keyboard editable, searchable and recover
       : `/m/services/${serviceId}/automation`
   );
   const workspace = page.getByRole('region', { name: 'Service automation' });
-  await workspace.getByRole('button', { name: 'Rules', exact: true }).click();
+  const rulesNavigation = workspace
+    .getByRole('navigation', { name: 'Automation sections' })
+    .getByRole('button', { name: 'Rules', exact: true });
+  await rulesNavigation.focus();
+  await expect(rulesNavigation).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(rulesNavigation).toHaveAttribute('aria-current', 'true');
   await expect(workspace.getByRole('button', { name: /^Configure Rule / })).toHaveCount(100);
   const health = workspace.getByRole('region', { name: 'Configuration health' });
   await expect(health).toBeVisible();
@@ -652,8 +670,7 @@ test('100-rule policy remains bounded, keyboard editable, searchable and recover
   await health.getByText('Review warnings', { exact: true }).click();
   const unusedFields = health.getByText(/^Unused fields \(\d+\)$/);
   await expect(unusedFields).toBeVisible();
-  await unusedFields.click();
-  await expect(health.locator('li').first()).toBeVisible();
+  await expect(health.getByRole('listitem').first()).toBeVisible();
   await health.getByText('Review warnings', { exact: true }).click();
   timing.initialRulesMs = Date.now() - start;
   await workspace.getByRole('button', { name: 'Overview', exact: true }).click();
@@ -701,7 +718,7 @@ test('100-rule policy remains bounded, keyboard editable, searchable and recover
       { timeout: 15000 }
     )
     .toBe('Rule 99 edited');
-  await workspace.getByRole('button', { name: 'Delete rule', exact: true }).click();
+  await workspace.getByRole('button', { name: 'Delete Rule 99 edited', exact: true }).click();
   await workspace.getByRole('button', { name: 'Undo', exact: true }).click();
   await workspace.getByRole('button', { name: 'Collapse all', exact: true }).click();
   await workspace.getByLabel('Search rules').fill('');
@@ -918,9 +935,7 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
       },
     });
     expect(ingestion1.ok()).toBe(true);
-    const accepted1 = (await ingestion1.json()) as {
-      data: { result: { action: string; incident: { id: string } } };
-    };
+    const accepted1 = await completedIngestion(db, ingestion1);
     expect(accepted1.data.result.action).toBe('triggered');
     const incident1 = await db.incident.findUniqueOrThrow({
       where: { id: accepted1.data.result.incident.id },
@@ -1052,7 +1067,7 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
     const confirmCutover = page.getByRole('button', { name: 'Confirm LIVE', exact: true });
     if (testInfo.project.name === 'desktop' || testInfo.project.name === 'mobile') {
       await page.keyboard.press('Tab');
-      await page.keyboard.press('Tab');
+      await expect(page.getByRole('button', { name: 'Keep unchanged', exact: true })).toBeFocused();
       await page.keyboard.press('Tab');
       await expect(confirmCutover).toBeFocused();
     } else {
@@ -1085,9 +1100,7 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
       },
     });
     expect(ingestion2.ok()).toBe(true);
-    const accepted2 = (await ingestion2.json()) as {
-      data: { result: { action: string; incident: { id: string } } };
-    };
+    const accepted2 = await completedIngestion(db, ingestion2);
     expect(accepted2.data.result.action).toBe('triggered');
     const incident2 = await db.incident.findUniqueOrThrow({
       where: { id: accepted2.data.result.incident.id },
@@ -1122,8 +1135,9 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
     await page.reload();
     await expect(page.getByText('Pending candidate · Version 3')).toBeVisible();
     await page.getByRole('button', { name: 'Discard candidate' }).click();
-    await expect(page.getByText('Discard candidate automation version?')).toBeVisible();
-    await page.getByRole('button', { name: 'Discard candidate', exact: true }).click();
+    const discardDialog = page.getByRole('alertdialog', { name: 'Discard candidate?' });
+    await expect(discardDialog).toBeVisible();
+    await discardDialog.getByRole('button', { name: 'Discard candidate', exact: true }).click();
     await expect(page.getByText('Pending candidate · Version 3')).not.toBeVisible();
     expect(
       await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId } })
@@ -1147,7 +1161,7 @@ test('SDK authoring, UI activation and HTTP ingestion share the published routin
         'DROP FUNCTION IF EXISTS automation_browser_fail_observation_once()'
       );
     }
-    await db.apiKey.update({ where: { id: key.id }, data: { revokedAt: new Date() } });
+    await db.apiKey.updateMany({ where: { id: key.id }, data: { revokedAt: new Date() } });
   }
 });
 
@@ -1201,6 +1215,18 @@ test('API-only automation authoring, diagnostics and historical restoration use 
         aliases: {},
         mappings: [{ source: 'EVENT' as const, path: 'payload.custom_details.environment' }],
       },
+      // An unmapped probe guarantees observation work in production, where ordinary
+      // mapped values are sampled. Keep the real worker and sampling policy enabled.
+      {
+        fieldId: 'diagnostic-probe',
+        key: 'diagnostic_probe',
+        label: 'Diagnostic probe',
+        type: 'ENUM' as const,
+        caseSensitive: false,
+        aliases: {},
+        allowedValues: ['production'],
+        mappings: [{ source: 'EVENT' as const, path: 'payload.custom_details.diagnostic_probe' }],
+      },
     ],
     rules: [
       {
@@ -1226,7 +1252,7 @@ test('API-only automation authoring, diagnostics and historical restoration use 
       summary: 'API lifecycle certification',
       source: 'private-certification-source',
       severity: 'info' as const,
-      custom_details: { environment: 'private-certification-value' },
+      custom_details: { environment: 'private-certification-value', diagnostic_probe: 'review-me' },
     },
   };
   try {
@@ -1281,7 +1307,10 @@ test('API-only automation authoring, diagnostics and historical restoration use 
       data: event,
     });
     expect(ingested.ok()).toBe(true);
-    const incident = await db.incident.findFirstOrThrow({ where: { serviceId: service.id } });
+    const completed = await completedIngestion(db, ingested);
+    const incident = await db.incident.findUniqueOrThrow({
+      where: { id: completed.data.result.incident.id },
+    });
     await expect
       .poll(
         async () =>
