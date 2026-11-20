@@ -31,4 +31,4 @@ Reference and operations:
 - [Permissions reference](../../reference/mcp/permissions.md): every permission, which roles can use it, and the effective-access rule. Generated from the code.
 - [Catalog and limits](../../reference/mcp/catalog.md): tools, operations, approvals, protocol features and fixed limits.
 - [Tool reference](../../reference/mcp/tools.md): every tool and prompt, with its hints, scopes and inputs. Generated from the code.
-- [Architecture and threat model](../../operate/mcp/architecture.md), [contributing to MCP](../../operate/mcp/contributing.md), [certification status](../../operate/mcp/certification.md), [exclusion review](../../operate/mcp/exclusion-review.md) and [full-parity delivery](../../operate/mcp/full-parity.md).
+- [Architecture and threat model](../../operate/mcp/architecture.md), [contributing to MCP](../../operate/mcp/contributing.md), [release status](../../operate/mcp/certification.md), [exclusion review](../../operate/mcp/exclusion-review.md) and [full-parity delivery](../../operate/mcp/full-parity.md).

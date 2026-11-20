@@ -21,6 +21,17 @@ Once your assistant is connected ([setup](self-hosted-setup.md)), ask in plain l
 
 The assistant can only do what you can do in OpsKnight, and only within what you approved when you connected it.
 
+## Before you begin
+
+- Your assistant is connected to OpsKnight and you approved the connection ([setup](self-hosted-setup.md), [client setup guides](clients/README.md)).
+- Requests that change something also need the matching permission on your account and on the connection (the **Needs** column below).
+
+To get started:
+
+1. Ask "Who am I in OpsKnight, and what can you do for me?" to confirm the connection and see your role and enabled tools.
+2. Ask "What can I ask you?" for suggestions that fit your permissions.
+3. Pick a request for your role from the tables below and ask it in your own words.
+
 ## Example requests
 
 ### On call

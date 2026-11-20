@@ -19,12 +19,22 @@ verification:
 
 Vendor documentation (fetched 12 November 2026): [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) and the [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference) (formerly under developers.openai.com/codex).
 
+## Before you begin
+
+- An administrator has turned on AI assistant access in **Settings → Integrations & ChatOps → MCP (AI Assistants)** (see [MCP setup](../self-hosted-setup.md)).
+- Copy the **MCP server URL** from the **Connect** tab on that page; the examples below use `https://ops.your-company.com/mcp`.
+- You have your own OpsKnight account and the Codex CLI installed.
+
 ## Connect with OAuth (recommended)
 
-```bash
-codex mcp add opsknight --url 'https://ops.your-company.com/mcp'
-codex mcp login opsknight
-```
+1. Add the server and sign in:
+
+   ```bash
+   codex mcp add opsknight --url 'https://ops.your-company.com/mcp'
+   codex mcp login opsknight
+   ```
+
+2. Sign in to OpsKnight in the browser and approve the connection.
 
 `codex mcp login` opens the browser; on a machine without one, add `--no-browser` and open the printed link elsewhere. Codex asks for the scopes OpsKnight's 401 challenge suggests unless you pass `--scopes`.
 
@@ -46,6 +56,12 @@ bearer_token_env_var = "OPSKNIGHT_TOKEN"
 ```
 
 Codex sends `Authorization: Bearer $OPSKNIGHT_TOKEN`. Export the variable in the shell that starts Codex.
+
+## Verify the connection
+
+1. Run `codex mcp list` (or `/mcp` in the TUI) and check the state of `opsknight`.
+2. Ask Codex "Who am I in OpsKnight, and what can you do for me?". It calls `whoami` and answers with your role, teams and enabled tools.
+3. In OpsKnight, select **Check connection** on the **Connect** tab to see the connection you just made.
 
 ## Known limits
 

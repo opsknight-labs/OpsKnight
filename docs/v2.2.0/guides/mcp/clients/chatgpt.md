@@ -19,8 +19,9 @@ verification:
 
 Vendor documentation (fetched 12 November 2026): [Building MCP servers for ChatGPT and API integrations](https://developers.openai.com/api/docs/guides/custom-mcp-server) and [Connect from ChatGPT](https://developers.openai.com/apps-sdk/deploy/connect-chatgpt).
 
-## Before you start
+## Before you begin
 
+- An administrator has turned on AI assistant access in **Settings → Integrations & ChatOps → MCP (AI Assistants)** (see [MCP setup](../self-hosted-setup.md)). Copy the **MCP server URL** from the **Connect** tab on that page.
 - ChatGPT connects from OpenAI's cloud. OpsKnight must be reachable over public HTTPS with a trusted certificate, or through [OpenAI Secure MCP Tunnel](../self-hosted-setup.md#private-installation-openai-secure-mcp-tunnel) for a private installation.
 - Plan and workspace rules change often and OpenAI's help center could not be fetched for this guide. Which plans may add custom MCP servers, and whether write tools are allowed on yours, is decided by OpenAI and your workspace administrator; check the vendor pages above.
 

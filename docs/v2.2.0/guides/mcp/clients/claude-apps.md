@@ -19,8 +19,9 @@ verification:
 
 Vendor documentation: [Getting started with custom connectors using remote MCP](https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp) (fetched 12 November 2026).
 
-## Before you start
+## Before you begin
 
+- An administrator has turned on AI assistant access in **Settings → Integrations & ChatOps → MCP (AI Assistants)** (see [MCP setup](../self-hosted-setup.md)). Copy the **MCP server URL** from the **Connect** tab on that page.
 - Claude connects from Anthropic's cloud, not from your computer. OpsKnight must be reachable from the internet at its App URL with a publicly trusted certificate. A private installation must allow Anthropic's published IP ranges (linked from the vendor page).
 - Connectors you add on claude.ai also appear in Claude Desktop and the mobile apps. Claude Desktop's `claude_desktop_config.json` is only for local (stdio) servers, so do not add OpsKnight there.
 - Plans: custom connectors are available on Free (one custom connector), Pro, Max, Team and Enterprise. On Team and Enterprise only an Owner or Primary Owner can add one for the organization.
@@ -37,6 +38,11 @@ Individual plans:
 Team and Enterprise: an owner adds it under **Organization settings → Connectors → Custom → Web** with the same URL. Each member then selects **Connect** and signs in as themselves, so every member acts with their own OpsKnight permissions.
 
 If **Automatic connections** is off in OpsKnight, an administrator first registers a manual client with redirect URI `https://claude.ai/api/mcp/auth_callback` and you choose **Use your own OAuth client** with its client ID.
+
+## Verify the connection
+
+1. Ask Claude "Who am I in OpsKnight, and what can you do for me?". It calls `whoami` and answers with your role, teams and enabled tools.
+2. In OpsKnight, select **Check connection** on the **Connect** tab to see the connection you just made.
 
 ## Personal access token (alternative)
 
