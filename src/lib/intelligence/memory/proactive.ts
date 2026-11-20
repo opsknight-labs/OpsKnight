@@ -14,6 +14,7 @@ import { getBuiltInPrompt, getGuidance, renderPrompt } from '../ai/prompts';
 import { getAiSettings } from '../ai/settings';
 import { AI_SETTINGS_DEFAULTS } from '../ai/contract';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
 import { incidentSummarySchema, postmortemDraftSchema } from '../drafts/schemas';
 import { PROACTIVE_AI_ACTOR, PROACTIVE_LIMITS, type ProactiveKind } from './contract';
 import {
@@ -183,7 +184,8 @@ async function gather(tx: Tx, incidentId: string): Promise<Gathered | null> {
       select: { kind: true, subjectRef: true, confidence: true, evidence: true },
     }),
     tx.incidentEvent.findMany({
-      where: { incidentId },
+      // Lifecycle only: captured war-room chat would crowd the 40-event window and is untrusted text.
+      where: { incidentId, ...LIFECYCLE_EVENT_WHERE },
       orderBy: { createdAt: 'asc' },
       take: 40,
       select: { createdAt: true, message: true, type: true },
