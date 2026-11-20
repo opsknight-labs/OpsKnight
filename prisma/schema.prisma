@@ -571,6 +571,7 @@ model User {
   intelligencePolicyVersions  IntelligencePolicyVersion[]
   intelligenceEvaluationRuns  IntelligenceEvaluationRun[]
   squireConversations         SquireConversation[]
+  squireDialogueStates        SquireDialogueState[]
   aiUsageDays                 AiUsageUserDay[]
   squireActionReceipts        SquireActionReceipt[]
   squireFeedback              SquireFeedback[]
@@ -6106,6 +6107,7 @@ enum ObservabilityConnectionKind {
   SENTRY
   GITHUB
   GITLAB
+  KUBERNETES
 }
 
 // A read-only connection Squire may query during an AI turn. Credentials are encrypted at rest and never
@@ -6325,6 +6327,20 @@ model SquireConversation {
 
   @@index([userId, updatedAt(sort: Desc)], map: "idx_squire_conversation_owner_recent")
   @@index([updatedAt], map: "idx_squire_conversation_retention")
+}
+
+// Basic-mode dialogue state when there is no saved conversation (history off), shared by every replica.
+// One row per person and incident context ('' for none); encrypted; short-lived and swept on write.
+model SquireDialogueState {
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopeKey       String
+  stateEncrypted String
+  expiresAt      DateTime
+  updatedAt      DateTime @updatedAt
+
+  @@id([userId, scopeKey])
+  @@index([expiresAt], map: "idx_squire_dialogue_state_expiry")
 }
 
 model SquireMessage {

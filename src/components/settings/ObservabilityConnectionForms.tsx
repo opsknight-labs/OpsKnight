@@ -171,6 +171,11 @@ const CREDENTIAL_LABELS: Record<
     secondary: null,
     help: 'A personal, group or project token with read_api.',
   },
+  KUBERNETES: {
+    secret: 'Service account token',
+    secondary: null,
+    help: 'A service account bound to the built-in view ClusterRole. The test lists namespaces.',
+  },
 };
 
 export function ConnectionForm({
@@ -237,7 +242,9 @@ export function ConnectionForm({
                 ? `Leave blank for ${defaultBase}.`
                 : kind === 'GITHUB' || kind === 'GITLAB'
                   ? 'The API address.'
-                  : 'For example https://prometheus.example.com'
+                  : kind === 'KUBERNETES'
+                    ? 'The API server, for example https://k8s.example.com:6443. Its certificate must be publicly trusted.'
+                    : 'For example https://prometheus.example.com'
             }
             placeholder={defaultBase ?? 'https://'}
             defaultValue={connection?.baseUrl ?? ''}

@@ -44,6 +44,7 @@ const BASE: Record<ObservabilityKind, string> = {
   SENTRY: 'https://sentry.io',
   GITHUB: 'https://api.github.com',
   GITLAB: 'https://gitlab.com',
+  KUBERNETES: 'https://k8s.example.com:6443',
 };
 
 function connection(

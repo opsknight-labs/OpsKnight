@@ -20,7 +20,11 @@ import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings
 import { purgeExpiredIntelligenceData } from '@/lib/intelligence/jobs/retention';
 import { DEFAULT_HANDLERS } from '@/lib/intelligence/jobs/runner';
 import { claimWorkItems, WORK_KINDS } from '@/lib/intelligence/jobs/work-queue';
-import { listServiceFacts, removeServiceFact } from '@/lib/intelligence/memory/facts';
+import {
+  listServiceFacts,
+  reconfirmServiceFact,
+  removeServiceFact,
+} from '@/lib/intelligence/memory/facts';
 import {
   resetSquireMemorySchedule,
   scheduleSquireMemoryWork,
@@ -448,6 +452,20 @@ describe('knowledge search', () => {
       });
       expect(result.coverage).toBe('SEMANTIC');
       expect(result.items[0].source.id).toBe(w.incidentB.id);
+      // Hybrid: a passage that shares no word with the query is still found through its vector.
+      const vectorOnly = await searchKnowledgeForActor(await actorOf(admin.id), {
+        query: 'zebra quokka',
+        personal: true,
+      });
+      expect(vectorOnly.coverage).toBe('SEMANTIC');
+      expect(vectorOnly.items.map(item => item.source.id)).toContain(w.incidentB.id);
+      expect(vectorOnly.items.map(item => item.source.id)).not.toContain(w.incidentA.id);
+      // Vector candidates go through the same visibility checks as lexical ones.
+      const hidden = await searchKnowledgeForActor(await actorOf(w.memberA.id), {
+        query: 'zebra quokka',
+        personal: true,
+      });
+      expect(hidden.items.map(item => item.source.id)).not.toContain(w.incidentB.id);
     } finally {
       registerEmbeddingResolver(async () => null);
     }
@@ -568,6 +586,46 @@ describe('learned service facts', () => {
         })
       ).items
     ).toEqual([]);
+
+    // Not re-confirmed for 180 days: still listed (as stale), but never searched or shown to the model.
+    await db.knowledgeChunk.update({
+      where: { id: stored[0].id },
+      data: { sourceUpdatedAt: new Date(Date.now() - 181 * 24 * HOUR) },
+    });
+    expect((await listServiceFacts(await actorOf(w.memberA.id), w.serviceA.id))?.[0]).toMatchObject(
+      { text: fact, stale: true }
+    );
+    const staleSearch = await searchKnowledgeForActor(await actorOf(w.memberA.id), {
+      query: 'failover restarting',
+      personal: false,
+    });
+    expect(staleSearch.items.map(item => item.kind)).not.toContain('SERVICE_FACT');
+    await expect(
+      reconfirmServiceFact(await actorOf(w.memberB.id), {
+        serviceId: w.serviceA.id,
+        factId: stored[0].id,
+      })
+    ).rejects.toThrow();
+    expect(
+      await reconfirmServiceFact(await actorOf(admin.id), {
+        serviceId: w.serviceA.id,
+        factId: stored[0].id,
+      })
+    ).toBe(true);
+    expect((await listServiceFacts(await actorOf(w.memberA.id), w.serviceA.id))?.[0]).toMatchObject(
+      { stale: false }
+    );
+    expect(
+      (
+        await searchKnowledgeForActor(await actorOf(w.memberA.id), {
+          query: 'failover restarting',
+          personal: false,
+        })
+      ).items[0]
+    ).toMatchObject({ kind: 'SERVICE_FACT' });
+    expect(
+      await db.auditLog.count({ where: { action: 'intelligence.squire.fact.reconfirmed' } })
+    ).toBe(1);
 
     await expect(
       removeServiceFact(await actorOf(w.memberB.id), {

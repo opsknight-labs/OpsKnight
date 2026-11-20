@@ -6,7 +6,10 @@ import {
   resetEntityCache,
   resolveEntities,
 } from '@/lib/intelligence/squire/basic/entities';
-import { resetDialogueMemory } from '@/lib/intelligence/assistant/dialogue-state';
+import {
+  readDialogueState,
+  resetDialogueMemory,
+} from '@/lib/intelligence/assistant/dialogue-state';
 import { resetBasicReadCaches } from '@/lib/intelligence/squire/basic/reads';
 import {
   checksFor,
@@ -32,7 +35,7 @@ beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
     throw new Error('Dedicated test DB required');
   await resetDatabase();
-  resetDialogueMemory();
+  await resetDialogueMemory();
   resetEntityCache();
   resetBasicReadCaches();
   resetCheckTemplateCache();
@@ -401,6 +404,36 @@ describe('caching and dialogue state persistence', () => {
     );
     expect(second.text).toContain('## Payments API');
     expect((await db.squireConversation.findUniqueOrThrow({ where: { id } })).state).toBeNull();
+  });
+
+  it('keeps the pending clarification in the database without history, encrypted, for ten minutes', async () => {
+    const w = await world();
+    const first = await collect(streamSquire(w.actor, { message: 'who owns pay', history: [] }));
+    expect(first.text).toContain('Several services match');
+    const [row] = await db.squireDialogueState.findMany({ where: { userId: w.responder.id } });
+    expect(row.scopeKey).toBe('');
+    expect(row.stateEncrypted).not.toContain('who owns pay');
+    expect(row.expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(10 * 60_000);
+    expect(row.expiresAt.getTime() - Date.now()).toBeGreaterThan(9 * 60_000);
+
+    // Nothing lives in process memory: another replica reads the same row and completes the question.
+    const second = await collect(streamSquire(w.actor, { message: 'Payments API', history: [] }));
+    expect(second.text).toContain('## Payments API');
+    expect(
+      await db.squireDialogueState.count({
+        where: { userId: w.responder.id, expiresAt: { gt: new Date() } },
+      })
+    ).toBeLessThanOrEqual(1);
+
+    // An expired clarification is ignored.
+    await collect(streamSquire(w.actor, { message: 'who owns pay', history: [] }));
+    const scope = { userId: w.responder.id, incidentId: null };
+    expect((await readDialogueState(scope))?.pending?.kind).toBe('service');
+    await db.squireDialogueState.updateMany({
+      where: { userId: w.responder.id },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+    expect((await readDialogueState(scope))?.pending).toBeUndefined();
   });
 });
 

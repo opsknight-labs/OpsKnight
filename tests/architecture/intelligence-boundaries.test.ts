@@ -287,6 +287,7 @@ describe('intelligence architecture boundaries', () => {
     expect([...new Set(delegates)].sort()).toEqual([
       'squireCheckTemplate',
       'squireConversation',
+      'squireDialogueState',
       'squireFeedback',
     ]);
     // Dialogue state may only touch the state column of the person's own conversation.

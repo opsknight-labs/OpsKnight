@@ -1,7 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import { ProactivePolicyForm, RemoveFactButton } from '@/components/settings/SquireMemoryForms';
+import {
+  ProactivePolicyForm,
+  ReconfirmFactButton,
+  RemoveFactButton,
+} from '@/components/settings/SquireMemoryForms';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { serviceReadWhere } from '@/lib/authorization-filters';
@@ -69,7 +73,7 @@ export default async function ServiceSquirePage({
 
       <SettingsSection
         title="Learned facts"
-        description="Facts Squire proposed during an investigation and a person confirmed. Squire cites them when it answers."
+        description="Facts Squire proposed during an investigation and a person confirmed. Squire cites them when it answers, for 180 days after the last confirmation."
       >
         {!memory.knowledgeEnabled && (
           <p className="py-2 text-sm text-muted-foreground">
@@ -88,11 +92,18 @@ export default async function ServiceSquirePage({
                 <div className="min-w-0 space-y-1">
                   <p className="whitespace-pre-wrap break-words text-sm">{fact.text}</p>
                   <p className="text-xs text-muted-foreground">
-                    Confirmed {fact.createdAt.toISOString().slice(0, 10)}
+                    Confirmed {fact.confirmedAt.toISOString().slice(0, 10)}
                     {fact.approvedBy ? ` by ${fact.approvedBy}` : ''}
+                    {fact.stale &&
+                      ' · Stale: Squire stops using it until someone confirms it again.'}
                   </p>
                 </div>
-                {canCurate && <RemoveFactButton serviceId={service.id} factId={fact.id} />}
+                {canCurate && (
+                  <div className="flex flex-wrap gap-2">
+                    <ReconfirmFactButton serviceId={service.id} factId={fact.id} />
+                    <RemoveFactButton serviceId={service.id} factId={fact.id} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>

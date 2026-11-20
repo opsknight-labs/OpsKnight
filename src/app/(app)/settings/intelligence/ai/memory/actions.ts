@@ -5,7 +5,7 @@ import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';
-import { removeServiceFact } from '@/lib/intelligence/memory/facts';
+import { reconfirmServiceFact, removeServiceFact } from '@/lib/intelligence/memory/facts';
 import {
   updateSquireMemorySettings,
   updateSquireServicePolicy,
@@ -106,6 +106,24 @@ export async function removeServiceFactAction(
     return removed
       ? { message: 'Fact removed.', ok: true }
       : { message: 'That fact was already removed.', ok: false };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Re-confirms one learned fact, so Squire keeps using it. Same permission as removing it. */
+export async function reconfirmServiceFactAction(
+  _state: SquireMemoryActionState,
+  form: FormData
+): Promise<SquireMemoryActionState> {
+  try {
+    const actor = await getCurrentAuthorizationActor();
+    const serviceId = text(form, 'serviceId');
+    const done = await reconfirmServiceFact(actor, { serviceId, factId: text(form, 'factId') });
+    revalidatePath(servicePath(serviceId));
+    return done
+      ? { message: 'Fact re-confirmed.', ok: true }
+      : { message: 'That fact was removed.', ok: false };
   } catch (error) {
     return failure(error);
   }

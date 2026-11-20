@@ -7,12 +7,14 @@ import { redactSecrets } from '../ai/redact';
 import { resolveEmbeddingModel } from '../ai/port';
 import { dot, normalizeVector } from '../semantic/vector';
 import { withDbBudget } from '../jobs/db-budget';
+import { detectCapabilities } from '../similarity/capabilities';
 import {
-  blendKnowledgeScore,
   KNOWLEDGE_LIMITS,
   KNOWLEDGE_SOURCE_KINDS,
   knowledgeTsQuery,
+  factStaleBefore,
   PERSONAL_KNOWLEDGE_KINDS,
+  reciprocalRankFusion,
   type KnowledgeSourceKindValue,
 } from './contract';
 import { getSquireMemorySettings } from './settings';
@@ -32,7 +34,7 @@ export interface KnowledgeSearchItem {
 
 export interface KnowledgeSearchResult {
   items: KnowledgeSearchItem[];
-  /** Off: the index is switched off. Lexical: full-text/trigram only. Semantic: re-ranked with embeddings. */
+  /** Off: the index is switched off. Lexical: full-text/trigram only. Semantic: fused with embedding similarity. */
   coverage: 'OFF' | 'LEXICAL' | 'SEMANTIC';
 }
 
@@ -49,6 +51,8 @@ interface Candidate {
   embeddingModel: string | null;
   lexical: number;
 }
+
+const MAX_VECTOR_DIMS = 16_000;
 
 let trigramAvailable: { value: boolean; at: number } | null = null;
 async function hasTrigram(client: Prisma.TransactionClient): Promise<boolean> {
@@ -141,10 +145,18 @@ export async function searchKnowledgeForActor(
   );
   if (kinds.length === 0) return { items: [], coverage: 'LEXICAL' };
   const limit = Math.max(1, Math.min(input.limit ?? KNOWLEDGE_LIMITS.resultLimit, 20));
-  const service = input.serviceId
-    ? Prisma.sql`AND (c."serviceId" = ${input.serviceId} OR c."serviceId" IS NULL)`
-    : Prisma.empty;
+  // Stale learned facts (not re-confirmed within the TTL) never reach a prompt.
+  const service = Prisma.sql`${
+    input.serviceId
+      ? Prisma.sql`AND (c."serviceId" = ${input.serviceId} OR c."serviceId" IS NULL)`
+      : Prisma.empty
+  } AND (c."sourceKind" <> 'SERVICE_FACT' OR c."sourceUpdatedAt" >= ${factStaleBefore()})`;
   const scope = scopeSql(actor);
+  const queryVector = await embedQuery(actor, query, input.signal);
+  const vectorSearch =
+    queryVector && (await detectCapabilities()).vectorAvailable ? queryVector : null;
+  // Ranked by cosine similarity, best first: from the vector search, or the in-memory fallback below.
+  let semantic: Array<{ id: string; cosine: number }> | null = null;
 
   const candidates = await withDbBudget({ maxDbMs: 1_500 }, async tx => {
     const lexical = await tx.$queryRaw<Array<Omit<Candidate, 'lexical'> & { rank: number }>>`
@@ -173,6 +185,33 @@ export async function searchKnowledgeForActor(
     }
     return rows;
   });
+  if (vectorSearch) {
+    // Vector candidates of their own, so a chunk that shares no words with the query can still be found.
+    // Its own budget: a failure here leaves the lexical candidates standing.
+    const size = Prisma.raw(String(vectorSearch.vector.length));
+    const literal = `[${vectorSearch.vector.join(',')}]`;
+    const nearest = await withDbBudget(
+      { maxDbMs: 1_500 },
+      tx =>
+        tx.$queryRaw<Array<Omit<Candidate, 'lexical'> & { cosine: number }>>`
+        SELECT c.id, c."sourceKind"::text AS kind, c."sourceId", c."serviceId", c."incidentId", c."runbookId",
+          c.title, c.text, c."sourceUpdatedAt", c."embeddingModel",
+          (1 - (c.embedding::vector(${size}) <=> ${literal}::vector(${size})))::float8 AS cosine
+        FROM "KnowledgeChunk" c
+        WHERE c."embeddingModel" = ${vectorSearch.model}
+          AND array_length(c.embedding, 1) = ${vectorSearch.vector.length}
+          AND c."sourceKind"::text = ANY(${kinds}::text[]) ${service} ${scope}
+        ORDER BY c.embedding::vector(${size}) <=> ${literal}::vector(${size}), c.id
+        LIMIT ${KNOWLEDGE_LIMITS.candidateLimit}`
+    ).catch(() => []);
+    const seen = new Set(candidates.map(row => row.id));
+    semantic = [];
+    for (const { cosine, ...row } of nearest) {
+      if (!(cosine > 0)) continue;
+      semantic.push({ id: row.id, cosine });
+      if (!seen.has(row.id)) candidates.push({ ...row, lexical: 0 });
+    }
+  }
   if (candidates.length === 0) return { items: [], coverage: 'LEXICAL' };
 
   const ids = (pick: (candidate: Candidate) => string | null) => [
@@ -219,14 +258,20 @@ export async function searchKnowledgeForActor(
     return incidents.has(source.id);
   });
 
-  const semantic = await semanticScores(actor, query, visible, input.signal);
+  // Without pgvector, the lexical candidates are re-ranked by cosine in memory instead.
+  if (queryVector && !vectorSearch)
+    semantic = await cosineOf(queryVector, visible).catch(() => null);
+  const visibleIds = new Set(visible.map(candidate => candidate.id));
+  const lexicalOrder = visible
+    .filter(candidate => candidate.lexical > 0)
+    .sort((a, b) => b.lexical - a.lexical)
+    .map(candidate => candidate.id);
+  const semanticOrder = semantic?.filter(row => visibleIds.has(row.id)).map(row => row.id) ?? [];
+  const fused = semanticOrder.length ? reciprocalRankFusion([lexicalOrder, semanticOrder]) : null;
   const ranked = visible
     .map(candidate => ({
       candidate,
-      score: blendKnowledgeScore(
-        candidate.lexical,
-        semantic?.get(candidate.id) ?? (semantic ? 0 : null)
-      ),
+      score: fused ? (fused.get(candidate.id) ?? 0) : Math.min(1, candidate.lexical),
     }))
     .sort(
       (a, b) => b.score - a.score || +b.candidate.sourceUpdatedAt - +a.candidate.sourceUpdatedAt
@@ -234,7 +279,7 @@ export async function searchKnowledgeForActor(
     .slice(0, limit);
 
   return {
-    coverage: semantic ? 'SEMANTIC' : 'LEXICAL',
+    coverage: fused ? 'SEMANTIC' : 'LEXICAL',
     items: ranked.map(({ candidate, score }) => ({
       chunkId: candidate.id,
       kind: candidate.kind,
@@ -250,29 +295,43 @@ export async function searchKnowledgeForActor(
 const shorten = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
 
-/** Cosine similarity per visible candidate, or null when no compatible embedding provider is configured. */
-async function semanticScores(
+/** The query's embedding, or null when no embedding provider is configured or no chunk carries its model. */
+async function embedQuery(
   actor: AuthorizationActor,
   query: string,
-  candidates: Candidate[],
   signal?: AbortSignal
-): Promise<Map<string, number> | null> {
-  if (candidates.length === 0 || !candidates.some(c => c.embeddingModel)) return null;
+): Promise<{ model: string; vector: number[] } | null> {
   try {
     const port = await resolveEmbeddingModel('PERSONAL');
     if (!port || signal?.aborted) return null;
-    const usable = candidates.filter(candidate => candidate.embeddingModel === port.model);
-    if (usable.length === 0) return null;
+    const indexed = await prisma.knowledgeChunk.findFirst({
+      where: { embeddingModel: port.model },
+      select: { id: true },
+    });
+    if (!indexed) return null;
     const { vectors } = await port.embed([query], { actorId: actor.id, signal });
     const vector = normalizeVector(vectors[0] ?? []);
-    if (!vector) return null;
-    const rows = await prisma.knowledgeChunk.findMany({
-      where: { id: { in: usable.map(candidate => candidate.id) }, embeddingModel: port.model },
-      select: { id: true, embedding: true },
-    });
-    return new Map(rows.map(row => [row.id, Math.max(0, dot(vector, row.embedding))]));
+    return vector && vector.length <= MAX_VECTOR_DIMS ? { model: port.model, vector } : null;
   } catch {
-    // The semantic re-rank is an optional improvement; lexical results always stand on their own.
+    // Semantic retrieval is an optional improvement; lexical results always stand on their own.
     return null;
   }
+}
+
+/** Cosine similarity of the visible candidates embedded with the same model, best first. */
+async function cosineOf(
+  query: { model: string; vector: number[] },
+  candidates: Candidate[]
+): Promise<Array<{ id: string; cosine: number }>> {
+  const usable = candidates.filter(candidate => candidate.embeddingModel === query.model);
+  if (usable.length === 0) return [];
+  const rows = await prisma.knowledgeChunk.findMany({
+    where: { id: { in: usable.map(candidate => candidate.id) }, embeddingModel: query.model },
+    select: { id: true, embedding: true },
+  });
+  return rows
+    .filter(row => row.embedding.length === query.vector.length)
+    .map(row => ({ id: row.id, cosine: dot(query.vector, row.embedding) }))
+    .filter(row => row.cosine > 0)
+    .sort((a, b) => b.cosine - a.cosine);
 }

@@ -56,6 +56,44 @@ export interface ErrorsQuery {
   window: TimeWindow;
 }
 
+export interface KubernetesQuery {
+  /** Validated DNS-1123 label. */
+  namespace: string;
+  /** Validated Kubernetes label selector, for workloads and pods. */
+  labelSelector?: string;
+}
+
+export interface KubernetesSummary {
+  namespace: string;
+  workloads: Array<{
+    kind: string;
+    name: string;
+    desired: number;
+    ready: number;
+    updated: number;
+    available: number;
+    rollout: 'complete' | 'progressing' | 'stalled';
+    message?: string;
+  }>;
+  pods: Array<{
+    name: string;
+    phase: string;
+    ready: boolean;
+    restarts: number;
+    reason?: string;
+    lastTermination?: string;
+  }>;
+  events: Array<{
+    at: string | null;
+    type: string;
+    reason: string;
+    object: string;
+    message: string;
+    count: number;
+  }>;
+  truncated: { workloads: boolean; pods: boolean; events: boolean };
+}
+
 export interface ChangeRef {
   provider: 'github' | 'gitlab';
   host: string;
@@ -81,6 +119,11 @@ export interface ConnectorAdapter {
   traces?(context: AdapterContext, query: TracesQuery): Promise<TracesSummary>;
   errors?(context: AdapterContext, query: ErrorsQuery): Promise<ErrorsSummary>;
   diff?(context: AdapterContext, ref: ChangeRef): Promise<DiffSummary>;
+  /** Metric names starting with a prefix (Prometheus-compatible backends only). */
+  metricNames?(context: AdapterContext, prefix: string): Promise<string[]>;
+  /** Values one label takes on one metric (Prometheus-compatible backends only). */
+  labelValues?(context: AdapterContext, metric: string, label: string): Promise<string[]>;
+  kubernetes?(context: AdapterContext, query: KubernetesQuery): Promise<KubernetesSummary>;
 }
 
 export function httpFor(

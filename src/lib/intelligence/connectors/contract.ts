@@ -15,27 +15,37 @@ export const OBSERVABILITY_KINDS = [
   'SENTRY',
   'GITHUB',
   'GITLAB',
+  'KUBERNETES',
 ] as const;
 export type ObservabilityKind = (typeof OBSERVABILITY_KINDS)[number];
 
 /** What a connection can answer. Each Squire tool needs exactly one of these. */
-export const CONNECTOR_CAPABILITIES = ['metrics', 'logs', 'traces', 'errors', 'diff'] as const;
+export const CONNECTOR_CAPABILITIES = [
+  'metrics',
+  'logs',
+  'traces',
+  'errors',
+  'diff',
+  'catalog',
+  'kubernetes',
+] as const;
 export type ConnectorCapability = (typeof CONNECTOR_CAPABILITIES)[number];
 
 export const KIND_CAPABILITIES: Readonly<
   Record<ObservabilityKind, readonly ConnectorCapability[]>
 > = {
-  PROMETHEUS: ['metrics'],
+  PROMETHEUS: ['metrics', 'catalog'],
   LOKI: ['logs'],
   TEMPO: ['traces'],
   // Grafana is reached through its data-source proxy: a Prometheus or Loki data source.
-  GRAFANA: ['metrics', 'logs'],
+  GRAFANA: ['metrics', 'logs', 'catalog'],
   DATADOG: ['metrics', 'logs', 'traces'],
   ELASTIC: ['logs'],
   CLOUDWATCH: ['metrics', 'logs'],
   SENTRY: ['errors'],
   GITHUB: ['diff'],
   GITLAB: ['diff'],
+  KUBERNETES: ['kubernetes'],
 };
 
 const CAPABILITY_LABELS: Readonly<Record<ConnectorCapability, string>> = {
@@ -44,6 +54,8 @@ const CAPABILITY_LABELS: Readonly<Record<ConnectorCapability, string>> = {
   traces: 'traces',
   errors: 'error events',
   diff: 'code diffs',
+  catalog: 'metric names and label values',
+  kubernetes: 'workload state and events',
 };
 
 /** "metrics, logs" — what a kind of connection can answer, for the settings page. */
@@ -63,6 +75,7 @@ export const KIND_LABELS: Readonly<Record<ObservabilityKind, string>> = {
   SENTRY: 'Sentry',
   GITHUB: 'GitHub',
   GITLAB: 'GitLab',
+  KUBERNETES: 'Kubernetes (read-only)',
 };
 
 /** The public endpoint used when an administrator leaves the base URL blank. */
