@@ -35,7 +35,7 @@ test('the 2.2.0 catalog is the current catalog and keeps every 2.1.0 capability'
   const previous = YAML.parse(readFileSync('docs/v2.1.0/capabilities.yaml', 'utf8'));
   assert.equal(current.catalog, 'current');
   for (const id of Object.keys(previous.capabilities))
-    assert.ok(current.capabilities[id], `Dropped capability: ${id}`);
+    assert.ok(Object.hasOwn(current.capabilities, id), `Dropped capability: ${id}`);
   assert.ok(current.capabilities.mcp_assistants, 'mcp_assistants is mapped');
 });
 
