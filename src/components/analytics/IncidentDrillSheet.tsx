@@ -25,7 +25,7 @@ import { formatDuration, formatMetric } from './format';
 
 type State =
   | { status: 'loading' }
-  | { status: 'error' }
+  | { status: 'error'; message: string; reference?: string }
   | { status: 'ready'; total: number; incidents: DrillIncident[]; nextCursor: string | null };
 
 /**
@@ -66,7 +66,12 @@ export default function IncidentDrillSheet({
       cache: 'no-store',
     });
     const body = await response.json().catch(() => null);
-    if (!response.ok || !body?.success) throw new Error('Request failed');
+    if (!response.ok || !body?.success) {
+      // Say what actually failed (status + reference), not a generic connection hint.
+      throw Object.assign(new Error(body?.error || `The server returned HTTP ${response.status}.`), {
+        reference: body?.requestId ?? response.headers.get('x-request-id') ?? undefined,
+      });
+    }
     return body.data as DrillPage;
   };
 
@@ -76,7 +81,16 @@ export default function IncidentDrillSheet({
     setMoreState('idle');
     fetchPage().then(
       page => id === request.current && setState({ status: 'ready', ...page }),
-      () => id === request.current && setState({ status: 'error' })
+      (error: Error & { reference?: string }) =>
+        id === request.current &&
+        setState({
+          status: 'error',
+          message:
+            error instanceof TypeError
+              ? 'Could not reach the server. Check your connection and try again.'
+              : error.message,
+          reference: error.reference,
+        })
     );
   };
 
@@ -133,7 +147,8 @@ export default function IncidentDrillSheet({
           <ErrorState
             variant="inline"
             title="Couldn't load incidents"
-            message="Check your connection and try again."
+            message={state.message}
+            errorCode={state.reference}
             onRetry={loadFirst}
           />
         ) : state.incidents.length === 0 ? (
