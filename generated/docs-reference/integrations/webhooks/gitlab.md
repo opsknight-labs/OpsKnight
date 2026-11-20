@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["GitLab webhook", "connect GitLab", "GitLab alerts", "GitLab integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/gitlab.ts
     - src/app/api/integrations/gitlab/route.ts

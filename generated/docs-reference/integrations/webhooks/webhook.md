@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Generic webhook webhook", "connect Generic webhook", "Generic webhook alerts", "Generic webhook integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/webhook.ts
     - src/app/api/integrations/webhook/route.ts

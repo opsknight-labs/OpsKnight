@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["GitHub webhook", "connect GitHub", "GitHub alerts", "GitHub integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/github.ts
     - src/app/api/integrations/github/route.ts

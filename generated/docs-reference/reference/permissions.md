@@ -6,7 +6,7 @@ product_area: authorization
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-27
+  verified_at: 2026-11-20
   evidence:
     - src/lib/authorization.ts
 ---
@@ -25,6 +25,7 @@ resource scope remain authoritative.
 
 ## Capabilities
 
+- `access.review.manage`
 - `admin.manage`
 - `audit.export`
 - `audit.read`
@@ -46,6 +47,7 @@ resource scope remain authoritative.
 - `incident.note.scoped`
 - `incident.read.all`
 - `incident.read.scoped`
+- `incident.resolve.scoped`
 - `incident.sensitive.read`
 - `metrics.read.all`
 - `metrics.read.scoped`
@@ -100,12 +102,15 @@ resource scope remain authoritative.
 - `incident.manage`
 - `incident.note`
 - `incident.read`
+- `incident.resolve`
 - `integration.create`
 - `integration.credentials.manage`
 - `integration.delete`
 - `integration.manage`
 - `integration.read`
 - `integration.test`
+- `maintenance_window.manage`
+- `maintenance_window.read`
 - `notification.manage`
 - `notification.preferences.manage`
 - `notification.preferences.read`

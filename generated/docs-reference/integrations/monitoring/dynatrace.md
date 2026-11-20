@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Dynatrace webhook", "connect Dynatrace", "Dynatrace alerts", "Dynatrace integration"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/dynatrace.ts
     - src/app/api/integrations/dynatrace/route.ts

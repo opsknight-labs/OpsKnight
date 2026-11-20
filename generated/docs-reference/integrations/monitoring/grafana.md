@@ -7,7 +7,7 @@ audience: [administrator, operator]
 keywords: ["Grafana webhook", "connect Grafana", "Grafana alerts", "Grafana integration", "Grafana contact point"]
 verification:
   level: source
-  verified_at: 2026-10-21
+  verified_at: 2026-11-20
   evidence:
     - src/lib/integrations/grafana.ts
     - src/app/api/integrations/grafana/route.ts
@@ -47,7 +47,7 @@ place them in logs or source control.
 
 The endpoint requires the integration identifier.
 Signature verification is **conditional-when-secret-configured** using the
-`grafana` verification contract and headers `x-grafana-signature`.
+`grafana` verification contract and headers `x-grafana-alerting-signature`, `x-grafana-signature`.
 The exact payload schema is defined by `src/app/api/integrations/grafana/route.ts` and `src/lib/integrations/grafana.ts`.
 
 - Method: `POST`
