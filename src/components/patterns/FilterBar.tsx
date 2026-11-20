@@ -18,6 +18,8 @@ export type FilterBarSearch = {
   placeholder?: string;
   /** Accessible name; defaults to the placeholder. */
   label?: string;
+  /** DOM id, for keyboard shortcuts that focus the search box. */
+  id?: string;
   /** Debounce server-backed searches so each keystroke does not hit the database. */
   debounceMs?: number;
 };
@@ -48,7 +50,7 @@ export type FilterBarProps = {
 };
 
 function FilterSearchInput({ search }: { search: FilterBarSearch }) {
-  const { value, onChange, placeholder = 'Search…', label, debounceMs = 0 } = search;
+  const { value, onChange, placeholder = 'Search…', label, id, debounceMs = 0 } = search;
   const [draft, setDraft] = useState(value);
   const [synced, setSynced] = useState(value);
   const skipNextDebounce = useRef(false);
@@ -86,6 +88,7 @@ function FilterSearchInput({ search }: { search: FilterBarSearch }) {
         className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
       />
       <Input
+        id={id}
         type="search"
         aria-label={label ?? placeholder}
         placeholder={placeholder}
@@ -151,7 +154,7 @@ export default function FilterBar({
       className={cn('rounded-lg border border-border bg-card shadow-sm', className)}
     >
       {hasHeader && (
-        <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-1 pt-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 pb-0.5 pt-3">
           <div className="min-w-0">
             {title && (
               <h2 className="flex items-center gap-2 font-display text-base font-semibold tracking-tight text-foreground">
@@ -175,7 +178,7 @@ export default function FilterBar({
         </div>
       )}
 
-      <div className={cn('space-y-3 p-3', hasHeader && 'px-4 pb-4 pt-2')}>
+      <div className={cn('space-y-2.5 p-2.5', hasHeader && 'px-3.5 pb-3 pt-1.5')}>
         {chips && (
           <div
             role="group"
@@ -187,14 +190,14 @@ export default function FilterBar({
         )}
 
         {(search || filters || (!hasHeader && (clearButton || actions))) && (
-          <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end md:justify-between">
-            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between">
+            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               {search && <FilterSearchInput search={search} />}
-              {filters && <div className="flex flex-wrap items-end gap-2.5">{filters}</div>}
+              {filters && <div className="flex flex-wrap items-center gap-2">{filters}</div>}
               {!hasHeader && clearButton}
             </div>
             {!hasHeader && actions && (
-              <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border pt-3 md:border-t-0 md:pt-0">
+              <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border pt-2 md:border-t-0 md:pt-0">
                 {actions}
               </div>
             )}
@@ -226,7 +229,7 @@ export default function FilterBar({
                 />
               </Button>
             </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 grid grid-cols-1 gap-3 border-t border-border pt-3 sm:grid-cols-2 lg:grid-cols-4">
+            <CollapsibleContent className="mt-2 grid grid-cols-1 gap-3 border-t border-border pt-3 data-[state=closed]:hidden sm:grid-cols-2 lg:grid-cols-4">
               {advanced}
             </CollapsibleContent>
           </Collapsible>
@@ -240,26 +243,23 @@ export default function FilterBar({
 export function FilterField({
   label,
   htmlFor,
-  icon,
+  icon: _icon,
   children,
   className,
 }: {
   label: string;
   htmlFor?: string;
-  /** Small lucide icon shown before the label. */
+  /** Accepted for compatibility; the compact bar does not render it. */
   icon?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   const fallbackId = useId();
   return (
-    <div className={cn('flex min-w-[10rem] flex-col gap-1.5', className)}>
-      <Label
-        htmlFor={htmlFor}
-        id={htmlFor ? undefined : fallbackId}
-        className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground [&_svg]:h-3 [&_svg]:w-3"
-      >
-        {icon && <span aria-hidden="true">{icon}</span>}
+    <div className={cn('flex min-w-[9rem] flex-col', className)}>
+      {/* Compact bar: the label names the control for assistive tech; the
+          selected value ("All statuses") already says what it filters. */}
+      <Label htmlFor={htmlFor} id={htmlFor ? undefined : fallbackId} className="sr-only">
         {label}
       </Label>
       <div role={htmlFor ? undefined : 'group'} aria-labelledby={htmlFor ? undefined : fallbackId}>
@@ -349,7 +349,7 @@ export function FilterChip({
       }
       onClick={removable ? onRemove : onClick}
       className={cn(
-        'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors duration-150',
+        'inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors duration-150',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'disabled:pointer-events-none disabled:opacity-50 [&_svg]:h-3.5 [&_svg]:w-3.5',
         active || removable
