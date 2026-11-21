@@ -222,6 +222,13 @@ export const StatusPageSettingsSchema = z
       .max(10000)
       .optional()
       .transform(ids => (ids ? Array.from(new Set(ids)) : ids)),
+    /** Business services shown on the page, in display order. */
+    businessServiceIds: z
+      .array(z.string().min(1).max(100))
+      .max(200)
+      .optional()
+      .transform(ids => (ids ? Array.from(new Set(ids)) : ids)),
+    serviceLayout: z.enum(['FLAT', 'BUSINESS', 'BUSINESS_EXPANDABLE']).optional(),
     serviceConfigs: z
       .record(
         z.object({

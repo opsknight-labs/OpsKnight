@@ -71,6 +71,27 @@ export interface PublicStatusService {
   history?: PublicStatusHistory;
 }
 
+/** How the page lists services. FLAT is the original list; absent means FLAT. */
+export type PublicServiceLayout = 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
+
+/**
+ * A customer-facing capability (Checkout, Payments) made of published technical services.
+ * Status is the worst member status; uptime is the weakest member's; history is merged.
+ */
+export interface PublicBusinessService {
+  id: string;
+  name: string;
+  description?: string | null;
+  status: PublicServiceStatus;
+  statusSince?: string;
+  /** Published member services, in page order; their rows live in `services`. */
+  memberServiceIds: string[];
+  activeIncidentCount: number;
+  impactedServiceCount: number;
+  uptime?: { days30: PublicUptimeWindow; days90: PublicUptimeWindow };
+  history?: PublicStatusHistory;
+}
+
 export interface PublicRegionStatus {
   name: string;
   status: PublicServiceStatus;
@@ -282,6 +303,8 @@ export interface PublicStatusPageSnapshot {
     subscription?: PublicSubscriptionCapabilities;
     showSubscribe: boolean;
     showServicesByRegion: boolean;
+    /** Additive in schema 3: present only when the page groups services by business service. */
+    serviceLayout?: PublicServiceLayout;
     showRegionHeatmap: boolean;
     showPostIncidentReview: boolean;
     showChangelog: boolean;
@@ -335,6 +358,8 @@ export interface PublicStatusPageSnapshot {
   /** The page's own SLA thresholds, so every surface grades uptime the same way. */
   thresholds?: { uptimeExcellent: number; uptimeGood: number };
   services: PublicStatusService[];
+  /** Additive in schema 3: present only when `page.serviceLayout` is not FLAT. */
+  businessServices?: PublicBusinessService[];
   regions: PublicRegionStatus[];
   incidents: PublicIncident[];
   maintenance?: PublicMaintenance[];

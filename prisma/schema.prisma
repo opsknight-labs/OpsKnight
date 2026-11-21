@@ -287,6 +287,14 @@ enum StatusPageSubscriptionState {
   COMPLAINED
 }
 
+/// How a status page lists its services: flat (default), grouped under business services, or
+/// grouped with each business service expandable to its technical services.
+enum StatusPageServiceLayout {
+  FLAT
+  BUSINESS
+  BUSINESS_EXPANDABLE
+}
+
 enum StatusPageAnnouncementNotificationTiming {
   NONE
   ON_PUBLISH
@@ -561,6 +569,7 @@ model User {
   incidentWatchers            IncidentWatcher[]
   incidentRoles               IncidentRoleAssignment[]        @relation("IncidentRoleHolder")
   incidentRolesAssigned       IncidentRoleAssignment[]        @relation("IncidentRoleAssigner")
+  businessServiceFollows      BusinessServiceFollower[]
   auditLogs                   AuditLog[]
   overrides                   OnCallOverride[]             @relation("OverrideUser")
   overrideReplacements        OnCallOverride[]             @relation("OverrideReplacesUser")
@@ -680,6 +689,7 @@ model Team {
   savedReports      SavedReport[]
   analyticsViews    AnalyticsView[]
   runbooks          Runbook[]          @relation("RunbookOwnerTeam")
+  businessServices  BusinessService[]
   teamLeadId        String?
   teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
 }
@@ -763,6 +773,7 @@ model Service {
   slackIntegration                SlackIntegration?               @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
   jiraServiceMapping              JiraServiceMapping?
   subscriptionServices            StatusPageSubscriptionService[]
+  businessServiceMemberships      BusinessServiceMember[]
   slackDestinations               SlackDestination[]
   microsoftTeamsDestinations      MicrosoftTeamsDestination[]
   intelligencePolicy              IntelligencePolicy?
@@ -2716,6 +2727,8 @@ model StatusPage {
   snapshot                    StatusPageSnapshot?
   assets                      StatusPageAsset[]
   routeOperations             StatusPageRouteOperation[]
+  serviceLayout               StatusPageServiceLayout    @default(FLAT)
+  businessServices            StatusPageBusinessService[]
 
   @@index([enabled])
   @@index([isDefault, enabled])
@@ -2790,6 +2803,8 @@ model StatusPageAnnouncement {
   type                   String                                   @default("INFO")
   incidentId             String?
   affectedServiceIds     Json?
+  /// Business services named on the update; their member services count as affected.
+  affectedBusinessServiceIds Json?
   startDate              DateTime
   endDate                DateTime?
   allDay                 Boolean                                  @default(false)
@@ -2850,6 +2865,7 @@ model StatusPageSubscription {
   statusPage                 StatusPage                      @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
   deliveryTokens             StatusPageSubscriptionToken[]
   selectedServices           StatusPageSubscriptionService[]
+  selectedBusinessServices   StatusPageSubscriptionBusinessService[]
 
   @@unique([statusPageId, email])
   @@index([statusPageId, verified])
@@ -2867,6 +2883,74 @@ model StatusPageSubscriptionService {
   @@id([subscriptionId, serviceId])
   @@index([serviceId])
   @@index([subscriptionId])
+}
+
+model StatusPageSubscriptionBusinessService {
+  subscriptionId    String
+  businessServiceId String
+  createdAt         DateTime               @default(now())
+  subscription      StatusPageSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  businessService   BusinessService        @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+
+  @@id([subscriptionId, businessServiceId])
+  @@index([businessServiceId])
+}
+
+/// A customer-facing capability (Checkout, Payments) made of technical services.
+model BusinessService {
+  id                String                                  @id @default(cuid())
+  name              String                                  @unique
+  description       String?
+  tier              String?
+  ownerTeamId       String?
+  createdAt         DateTime                                @default(now())
+  updatedAt         DateTime                                @updatedAt
+  ownerTeam         Team?                                   @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
+  members           BusinessServiceMember[]
+  followers         BusinessServiceFollower[]
+  statusPages       StatusPageBusinessService[]
+  subscriptions     StatusPageSubscriptionBusinessService[]
+
+  @@index([ownerTeamId])
+}
+
+model BusinessServiceMember {
+  businessServiceId String
+  serviceId         String
+  createdAt         DateTime        @default(now())
+  businessService   BusinessService @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+  service           Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([businessServiceId, serviceId])
+  @@index([serviceId])
+}
+
+/// Internal stakeholders who get plain-language updates when a member service is affected.
+model BusinessServiceFollower {
+  businessServiceId String
+  userId            String
+  createdAt         DateTime        @default(now())
+  businessService   BusinessService @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([businessServiceId, userId])
+  @@index([userId])
+}
+
+model StatusPageBusinessService {
+  id                String          @id @default(cuid())
+  statusPageId      String
+  businessServiceId String
+  displayName       String?
+  order             Int             @default(0)
+  showOnPage        Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  statusPage        StatusPage      @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  businessService   BusinessService @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+
+  @@unique([statusPageId, businessServiceId])
+  @@index([statusPageId, order])
+  @@index([businessServiceId])
 }
 
 model StatusPageSubscriptionToken {

@@ -21,6 +21,8 @@ const sectionFields = new Map<string, readonly string[]>([
     [
       'serviceIds',
       'serviceConfigs',
+      'serviceLayout',
+      'businessServiceIds',
       'showServices',
       'showServicesByRegion',
       'showServiceOwners',

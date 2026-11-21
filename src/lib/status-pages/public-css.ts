@@ -3046,4 +3046,99 @@ ${R} .status-subscribe-block { padding-block: 1.5rem 0; }
     padding-block-end: 2px;
   }
 }
+
+/* Business-service layouts. Only --status-* and --primary tokens, so every theme inherits them. */
+${R} .status-v3-business__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-block-size: 2rem;
+  margin: -0.25rem -0.35rem;
+  padding: 0.25rem 0.35rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+${R} .status-v3-business__toggle:hover { background: var(--status-panel-muted-bg); }
+${R} .status-v3-business__toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+${R} .status-v3-business__chevron {
+  flex-shrink: 0;
+  color: var(--status-text-subtle);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+${R} .status-v3-business__toggle[aria-expanded="true"] .status-v3-business__chevron {
+  transform: rotate(90deg);
+}
+${R} .status-v3-business__tally {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--status-panel-border);
+  border-radius: 4px;
+  background: var(--status-panel-muted-bg);
+  color: var(--status-text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+${R} .status-v3-business[data-status="degraded"] .status-v3-business__tally--impacted {
+  color: var(--status-degraded);
+  background: var(--status-degraded-bg);
+  border-color: color-mix(in srgb, var(--status-degraded) 30%, transparent);
+}
+${R} .status-v3-business[data-status="partial-outage"] .status-v3-business__tally--impacted {
+  color: var(--status-partial-outage);
+  background: var(--status-partial-outage-bg);
+  border-color: color-mix(in srgb, var(--status-partial-outage) 30%, transparent);
+}
+${R} .status-v3-business[data-status="major-outage"] .status-v3-business__tally--impacted {
+  color: var(--status-major-outage);
+  background: var(--status-major-outage-bg);
+  border-color: color-mix(in srgb, var(--status-major-outage) 30%, transparent);
+}
+${R} .status-v3-business[data-status="maintenance"] .status-v3-business__tally--impacted {
+  color: var(--status-maintenance);
+  background: var(--status-maintenance-bg);
+  border-color: color-mix(in srgb, var(--status-maintenance) 30%, transparent);
+}
+${R} .status-v3-business__members {
+  display: grid;
+  gap: 0.45rem;
+  margin-block-start: 0.2rem;
+  padding-inline-start: 0.85rem;
+  border-inline-start: 1px solid var(--status-panel-border);
+}
+${R} .status-v3-business__members[hidden] { display: none; }
+${R} .status-v3-business__member {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--status-panel-muted-border, var(--status-panel-border));
+  border-radius: 4px;
+  background: var(--status-panel-muted-bg);
+  min-inline-size: 0;
+}
+${R} .status-v3-business__member-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--status-text-strong);
+  overflow-wrap: anywhere;
+}
+${R} .status-v3-business-others { margin-block-start: 1.25rem; }
+@media (prefers-reduced-motion: reduce) {
+  ${R} .status-v3-business__chevron { transition: none; }
+}
+@media (max-width: 36rem) {
+  /* 44px touch target for the disclosure. */
+  ${R} .status-v3-business__toggle { min-block-size: 2.75rem; }
+  ${R} .status-v3-business__members { padding-inline-start: 0.5rem; }
+}
 `;

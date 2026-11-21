@@ -75,6 +75,17 @@ export const PAGE_ACCESS: readonly PageAccessRule[] = [
   { pattern: '/postmortems/create', label: 'Create postmortem', anyOf: [C.OPERATIONS_MANAGE] },
 
   { pattern: '/services', label: 'Services', anyOf: SERVICE_READ },
+  { pattern: '/services/business', label: 'Business services', anyOf: SERVICE_READ },
+  {
+    pattern: '/services/business/new',
+    label: 'New business service',
+    anyOf: [C.OPERATIONS_MANAGE],
+  },
+  {
+    pattern: '/services/business/[id]',
+    label: 'Business service',
+    anyOf: [C.OPERATIONS_MANAGE],
+  },
   { pattern: '/services/[id]', label: 'Service', anyOf: SERVICE_READ, resource: 'service' },
   {
     pattern: '/services/[id]/webhooks',
