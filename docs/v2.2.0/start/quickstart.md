@@ -35,7 +35,7 @@ cp env.example .env
 Edit `.env` and set at least:
 
 ```dotenv
-OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.2.1
+OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.2.2
 POSTGRES_PASSWORD=<unique-database-password>
 NEXTAUTH_URL=http://localhost:3000
 NEXT_PUBLIC_APP_URL=http://localhost:3000

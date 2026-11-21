@@ -40,9 +40,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The unused intelligence `InsightStrip` component and the separate insights inbox section (merged into Needs attention).
 
+## [2.2.2] - 2026-11-21
+
+First published build of the 2.2 line; 2.2.0 and 2.2.1 were tagged but never published. It contains everything listed under 2.2.1 and 2.2.0 below.
+
+### Fixed
+
+- Release images are built natively per architecture: amd64 on an amd64 runner and arm64 on an arm64 runner, then merged into one multi-architecture image with SBOM and provenance for both. The 2.2.1 release emulated arm64 under QEMU, which ran for hours and crashed ("Illegal instruction") before publishing.
+- The Agent image bundles its JavaScript on the build machine's own architecture, so its arm64 build no longer runs Node.js under emulation.
+
 ## [2.2.1] - 2026-11-21
 
-First published build of the 2.2 line; 2.2.0 was tagged but never published. It contains everything listed under 2.2.0 below.
+Not published: its arm64 release build under emulation did not finish (see 2.2.2). 2.2.0 was tagged but never published. It contains everything listed under 2.2.0 below.
 
 ### Fixed
 
