@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { recordAiUsage, reserveAiTokens } from '@/lib/intelligence/ai/budget';
+import { loadAiCostView } from '@/lib/intelligence/ai/cost-view';
 import {
   attributeTeam,
   deleteBudget,
@@ -18,7 +19,11 @@ import {
   invalidateGatewayCache,
   resolveGatewayPort,
 } from '@/lib/intelligence/ai/gateway';
-import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
+import {
+  saveAiProvider,
+  updateAiSettings,
+  type AiProviderView,
+} from '@/lib/intelligence/ai/settings';
 import {
   clearRuntimeOperationalMetrics,
   runtimeOperationalMetrics,
@@ -513,6 +518,20 @@ describe('budget administration, read models and metrics', () => {
     expect(week.byCapability[0]).toMatchObject({ key: 'SQUIRE_CHAT', tokens: 800 });
     expect(week.byModel.map(slice => slice.label)).toEqual([
       'gpt-4o',
+      'gpt-4o-mini',
+      'text-embedding-3-small',
+    ]);
+    // The price table lists every model with usage, not only each provider's configured model.
+    const cost = await loadAiCostView(
+      7,
+      10_000,
+      [{ id: 'p1', kind: 'OPENAI', name: 'openai', model: 'gpt-4o' } as AiProviderView],
+      { SUMMARIZE: { providerId: 'p1', model: 'gpt-4.1-nano' } },
+      now
+    );
+    expect(cost.configuredPrices.map(row => row.model)).toEqual([
+      'gpt-4o',
+      'gpt-4.1-nano',
       'gpt-4o-mini',
       'text-embedding-3-small',
     ]);
