@@ -51,7 +51,9 @@ export function assertSafeRegex(pattern: string): void {
     throw new Error('Pattern must be between 1 and 200 characters');
   if (/\\[1-9]/.test(pattern)) throw new Error('Back-references are not supported');
   if (/\([^)]*[+*][^)]*\)[+*{]/.test(pattern) || /[+*]\)?[+*]/.test(pattern))
-    throw new Error('Nested or stacked quantifiers are not supported');
+    throw new Error(
+      'This pattern can backtrack catastrophically; simplify nested or stacked repeats such as (a+)+'
+    );
   try {
     // Validated once at save time, bounded in length and shape above; never compiled on the hot path.
     // eslint-disable-next-line security/detect-non-literal-regexp

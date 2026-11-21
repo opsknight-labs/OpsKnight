@@ -99,8 +99,13 @@ export default function SuppressionRuleBuilder({
   const [replaying, startReplay] = useTransition();
   const request = useRef(0);
 
-  const { matchers } = validateMatcherDrafts(rows);
+  const { matchers, errors: rowErrors } = validateMatcherDrafts(rows);
   const matcherKey = matchers ? JSON.stringify(matchers) : '';
+  // A rejected pattern is explained while it is typed, not only on save; other gaps wait for save.
+  const patternErrors = rows.map((row, index) =>
+    row.op === 'regex' && row.value ? (rowErrors.at(index) ?? null) : null
+  );
+  const patternRejected = patternErrors.some(Boolean);
 
   // Live match preview: debounced, only for valid conditions, and stale answers are ignored.
   useEffect(() => {
@@ -251,7 +256,7 @@ export default function SuppressionRuleBuilder({
           setErrors(current => ({ ...current, rows: undefined }));
           setReplay(null);
         }}
-        errors={errors.rows}
+        errors={errors.rows ?? patternErrors}
       />
 
       <div
@@ -262,7 +267,9 @@ export default function SuppressionRuleBuilder({
       >
         {(!matcherKey || live.state === 'idle') && (
           <p className="text-xs text-muted-foreground">
-            Complete the conditions to see how many recent alerts they match.
+            {patternRejected
+              ? 'Fix the pattern above to see how many recent alerts the conditions match.'
+              : 'Complete the conditions to see how many recent alerts they match.'}
           </p>
         )}
         {matcherKey && live.state === 'loading' && !live.data && (

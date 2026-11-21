@@ -481,9 +481,21 @@ describe('SuppressionRuleBuilder', () => {
     fireEvent.change(screen.getByLabelText('Value'), { target: { value: '(a+)+' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add rule' }));
     expect(await screen.findByText('Give the rule a name.')).toBeInTheDocument();
-    expect(screen.getByText(/Condition 1: Nested or stacked quantifiers/)).toBeInTheDocument();
+    expect(screen.getByText(/Condition 1: This pattern can backtrack catastrophically/)).toBeInTheDocument();
     expect(screen.getByLabelText('Value')).toHaveAttribute('aria-invalid', 'true');
     expect(actions.createRuleAction).not.toHaveBeenCalled();
+  });
+
+  it('explains a rejected pattern while it is typed, before any save', () => {
+    render(<SuppressionRuleBuilder services={services} owners={owners} currentUserId="user-1" />);
+    fireEvent.change(screen.getByLabelText('Operator'), { target: { value: 'regex' } });
+    fireEvent.change(screen.getByLabelText('Value'), { target: { value: '(a+)+$' } });
+    expect(
+      screen.getByText(/Condition 1: This pattern can backtrack catastrophically/)
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Value')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByTestId('live-match-preview')).toHaveTextContent('Fix the pattern above');
+    expect(previews.previewMatchersAction).not.toHaveBeenCalled();
   });
 
   it('saves several conditions with owner and expiry through the existing action, and replays the rule', async () => {
