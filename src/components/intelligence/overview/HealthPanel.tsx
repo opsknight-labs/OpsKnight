@@ -5,7 +5,7 @@ import { formatCount } from '@/lib/intelligence/overview/window';
 import { toneClasses } from '@/components/patterns/status-tone';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
-import { StatGrid, StatTile } from './primitives';
+import { NO_VALUE, StatGrid, StatTile } from './primitives';
 
 const LANE_TONE = { healthy: 'ok', degraded: 'elevated', disabled: 'neutral' } as const;
 
@@ -48,7 +48,11 @@ export default function HealthPanel({ data }: { data: OverviewHealth }) {
       <StatGrid flush columns={4} label="Intelligence work backlog">
         <StatTile label="Ready" value={formatCount(backlog.ready)} hint="Waiting to run" />
         <StatTile label="Running" value={formatCount(backlog.leased)} />
-        <StatTile label="Oldest waiting" value={formatAge(backlog.oldestReadyAgeMs)} />
+        <StatTile
+          label="Oldest waiting"
+          value={backlog.oldestReadyAgeMs === null ? NO_VALUE : formatAge(backlog.oldestReadyAgeMs)}
+          hint={backlog.oldestReadyAgeMs === null ? 'Nothing waiting' : undefined}
+        />
         <StatTile
           label="Failed work"
           value={formatCount(backlog.deadLetters)}

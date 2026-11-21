@@ -3,10 +3,10 @@ import Link from 'next/link';
 import { Brain, Settings2 } from 'lucide-react';
 import FreshnessControl from '@/components/analytics/FreshnessControl';
 import { SectionSkeleton } from '@/components/analytics/SectionCard';
-import { KpiSkeleton } from '@/components/intelligence/overview/OverviewKpis';
+import { ImpactSkeleton } from '@/components/intelligence/overview/ImpactSummary';
 import WindowSelector from '@/components/intelligence/overview/WindowSelector';
 import { FeatureOff } from '@/components/intelligence/overview/primitives';
-import { FilterBar, PageHeader } from '@/components/patterns';
+import { PageHeader } from '@/components/patterns';
 import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import { requirePageAccess } from '@/lib/access/server';
@@ -23,8 +23,9 @@ import { cn } from '@/lib/utils';
 import {
   AttentionSection,
   ChangeSection,
+  FeedbackSection,
   HealthSection,
-  KpiSection,
+  ImpactSection,
   NoiseControlsSection,
   QualitySection,
   SECTION_TITLES,
@@ -34,13 +35,14 @@ import {
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Two cards side by side from lg; a lone card (e.g. no Lane health for responders) takes the full row.
+// Two cards side by side from lg, stretched to the same height; a lone card takes the full row.
 const PANEL_ROW =
-  'grid grid-cols-1 items-start gap-4 sm:gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2';
+  'grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2';
 
 /**
- * Responder-facing AIOps overview, laid out like Analytics: header, window filter, KPI cards, the
- * "Needs attention" inbox, then trend and detail sections. What Intelligence and the noise controls did
+ * Responder-facing AIOps overview. It answers two questions first: is Intelligence helping (the impact
+ * card: one sentence and four headline numbers) and what needs me now (the "Needs attention" inbox). Then
+ * the response trend beside feedback, and the detail sections. What Intelligence and the noise controls did
  * for the incidents the viewer can read, over a selectable window. Every fix links to the existing flow.
  */
 export default async function IntelligenceOverviewPage({
@@ -71,6 +73,7 @@ export default async function IntelligenceOverviewPage({
         title="AIOps overview"
         icon={Brain}
         description="What Intelligence and the noise controls did for the incidents you can see."
+        secondaryActions={<WindowSelector current={range.key} variant="header" />}
         primaryAction={
           canManage ? (
             <Link
@@ -98,7 +101,6 @@ export default async function IntelligenceOverviewPage({
         />
       )}
 
-      <FilterBar chips={<WindowSelector current={range.key} />} />
       {/* Live data (no cache), so "Updated" is this render and Refresh just re-renders. */}
       <Suspense fallback={<div className="h-11 sm:h-5" aria-hidden />}>
         <FreshnessControl asOf={range.until.toISOString()} invalidate={false} />
@@ -113,8 +115,8 @@ export default async function IntelligenceOverviewPage({
 
       {/* Keyed by window so every section's Suspense boundary shows its skeleton again on a switch. */}
       <Fragment key={`panels-${range.key}`}>
-        <Suspense fallback={<KpiSkeleton />}>
-          <KpiSection {...props} />
+        <Suspense fallback={<ImpactSkeleton />}>
+          <ImpactSection {...props} />
         </Suspense>
 
         {/* Probes and operations insights in one ranked inbox. No skeleton: it is absent when empty. */}
@@ -122,16 +124,14 @@ export default async function IntelligenceOverviewPage({
           <AttentionSection actor={actor} />
         </Suspense>
 
-        <div className={PANEL_ROW}>
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
           <Suspense
-            fallback={
-              <>
-                <SectionSkeleton title="time to acknowledge" />
-                <SectionSkeleton title="time to resolve" />
-              </>
-            }
+            fallback={<SectionSkeleton title={SECTION_TITLES.trend} className="lg:col-span-2" />}
           >
             <TrendSection {...props} />
+          </Suspense>
+          <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.feedback} />}>
+            <FeedbackSection {...props} />
           </Suspense>
         </div>
         <div className={PANEL_ROW}>

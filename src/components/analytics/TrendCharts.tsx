@@ -17,6 +17,8 @@ type Bucket = 'hour' | 'day' | 'week' | 'month';
 
 const AXIS = { fontSize: 11, fill: 'hsl(var(--ui-muted-foreground))' };
 const HEIGHT = 240;
+// The comparison chart sits beside a side card on the AIOps overview, so it runs shorter.
+const COMPARISON_HEIGHT = 190;
 
 type Series = { key: string; label: string; color: string; dashed?: boolean };
 
@@ -265,7 +267,7 @@ export function DurationComparisonChart({
   const previous = previousSeries('previous', 'Previous window');
   return (
     <div>
-      <div style={{ height: HEIGHT }} aria-hidden>
+      <div style={{ height: COMPARISON_HEIGHT }} aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -4 }}>
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />

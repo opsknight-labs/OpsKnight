@@ -18,7 +18,7 @@ export const DurationChart = dynamic(() => import('./TrendCharts').then(m => m.D
 
 export const DurationComparisonChart = dynamic(
   () => import('./TrendCharts').then(m => m.DurationComparisonChart),
-  { ssr: false, loading: placeholder }
+  { ssr: false, loading: () => <Skeleton className="h-[214px] w-full" /> }
 );
 
 export const InterruptionsChart = dynamic(

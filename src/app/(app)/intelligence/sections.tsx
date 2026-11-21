@@ -20,11 +20,12 @@ import {
   type OverviewWindow,
 } from '@/lib/intelligence/overview';
 import ChangePanel from '@/components/intelligence/overview/ChangePanel';
+import FeedbackPanel from '@/components/intelligence/overview/FeedbackPanel';
 import HealthPanel from '@/components/intelligence/overview/HealthPanel';
+import ImpactSummary from '@/components/intelligence/overview/ImpactSummary';
 import NeedsAttention from '@/components/intelligence/overview/NeedsAttention';
 import NoisePanel, { NoiseControls } from '@/components/intelligence/overview/NoisePanel';
 import OutcomeTrends from '@/components/intelligence/overview/OutcomeTrends';
-import OverviewKpis from '@/components/intelligence/overview/OverviewKpis';
 import QualityPanel from '@/components/intelligence/overview/QualityPanel';
 import {
   DrilldownLink,
@@ -47,7 +48,7 @@ interface SectionProps {
 
 const ATTENTION_INSIGHT_LIMIT = 10;
 
-// One read per request: the KPI grid, the trend cards and the noise sections share these. `cache` keys on
+// One read per request: the impact card, the feedback card, the trend and the noise sections share these. `cache` keys on
 // the argument identity, so callers pass the same `scope` and `range` objects the page built.
 const loadNoise = cache((scope: OverviewScope, range: OverviewWindow) =>
   loadSection('noise', () => getOverviewNoise(scope, range))
@@ -67,6 +68,8 @@ const info = (label: string, description: string) => (
 export const SECTION_TITLES = {
   noise: 'Noise',
   noiseControls: 'Noise controls',
+  trend: 'Response trend',
+  feedback: 'Feedback and quality',
   quality: 'Alert quality',
   change: 'Changes',
   health: 'Lane health',
@@ -128,34 +131,60 @@ export async function NoiseSection({ scope, range, canManage }: SectionProps) {
   );
 }
 
-/** The headline numbers, one card each, filled from the Noise, Speed and Outcomes loaders. */
-export async function KpiSection({ scope, range, canManage, status }: SectionProps) {
+/** The answer card: a plain-language summary and the four headline numbers. */
+export async function ImpactSection({ scope, range, status }: SectionProps) {
   const [noise, speed, outcomes] = await Promise.all([
     loadNoise(scope, range),
     loadSpeed(scope, range),
     loadOutcomes(scope, range),
   ]);
   return (
-    <OverviewKpis
+    <ImpactSummary
       noise={noise}
       speed={speed}
       outcomes={outcomes}
-      triageEnabled={status.triageEnabled}
-      canManage={canManage}
+      enabled={status.enabled}
+      windowLabel={range.label}
     />
   );
 }
 
-/** MTTA and MTTR per period against the previous window: two trend cards in the page grid. */
+/** Responder feedback and the secondary noise numbers, as one compact list beside the trend. */
+export async function FeedbackSection({ scope, range, canManage, status }: SectionProps) {
+  const [noise, speed] = await Promise.all([loadNoise(scope, range), loadSpeed(scope, range)]);
+  return (
+    <SectionCard
+      id="overview-feedback"
+      title={SECTION_TITLES.feedback}
+      description="How responders rated Intelligence, and how grouping and noise controls behaved."
+    >
+      <FeedbackPanel
+        noise={noise}
+        speed={speed}
+        triageEnabled={status.triageEnabled}
+        canManage={canManage}
+      />
+    </SectionCard>
+  );
+}
+
+/** MTTA or MTTR per period against the previous window, in one card two thirds wide from lg. */
 export async function TrendSection({ scope, range }: SectionProps) {
   const result = await loadOutcomes(scope, range);
   if (!result.ok)
     return (
-      <SectionCard id="overview-trends" title="Response times" className="lg:col-span-2">
+      <SectionCard id="overview-trends" title={SECTION_TITLES.trend} className="lg:col-span-2">
         <SectionError message={result.error} />
       </SectionCard>
     );
-  return <OutcomeTrends data={result.data} windowKey={range.key} since={range.since} />;
+  return (
+    <OutcomeTrends
+      data={result.data}
+      windowKey={range.key}
+      since={range.since}
+      className="lg:col-span-2"
+    />
+  );
 }
 
 /** Desktop noise card: what suppression rules and maintenance windows held back (the KPIs carry the totals). */

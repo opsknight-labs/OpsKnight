@@ -9,6 +9,7 @@ import AnalyticsFreshness from '@/components/analytics/AnalyticsFreshness';
 import AnalyticsViews from '@/components/analytics/AnalyticsViews';
 import { AvailabilitySection } from '@/components/analytics/AvailabilitySection';
 import { BreakdownSection } from '@/components/analytics/BreakdownSection';
+import { KpiGridSkeleton } from '@/components/analytics/KpiCard';
 import { SectionSkeleton } from '@/components/analytics/SectionCard';
 import {
   FollowThroughSection,
@@ -161,7 +162,7 @@ export default async function AnalyticsPage({
       )}
 
       {/* Each section streams on its own; keyed so a filter change shows fresh skeletons. */}
-      <Suspense key={`kpis-${key}`} fallback={<KpiSkeleton />}>
+      <Suspense key={`kpis-${key}`} fallback={<KpiGridSkeleton count={8} />}>
         <KpiSection context={context} />
       </Suspense>
 
@@ -224,19 +225,5 @@ export default async function AnalyticsPage({
         </Suspense>
       </div>
     </div>
-  );
-}
-
-function KpiSkeleton() {
-  return (
-    <ul
-      role="status"
-      aria-label="Loading key metrics"
-      className="grid grid-cols-2 gap-3 md:grid-cols-4"
-    >
-      {Array.from({ length: 8 }, (_, index) => (
-        <li key={index} className="h-[6.5rem] animate-pulse rounded-lg border bg-card shadow-sm" />
-      ))}
-    </ul>
   );
 }
