@@ -23,6 +23,8 @@ export type MicrosoftTeamsIncidentCardInput = {
     priority?: string | null;
     serviceName: string;
     assigneeName?: string | null;
+    /** Role holders in catalog order (see `summarizeIncidentRoles`). */
+    roles?: Array<{ shortLabel: string; name: string }>;
     incidentUrl: string;
     acknowledgedBy?: string | null;
     resolvedBy?: string | null;
@@ -60,6 +62,7 @@ export type MicrosoftTeamsCardOptions = {
       canSnooze: boolean;
       canEscalate: boolean;
       canJoinResponder: boolean;
+      canTakeCommand: boolean;
       canRead: boolean;
     }>;
   };
@@ -123,6 +126,8 @@ function interactiveActions(
         return caps.canEscalate === true;
       case 'canJoinResponder':
         return caps.canJoinResponder === true;
+      case 'canTakeCommand':
+        return caps.canTakeCommand === true;
       case 'canRead':
         return caps.canRead === true;
     }
@@ -145,6 +150,8 @@ function interactiveActions(
         return (CHATOPS_ACTIONS.SNOOZE.phases as readonly string[]).includes(phase);
       case 'JOIN_RESPONDER':
         return (CHATOPS_ACTIONS.JOIN_RESPONDER.phases as readonly string[]).includes(phase);
+      case 'TAKE_COMMAND':
+        return (CHATOPS_ACTIONS.TAKE_COMMAND.phases as readonly string[]).includes(phase);
       case 'VIEW_RESPONDERS':
       case 'REFRESH':
         return true;
@@ -314,6 +321,14 @@ function interactiveActions(
         'secondary'
       )
     );
+  if (isAllowedInPhase('TAKE_COMMAND') && allow('canTakeCommand'))
+    actions.push(
+      execute(
+        CHATOPS_ACTIONS.TAKE_COMMAND.title,
+        teamsVerbForChatOpsKind('TAKE_COMMAND'),
+        'secondary'
+      )
+    );
   if (isAllowedInPhase('VIEW_RESPONDERS') && allow('canRead'))
     actions.push(
       execute(
@@ -384,6 +399,7 @@ export function buildMicrosoftTeamsIncidentCard(
     { title: 'Urgency', value: incident.urgency },
   ];
   if (incident.assigneeName) facts.push({ title: 'Assignee', value: incident.assigneeName });
+  for (const role of incident.roles ?? []) facts.push({ title: role.shortLabel, value: role.name });
   if (incident.priority) facts.push({ title: 'Priority', value: incident.priority });
 
   const disableActions = Boolean(options?.disableActions);

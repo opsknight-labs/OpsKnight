@@ -861,6 +861,43 @@ export type MaintenanceSchedule = {
   createdAt: string;
   updatedAt: string;
 };
+export type IncidentRole = {
+  incidentId: string;
+  roleKey: 'COMMANDER' | 'OPS_LEAD' | 'COMMS_LEAD' | 'SCRIBE';
+  label: string;
+  rights: 'operator' | 'contributor';
+  holder: { id: string; name: string; email: string; assignedAt: string } | null;
+};
+export type IncidentRoleChange = {
+  incidentId: string;
+  roleKey: 'COMMANDER' | 'OPS_LEAD' | 'COMMS_LEAD' | 'SCRIBE';
+  userId: string | null;
+  userName: string | null;
+  previousUserId: string | null;
+  changed: boolean;
+};
+export type BusinessService = {
+  id: string;
+  name: string;
+  description: string | null;
+  tier: string | null;
+  ownerTeam: { id: string; name: string } | null;
+  members: Array<{ id: string; name: string; status: string }>;
+  followers: Array<{ id: string; name: string }>;
+  createdAt: string;
+  updatedAt: string;
+};
+export type BusinessServiceDeletion = { id: string; deleted: true };
+export type StatusPageBusinessServices = {
+  statusPageId: string;
+  serviceLayout: 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
+  businessServices: Array<{
+    businessServiceId: string;
+    name: string;
+    order: number;
+    showOnPage: boolean;
+  }>;
+};
 export type StatusPagePublicationState = {
   status: 'LIVE' | 'PUBLISHING' | 'FAILED' | 'DISABLED';
   revision: string;
@@ -1295,6 +1332,12 @@ export type IncidentTemplate = {
   defaultUrgency: 'HIGH' | 'MEDIUM' | 'LOW';
   defaultPriority: string | null;
   defaultServiceId: string | null;
+  defaultRoles?: {
+    COMMANDER?: string;
+    OPS_LEAD?: string;
+    COMMS_LEAD?: string;
+    SCRIBE?: string;
+  } | null;
   createdById: string | null;
   isPublic: boolean;
   createdAt: string;
@@ -3039,6 +3082,41 @@ export interface OperationRequests {
     body: Record<string, never>;
   };
   getStatusPagePublicationJob: { params: { id: string; jobId: string } };
+  listBusinessServices: { query?: { limit?: number; cursor?: string } };
+  createBusinessService: {
+    headers: { 'Idempotency-Key': string };
+    body: {
+      name: string;
+      description?: string | null;
+      tier?: string | null;
+      ownerTeamId?: string | null;
+      memberServiceIds?: Array<string>;
+      followerUserIds?: Array<string>;
+    };
+  };
+  getBusinessService: { params: { id: string } };
+  updateBusinessService: {
+    params: { id: string };
+    headers: { 'Idempotency-Key': string };
+    body: {
+      name?: string;
+      description?: string | null;
+      tier?: string | null;
+      ownerTeamId?: string | null;
+      memberServiceIds?: Array<string>;
+      followerUserIds?: Array<string>;
+    };
+  };
+  deleteBusinessService: { params: { id: string }; headers: { 'Idempotency-Key': string } };
+  getStatusPageBusinessServices: { params: { id: string } };
+  setStatusPageBusinessServices: {
+    params: { id: string };
+    headers: { 'Idempotency-Key': string; 'If-Match': string };
+    body: {
+      serviceLayout: 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
+      businessServiceIds: Array<string>;
+    };
+  };
   listStatusPageServices: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   setStatusPageServices: {
     params: { id: string };
@@ -3387,6 +3465,16 @@ export interface OperationRequests {
   };
   listIncidentWatchers: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   getIncidentWatcher: { params: { id: string; watcherId: string } };
+  listIncidentRoles: { params: { id: string } };
+  setIncidentRole: {
+    params: { id: string; roleKey: 'COMMANDER' | 'OPS_LEAD' | 'COMMS_LEAD' | 'SCRIBE' };
+    headers: { 'Idempotency-Key': string };
+    body: { userId: string };
+  };
+  clearIncidentRole: {
+    params: { id: string; roleKey: 'COMMANDER' | 'OPS_LEAD' | 'COMMS_LEAD' | 'SCRIBE' };
+    headers: { 'Idempotency-Key': string };
+  };
   listIncidentTags: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   listIncidentCustomFields: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   listIncidentTemplates: { query?: { limit?: number; cursor?: string } };
@@ -3401,6 +3489,12 @@ export interface OperationRequests {
       defaultPriority?: string | null;
       defaultServiceId?: string | null;
       isPublic?: boolean;
+      defaultRoles?: {
+        COMMANDER?: string;
+        OPS_LEAD?: string;
+        COMMS_LEAD?: string;
+        SCRIBE?: string;
+      };
     };
   };
   getIncidentTemplate: { params: { templateId: string } };
@@ -3416,6 +3510,12 @@ export interface OperationRequests {
       defaultPriority?: string | null;
       defaultServiceId?: string | null;
       isPublic?: boolean;
+      defaultRoles?: {
+        COMMANDER?: string;
+        OPS_LEAD?: string;
+        COMMS_LEAD?: string;
+        SCRIBE?: string;
+      };
     };
   };
   deleteIncidentTemplate: {
@@ -4680,6 +4780,39 @@ export interface OperationResponses {
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
+  listBusinessServices: {
+    data: Array<BusinessService>;
+    pagination?: Pagination;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  createBusinessService: { data: BusinessService; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  getBusinessService: { data: BusinessService; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  updateBusinessService: { data: BusinessService; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  deleteBusinessService: {
+    data: BusinessServiceDeletion;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getStatusPageBusinessServices: {
+    data: StatusPageBusinessServices;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  setStatusPageBusinessServices: {
+    data: StatusPageConfigurationResult;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
   listStatusPageServices: {
     data: Array<StatusPageService>;
     pagination?: Pagination;
@@ -4958,6 +5091,18 @@ export interface OperationResponses {
     timestamp: string;
   } & Record<string, unknown>;
   getIncidentWatcher: { data: IncidentWatcher; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  listIncidentRoles: { data: Array<IncidentRole>; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  setIncidentRole: { data: IncidentRoleChange; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  clearIncidentRole: { data: IncidentRoleChange; requestId: string; timestamp: string } & Record<
     string,
     unknown
   >;
@@ -6556,6 +6701,62 @@ export const OPERATIONS = {
     requiredHeaders: [],
     bodyRequired: false,
   },
+  listBusinessServices: {
+    method: 'GET',
+    path: '/business-services',
+    kind: 'list',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  createBusinessService: {
+    method: 'POST',
+    path: '/business-services',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: true,
+  },
+  getBusinessService: {
+    method: 'GET',
+    path: '/business-services/{id}',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  updateBusinessService: {
+    method: 'PATCH',
+    path: '/business-services/{id}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: true,
+  },
+  deleteBusinessService: {
+    method: 'DELETE',
+    path: '/business-services/{id}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: false,
+  },
+  getStatusPageBusinessServices: {
+    method: 'GET',
+    path: '/status-pages/{id}/business-services',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  setStatusPageBusinessServices: {
+    method: 'PUT',
+    path: '/status-pages/{id}/business-services',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key', 'If-Match'],
+    bodyRequired: true,
+  },
   listStatusPageServices: {
     method: 'GET',
     path: '/status-pages/{id}/services',
@@ -7042,6 +7243,30 @@ export const OPERATIONS = {
     kind: 'item',
     idempotency: null,
     requiredHeaders: [],
+    bodyRequired: false,
+  },
+  listIncidentRoles: {
+    method: 'GET',
+    path: '/incidents/{id}/roles',
+    kind: 'list',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  setIncidentRole: {
+    method: 'PUT',
+    path: '/incidents/{id}/roles/{roleKey}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: true,
+  },
+  clearIncidentRole: {
+    method: 'DELETE',
+    path: '/incidents/{id}/roles/{roleKey}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
     bodyRequired: false,
   },
   listIncidentTags: {

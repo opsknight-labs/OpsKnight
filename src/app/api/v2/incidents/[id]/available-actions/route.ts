@@ -15,6 +15,7 @@ import {
 } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
 
 /** Advisory snapshot. Mutation endpoints always repeat authorization and state checks. */
 export const GET = withV2Observability(async function GET(
@@ -40,6 +41,7 @@ export const GET = withV2Observability(async function GET(
         teamId: true,
         service: { select: { teamId: true } },
         watchers: { select: { userId: true } },
+        roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       },
     });
     if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
@@ -53,6 +55,7 @@ export const GET = withV2Observability(async function GET(
       type: 'incident',
       assigneeId: incident.assigneeId,
       watcherIds: incident.watchers.map(watcher => watcher.userId),
+      ...incidentRoleRelations(incident.roleAssignments),
       visibility: incident.visibility,
       serviceTeamId: incident.service.teamId,
       assignedTeamId: incident.teamId,

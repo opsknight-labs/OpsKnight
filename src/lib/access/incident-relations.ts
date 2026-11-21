@@ -3,6 +3,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import { CAPABILITIES } from '@/lib/authorization';
+import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
 import {
   actorHasCapability,
   incidentOperatorRelation,
@@ -23,6 +24,7 @@ export async function loadIncidentAccessResource(
       teamId: true,
       visibility: true,
       watchers: { select: { userId: true } },
+      roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       service: { select: { teamId: true, escalationPolicyId: true } },
     },
   });
@@ -34,6 +36,7 @@ export async function loadIncidentAccessResource(
     assignedTeamId: incident.teamId,
     visibility: incident.visibility,
     watcherIds: (incident.watchers ?? []).map(watcher => watcher.userId),
+    ...incidentRoleRelations(incident.roleAssignments),
     serviceTeamId: incident.service?.teamId ?? null,
     escalationPolicyId: incident.service?.escalationPolicyId ?? null,
   };

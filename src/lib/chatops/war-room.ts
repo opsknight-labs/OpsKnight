@@ -204,7 +204,7 @@ export async function postWarRoomWelcomeCard(
         type: 'mrkdwn',
         text: [
           '*⚡ War Room Power Features:*',
-          '• 🔘 *1-Click Action Buttons*: Use *Acknowledge*, *Assign to Me*, or *Resolve* on the card above.',
+          '• 🔘 *1-Click Action Buttons*: Use *Acknowledge*, *Assign to Me*, *Take command* or *Resolve* on the card above.',
           '• 📌 *Emoji Reaction Sync*: React to ANY message with 📌 (`:pushpin:`) or 📝 (`:memo:`) to auto-save to the incident timeline!',
           '• 📄 *Auto Postmortem*: Type `/incident postmortem` to generate a pre-filled Postmortem draft.',
         ].join('\n'),
@@ -219,7 +219,8 @@ export async function postWarRoomWelcomeCard(
           '`/incident ack` — Acknowledge incident',
           '`/incident resolve [summary]` — Resolve incident with notes',
           '`/incident note <message>` — Save a note to the timeline',
-          '`/incident who` — View current on-call responders',
+          '`/incident who` — View incident roles and on-call responders',
+          '`/incident role commander me` — Take command (also ops-lead, comms-lead, scribe)',
           '`/incident postmortem` — Create postmortem draft',
         ].join('\n'),
       },

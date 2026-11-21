@@ -68,12 +68,29 @@ const decisions: readonly ApiCapability[] = [
     ],
   },
   {
-    id: 'incident-lifecycle',
-    area: 'Incidents',
-    title: 'Incident lifecycle and watchers',
+    id: 'business-services',
+    area: 'Services',
+    title: 'Business services and grouped status pages',
     status: 'available',
     explanation:
-      'Canonical lifecycle and watcher commands, transactional timeline/audit and durable replay. Watcher mutations require operational privileges.',
+      'Customer-facing groupings of technical services with followers, plus the status page layout and business-service mapping published through the shared publication command.',
+    operationIds: [
+      'listBusinessServices',
+      'createBusinessService',
+      'getBusinessService',
+      'updateBusinessService',
+      'deleteBusinessService',
+      'getStatusPageBusinessServices',
+      'setStatusPageBusinessServices',
+    ],
+  },
+  {
+    id: 'incident-lifecycle',
+    area: 'Incidents',
+    title: 'Incident lifecycle, watchers and roles',
+    status: 'available',
+    explanation:
+      'Canonical lifecycle, watcher and incident-role commands, transactional timeline/audit and durable replay. Watcher mutations require operational privileges; roles follow the incident relationship (take, delegate as commander, or manage).',
     operationIds: [
       'reopenIncident',
       'escalateIncident',
@@ -86,6 +103,9 @@ const decisions: readonly ApiCapability[] = [
       'getIncidentWatcher',
       'setIncidentWatcher',
       'removeIncidentWatcher',
+      'listIncidentRoles',
+      'setIncidentRole',
+      'clearIncidentRole',
     ],
   },
   {

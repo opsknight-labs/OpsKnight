@@ -52,6 +52,7 @@ export default async function StatusPageWorkspacePage({
       where: { id: pageId },
       include: {
         services: { include: { service: true } },
+        businessServices: { select: { businessServiceId: true, order: true } },
         announcements: { orderBy: { startDate: 'desc' }, take: 20 },
         apiTokens: { orderBy: { createdAt: 'desc' }, take: 50 },
         _count: {
@@ -64,6 +65,16 @@ export default async function StatusPageWorkspacePage({
     prisma.service.findMany({ orderBy: { name: 'asc' } }),
     getStatusPageSnapshot(pageId).catch(() => null),
   ]);
+  const allBusinessServices = (
+    await prisma.businessService.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, members: { select: { serviceId: true } } },
+    })
+  ).map(item => ({
+    id: item.id,
+    name: item.name,
+    memberServiceIds: item.members.map(member => member.serviceId),
+  }));
   if (!statusPage) notFound();
 
   const liveSnapshot =
@@ -165,6 +176,7 @@ export default async function StatusPageWorkspacePage({
           key={statusPage.id}
           statusPage={formattedStatusPage}
           allServices={allServices}
+          allBusinessServices={allBusinessServices}
           liveSnapshot={liveSnapshot}
           draftIncidentId={draftIncidentId}
         />

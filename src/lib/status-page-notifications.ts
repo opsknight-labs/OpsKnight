@@ -34,6 +34,7 @@ import {
 } from '@/lib/status-pages/announcement-notification-generation';
 import type { AnnouncementFanoutDeliveryMode } from '@/lib/status-pages/announcement-fanout-contract';
 import { selectAnnouncementRecipientsNeedingReplacement } from '@/lib/status-pages/announcement-recipient-reconciliation';
+import { subscriberServiceFilter } from '@/lib/status-pages/subscription-policy';
 
 export async function notifyStatusPageSubscribers(
   incidentId: string,
@@ -220,10 +221,7 @@ export async function notifyStatusPageSubscribers(
               state: 'ACTIVE',
               verified: true,
               unsubscribedAt: null,
-              OR: [
-                { selectedServices: { none: {} } },
-                { selectedServices: { some: { serviceId: incident.serviceId } } },
-              ],
+              ...subscriberServiceFilter([incident.serviceId]),
             },
             orderBy: { id: 'asc' },
             take: PAGE_SIZE,
@@ -515,9 +513,23 @@ export async function notifyStatusPageSubscribersAnnouncement(
     let cursor: string | undefined = fanout.cursor ?? undefined;
 
     const rawAffected = announcement.affectedServiceIds;
-    const affectedIds: string[] = Array.isArray(rawAffected)
+    const directAffectedIds: string[] = Array.isArray(rawAffected)
       ? rawAffected.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
       : [];
+    // A business service named on the update affects every one of its member services.
+    const rawBusiness = announcement.affectedBusinessServiceIds;
+    const businessIds = Array.isArray(rawBusiness)
+      ? rawBusiness.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+      : [];
+    const businessMembers = businessIds.length
+      ? await prisma.businessServiceMember.findMany({
+          where: { businessServiceId: { in: businessIds } },
+          select: { serviceId: true },
+        })
+      : [];
+    const affectedIds = [
+      ...new Set([...directAffectedIds, ...businessMembers.map(member => member.serviceId)]),
+    ];
     const hasScopedServices = affectedIds.length > 0;
 
     while (true) {
@@ -561,10 +573,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
               state: 'ACTIVE',
               verified: true,
               unsubscribedAt: null,
-              OR: [
-                { selectedServices: { none: {} } },
-                { selectedServices: { some: { serviceId: { in: affectedIds } } } },
-              ],
+              ...subscriberServiceFilter(affectedIds),
             }
           : { statusPageId, state: 'ACTIVE', verified: true, unsubscribedAt: null },
         orderBy: { id: 'asc' },

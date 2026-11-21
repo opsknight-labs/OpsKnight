@@ -13,6 +13,7 @@ import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
 import { toIncidentApiDto } from '@/lib/incidents/api-dto';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
+import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
 
 const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
@@ -39,9 +40,7 @@ function rateLimitError(retryAfter: number) {
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError(
-      new AppError({ code: 'API_KEY_INVALID' })
-    );
+    return jsonError(new AppError({ code: 'API_KEY_INVALID' }));
   }
 
   const rate = await checkRateLimit(
@@ -81,6 +80,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       automationDecision: { select: { incidentId: true } },
       service: { select: { id: true, name: true, teamId: true } },
       watchers: { select: { userId: true } },
+      roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       assignee: {
         select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
       },
@@ -104,6 +104,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       type: 'incident',
       assigneeId: incident.assigneeId,
       watcherIds: incident.watchers.map(watcher => watcher.userId),
+      ...incidentRoleRelations(incident.roleAssignments),
       visibility: incident.visibility,
       serviceTeamId: incident.service?.teamId,
       assignedTeamId: incident.teamId,
@@ -142,9 +143,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError(
-      new AppError({ code: 'API_KEY_INVALID' })
-    );
+    return jsonError(new AppError({ code: 'API_KEY_INVALID' }));
   }
 
   const rate = await checkRateLimit(

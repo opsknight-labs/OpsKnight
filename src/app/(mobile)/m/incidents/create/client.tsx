@@ -252,6 +252,7 @@ export default function MobileCreateIncidentClient({
       priority: priority || null,
       assigneeId: assigneeId || null,
       visibility,
+      ...(selectedTemplateId ? { templateId: selectedTemplateId } : {}),
     };
     const fingerprint = JSON.stringify(payload);
     if (!submissionRef.current || submissionRef.current.fingerprint !== fingerprint) {

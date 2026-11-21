@@ -1654,7 +1654,7 @@
     "risk": "R2",
     "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
-    "routeSha256": "362f86488e44b153fb8b3ee5d834efe1d17a1b520577a024e655ac20ffc3017f",
+    "routeSha256": "c05918a6fe88847f602fb268b2c0515ff05a8ddb6f0a2b2cb5d86b603a862488",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
     "contractSha256": "5ba51139cf340e0172b18354d422c9ed3c8983d48a2e31106410feb1d2121d44",
@@ -1701,7 +1701,7 @@
     "routeSha256": "064e2025d1bcbf5fae3e94548023cd09236f643f6bea37792f6dbb60c7dbb47c",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-incidents.test.ts",
-    "contractSha256": "8510ef08fa1a3628554e3065b54d6e333d14d151610245b252478c0273c3a3cf",
+    "contractSha256": "04b32b98bf1b0fe9382c426c465a56745caef46db332188f81f9a453ff9a5ff3",
     "actions": ["incident.manage"]
   },
   "getIncidentTemplate": {
@@ -1723,7 +1723,7 @@
     "routeSha256": "56b5dc9acedf37e34d526854893128a12f2806611de8e918a7e9e53033fb4b78",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-incidents.test.ts",
-    "contractSha256": "63c56e143f0f7daa19e8a8e6a803f539ebc685fcbaffe3c5087d969e0821984d",
+    "contractSha256": "d1485c7ff3c0d18c5d8954eb37cb50634cb004c7d1c3fc86238fc8b28626013f",
     "actions": ["incident.manage"]
   },
   "deleteIncidentTemplate": {
@@ -1800,7 +1800,7 @@
     "risk": "R1",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": "incident_watch",
-    "routeSha256": "362f86488e44b153fb8b3ee5d834efe1d17a1b520577a024e655ac20ffc3017f",
+    "routeSha256": "c05918a6fe88847f602fb268b2c0515ff05a8ddb6f0a2b2cb5d86b603a862488",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-round5.test.ts",
     "contractSha256": "e940f891f63d84ed3510af5a07d22efd2ee91789ea08f784421f597b95ff3c70",
@@ -1813,7 +1813,7 @@
     "risk": "R3",
     "reason": "Destructive: frozen prepare with an impact preview, independent native review after a recent sign-in, re-check of the target at commit and a verified postcondition; never generic.",
     "tool": null,
-    "routeSha256": "e26768d63e76fa3aeda54965972a25dbb5e999d5e611567204d6ae94edeb5da5",
+    "routeSha256": "3738b59bca10600eaed245aeaf876631956365963f9887224c2b25fa2e69877f",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-destructive-items.test.ts",
     "contractSha256": "ffad3a91e92e3288e9da8a6abbfecda237b16ef9431c09e7cfc6d5a6a7ab8cf9",
@@ -2272,7 +2272,7 @@
       "destructiveHint": false,
       "openWorldHint": true
     },
-    "routeSha256": "8b638d8046b5059fdf35ea109d89b9e317bc6d4c986dce9879efa5a16b72dd77",
+    "routeSha256": "a3058c38f40b26a0cc4660d2a03b694d33801bbde4d110cce4f8b50d15c5ffe8",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-incident-actions.test.ts",
     "contractSha256": "1abdeb413feacf892c412e1e6225a42ebe3dead176be68ee6902d648a612df39",
@@ -2288,7 +2288,7 @@
     "annotations": {
       "openWorldHint": true
     },
-    "routeSha256": "bef12caa58327e2a6c07f73d40a844340820065fb89d0e7d1855f89c3c773a7f",
+    "routeSha256": "77d69a6b83e5bc3dd8be6599616a59fac6fbb953cc3a185d153f61142b076dc9",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "9e57b0a4922c622eb6514cbfe1a535b6beed67b882abc72febeaa9cb54a0cb4b",
@@ -2299,7 +2299,7 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": "incident_list_notes",
-    "routeSha256": "558a55d473a241f42dc7d75c85ef1763686932730a6b998643b7760cfe28e6a9",
+    "routeSha256": "302b3cbad00f7cbc03cacec41064d1493bcb5b71d2832be03b8ff42f56142b34",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-round5.test.ts",
     "contractSha256": "609f25b7976a3b847bf09ac0c2e5a07817d7408e498caaa03715aca4033844ea",
@@ -2317,7 +2317,7 @@
     "annotations": {
       "destructiveHint": false
     },
-    "routeSha256": "558a55d473a241f42dc7d75c85ef1763686932730a6b998643b7760cfe28e6a9",
+    "routeSha256": "302b3cbad00f7cbc03cacec41064d1493bcb5b71d2832be03b8ff42f56142b34",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "e74454a3d3f54c7e54ae44333857c57a728550d0fb068dd3adb4c1c36edd2acf",
@@ -2372,7 +2372,7 @@
     "tool": "incident_get_timeline",
     "title": "Get an incident timeline",
     "agentDescription": "Read one incident's timeline events (alerts, acknowledgements, notes, escalations) newest first, one page at a time. Use it to reconstruct what happened and when.",
-    "routeSha256": "18c9c76d2b87a16e8dad3668984d52884f2dcda26904806a18440192d14c5b26",
+    "routeSha256": "840782289316fead36ce787eec820e1bfb169ee645dd18d221e7ec5d3a016033",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "774a209c9632f1fa82391cef7756de4688d753cd5675e6a6569f94870b169f05",
@@ -2659,7 +2659,7 @@
     "risk": "R0",
     "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
     "tool": "incident_available_actions",
-    "routeSha256": "5f1f3a184403ab1b1d575386f6fba8078b96b1d16ea1e8133da1d89401c342fd",
+    "routeSha256": "d100031070fa90b8d59c89cdb49ff7a3ceab446b93da0de63b816fdbbc24fc31",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-curated-round5.test.ts",
     "contractSha256": "72a32b2d07116c4b4290fe2745db419a4e2ae8d139b4f6837b94703adbb1be30",
@@ -3813,7 +3813,7 @@
     "risk": "R2",
     "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
-    "routeSha256": "e26768d63e76fa3aeda54965972a25dbb5e999d5e611567204d6ae94edeb5da5",
+    "routeSha256": "3738b59bca10600eaed245aeaf876631956365963f9887224c2b25fa2e69877f",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-item-previews.test.ts",
     "contractSha256": "8f5b217ffb56d5d1f59ebbac5f905cdf273fd6b637e30f7b586e209dbea58c71",
@@ -3954,5 +3954,125 @@
     "actions": ["maintenance_window.manage"],
     "impactPreview": "getMaintenanceSchedule",
     "additionalScopes": ["services:read"]
+  },
+  "listIncidentRoles": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only role roster through the existing REST route authorization and scoped projection.",
+    "tool": "incident_roles_list",
+    "title": "List incident roles",
+    "agentDescription": "List who holds each incident role (commander, ops lead, comms lead, scribe) on one incident, with empty roles as null. Use for 'who is running this incident?'.",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/incident-roles-tools.test.ts",
+    "actions": ["incident.read"],
+    "routeSha256": "f254188ad20075b2c50ef7a980f850ddf4fcebe3f5be0403d9fd860d420ab86b",
+    "contractSha256": "aa6b902309539a8c8f2cfe46b89ac855bcbd9c228bc420ef3f214ff30ce8621b"
+  },
+  "setIncidentRole": {
+    "status": "CURATED",
+    "risk": "R1",
+    "reason": "Reversible responder change: the shared role command re-checks the incident relationship (take, delegate as commander, or manage) inside the route.",
+    "tool": "incident_role_assign",
+    "title": "Assign an incident role",
+    "agentDescription": "Make someone the commander, ops lead, comms lead or scribe of an incident (roleKey + userId). Use for 'make me incident commander' or 'Priya is comms lead'. The holder starts following the incident.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/incident-roles-tools.test.ts",
+    "actions": ["incident.acknowledge"],
+    "routeSha256": "a3349e77f331048b2b2a0970d52b50c9f95549f488c5a3d6a798043338136d9e",
+    "contractSha256": "b33412efb6a87bd502172970d09c2af7ec67068de15025a45f1e503871d5caa5"
+  },
+  "clearIncidentRole": {
+    "status": "DISCOVERABLE",
+    "risk": "R1",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["incident.acknowledge"],
+    "routeSha256": "a3349e77f331048b2b2a0970d52b50c9f95549f488c5a3d6a798043338136d9e",
+    "contractSha256": "a02a08215398b761d7cc595e835bf5805a8f4fa51794546f49302076ceb7adee"
+  },
+  "listBusinessServices": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only catalog of business services through the existing REST route authorization and scoped projection.",
+    "tool": "business_services_list",
+    "title": "List business services",
+    "agentDescription": "List business services (Checkout, Payments) with their technical services and current member status. Use to answer what customers are affected when a service is down.",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "6eaa4c76739c169eb564e123377409147d830430fc5275d4be158f950eca4196",
+    "contractSha256": "c653dc9baf0ab8e4dbcdaf80fa1b6ad66d7fe707c7969101aaa5d292dd5c503b"
+  },
+  "getBusinessService": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "047a184d8ae8cfa2dc26d4adae8124a79b9dc9bcd257f7788345229675e420a3",
+    "contractSha256": "2ae60b7b4864b3940bab4110802ea328f5e463f00a926d5a5f48f2988ac72321"
+  },
+  "getStatusPageBusinessServices": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["status_page.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "09b79607e6fc4cf713a3c5969e124dc3979763a33eb37e39669e33c78cf8dbe7",
+    "contractSha256": "374b7b104eb907adf8ca0b7c6045ab20ba1d0b96dee422168575b74e44c2a9c9"
+  },
+  "createBusinessService": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.create"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "6eaa4c76739c169eb564e123377409147d830430fc5275d4be158f950eca4196",
+    "contractSha256": "d4fdc284e943cb14ce410094889754891c5074c9fb56e2e123e434b850880310"
+  },
+  "updateBusinessService": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.create"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "047a184d8ae8cfa2dc26d4adae8124a79b9dc9bcd257f7788345229675e420a3",
+    "contractSha256": "3a272350240cde70725fafef6cfff39fe115b3ee42cfa63883d79d15ca18dfb4"
+  },
+  "deleteBusinessService": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.delete"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "047a184d8ae8cfa2dc26d4adae8124a79b9dc9bcd257f7788345229675e420a3",
+    "contractSha256": "521132ecea66e6bc2cadad5795265d1a43dbbe9efefe9b0124de6a598bf9f541"
+  },
+  "setStatusPageBusinessServices": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["status_page.manage"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "09b79607e6fc4cf713a3c5969e124dc3979763a33eb37e39669e33c78cf8dbe7",
+    "contractSha256": "6a269931bbab2b10e7ecbcc0bd76acafd4149fd05d5ac6451dc8b513ddacc39f"
   }
 }

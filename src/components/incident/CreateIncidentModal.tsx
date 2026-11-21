@@ -606,6 +606,7 @@ function CreateIncidentModalContent({
       }
 
       if (data.dedupKey) formData.append('dedupKey', data.dedupKey);
+      if (selectedTemplateId) formData.append('templateId', selectedTemplateId);
 
       customFields.forEach(field => {
         const effectiveValue = (customFieldValues[field.id] ?? field.defaultValue ?? '').trim();
@@ -618,7 +619,7 @@ function CreateIncidentModalContent({
         formAction(formData);
       });
     },
-    [customFieldValues, customFields, formAction]
+    [customFieldValues, customFields, formAction, selectedTemplateId]
   );
 
   const handleKeyDown = useCallback(

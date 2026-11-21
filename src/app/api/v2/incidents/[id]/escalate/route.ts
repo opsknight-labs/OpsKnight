@@ -6,6 +6,7 @@ import { internalV2MutationGuard } from '@/lib/api-v2/internal-context';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { requestIncidentEscalation } from '@/lib/escalation/authorization';
 import { AppError } from '@/lib/errors';
+import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
 
 /**
  * Page the next escalation tier now, through the same entry point as Slack, Teams and the web UI.
@@ -25,6 +26,7 @@ export const POST = defineV2Route({
         visibility: true,
         service: { select: { teamId: true } },
         watchers: { select: { userId: true } },
+        roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       },
     });
     if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
@@ -35,6 +37,7 @@ export const POST = defineV2Route({
       serviceTeamId: incident.service.teamId,
       visibility: incident.visibility,
       watcherIds: incident.watchers.map(watcher => watcher.userId),
+      ...incidentRoleRelations(incident.roleAssignments),
     };
   },
   handler: async ({ req, params, actor, apiKey }) => {

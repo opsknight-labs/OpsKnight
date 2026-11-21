@@ -59,6 +59,8 @@ export type StatusPageConfigurationChange = {
     string,
     { displayName?: string | null; order?: number; showOnPage?: boolean }
   >;
+  /** Business services to show, in display order; their member services are mapped too. */
+  businessServiceIds?: string[];
   expectedUpdatedAt?: string;
   expectedRevision?: number;
   /** Settings section that produced the patch, recorded for audit only. */
@@ -101,7 +103,16 @@ const MAX_LAST_ERROR_LENGTH = 500;
 export async function applyStatusPageConfigurationChange(
   change: StatusPageConfigurationChange
 ): Promise<StatusPageConfigurationResult> {
-  const { pageId, actor, patch, serviceIds, serviceConfigs, expectedUpdatedAt, section } = change;
+  const {
+    pageId,
+    actor,
+    patch,
+    serviceIds,
+    serviceConfigs,
+    businessServiceIds,
+    expectedUpdatedAt,
+    section,
+  } = change;
   const startedAt = performance.now();
 
   if (change.idempotency) {
@@ -129,11 +140,27 @@ export async function applyStatusPageConfigurationChange(
           select: { serviceId: true, showOnPage: true, displayName: true, order: true },
         });
 
+  const currentBusinessServiceIds =
+    businessServiceIds === undefined
+      ? undefined
+      : (
+          await prisma.statusPageBusinessService.findMany({
+            where: { statusPageId: pageId },
+            orderBy: { order: 'asc' },
+            select: { businessServiceId: true },
+          })
+        ).map(row => row.businessServiceId);
+
   const classification = classifyStatusPageChange({
-    current: { ...(current as unknown as StatusPageClassifierState), serviceMappings },
+    current: {
+      ...(current as unknown as StatusPageClassifierState),
+      serviceMappings,
+      businessServiceIds: currentBusinessServiceIds,
+    },
     patch,
     serviceIds,
     serviceConfigs,
+    businessServiceIds,
   });
 
   // A save that changes nothing must not disturb a working page.
@@ -191,7 +218,9 @@ export async function applyStatusPageConfigurationChange(
         // a real conditional parent write before their delta to fence every writer.
         data: {
           ...data,
-          ...(serviceIds !== undefined ? { updatedAt: new Date() } : {}),
+          ...(serviceIds !== undefined || businessServiceIds !== undefined
+            ? { updatedAt: new Date() }
+            : {}),
         } as Prisma.StatusPageUpdateInput,
       });
 
@@ -238,6 +267,35 @@ export async function applyStatusPageConfigurationChange(
             await tx.statusPageService.update({ where: { id: row.id }, data: next });
           }
         }
+      }
+
+      if (businessServiceIds !== undefined) {
+        await tx.statusPageBusinessService.deleteMany({
+          where: { statusPageId: pageId, businessServiceId: { notIn: businessServiceIds } },
+        });
+        for (const [order, businessServiceId] of businessServiceIds.entries()) {
+          await tx.statusPageBusinessService.upsert({
+            where: { statusPageId_businessServiceId: { statusPageId: pageId, businessServiceId } },
+            create: { statusPageId: pageId, businessServiceId, order },
+            update: { order },
+          });
+        }
+        // A business service is shown through its members, so they are published with it.
+        // Members the admin hid stay hidden (skipDuplicates keeps their row).
+        const members = businessServiceIds.length
+          ? await tx.businessServiceMember.findMany({
+              where: { businessServiceId: { in: businessServiceIds } },
+              select: { serviceId: true },
+            })
+          : [];
+        if (members.length)
+          await tx.statusPageService.createMany({
+            data: [...new Set(members.map(member => member.serviceId))].map(serviceId => ({
+              statusPageId: pageId,
+              serviceId,
+            })),
+            skipDuplicates: true,
+          });
       }
 
       if (classification.classes.includes('ROUTING')) {
@@ -291,6 +349,7 @@ export async function applyStatusPageConfigurationChange(
             failClosed: classification.failClosed,
             section: section ?? null,
             serviceMappingsChanged: serviceIds !== undefined,
+            businessServiceMappingsChanged: businessServiceIds !== undefined,
             expectedUpdatedAt: expectedUpdatedAt || current.updatedAt.toISOString(),
           },
         },

@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { handleSlashCommand, type SlashCommandPayload } from '@/lib/chatops/slash-commands';
+import {
+  handleSlashCommand,
+  parseRoleCommandArgs,
+  type SlashCommandPayload,
+} from '@/lib/chatops/slash-commands';
 import prisma from '@/lib/prisma';
 import * as retryModule from '@/lib/retry';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsNote,
   executeChatOpsLifecycleCommand,
+  executeChatOpsRole,
 } from '@/lib/incidents/chatops-lifecycle';
 import { sendIncidentNotifications } from '@/lib/user-notifications';
 
@@ -56,6 +61,7 @@ vi.mock('@/lib/retry', () => ({
 vi.mock('@/lib/incidents/chatops-lifecycle', () => ({
   executeChatOpsLifecycleCommand: vi.fn(),
   executeChatOpsNote: vi.fn().mockResolvedValue({ created: true }),
+  executeChatOpsRole: vi.fn().mockResolvedValue({ changed: true, userName: 'Alice' }),
   authorizeChatOpsIncident: vi.fn().mockResolvedValue(undefined),
   chatOpsLifecycleErrorMessage: vi.fn(error =>
     error instanceof Error ? error.message : 'Unable to update incident.'
@@ -90,7 +96,9 @@ describe('ChatOps Slash Command Dispatcher', () => {
       status: input.command === 'ACKNOWLEDGE' ? 'ACKNOWLEDGED' : 'RESOLVED',
       changed: true,
     }));
-    vi.mocked(prisma.$transaction).mockImplementation(async operation => operation(prisma as never));
+    vi.mocked(prisma.$transaction).mockImplementation(async operation =>
+      operation(prisma as never)
+    );
   });
 
   const basePayload: SlashCommandPayload = {
@@ -103,6 +111,55 @@ describe('ChatOps Slash Command Dispatcher', () => {
     team_id: 'T111222',
     response_url: 'https://hooks.slack.com/commands/test',
   };
+
+  describe('/incident role', () => {
+    it.each([
+      ['commander me', 'COMMANDER', { kind: 'me' }],
+      ['ops-lead clear', 'OPS_LEAD', { kind: 'clear' }],
+      ['Comms lead <@U123|bob>', 'COMMS_LEAD', { kind: 'slack', slackUserId: 'U123' }],
+      ['ic <@U9>', 'COMMANDER', { kind: 'slack', slackUserId: 'U9' }],
+      ['scribe none', 'SCRIBE', { kind: 'clear' }],
+    ])('parses %s', (args, roleKey, target) => {
+      expect(parseRoleCommandArgs(args)).toEqual({ roleKey, target });
+    });
+
+    it.each(['', 'commander', 'pilot me', 'commander bob'])('rejects %j with usage', args => {
+      expect(parseRoleCommandArgs(args)).toHaveProperty('error');
+    });
+
+    it('takes command for the caller through the role command', async () => {
+      vi.mocked(prisma.incident.findFirst).mockResolvedValue({
+        id: 'inc-104',
+        title: 'Payments API Failure',
+        status: 'OPEN',
+        roleAssignments: [],
+        service: { id: 'srv-1', name: 'Payments' },
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const result = await handleSlashCommand({ ...basePayload, text: 'role commander me' });
+      expect(result.response_type).toBe('in_channel');
+      expect(result.text).toContain('Incident commander');
+      expect(executeChatOpsRole).toHaveBeenCalledWith({
+        incidentId: 'inc-104',
+        actor: { id: 'usr-alice', name: 'Alice' },
+        roleKey: 'COMMANDER',
+        targetUserId: 'usr-alice',
+        provider: 'SLACK',
+      });
+    });
+
+    it('lists every role with holders and gaps', async () => {
+      vi.mocked(prisma.incident.findFirst).mockResolvedValue({
+        id: 'inc-104',
+        title: 'Payments API Failure',
+        status: 'OPEN',
+        roleAssignments: [{ roleKey: 'SCRIBE', user: { name: 'Sam' } }],
+        service: { id: 'srv-1', name: 'Payments' },
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const result = await handleSlashCommand({ ...basePayload, text: 'roles' });
+      expect(result.text).toContain('*Scribe:* Sam');
+      expect(result.text).toContain('*Incident commander:* _unassigned_');
+    });
+  });
 
   it('returns help block when /incident help is invoked', async () => {
     const result = await handleSlashCommand({ ...basePayload, text: 'help' });

@@ -15,3 +15,6 @@ OpsKnight 2.0 supports one status page per deployment. Start with
 components, then practice [publishing an incident update](./publish-update).
 Use [Subscribers and API access](./subscribers-and-api-access) for subscription,
 verification, administration, and automation boundaries.
+
+Show business services, optionally expandable to their technical services, with
+[status page layouts](./business-service-layouts).

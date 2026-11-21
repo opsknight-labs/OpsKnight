@@ -12,7 +12,8 @@ verification: { level: source, verified_at: 2026-10-01, evidence: [src/app/(app)
 
 Start with [Respond to an incident](./respond-to-an-incident). For individual
 tasks use [create](./create), [acknowledge](./acknowledge), [assign](./assign),
-[escalate](./escalate), and [resolve](./resolve). Administrators can configure
+[escalate](./escalate), and [resolve](./resolve). Give the response a commander, ops lead,
+comms lead and scribe with [incident roles](./incident-roles). Administrators can configure
 [incident SLA](./configure-incident-sla), [templates](./incident-templates), and
 the [SLA scheduler migration](./migrate-sla-scheduler). Track operational
 follow-up through [Action Items](./action-items), then create a
