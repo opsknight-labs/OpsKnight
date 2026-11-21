@@ -67,7 +67,7 @@ If you are deploying directly from this repository checkout, follow the instruct
   ```
 - **Split Runtime + PgBouncer + External PostgreSQL**:
   ```bash
-  export OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.2.0
+  export OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.2.1
   export OPSKNIGHT_DATABASE_URL="postgresql://user:pass@db.example.com:5432/opsknight?sslmode=verify-full"
   export EXTERNAL_DB_HOST="db.example.com"
   export EXTERNAL_DB_PASSWORD="pass"
