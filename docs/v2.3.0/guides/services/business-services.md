@@ -3,7 +3,7 @@ title: Business services
 description: Group technical services into what customers rely on, follow them in plain language, and see which business services an incident impacts.
 type: how-to
 product_area: services
-audience: [administrator, responder, stakeholder]
+audience: [administrator, responder]
 verification:
   level: source
   verified_at: 2026-11-22

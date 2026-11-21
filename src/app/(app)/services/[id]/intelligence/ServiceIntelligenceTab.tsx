@@ -13,6 +13,7 @@ import {
   getServiceNoiseStatus,
   getServiceRecentChanges,
   getServiceRecurringProblems,
+  getServiceSloAlerts,
   getServiceSloBurn,
   type ServiceIntelligenceAccess,
 } from '@/lib/intelligence/surfaces/service-intelligence';
@@ -65,10 +66,11 @@ export default async function ServiceIntelligenceTab({
 }) {
   const { service, canManage } = access;
   const now = new Date();
-  const [dependencies, burn, quality, changes, noise, gate, recurring, facts, jira] =
+  const [dependencies, burn, sloAlerts, quality, changes, noise, gate, recurring, facts, jira] =
     await Promise.all([
       loadSection('dependencies', () => getServiceDependencyNeighbourhood(access)),
       loadSection('SLO burn', () => getServiceSloBurn(access, now)),
+      loadSection('SLO alerts', () => getServiceSloAlerts(access, now)),
       loadSection('alert quality', () => getServiceAlertQuality(access, now)),
       loadSection('recent changes', () => getServiceRecentChanges(access, now)),
       loadSection('noise controls', () => getServiceNoiseStatus(access, now)),
@@ -84,7 +86,10 @@ export default async function ServiceIntelligenceTab({
 
   // Panels are hook-free server components, so calling them here tells us which ones are silent.
   const panels = [
-    section('slo-burn', 'SLO burn', burn, data => SloBurnPanel({ burn: data })),
+    section('slo-burn', 'SLO burn', burn, data =>
+      // Alert state is an enhancement: if it fails to load the burn panel still renders.
+      SloBurnPanel({ burn: data, alerts: sloAlerts.ok ? sloAlerts.data : [] })
+    ),
     section('dependencies', 'Dependencies', dependencies, data =>
       DependenciesPanel({ data, canManage })
     ),

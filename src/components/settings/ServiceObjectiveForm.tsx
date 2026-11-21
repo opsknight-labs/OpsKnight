@@ -13,6 +13,8 @@ import { saveObjective } from '@/app/(app)/settings/service-objectives/actions';
 import { SearchableRunbookSelect } from '@/components/runbooks/SearchableRunbookSelect';
 import { SERVICE_OBJECTIVE_CONTRACT } from '@/lib/slo/contract';
 import { formatObjectiveWindow } from '@/components/settings/serviceObjectiveSummary';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import { SloAlertingStep } from '@/components/settings/SloAlertingStep';
 
 type Definition = {
   id: string;
@@ -115,7 +117,7 @@ export function ServiceObjectiveForm({
     'aria-invalid': errors.has(name) || undefined,
   });
 
-  return (
+  const definitionForm = (
     <form
       ref={formRef}
       action={action}
@@ -308,5 +310,21 @@ export function ServiceObjectiveForm({
         </p>
       )}
     </form>
+  );
+  if (archive || !objective) return definitionForm;
+  // Editing: the definition, then the optional burn-rate alerting step (saved separately, off by default).
+  return (
+    <Tabs defaultValue="definition" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="definition">Definition</TabsTrigger>
+        <TabsTrigger value="alerting">Alerting</TabsTrigger>
+      </TabsList>
+      <TabsContent value="definition" forceMount className="data-[state=inactive]:hidden">
+        {definitionForm}
+      </TabsContent>
+      <TabsContent value="alerting">
+        <SloAlertingStep objectiveId={objective.id} />
+      </TabsContent>
+    </Tabs>
   );
 }

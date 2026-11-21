@@ -528,7 +528,7 @@ const decisions: readonly ApiCapability[] = [
     title: 'Service objectives',
     status: 'partial',
     explanation:
-      'The four supported metrics have explicit contracts, immutable versioned writes, archived reads, bounded history and quota-bound asynchronous evaluation. Scoped readers receive actor-filtered evaluations; shared daily history requires global metric visibility. Full product UI parity, performance and final combined certification remain in progress.',
+      'The four supported metrics have explicit contracts, immutable versioned writes, archived reads, bounded history and quota-bound asynchronous evaluation. Scoped readers receive actor-filtered evaluations; shared daily history requires global metric visibility. Availability and uptime objectives can carry an opt-in multi-window burn-rate alert policy measured from connector metrics. Full product UI parity, performance and final combined certification remain in progress.',
     operationIds: [
       'getServiceObjectiveCatalog',
       'listServiceObjectives',
@@ -541,6 +541,9 @@ const decisions: readonly ApiCapability[] = [
       'getServiceObjectiveHistory',
       'evaluateServiceObjective',
       'getServiceObjectiveEvaluation',
+      'getServiceObjectiveAlertPolicy',
+      'updateServiceObjectiveAlertPolicy',
+      'getServiceObjectiveBurnHistory',
     ],
   },
   {

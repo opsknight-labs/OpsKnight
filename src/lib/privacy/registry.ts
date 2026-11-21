@@ -320,6 +320,9 @@ export const personalDataRegistry = [
       'PrePagingDecision',
       'ServiceMetricTemplate',
       'MetricAnomaly',
+      'SloAlertPolicy',
+      'SloSliPoint',
+      'SloAlertTransition',
     ],
     fields: [
       'IncidentFingerprint.template',
@@ -359,6 +362,10 @@ export const personalDataRegistry = [
       'ServiceMetricTemplate.createdById',
       'ServiceMetricTemplate.updatedById',
       'MetricAnomaly.labels',
+      'SloAlertPolicy.goodQuery',
+      'SloAlertPolicy.totalQuery',
+      'SloAlertPolicy.createdById',
+      'SloAlertPolicy.updatedById',
     ],
     purpose: [
       'Similar-incident suggestions',
@@ -370,6 +377,7 @@ export const personalDataRegistry = [
       'Probable-cause and runbook recommendations from service dependencies and change events',
       'Optional weekly digest email to people who manage intelligence',
       'Optional metric anomaly evidence from administrator-configured metric queries',
+      'Optional SLO burn-rate alerts from administrator-configured good and total event queries (5-minute counts kept 30 days)',
     ],
     classifications: ['INTERNAL', 'PERSONAL'],
     locations: ['DATABASE', 'FREE_TEXT'],

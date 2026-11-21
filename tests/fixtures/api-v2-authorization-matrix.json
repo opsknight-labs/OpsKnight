@@ -1361,11 +1361,29 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /service-objectives/{id}/alert-policy [service-objectives:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "PUT /service-objectives/{id}/alert-policy [service-objectives:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "POST /service-objectives/{id}/archive [service-objectives:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /service-objectives/{id}/burn-history [service-objectives:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
   },
   "POST /service-objectives/{id}/evaluate [service-objectives:evaluate]": {
     "ADMIN": "allow:global",

@@ -237,13 +237,88 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/integration-certification.yml
 
-  build:
+  # Each release architecture builds natively on its own runner. Emulating arm64 under QEMU on an
+  # amd64 runner took hours and crashed ("Illegal instruction"); the build job merges both digests.
+  release-image:
     needs: [release-quality, integration-certification]
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') && !inputs.certification_archive &&
+      needs.release-quality.result == 'success' && needs.integration-certification.result == 'success'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (release labels)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME_RELEASE }}
+
+      - name: Build + push ${{ matrix.arch }} release image by digest
+        id: arch_build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE_NAME_RELEASE }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+            BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
+          cache-from: |
+            type=gha,scope=opsknight-release-${{ matrix.arch }}
+            type=gha,scope=opsknight-main-amd64
+          cache-to: type=gha,scope=opsknight-release-${{ matrix.arch }},mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Export ${{ matrix.arch }} digest
+        env:
+          DIGEST: ${{ steps.arch_build.outputs.digest }}
+        run: |
+          test -n "$DIGEST"
+          mkdir -p /tmp/release-digests
+          touch "/tmp/release-digests/${DIGEST#sha256:}"
+
+      - name: Upload ${{ matrix.arch }} digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-digest-${{ matrix.arch }}
+          path: /tmp/release-digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: [release-quality, integration-certification, release-image]
     if: >-
       !cancelled() && !inputs.certification_archive &&
       (github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'ci:full')) &&
       (!startsWith(github.ref, 'refs/tags/v') ||
-        (needs.release-quality.result == 'success' && needs.integration-certification.result == 'success'))
+        (needs.release-quality.result == 'success' && needs.integration-certification.result == 'success' &&
+          needs.release-image.result == 'success'))
     runs-on: ubuntu-22.04
     outputs:
       release_image_digest: ${{ steps.resolve_release_digest.outputs.digest || steps.release_build.outputs.digest }}
@@ -264,10 +339,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -731,27 +802,25 @@ jobs:
           provenance: false
           sbom: false
 
+      - name: Download native release image digests
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/release-digests
+          pattern: release-digest-*
+          merge-multiple: true
+
+      # Release channel: one index over the amd64 and arm64 images (and their SBOM and provenance).
       - name: Build + push (release channel - version tag)
         if: startsWith(github.ref, 'refs/tags/v')
         id: release_build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta_release_tag.outputs.tags }}
-          labels: ${{ steps.meta_release_tag.outputs.labels }}
-          build-args: |
-            SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
-            BUILD_REVISION=${{ github.sha }}
-            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
-          cache-from: |
-            type=gha,scope=opsknight-release
-            type=gha,scope=opsknight-main-amd64
-          cache-to: type=gha,scope=opsknight-release,mode=max
-          provenance: mode=max
-          sbom: true
+        working-directory: /tmp/release-digests
+        env:
+          TAGS: ${{ steps.meta_release_tag.outputs.tags }}
+        run: |
+          test "$(ls | wc -l)" -eq 2
+          # shellcheck disable=SC2046
+          docker buildx imagetools create $(printf -- '--tag %s ' $TAGS) $(printf "${IMAGE_NAME_RELEASE}@sha256:%s " *)
 
       - name: Resolve release candidate index digest
         if: startsWith(github.ref, 'refs/tags/v')
@@ -1016,7 +1085,9 @@ jobs:
           EOF
           docker buildx imagetools create "${tag_args[@]}" "$source_ref"
           for tag in "${verified_tags[@]}"; do
-            promoted_digest="$(docker buildx imagetools inspect "$tag" | awk '/^Digest:/ {print $2; exit}')"
+            # No pipe: under pipefail, awk exiting early killed inspect (exit 255) after a good promotion.
+            inspected="$(docker buildx imagetools inspect "$tag")"
+            promoted_digest="$(awk '/^Digest:/ {print $2; exit}' <<<"$inspected")"
             test "$promoted_digest" = "$RELEASE_IMAGE_DIGEST"
           done
 

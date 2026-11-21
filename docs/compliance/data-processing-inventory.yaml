@@ -127,6 +127,7 @@ domains:
         heartbeat-token-hashes,
         metric-template-queries-and-authorship,
         numeric-metric-anomaly-evidence-and-series-labels,
+        slo-alert-queries-authorship-and-five-minute-event-counts,
       ]
     purpose:
       [
@@ -140,6 +141,7 @@ domains:
         probable-cause-and-runbook-recommendations,
         pre-paging-noise-controls-and-heartbeat-monitoring,
         optional-metric-anomaly-evidence-from-administrator-configured-connectors,
+        optional-slo-burn-rate-alerts-from-administrator-configured-connectors,
       ]
     storage: [postgresql]
     recipients:

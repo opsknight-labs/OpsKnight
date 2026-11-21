@@ -218,13 +218,15 @@ jobs:
           if-no-files-found: error
 
   db-integration:
-    name: Database integration (L2, shard ${{ matrix.shard }}/4)
+    name: Database integration (L2, shard ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The intelligence suites pushed the slowest shard past 20 minutes (shards are split by file count, not time).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        # 6 shards: after #928 four shards ran 13-18 min against the 20-min limit.
+        shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
         image: postgres:16
@@ -277,7 +279,7 @@ jobs:
         # general opsknight_test database. No assertions or dedicated gates are skipped.
         run: >-
           npm run test:ci:db --
-          --shard=${{ matrix.shard }}/4
+          --shard=${{ matrix.shard }}/6
           --exclude tests/integration/authentication-policy-database.test.ts
           --exclude tests/integration/emergency-authentication-database.test.ts
           --exclude tests/integration/oidc-staged-authentication-database.test.ts
@@ -359,7 +361,7 @@ jobs:
           DB_STATUS: ${{ needs.db-integration.result }}
           INGESTION_STATUS: ${{ needs.ingestion-durability.result }}
           DB_SECRET_STATUS: ${{ needs.database-secret-scripts.result }}
-          DB_SHARDS: '4'
+          DB_SHARDS: '6'
         run: |
           node - <<'NODE'
           const fs = require('fs');

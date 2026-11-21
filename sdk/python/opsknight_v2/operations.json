@@ -767,6 +767,30 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getServiceObjectiveAlertPolicy": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/alert-policy",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceObjectiveAlertPolicy": {
+    "method": "PUT",
+    "path": "/service-objectives/{id}/alert-policy",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": true
+  },
+  "getServiceObjectiveBurnHistory": {
+    "method": "GET",
+    "path": "/service-objectives/{id}/burn-history",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "getStatusPagePublication": {
     "method": "GET",
     "path": "/status-pages/{id}/publication",

@@ -732,6 +732,30 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/service-objectives/{id}/alert-policy',
+    'getServiceObjectiveAlertPolicy',
+    'service-objectives:read',
+    'item',
+    'ServiceObjectiveAlertPolicy'
+  ),
+  op(
+    'put',
+    '/service-objectives/{id}/alert-policy',
+    'updateServiceObjectiveAlertPolicy',
+    'service-objectives:write',
+    'item',
+    'ServiceObjectiveAlertPolicy'
+  ),
+  op(
+    'get',
+    '/service-objectives/{id}/burn-history',
+    'getServiceObjectiveBurnHistory',
+    'service-objectives:read',
+    'item',
+    'ServiceObjectiveBurnHistory'
+  ),
+  op(
+    'get',
     '/status-pages/{id}/publication',
     'getStatusPagePublication',
     'status-pages:read',

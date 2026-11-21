@@ -4,6 +4,12 @@ import {
   SERVICE_OBJECTIVE_METRICS,
 } from '@/lib/slo/types';
 import { CREATABLE_SERVICE_OBJECTIVE_METRICS } from '@/lib/slo/schemas';
+import {
+  SLO_ALERT_BOUNDS,
+  SLO_ALERT_STATES,
+  SLO_BURN_TIERS,
+  SLO_BURN_WINDOWS,
+} from '@/lib/slo/burn-alerts/contract';
 type Schema = Record<string, unknown>;
 const ref = (name: string): Schema => ({ $ref: `#/components/schemas/${name}` });
 const string: Schema = { type: 'string' };
@@ -78,6 +84,21 @@ const evaluation = object(
     'dataState',
     'definitionVersion',
   ]
+);
+const alertState: Schema = { type: 'string', enum: SLO_ALERT_STATES };
+const burnWindow: Schema = { type: 'string', enum: Object.keys(SLO_BURN_WINDOWS) };
+const burnByWindow = object(
+  Object.fromEntries(Object.keys(SLO_BURN_WINDOWS).map(key => [key, nullableNumber]))
+);
+const alertPolicyInput = object(
+  {
+    connectionId: { type: 'string', minLength: 1, maxLength: 64 },
+    goodQuery: { type: 'string', minLength: 1, maxLength: SLO_ALERT_BOUNDS.maxQueryLength },
+    totalQuery: { type: 'string', minLength: 1, maxLength: SLO_ALERT_BOUNDS.maxQueryLength },
+    enabled: { type: 'boolean', default: false },
+    ticketsEnabled: { type: 'boolean', default: true },
+  },
+  ['connectionId', 'goodQuery', 'totalQuery']
 );
 export const SERVICE_OBJECTIVE_SCHEMAS: Record<string, Schema> = {
   ServiceObjective: object({
@@ -170,6 +191,61 @@ export const SERVICE_OBJECTIVE_SCHEMAS: Record<string, Schema> = {
       }),
     ],
   },
+  ServiceObjectiveAlertPolicy: object({
+    objectiveId: string,
+    serviceId: string,
+    connectionId: nullableString,
+    connectionName: nullableString,
+    goodQuery: string,
+    totalQuery: string,
+    stepSeconds: integer,
+    enabled: { type: 'boolean' },
+    ticketsEnabled: { type: 'boolean' },
+    state: alertState,
+    stateSince: date,
+    lastEvaluatedAt: nullableDate,
+    lastStatus: nullableString,
+    lastIncidentId: nullableString,
+    coverageFrom: nullableDate,
+    updatedAt: date,
+  }),
+  ServiceObjectiveBurnHistory: object({
+    objectiveId: string,
+    targetPercent: { type: 'number' },
+    state: alertState,
+    hours: integer,
+    points: {
+      type: 'array',
+      items: object({
+        at: date,
+        good: { type: 'number' },
+        total: { type: 'number' },
+        sli: nullableNumber,
+        burn1h: nullableNumber,
+      }),
+    },
+    transitions: {
+      type: 'array',
+      maxItems: SLO_ALERT_BOUNDS.maxTransitions,
+      items: object({
+        from: alertState,
+        to: alertState,
+        at: date,
+        incidentId: nullableString,
+        burnByWindow,
+      }),
+    },
+    tiers: {
+      type: 'array',
+      maxItems: SLO_BURN_TIERS.length,
+      items: object({
+        tier: { type: 'string', enum: ['PAGE', 'TICKET'] },
+        long: burnWindow,
+        short: burnWindow,
+        threshold: { type: 'number' },
+      }),
+    },
+  }),
   ServiceObjectiveEvaluation: evaluation,
   ServiceObjectiveEvaluationReceipt: {
     oneOf: [
@@ -194,11 +270,12 @@ export const SERVICE_OBJECTIVE_SCHEMAS: Record<string, Schema> = {
   }),
 };
 export const SERVICE_OBJECTIVE_OPERATIONS: {
-  method: 'get' | 'post' | 'patch';
+  method: 'get' | 'post' | 'patch' | 'put';
   path: string;
   summary: string;
   description?: string;
   body?: Schema;
+  query?: Record<string, Schema>;
   status?: number;
   paginated?: boolean;
 }[] = [
@@ -284,5 +361,34 @@ export const SERVICE_OBJECTIVE_OPERATIONS: {
     method: 'get',
     path: '/service-objectives/{id}/evaluations/{evaluationId}',
     summary: 'Inspect an authorized evaluation job and its recorded outcome',
+  },
+  {
+    method: 'get',
+    path: '/service-objectives/{id}/alert-policy',
+    summary: 'Read the burn-rate alert policy and current alert state of an objective',
+    description:
+      'Returns 404 when the objective has no policy. state is OK, TICKET or PAGE; lastStatus explains the latest evaluation (OK, NO_DATA, CONNECTOR_ERROR:<code> or a connection scope problem).',
+  },
+  {
+    method: 'put',
+    path: '/service-objectives/{id}/alert-policy',
+    summary: 'Create or replace the multi-window burn-rate alert policy of an objective',
+    body: alertPolicyInput,
+    description:
+      'Availability and uptime objectives of a service only. goodQuery and totalQuery return event counts per 5-minute step through an enabled metrics connection the service team may use. enabled defaults to false. Changing the connection or a query discards stored measurements; tiers re-arm as coverage builds. Required idempotency key; saving does no network I/O.',
+  },
+  {
+    method: 'get',
+    path: '/service-objectives/{id}/burn-history',
+    summary: 'Read stored SLI steps, hourly burn, alert transitions and tier thresholds',
+    query: {
+      hours: {
+        type: 'integer',
+        minimum: 1,
+        maximum: SLO_ALERT_BOUNDS.historyMaxHours,
+        default: SLO_ALERT_BOUNDS.historyDefaultHours,
+      },
+    },
+    description: `hours (1-${SLO_ALERT_BOUNDS.historyMaxHours}, default ${SLO_ALERT_BOUNDS.historyDefaultHours}) bounds the steps returned; at most ${SLO_ALERT_BOUNDS.maxTransitions} transitions.`,
   },
 ];

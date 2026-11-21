@@ -248,13 +248,14 @@ describe('TQ-11: tools/list stays small', () => {
     // overrides, available actions, watch) and widens catch-up: about 3.4 KB more. The long tail
     // stays discoverable through search_capabilities on purpose. Incident roles add
     // incident_roles_list and incident_role_assign (id, roleKey enum, userId): about 0.4 KB.
-    // business_services_list (cursor pagination only): about 0.25 KB.
+    // business_services_list (cursor pagination only): about 0.25 KB. Merged with the SLO
+    // burn-alert tools from develop: about 0.25 KB more.
     const named = tools.filter(tool => MCP_CATALOG.some(operation => operation.tool === tool.name));
     const namedBytes = named.reduce(
       (total, tool) => total + Buffer.byteLength(JSON.stringify(tool.inputSchema)),
       0
     );
-    expect(namedBytes).toBeLessThanOrEqual(18176);
+    expect(namedBytes).toBeLessThanOrEqual(18432);
     expect(bytes).toBeGreaterThan(namedBytes);
   });
 });

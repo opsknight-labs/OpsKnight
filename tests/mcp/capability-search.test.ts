@@ -98,7 +98,6 @@ describe('golden queries against the real catalog', () => {
     ['open incidents', 'listIncidents'],
     ['list incidents', 'listIncidents'],
     ['show open incidents', 'listIncidents'],
-    ['check SLO', 'listServiceObjectives'],
     ['error budget', 'listServiceObjectives'],
     ['who is on call', 'getOnCallNow'],
     ['who is covering my team right now', 'getOnCallNow'],
@@ -121,6 +120,15 @@ describe('golden queries against the real catalog', () => {
     ['has this happened before, what fixed it last time', 'listSimilarIncidents'],
   ])('%s -> %s', (query, expected) => {
     expect(first(query)).toBe(expected);
+  });
+
+  it('offers the objective list and the curated burn-alert read for an SLO question', () => {
+    // Both match "slo"; the curated tool ranks first, the list (which gives its objective id) next.
+    const top = searchCapabilities(MCP_CATALOG, 'check SLO')
+      .slice(0, 2)
+      .map(op => op.operationId);
+    expect(top).toEqual(['getServiceObjectiveAlertPolicy', 'listServiceObjectives']);
+    expect(first('burn rate alert')).toBe('getServiceObjectiveAlertPolicy');
   });
 
   it('never ranks an approval-gated change first for a read question', () => {

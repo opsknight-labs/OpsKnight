@@ -434,6 +434,15 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     'getServiceObjective',
     async () => (await import('@/app/api/v2/service-objectives/[id]/route')).GET,
   ],
+  // Burn-rate alert policy and its history (the policy read is curated as slo_alert_policy_get).
+  [
+    'getServiceObjectiveAlertPolicy',
+    async () => (await import('@/app/api/v2/service-objectives/[id]/alert-policy/route')).GET,
+  ],
+  [
+    'getServiceObjectiveBurnHistory',
+    async () => (await import('@/app/api/v2/service-objectives/[id]/burn-history/route')).GET,
+  ],
   [
     'getServiceObjectiveCatalog',
     async () => (await import('@/app/api/v2/service-objectives/catalog/route')).GET,
@@ -782,6 +791,10 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
   [
     'updateServiceObjective',
     async () => (await import('@/app/api/v2/service-objectives/[id]/route')).PATCH,
+  ],
+  [
+    'updateServiceObjectiveAlertPolicy',
+    async () => (await import('@/app/api/v2/service-objectives/[id]/alert-policy/route')).PUT,
   ],
   [
     'createServiceObjective',

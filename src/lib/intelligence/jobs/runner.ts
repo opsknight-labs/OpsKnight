@@ -47,6 +47,9 @@ import {
 import { purgeConversations } from '../conversations/store';
 import { evaluateMetricTemplate } from '../metric-anomaly/evaluate';
 import { scheduleMetricEvaluationsIfDue } from '../metric-anomaly/service';
+import { evaluateSloPolicy } from '@/lib/slo/burn-alerts/evaluate';
+import { scheduleSloEvaluationsIfDue } from '@/lib/slo/burn-alerts/service';
+import { SLO_ALERT_BOUNDS } from '@/lib/slo/burn-alerts/contract';
 import {
   METRIC_EVALUATION_BUDGET_MS,
   METRIC_SCHEDULE_CHECK_INTERVAL_MS,
@@ -180,6 +183,10 @@ export const DEFAULT_HANDLERS: WorkHandlers = {
   [WORK_KINDS.EVALUATE_METRIC_TEMPLATE]: async (item, { settings, signal }) => {
     await evaluateMetricTemplate(item, settings, signal);
   },
+  // SLO burn-rate alerts: one policy per item; raises and resolves through the normal event path.
+  [WORK_KINDS.EVALUATE_SLO_POLICY]: async (item, { settings, signal }) => {
+    await evaluateSloPolicy(item, settings, signal);
+  },
   // Semantic search is optional and never sits in front of analysis: incidents are analysed lexically
   // straight away, then re-analysed once their vector exists, so a slow or failing embedding provider
   // only delays the semantic signal. One provider call per pass, however many incidents arrive.
@@ -245,6 +252,7 @@ const KIND_MIN_BUDGET_MS: Partial<Record<WorkKind, number>> = {
   [WORK_KINDS.SYNC_KNOWLEDGE]: 120_000,
   [WORK_KINDS.SQUIRE_PROACTIVE]: 120_000,
   [WORK_KINDS.EVALUATE_METRIC_TEMPLATE]: METRIC_EVALUATION_BUDGET_MS,
+  [WORK_KINDS.EVALUATE_SLO_POLICY]: SLO_ALERT_BOUNDS.evaluationBudgetMs,
 };
 
 export function workBudgetMs(
@@ -267,6 +275,7 @@ export interface LaneState {
   lastTopologyCheckAt: number;
   /** Optional so lane states built before metric templates existed stay valid. */
   lastMetricCheckAt?: number;
+  lastSloCheckAt?: number;
   /** Handlers that exceeded their budget and are still running; they count against concurrency until they let go. */
   timedOut: Set<Promise<unknown>>;
   kinds: KindBreaker;
@@ -338,6 +347,7 @@ export function createLaneState(): LaneState {
     lastConversationSweepAt: 0,
     lastTopologyCheckAt: 0,
     lastMetricCheckAt: 0,
+    lastSloCheckAt: 0,
     timedOut: new Set(),
     kinds: new KindBreaker(),
     saturatedLogged: false,
@@ -781,6 +791,21 @@ async function runCycle(
         await scheduleMetricEvaluationsIfDue(settings, new Date(now()));
       } catch (error) {
         logger.warn('[Intelligence] Could not schedule metric template evaluations; will retry', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // SLO burn-rate policies are evaluated every step; with none enabled this is one small index probe.
+    if (
+      handlers[WORK_KINDS.EVALUATE_SLO_POLICY] &&
+      now() - (state.lastSloCheckAt ?? 0) >= SLO_ALERT_BOUNDS.scheduleCheckIntervalMs
+    ) {
+      state.lastSloCheckAt = now();
+      try {
+        await scheduleSloEvaluationsIfDue(settings, new Date(now()));
+      } catch (error) {
+        logger.warn('[Intelligence] Could not schedule SLO burn-rate evaluations; will retry', {
           error: error instanceof Error ? error.message : String(error),
         });
       }

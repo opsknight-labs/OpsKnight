@@ -30,3 +30,6 @@ Pause paging during planned work with
 
 Group services into what customers rely on with
 [business services](./business-services).
+
+Page on fast error-budget spend for an availability objective with
+[SLO burn-rate alerts](../slo-burn-alerts).
