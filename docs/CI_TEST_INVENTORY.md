@@ -28,7 +28,7 @@ Pull requests run a light required gate. Heavy suites run on `develop` in 6-hour
 +------------------------------------------------------------------------------------------------------------------------------------------+
 | tests.yml                        | static-validation          | L0    | No  | No      | No      | PR, push develop/main                 |
 | tests.yml                        | unit-tests                 | L1    | No  | No      | No      | PR, push develop/main                 |
-| tests.yml                        | db-integration (4 shards)  | L2    | Yes | No      | No      | PR, push develop/main                 |
+| tests.yml                        | db-integration (6 shards)  | L2    | Yes | No      | No      | PR, push develop/main                 |
 | tests.yml                        | ingestion-durability       | L2    | Yes | No      | No      | PR, push develop/main                 |
 | tests.yml                        | database-secret-scripts    | L2    | Yes | No      | No      | PR, push develop/main                 |
 | tests.yml                        | build                      | Gate  | No  | Yes     | No      | PR, push develop/main                 |
