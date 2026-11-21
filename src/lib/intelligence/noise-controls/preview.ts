@@ -80,7 +80,8 @@ function stringLabels(raw: unknown): Record<string, string> {
   );
 }
 
-function toInput(row: AlertRow): PrePagingInput {
+/** A stored alert as matcher input (no orchestration transforms: those are not persisted). */
+export function alertRowToInput(row: Omit<AlertRow, 'incidentId'>): PrePagingInput {
   const payload = (row.payload ?? {}) as Record<string, unknown>;
   return {
     serviceId: row.serviceId,
@@ -126,7 +127,7 @@ export async function previewMatchers(
   const examples: MatchPreviewExample[] = [];
   let matchedAlerts = 0;
   for (const row of scanned) {
-    const alert = toInput(row);
+    const alert = alertRowToInput(row);
     if (!matchesAll(compiled, alert)) continue;
     matchedAlerts += 1;
     if (!incidents.has(row.incidentId) && examples.length < 5)

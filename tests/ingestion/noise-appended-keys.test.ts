@@ -123,3 +123,23 @@ it('an appended key that later opens its own incident no longer holds the origin
     expect(await status(split.incident.id)).toBe('RESOLVED');
   }
 });
+
+it('keys appended while content dedup was on still hold the incident after it is switched off', async () => {
+  const serviceId = await service({ contentDedup: { enabled: true, windowSeconds: 600 } });
+  const summary = `Checkout 5xx ${randomUUID()}`;
+  const own = randomUUID();
+  const appended = randomUUID();
+  const opened = await send(serviceId, 'trigger', own, summary);
+  if (!('incident' in opened) || !opened.incident) throw new Error('expected an incident');
+  const incidentId = opened.incident.id;
+  expect((await send(serviceId, 'trigger', appended, summary)).action).toBe('deduplicated');
+
+  await prisma.noiseControlPolicy.updateMany({ where: { serviceId }, data: { mode: 'OFF' } });
+  await primePrePagingSnapshot();
+
+  const partial = await send(serviceId, 'resolve', own, summary);
+  expect('incident' in partial && partial.incident?.id).toBe(incidentId);
+  expect(await status(incidentId)).toBe('OPEN');
+  expect((await send(serviceId, 'resolve', appended, summary)).action).toBe('resolved');
+  expect(await status(incidentId)).toBe('RESOLVED');
+});

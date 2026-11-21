@@ -530,14 +530,13 @@
         "9 automation tool evidence verified",
         "10 oversized tool output trimmed, not dropped",
         "11 triage owner limited to current active members",
-        "12 weight fits moved to the daily lane job"
+        "12 weight fits moved to the daily lane job",
+        "13 sweep also lifts SUPPRESSION-rule holds whose rule was disabled, expired, deleted or edited to no longer match (same paging UNSUPPRESS path)",
+        "14 storm cascade has no parent-age cutoff; keyset-paged (cursor noise-sweep:storm-cascade) over unsettled links",
+        "15 appended-key resolve always searches appended alerts (persisted fact), independent of the live content-dedup switch",
+        "16 migration 20261121000100 adds idx_alert_incident_key_latest Alert(incidentId, dedupKey, createdAt DESC, id DESC) INCLUDE (status), CONCURRENTLY"
       ],
-      "gaps": [
-        "SUPPRESSION-rule (automation suppression rule) suppressions are not lifted by the sweep; only noise-control holds are (legacy flapping holds are released by releaseStableFlappingHolds)",
-        "Storm cascade shortcut: parents resolved more than 24h ago are not cascaded",
-        "Appended-key resolve lookup follows the live content-dedup switch: keys appended while it was on stop holding their incident open once it is switched off",
-        "Alert(incidentId, dedupKey, createdAt, id) INCLUDE (status) index not added: the open-other-keys count now runs only on resolves for content-dedup services; add it if that count shows up in profiles"
-      ]
+      "gaps": []
     },
     "M2": {
       "status": "implemented_pending_full_ci",

@@ -238,6 +238,45 @@ describe('un-suppress sweep', () => {
     expect(await escalationJobs(id)).toBe(1);
   });
 
+  it('pages a rule-suppressed incident once its rule is disabled, expired or no longer matches', async () => {
+    const service = await createTestService('Suppression rule');
+    await policy(service.id, {});
+    const rule = (key: string) =>
+      db.suppressionRule.create({
+        data: {
+          name: `Mute ${key}`,
+          serviceId: service.id,
+          matchers: [{ field: 'dedupKey', op: 'equals', value: `${integrationId}:${key}` }],
+          effect: 'SUPPRESS',
+        },
+      });
+    const ends = [
+      { enabled: false },
+      { expiresAt: new Date(Date.now() - 1_000) },
+      { matchers: [{ field: 'source', op: 'equals', value: 'other' }] },
+    ];
+    const held: Array<{ id: string; ruleId: string }> = [];
+    for (const [index] of ends.entries()) {
+      const r = await rule(`muted-${index}`);
+      await primePrePagingSnapshot();
+      const id = incidentOf(await send(service.id, `muted-${index}`)).id;
+      expect((await incident(id)).status).toBe('SUPPRESSED');
+      held.push({ id, ruleId: r.id });
+    }
+
+    // Rules still in force: nothing happens.
+    await runUnsuppressSweep(budget);
+    for (const { id } of held) expect((await incident(id)).status).toBe('SUPPRESSED');
+
+    for (const [index, data] of ends.entries())
+      await db.suppressionRule.update({ where: { id: held[index].ruleId }, data });
+    await runUnsuppressSweep(budget);
+    for (const { id } of held) {
+      expect((await incident(id)).status).toBe('OPEN');
+      expect(await escalationJobs(id)).toBe(1);
+    }
+  });
+
   it('leaves an incident held by product maintenance to its own end sweep', async () => {
     const service = await createTestService('Product maintenance');
     const startsAt = new Date(Date.now() - 60_000);
@@ -346,6 +385,22 @@ describe('storm parent', () => {
 
     // Idempotent: the re-paged child is not paged again.
     await runStormCascadeSweep(budget);
+    expect(await escalationJobs(firing.id)).toBe(1);
+  });
+
+  it('still cascades to open children of a parent resolved more than a day ago', async () => {
+    const service = await createTestService('Storm cascade late');
+    await policy(service.id, { storm: { enabled: true, threshold: 2, windowSeconds: 60 } });
+    const parent = incidentOf(await send(service.id, 'late-1'));
+    await send(service.id, 'late-2');
+    const firing = incidentOf(await send(service.id, 'late-3'));
+    expect((await send(service.id, 'late-1', {}, 'resolve')).action).toBe('resolved');
+    await db.incident.update({
+      where: { id: parent.id },
+      data: { resolvedAt: new Date(Date.now() - 3 * 86_400_000) },
+    });
+    while (await runStormCascadeSweep(budget));
+    expect((await incident(firing.id)).status).toBe('OPEN');
     expect(await escalationJobs(firing.id)).toBe(1);
   });
 

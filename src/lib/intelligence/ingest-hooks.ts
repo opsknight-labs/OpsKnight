@@ -10,7 +10,6 @@ export {
   recordIngestNoiseDecision,
   linkStormChild,
   noisePipelineOrder,
-  contentDedupMayAppend,
   automationIntelligenceContext,
   type IngestNoiseDecision,
   type IngestNoisePrefetch,

@@ -24,7 +24,6 @@ import {
   linkStormChild,
   recordIngestNoiseDecision,
   noisePipelineOrder,
-  contentDedupMayAppend,
   signalIntelligenceIncident,
   type IngestNoiseDecision,
 } from './intelligence/ingest-hooks';
@@ -295,7 +294,8 @@ async function applyEvent(
       tx,
       serviceId,
       candidateDedupKeys,
-      event_action === 'resolve' && contentDedupMayAppend(serviceId)
+      // Always: whether a key was appended is a persisted fact, not the live content-dedup switch.
+      event_action === 'resolve'
     );
 
     // Only a brand-new incident is held; incidents already open before the
