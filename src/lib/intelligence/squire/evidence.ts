@@ -269,6 +269,7 @@ export class SquireEvidenceRegistry {
       case 'get_error_events':
       case 'get_change_diff':
       case 'get_k8s_state':
+      case 'get_pipeline_runs':
       case 'list_metrics':
       case 'label_values':
         add('observability', {

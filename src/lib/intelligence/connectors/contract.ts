@@ -16,6 +16,8 @@ export const OBSERVABILITY_KINDS = [
   'GITHUB',
   'GITLAB',
   'KUBERNETES',
+  'GITHUB_ACTIONS',
+  'GITLAB_CI',
 ] as const;
 export type ObservabilityKind = (typeof OBSERVABILITY_KINDS)[number];
 
@@ -28,6 +30,7 @@ export const CONNECTOR_CAPABILITIES = [
   'diff',
   'catalog',
   'kubernetes',
+  'pipelines',
 ] as const;
 export type ConnectorCapability = (typeof CONNECTOR_CAPABILITIES)[number];
 
@@ -46,6 +49,8 @@ export const KIND_CAPABILITIES: Readonly<
   GITHUB: ['diff'],
   GITLAB: ['diff'],
   KUBERNETES: ['kubernetes'],
+  GITHUB_ACTIONS: ['pipelines'],
+  GITLAB_CI: ['pipelines'],
 };
 
 const CAPABILITY_LABELS: Readonly<Record<ConnectorCapability, string>> = {
@@ -56,6 +61,7 @@ const CAPABILITY_LABELS: Readonly<Record<ConnectorCapability, string>> = {
   diff: 'code diffs',
   catalog: 'metric names and label values',
   kubernetes: 'workload state and events',
+  pipelines: 'CI/CD runs and failed jobs',
 };
 
 /** "metrics, logs" — what a kind of connection can answer, for the settings page. */
@@ -76,6 +82,8 @@ export const KIND_LABELS: Readonly<Record<ObservabilityKind, string>> = {
   GITHUB: 'GitHub',
   GITLAB: 'GitLab',
   KUBERNETES: 'Kubernetes (read-only)',
+  GITHUB_ACTIONS: 'GitHub Actions (read-only)',
+  GITLAB_CI: 'GitLab CI (read-only)',
 };
 
 /** The public endpoint used when an administrator leaves the base URL blank. */
@@ -84,6 +92,8 @@ export const KIND_DEFAULT_BASE_URL: Readonly<Partial<Record<ObservabilityKind, s
   SENTRY: 'https://sentry.io',
   GITHUB: 'https://api.github.com',
   GITLAB: 'https://gitlab.com',
+  GITHUB_ACTIONS: 'https://api.github.com',
+  GITLAB_CI: 'https://gitlab.com',
 };
 
 export const CONNECTOR_BOUNDS = {

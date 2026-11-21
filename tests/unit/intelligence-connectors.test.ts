@@ -45,6 +45,8 @@ const BASE: Record<ObservabilityKind, string> = {
   GITHUB: 'https://api.github.com',
   GITLAB: 'https://gitlab.com',
   KUBERNETES: 'https://k8s.example.com:6443',
+  GITHUB_ACTIONS: 'https://api.github.com',
+  GITLAB_CI: 'https://gitlab.com',
 };
 
 function connection(

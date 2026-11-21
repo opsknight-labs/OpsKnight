@@ -176,6 +176,16 @@ const CREDENTIAL_LABELS: Record<
     secondary: null,
     help: 'A service account bound to the built-in view ClusterRole. The test lists namespaces.',
   },
+  GITHUB_ACTIONS: {
+    secret: 'Token (optional for public repositories)',
+    secondary: null,
+    help: 'A fine-grained token with read-only Actions, Checks and Metadata.',
+  },
+  GITLAB_CI: {
+    secret: 'Access token',
+    secondary: null,
+    help: 'A project or group token with read_api (Reporter role, to read job logs).',
+  },
 };
 
 export function ConnectionForm({
@@ -240,7 +250,10 @@ export function ConnectionForm({
             help={
               defaultBase
                 ? `Leave blank for ${defaultBase}.`
-                : kind === 'GITHUB' || kind === 'GITLAB'
+                : kind === 'GITHUB' ||
+                    kind === 'GITLAB' ||
+                    kind === 'GITHUB_ACTIONS' ||
+                    kind === 'GITLAB_CI'
                   ? 'The API address.'
                   : kind === 'KUBERNETES'
                     ? 'The API server, for example https://k8s.example.com:6443. Its certificate must be publicly trusted.'

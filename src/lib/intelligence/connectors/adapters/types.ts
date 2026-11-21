@@ -94,6 +94,40 @@ export interface KubernetesSummary {
   truncated: { workloads: boolean; pods: boolean; events: boolean };
 }
 
+export interface PipelineQuery {
+  /** Validated owner/repo (GitHub) or namespaced project path (GitLab). */
+  repository: string;
+  branch?: string;
+  /** A numeric run (GitHub) or pipeline (GitLab) id: that run and its failed jobs instead of the list. */
+  runId?: string;
+}
+
+export interface PipelineSummary {
+  provider: 'github_actions' | 'gitlab_ci';
+  repository: string;
+  runs: Array<{
+    id: string;
+    name: string;
+    branch: string;
+    sha: string;
+    event: string;
+    status: string;
+    conclusion: string | null;
+    startedAt: string | null;
+    updatedAt: string | null;
+    url: string;
+  }>;
+  failedJobs?: Array<{
+    id: string;
+    name: string;
+    conclusion: string;
+    failedSteps: string[];
+    url: string;
+    logTail: string;
+  }>;
+  truncated?: { failedJobs: boolean };
+}
+
 export interface ChangeRef {
   provider: 'github' | 'gitlab';
   host: string;
@@ -124,6 +158,7 @@ export interface ConnectorAdapter {
   /** Values one label takes on one metric (Prometheus-compatible backends only). */
   labelValues?(context: AdapterContext, metric: string, label: string): Promise<string[]>;
   kubernetes?(context: AdapterContext, query: KubernetesQuery): Promise<KubernetesSummary>;
+  pipelines?(context: AdapterContext, query: PipelineQuery): Promise<PipelineSummary>;
 }
 
 export function httpFor(

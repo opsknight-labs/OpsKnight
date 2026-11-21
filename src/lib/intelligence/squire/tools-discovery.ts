@@ -20,6 +20,7 @@ export const DISCOVERY_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = 
   label_values: 'INTERNAL',
   list_metric_templates: 'INTERNAL',
   get_k8s_state: 'INTERNAL',
+  get_pipeline_runs: 'INTERNAL',
 };
 
 export const DISCOVERY_TOOL_LABELS: Readonly<Record<string, string>> = {
@@ -27,6 +28,7 @@ export const DISCOVERY_TOOL_LABELS: Readonly<Record<string, string>> = {
   label_values: 'Listing label values',
   list_metric_templates: 'Reading saved metric queries',
   get_k8s_state: 'Reading Kubernetes state',
+  get_pipeline_runs: 'Reading CI/CD pipeline runs',
 };
 
 export const DISCOVERY_TOOL_CAPABILITY: Readonly<Record<string, ConnectorCapability>> = {
@@ -34,6 +36,7 @@ export const DISCOVERY_TOOL_CAPABILITY: Readonly<Record<string, ConnectorCapabil
   label_values: 'catalog',
   list_metric_templates: 'metrics',
   get_k8s_state: 'kubernetes',
+  get_pipeline_runs: 'pipelines',
 };
 
 export const DISCOVERY_CAP = 50;
@@ -44,6 +47,13 @@ const LABEL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const NAMESPACE = /^[a-z0-9-]{1,63}$/;
 // Equality, set and existence selectors: keys, values, `=`, `!=`, `in (...)`, `notin (...)`, `!key`.
 const LABEL_SELECTOR = /^[A-Za-z0-9._/\-=!,() ]{1,200}$/;
+// owner/repo or group/sub/project: 2 to 10 path segments, never "." or "..".
+const SEGMENT = /^(?!\.{1,2}$)[A-Za-z0-9_.-]{1,100}$/;
+const isRepository = (value: string) => {
+  const parts = value.split('/');
+  return parts.length >= 2 && parts.length <= 10 && parts.every(part => SEGMENT.test(part));
+};
+const BRANCH = /^(?!\/)(?!.*\.\.)[A-Za-z0-9_./-]{1,200}$/;
 
 const capped = (values: readonly string[]) => {
   const sorted = [...new Set(values)].sort();
@@ -205,6 +215,51 @@ export function buildDiscoveryTools(
       const { namespace, labelSelector } = parsed.data;
       return run('get_k8s_state', parsed.data.connectionId, 'kubernetes', (adapter, context) =>
         adapter.kubernetes?.(context, { namespace, labelSelector: labelSelector || undefined })
+      );
+    }
+  );
+
+  add(
+    'get_pipeline_runs',
+    'Read-only CI/CD runs (GitHub Actions workflow runs or GitLab CI pipelines) for one repository, optionally one branch: the 10 newest with status. With runId, that run and up to 5 failed jobs with their failed steps and a short log tail.',
+    {
+      repository: {
+        type: 'string',
+        minLength: 3,
+        maxLength: 300,
+        description: 'owner/repo, or group/project on GitLab',
+      },
+      branch: { type: 'string', maxLength: 200 },
+      runId: { type: 'string', maxLength: 20, description: 'A run or pipeline id from a list' },
+    },
+    ['repository'],
+    async input => {
+      const parsed = z
+        .object({
+          connectionId,
+          repository: z.string().trim().max(300).refine(isRepository),
+          branch: z.union([z.literal(''), z.string().trim().regex(BRANCH)]).optional(),
+          runId: z
+            .union([
+              z.literal(''),
+              z
+                .string()
+                .trim()
+                .regex(/^\d{1,19}$/),
+            ])
+            .optional(),
+        })
+        .strict()
+        .safeParse(input);
+      if (!parsed.success)
+        return { error: 'Invalid input: use owner/repo, a branch name and a numeric run id.' };
+      const { repository, branch, runId } = parsed.data;
+      return run('get_pipeline_runs', parsed.data.connectionId, 'pipelines', (adapter, context) =>
+        adapter.pipelines?.(context, {
+          repository,
+          branch: branch || undefined,
+          runId: runId || undefined,
+        })
       );
     }
   );
