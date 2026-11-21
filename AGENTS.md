@@ -11,7 +11,7 @@
   - Branch features and fixes from `develop` and open the PR against `develop`.
   - Releases: a PR from `develop` into `main` (merge commit, not squash), then tag `vX.Y.0`.
   - Patches for the live release: branch `hotfix/<name>` from `main`, PR into `main`, tag `vX.Y.Z`, then PR `main` back into `develop`.
-  - The `Release source` check rejects any other PR into `main`.
+  - The `Release source` check rejects any other PR into `main`. Full release, hotfix and image-channel details: [`docs/RELEASING.md`](docs/RELEASING.md).
 - **Feature Branches Only**: All changes must be developed on a dedicated, descriptive branch:
   - Features: `feat/<feature-name>`
   - Bug fixes: `fix/<bug-name>`

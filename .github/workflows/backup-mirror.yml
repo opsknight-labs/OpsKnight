@@ -25,6 +25,10 @@ env:
 jobs:
   mirror:
     if: github.repository == 'opsknight-labs/OpsKnight'
+    # Shows the staging build as a deployment; no approval (develop is staging).
+    environment:
+      name: staging
+      url: https://opssentinal.com
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
