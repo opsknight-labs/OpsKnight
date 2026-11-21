@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/link', () => ({
@@ -13,10 +13,10 @@ vi.mock('@/app/(app)/settings/intelligence/response/actions', () => ({
 }));
 
 import NoisePanel from '@/components/intelligence/overview/NoisePanel';
-import SpeedPanel from '@/components/intelligence/overview/SpeedPanel';
+import OverviewKpis from '@/components/intelligence/overview/OverviewKpis';
 import QualityPanel from '@/components/intelligence/overview/QualityPanel';
 import ChangePanel, { riskBand } from '@/components/intelligence/overview/ChangePanel';
-import OutcomesPanel, { bucketLabel } from '@/components/intelligence/overview/OutcomesPanel';
+import OutcomeTrends, { bucketKey } from '@/components/intelligence/overview/OutcomeTrends';
 import HealthPanel from '@/components/intelligence/overview/HealthPanel';
 import WindowSelector from '@/components/intelligence/overview/WindowSelector';
 import {
@@ -115,24 +115,118 @@ const speed = (overrides: Partial<OverviewSpeed> = {}): OverviewSpeed => ({
   ...overrides,
 });
 
-describe('SpeedPanel', () => {
-  it('shows time to first insight and acceptance, and never fabricates a rate without reviews', () => {
-    render(<SpeedPanel data={speed()} windowLabel="Last 7 days" triageEnabled canManage={false} />);
-    expect(within(tile('First insight (median)')).getByText('45 s')).toBeInTheDocument();
+const outcomes = (series = true): OverviewOutcomes => ({
+  current: { incidents: 10, acknowledged: 8, resolved: 6, mttaSeconds: 300, mttrSeconds: 3600 },
+  previous: { incidents: 5, acknowledged: 5, resolved: 5, mttaSeconds: 600, mttrSeconds: 1800 },
+  series: Array.from({ length: 7 }, (_, index) => ({
+    index,
+    current: {
+      incidents: 1,
+      mttaSeconds: series && index === 6 ? 300 : null,
+      mttrSeconds: series ? 3600 : null,
+    },
+    previous: {
+      incidents: 1,
+      mttaSeconds: series ? 600 : null,
+      mttrSeconds: series ? 1800 : null,
+    },
+  })),
+});
+
+const card = (label: string) =>
+  screen.getByText(label, { selector: 'span' }).closest('li') as HTMLElement;
+
+describe('OverviewKpis', () => {
+  const ok = <T,>(data: T) => ({ ok: true as const, data });
+
+  it('shows each headline number as its own card, and never fabricates a rate without reviews', () => {
+    render(
+      <OverviewKpis
+        noise={ok(noise())}
+        speed={ok(speed())}
+        outcomes={ok(outcomes())}
+        triageEnabled
+        canManage={false}
+      />
+    );
+    const list = screen.getByRole('list');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(12);
+    expect(within(card('Alerts received')).getByText('12.9K')).toBeInTheDocument();
+    expect(within(card('Alerts received')).getByText('300 incidents created')).toBeInTheDocument();
+    expect(within(card('Compression')).getByText('43×')).toBeInTheDocument();
+    expect(within(card('Pages avoided')).getByText('120')).toBeInTheDocument();
+    expect(within(card('Would have avoided')).getByText('40')).toBeInTheDocument();
+    expect(within(card('First insight (median)')).getByText('45 s')).toBeInTheDocument();
     expect(
-      within(tile('First insight (median)')).getByText('30 of 40 incidents had an insight')
+      within(card('First insight (median)')).getByText('p90 12 min · 30 of 40 incidents')
     ).toBeInTheDocument();
-    expect(within(tile('First insight (p90)')).getByText('12 min')).toBeInTheDocument();
-    expect(within(tile('Related accepted')).getByText('75%')).toBeInTheDocument();
-    expect(within(tile('Rated helpful')).getByText('—')).toBeInTheDocument();
-    expect(within(tile('Rated helpful')).getByText('None rated yet')).toBeInTheDocument();
-    expect(within(tile('Triage accepted')).getByText('50%')).toBeInTheDocument();
+    expect(within(card('Suggestions accepted')).getByText('75%')).toBeInTheDocument();
+    expect(within(card('Rated helpful')).getByText('—')).toBeInTheDocument();
+    expect(within(card('Rated helpful')).getByText('None rated yet')).toBeInTheDocument();
+    expect(within(card('Triage accepted')).getByText('50%')).toBeInTheDocument();
+    expect(within(card('False-group rate')).getByText('10%')).toBeInTheDocument();
+    expect(
+      within(card('Heartbeat monitors')).getByText('No heartbeat monitors')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'How Alerts received is calculated' })
+    ).toBeInTheDocument();
   });
 
-  it('replaces the triage tile with a turn-on hint when triage is off', () => {
-    render(<SpeedPanel data={speed()} windowLabel="Last 7 days" triageEnabled={false} canManage />);
-    expect(screen.queryByText('Triage accepted')).toBeNull();
-    expect(screen.getByText('Triage suggestions are off')).toBeInTheDocument();
+  it('compares MTTA and MTTR with the previous window, judging lower as better', () => {
+    render(
+      <OverviewKpis
+        noise={ok(noise())}
+        speed={ok(speed())}
+        outcomes={ok(outcomes())}
+        triageEnabled
+        canManage={false}
+      />
+    );
+    const mtta = card('Mean time to acknowledge');
+    expect(within(mtta).getByText('5 min')).toBeInTheDocument();
+    expect(within(mtta).getByText('−50%')).toBeInTheDocument();
+    expect(within(mtta).getByText(/vs previous period, better/)).toBeInTheDocument();
+    expect(within(mtta).getByText('8 acknowledged')).toBeInTheDocument();
+    const mttr = card('Mean time to resolve');
+    expect(within(mttr).getByText('+100%')).toBeInTheDocument();
+    expect(within(mttr).getByText(/vs previous period, worse/)).toBeInTheDocument();
+    // No previous value for the other cards, so no badge is invented.
+    expect(within(card('Alerts received')).queryByText(/vs previous period/)).toBeNull();
+  });
+
+  it('blanks only the cards of a failed loader and points administrators at the triage switch', () => {
+    render(
+      <OverviewKpis
+        noise={{ ok: false, error: 'Noise is unavailable.' }}
+        speed={ok(speed())}
+        outcomes={ok(outcomes())}
+        triageEnabled={false}
+        canManage
+      />
+    );
+    expect(within(card('Alerts received')).getByText('—')).toBeInTheDocument();
+    expect(within(card('Alerts received')).getByText('Unavailable')).toBeInTheDocument();
+    expect(within(card('First insight (median)')).getByText('45 s')).toBeInTheDocument();
+    const triage = card('Triage accepted');
+    expect(within(triage).getByText(/Triage suggestions are off/)).toBeInTheDocument();
+    expect(within(triage).getByRole('link', { name: 'Turn on' })).toHaveAttribute(
+      'href',
+      '/settings/intelligence#triage'
+    );
+  });
+
+  it('offers responders no settings link when triage is off', () => {
+    render(
+      <OverviewKpis
+        noise={ok(noise())}
+        speed={ok(speed())}
+        outcomes={ok(outcomes())}
+        triageEnabled={false}
+        canManage={false}
+      />
+    );
+    expect(within(card('Triage accepted')).queryByRole('link')).toBeNull();
   });
 });
 
@@ -289,44 +383,31 @@ describe('ChangePanel', () => {
   });
 });
 
-describe('OutcomesPanel', () => {
-  const outcomes: OverviewOutcomes = {
-    current: { incidents: 10, acknowledged: 8, resolved: 6, mttaSeconds: 300, mttrSeconds: 3600 },
-    previous: { incidents: 5, acknowledged: 5, resolved: 5, mttaSeconds: 600, mttrSeconds: 1800 },
-    series: Array.from({ length: 7 }, (_, index) => ({
-      index,
-      current: { incidents: 1, mttaSeconds: index === 6 ? 300 : null, mttrSeconds: 3600 },
-      previous: { incidents: 1, mttaSeconds: 600, mttrSeconds: 1800 },
-    })),
-  };
+describe('OutcomeTrends', () => {
+  const since = new Date('2026-11-02T00:00:00Z');
 
-  it('compares MTTA and MTTR with the previous window, judging lower as better', () => {
-    render(
-      <OutcomesPanel data={outcomes} windowKey="7d" since={new Date('2026-11-02T00:00:00Z')} />
-    );
-    const mtta = tile('Mean time to acknowledge');
-    expect(within(mtta).getByText('5 min')).toBeInTheDocument();
-    expect(within(mtta).getByText(/−50% vs previous 7d/)).toBeInTheDocument();
-    expect(within(mtta).getByText('(better)')).toBeInTheDocument();
-    const mttr = tile('Mean time to resolve');
-    expect(within(mttr).getByText(/\+100% vs previous 7d/)).toBeInTheDocument();
-    expect(within(mttr).getByText('(worse)')).toBeInTheDocument();
-    // Volume is shown without a better/worse judgement.
-    expect(within(tile('Incidents')).queryByText(/better|worse/)).toBeNull();
-  });
-
-  it('draws one small multiple per measure and offers a data table', () => {
-    render(
-      <OutcomesPanel data={outcomes} windowKey="7d" since={new Date('2026-11-02T00:00:00Z')} />
-    );
-    expect(screen.getAllByRole('img')).toHaveLength(2);
-    const table = screen.getByRole('table');
+  it('draws one trend card per measure, each with a Chart/Table toggle', () => {
+    render(<OutcomeTrends data={outcomes()} windowKey="7d" since={since} />);
+    const mtta = screen.getByRole('region', { name: 'Time to acknowledge' });
+    expect(screen.getByRole('region', { name: 'Time to resolve' })).toBeInTheDocument();
+    fireEvent.click(within(mtta).getByRole('button', { name: 'Table' }));
+    const table = within(mtta).getByRole('table');
     expect(within(table).getAllByRole('row')).toHaveLength(8);
-    expect(within(table).getByRole('rowheader', { name: 'Nov 8' })).toBeInTheDocument();
+    const last = within(table).getByRole('rowheader', { name: 'Nov 8' }).closest('tr')!;
+    expect(within(last).getByText('5m')).toBeInTheDocument();
+    expect(within(last).getByText('10m')).toBeInTheDocument();
   });
 
-  it('labels hourly buckets in UTC for the 24 hour window', () => {
-    expect(bucketLabel(new Date('2026-11-08T12:00:00Z'), 3_600_000, 3)).toBe('15:00 UTC');
+  it('says so instead of drawing an empty chart', () => {
+    render(<OutcomeTrends data={outcomes(false)} windowKey="7d" since={since} />);
+    expect(screen.getAllByText(/No acknowledged or resolved incidents/)).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Table' })).toBeNull();
+  });
+
+  it('buckets the 24 hour window by UTC hour', () => {
+    expect(bucketKey(new Date('2026-11-08T12:00:00Z'), 3_600_000, 3)).toBe('2026-11-08T15:00:00');
+    render(<OutcomeTrends data={outcomes()} windowKey="24h" since={since} />);
+    expect(screen.getAllByText(/Mean per hour \(UTC\)/)).toHaveLength(2);
   });
 });
 
@@ -354,7 +435,7 @@ describe('overview primitives', () => {
     const nav = screen.getByRole('navigation', { name: 'Time window' });
     const current = within(nav).getByRole('link', { current: 'page' });
     expect(current).toHaveAttribute('href', '/intelligence?window=24h');
-    expect(current).toHaveAccessibleName('24h (last 24 hours)');
+    expect(current).toHaveAccessibleName('24 hours');
     expect(within(nav).getAllByRole('link')).toHaveLength(3);
   });
 

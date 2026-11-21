@@ -1,5 +1,5 @@
 import { DashboardPageSkeleton } from '@/components/patterns';
 
 export default function IntelligenceOverviewLoading() {
-  return <DashboardPageSkeleton label="Loading the AIOps overview" stats={4} panels={4} actions />;
+  return <DashboardPageSkeleton label="Loading the AIOps overview" stats={12} panels={6} actions />;
 }

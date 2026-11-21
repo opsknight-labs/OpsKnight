@@ -75,16 +75,7 @@ export function OverviewSection({
           </h2>
           {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
         </div>
-        {drilldown && (
-          <Link
-            href={drilldown.href}
-            data-overview-drilldown={id}
-            className="-my-1 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground underline-offset-4 transition-colors duration-150 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
-          >
-            {drilldown.label}
-            <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          </Link>
-        )}
+        {drilldown && <DrilldownLink id={id} {...drilldown} />}
       </header>
       <div className="flex-1 space-y-4 p-4 sm:p-5">{children}</div>
       {footer && (
@@ -93,6 +84,20 @@ export function OverviewSection({
         </footer>
       )}
     </section>
+  );
+}
+
+/** "View alerts ↗": the header link to the full list behind a section. */
+export function DrilldownLink({ id, href, label }: { id: string; href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      data-overview-drilldown={id}
+      className="-my-1 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground underline-offset-4 transition-colors duration-150 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+    >
+      {label}
+      <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+    </Link>
   );
 }
 

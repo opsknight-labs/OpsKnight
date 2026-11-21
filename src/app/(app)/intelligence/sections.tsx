@@ -1,15 +1,7 @@
 import { cache } from 'react';
-import {
-  Activity,
-  Brain,
-  Gauge,
-  GitCommitHorizontal,
-  Timer,
-  TrendingUp,
-  Volume2,
-} from 'lucide-react';
-import { PageHeader } from '@/components/patterns';
-import type { DetailStatItem } from '@/components/ui/DetailHeroBanner';
+import { Volume2 } from 'lucide-react';
+import MetricInfo from '@/components/analytics/MetricInfo';
+import { SectionCard } from '@/components/analytics/SectionCard';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
@@ -30,17 +22,15 @@ import {
 import ChangePanel from '@/components/intelligence/overview/ChangePanel';
 import HealthPanel from '@/components/intelligence/overview/HealthPanel';
 import NeedsAttention from '@/components/intelligence/overview/NeedsAttention';
-import NoisePanel from '@/components/intelligence/overview/NoisePanel';
-import OutcomesPanel from '@/components/intelligence/overview/OutcomesPanel';
+import NoisePanel, { NoiseControls } from '@/components/intelligence/overview/NoisePanel';
+import OutcomeTrends from '@/components/intelligence/overview/OutcomeTrends';
+import OverviewKpis from '@/components/intelligence/overview/OverviewKpis';
 import QualityPanel from '@/components/intelligence/overview/QualityPanel';
-import SpeedPanel from '@/components/intelligence/overview/SpeedPanel';
-import WindowSelector from '@/components/intelligence/overview/WindowSelector';
 import {
-  NO_VALUE,
+  DrilldownLink,
   OverviewSection,
   SectionError,
 } from '@/components/intelligence/overview/primitives';
-import { formatCount, formatDuration, formatPercent } from '@/lib/intelligence/overview/window';
 
 /**
  * One async server component per overview section. Each loads its own data through a fail-soft loader
@@ -57,116 +47,28 @@ interface SectionProps {
 
 const ATTENTION_INSIGHT_LIMIT = 10;
 
-// One read per request: the header's stat strip and the Noise/Speed cards share these. `cache` keys on the
-// argument identity, so callers pass the same `scope` and `range` objects the page built.
+// One read per request: the KPI grid, the trend cards and the noise sections share these. `cache` keys on
+// the argument identity, so callers pass the same `scope` and `range` objects the page built.
 const loadNoise = cache((scope: OverviewScope, range: OverviewWindow) =>
   loadSection('noise', () => getOverviewNoise(scope, range))
 );
 const loadSpeed = cache((scope: OverviewScope, range: OverviewWindow) =>
   loadSection('speed', () => getOverviewSpeed(scope, range))
 );
+const loadOutcomes = cache((scope: OverviewScope, range: OverviewWindow) =>
+  loadSection('outcomes', () => getOverviewOutcomes(scope, range))
+);
 
-const HEADER_STAT_LABELS = [
-  'Alerts received',
-  'Pages avoided',
-  'First insight, median',
-  'Suggestions accepted',
-] as const;
-
-/**
- * The overview's page band: eyebrow, title, the window selector as its action and the headline numbers.
- * `stats` is null while they load (the strip shows placeholders), so the band never shifts.
- */
-export function OverviewHeader({
-  scope,
-  range,
-  stats,
-}: {
-  scope: OverviewScope;
-  range: OverviewWindow;
-  stats: DetailStatItem[] | null;
-}) {
-  return (
-    <PageHeader
-      eyebrow="AIOps"
-      title="AIOps overview"
-      icon={Brain}
-      description={
-        <>
-          <p>
-            What Intelligence and the noise controls did for the incidents you can see: noise held
-            back, how quickly suggestions arrived and how often they helped.
-          </p>
-          {!scope.global && (
-            <p className="mt-1 text-xs">
-              Showing your teams&apos; services and incidents only.
-              {scope.servicesTruncated && ' Limited to the first 2,000 services.'}
-            </p>
-          )}
-        </>
-      }
-      primaryAction={<WindowSelector current={range.key} />}
-      stats={
-        stats ?? HEADER_STAT_LABELS.map(label => ({ label, value: NO_VALUE, subtext: 'Loading' }))
-      }
-    />
-  );
-}
-
-/** The header with its stat strip filled from the Noise and Speed loaders (shared with their cards). */
-export async function OverviewHeaderWithStats({ scope, range }: SectionProps) {
-  const [noise, speed] = await Promise.all([loadNoise(scope, range), loadSpeed(scope, range)]);
-  const unavailable = { value: NO_VALUE, subtext: 'Unavailable' };
-  const stats: DetailStatItem[] = [
-    {
-      label: HEADER_STAT_LABELS[0],
-      ...(noise.ok
-        ? {
-            value: formatCount(noise.data.alerts),
-            subtext: `${formatCount(noise.data.incidents)} incidents created`,
-          }
-        : unavailable),
-    },
-    {
-      label: HEADER_STAT_LABELS[1],
-      ...(noise.ok
-        ? { value: formatCount(noise.data.pagesAvoided), subtext: 'Held back by noise controls' }
-        : unavailable),
-    },
-    {
-      label: HEADER_STAT_LABELS[2],
-      ...(speed.ok
-        ? {
-            value: formatDuration(speed.data.firstInsightP50Seconds),
-            subtext:
-              speed.data.incidents === 0
-                ? 'No incidents in this window'
-                : `${formatCount(speed.data.incidentsWithInsight)} of ${formatCount(speed.data.incidents)} incidents`,
-          }
-        : unavailable),
-    },
-    {
-      label: HEADER_STAT_LABELS[3],
-      ...(speed.ok
-        ? {
-            value: formatPercent(speed.data.relatedSuggestions.rate),
-            subtext:
-              speed.data.relatedSuggestions.reviewed === 0
-                ? 'None reviewed yet'
-                : `${formatCount(speed.data.relatedSuggestions.accepted)} of ${formatCount(speed.data.relatedSuggestions.reviewed)} reviewed`,
-          }
-        : unavailable),
-    },
-  ];
-  return <OverviewHeader scope={scope} range={range} stats={stats} />;
-}
+/** Header info button: one sentence on what a section counts. */
+const info = (label: string, description: string) => (
+  <MetricInfo definitions={[{ label, description }]} />
+);
 
 export const SECTION_TITLES = {
   noise: 'Noise',
-  speed: 'Speed',
+  noiseControls: 'Noise controls',
   quality: 'Alert quality',
   change: 'Changes',
-  outcomes: 'Outcomes',
   health: 'Lane health',
 } as const;
 
@@ -205,6 +107,7 @@ export async function AttentionSection({
   );
 }
 
+/** The mobile page's Noise card: totals and the noise-control breakdown in one card. */
 export async function NoiseSection({ scope, range, canManage }: SectionProps) {
   const result = await loadNoise(scope, range);
   return (
@@ -225,27 +128,56 @@ export async function NoiseSection({ scope, range, canManage }: SectionProps) {
   );
 }
 
-export async function SpeedSection({ scope, range, canManage, status }: SectionProps) {
-  const result = await loadSpeed(scope, range);
+/** The headline numbers, one card each, filled from the Noise, Speed and Outcomes loaders. */
+export async function KpiSection({ scope, range, canManage, status }: SectionProps) {
+  const [noise, speed, outcomes] = await Promise.all([
+    loadNoise(scope, range),
+    loadSpeed(scope, range),
+    loadOutcomes(scope, range),
+  ]);
   return (
-    <OverviewSection
-      id="overview-speed"
-      icon={<Timer />}
-      drilldown={{ href: '/incidents', label: 'View incidents' }}
-      title={SECTION_TITLES.speed}
-      description="How soon the first suggestion arrived, and how often suggestions were accepted."
+    <OverviewKpis
+      noise={noise}
+      speed={speed}
+      outcomes={outcomes}
+      triageEnabled={status.triageEnabled}
+      canManage={canManage}
+    />
+  );
+}
+
+/** MTTA and MTTR per period against the previous window: two trend cards in the page grid. */
+export async function TrendSection({ scope, range }: SectionProps) {
+  const result = await loadOutcomes(scope, range);
+  if (!result.ok)
+    return (
+      <SectionCard id="overview-trends" title="Response times" className="lg:col-span-2">
+        <SectionError message={result.error} />
+      </SectionCard>
+    );
+  return <OutcomeTrends data={result.data} windowKey={range.key} since={range.since} />;
+}
+
+/** Desktop noise card: what suppression rules and maintenance windows held back (the KPIs carry the totals). */
+export async function NoiseControlsSection({ scope, range, canManage }: SectionProps) {
+  const result = await loadNoise(scope, range);
+  return (
+    <SectionCard
+      id="overview-noise"
+      title={SECTION_TITLES.noiseControls}
+      description="Alerts held back by suppression rules and maintenance windows in this window."
+      info={info(
+        SECTION_TITLES.noiseControls,
+        'Shadow decisions show what would have happened and are never counted as avoided pages.'
+      )}
+      actions={<DrilldownLink id="overview-noise" href="/alerts" label="View alerts" />}
     >
       {result.ok ? (
-        <SpeedPanel
-          data={result.data}
-          windowLabel={range.label}
-          triageEnabled={status.triageEnabled}
-          canManage={canManage}
-        />
+        <NoiseControls data={result.data} canManage={canManage} />
       ) : (
         <SectionError message={result.error} />
       )}
-    </OverviewSection>
+    </SectionCard>
   );
 }
 
@@ -256,32 +188,37 @@ export async function QualitySection({
 }: SectionProps & { actor: AuthorizationActor }) {
   const result = await loadSection('alert quality', () => getOverviewQuality(actor, range.until));
   return (
-    <OverviewSection
+    <SectionCard
       id="overview-quality"
-      icon={<Gauge />}
-      drilldown={{ href: '/services', label: 'View services' }}
       title={SECTION_TITLES.quality}
       description="Services that self-clear, go unacknowledged or flap, over the last 30 days."
+      info={info(
+        SECTION_TITLES.quality,
+        'Ranks services by alerts that self-clear, go unacknowledged or flap; always the last 30 days, whatever the window.'
+      )}
+      actions={<DrilldownLink id="overview-quality" href="/services" label="View services" />}
     >
       {result.ok ? (
         <QualityPanel data={result.data} canManage={canManage} />
       ) : (
         <SectionError message={result.error} />
       )}
-    </OverviewSection>
+    </SectionCard>
   );
 }
 
 export async function ChangeSection({ scope, range, canManage, status }: SectionProps) {
   const result = await loadSection('changes', () => getOverviewChange(scope, range));
   return (
-    <OverviewSection
+    <SectionCard
       id="overview-change"
-      icon={<GitCommitHorizontal />}
-      drilldown={{ href: '/changes', label: 'View changes' }}
       title={SECTION_TITLES.change}
       description="Incidents linked to a likely change, and the riskiest recent changes."
-      footer="Risk is a ranking signal to help you look in the right place, never a verdict."
+      info={info(
+        SECTION_TITLES.change,
+        'Risk is a ranking signal to help you look in the right place, never a verdict.'
+      )}
+      actions={<DrilldownLink id="overview-change" href="/changes" label="View changes" />}
     >
       {result.ok ? (
         <ChangePanel
@@ -293,26 +230,7 @@ export async function ChangeSection({ scope, range, canManage, status }: Section
       ) : (
         <SectionError message={result.error} />
       )}
-    </OverviewSection>
-  );
-}
-
-export async function OutcomesSection({ scope, range }: SectionProps) {
-  const result = await loadSection('outcomes', () => getOverviewOutcomes(scope, range));
-  return (
-    <OverviewSection
-      id="overview-outcomes"
-      icon={<TrendingUp />}
-      drilldown={{ href: '/insights', label: 'Open analytics' }}
-      title={SECTION_TITLES.outcomes}
-      description="Mean time to acknowledge and resolve for incidents created in this window, compared with the window before it."
-    >
-      {result.ok ? (
-        <OutcomesPanel data={result.data} windowKey={range.key} since={range.since} />
-      ) : (
-        <SectionError message={result.error} />
-      )}
-    </OverviewSection>
+    </SectionCard>
   );
 }
 
@@ -320,18 +238,20 @@ export async function HealthSection({ actor }: SectionProps & { actor: Authoriza
   const result = await loadSection('lane health', () => getOverviewHealth(actor));
   if (result.ok && result.data === null) return null;
   return (
-    <OverviewSection
+    <SectionCard
       id="overview-health"
-      icon={<Activity />}
       title={SECTION_TITLES.health}
-      description="Whether the Intelligence lane is running here, and how much work is waiting."
-      footer="Visible to administrators. Intelligence runs off the paging path; a degraded lane never delays notifications."
+      description="Whether the Intelligence lane is running here, and how much work is waiting. Visible to administrators."
+      info={info(
+        SECTION_TITLES.health,
+        'Intelligence runs off the paging path; a degraded lane never delays notifications.'
+      )}
     >
       {result.ok && result.data ? (
         <HealthPanel data={result.data} />
       ) : (
         <SectionError message={result.ok ? 'Unavailable.' : result.error} />
       )}
-    </OverviewSection>
+    </SectionCard>
   );
 }

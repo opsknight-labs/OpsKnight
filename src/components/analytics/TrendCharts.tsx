@@ -244,6 +244,79 @@ export function DurationChart({
   );
 }
 
+/** One bucketed duration (ms) for this window against the previous one; used where no median/p90 exists. */
+export type DurationComparisonPoint = {
+  bucket: string;
+  current: number | null;
+  previous: number | null;
+};
+
+const COMPARISON_SERIES: Series[] = [
+  { key: 'current', label: 'This window', color: 'var(--chart-series-1)' },
+];
+
+export function DurationComparisonChart({
+  data,
+  bucket,
+}: {
+  data: DurationComparisonPoint[];
+  bucket: Bucket;
+}) {
+  const previous = previousSeries('previous', 'Previous window');
+  return (
+    <div>
+      <div style={{ height: HEIGHT }} aria-hidden>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -4 }}>
+            <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+            <XAxis
+              dataKey="bucket"
+              tickFormatter={value => formatBucket(value, bucket)}
+              tick={AXIS}
+              tickLine={false}
+              axisLine={false}
+              minTickGap={24}
+            />
+            <YAxis
+              tickFormatter={value => formatDuration(value)}
+              tick={AXIS}
+              tickLine={false}
+              axisLine={false}
+              width={52}
+            />
+            <Tooltip
+              cursor={{ stroke: 'hsl(var(--ui-muted-foreground))', strokeDasharray: '3 3' }}
+              content={props => (
+                <ChartTooltip
+                  {...props}
+                  series={[previous, ...COMPARISON_SERIES]}
+                  bucket={bucket}
+                  format={formatDuration}
+                />
+              )}
+            />
+            {COMPARISON_SERIES.map(item => (
+              <Line
+                key={item.key}
+                type="monotone"
+                dataKey={item.key}
+                stroke={item.color}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--ui-card))' }}
+                connectNulls
+                isAnimationActive={false}
+              />
+            ))}
+            {previousLine(previous)}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <Legend series={[...COMPARISON_SERIES, previous]} />
+    </div>
+  );
+}
+
 // Same hues as the responder band legend, so evening/overnight read the same everywhere.
 const INTERRUPTION_SERIES: Series[] = [
   { key: 'evening', label: 'Evenings & weekends', color: 'var(--chart-ordinal-2)' },

@@ -9,10 +9,19 @@ import {
 } from '@/components/ui/shadcn/tooltip';
 import { METRICS, type MetricId } from '@/lib/analytics/definitions';
 
-/** Definition tooltip; the text comes from the metric registry, never inline copy. */
-export default function MetricInfo({ metrics }: { metrics: MetricId[] }) {
+/**
+ * Definition tooltip; the text comes from the metric registry, never inline copy. Pages outside
+ * Analytics whose metrics are not in the registry pass their own `definitions`.
+ */
+export default function MetricInfo({
+  metrics = [],
+  definitions: own,
+}: {
+  metrics?: MetricId[];
+  definitions?: Array<{ label: string; description: string }>;
+}) {
   // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
-  const definitions = metrics.map(id => METRICS[id]);
+  const definitions = own ?? metrics.map(id => METRICS[id]);
   const label =
     definitions.length === 1
       ? `How ${definitions[0].label} is calculated`
