@@ -7,6 +7,7 @@
  */
 
 import prisma from '@/lib/prisma';
+import { loadPostmortemEvents } from '@/lib/incidents/event-filters';
 import { logger } from '@/lib/logger';
 import { createDraftActionItemRows } from '@/lib/postmortems/action-item-commands';
 import { findSlackWarRoomAuthority } from '@/lib/war-room/slack-compatibility';
@@ -185,8 +186,17 @@ export async function postWarRoomWelcomeCard(
 ): Promise<void> {
   const { slackApiCall } = await import('@/lib/war-room/providers/slack/client');
   const blocks = [
-    { type: 'header', text: { type: 'plain_text', text: '👋 Welcome to your Incident War Room!', emoji: true } },
-    { type: 'section', text: { type: 'mrkdwn', text: `This channel was automatically provisioned to coordinate resolution for *${incidentTitle}*.` } },
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: '👋 Welcome to your Incident War Room!', emoji: true },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `This channel was automatically provisioned to coordinate resolution for *${incidentTitle}*.`,
+      },
+    },
     { type: 'divider' },
     {
       type: 'section',
@@ -225,12 +235,18 @@ export async function postWarRoomWelcomeCard(
 export async function ensurePostmortemDraft(incidentId: string): Promise<string | null> {
   try {
     const { getBaseUrl } = await import('@/lib/env-validation');
-    const existing = await prisma.postmortem.findUnique({ where: { incidentId }, select: { id: true } });
+    const existing = await prisma.postmortem.findUnique({
+      where: { incidentId },
+      select: { id: true },
+    });
     const appUrl = getBaseUrl();
     if (existing) return `${appUrl}/postmortems/${incidentId}`;
     const incident = await prisma.incident.findUnique({
       where: { id: incidentId },
-      include: { service: { select: { name: true } }, assignee: { select: { id: true, name: true } } },
+      include: {
+        service: { select: { name: true } },
+        assignee: { select: { id: true, name: true } },
+      },
     });
     if (!incident) return null;
     const notes = await prisma.incidentNote.findMany({
@@ -238,7 +254,7 @@ export async function ensurePostmortemDraft(incidentId: string): Promise<string 
       include: { user: { select: { name: true } } },
       orderBy: { createdAt: 'asc' },
     });
-    const events = await prisma.incidentEvent.findMany({ where: { incidentId }, orderBy: { createdAt: 'asc' } });
+    const events = await loadPostmortemEvents(prisma, incidentId);
     const timelineEntries = [
       ...events.map(e => ({
         id: `event-${e.id}`,
@@ -247,7 +263,9 @@ export async function ensurePostmortemDraft(incidentId: string): Promise<string 
           ? 'ESCALATION'
           : e.type === 'MANUAL_RESOLVED' || e.type === 'AUTO_RESOLVED'
             ? 'RESOLUTION'
-            : 'DETECTION') as 'DETECTION' | 'ESCALATION' | 'MITIGATION' | 'RESOLUTION',
+            : e.type === 'CHAT_MESSAGE'
+              ? 'MITIGATION'
+              : 'DETECTION') as 'DETECTION' | 'ESCALATION' | 'MITIGATION' | 'RESOLUTION',
         title: e.message.slice(0, 60),
         description: e.message,
         actor: 'System',

@@ -94,11 +94,30 @@ test.describe.serial('authenticated navigation fast path', () => {
     expect(requests.filter(path => path === '/api/sidebar-stats')).toHaveLength(0);
   });
 
+  test('the alerts and changes lists are single-navigation sidebar destinations', async ({
+    page,
+  }) => {
+    const requests = await navigationRequests(page);
+    await sidebarLink(page, 'Alerts').click();
+    await expect(page).toHaveURL(/\/alerts$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Alerts' })).toBeVisible();
+
+    await sidebarLink(page, 'Changes').click();
+    await expect(page).toHaveURL(/\/changes$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Changes' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Alerts' })).not.toBeVisible();
+
+    expect(requests.filter(path => path === '/api/auth/session')).toHaveLength(0);
+    expect(requests.filter(path => path === '/api/sidebar-stats')).toHaveLength(0);
+  });
+
   test('activity heartbeat remains separate from the following click', async ({ page }) => {
     await page.clock.install();
     try {
       await page.keyboard.press('Shift');
-      await page.clock.fastForward(2 * 60 * 1000 + 1);
+      // Advance timers sequentially so pending route chunks can finish before
+      // webpack's two-minute timeout; a clock jump expires them immediately.
+      await page.clock.runFor(2 * 60 * 1000 + 1);
       await page.clock.resume();
 
       const requests = await navigationRequests(page);

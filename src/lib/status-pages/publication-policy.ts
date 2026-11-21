@@ -27,7 +27,9 @@ export function isAllowedStatusPageContactUrl(value: string): boolean {
   if (!trimmed) return false;
   try {
     const parsed = new URL(trimmed);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' || parsed.protocol === 'mailto:';
+    return (
+      parsed.protocol === 'https:' || parsed.protocol === 'http:' || parsed.protocol === 'mailto:'
+    );
   } catch {
     return false;
   }
@@ -153,6 +155,8 @@ export const STATUS_PAGE_PRESENTATION_FIELDS = [
   'showRegionHeatmap',
   'uptimeExcellentThreshold',
   'uptimeGoodThreshold',
+  // Responder-side reminder interval for the next status update; never rendered on the public page.
+  'updateCadenceMinutes',
 ] as const;
 
 /** PUBLIC is the schema default, so an absent mode is treated as PUBLIC. */
@@ -211,14 +215,20 @@ function canonicalJson(value: unknown): string {
 }
 
 function asIdSet(value: unknown): Set<string> {
-  return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+  return new Set(
+    Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  );
 }
 
 /**
  * Compare the effective public limit rather than the raw column, so an edit that both values clamp
  * to the same bound (999 -> 500 on a field capped at 100) is correctly a no-op.
  */
-function effectiveBound(field: string, value: unknown, current: StatusPageClassifierState): number | null {
+function effectiveBound(
+  field: string,
+  value: unknown,
+  current: StatusPageClassifierState
+): number | null {
   if (value === null || value === undefined) return null;
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   const settings = {
@@ -323,7 +333,9 @@ export function classifyStatusPageChange(input: {
     if (next !== normalizeText(current.authProvider)) {
       // Behind a login wall, swapping the identity provider changes who can get in. Otherwise it
       // is inert: the provider never reaches the published payload.
-      const gated = provided('requireAuth') ? patch.requireAuth === true : current.requireAuth === true;
+      const gated = provided('requireAuth')
+        ? patch.requireAuth === true
+        : current.requireAuth === true;
       note('authProvider', gated ? 'PRIVACY_TIGHTENING' : 'CONTENT');
     }
   }

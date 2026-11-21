@@ -1,0 +1,688 @@
+{
+  "branch": "feat/intelligence-engine",
+  "delivery": "Continue feat/intelligence-engine and PR #928 on the same branch, per the explicit delivery request; no merge.",
+  "status": "in_progress",
+  "complete": false,
+  "phases": [
+    {
+      "id": 0,
+      "name": "Correctness and performance fixes",
+      "status": "implemented_pending_full_ci",
+      "implemented": [
+        "Preserve change webhook component and labels",
+        "Gate late-change fan-out on the master switch",
+        "Independent concurrent indexes for paging lookup and side-effect backlog",
+        "Keyset-cursor reconciliation with bounded pages",
+        "Batch anchor-reversal relationship events",
+        "Separate Squire event bus from UI implementation",
+        "Hide incident Intelligence panel when policy is OFF or permission is absent",
+        "Distinguish assistant permission denial from disabled status",
+        "Confirm provider removal",
+        "Batch correlation proposals, fingerprints, decision events and versioned system audits; retain ordered pair locks, current certification and human vetoes; system re-election reversals do not become false human vetoes"
+      ],
+      "remaining": [],
+      "wave": 1
+    },
+    {
+      "id": 1,
+      "name": "Engine latency and fan-out",
+      "status": "in_progress",
+      "implemented": [
+        "Digest all alert payloads and incident analysis inputs, policy identity/version/mode and engine version",
+        "Skip unchanged inputs and preserve truthful freshness snapshots",
+        "Persist/coalesce explicit operator force requests",
+        "Post-commit batched NOTIFY with LISTEN reconnect and polling recovery",
+        "Bounded oldest-first queue aging; first insight outranks fresh backfill",
+        "Dedicated split Compose and Helm worker with listener session capacity accounting",
+        "Settings warning when sharing paging process",
+        "Bounded change candidates and dependency observer buckets",
+        "Registered per-kind duration/failure metrics and first-insight histogram",
+        "Engine-local Prisma pool wait gauge with two measured quiet samples before recovery; skip the backlog SQL probe while the pool is contended",
+        "Bounded human suggestion acceptance metric, excluding AUTO/undo and reporting truncation; no fabricated ratio with zero reviews",
+        "Incremental alert cursor/digest and label union; explicit repair for edited or deleted inputs",
+        "Per-incident trailing wake throttle at most once per two seconds",
+        "Incremental dependency observation watermark",
+        "Cap reconcile pages at 500",
+        "Nullable common Alert severity/resourceKey/labels/fingerprintHash with concurrent indexes and bounded backfill"
+      ],
+      "remaining": [
+        "Full OFF/SHADOW/ON ingestion A/B over 1M history on dedicated hardware (the CI gate runs the ON/OFF arms on the shared runner)"
+      ],
+      "scale_and_gates": {
+        "status": "implemented_pending_full_ci",
+        "implemented": [
+          "Backlog aggregate cached per process for the metrics scrape (fresh for operators and tests); production claim SQL exported for EXPLAIN",
+          "Semantic backfill walks the lookback window in 5,000-row pages behind a per-model cursor; policy checked only for pending rows; runner keeps walking while pages are full",
+          "Paging-outbox lookup verified covered by idx_background_job_intelligence_paging and asserted in the plan gate",
+          "RunbookExecution(serviceId, createdAt) index; dependency reads ordered by recency; rejected edges excluded from the cap",
+          "Full-text source keeps the two-rarest-words conjunction (OR of three measured 902 ms vs 218 ms at 100k and was reverted); common-only titles left to trigram",
+          "Updated-incident repair paced to 5 s (LaneState.lastUpdatedRepairAt) so busy lanes do not repeat it per 250 ms poll and benchmarks can disable it like every other sweep",
+          "Dedicated intelligence worker in Swarm and Kustomize split profiles (PDB, network policy, recreate strategy) with OPSKNIGHT_INTELLIGENCE_DEDICATED on shared roles; single-node tuning documented",
+          "Ingestion A/B, storm drain and query-plan scripts assert their contracts (exit 1) with --output/--no-gate; nightly and ci:full workflow jobs; results under certification/perf"
+        ],
+        "open": [
+          "OPEN, NOT RE-MEASURED on the final code: the lane moved from a worker thread to a child process (2026-11-16, crash isolation); the 2026-11-16 campaign held the lock 19:02-22:13 and the host never got quiet, so no run was started. The figures that follow are for the worker-thread code and are not evidence for the lane process. Storm gate PASSES locally on the thread lane (2026-11-11, code 95454c2d9): 20k/1k drained in 14.1 s and 1M/10k in 274.5 s (limit 600 s; 0 failed items, 0 dead letters, host load 4.6 to 14.2 during the 1M run). History: 7,684 s then 703.2 s at 100k/10k on 2026-11-08 (seeded history lacked alertNormalizationHash; repair paced). Not yet run on dedicated hardware or in CI. See certification/perf/README.md.",
+          "OPEN, NOT RE-MEASURED on the final code: the lane moved from a worker thread to a child process (2026-11-16, crash isolation); the 2026-11-16 campaign held the lock 19:02-22:13 and the host never got quiet, so no run was started. The figures that follow are for the worker-thread code and are not evidence for the lane process. Ingestion A/B gate (CI shape 6 reps/300 events/concurrency 16/backlog 1500) PASSES locally with the lane in its worker thread, the integrated default: 3 of 3 valid invocations on 2026-11-11 under the peak-load host check (p50/p99 delta ms -0.80/-14.27, -1.29/-5.93, -0.64/-3.27; limits +2/+10; 1 run discarded for a load peak). OUTSIDE THE CONTRACT: the in-process fallback (thread bundle missing or INTELLIGENCE_LANE_THREAD=off) meets the latency thresholds (-0.03/+1.06, -0.44/+1.52, +0.01/+4.14) but FAILS the gate 3 of 3 because the lane does no work inside the burst (it stops while 2 or more events are in flight); the fallback is logged at startup, shown as degraded lane health and exported as opsknight_intelligence_lane_mode. Still to do: confirm on the CI runner and on dedicated hardware; one local campaign on a shared 12-core host is not certification.",
+          "Query-plan gate passes on 21k history (7 judged index-backed, 2 size-dependent queries not judged below 200k rows); needs the 1M CI run for the size-dependent checks"
+        ]
+      },
+      "wave": 1
+    },
+    {
+      "id": 2,
+      "name": "Alert correlation and pre-paging noise controls",
+      "status": "in_progress",
+      "implemented": [
+        "Lane-owned AlertFingerprint per alert with safe labels and source digest",
+        "Incident labels include later alerts; stable first value for conflicting shared keys",
+        "Alert fingerprint retention cascades with parent fingerprint",
+        "Pre-paging noise controls module (src/lib/intelligence/noise-controls): per-service/global NoiseControlPolicy with OFF/SHADOW/ON, revision CAS, audit and a SHADOW→ON readiness gate (50 shadow decisions / 7 days, ≤2% reversed, or explicit acknowledgement)",
+        "Maintenance windows with SERVICE/TEAM/LABEL/ALL scope, dependency-free RRULE subset (DAILY/WEEKLY/MONTHLY, INTERVAL, BYDAY, COUNT, UNTIL), suppress-or-downgrade, optional status-page link, end-now and enable/disable",
+        "Owned, expiring, audited suppression rules with safe matchers (equals/contains/prefix/regex/exists on source, summary, severity, resource, labels) and downgrade suggestions from the alert-quality leaderboard",
+        "Ordered orchestration rules (DROP, SUPPRESS, SET_SEVERITY, SET_URGENCY, SET_LABEL, REROUTE_SERVICE, ATTACH_RUNBOOK, ADD_NOTE) compiled once into the 30-second in-process snapshot",
+        "Content dedup on fingerprint + label subset, policy-aware flapping keyed on dedup key and fingerprint, storm grouping under the earliest open incident with topology scope and a bounded hold (never HIGH)",
+        "Deadline-bounded (5 ms) fail-open evaluator with prepaging decision/fail-open/duration metrics; recorded, reversible decisions (reverse re-ingests the alert through processEvent so it pages)",
+        "Heartbeat monitors: hashed tokens shown once, GET/POST /api/heartbeats/<token> with rate limiting, cron-tick sweep raising and resolving incidents only through processEvent",
+        "Replay simulation over recent alerts using the real evaluator with in-memory lookups, recorded as an evaluation run; KPIs (compression, pages avoided, shadow would-avoid, downgrades, holds, false-group rate, per-source, heartbeats)",
+        "Correlation rules: allowHighUrgency (SUGGEST only, never AUTO) and linkType PARENT_CHILD (IncidentRelationshipType extended)",
+        "Noise controls settings page with policy, windows, rules, suggestions, heartbeats, simulation and decision list; privacy registry and processing inventory entries; operator doc",
+        "Pre-paging hook wired into processEvent (p1): bounded ingest hook (src/lib/intelligence/noise-controls/ingest.ts) evaluates the cached snapshot before incident creation, records the decision and applies SUPPRESS/DOWNGRADE/APPEND/GROUP_CHILD/HOLD/DROP/TRANSFORM; OFF policies do no reads; fail-open on deadline or error",
+        "Pre-paging lookups run in one prefetched round trip on a dedicated, deadline-bounded 2-connection pool (lookup-client.ts), with a 4-round-trip savepoint fallback when the only URL is a transaction pooler (pgbouncer=true)",
+        "Storm children roll up under their parent in the notification noise controller (GROUP_CHILD applied on the hot path)",
+        "Ingestion A/B with every control ON and large history (tests/load/intelligence-ingestion-ab.ts, 20k-row seeding batches); evidence under certification/perf (2026-11-09/10 runs)",
+        "Versioned, traceable orchestration policies (p1): NoiseControlPolicyVersion (migration 20261111100000_noise_control_policy_versions), checksum, origin (publish / rollback / captured), bounded backfill of existing policies as version 1, policyVersionId recorded on every PrePagingDecision; settings Policy history with per-version change summary, diff against running, and rollback via compare-and-set (ON needs the readiness acknowledgement). Kept in noise-controls rather than the automation rule-set kinds (reason in commit 0969e14a2)"
+      ],
+      "remaining": [
+        "Browser (Playwright) journeys for the noise controls page (including policy history and rollback)",
+        "OPEN, NOT RE-MEASURED on the final code: the lane moved from a worker thread to a child process (2026-11-16, crash isolation); the 2026-11-16 campaign held the lock 19:02-22:13 and the host never got quiet, so no run was started. The figures that follow are for the worker-thread code and are not evidence for the lane process. Ingestion A/B with every noise control ON and the lane busy PASSES locally on the thread lane: 3 of 3 valid invocations on 2026-11-11 (p50/p99 delta ms -0.08/-17.62, +0.64/-13.42, -0.29/-10.20; limits +2/+10; 3 runs discarded for a load peak above 4). Before the pre-paging lookups were started early and moved off the event's connection the same shape failed on p50 (+2.65 ms, one valid run at 7d95e616e; +4.45 ms in-process on 2026-11-10). Thresholds unchanged. Still to do: CI runner and dedicated hardware. See certification/perf/README.md",
+        "OPEN gate: 10k burst over 1.01M history with controls ON fails on both routes (pool +12.56 ms / +17.45 ms). Needs a cleaner arm (storm threshold above the burst size) and a lookup pool sized to event concurrency: the pool is fixed at 2 connections per process, so at concurrency 16 it queues and 28% of evaluations failed open; making it configurable needs a database-backed setting because the intelligence directory may not read environment variables",
+        "Savepoint route effectiveness: a deployment whose only URL is pgbouncer=true fails open more often under load (8-14% on the A/B runs, 63% in the burst)",
+        "Orchestration REROUTE_SERVICE and ATTACH_RUNBOOK are recorded on the decision and noted on the timeline but not applied at ingestion",
+        "Fault injection on the wired hook and paging regression certification on dedicated hardware",
+        "Ingestion gate work (lane pool, ingestion yield, lane worker thread, burst-start yield, early pre-paging lookups, peak-load host check) is on branch wip/intel-ingest-gate, verified there and not yet landed on feat/intelligence-engine"
+      ],
+      "wave": 2
+    },
+    {
+      "id": 3,
+      "name": "Triage and topology",
+      "status": "implemented_pending_full_ci",
+      "implemented": [
+        "Dependency observation uses lift and minimum support with bounded buckets",
+        "Backstage JSON/YAML topology import (paste and scheduled https sources, SSRF-guarded, 2 MB bound), idempotent DECLARED edges, audited; actor-scoped service graph endpoint with open-incident overlay",
+        "Native Argo CD, LaunchDarkly, Unleash and HCP Terraform change sources behind the generic integration handler (GitHub/GitLab/Vercel already existed)",
+        "Feedback-driven cause-ranking weight fitting (kind, upstream decay, global) published as a policy version",
+        "Change risk score on ChangeEvent from historical follow rate, dependency blast radius, timing and size labels, computed in the LATE_CHANGE handler",
+        "Multi-window SLO burn (lib/slo/burn.ts) and SLO-aware urgency suggestion; rankByBurn exposed for parent selection",
+        "Unified incident time axis (alerts, changes with risk, upstream incidents, noise decisions when present) with a Timeline tab",
+        "Runbook-ranking weight fitting (p1): bounded, policy-versioned weights (service-wide record, same-problem record, MTTR bonus, untried-binding prior) whose defaults reproduce the Wilson ranking; suggest-only offline fit from recommendation verdicts and first-run outcomes (40-label minimum, held-out improvement), published by a person as response.runbookWeights",
+        "p2 metric anomaly evidence (default off): per-service metric templates evaluated by the lane job EVALUATE_METRIC_TEMPLATE (generation-fenced, withDbBudget, network outside transactions, fail to no evidence), same-time-of-week median/MAD detector, MetricAnomaly rows feeding METRIC_ANOMALY root-cause findings and the incident time axis, settings page, retention, privacy registry and inventory entries, architecture-boundary assertion keeping the module off ingestion; migration 20261111210000_metric_anomaly_evidence"
+      ],
+      "remaining": [
+        "Runbook-ranking fit runs only when someone opens the insights page; nothing refits on a schedule",
+        "The 120-minute 'resolved after a run' window is a fixed constant (RUNBOOK_FIT_LIMITS.resolvedWithinMinutes), not a policy setting",
+        "Metric anomalies are not exposed through a Squire tool, API v2 or MCP; they reach users only through root-cause findings, the incident time axis and the settings page",
+        "Metric anomaly baselines are recomputed from the connector on every evaluation (raw series are not stored), so a connector with short retention gives fewer baseline weeks and may report no data",
+        "MetricTemplateManager has no component test and the metric settings page has had no browser check"
+      ],
+      "wave": 3
+    },
+    {
+      "id": 4,
+      "name": "Squire AI SRE capabilities",
+      "status": "implemented_pending_full_ci",
+      "remaining": [
+        "Merge and ungroup proposals",
+        "Suppression-rule and maintenance-window proposals (extension point in catalog-extended.ts) and a maintenance read tool",
+        "On-call read tool beyond the existing schedule tools",
+        "In-chat incident/postmortem/stakeholder/customer drafts and reconstructed timeline",
+        "Optional docs import into knowledge memory",
+        "Runbooks with required inputs that have no default or binding preset (assistant cannot collect inputs yet)",
+        "Proactive briefings as incident timeline notes (needs a deliberate system-actor note path)",
+        "Live-vendor verification of connectors (CloudWatch JSON protocol, Datadog span attributes, Sentry project filter) and connector request metrics",
+        "Grafana data-source type picker and CloudWatch Logs Insights queries",
+        "Teams Action.Submit fallback for clients without Action.Execute",
+        "Live-model run of the investigation eval cases (nightly tier)",
+        "Cost split across several teams per call; built-in prices for self-hosted/OpenAI-compatible endpoints"
+      ],
+      "wave": 5,
+      "branch": "wip/intel-f-integrated (stacked on feat/intelligence-engine)",
+      "implemented": [
+        "Encrypted, team-scoped read-only ObservabilityConnection model, admin connection testing and SSRF-safe adapters for Prometheus/Grafana-Loki-Tempo/Datadog/Elastic/CloudWatch/Sentry/GitHub/GitLab (fake-server tested only)",
+        "Scoped metrics/logs/traces/Sentry/GitHub-GitLab diff tools (query_metrics, search_logs, get_traces, get_error_events, get_change_diff)",
+        "Alert payload (redacted), runbook steps, SLO status, incident analytics and escalation policy tools with data classes and citations",
+        "Escalate, urgency, snooze, unlink related, add responder, Jira, status draft with separate publish proposals through the sealed confirm flow (opt-in)",
+        "Approved runbook execution through the existing resolve/preview/start flow with runbook approvals intact",
+        "Per-capability model routing (SQUIRE_CHAT/SUMMARIZE/DIAGNOSE/POSTMORTEM/CLASSIFY) applied after the data policy",
+        "Investigation mode: budgeted loop of at most 12 steps and four parallel reads, ranked evidence-backed hypotheses, collapsible progress",
+        "Evidence-based partial answer on step exhaustion, token ceiling, cancellation or failed diagnosis",
+        "Summaries of turns older than the ten-turn window instead of dropping them",
+        "Knowledge chunks from postmortems, runbook steps, resolution and incident notes with cited, permission-rechecked search_knowledge; human-confirmed service facts",
+        "Opt-in per-service proactive briefing, stakeholder-update nudge and postmortem draft (stored as SquireProactiveNote, shown on the incident page)",
+        "Slack/Teams @squire and /incident ask with owner-only interactive confirmation",
+        "Read-only ask_squire MCP tool (opt-in) and alert/change/service/team/schedule/runbook page context",
+        "Mobile incident Squire surface (opt-in)",
+        "AI cost governance: model price table with overrides, spend by team/capability/model, team and capability token/dollar budgets, 80/100 percent alerts"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Squire safety and evaluation",
+      "status": "in_progress",
+      "remaining": [
+        "Opt-in encrypted content audit",
+        "Refresh architecture and operator docs to match final implementation",
+        "Live evaluation tier has never run against a real model (needs SQUIRE_EVAL_API_KEY); the three newest live cases (alert payload, objectives, analytics) are unverified and count toward the 0.85 pass rate",
+        "Live tier is 22 cases, not the ~80 first planned; the breadth is in the 100-case scripted-model tier",
+        "No evaluation cases for the Slack, Teams and MCP surfaces; connector tools are exercised only through Prometheus, Loki, Tempo, Sentry and GitHub stand-ins (not Datadog, Elastic, CloudWatch, Grafana proxy or GitLab)"
+      ],
+      "wave": 6,
+      "implemented": [
+        "Untrusted-data envelope around every tool result with secret redaction and instruction-like text neutralisation",
+        "Proposal trust flag (untrustedContext) when a turn read tool data before proposing",
+        "Per-tool data classes; saved turn classified as the highest class of tools that ran",
+        "Personal-data redaction (email, phone, IPv4/IPv6) helper",
+        "Shared replica circuit-breaker state via AiProviderBreaker, best effort with in-process fallback",
+        "Answer feedback (thumbs + reason, no text stored) and Quality-page summary",
+        "About 45 structural no-model evaluation cases on every PR (squire-evals-contract) and nightly live-model workflow with stored baseline gate",
+        "Basic-mode 429 shows a truthful status instead of AI limit reached",
+        "Token-to-cost price table, per-team/per-capability limits, 80/100 percent alerts and usage breakdown (Workstream F6)",
+        "p2 Squire evaluation: scripted-model tier of 100 cases on every pull request (real gateway, tools, proposal and citation code against the local fake model; fails when an offered tool or action has no case), nightly live tier of 22 cases with an LLM judge and per-case token ceiling, baseline gate that fails on a must-pass case that did not run, a judge regression or an empty run, labelled storm fixture (35 incidents into 12 clusters, false-group rate 0, pair recall 1) and root-cause fixture (top-1 8/8)"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "UI polish and new surfaces",
+      "status": "in_progress",
+      "remaining": [
+        "Finish extracting composer/history/list/panel from the launcher",
+        "Resizable docked Sheet panel",
+        "Complete shared settings form primitives, toasts and remaining dark-mode fixes",
+        "Citation layouts and breadcrumbs",
+        "Complete browser coverage and incident bundle certification",
+        "Collapse preference for incident intelligence sections",
+        "Maintenance calendar view (builders show upcoming occurrences only)",
+        "Overview AI cost and one-click severity lowering for noisy alerts (today: link to service automation, Jira issue when configured)",
+        "Remove legacy noise-control list components superseded by the builders",
+        "Wallboard noise tile e2e (needs the kiosk token flow in the e2e seed) and browser dark-mode contrast check of the new intelligence surfaces",
+        "Browser coverage for the timeline Reverse action and the mobile 44 px assertion; CI run of the new intelligence e2e specs with the shared Playwright config",
+        "FAILING: tests/e2e/intelligence-ui.spec.ts 'an automatic relationship can be ungrouped after intelligence is switched off' times out waiting for the Related tab once intelligence is disabled (seen in the p2 chat-polish Chromium run); the describe block is serial so later tests in the spec are skipped. Needs a decision on whether the test or the panel is wrong",
+        "No clean serial run of the whole intelligence-ui e2e spec after the three Squire assertion fixes; only the three touched tests were re-run"
+      ],
+      "implemented": [
+        "Memoized messages, stable ids, safe lazy markdown and code copying",
+        "Copy, regenerate, edit-and-resend, scroll stick and jump to latest",
+        "Accessible log and separate completion announcement",
+        "Expandable docked desktop panel and mobile full screen",
+        "Global shortcut, distinct availability states, retry and app-timezone history dates",
+        "Configured assistant name, shared chat buttons and 44px touch targets",
+        "Production browser journeys with mobile, dark mode and accessibility checks",
+        "User-facing AIOps overview (/intelligence): scoped, bounded noise, acceptance, MTTA/MTTR trends on the SVG chart kit, change, health and noisy-alert panels with Jira issue",
+        "Incident group card and view with Ungroup and page; timeline noise/grouping/suggestion events with Why? and reversal; Post summary as note",
+        "Incident-list noise-decision badges and filter; wallboard noise tile",
+        "Maintenance, suppression, orchestration and heartbeat builders with seven-day previews",
+        "Mobile Intelligence sections and status-token analysis notices with 44 px touch targets",
+        "p2 Squire chat polish: text deltas applied once per animation frame, memoised message markdown, aria-modal dialog with a focus trap and focus restore, live-region announcements for lookups and investigation steps, separate rate-limited (Retry-After countdown), budget, AI-disabled and basic-mode states, additive limit: 'rate' | 'budget' on meta and error events; three stale e2e assertions corrected"
+      ],
+      "wave": 7
+    },
+    {
+      "id": 7,
+      "wave": 4,
+      "name": "Triage, routing and responder assist",
+      "status": "implemented_pending_full_ci",
+      "implemented": [
+        "Urgency, team/assignee, duplicate and resolution-time suggestions voted from similar resolved outcomes (TRIAGE_* findings, policy triage.enabled default off)",
+        "Accept/dismiss chips through the incident's own domain commands (urgency command, assignment command, human link) with HELPFUL/NOT_HELPFUL feedback for calibration",
+        "Noisy alert report by service and team with flapping ratio, Jira issue action, routing/integration links and a link to suppression rules (suggested from alert quality by the noise-controls layer)",
+        "Shift handoff summary (open, recently resolved, overdue follow-ups) at each rotation through the notification control plane; AI narrative only when a provider is enabled (handoffSummaryEnabled, default off)",
+        "Impact estimate on the incident page (p1): lazy Impact tab listing actor-scoped dependent services, linked status-page components with current status, and SLO error budget at risk for the incident's own service"
+      ],
+      "remaining": [
+        "Impact estimate: SLO budget at risk only for the incident's own service, not downstream services' SLOs",
+        "Impact estimate: customer or user counts are not estimated"
+      ]
+    },
+    {
+      "id": 8,
+      "wave": 1,
+      "name": "Engine robustness and fault tolerance",
+      "status": "implemented_pending_full_ci",
+      "branch": "feat/intelligence-robustness (stacked on feat/intelligence-engine)",
+      "implemented": [
+        "Abortable handlers: ambient abort scope cancels budgeted statements and terminates stuck backends; timed-out handlers keep their concurrency slot and saturate the lane instead of exceeding maxConcurrency",
+        "Lease renewal before late batch starts",
+        "Quarantine for work that dies twice within 24h; never auto-revived or purged; operator replay clears it; badge in Failed work",
+        "Per-kind failure-rate breaker pauses one kind for five minutes; claim excludes paused kinds",
+        "Updated-incident watermark reconcile every cycle (O(changes)); recent-history sweep paced to ten minutes; database clock for discovery and the sweeps",
+        "Per-table retention transactions, bounded AlertFingerprint drain before parents, lease row instead of transaction-long lock, adaptive batch size, per-table deleted-rows metric",
+        "Resumable alert bootstrap in 5,000-payload passes with alertIndexPartial; analysis chained only on completion; no recursive force rebuild",
+        "Listener reconnect backoff with jitter; wake-leader election so one replica acts on notifications; HNSW build skips indexes another replica is building; observer no longer spins on a held lock",
+        "lane_up gauge, cycle age from start, saturation health, quarantined/kind-paused/timed-out/wake-leader metrics, LaneGone/WorkQuarantined/KindPaused alerts with rule tests",
+        "Policy publish/rollback enqueue a bounded re-index of the scope's open incidents",
+        "Late change webhook enqueues one LATE_CHANGE item; fan-out runs in the lane",
+        "Boundary test also catches relative intelligence imports in ingestion",
+        "repair-invalid-indexes script at container start and in prisma:migrate:safe",
+        "Robustness integration suite: quarantine, kind exclusion, future schedule kept on requeue, statement cancellation, saturation, kind pause, retention drain and lease, updated-incident reconcile, policy publish re-index, 12k-alert bootstrap"
+      ],
+      "remaining": [
+        "Replica-level chaos (two lane processes racing on one incident) in CI",
+        "Shared replica breaker state for AI providers (tracked in phase 5)"
+      ]
+    },
+    {
+      "id": 9,
+      "wave": 8,
+      "name": "Part 2: operations intelligence",
+      "status": "in_progress",
+      "implemented": [
+        "J0 operations insight store (default off): OpsInsight and OpsInsightScopeState tables, generation-fenced OPS_INSIGHTS lane job under withDbBudget scheduled once per runner cycle, producer interface (kind, version, area, scopeType, loadInput, derive) that skips derive while a scope's input is unchanged, first producer for integration health, retention through purgeOpsInsights",
+        "J0 daily operations rollups: generateOpsRollups runs after the incident rollups in its own try/catch with per-rollup watermarks; queryOpsRollup reads them; MetricRollup subject index and RunbookExecution completed index (one CREATE INDEX CONCURRENTLY per migration); query-plan assertions in tests/load/intelligence-query-plans.ts",
+        "J0 scoped reads and decisions: listInsightsForScope, countOpenInsightsForScopes, keyset listInsightsInbox, readableOpsInsightScopes; accept/dismiss through decideInsight with audit; suggest-only, nothing publishes",
+        "J0 UI kit and switches: InsightsPanel, InsightBadge, InsightStrip, InsightsInboxSection on the Intelligence overview; one master and six per-area switches in IntelligenceSettings (revision CAS and audit)",
+        "J0 boundaries: events.ts, the escalation path and notification dispatch may never import ops-insights or generateOpsRollups (tests/architecture/intelligence-boundaries.test.ts extended)",
+        "K AI result cache (opt-in, AiSettings.resultCacheEnabled): AiResultCache table, cachedGenerate and cachedGenerateStructured keyed by prompt id/version, scope and input hash, expired rows swept by retention; handoff ages kept as coarse bands so an unchanged shift reuses its narrative; the conversation summariser caches per person",
+        "K call-site gate: AiRequestContext.callSite is required and the gateway refuses untagged calls (CALL_SITE_REFUSED); list, badge, wallboard and overview loaders run under deterministicOnly(); architecture test forbids list and badge loaders importing the gateway",
+        "K shared incident brief builder (incidentBrief, renderBrief, BRIEF_BUDGETS) and one output-token table (AI_OUTPUT_TOKENS, outputTokensFor); no numeric maxOutputTokens literal outside src/lib/intelligence/ai",
+        "K cache-aware accounting: cache-read and cache-write tokens, result-cache hits, saved tokens and saved cost on AiUsageBreakdownDay and in the AI spend panel",
+        "Migrations 20261111210050_ops_insights, 20261111210100_metric_rollup_subject_index, 20261111210200_runbook_execution_completed_index and 20261111230000_ai_result_cache (expand-only); new tables registered in the privacy registry and the data-processing inventory; User.opsInsightDecisions is SET_NULL on delete",
+        "K controls (all opt-in): capability routing defaults through spend controls (small model for classify, tool hops and phrasing, strong model for diagnosis and postmortems; an administrator's route still wins), a background AI allocation of the daily budget (default 30%, shed first), per-service daily cap on AI-written proactive notes, degradation from 80% of a budget (small model, shorter answers, background AI paused) and basic mode at 100%; phraseInsights rewords one scope's insights in one cached structured call only when a reader expands 'Explain in plain words'",
+        "J1 automation: replay of a draft against 7 to 30 days of stored alerts (REST and the review dialog), rule-health insights (never matched, shadowed, unmapped field, overridden by responders, policy never acknowledged), mined rule suggestions that open the editor pre-filled, Squire automation tools (explain routing, explain a rule, draft a rule as a NAVIGATE proposal; never saves or publishes)",
+        "J2 escalation: EscalationStepAttempt captured in the escalation commit path, acknowledgement attributed to the step, ops.escalation.step_outcome rollup source, policy insights (step never acknowledged, night timeouts, always skipped with reason, p75 wait suggestion, one person on every step, unused policy), per-step line and Insights tab on the policy page; a resumable BACKFILL_ESCALATION_ATTEMPTS lane job rebuilds 90 days from timeline text while escalation insights are on (approximate, never feeds the night insight)",
+        "J3 on-call: OnCallCoverageDay snapshot captured per schedule day (after overrides), load and fairness from ops.pages.user_hour (Jain index, night and weekend pages), schedule insights (gap, same person primary and backup, unfair) and person insights (load, night, busy next shift), Load & fairness tab and My on-call load card; npm run backfill:oncall-coverage",
+        "J4 postmortems: repeat-cause producer, recurrence strip (mounted in the incident insights inspector during integration), evidence-filled drafts, action-item suggestions with duplicate detection, postmortem checklist",
+        "J5 runbooks: runbook health from ops.runbook.run and ops.runbook.step_outcome (failure rate, unused, failing step, always-retried step, repeated follow-up notes), missing runbook from hand-resolved recurring problems, configurable fix window (IntelligenceSettings.runbookFixWindowMinutes), runbook weight proposals computed by the worker",
+        "J6 notifications: acknowledgement capture per notification, personal and service noise reports from ops.pages.user_service and ops.pages.service, opt-in bundling of low-urgency pages (NotificationPreference.bundleLowUrgencyPages)",
+        "J7 helpers (IntelligenceSettings.opsHelpersEnabled, default off): create-incident suggestions, status-update drafts, knowledge results in the command palette, 'why did this change' on analytics cards, operations insights in the weekly digest, a CI guard on median Squire evaluation prompt tokens per case",
+        "Integration (wip/intel-ops-integrated on Workstream I): eleven producers registered once, one switch per area, slice migrations 20261113020000 to 20261113110000 apply cleanly after the base with no new drift; boundary test updated for K phrasing and spend tiers",
+        "J1.4 intelligence fields as automation conditions (IntelligenceSettings.automationIntelligenceFieldsEnabled, default off): inMaintenance, recentRiskyChange, sloBurning, flapping, stormActive read from the 30 s pre-paging snapshot with no per-event query; MISSING on a cold snapshot; replay rebuilds them from stored evidence",
+        "J1.5 one pipeline, one trace (NoiseControlPolicy.pipelineOrder, null = OFF): SHADOW records the noise-first automation comparison in evidence.pipeline, ON runs automation after the noise decision (REROUTE_SERVICE pins the target policy, ATTACH_RUNBOOK suggests bound runbooks); 'Why did this route here?' on the incident automation card and preRoutingTrace on the decisions REST route",
+        "J1 mining: team hand-offs become 'use escalation policy' suggestions when exactly one live policy pages that team first (producer v2, capped at 1000 groups / 2000 incidents)",
+        "J7 weekly team brief in the digest (opsHelpersEnabled plus operations insights): per team, incidents this week vs last from rollups and the top 3 open insights, scoped readers, optional cached phrasing (callSite background, prompt digest.team-brief v1)",
+        "R4 engine: pre-paging lookup pool sized from the main pool (PREPAGING_LOOKUP_POOL_SIZE, default a quarter of it, 2-8) with every connection warmed; savepoint opened before the deadline; opsknight_prepaging_lookups_total{route,outcome}; runbook weight fit as a fenced FIT_RUNBOOK_WEIGHTS lane item with an input-hash skip; impact card shows downstream SLO burn and affected status-page subscribers (METRICS_READ_ALL)",
+        "Integrated lane runs in a child process (crash isolation) with its own pool, burst-start yield and early pre-paging lookups overlapping the event transaction's reads (wip/intel-ingest-gate)",
+        "UI verification: tests/e2e/intelligence-ops.spec.ts covers the intelligence surfaces at 1280 and 390 px, light and dark, with axe and 44 px targets; touch-target, contrast, dark-mode and keyboard-scroll fixes on those surfaces",
+        "Final integration (wip/intel-final-int): j1-hot, j7-rest, r4-engine, ui-verify and ingest-gate merged; tsc clean, architecture suite 485/485, no new schema drift vs base, slice integration files 229/229, ingestion suite 118/118"
+      ],
+      "remaining": [
+        "On-call load counts a person's pages in every rotation they belong to (a notification does not record its schedule)",
+        "Responder-correction detection matches priority changes on message text (no dedicated event type)",
+        "Maintenance-window risk in the busy-next-shift insight covers one-off windows only; recurring windows are not expanded",
+        "Weight-fitting feedback loop from insight decisions: accept/dismiss decisions are stored and audited but nothing consumes them yet",
+        "Insight inbox visibility is filtered after reading (at most 5 rounds of 100 rows), so a viewer who can read very little of a very large estate may get a short page with a cursor (shortcut comment in ops-insights/view.ts)",
+        "POLICY insight scope uses the ESCALATION_POLICY_READ authorization check rather than a ReadWhere helper, because none exists for policies",
+        "Non-Claude model families are charged the full input rate for cache-read and cache-write tokens; per-family cache rates were not added",
+        "The postmortem recurrence strip shows only when the incident inspector opens (it has no strip chip or section of its own)",
+        "Full unit suite, full typecheck, build and Playwright e2e for the integrated branch run in the landing script, not in this integration",
+        "J1.4/J1.5 ingestion A/B (pipeline order shadow/on, automation intelligence) not run; benchmark flags exist in tests/load/intelligence-ingestion-ab.ts",
+        "J1.5 rolling deploy: older workers reject attachRunbookIds on EVALUATE_TRIGGER (only once a service sets pipeline order ON); ATTACH_RUNBOOK binding-to-suggestion has no end-to-end test",
+        "J1.4 flapping field reads recorded noise-control FLAPPING decisions only (not legacy checkAlertFlapping); the automation Test tab supplies no intelligence values",
+        "Escalation attempt backfill reads timeline text only (job payloads are deleted after 7 days); policy-level rule mining covers team hand-offs only (no policy-change event exists); on-call coverage history is still a manual script (npm run backfill:oncall-coverage)",
+        "Lane bundle in the Docker image is wired (postbuild and build:scripts write scripts/dist, which the image copies) but no Docker build was run to prove the child process starts there",
+        "SettingsTopNav is not rendered anywhere, so 'Intelligence in the top nav' is unreachable; settings pages render at zoom 0.95; service 'Recurring problems' shows raw templates"
+      ],
+      "verification": "2026-11-16 integration of K and J1 to J7 on Workstream I (0d662b41f): 70 slice unit, component and architecture files (819 tests) passed, including intelligence-boundaries, design-system-contract, the MCP tools contract and the API v2 authorization matrix; 30 slice integration files (328 tests) passed on a fresh pgvector pg16 database after two test fixes (boundary rules for K and J5, scripted eval cases for the J1 tools); prisma validate, migrate deploy and migrate diff (no drift beyond the base's pre-existing drift)"
+    },
+    {
+      "id": 10,
+      "wave": 1,
+      "name": "Workstream I: intelligence placement",
+      "status": "implemented_pending_full_ci",
+      "implemented": [
+        "I1 incident: one IntelligenceStrip under the command bar (chips only with content, single FreshnessDot) and the Insights inspector (Sheet, shortcut I, bottom sheet on mobile; Briefing, Triage, Similar, Related, Why, Runbooks, Impact, Summary) replace the seven-tab panel, IncidentGroupCard, MobileIncidentIntelligence and the proactive card; intelligence time axis is an overlay on the Timeline tab; OFF mode renders nothing for responders; loaders in src/lib/intelligence/incident-ux/{strip,strip-contract}.ts, bounded, scoped and fail-soft",
+        "I2 service/team/dashboard: /services/[id]/intelligence tab (SLO burn, dependency graph SVG with suggested edges and admin approve/reject, alert quality with one-click fixes, recent changes with risk, noise controls), service list badges, team AI usage and noise load tiles, dashboard AIOps pulse tile and wallboard largest open group",
+        "I2 lists: /alerts and /changes lists with a shared filter bar and keyset pagination, Needs attention inbox on the AIOps overview, AIOps entry in mobile navigation",
+        "I3 settings: Intelligence tab in the settings top nav; five pages (Engine, Noise controls, Services & changes, Assistant, Evaluation & spend) with anchored sections; old addresses redirect; server-action files stay at their old route folders",
+        "I4 Squire: docked display at lg and up (--squire-dock-width, squire-docked class, app shell pads the content row), pinned incident briefing view and API, hand-off contract openSquire({ question, evidence, incidentId }), ?squire=open&q= deep link (question placed in the composer, never auto-submitted), 44 px targets",
+        "Integration: inspector Ask Squire uses the bus evidence kinds (one shape, tested); inspector is offset by --squire-dock-width beside a docked assistant; inbox, service tab and team tile link to the regrouped settings anchors; one noise-decision vocabulary (kinds, labels, status tones) in incident-ux/explain.ts shared by strip, lists and service badges",
+        "No schema change"
+      ],
+      "remaining": [
+        "Evals/baseline has no anchor of its own on Evaluation & spend (content sits inside the grouping-evaluation and insights sections); add a section id to routes.ts if a separate anchor is wanted",
+        "Relocating the settings server-action files to the new route folders (kept in place so imports stayed stable across slices)",
+        "Squire focus trap in docked mode to be re-checked when the concurrent SquireLauncher streaming/focus work lands (docked panel is deliberately not a modal)"
+      ]
+    }
+  ],
+  "verification": {
+    "database": "Dedicated pgvector test container opsknight-intel-roadmap-test at loopback 55434; no test resets against demo DB.",
+    "local_demo": "Preserved at localhost:3100; migrations applied without reseeding.",
+    "note": "Implemented means code exists; certification remains separate. Full phase coverage is not claimed.",
+    "typecheck": "Passed on Node20 with --noEmit --incremental false and a 12 GB heap on foundation source.",
+    "lint": "All changed TypeScript files passed with --max-warnings 0.",
+    "production_build": "Passed using isolated .next/roadmap output; original tsconfig restored after generated build changes.",
+    "database_tests": {
+      "suites": 37,
+      "passed": 419,
+      "failed": 0
+    },
+    "intelligence_ui_unit_tests": {
+      "suites": 37,
+      "passed": 350,
+      "failed": 0
+    },
+    "ingestion_unit_tests": {
+      "suites": 9,
+      "passed": 73,
+      "failed": 0
+    },
+    "deployment_contract_tests": {
+      "suites": 2,
+      "passed": 50,
+      "failed": 0
+    },
+    "metrics_tests": {
+      "suites": 2,
+      "passed": 17,
+      "failed": 0
+    },
+    "browser": "Passed Similar percentages, Related link, deployment lead, runbook, freshness, basic Squire citations, 390px layout and lane settings on updated dev server.",
+    "demo_queue": "0 ready/running items, 0 dead letters after native reindex of 358 incidents.",
+    "remote_status": "PR #928 conflict resolution published at 414959283; GitHub CI started. Additional foundation source is local pending commit and full CI."
+  },
+  "squire_history_followup": {
+    "status": "implemented",
+    "features": [
+      "Private encrypted history enabled by default for new installs, with 90-day inactivity retention; existing administrator opt-outs/custom settings preserved",
+      "AI-off history saving/reading and paginated access without 50-chat capacity eviction",
+      "Immediate expiry filtering; expired threads cannot be revived; physical cleanup also runs without configured Intelligence settings",
+      "Cross-page historical reading with original incident context preserved for continuation",
+      "Richer basic-mode briefings, scoped incident search, timelines, recorded fixes, combined questions and pattern-based investigation guidance",
+      "Freshness notices and fresh scoped facts for follow-ups rather than replayed assistant claims",
+      "Signature crimson/slate Squire mascot with retained alternative avatars, timezone-aware history dates and responsive panel"
+    ],
+    "verification": {
+      "unit_and_ui_tests": 357,
+      "focused_database_tests": 61,
+      "retention_and_runner_tests": 27,
+      "avatar_gateway_tests": 20,
+      "full_database_run": "421 of 422 passed; remaining legacy ICON-default expectation updated and the complete 20-test gateway suite passed on rerun.",
+      "production_build": "passed",
+      "non_incremental_typecheck": "passed on final source with --noEmit --incremental false",
+      "lint": "passed",
+      "production_browser": "AI-off auto-save, reload/reopen, cross-page history guard, signature mascot, 390px layout and dark mode passed"
+    },
+    "local_demo": "http://localhost:3100; history enabled for 90 days and SQUIRE mascot selected through the audited settings service; AI master switch preserved off."
+  },
+  "mascot_integration": {
+    "source": "User-supplied Downloads/OpsKnightSquire.tsx and opsknight-squire.svg (2026-11-06 11:47)",
+    "states": 9,
+    "variants": ["full", "avatar"],
+    "verified": [
+      "54 focused component tests passed",
+      "Browser: desktop, 390px mobile, dark mode, basic-mode history",
+      "All nine states rendered on light/dark at 96/32/20px",
+      "Reduced motion disables animation; optional animation runs otherwise",
+      "Production build passed (.next/squire-design-production); Next TypeScript checks passed",
+      "Focused ESLint passed with zero warnings"
+    ],
+    "scope": "Actual Squire UI; no canvas boards supplied or modified"
+  },
+  "chat_experience": {
+    "implemented": [
+      "All nine mascot expressions mapped to real chat, provider, network and confirmed-action state",
+      "Shared authorized realtime incident attention; no second event stream",
+      "Interactive appearance preview for all expressions, assistant name, avatar and optional motion",
+      "Docked expandable desktop chat and full-screen mobile layout with safe-area composer",
+      "Lazy-loaded sanitized markdown with code copy and exact server-cited links",
+      "Memoized messages, stable message ids and separate completion announcements",
+      "User-controlled stream following and jump to latest",
+      "Edit and regenerate into new versions without changing existing saved chats",
+      "Loaded-history search, keyboard shortcut, growing composer, IME support, visible copy and retry errors"
+    ],
+    "verification": {
+      "components_and_contracts": "88 passed",
+      "database_squire": "22 passed on disposable pgvector test DB",
+      "lint": "Passed with zero warnings",
+      "production_browser": "3 journeys passed, including WCAG 2.1 AA scans in light and dark, mobile, markdown, confirmed-action success, reduced motion, offline draft recovery and keyboard entry",
+      "production_build": "Passed with nonincremental standalone TypeScript also previously verified",
+      "docs_shortcut_registry": "Passed"
+    },
+    "local_demo": "http://localhost:3100; AI remains off, 90-day private history and optional mascot animation enabled"
+  },
+  "basic_mode_expansion": {
+    "status": "implemented_verified_locally",
+    "capabilities": [
+      "Personal and team incident work queues with exclusive assignment semantics",
+      "Filtered incident search by status, urgency, priority, service/title keywords and time",
+      "Incident cohorts, period comparison, top services and bounded wall-clock MTTR",
+      "Separate scoped alert-record counts and listings",
+      "Service inventory, ownership, configured health, routing targets and topology",
+      "Named-service point-in-time on-call coverage with no unrelated-schedule fallback",
+      "Permission-checked runbook catalog counts and search",
+      "Recorded change and deployment history",
+      "Postmortem and overdue follow-up task search",
+      "Current-incident responder and escalation context",
+      "Curated OpsKnight workflow guidance",
+      "Follow-up filter replacement and canonical service/schedule/postmortem citations"
+    ],
+    "verification": {
+      "unit_ui": "130 passed",
+      "new_database_capabilities": "12 passed before Docker engine became unavailable",
+      "existing_database_suites": "41 existing tests passed in prior combined run; broader rerun subsequently blocked by database connection failures",
+      "typecheck_and_lint": "Passed",
+      "production_build": "Passed (.next/squire-basic-production)",
+      "production_browser": "4 production journeys passed: keyboard launcher, AI-off reports and persisted citations without provider calls, chat accessibility and mascot states, and 390px mobile layout",
+      "unit_full_repository": "11161 passed, 7 skipped across 1073 suites on Node 20 after pre-push fixes",
+      "focused_database_squire": "53 passed across four suites after Docker restart",
+      "live_demo": "Passed AI-off answer, auto-save, reload/reopen, cross-page history guard, supplied mascot, mobile and dark mode after restart",
+      "all_intelligence_database": "435 passed across 38 suites after Docker restart"
+    },
+    "blocker": null,
+    "guide": "docs/v2.3.0/guides/intelligence/basic-mode.md",
+    "v2": {
+      "status": "implemented_verified_locally",
+      "branch": "feat/intelligence-engine",
+      "capabilities": [
+        "Deterministic NLU: normalisation, spelling correction against a closed vocabulary, scored intents with two-choice clarification, slot extraction",
+        "Fuzzy service/team/person resolution with pg_trgm limited to readable entities, cached per actor",
+        "Calendar windows: since, between, single day, weekdays, ISO and month-name dates, 24h/7d shorthand",
+        "Dialogue state on SquireConversation.state (pending clarification, page cursor) or in memory without history",
+        "Paging (show more), page size, breakdowns by team/urgency/status/priority/day/hour, SQL-bounded MTTA/MTTR",
+        "Page context for service, team, schedule, runbook and alert pages",
+        "Basic-mode proposals and slash shortcuts through the existing sealed proposal flow",
+        "Answer-aware suggestion chips; admin-editable suggested-checks library; 10 s per-actor answer cache; evidence above 32 cited partially instead of withheld",
+        "Trigram indexes for Incident.title and Service.name via an online installer"
+      ]
+    }
+  },
+  "local_runtime_recovery": {
+    "verified_at": "2026-11-06",
+    "restart": "User explicitly approved Docker Desktop restart; hung Docker app processes restarted without deleting containers or volumes.",
+    "restored_containers": ["opsknight-intel-dev", "opsknight-intel-roadmap-test"],
+    "other_containers": "Other containers, including mcp939-testdb, were not individually operated and remain stopped after the engine restart.",
+    "demo_url": "http://localhost:3100",
+    "login": "HTTP 200; root redirects to the local login path with callbackUrl.",
+    "full_intelligence_database": "435 tests passed across all 38 Intelligence database suites on the disposable pgvector test database after restart.",
+    "pre_push": "11161 unit tests passed, 7 skipped; production build passed through normal pre-push hook.",
+    "ci": "ci:full label applied to PR #928. No workflow runs reported for pushed head. Read-only merge preview against current main reports conflicts in 17 files; branch integration is still required before CI can certify the PR."
+  },
+  "scope_revision": "2026-11-06 expanded AIOps waves 1–7",
+  "foundation_followup": {
+    "status": "in_progress",
+    "base_main": "db1c13a677deebbb28b488302e3189c4d7217b56",
+    "conflicts": "Resolved and published at 414959283; GitHub reported mergeable against main db1c13a67.",
+    "backup_ref": "refs/codex-backups/intelligence-before-roadmap-sync-20261106",
+    "verification": [
+      "Combined 326-operation API authorization matrix: 7 tests passed",
+      "Focused regenerated API/MCP/pool/feature telemetry units: 62 passed",
+      "Pool, runner and metrics database checks: 24 passed",
+      "Correlation and AUTO database checks: 25 passed, including 121-link two-batch re-election and AUTO re-anchor audit regression",
+      "System audit/pool/feature units: 18 passed",
+      "Final nonincremental typecheck passed after regression tests; changed TypeScript lint passed with zero warnings across all applicable files (386 paths respecting repository ignores). Full repository checks remain pending.",
+      "Local million-row benchmark: 1M incidents, alerts and normalized fingerprints, durable PostgreSQL; 5k-alert incremental p50 12.53ms / p99 15.21ms, all index-plan gates passed. Foundation-only nightly workflow added; not full ingestion A/B certification."
+    ],
+    "scope": "Expanded roadmap still in progress. Incremental indexing, bounded observer, shared alert shape/backfill and foundation benchmark now implemented and verified locally."
+  },
+  "gap_audit": {
+    "branch": "wip/intel-final (wip/intel-m12-int + wip/intel-gap3-int + wip/intel-m5-learning + wip/intel-m5-mobile-ai + wip/intel-m3-learning-v2 + wip/intel-m3-changes-b + wip/intel-m4-data + wip/intel-m4-mcp-investigate, on origin/main 2b27d173b) -> feat/intelligence-engine",
+    "M1": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "1 legacy fixed-threshold flapping check removed from processEvent (flapping.ts kept only to drain pre-existing holds)",
+        "2 lane sweep un-suppresses noise-control and legacy flapping holds whose reason ended (NoiseMaintenanceWindow); incidents held by product maintenance are left to the service-maintenance end sweep",
+        "3 resolve matches content-dedup appended keys; incident stays open until every alert key is clear",
+        "4 storm parent takes children's top urgency, prefers its own service, cascades resolve/re-page on parent resolve",
+        "5 automatic runbooks skip storm children and are rate-limited per rule with a recorded skip",
+        "6 triage SLO burn excludes the subject incident",
+        "7 change risk uses local time zone",
+        "8 root cause keeps changes trailing onset slightly, ranked below preceding ones",
+        "9 automation tool evidence verified",
+        "10 oversized tool output trimmed, not dropped",
+        "11 triage owner limited to current active members",
+        "12 weight fits moved to the daily lane job",
+        "13 sweep also lifts SUPPRESSION-rule holds whose rule was disabled, expired, deleted or edited to no longer match (same paging UNSUPPRESS path)",
+        "14 storm cascade has no parent-age cutoff; keyset-paged (cursor noise-sweep:storm-cascade) over unsettled links",
+        "15 appended-key resolve always searches appended alerts (persisted fact), independent of the live content-dedup switch",
+        "16 migration 20261121000100 adds idx_alert_incident_key_latest Alert(incidentId, dedupKey, createdAt DESC, id DESC) INCLUDE (status), CONCURRENTLY"
+      ],
+      "gaps": []
+    },
+    "M2": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "1 cache-friendly prompt order, volatile briefing after the prefix",
+        "2 rolling cache breakpoint and per-step holds",
+        "3 tool subset by intent",
+        "4 short evidence handles",
+        "5 lean planner with fixed first read round; diagnosis gets system prompt + current briefing only",
+        "6 narrower investigation trigger",
+        "7 model tiering on by default",
+        "8 compact, block-stable history",
+        "9 one handoff narrative per handoff; stakeholder nudge has its own prompt (stakeholder.update) and schema; one shared incident summary reused by inspector, pinned briefing and the chat-turn brief",
+        "10 per-step holds; cache reads weighted 0.1 against daily, per-user, team and capability token budgets (dollars unchanged)",
+        "11 scripted investigation prompt-token median gated in baseline.json",
+        "12 compact tool JSON schemas at the gateway and in the planner prompt (no length caps, minLength 1, additionalProperties, default; enums, required, ranges and real minimums kept): tools were ~86% of scripted prompt tokens",
+        "13 read-tool families (observability x8, automation x2) offered only when the message or intent asks for that evidence; also applied to action messages; UNKNOWN non-action messages keep the full set",
+        "14 scripted model median 11851.5 -> 7857 (-33.7%); investigation median 6545 -> 5943 (-9.2%); all 106 model + 14 investigation evals green",
+        "15 offline cache estimator (src/lib/intelligence/ai/cache-estimate.ts) + eval gate asserting a stable tool/message prefix across steps; estimated cache-read share 0.514 recorded as baseline.json modelCacheReadShare; with reads weighted 0.1 the effective input is ~54% of raw (~-64% vs the uncached old median)",
+        "16 live cache measurement: SQUIRE_EVAL_PROVIDER_KIND=ANTHROPIC|BEDROCK npm run test:squire:eval writes cache.cacheReadShare to reports/squire-eval.json (documented in docs/v2.3.0/operate/intelligence/production.md)"
+      ],
+      "gaps": [
+        "Raw (uncached) input-token cut is -33.7% scripted / -9.2% investigation, below the -50-70% target; reaching it cache-adjusted relies on the offline estimate",
+        "Live Anthropic/Bedrock cache run not yet executed (paid; command documented)"
+      ]
+    },
+    "review_fixes": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "C1 flapping quiet measured from the key's latest resolve, so a re-sending hard-down alert is unsuppressed",
+        "C2 storm cascade resolves as SYSTEM/AUTOMATION, isolates each row, falls back to paging an unpaged child whose resolve failed; un-suppress rows isolated too",
+        "C3 storm parent never an unpaged storm child (live, prefetched, simulated)",
+        "C4 STORM_CHILD runbook skip only for prepaging_storm links",
+        "C5 appended key with a newer incident of its own no longer holds the original open",
+        "C6 reversed GROUP_CHILD children are not re-paged by the cascade",
+        "C7 sweep leaves legacy flapping-suppression holds to releaseStableFlappingHolds",
+        "C8 Terraform startedAt is the apply start or absent",
+        "P1 appended-key resolve lookup gated on content dedup via the noise snapshot; branch 2 only on a branch 1 miss",
+        "P2/P3 sweep probes on partial indexes idx_sla_pause_open_noise and idx_incident_relationship_storm_open; closed-child links marked",
+        "P4 rule rate lock before the incident row lock",
+        "P6 storm parent: own-service probe UNION ALL scope, LIMIT 1",
+        "P8 weight proposal refits under withDbBudget",
+        "P9 chat brief reuses the read incident and reads only BRIEFING notes",
+        "S1 refused top-up stops the tool loop without another model call",
+        "S2 volatile Squire context wrapped as untrusted data"
+      ],
+      "gaps": [
+        "Ingestion A/B (processEvent p50/p99 vs OFF) not re-benchmarked after the resolve-path change"
+      ]
+    },
+    "M3": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "Reachable AUTO: certification evidence pooled across services by rule signature; evidence survives edits that do not change the rule",
+        "Learning labels: implicit positives from rollback-after-incident and postmortem root cause into cause and runbook weight fits; time-based train/test split",
+        "Acceptance-drift OpsInsight per finding kind (area intelligence, opsInsightsIntelligenceEnabled default off)",
+        "Proactive anomaly: scheduled EVALUATE_METRIC_TEMPLATE lane job feeds a metric early-warning OpsInsight (never pages; default off)",
+        "SHADOW defaults: new services get one CONTENT_TEMPLATE correlation rule in SHADOW while intelligence is on",
+        "Changes: versioned label->service mapping with Backstage alias and exact-name fallback, unmapped list and one-click mapping on /changes",
+        "Changes: GitHub/GitLab deployment and Kubernetes rollout mappers with signature verification and startedAt",
+        "Alert time partitioning (opt-in): scripts/partition-alerts.ts prepare/copy/swap/finalize/rollback with mirror triggers, dry-run default and pool/paging pause; lane partition maintenance behind ALERT_PARTITION_MAINTENANCE (default off); docs/v2.3.0/operate/data/alert-partitioning.md"
+      ],
+      "gaps": [
+        "Noise-under-storm, pre-page grouping, HIGH storms, event model, service tier and scale items tracked by earlier waves"
+      ]
+    },
+    "M4": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "list_metrics, label_values and per-service saved queries (list_metric_templates); search_logs schema/description fixed",
+        "Read-only Kubernetes connector, get_k8s_state tool and connection UI",
+        "Read-only Azure DevOps (Repos diffs/activity, Pipelines runs with failed-record log tail), Argo CD (sync/health/history/resources) and base14 Scout (OAuth2 client credentials, discovery, clamped windows; metrics/logs/traces/APM KPIs/topology) connectors with Squire tools, citations and connection UI",
+        "Hybrid lexical + vector knowledge retrieval (RRF), section-aware chunking, 180-day learned-fact re-confirmation",
+        "Basic-mode dialogue state persisted encrypted in the database (10 minute TTL)",
+        "MCP long-running investigation: squire_start_investigation / squire_get_investigation, caller-scoped, encrypted, 1 h expiry, 2 per person, squireMcpEnabled + capability catalog",
+        "Read-only CI/CD connector (GITHUB_ACTIONS, GITLAB_CI kinds), get_pipeline_runs tool (recent runs, failed jobs, bounded log tail), evidence citations and connection UI"
+      ],
+      "gaps": []
+    },
+    "M5": {
+      "status": "implemented_pending_full_ci",
+      "done": [
+        "Mobile parity: Needs attention with mobile links, create-incident suggestions, Squire on /m entity pages, postmortem/policy/status page context",
+        "On-demand AI: explain runbook failure, weekly report narrative, plain-words analytics filter on /insights"
+      ]
+    }
+  },
+  "gap-audit-2026-11-17 waves M3/M4/M5": {
+    "status": "partial",
+    "base": "a445b0c11 (origin/feat/intelligence-engine)",
+    "integration_branch": "wip/intel-gap3-int",
+    "done": [
+      "M5.1 incident 'Post status update' action + next-update-due chip; StatusPage.updateCadenceMinutes; announcements link to public incidents (m5-comms, behind opsHelpersEnabled)",
+      "M5.4 precomputed Incident.pageContext (rank-1 similar incident, change, runbook ids) in page/escalation emails; pageContextEnabled default off (m5-comms)",
+      "M5.2 one ranked Needs attention section on /intelligence and /m/intelligence, topbar badge, top-level Intelligence nav entry (m5-home)",
+      "M5.5 settings setup checklist, 'Turn on recommended' preset (no AUTO, no noise ON, no AI), weekly digest moved to Engine page (m5-home)",
+      "M5.12 InsightStrip removed, dead IncidentImpactCard mocks dropped (m5-home)",
+      "M5.3 ranked schedule-override cover candidates (m5-people, peopleInsightsEnabled default off)",
+      "M5.7 suggested experts on the incident responders card (m5-people)",
+      "M5.8 night pages + per-service tune links on the personal noise card; load and expertise card on /users/[id] (m5-people)",
+      "M4 Slack thread history and progressive answer edits (m4-chatops)",
+      "M4 deterministic war-room kickoff message (warRoomKickoffEnabled default off) (m4-chatops)",
+      "M4 war-room channel capture to the incident timeline as CHAT_MESSAGE (warRoomCaptureEnabled default off) (m4-chatops)"
+    ],
+    "remaining": {
+      "M3": [
+        "noise fail-open under storms",
+        "pre-page grouping in HOLD window (SHADOW first)",
+        "HIGH storm grouping",
+        "SHADOW defaults for new services",
+        "reachable AUTO certification evidence",
+        "event model fields + Alert.integrationId",
+        "change-to-service mapping and deploy mappers; change risk as cause prior",
+        "learning labels from implicit truth, time split, acceptance drift",
+        "Service.slaTier prior",
+        "proactive anomaly evaluation",
+        "scale: Alert partitioning plan, LISTEN/NOTIFY snapshots, lane reservation"
+      ],
+      "M4": [
+        "auto-investigation on page",
+        "hypotheses with verification checks",
+        "suspect change ranking",
+        "metric discovery tools and search_logs schema fix",
+        "Kubernetes and CI/CD connectors",
+        "MCP long-running investigation task",
+        "hybrid knowledge retrieval and fact TTL",
+        "persisted dialogue state, streamed conclusion",
+        "governance data class, per-tool PII redaction, readUntrusted scope",
+        "Teams thread history and progressive updates (Slack done)"
+      ],
+      "M5": [
+        "6 action item dedupe/owner/nudge",
+        "9 SLO burn forecast, change follow-on incidents",
+        "10 mobile parity",
+        "11 on-demand AI helpers",
+        "8 noisy rules on the personal noise card (no per-rule rollup) and the mobile noise card",
+        "4 page context rendered in channels other than email",
+        "5 remove the duplicate digest block from the Evaluation page (owned InsightsSections.tsx)"
+      ]
+    },
+    "note": "Run of 2026-11-20: merged the four slices with commits onto a445b0c11. m5-mobile-ai, m3-learning, m3-changes and m4-data stopped on a permission denial with no commits; m4-chatops item d (MCP long-running investigation) was designed but not built. The integrator split the CHAT_MESSAGE enum value into its own migration (20261117400050) so validate-migrations passes. No browser or visual check of any new UI was done. M5 learning (wip/intel-m5-learning) is integrated by a separate run and is not tracked here.",
+    "merged_slices": [
+      "wip/intel-m5-comms",
+      "wip/intel-m5-home",
+      "wip/intel-m5-people",
+      "wip/intel-m4-chatops"
+    ]
+  }
+}

@@ -38,6 +38,7 @@ import {
 
 import { createIncident, getIncidentCreationContext } from '@/app/(app)/incidents/actions';
 import CustomFieldInput from '@/components/CustomFieldInput';
+import CreateIncidentSuggestions from '@/components/incident/CreateIncidentSuggestions';
 import UserAvatar from '@/components/UserAvatar';
 import StatusBadge from '@/components/incident/StatusBadge';
 import PriorityBadge from '@/components/incident/PriorityBadge';
@@ -508,6 +509,7 @@ function CreateIncidentModalContent({
   }, [contextData, loading]);
 
   const services = useMemo(() => contextData?.services || [], [contextData?.services]);
+  const selectableServiceIds = useMemo(() => new Set(services.map(s => s.id)), [services]);
   const users = useMemo(() => contextData?.users || [], [contextData?.users]);
   const teams = useMemo(() => contextData?.teams || [], [contextData?.teams]);
   const templates = useMemo(() => contextData?.templates || [], [contextData?.templates]);
@@ -945,6 +947,18 @@ function CreateIncidentModalContent({
                       <FormMessage />
                     </FormItem>
                   )}
+                />
+
+                <CreateIncidentSuggestions
+                  title={watchedTitle ?? ''}
+                  serviceId={watchedServiceId ?? ''}
+                  urgency={watchedUrgency}
+                  getDescription={() => form.getValues('description')}
+                  selectableServiceIds={selectableServiceIds}
+                  onPickService={id =>
+                    form.setValue('serviceId', id, { shouldDirty: true, shouldValidate: true })
+                  }
+                  onPickUrgency={value => form.setValue('urgency', value, { shouldDirty: true })}
                 />
 
                 {/* Feature 6: Quick Impact Tagging (Customer-Facing vs Internal) */}

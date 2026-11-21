@@ -18,6 +18,8 @@ vi.mock('@/app/(app)/services/[id]/automation/actions', () => ({
 const data = {
   recoveryOwnerId: 'actor',
   enabled: true,
+  insights: { items: [], canDecide: false, squireName: null },
+  intelligenceFieldsEnabled: false,
   mode: 'SHADOW' as const,
   canPublish: true,
 

@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -29,6 +30,7 @@ import {
   Search as SearchIcon,
   Server,
   Shield,
+  Sparkles,
   Sun,
   User,
   Users,
@@ -47,6 +49,12 @@ import {
 } from '@/components/ui/shadcn/command';
 import { DialogOverlay, DialogPortal } from '@/components/ui/shadcn/dialog';
 import UserAvatar from '@/components/UserAvatar';
+import PaletteKnowledgeResults from '@/components/search/PaletteKnowledgeResults';
+import { openSquire } from '@/components/squire/squire-bus';
+import {
+  queryAddressesAssistant,
+  questionFromPaletteQuery,
+} from '@/components/squire/palette-question';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { useThemePreference } from '@/hooks/use-theme-preference';
 import { GLOBAL_NAVIGATION_SHORTCUTS } from '@/lib/keyboard-shortcuts';
@@ -275,17 +283,18 @@ const THEME_SOURCES: ReadonlyArray<{ choice: ThemeChoice; title: string; icon: L
   { choice: 'system', title: 'Match system theme', icon: Monitor },
 ];
 
-const THEME_ACTIONS: Array<Entry & { choice: ThemeChoice }> = THEME_SOURCES.map(({ choice, title, icon }) =>
-  Object.assign(
-    action(`theme-${choice}`, title, 'Appearance', icon, [
-      'theme',
-      'appearance',
-      'mode',
-      'color',
-      choice,
-    ]),
-    { choice }
-  )
+const THEME_ACTIONS: Array<Entry & { choice: ThemeChoice }> = THEME_SOURCES.map(
+  ({ choice, title, icon }) =>
+    Object.assign(
+      action(`theme-${choice}`, title, 'Appearance', icon, [
+        'theme',
+        'appearance',
+        'mode',
+        'color',
+        choice,
+      ]),
+      { choice }
+    )
 );
 
 /** Shown under the "no results" message so the next step is one keystroke away. */
@@ -385,6 +394,32 @@ export default function CommandPalette({
     onOpenChange(false);
     setQuery('');
   }, [onOpenChange]);
+
+  // The assistant announces itself when mounted, so the entry only exists while it is switched on.
+  const [assistantName, setAssistantName] = useState<string | null>(null);
+  useEffect(() => {
+    const read = () => setAssistantName(document.documentElement.dataset.squireName ?? null);
+    read();
+    window.addEventListener('squire:ready', read);
+    return () => window.removeEventListener('squire:ready', read);
+  }, []);
+  const assistantMatches =
+    hasQuery && Boolean(assistantName) && queryAddressesAssistant(query, assistantName ?? '');
+  const assistantQuestion = assistantName
+    ? questionFromPaletteQuery(query, assistantName)
+    : undefined;
+
+  const askAssistant = () => {
+    // The assistant panel takes focus itself; the typed question goes with it so it is not typed twice.
+    restoreFocus.current = false;
+    close();
+    openSquire(assistantQuestion);
+  };
+
+  const openHref = (href: string) => {
+    close();
+    router.push(href);
+  };
 
   const openEntity = (result: SearchResult) => {
     setRecents(pushRecent(result));
@@ -518,6 +553,25 @@ export default function CommandPalette({
                 </CommandGroup>
               )}
 
+              {assistantMatches && assistantName && (
+                <CommandGroup heading="Assistant">
+                  <CommandItem
+                    value={`ask-${assistantName}`}
+                    onSelect={askAssistant}
+                    className={ITEM_CLASS}
+                  >
+                    <Sparkles
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <ItemText
+                      title={`Ask ${assistantName}`}
+                      subtitle={assistantQuestion ?? 'Questions about incidents you can access'}
+                    />
+                  </CommandItem>
+                </CommandGroup>
+              )}
+
               {actions.length > 0 && (
                 <CommandGroup heading="Actions">{actions.map(renderCommand)}</CommandGroup>
               )}
@@ -536,6 +590,8 @@ export default function CommandPalette({
                   ))}
                 </CommandGroup>
               ))}
+
+              {hasQuery && <PaletteKnowledgeResults query={query} onOpen={openHref} />}
 
               {waitingForEntities && ranked.length === 0 && (
                 <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">

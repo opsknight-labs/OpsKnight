@@ -137,6 +137,7 @@ function liveTransaction(escalationProcessingAt: Date | null) {
             ]
           : []
       ),
+      $executeRaw: vi.fn().mockResolvedValue(1),
       incidentEvent: { create: mocks.txIncidentEventCreate },
       backgroundJob: { create: mocks.txBackgroundJobCreate },
     });

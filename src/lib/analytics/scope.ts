@@ -6,7 +6,10 @@ import {
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
 import { actorScheduleScope } from '@/lib/actor-metrics';
-import { compileIncidentMetricFilter, type IncidentMetricFilter } from '@/lib/metrics/domain/filter';
+import {
+  compileIncidentMetricFilter,
+  type IncidentMetricFilter,
+} from '@/lib/metrics/domain/filter';
 import { UNASSIGNED, type AnalyticsParams } from './params';
 
 /** SQL alias every analytics query uses for "Incident". */
@@ -64,6 +67,10 @@ export function buildAnalyticsScope(
     scheduleWhere,
     serviceWhere,
     actor,
-    key: JSON.stringify({ filter: compiled.identity, schedules: scheduleWhere, services: serviceWhere }),
+    key: JSON.stringify({
+      filter: compiled.identity,
+      schedules: scheduleWhere,
+      services: serviceWhere,
+    }),
   };
 }

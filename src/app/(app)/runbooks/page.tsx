@@ -13,7 +13,13 @@ import {
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
+import {
+  assertCapability,
+  getCurrentAuthorizationActor,
+  getCurrentUser,
+  getUserPermissions,
+} from '@/lib/rbac';
+import { countOpenInsightsForScopes } from '@/lib/intelligence/ops-insights/view';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import RunbookLibrary, { CreateRunbookDialog } from '@/components/runbooks/RunbookLibrary';
@@ -145,6 +151,16 @@ export default async function RunbooksPage({
     }),
     getRunbookNavigationSummary(),
   ]);
+  // Stored counts only (one grouped query); empty while runbook insights are off. Never blocks the list.
+  const insightCounts = await getCurrentAuthorizationActor()
+    .then(actor =>
+      countOpenInsightsForScopes(
+        actor,
+        'RUNBOOK',
+        runbooks.map(item => item.id)
+      )
+    )
+    .catch(() => new Map());
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE);
   const onlineAgents = navigation.onlineAgents ?? 'Unknown';
   const executionCount = navigation.activeExecutions ?? 'Unknown';
@@ -280,6 +296,7 @@ export default async function RunbooksPage({
               : null,
             archivedAt: item.archivedAt?.toISOString() ?? null,
             updatedAt: item.updatedAt.toISOString(),
+            insights: insightCounts.get(item.id) ?? null,
           }))}
         />
 

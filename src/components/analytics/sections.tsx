@@ -25,6 +25,13 @@ import MetricInfo from './MetricInfo';
 import { SectionCard } from './SectionCard';
 import SectionError from './SectionError';
 import ServicesTable from './ServicesTable';
+import MetricChangeWhy from './MetricChangeWhy';
+import {
+  loadMetricChanges,
+  METRIC_CHANGE_MAX_WINDOW_DAYS,
+  type MetricChanges,
+} from '@/lib/intelligence/helpers/metric-change-loader';
+import type { ChangeMetric } from '@/lib/intelligence/helpers/metric-change';
 
 /** Loads one section; a failure renders an inline retry instead of breaking the page. */
 export async function load<K extends AnalyticsSectionKey>(
@@ -58,7 +65,12 @@ export function NoIncidents({ filtered }: { filtered: boolean }) {
 export const isFiltered = (context: AnalyticsContext) => {
   const p = context.params;
   return Boolean(
-    p.teams.length || p.services.length || p.priorities.length || p.urgency || p.status || p.assignee
+    p.teams.length ||
+    p.services.length ||
+    p.priorities.length ||
+    p.urgency ||
+    p.status ||
+    p.assignee
   );
 };
 
@@ -83,7 +95,46 @@ const KPI_TILES: Array<{
   { id: 'afterHoursRate', drill: { kind: 'afterHours', title: 'Incidents created after hours' } },
 ];
 
+const CHANGE_METRIC_FOR: Partial<Record<MetricId, ChangeMetric>> = {
+  incidents: 'incidents',
+  mttaP50: 'mtta',
+  mttrP50: 'mttr',
+};
+
+/**
+ * "Why did this change" comes from per-service daily rollups, which only answer a preset range of at
+ * most 90 days on the unfiltered or single-team view. A helper, never a gate: failures show nothing.
+ */
+function kpiChanges(context: AnalyticsContext): {
+  windowDays: number;
+  teamId?: string;
+  changes: Promise<MetricChanges>;
+} | null {
+  const p = context.params;
+  const windowDays = parseInt(p.range, 10);
+  if (
+    !p.compare ||
+    p.range === 'custom' ||
+    p.range === '24h' ||
+    !(windowDays <= METRIC_CHANGE_MAX_WINDOW_DAYS) ||
+    p.teams.length > 1 ||
+    p.services.length ||
+    p.priorities.length ||
+    p.urgency ||
+    p.status ||
+    p.assignee
+  )
+    return null;
+  const teamId = p.teams[0];
+  return {
+    windowDays,
+    teamId,
+    changes: loadMetricChanges(context.scope.actor, { windowDays, teamId }).catch(() => ({})),
+  };
+}
+
 export async function KpiSection({ context }: { context: AnalyticsContext }) {
+  const why = kpiChanges(context);
   const result = await load(context, 'kpis');
   if ('error' in result) {
     return (
@@ -113,6 +164,26 @@ export async function KpiSection({ context }: { context: AnalyticsContext }) {
     resolveSla: previous.resolveSla,
     escalationRate: previous.escalationRate,
     afterHoursRate: previous.afterHoursRate,
+  };
+  const changes = why ? await why.changes : {};
+  // Shown only when the rollups agree with the tile's own direction, so the line never contradicts it.
+  const whyFooter = (tile: { id: MetricId }) => {
+    const metric = CHANGE_METRIC_FOR[tile.id];
+    const change = metric === undefined ? undefined : changes[metric as ChangeMetric];
+    const now = values[tile.id];
+    const before = previousValues[tile.id];
+    if (!why || !metric || !change || now == null || before == null || now === before) return null;
+    if (now > before !== (change.direction === 'up')) return null;
+    return (
+      <div className="relative z-10">
+        <MetricChangeWhy
+          metric={metric}
+          line={change.line}
+          windowDays={why.windowDays}
+          teamId={why.teamId}
+        />
+      </div>
+    );
   };
 
   return (
@@ -188,6 +259,7 @@ export async function KpiSection({ context }: { context: AnalyticsContext }) {
               ) : (
                 body
               )}
+              {whyFooter(tile)}
             </li>
           );
         })}
@@ -212,7 +284,13 @@ function TrendTable({
       <thead className="sticky top-0 bg-card">
         <tr className="border-b text-muted-foreground">
           <th scope="col" className="py-1.5 text-left font-medium">
-            {bucket === 'hour' ? 'Hour' : bucket === 'week' ? 'Week of' : bucket === 'month' ? 'Month' : 'Day'}
+            {bucket === 'hour'
+              ? 'Hour'
+              : bucket === 'week'
+                ? 'Week of'
+                : bucket === 'month'
+                  ? 'Month'
+                  : 'Day'}
           </th>
           {columns.map(column => (
             <th key={column.label} scope="col" className="py-1.5 text-right font-medium">
@@ -255,7 +333,10 @@ export async function TrendSection({ context }: { context: AnalyticsContext }) {
   const total = rows.reduce((sum, row) => sum + row.high + row.medium + row.low, 0);
   const compare = context.params.compare;
   const durationColumns = (prefix: 'mtta' | 'mttr') => [
-    { label: 'Median', render: (row: (typeof rows)[number]) => formatDuration(row[`${prefix}P50`]) },
+    {
+      label: 'Median',
+      render: (row: (typeof rows)[number]) => formatDuration(row[`${prefix}P50`]),
+    },
     { label: 'p90', render: (row: (typeof rows)[number]) => formatDuration(row[`${prefix}P90`]) },
     ...(compare
       ? [
@@ -293,7 +374,13 @@ export async function TrendSection({ context }: { context: AnalyticsContext }) {
                   { label: 'Low', render: row => String(row.low) },
                   { label: 'Total', render: row => String(row.high + row.medium + row.low) },
                   ...(compare
-                    ? [{ label: 'Previous', render: (row: (typeof rows)[number]) => formatMetric(row.previousTotal, 'count') }]
+                    ? [
+                        {
+                          label: 'Previous',
+                          render: (row: (typeof rows)[number]) =>
+                            formatMetric(row.previousTotal, 'count'),
+                        },
+                      ]
                     : []),
                 ]}
               />
@@ -307,7 +394,11 @@ export async function TrendSection({ context }: { context: AnalyticsContext }) {
           id={`analytics-${metric}`}
           title={metric === 'mtta' ? 'Time to acknowledge' : 'Time to resolve'}
           description={`Median and p90 per ${unitLabel}`}
-          info={<MetricInfo metrics={metric === 'mtta' ? ['mttaP50', 'mttaP90'] : ['mttrP50', 'mttrP90']} />}
+          info={
+            <MetricInfo
+              metrics={metric === 'mtta' ? ['mttaP50', 'mttaP90'] : ['mttrP50', 'mttrP90']}
+            />
+          }
           className="xl:col-span-6"
         >
           {total === 0 ? (
@@ -334,7 +425,9 @@ export async function ServicesSection({ context }: { context: AnalyticsContext }
       id="analytics-services"
       title="Services"
       description="Reliability per service. Select a service to filter the whole page."
-      info={<MetricInfo metrics={['mttaP50', 'mttrP50', 'ackSla', 'resolveSla', 'alertsPerIncident']} />}
+      info={
+        <MetricInfo metrics={['mttaP50', 'mttrP50', 'ackSla', 'resolveSla', 'alertsPerIncident']} />
+      }
       className="xl:col-span-12"
     >
       {'error' in result ? (
@@ -366,7 +459,11 @@ export async function RespondersSection({ context }: { context: AnalyticsContext
       id="analytics-responders"
       title="Responder load"
       description="Assigned incidents by time of day in each responder's own timezone, time spent handling them, plus scheduled on-call time"
-      info={<MetricInfo metrics={['afterHoursRate', 'handlingHours', 'offHoursInterruptions', 'onCallHours']} />}
+      info={
+        <MetricInfo
+          metrics={['afterHoursRate', 'handlingHours', 'offHoursInterruptions', 'onCallHours']}
+        />
+      }
       className="xl:col-span-7"
     >
       {'error' in result ? (
@@ -397,10 +494,18 @@ const HOUR_MS = 3_600_000;
 function Sparkline({ values }: { values: number[] }) {
   const max = Math.max(1, ...values);
   const step = 48 / Math.max(1, values.length - 1);
-  const points = values.map((value, index) => `${index * step},${15 - (value / max) * 14}`).join(' ');
+  const points = values
+    .map((value, index) => `${index * step},${15 - (value / max) * 14}`)
+    .join(' ');
   return (
     <svg viewBox="0 0 48 16" className="h-4 w-12 shrink-0 text-muted-foreground" aria-hidden>
-      <polyline points={points} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -413,7 +518,8 @@ function ResponderList({
   trends: Record<string, number[]>;
 }) {
   const max = Math.max(1, ...rows.map(row => row.incidents));
-  const offHours = (row: (typeof rows)[number]) => row.handlingEveningHours + row.handlingOvernightHours;
+  const offHours = (row: (typeof rows)[number]) =>
+    row.handlingEveningHours + row.handlingOvernightHours;
   const totalHandling = rows.reduce((sum, row) => sum + row.handlingHours, 0);
   const totalOffHours = rows.reduce((sum, row) => sum + offHours(row), 0);
   return (
@@ -424,8 +530,10 @@ function ResponderList({
           <span className="font-medium tabular-nums text-foreground">
             {formatDuration(totalHandling * HOUR_MS)}
           </span>
-          , <span className="tabular-nums">{formatDuration(totalOffHours * HOUR_MS)}</span> of it off-hours (
-          <span className="tabular-nums">{Math.round((totalOffHours / totalHandling) * 100)}%</span>)
+          , <span className="tabular-nums">{formatDuration(totalOffHours * HOUR_MS)}</span> of it
+          off-hours (
+          <span className="tabular-nums">{Math.round((totalOffHours / totalHandling) * 100)}%</span>
+          )
         </p>
       )}
       <ul className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-hidden>
@@ -458,7 +566,10 @@ function ResponderList({
                     <span
                       key={band.key}
                       className="h-full border-r-2 border-card last:border-r-0"
-                      style={{ width: `${(row[band.key] / row.incidents) * 100}%`, background: band.color }}
+                      style={{
+                        width: `${(row[band.key] / row.incidents) * 100}%`,
+                        background: band.color,
+                      }}
                     />
                   ) : null
                 )}
@@ -512,10 +623,20 @@ function OffHoursTrend({
               <thead className="sticky top-0 bg-card">
                 <tr className="border-b text-muted-foreground">
                   <th scope="col" className="py-1.5 text-left font-medium">
-                    {bucket === 'hour' ? 'Hour' : bucket === 'week' ? 'Week of' : bucket === 'month' ? 'Month' : 'Day'}
+                    {bucket === 'hour'
+                      ? 'Hour'
+                      : bucket === 'week'
+                        ? 'Week of'
+                        : bucket === 'month'
+                          ? 'Month'
+                          : 'Day'}
                   </th>
-                  <th scope="col" className="py-1.5 text-right font-medium">Evenings & weekends</th>
-                  <th scope="col" className="py-1.5 text-right font-medium">Overnight</th>
+                  <th scope="col" className="py-1.5 text-right font-medium">
+                    Evenings & weekends
+                  </th>
+                  <th scope="col" className="py-1.5 text-right font-medium">
+                    Overnight
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -541,7 +662,14 @@ function OffHoursTrend({
 // ------------------------------------------------------------------ Timing
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const SEQ = ['--chart-seq-0', '--chart-seq-1', '--chart-seq-2', '--chart-seq-3', '--chart-seq-4', '--chart-seq-5'];
+const SEQ = [
+  '--chart-seq-0',
+  '--chart-seq-1',
+  '--chart-seq-2',
+  '--chart-seq-3',
+  '--chart-seq-4',
+  '--chart-seq-5',
+];
 
 export async function TimingSection({ context }: { context: AnalyticsContext }) {
   const result = await load(context, 'timing');
@@ -565,7 +693,9 @@ export async function TimingSection({ context }: { context: AnalyticsContext }) 
 
 function Heatmap({ counts, max }: { counts: number[][]; max: number }) {
   const step = (value: number) =>
-    value === 0 ? SEQ[0] : SEQ[Math.min(SEQ.length - 1, Math.ceil((value / max) * (SEQ.length - 1)))];
+    value === 0
+      ? SEQ[0]
+      : SEQ[Math.min(SEQ.length - 1, Math.ceil((value / max) * (SEQ.length - 1)))];
   const busiest = counts
     .flatMap((hours, day) => hours.map((count, hour) => ({ day, hour, count })))
     .filter(cell => cell.count > 0)
@@ -619,7 +749,11 @@ function Heatmap({ counts, max }: { counts: number[][]; max: number }) {
         <span className="flex items-center gap-1" aria-hidden>
           Fewer
           {SEQ.map(token => (
-            <span key={token} className="h-2.5 w-2.5 rounded-sm" style={{ background: `var(${token})` }} />
+            <span
+              key={token}
+              className="h-2.5 w-2.5 rounded-sm"
+              style={{ background: `var(${token})` }}
+            />
           ))}
           More
         </span>
@@ -736,12 +870,17 @@ function RankedList({
                 <span className="truncate" title={item.label}>
                   {item.label}
                 </span>
-                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{item.detail}</span>
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {item.detail}
+                </span>
               </div>
               <div className="mt-1 h-1.5 rounded-full bg-muted" aria-hidden>
                 <div
                   className="h-full rounded-full"
-                  style={{ width: `${(item.value / max) * 100}%`, background: 'var(--chart-series-1)' }}
+                  style={{
+                    width: `${(item.value / max) * 100}%`,
+                    background: 'var(--chart-series-1)',
+                  }}
                 />
               </div>
             </li>
@@ -797,11 +936,17 @@ export async function FollowThroughSection({ context }: { context: AnalyticsCont
             />
           </dl>
           <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-            <Link href="/postmortems" className="inline-flex items-center gap-1 font-medium hover:underline">
+            <Link
+              href="/postmortems"
+              className="inline-flex items-center gap-1 font-medium hover:underline"
+            >
               <ClipboardCheck className="h-4 w-4" aria-hidden /> Postmortems
               <ArrowRight className="h-3.5 w-3.5" aria-hidden />
             </Link>
-            <Link href="/action-items" className="inline-flex items-center gap-1 font-medium hover:underline">
+            <Link
+              href="/action-items"
+              className="inline-flex items-center gap-1 font-medium hover:underline"
+            >
               <BellRing className="h-4 w-4" aria-hidden /> Action items
               <ArrowRight className="h-3.5 w-3.5" aria-hidden />
             </Link>

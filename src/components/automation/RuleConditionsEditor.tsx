@@ -5,6 +5,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   builtinFields,
+  isIntelligenceFieldKey,
   LIMITS,
   type Rule,
   type Field,
@@ -52,7 +53,7 @@ const ConditionRow = memo(function ConditionRow({
   condition: Condition;
   index: number;
   field: Field | undefined;
-  fieldOptions: { builtin: Field[]; context: Field[] };
+  fieldOptions: { builtin: Field[]; intelligence: Field[]; context: Field[] };
   canEdit: boolean;
   onFieldChange: (index: number, fieldKey: string) => void;
   onOperatorChange: (index: number, operator: Condition['operator']) => void;
@@ -88,6 +89,15 @@ const ConditionRow = memo(function ConditionRow({
             </option>
           ))}
         </optgroup>
+        {fieldOptions.intelligence.length > 0 && (
+          <optgroup label="Intelligence signals">
+            {fieldOptions.intelligence.map(option => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </optgroup>
+        )}
         {fieldOptions.context.length > 0 && (
           <optgroup label="Context fields">
             {fieldOptions.context.map(option => (
@@ -167,7 +177,10 @@ export function RuleConditionsEditor({
   const fieldOptions = useMemo(
     () => ({
       builtin: fields.filter(field => builtinKeys.has(field.key)),
-      context: fields.filter(field => !builtinKeys.has(field.key)),
+      intelligence: fields.filter(field => isIntelligenceFieldKey(field.key)),
+      context: fields.filter(
+        field => !builtinKeys.has(field.key) && !isIntelligenceFieldKey(field.key)
+      ),
     }),
     [fields]
   );

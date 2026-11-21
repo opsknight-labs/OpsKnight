@@ -18,6 +18,12 @@ import {
   resolveStoredActionItems,
   type ActionItem,
 } from '@/lib/action-items';
+import { logger } from '@/lib/logger';
+import { applyEvidenceToDraft } from '@/lib/intelligence/postmortems/evidence-draft';
+import {
+  evidenceForStoredDraft,
+  getPostmortemAssistForActor,
+} from '@/lib/intelligence/postmortems/loaders';
 import {
   parsePageParam,
   parsePageSizeParam,
@@ -630,7 +636,7 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
   }
   timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-  return {
+  const draft = {
     summary,
     impact,
     timeline,
@@ -638,6 +644,32 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
     resolution: 'Service was restored by...',
     lessons: '1. Improve monitoring for...\n2. Update runbooks for...',
   };
+
+  // 4. With postmortem intelligence on, fill the template with what is already known about the incident.
+  // Deterministic and best effort: off, unreadable or failing, the template draft is returned as before.
+  try {
+    const assist = await getPostmortemAssistForActor(
+      incidentId,
+      await getCurrentAuthorizationActor()
+    );
+    if (!assist) return draft;
+    const clock = new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+      timeZone: tz,
+    });
+    // The draft is saved onto this incident's postmortem: cite only incidents its readers share.
+    const evidence = await evidenceForStoredDraft(incidentId, assist.evidence);
+    return applyEvidenceToDraft(draft, evidence, at => clock.format(at));
+  } catch (error) {
+    logger.warn('[Intelligence] postmortem evidence draft failed', {
+      error: error instanceof Error ? error.name : 'error',
+    });
+    return draft;
+  }
 }
 
 /**

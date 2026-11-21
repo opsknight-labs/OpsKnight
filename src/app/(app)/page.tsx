@@ -13,6 +13,8 @@ import LiveCommandStrip from '@/components/dashboard/live/LiveCommandStrip';
 import DashboardCockpit from '@/components/dashboard/live/DashboardCockpit';
 import LiveIncidentsPanel from '@/components/dashboard/live/LiveIncidentsPanel';
 import { OpsPulsePanel } from '@/components/dashboard/live/ResponderRail';
+import AiopsPulseTile from '@/components/dashboard/live/AiopsPulseTile';
+import { getAiopsPulse } from '@/lib/intelligence/surfaces/dashboard-pulse';
 import DashboardHistorySection, {
   DashboardHistoryProvider,
 } from '@/components/dashboard/DashboardHistorySection';
@@ -56,7 +58,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const historyQuery = { range: parseHistoryRange(urlParams.get('range')) };
   const generation = await getRealtimeChangeGeneration().catch(() => null);
 
-  const [snapshot, services, teams] = await Promise.all([
+  const [snapshot, services, teams, aiopsPulse] = await Promise.all([
     getLiveDashboardSnapshot(actor, liveQuery, { generation }).catch(error => {
       logger.warn('dashboard.live.initial_failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -73,6 +75,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
+    // Null unless the viewer may read intelligence and at least one number is non-zero.
+    getAiopsPulse(actor).catch(() => null),
   ]);
 
   const scopeMode = hasCapability(actor.role, CAPABILITIES.INCIDENT_READ_ALL)
@@ -119,7 +123,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 currentUserName={currentUserName}
               />
             }
-            rail={<OpsPulsePanel />}
+            rail={
+              <OpsPulsePanel
+                aiops={aiopsPulse ? <AiopsPulseTile pulse={aiopsPulse} /> : undefined}
+              />
+            }
           />
 
           <DashboardHistorySection />

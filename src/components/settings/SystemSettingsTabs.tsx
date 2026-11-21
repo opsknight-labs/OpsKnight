@@ -54,7 +54,12 @@ export default function SystemSettingsTabs({
             label: 'Overview',
             icon: <Activity className="h-3.5 w-3.5" />,
             badge: (
-              <span className={cn('rounded-full border px-1.5 py-0.5 text-2xs font-semibold', toneClasses('ok').soft)}>
+              <span
+                className={cn(
+                  'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+                  toneClasses('ok').soft
+                )}
+              >
                 Live
               </span>
             ),
@@ -77,7 +82,12 @@ export default function SystemSettingsTabs({
       label: 'App URL',
       icon: <Globe className="h-3.5 w-3.5" />,
       badge: !appUrlConfigured ? (
-        <span className={cn('rounded-full border px-1.5 py-0.5 text-2xs font-semibold', toneClasses('elevated').soft)}>
+        <span
+          className={cn(
+            'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+            toneClasses('elevated').soft
+          )}
+        >
           Fallback
         </span>
       ) : undefined,
@@ -88,7 +98,12 @@ export default function SystemSettingsTabs({
       label: 'SSO / Authentication',
       icon: <Shield className="h-3.5 w-3.5" />,
       badge: ssoEnabled ? (
-        <span className={cn('rounded-full border px-1.5 py-0.5 text-2xs font-semibold', toneClasses('ok').soft)}>
+        <span
+          className={cn(
+            'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+            toneClasses('ok').soft
+          )}
+        >
           Enabled
         </span>
       ) : undefined,
@@ -101,11 +116,21 @@ export default function SystemSettingsTabs({
             label: 'SCIM Provisioning',
             icon: <UserCheck className="h-3.5 w-3.5" />,
             badge: scimEnabled ? (
-              <span className={cn('rounded-full border px-1.5 py-0.5 text-2xs font-semibold', toneClasses('ok').soft)}>
+              <span
+                className={cn(
+                  'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+                  toneClasses('ok').soft
+                )}
+              >
                 Active
               </span>
             ) : (
-              <span className={cn('rounded-full border px-1.5 py-0.5 text-2xs font-semibold', toneClasses(null).soft)}>
+              <span
+                className={cn(
+                  'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+                  toneClasses(null).soft
+                )}
+              >
                 SCIM 2.0
               </span>
             ),
@@ -124,7 +149,12 @@ export default function SystemSettingsTabs({
       label: 'Environment',
       icon: <Key className="h-3.5 w-3.5" />,
       badge: !allEnvOk ? (
-        <span className={cn('rounded-full border px-1.5 py-0.5 text-2xs font-semibold', toneClasses('critical').soft)}>
+        <span
+          className={cn(
+            'rounded-full border px-1.5 py-0.5 text-2xs font-semibold',
+            toneClasses('critical').soft
+          )}
+        >
           {missingCount} missing
         </span>
       ) : undefined,

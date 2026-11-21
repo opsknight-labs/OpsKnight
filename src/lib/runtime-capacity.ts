@@ -27,6 +27,8 @@ export interface CapacityEnv {
   STATUS_PROJECTOR_REPLICAS?: string;
   PROJECTOR_REPLICAS?: string;
   DATABASE_POOL_SIZE_STATUS_PROJECTOR?: string;
+  INTELLIGENCE_WORKER_REPLICAS?: string;
+  DATABASE_POOL_SIZE_INTELLIGENCE_WORKER?: string;
   INGESTION_WORKER_REPLICAS?: string;
   DATABASE_POOL_SIZE_INGESTION_WORKER?: string;
   DATABASE_CONNECTION_RESERVE?: string;
@@ -47,6 +49,7 @@ export interface CapacityAnalysisResult {
   headroom: number;
   breakdown: {
     mcp: { replicas: number; pool: number; total: number };
+    intelligence: { replicas: number; pool: number; total: number };
     ingestionWorker: { replicas: number; pool: number; total: number };
     web: { replicas: number; pool: number; effective: number };
     pgbouncer: { replicas: number; defaultPool: number; reserve: number } | null;

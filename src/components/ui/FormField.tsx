@@ -18,15 +18,7 @@ interface BaseFormFieldProps {
 interface InputFormFieldProps extends BaseFormFieldProps {
   type: 'input';
   inputType?:
-    | 'text'
-    | 'email'
-    | 'password'
-    | 'number'
-    | 'tel'
-    | 'url'
-    | 'search'
-    | 'date'
-    | 'datetime-local';
+    'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'search' | 'date' | 'datetime-local';
   placeholder?: string;
   value?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -59,10 +51,7 @@ interface SwitchFormFieldProps extends BaseFormFieldProps {
 }
 
 type FormFieldProps =
-  | InputFormFieldProps
-  | TextareaFormFieldProps
-  | SelectFormFieldProps
-  | SwitchFormFieldProps;
+  InputFormFieldProps | TextareaFormFieldProps | SelectFormFieldProps | SwitchFormFieldProps;
 
 /**
  * FormField wrapper component for consistent form inputs

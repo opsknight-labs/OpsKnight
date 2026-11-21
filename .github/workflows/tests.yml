@@ -16,6 +16,9 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   # Pull requests run only this file's light gate (static checks, unit, database
   # integration, build). Browser E2E lives in e2e.yml; heavy certification suites

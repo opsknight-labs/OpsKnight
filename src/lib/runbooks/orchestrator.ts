@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { buildExecutionPreview, checkExecutionReadiness } from './execution-preview';
 import type { IncidentEventType, Prisma, RunbookExecutionStep } from '@prisma/client';
 import { z } from 'zod/v3';
+import { PREPAGING_LIMITS } from '@/lib/intelligence/noise-controls/contract';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { safeOutboundFetch } from '@/lib/network-security';
@@ -87,6 +88,10 @@ const jobPayloadSchema = z.discriminatedUnion('kind', [
       incidentId: z.string().cuid(),
       sourceEventId: z.string().min(1).max(200),
       source: z.string().max(40).optional(),
+      attachRunbookIds: z
+        .array(z.string().min(1).max(100))
+        .max(PREPAGING_LIMITS.maxAttachRunbooks)
+        .optional(),
     })
     .strict(),
 ]);
@@ -220,6 +225,10 @@ export async function previewRunbookExecution(
 }
 
 export const INCIDENT_NOT_OPEN = 'INCIDENT_NOT_OPEN';
+export const BINDING_RATE_LIMITED = 'BINDING_RATE_LIMITED';
+/** A storm can open many incidents at once; one automatic rule starts at most this many runs per window. */
+const AUTOMATIC_RULE_RATE_LIMIT = 5;
+const AUTOMATIC_RULE_RATE_WINDOW_MS = 10 * 60_000;
 
 /**
  * Takes the same row lock the lifecycle UPDATE takes (FOR NO KEY UPDATE), so automatic
@@ -250,6 +259,10 @@ async function prepareRunbookExecution(
         throw new RunbookDefinitionError(
           'AUTOMATION_NOT_AUTHORIZED: Incident, service and matching enabled trigger are required.'
         );
+      // Lock order: rule rate lock, then the incident row. A storm queues on the rule without holding
+      // incident rows that ingestion and responders need.
+      if (input.bindingId)
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-binding-rate:${input.bindingId}`}))`;
       const incidentLock = await lockOpenIncidentForAutomation(tx, input.incidentId);
       if (!incidentLock.open) throw new RunbookDefinitionError(incidentLock.reason);
     }
@@ -655,6 +668,21 @@ async function prepareRunbookExecution(
         throw new RunbookDefinitionError(
           'TRIGGER_ALREADY_HANDLED: this incident already started an automatic execution for the binding.'
         );
+      if (mode === 'AUTOMATIC' && binding) {
+        // Serialized per rule (rate lock taken first, above) so concurrent incidents cannot both take the last slot.
+        const recentRuns = await tx.runbookExecution.count({
+          where: {
+            serviceId: binding.serviceId,
+            bindingId: binding.id,
+            triggeredByUserId: null,
+            createdAt: { gte: new Date(Date.now() - AUTOMATIC_RULE_RATE_WINDOW_MS) },
+          },
+        });
+        if (recentRuns >= AUTOMATIC_RULE_RATE_LIMIT)
+          throw new RunbookDefinitionError(
+            `${BINDING_RATE_LIMITED}: ${recentRuns} automatic runs of this rule in the last 10 minutes.`
+          );
+      }
     }
     if (!input.triggeredByUserId && hasWriteAction) {
       if (!resolvedServiceId) {
@@ -1954,5 +1982,6 @@ export async function processRunbookJob(raw: unknown): Promise<void> {
   const { evaluateIncidentTriggers } = await import('./triggers');
   await evaluateIncidentTriggers(payload.incidentId, payload.sourceEventId, {
     source: payload.source,
+    attachRunbookIds: payload.attachRunbookIds,
   });
 }

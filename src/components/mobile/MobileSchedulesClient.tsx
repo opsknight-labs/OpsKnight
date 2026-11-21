@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { CalendarClock, ChevronRight, UsersRound } from 'lucide-react';
 import MobileCachedDataNotice from '@/components/mobile/MobileCachedDataNotice';
@@ -17,7 +17,14 @@ type Schedule = { id: string; name: string; layers: ScheduleLayer[] };
 
 const CACHE_KEY = 'mobile-schedules';
 
-export default function MobileSchedulesClient({ initialSchedules }: { initialSchedules: Schedule[] }) {
+export default function MobileSchedulesClient({
+  initialSchedules,
+  myLoad,
+}: {
+  initialSchedules: Schedule[];
+  /** The signed-in person's "My on-call load" card, streamed from the server; absent when off. */
+  myLoad?: ReactNode;
+}) {
   const [schedules, setSchedules] = useState<Schedule[]>(initialSchedules);
   const [cachedAt, setCachedAt] = useState<Date | null>(null);
 
@@ -49,7 +56,8 @@ export default function MobileSchedulesClient({ initialSchedules }: { initialSch
   }, [initialSchedules]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && navigator.onLine) void writeCache(CACHE_KEY, initialSchedules);
+    if (typeof window !== 'undefined' && navigator.onLine)
+      void writeCache(CACHE_KEY, initialSchedules);
   }, [initialSchedules]);
 
   const totalLayers = schedules.reduce((sum, schedule) => sum + schedule.layers.length, 0);
@@ -58,9 +66,15 @@ export default function MobileSchedulesClient({ initialSchedules }: { initialSch
     <div className="responsive-page space-y-4">
       <MobileCachedDataNotice savedAt={cachedAt} />
       <section className="flex items-center justify-between gap-3 px-0.5 text-[11px] text-muted-foreground">
-        <span>{schedules.length} {schedules.length === 1 ? 'schedule' : 'schedules'}</span>
-        <span>{totalLayers} escalation {totalLayers === 1 ? 'layer' : 'layers'}</span>
+        <span>
+          {schedules.length} {schedules.length === 1 ? 'schedule' : 'schedules'}
+        </span>
+        <span>
+          {totalLayers} escalation {totalLayers === 1 ? 'layer' : 'layers'}
+        </span>
       </section>
+
+      {myLoad}
 
       {schedules.length === 0 ? (
         <EmptyState
@@ -72,7 +86,10 @@ export default function MobileSchedulesClient({ initialSchedules }: { initialSch
       ) : (
         <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
           {schedules.map((schedule, index) => {
-            const totalParticipants = schedule.layers.reduce((count, layer) => count + layer.users.length, 0);
+            const totalParticipants = schedule.layers.reduce(
+              (count, layer) => count + layer.users.length,
+              0
+            );
             const firstResponder = schedule.layers[0]?.users[0]?.user;
             return (
               <Link
@@ -85,7 +102,9 @@ export default function MobileSchedulesClient({ initialSchedules }: { initialSch
                   <CalendarClock className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-semibold text-foreground">{schedule.name}</span>
+                  <span className="block truncate text-[13px] font-semibold text-foreground">
+                    {schedule.name}
+                  </span>
                   <span className="mt-1 flex min-w-0 items-center gap-1.5 truncate text-[11px] text-muted-foreground">
                     <UsersRound className="h-3 w-3 shrink-0" aria-hidden="true" />
                     <span className="truncate">
@@ -99,7 +118,10 @@ export default function MobileSchedulesClient({ initialSchedules }: { initialSch
                     {schedule.layers.length} {schedule.layers.length === 1 ? 'layer' : 'layers'}
                   </span>
                 </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
               </Link>
             );
           })}

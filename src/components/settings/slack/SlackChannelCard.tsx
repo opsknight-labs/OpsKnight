@@ -120,10 +120,7 @@ export function SlackChannelCard({
             </Button>
           </>
         ) : isPrivate ? (
-          <Badge
-            variant="outline"
-            className={cn('gap-1', toneClasses('elevated').soft)}
-          >
+          <Badge variant="outline" className={cn('gap-1', toneClasses('elevated').soft)}>
             <Lock className="h-3 w-3" />
             Invite Required
           </Badge>

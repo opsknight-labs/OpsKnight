@@ -218,7 +218,12 @@ export default function JiraIntegrationPage({
     <form action={formAction} className="space-y-6">
       <McpUnsavedChangesGuard dirty={isDirty} />
       {state?.code === 'SETTINGS_CHANGED' && (
-        <div className={cn('rounded-lg border p-4 text-sm flex items-start justify-between gap-4', toneClasses('elevated').soft)}>
+        <div
+          className={cn(
+            'rounded-lg border p-4 text-sm flex items-start justify-between gap-4',
+            toneClasses('elevated').soft
+          )}
+        >
           <div className="flex gap-2 min-w-0">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
@@ -250,7 +255,6 @@ export default function JiraIntegrationPage({
           </div>
         </div>
       )}
-
 
       <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -497,7 +501,12 @@ export default function JiraIntegrationPage({
         <div className="space-y-2">
           <Label htmlFor="jiraWebhookEndpoint">OpsKnight Webhook Endpoint</Label>
           <div className="flex gap-2">
-            <Input id="jiraWebhookEndpoint" value={webhookUrl} readOnly className="font-mono text-xs" />
+            <Input
+              id="jiraWebhookEndpoint"
+              value={webhookUrl}
+              readOnly
+              className="font-mono text-xs"
+            />
             <Button type="button" variant="outline" onClick={() => copyValue(webhookUrl, 'base')}>
               <Copy className="h-4 w-4" />
               {copied === 'base' ? 'Copied' : 'Copy URL'}

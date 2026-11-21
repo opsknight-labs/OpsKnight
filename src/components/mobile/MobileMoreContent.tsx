@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import {
   BarChart3,
   BookOpen,
@@ -13,6 +13,7 @@ import {
   Settings,
   ShieldCheck,
   Signal,
+  Sparkles,
   Users,
   UsersRound,
   Wrench,
@@ -47,6 +48,8 @@ type MobileMoreContentProps = {
   role: string;
   gender?: string | null;
   avatarUrl?: string | null;
+  /** Server-rendered personal noise card; absent while the Notifications area is off. */
+  noise?: ReactNode;
 };
 
 const operations: NavigationItem[] = [
@@ -81,6 +84,13 @@ const operations: NavigationItem[] = [
     label: 'Analytics',
     description: 'Response times, SLA, load and noise',
     icon: BarChart3,
+  },
+  {
+    // Shown by the page access rule (intelligence.read), like every other entry.
+    href: '/m/intelligence',
+    label: 'AIOps',
+    description: 'Noise held back and what needs attention',
+    icon: Sparkles,
   },
   {
     href: '/m/users',
@@ -152,6 +162,7 @@ export default function MobileMoreContent({
   role,
   gender,
   avatarUrl: avatarUrlProp,
+  noise,
 }: MobileMoreContentProps) {
   const { getAvatar } = useUserAvatarContextSafe();
   const avatarUrl = userId ? getAvatar(userId, gender, name, avatarUrlProp) : avatarUrlProp;
@@ -197,6 +208,7 @@ export default function MobileMoreContent({
           <MobileThemeToggle />
           <MobileBiometricToggle />
           <PushNotificationToggle />
+          {noise}
         </div>
       </Section>
 

@@ -5,6 +5,12 @@ import StatusPageAnnouncementManager, {
   type AnnouncementItem,
 } from '@/components/status-page/StatusPageAnnouncementManager';
 
+// The draft and cadence helpers call server actions; real ones would reach the database and log through fetch.
+vi.mock('@/app/(app)/settings/status-pages/helper-actions', () => ({
+  loadStatusDraftsAction: vi.fn().mockResolvedValue([]),
+  saveUpdateCadenceAction: vi.fn(),
+}));
+
 const mockAnnouncements: AnnouncementItem[] = [
   {
     id: 'ann-1',
@@ -146,7 +152,9 @@ describe('StatusPageAnnouncementManager Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
     const dialog = await screen.findByRole('dialog');
 
-    const titleInput = within(dialog).getByPlaceholderText(/Scheduled Database Maintenance Window/i);
+    const titleInput = within(dialog).getByPlaceholderText(
+      /Scheduled Database Maintenance Window/i
+    );
     const messageInput = within(dialog).getByPlaceholderText(/Describe the scope/i);
 
     fireEvent.change(titleInput, { target: { value: 'Test Window' } });
@@ -345,7 +353,9 @@ describe('StatusPageAnnouncementManager Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
     const dialog = await screen.findByRole('dialog');
 
-    const titleInput = within(dialog).getByPlaceholderText(/Scheduled Database Maintenance Window/i);
+    const titleInput = within(dialog).getByPlaceholderText(
+      /Scheduled Database Maintenance Window/i
+    );
     const messageInput = within(dialog).getByPlaceholderText(/Describe the scope/i);
 
     fireEvent.change(titleInput, { target: { value: 'Resolved Database Incident' } });

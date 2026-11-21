@@ -150,7 +150,9 @@ describeIfRealDB('weekly analytics email', { timeout: 60_000 }, () => {
   async function seed() {
     const now = new Date();
     const team = await createTestTeam('payments');
-    const service = await testPrisma.service.create({ data: { name: 'payments-api', teamId: team.id } });
+    const service = await testPrisma.service.create({
+      data: { name: 'payments-api', teamId: team.id },
+    });
     const other = await testPrisma.service.create({ data: { name: 'ledger', teamId: team.id } });
     // Outside the recipient's teams: must not leak into their report.
     const hidden = await testPrisma.service.create({ data: { name: 'hidden-svc' } });
@@ -181,7 +183,12 @@ describeIfRealDB('weekly analytics email', { timeout: 60_000 }, () => {
     const user = await createTestUser({ name: 'Sam', emailNotificationsEnabled: true });
     await testPrisma.teamMember.create({ data: { teamId: team.id, userId: user.id } });
     const view = await testPrisma.analyticsView.create({
-      data: { name: 'High urgency', query: 'urgency=HIGH&range=90d', userId: user.id, emailWeekly: true },
+      data: {
+        name: 'High urgency',
+        query: 'urgency=HIGH&range=90d',
+        userId: user.id,
+        emailWeekly: true,
+      },
     });
     return { now, user, view, service };
   }
@@ -223,7 +230,9 @@ describeIfRealDB('weekly analytics email', { timeout: 60_000 }, () => {
     expect(payload.html).toContain(services[0].name);
     expect(trend).toHaveLength(7);
     expect(payload.html).toContain('Incidents rose to 3 from 1');
-    expect(payload.html).toMatch(/from=\d{4}-\d{2}-\d{2}&amp;to=\d{4}-\d{2}-\d{2}&amp;urgency=HIGH/);
+    expect(payload.html).toMatch(
+      /from=\d{4}-\d{2}-\d{2}&amp;to=\d{4}-\d{2}-\d{2}&amp;urgency=HIGH/
+    );
     expect(payload.html).not.toContain('hidden-svc');
 
     // Restart in the same week: nothing new, even if lastSentAt was lost.

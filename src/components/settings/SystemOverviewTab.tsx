@@ -102,19 +102,14 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 <Database className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-2xs font-medium text-muted-foreground">
-                  PostgreSQL Connection
-                </p>
+                <p className="text-2xs font-medium text-muted-foreground">PostgreSQL Connection</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className={cn('flex h-1.5 w-1.5 rounded-full', toneClasses('ok').solid)} />
                   <span className="text-xs font-semibold text-foreground">Connected</span>
                 </div>
               </div>
             </div>
-            <Badge
-              variant="outline"
-              className="text-2xs font-mono tabular-nums"
-            >
+            <Badge variant="outline" className="text-2xs font-mono tabular-nums">
               {metrics.dbPingMs ?? metrics.dbLatencyMs} ms ping
             </Badge>
           </div>
@@ -140,10 +135,7 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 </p>
               </div>
             </div>
-            <Badge
-              variant="outline"
-              className="text-2xs font-mono tabular-nums"
-            >
+            <Badge variant="outline" className="text-2xs font-mono tabular-nums">
               {heapPct}% heap
             </Badge>
           </div>
@@ -184,10 +176,7 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 </div>
               </div>
             </div>
-            <Badge
-              variant="outline"
-              className="text-2xs font-mono capitalize"
-            >
+            <Badge variant="outline" className="text-2xs font-mono capitalize">
               Node {metrics.nodeVersion}
             </Badge>
           </div>
@@ -204,9 +193,7 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 <ShieldCheck className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-2xs font-medium text-muted-foreground">
-                  Encryption & Envelope
-                </p>
+                <p className="text-2xs font-medium text-muted-foreground">Encryption & Envelope</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span
                     className={cn(
@@ -416,10 +403,7 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 </div>
                 <h4 className="text-xs font-semibold text-foreground">SSO / Authentication</h4>
               </div>
-              <Badge
-                variant={subsystems.ssoEnabled ? 'success' : 'neutral'}
-                className="text-2xs"
-              >
+              <Badge variant={subsystems.ssoEnabled ? 'success' : 'neutral'} className="text-2xs">
                 {subsystems.ssoEnabled ? 'Enabled' : 'Password Only'}
               </Badge>
             </div>
@@ -458,10 +442,7 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 </div>
                 <h4 className="text-xs font-semibold text-foreground">SCIM 2.0 Provisioning</h4>
               </div>
-              <Badge
-                variant={subsystems.scimEnabled ? 'success' : 'neutral'}
-                className="text-2xs"
-              >
+              <Badge variant={subsystems.scimEnabled ? 'success' : 'neutral'} className="text-2xs">
                 {subsystems.scimEnabled ? 'Active' : 'Standby'}
               </Badge>
             </div>
@@ -495,10 +476,7 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 </div>
                 <h4 className="text-xs font-semibold text-foreground">Data Retention</h4>
               </div>
-              <Badge
-                variant="outline"
-                className="text-2xs"
-              >
+              <Badge variant="outline" className="text-2xs">
                 5 Policies
               </Badge>
             </div>
@@ -538,10 +516,7 @@ export default function SystemOverviewTab({ metrics, subsystems, onNavigateTab }
                 </div>
                 <h4 className="text-xs font-semibold text-foreground">Environment Secrets</h4>
               </div>
-              <Badge
-                variant={subsystems.allEnvOk ? 'success' : 'destructive'}
-                className="text-2xs"
-              >
+              <Badge variant={subsystems.allEnvOk ? 'success' : 'destructive'} className="text-2xs">
                 {subsystems.allEnvOk ? 'All Set' : `${subsystems.missingCount} Missing`}
               </Badge>
             </div>

@@ -6,7 +6,16 @@ import { z } from 'zod';
  * everywhere and unknown values are dropped instead of trusted.
  */
 
-export const ANALYTICS_RANGES = ['24h', '7d', '30d', '90d', '180d', '365d', '730d', '1095d'] as const;
+export const ANALYTICS_RANGES = [
+  '24h',
+  '7d',
+  '30d',
+  '90d',
+  '180d',
+  '365d',
+  '730d',
+  '1095d',
+] as const;
 export type AnalyticsRange = (typeof ANALYTICS_RANGES)[number] | 'custom';
 export const DEFAULT_ANALYTICS_RANGE: AnalyticsRange = '30d';
 
@@ -40,11 +49,7 @@ export type AnalyticsParams = {
   assignee?: string;
 };
 
-type RawParams =
-  | URLSearchParams
-  | Record<string, string | string[] | undefined>
-  | null
-  | undefined;
+type RawParams = URLSearchParams | Record<string, string | string[] | undefined> | null | undefined;
 
 const id = z
   .string()
@@ -91,7 +96,9 @@ function legacyRange(value: string | undefined): AnalyticsRange | undefined {
 
 export function parseAnalyticsParams(raw: RawParams): AnalyticsParams {
   let range: AnalyticsRange =
-    legacyRange(first(raw, 'range')) ?? legacyRange(first(raw, 'window')) ?? DEFAULT_ANALYTICS_RANGE;
+    legacyRange(first(raw, 'range')) ??
+    legacyRange(first(raw, 'window')) ??
+    DEFAULT_ANALYTICS_RANGE;
   let from: Date | undefined;
   let to: Date | undefined;
 
@@ -156,11 +163,11 @@ export function analyticsParamsKey(params: AnalyticsParams): string {
 export function hasActiveAnalyticsFilters(params: AnalyticsParams): boolean {
   return Boolean(
     params.teams.length ||
-      params.services.length ||
-      params.priorities.length ||
-      params.urgency ||
-      params.status ||
-      params.assignee
+    params.services.length ||
+    params.priorities.length ||
+    params.urgency ||
+    params.status ||
+    params.assignee
   );
 }
 

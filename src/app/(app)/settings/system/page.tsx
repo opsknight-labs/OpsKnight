@@ -408,9 +408,7 @@ export default async function SystemSettingsPage() {
             <div
               key={row.key}
               className={`relative flex flex-col justify-between rounded-xl border p-4 transition-all duration-150 ${
-                row.ok
-                  ? 'border-border bg-card'
-                  : 'border-rose-500/40 bg-rose-500/5'
+                row.ok ? 'border-border bg-card' : 'border-rose-500/40 bg-rose-500/5'
               }`}
             >
               <div className="space-y-2">
@@ -418,9 +416,7 @@ export default async function SystemSettingsPage() {
                   <div className="flex items-center gap-2 min-w-0">
                     <div
                       className={`p-1.5 rounded-md shrink-0 ${
-                        row.ok
-                          ? 'bg-muted text-muted-foreground'
-                          : 'bg-muted text-muted-foreground'
+                        row.ok ? 'bg-muted text-muted-foreground' : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {row.icon}
@@ -452,9 +448,7 @@ export default async function SystemSettingsPage() {
 
               <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-2xs text-muted-foreground gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-2xs text-muted-foreground/80">
-                    {row.scope}
-                  </span>
+                  <span className="font-mono text-2xs text-muted-foreground/80">{row.scope}</span>
                   <span className="text-2xs rounded bg-muted/60 px-1.5 py-0.5 border border-border/50 text-muted-foreground font-medium">
                     {row.source}
                   </span>

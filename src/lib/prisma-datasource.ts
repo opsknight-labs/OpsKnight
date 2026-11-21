@@ -1,4 +1,4 @@
-import { isDedicatedHttpRole } from './runtime-role';
+import { getOpsKnightProcessRole, isDedicatedHttpRole } from './runtime-role';
 
 const DEFAULT_POOL_SIZE = 10;
 
@@ -93,5 +93,176 @@ export function configurePrismaDatasource(
     // Preserve provider-specific Prisma URLs that the WHATWG parser does not
     // understand. Prisma will surface any genuine configuration error.
     return rawUrl;
+  }
+}
+
+/**
+ * Route for the pre-paging noise-control lookup pool. Its per-connection statement timeout is a startup
+ * option, which transaction poolers may discard, so like MCP it prefers the direct route.
+ */
+export function selectPrePagingLookupDatasourceUrl(
+  env: { DIRECT_DATABASE_URL?: string; DATABASE_URL?: string } = {
+    DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL,
+    DATABASE_URL: process.env.DATABASE_URL,
+  }
+): string | undefined {
+  return env.DIRECT_DATABASE_URL ?? env.DATABASE_URL;
+}
+
+/** The role-specific pool size setting for this process, when one is set. */
+export function rolePoolSize(): string | undefined {
+  switch (getOpsKnightProcessRole()) {
+    case 'integrated':
+      return process.env.DATABASE_POOL_SIZE_INTEGRATED;
+    case 'web':
+    case 'http':
+      return process.env.DATABASE_POOL_SIZE_WEB;
+    case 'scheduler':
+      return process.env.DATABASE_POOL_SIZE_SCHEDULER;
+    case 'worker':
+      return process.env.DATABASE_POOL_SIZE_WORKER;
+    case 'general-worker':
+      return process.env.DATABASE_POOL_SIZE_GENERAL_WORKER;
+    case 'critical-worker':
+      return process.env.DATABASE_POOL_SIZE_CRITICAL_WORKER;
+    case 'bulk-worker':
+      return process.env.DATABASE_POOL_SIZE_BULK_WORKER;
+    case 'status-projector':
+      return process.env.DATABASE_POOL_SIZE_STATUS_PROJECTOR;
+    case 'runbook-worker':
+      return process.env.DATABASE_POOL_SIZE_RUNBOOK_WORKER;
+    case 'ingestion-worker':
+      return process.env.DATABASE_POOL_SIZE_INGESTION_WORKER;
+    case 'intelligence-worker':
+      return process.env.DATABASE_POOL_SIZE_INTELLIGENCE_WORKER;
+  }
+}
+
+/** The connection limit the primary Prisma client is configured with in this process. */
+export function primaryPoolSize(): number {
+  const configured = configurePrismaDatasource(
+    selectPrismaDatasourceUrl(getOpsKnightProcessRole()),
+    rolePoolSize() ?? process.env.DATABASE_POOL_SIZE
+  );
+  try {
+    return poolSize(new URL(configured ?? '').searchParams.get('connection_limit') ?? undefined);
+  } catch {
+    return DEFAULT_POOL_SIZE;
+  }
+}
+
+/**
+ * Pre-paging lookup connections per process: `PREPAGING_LOOKUP_POOL_SIZE` (1-32) when valid, otherwise a
+ * quarter of the main pool, 2-8. An event holds one lookup connection for about a millisecond and no more
+ * events can be in the hook than the main pool has connections. Measured at concurrency 16, fail-open came
+ * from cold connections and per-query client overhead, not from waiting for one: 16 connections failed
+ * open more often than 2-5, because each new connection is cold. See docs/architecture/intelligence.md.
+ */
+export function prePagingLookupPoolSize(
+  mainPoolSize: number,
+  configured: string | undefined = process.env.PREPAGING_LOOKUP_POOL_SIZE
+): number {
+  const explicit = Number(configured);
+  if (configured?.trim() && Number.isInteger(explicit) && explicit >= 1 && explicit <= 32)
+    return explicit;
+  return Math.min(8, Math.max(2, Math.ceil(mainPoolSize / 4)));
+}
+
+/**
+ * Set (to `1`) only in the environment of the child process that runs the intelligence lane for an
+ * `integrated` process (see intelligence/jobs/lane-thread.ts). That process's Prisma client is the lane's
+ * own pool. Internal: operators never set it.
+ */
+export const INTELLIGENCE_LANE_THREAD_ENV = 'OPSKNIGHT_INTELLIGENCE_LANE_THREAD';
+
+export function isIntelligenceLaneThread(
+  value: string | undefined = process.env.OPSKNIGHT_INTELLIGENCE_LANE_THREAD
+): boolean {
+  return value === '1';
+}
+
+/** The environment of a lane thread: this process's, marked as the lane's (see `isIntelligenceLaneThread`). */
+export function intelligenceLaneThreadEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  data: object = {}
+): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    [INTELLIGENCE_LANE_THREAD_ENV]: '1',
+    [INTELLIGENCE_LANE_DATA_ENV]: JSON.stringify(data),
+  };
+}
+
+/** Extra data (JSON) a benchmark or test hands its own lane entry. Internal. */
+export const INTELLIGENCE_LANE_DATA_ENV = 'OPSKNIGHT_INTELLIGENCE_LANE_DATA';
+
+/** The extra data the parent gave this lane process (an empty object when none). */
+export function intelligenceLaneThreadData<T extends object>(
+  env: NodeJS.ProcessEnv = process.env
+): Partial<T> {
+  // eslint-disable-next-line security/detect-object-injection -- constant environment variable name
+  return JSON.parse(env[INTELLIGENCE_LANE_DATA_ENV] || '{}') as Partial<T>;
+}
+
+/** `next dev`: it recompiles the app but never the lane bundle, so the lane stays in-process there. */
+export function isNextDevelopment(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV === 'development';
+}
+
+/**
+ * `INTELLIGENCE_LANE_THREAD`: `off` keeps an `integrated` process's lane on its main thread; anything else
+ * (the default) runs it in a child process when the build includes the thread bundle.
+ */
+export function intelligenceLaneThreadMode(
+  value: string | undefined = process.env.INTELLIGENCE_LANE_THREAD
+): 'auto' | 'off' {
+  return value?.trim().toLowerCase() === 'off' ? 'off' : 'auto';
+}
+
+/** Connections the intelligence lane uses on its own when it shares a process with ingestion. */
+export const DEFAULT_INTELLIGENCE_LANE_POOL_SIZE = 10;
+/** A lane pool always keeps one connection beside a running handler (claims, lease renewal, cancel). */
+const MIN_INTELLIGENCE_LANE_POOL_SIZE = 2;
+const MAX_INTELLIGENCE_LANE_POOL_SIZE = 16;
+
+/**
+ * Size of the intelligence lane's own pool in a shared process (`integrated`, `worker`,
+ * `general-worker`). `0` keeps the lane on the process pool, the behaviour before the pool existed.
+ * The dedicated `intelligence-worker` role never uses it: the whole process is the lane there.
+ * Values that are not an integer between 0 and 16 fall back to the default; 1 is raised to 2.
+ */
+export function intelligenceLanePoolSize(
+  value: string | undefined = process.env.INTELLIGENCE_LANE_DATABASE_POOL_SIZE
+): number {
+  const trimmed = value?.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) return DEFAULT_INTELLIGENCE_LANE_POOL_SIZE;
+  const parsed = Number(trimmed);
+  if (parsed === 0) return 0;
+  return parsed <= MAX_INTELLIGENCE_LANE_POOL_SIZE
+    ? Math.max(MIN_INTELLIGENCE_LANE_POOL_SIZE, parsed)
+    : DEFAULT_INTELLIGENCE_LANE_POOL_SIZE;
+}
+
+/** The lane pool reads the same datasource as the process, with its own connection limit. */
+export function configureIntelligenceLanePrismaDatasource(
+  rawUrl: string | undefined,
+  size: number,
+  transactionPooler = false
+): string | undefined {
+  const configured = configurePrismaDatasource(
+    rawUrl,
+    String(Math.max(MIN_INTELLIGENCE_LANE_POOL_SIZE, size)),
+    transactionPooler
+  );
+  if (!configured) return configured;
+  try {
+    // Named so operators can tell the lane's connections apart in pg_stat_activity.
+    const url = new URL(configured);
+    if (!url.searchParams.has('application_name')) {
+      url.searchParams.set('application_name', 'opsknight-intelligence-lane');
+    }
+    return url.toString();
+  } catch {
+    return configured;
   }
 }

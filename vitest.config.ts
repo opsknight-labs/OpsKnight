@@ -26,6 +26,7 @@ export default defineConfig({
       '**/.claude/**',
       '**/.next/**',
       'tests/e2e/**',
+      'tests/evals/**',
       'tests/ingestion/**',
       'tests/docs/journeys/**',
       'tests/readme/**',

@@ -4,7 +4,9 @@ import { drillInputSchema, encodeDrillCursor } from '@/lib/analytics/drilldown';
 describe('analytics drill-down input', () => {
   it('defaults to all incidents and round-trips a cursor', () => {
     const createdAt = new Date('2026-01-15T18:00:00.123Z');
-    const parsed = drillInputSchema.parse({ cursor: encodeDrillCursor({ createdAt, id: 'clx_1-a' }) });
+    const parsed = drillInputSchema.parse({
+      cursor: encodeDrillCursor({ createdAt, id: 'clx_1-a' }),
+    });
     expect(parsed).toEqual({ drill: 'all', cursor: { createdAt, id: 'clx_1-a' } });
   });
 

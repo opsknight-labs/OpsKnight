@@ -111,6 +111,47 @@ describe('incident lifecycle command engine', () => {
     );
   });
 
+  it('stamps the page an acknowledgement arrived through, inside the same transaction', async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    Object.assign(tx, { notification: { updateMany } });
+    tx.incident.findUnique.mockResolvedValue(snapshot());
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-page',
+      command: 'ACKNOWLEDGE',
+      source: 'VOICE',
+      ackedNotification: { id: 'ntf-1', via: 'VOICE', userId: 'user-1' },
+      now: NOW,
+    });
+
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'ntf-1', incidentId: 'inc-page', userId: 'user-1', ackedAt: null },
+      data: { ackedAt: NOW, ackedVia: 'VOICE' },
+    });
+  });
+
+  it('writes nothing to notifications for an acknowledgement that names no page, or another command', async () => {
+    const updateMany = vi.fn();
+    Object.assign(tx, { notification: { updateMany } });
+    tx.incident.findUnique.mockResolvedValue(snapshot());
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-page',
+      command: 'ACKNOWLEDGE',
+      source: 'WEB',
+      now: NOW,
+    });
+    tx.incident.findUnique.mockResolvedValue(snapshot());
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-page',
+      command: 'SUPPRESS',
+      source: 'WEB',
+      ackedNotification: { id: 'ntf-1', via: 'PUSH', userId: 'user-1' },
+      now: NOW,
+    });
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
   it('treats duplicate ACK as a no-op before stale expectedStatus checks', async () => {
     tx.incident.findUnique.mockResolvedValue(
       snapshot({ status: 'ACKNOWLEDGED', acknowledgedAt: new Date(NOW.getTime() - 60_000) })

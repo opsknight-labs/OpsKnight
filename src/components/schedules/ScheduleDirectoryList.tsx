@@ -14,6 +14,7 @@ import UserAvatar from '@/components/UserAvatar';
 import { Calendar, CheckCircle2, AlertTriangle, Loader2, Network, Users } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/service/Pagination';
+import type { OpsInsightCount } from '@/lib/intelligence/ops-insights/contract';
 import {
   DirectoryCardGrid,
   DirectoryGuide,
@@ -62,6 +63,8 @@ type ScheduleDirectoryListProps = {
   };
   currentSearch?: string;
   currentStatus?: string;
+  /** Open operations insights per schedule id; schedules without any are absent. */
+  insightCounts?: Record<string, OpsInsightCount>;
 };
 
 function Responder({ responder }: { responder: ScheduleResponder }) {
@@ -229,6 +232,7 @@ export default function ScheduleDirectoryList({
   filterCounts,
   currentSearch = '',
   currentStatus = 'all',
+  insightCounts,
 }: ScheduleDirectoryListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -413,7 +417,11 @@ export default function ScheduleDirectoryList({
         ) : (
           <DirectoryCardGrid>
             {schedules.map(schedule => (
-              <ScheduleCard key={schedule.id} schedule={schedule} />
+              <ScheduleCard
+                key={schedule.id}
+                schedule={schedule}
+                insights={insightCounts?.[schedule.id]}
+              />
             ))}
           </DirectoryCardGrid>
         )}

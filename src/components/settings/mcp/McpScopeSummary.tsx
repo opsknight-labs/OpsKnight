@@ -72,9 +72,7 @@ function McpScopeSummary({
           />
           <span
             className={cn(
-              usableCount !== null &&
-                usableCount < scopes.length &&
-                toneClasses('elevated').text
+              usableCount !== null && usableCount < scopes.length && toneClasses('elevated').text
             )}
           >
             {chipText}

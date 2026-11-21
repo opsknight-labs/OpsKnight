@@ -68,7 +68,9 @@ describe('getTeamsGrantedRscPermissions probe scheduling', () => {
 
     const pending = getTeamsGrantedRscPermissions();
     await vi.waitFor(() =>
-      expect(vi.mocked(global.fetch).mock.calls.some(([u]) => String(u).includes('team-9'))).toBe(true)
+      expect(vi.mocked(global.fetch).mock.calls.some(([u]) => String(u).includes('team-9'))).toBe(
+        true
+      )
     );
     controllers.at(-1)!.abort(new Error('deadline'));
     const state = await pending;

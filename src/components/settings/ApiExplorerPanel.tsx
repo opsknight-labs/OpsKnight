@@ -346,7 +346,10 @@ export default function ApiExplorerPanel({
           </div>
 
           <Select value={selectedTag} onValueChange={setSelectedTag}>
-            <SelectTrigger aria-label="Filter by category" className="h-9 text-xs w-[160px] bg-background">
+            <SelectTrigger
+              aria-label="Filter by category"
+              className="h-9 text-xs w-[160px] bg-background"
+            >
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>
@@ -360,7 +363,10 @@ export default function ApiExplorerPanel({
           </Select>
 
           <Select value={selectedMethod} onValueChange={setSelectedMethod}>
-            <SelectTrigger aria-label="Filter by HTTP method" className="h-9 text-xs w-[120px] bg-background">
+            <SelectTrigger
+              aria-label="Filter by HTTP method"
+              className="h-9 text-xs w-[120px] bg-background"
+            >
               <SelectValue placeholder="All Methods" />
             </SelectTrigger>
             <SelectContent>

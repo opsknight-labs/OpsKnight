@@ -1,0 +1,700 @@
+{
+  "generatedAt": "2026-11-10T04:55:18.242Z",
+  "options": {
+    "repetitions": 6,
+    "events": 200,
+    "concurrency": 8,
+    "backlog": 800,
+    "services": 4,
+    "maxP99DeltaMs": 10,
+    "maxP50DeltaMs": 2,
+    "gate": true,
+    "output": "plans/intelligence-engine/certification/perf/ingestion-ab-after-2026-11-10b-local.json",
+    "laneYield": true,
+    "cpuProfileDir": null
+  },
+  "laneWasBusyInEveryCandidateRun": true,
+  "node": "v20.20.2",
+  "host": {
+    "cpus": 12,
+    "loadAverageAtStart": [2.78564453125, 3.53369140625, 4.31494140625],
+    "loadAverageAtEnd": [3.0966796875, 3.54833984375, 4.30126953125]
+  },
+  "lane": {
+    "pool": {
+      "ownPool": true,
+      "size": 10
+    },
+    "yieldToIngestion": true
+  },
+  "pagingBackpressureBypassed": true,
+  "totalFailures": 0,
+  "gate": {
+    "contract": {
+      "maxP99DeltaMs": 10,
+      "maxP50DeltaMs": 2
+    },
+    "medianPairedDeltaMs": {
+      "p50": 0.45166600000084145,
+      "p99": 2.354542000000947
+    },
+    "breaches": [],
+    "passed": true
+  },
+  "summary": [
+    {
+      "metric": "p50 latency (ms)",
+      "medianRatio": 1.0241579560173062,
+      "ci95": [0.982874098064058, 1.0432822132159008],
+      "baselineRunToRunCv": 0.07132877425908114,
+      "noiseFloor": 0.14265754851816229,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p95 latency (ms)",
+      "medianRatio": 1.189630074455498,
+      "ci95": [0.9131442322451575, 1.360091453265742],
+      "baselineRunToRunCv": 0.13878223615578894,
+      "noiseFloor": 0.2775644723115779,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p99 latency (ms)",
+      "medianRatio": 1.096603201540019,
+      "ci95": [0.32381337205090804, 3.4639256898358672],
+      "baselineRunToRunCv": 0.8337104300417619,
+      "noiseFloor": 1.6674208600835239,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p99.9 latency (ms)",
+      "medianRatio": 1.0722568524236584,
+      "ci95": [0.34383835776571053, 3.305080760846362],
+      "baselineRunToRunCv": 0.7977842498511215,
+      "noiseFloor": 1.595568499702243,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "throughput (events/s)",
+      "medianRatio": 0.9289495586129995,
+      "ci95": [0.5856898952735946, 1.0593714698326606],
+      "baselineRunToRunCv": 0.11801051582876715,
+      "noiseFloor": 0.2360210316575343,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    }
+  ],
+  "rawCounts": [
+    {
+      "arm": "baseline",
+      "maxPeakLockWaiters": 0,
+      "maxPeakActiveBackends": 9,
+      "failures": 0
+    },
+    {
+      "arm": "candidate",
+      "maxPeakLockWaiters": 0,
+      "maxPeakActiveBackends": 9,
+      "failures": 0
+    }
+  ],
+  "samples": [
+    {
+      "arm": "baseline",
+      "repetition": 0,
+      "p50Ms": 20.996499999999287,
+      "p95Ms": 27.018458999998984,
+      "p99Ms": 38.44987500000025,
+      "p999Ms": 45.323999999998705,
+      "maxMs": 45.323999999998705,
+      "throughputPerSec": 360.62449343528135,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 0.995839,
+          "p99": 4.333567,
+          "max": 7.512063,
+          "mean": 1.1168727741935485
+        },
+        "eventLoopUtilization": 0.7947402931974514,
+        "processCpuPerSec": 2.500932665096143,
+        "gc": {
+          "totalMs": 48.51254099607468,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 243,
+          "totalMs": 0.05000000000000001,
+          "meanMs": 0.00020576131687242803,
+          "peakWaiting": 1
+        },
+        "primaryStatements": {
+          "count": 3528,
+          "p50Ms": 0,
+          "p99Ms": 2,
+          "perEventMs": 4.23
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 72,
+          "CPU": 11,
+          "Client:ClientRead": 1,
+          "IO:WALSync": 2,
+          "IO:DataFileExtend": 1
+        }
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 0,
+      "p50Ms": 20.636916000001293,
+      "p95Ms": 24.67175000000134,
+      "p99Ms": 26.08324999999968,
+      "p999Ms": 27.064125000000786,
+      "maxMs": 27.064125000000786,
+      "throughputPerSec": 382.03529966819264,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 5,
+      "laneItemsProcessed": 1,
+      "laneItemsActive": 1,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.016831,
+          "p99": 4.157439,
+          "max": 4.874239,
+          "mean": 1.1274146004319654
+        },
+        "eventLoopUtilization": 0.8263438625072754,
+        "processCpuPerSec": 2.603031897466201,
+        "gc": {
+          "totalMs": 47.70308184623718,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 244,
+          "totalMs": 0.032719000000000026,
+          "meanMs": 0.00013409426229508208,
+          "peakWaiting": 1
+        },
+        "primaryStatements": {
+          "count": 3533,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 3.205
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 72,
+          "CPU": 10,
+          "IO:WALSync": 3,
+          "LWLock:WALWrite": 2,
+          "Client:ClientRead": 1,
+          "idle-in-tx CPU": 3
+        }
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 1,
+      "p50Ms": 21.453708000000915,
+      "p95Ms": 32.39754199999879,
+      "p99Ms": 37.55066700000134,
+      "p999Ms": 40.71399999999994,
+      "maxMs": 40.71399999999994,
+      "throughputPerSec": 350.59594737379564,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 6,
+      "laneItemsProcessed": 4,
+      "laneItemsActive": 4,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.014271,
+          "p99": 4.386815,
+          "max": 4.718591,
+          "mean": 1.1256203636363635
+        },
+        "eventLoopUtilization": 0.7897825192759473,
+        "processCpuPerSec": 2.300386225260528,
+        "gc": {
+          "totalMs": 50.76974904537201,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 244,
+          "totalMs": 0.054037,
+          "meanMs": 0.00022146311475409837,
+          "peakWaiting": 1
+        },
+        "primaryStatements": {
+          "count": 3532,
+          "p50Ms": 0,
+          "p99Ms": 2,
+          "perEventMs": 5.07
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 55,
+          "CPU": 18,
+          "idle-in-tx CPU": 3,
+          "IO:WALSync": 2,
+          "LWLock:WALWrite": 2,
+          "Client:ClientRead": 1
+        }
+      }
+    },
+    {
+      "arm": "baseline",
+      "repetition": 1,
+      "p50Ms": 21.002042000000074,
+      "p95Ms": 27.233291000000463,
+      "p99Ms": 115.96391699999913,
+      "p999Ms": 118.41029100000014,
+      "maxMs": 118.41029100000014,
+      "throughputPerSec": 319.59541368308965,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 9,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.026047,
+          "p99": 4.251647,
+          "max": 4.816895,
+          "mean": 1.1315111884057971
+        },
+        "eventLoopUtilization": 0.6786571093129253,
+        "processCpuPerSec": 2.047392139136609,
+        "gc": {
+          "totalMs": 50.565332889556885,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 243,
+          "totalMs": 0.14854000000000006,
+          "meanMs": 0.0006112757201646093,
+          "peakWaiting": 0
+        },
+        "primaryStatements": {
+          "count": 3520,
+          "p50Ms": 0,
+          "p99Ms": 2,
+          "perEventMs": 7.445
+        },
+        "waitEvents": {
+          "Client:ClientRead": 1,
+          "idle-in-tx Client:ClientRead": 61,
+          "CPU": 14,
+          "IO:WALWrite": 1,
+          "idle-in-tx CPU": 4,
+          "IO:SLRUWrite": 1,
+          "LWLock:MultiXactGen": 1,
+          "IO:WALSync": 1,
+          "IO:WALInitWrite": 1,
+          "LWLock:WALWrite": 10,
+          "IO:WALInitSync": 1
+        }
+      }
+    },
+    {
+      "arm": "baseline",
+      "repetition": 2,
+      "p50Ms": 20.194124999999985,
+      "p95Ms": 23.66333300000042,
+      "p99Ms": 25.914457999999286,
+      "p999Ms": 27.070624999998472,
+      "maxMs": 27.070624999998472,
+      "throughputPerSec": 388.3915279682168,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 7,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.003519,
+          "p99": 4.374527,
+          "max": 4.763647,
+          "mean": 1.1142969197396961
+        },
+        "eventLoopUtilization": 0.7881758480095237,
+        "processCpuPerSec": 2.4107384462681622,
+        "gc": {
+          "totalMs": 49.807956993579865,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 240,
+          "totalMs": 0.03904200000000002,
+          "meanMs": 0.0001626750000000001,
+          "peakWaiting": 0
+        },
+        "primaryStatements": {
+          "count": 3524,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 3.315
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 57,
+          "CPU": 14,
+          "idle-in-tx CPU": 1,
+          "IO:WALSync": 2,
+          "LWLock:WALWrite": 1
+        }
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 2,
+      "p50Ms": 20.98816699999952,
+      "p95Ms": 122.63983300000109,
+      "p99Ms": 227.94483399999808,
+      "p999Ms": 228.84024999999747,
+      "maxMs": 228.84024999999747,
+      "throughputPerSec": 227.4769933408563,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 5,
+      "laneItemsProcessed": 1,
+      "laneItemsActive": 1,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.020927,
+          "p99": 19.398655,
+          "max": 24.412159,
+          "mean": 1.9819283069977427
+        },
+        "eventLoopUtilization": 0.9119264114325929,
+        "processCpuPerSec": 3.382611325602701,
+        "gc": {
+          "totalMs": 184.67416787147522,
+          "majorMs": 8.765500009059906,
+          "majorCount": 1
+        },
+        "poolWait": {
+          "queries": 250,
+          "totalMs": 0.05588099999999996,
+          "meanMs": 0.00022352399999999985,
+          "peakWaiting": 0
+        },
+        "primaryStatements": {
+          "count": 3540,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 3.245
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 94,
+          "CPU": 12,
+          "idle-in-tx CPU": 5,
+          "IO:WALSync": 5,
+          "LWLock:WALWrite": 3
+        }
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 3,
+      "p50Ms": 20.873749999998836,
+      "p95Ms": 40.70283399999971,
+      "p99Ms": 48.86675000000105,
+      "p999Ms": 48.9230000000025,
+      "maxMs": 48.9230000000025,
+      "throughputPerSec": 355.4921730390629,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 5,
+      "laneItemsActive": 5,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.006591,
+          "p99": 3.735551,
+          "max": 4.419583,
+          "mean": 1.121590784
+        },
+        "eventLoopUtilization": 0.7778844401316224,
+        "processCpuPerSec": 2.434721456622912,
+        "gc": {
+          "totalMs": 55.18166810274124,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 244,
+          "totalMs": 0.062923,
+          "meanMs": 0.0002578811475409836,
+          "peakWaiting": 0
+        },
+        "primaryStatements": {
+          "count": 3532,
+          "p50Ms": 0,
+          "p99Ms": 3,
+          "perEventMs": 5.025
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 57,
+          "CPU": 11,
+          "Client:ClientRead": 1,
+          "idle-in-tx CPU": 3,
+          "IO:WALSync": 2
+        }
+      }
+    },
+    {
+      "arm": "baseline",
+      "repetition": 3,
+      "p50Ms": 18.981291000000056,
+      "p95Ms": 29.926542000001064,
+      "p99Ms": 33.80779199999961,
+      "p999Ms": 35.249667000000045,
+      "maxMs": 35.249667000000045,
+      "throughputPerSec": 382.6818902523005,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 5,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.003519,
+          "p99": 3.831807,
+          "max": 5.701631,
+          "mean": 1.1158278029978588
+        },
+        "eventLoopUtilization": 0.7915382943780555,
+        "processCpuPerSec": 2.3865075917237144,
+        "gc": {
+          "totalMs": 44.03491699695587,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 241,
+          "totalMs": 0.03962100000000013,
+          "meanMs": 0.00016440248962655655,
+          "peakWaiting": 0
+        },
+        "primaryStatements": {
+          "count": 3524,
+          "p50Ms": 0,
+          "p99Ms": 2,
+          "perEventMs": 3.82
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 60,
+          "idle-in-tx CPU": 3,
+          "CPU": 9,
+          "Client:ClientRead": 1,
+          "IO:WALSync": 1
+        }
+      }
+    },
+    {
+      "arm": "baseline",
+      "repetition": 4,
+      "p50Ms": 18.33416700000089,
+      "p95Ms": 23.24016699999993,
+      "p99Ms": 24.373332999999548,
+      "p999Ms": 25.41166599999997,
+      "maxMs": 25.41166599999997,
+      "throughputPerSec": 426.4998581365502,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 0.999935,
+          "p99": 3.823615,
+          "max": 4.448255,
+          "mean": 1.1111111448931117
+        },
+        "eventLoopUtilization": 0.8143978692796398,
+        "processCpuPerSec": 2.5352750942104554,
+        "gc": {
+          "totalMs": 42.876918971538544,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 239,
+          "totalMs": 0.07079000000000002,
+          "meanMs": 0.00029619246861924695,
+          "peakWaiting": 1
+        },
+        "primaryStatements": {
+          "count": 3520,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 2.245
+        },
+        "waitEvents": {
+          "Client:ClientRead": 1,
+          "idle-in-tx Client:ClientRead": 62,
+          "CPU": 10,
+          "idle-in-tx CPU": 1
+        }
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 4,
+      "p50Ms": 18.777083000000857,
+      "p95Ms": 24.87724999999773,
+      "p99Ms": 26.727875000000495,
+      "p999Ms": 27.247833000001265,
+      "maxMs": 27.247833000001265,
+      "throughputPerSec": 415.373707830806,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 5,
+      "laneItemsProcessed": 5,
+      "laneItemsActive": 5,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.016319,
+          "p99": 4.036607,
+          "max": 4.849663,
+          "mean": 1.1187802703962704
+        },
+        "eventLoopUtilization": 0.8196127059437253,
+        "processCpuPerSec": 2.5703428883997232,
+        "gc": {
+          "totalMs": 46.22562503814697,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 239,
+          "totalMs": 0.04333000000000009,
+          "meanMs": 0.00018129707112970748,
+          "peakWaiting": 2
+        },
+        "primaryStatements": {
+          "count": 3529,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 2.505
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 60,
+          "CPU": 8,
+          "IO:WALSync": 2,
+          "Client:ClientRead": 2,
+          "idle-in-tx CPU": 2
+        }
+      }
+    },
+    {
+      "arm": "candidate",
+      "repetition": 5,
+      "p50Ms": 18.50195800000074,
+      "p95Ms": 24.311249999998836,
+      "p99Ms": 74.58308299999771,
+      "p999Ms": 76.40299999999843,
+      "maxMs": 76.40299999999843,
+      "throughputPerSec": 390.13406276282865,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 9,
+      "laneItemsProcessed": 5,
+      "laneItemsActive": 6,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 1.014783,
+          "p99": 3.926015,
+          "max": 4.493311,
+          "mean": 1.1184007002188183
+        },
+        "eventLoopUtilization": 0.7458596295268296,
+        "processCpuPerSec": 2.3250117497163325,
+        "gc": {
+          "totalMs": 43.5393750667572,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 238,
+          "totalMs": 0.07378799999999996,
+          "meanMs": 0.000310033613445378,
+          "peakWaiting": 0
+        },
+        "primaryStatements": {
+          "count": 3512,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 4.015
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 51,
+          "CPU": 8,
+          "idle-in-tx CPU": 5,
+          "IO:WALSync": 2,
+          "IO:WALInitWrite": 1,
+          "LWLock:WALWrite": 8,
+          "Client:ClientRead": 1
+        }
+      }
+    },
+    {
+      "arm": "baseline",
+      "repetition": 5,
+      "p50Ms": 17.734375,
+      "p95Ms": 20.17791700000089,
+      "p99Ms": 21.5313750000023,
+      "p999Ms": 23.116833000000042,
+      "maxMs": 23.116833000000042,
+      "throughputPerSec": 447.3200503344187,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "laneItemsActive": 0,
+      "diagnostics": {
+        "eventLoopDelayMs": {
+          "p50": 0.994815,
+          "p99": 4.093951,
+          "max": 4.411391,
+          "mean": 1.1123065935162093
+        },
+        "eventLoopUtilization": 0.8179027165196363,
+        "processCpuPerSec": 2.5698492159707316,
+        "gc": {
+          "totalMs": 42.909123837947845,
+          "majorMs": 0,
+          "majorCount": 0
+        },
+        "poolWait": {
+          "queries": 236,
+          "totalMs": 0.04242099999999982,
+          "meanMs": 0.00017974999999999925,
+          "peakWaiting": 0
+        },
+        "primaryStatements": {
+          "count": 3512,
+          "p50Ms": 0,
+          "p99Ms": 1,
+          "perEventMs": 1.725
+        },
+        "waitEvents": {
+          "idle-in-tx Client:ClientRead": 51,
+          "CPU": 7,
+          "IO:WALSync": 1,
+          "Client:ClientRead": 3,
+          "idle-in-tx CPU": 1
+        }
+      }
+    }
+  ],
+  "interpretation": "Verdicts compare paired repetitions against measured baseline noise. NO_DETECTABLE_DIFFERENCE means the difference is within noise, not that it is zero. The gate judges the median paired difference in absolute milliseconds against the ingestion contract. Treat results from shared or loaded hosts as indicative only."
+}

@@ -34,7 +34,9 @@ export async function runMcpMaintenance() {
   });
   const tasks = await runTask('tasks', async () => {
     const { cleanupExpiredMcpTasks } = await import('./protocol/tasks');
-    return cleanupExpiredMcpTasks();
+    // Squire investigations are MCP task handles too: their answers go once they expire.
+    const { cleanupExpiredSquireInvestigations } = await import('./core/squire-investigation');
+    return (await cleanupExpiredMcpTasks()) + (await cleanupExpiredSquireInvestigations());
   });
   return { credentials, tasks };
 }

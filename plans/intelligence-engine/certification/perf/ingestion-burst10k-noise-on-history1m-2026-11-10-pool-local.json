@@ -1,0 +1,134 @@
+{
+  "generatedAt": "2026-11-10T05:12:55.501Z",
+  "options": {
+    "noiseControls": true,
+    "noiseLookups": "pool",
+    "lane": true,
+    "history": 1000000,
+    "repetitions": 1,
+    "events": 10000,
+    "concurrency": 16,
+    "backlog": 800,
+    "services": 4,
+    "maxP99DeltaMs": 10,
+    "maxP50DeltaMs": 2,
+    "gate": true,
+    "output": "plans/intelligence-engine/certification/perf/ingestion-burst10k-noise-on-history1m-2026-11-10-pool-local.json"
+  },
+  "laneWasBusyInEveryCandidateRun": true,
+  "noiseControlsInCandidate": true,
+  "noiseFailOpenInCandidate": {
+    "deadline": 2774,
+    "error": 1
+  },
+  "noiseDecisionsInCandidate": 3353,
+  "node": "v20.20.2",
+  "pagingBackpressureBypassed": true,
+  "totalFailures": 0,
+  "gate": {
+    "contract": {
+      "maxP99DeltaMs": 10,
+      "maxP50DeltaMs": 2
+    },
+    "medianPairedDeltaMs": {
+      "p50": 12.56429200002458,
+      "p99": 17.45483299990883
+    },
+    "breaches": ["p99 +17.45 ms > 10 ms", "p50 +12.56 ms > 2 ms"],
+    "passed": false
+  },
+  "summary": [
+    {
+      "metric": "p50 latency (ms)",
+      "medianRatio": 1.3834288373666017,
+      "ci95": [1.3834288373666017, 1.3834288373666017],
+      "baselineRunToRunCv": 0,
+      "noiseFloor": 0.05,
+      "verdict": "INSUFFICIENT_DATA"
+    },
+    {
+      "metric": "p95 latency (ms)",
+      "medianRatio": 1.5510037501298208,
+      "ci95": [1.5510037501298208, 1.5510037501298208],
+      "baselineRunToRunCv": 0,
+      "noiseFloor": 0.05,
+      "verdict": "INSUFFICIENT_DATA"
+    },
+    {
+      "metric": "p99 latency (ms)",
+      "medianRatio": 1.2957631669225975,
+      "ci95": [1.2957631669225975, 1.2957631669225975],
+      "baselineRunToRunCv": 0,
+      "noiseFloor": 0.05,
+      "verdict": "INSUFFICIENT_DATA"
+    },
+    {
+      "metric": "p99.9 latency (ms)",
+      "medianRatio": 0.9247124633230372,
+      "ci95": [0.9247124633230372, 0.9247124633230372],
+      "baselineRunToRunCv": 0,
+      "noiseFloor": 0.05,
+      "verdict": "INSUFFICIENT_DATA"
+    },
+    {
+      "metric": "throughput (events/s)",
+      "medianRatio": 0.7252476313180112,
+      "ci95": [0.7252476313180112, 0.7252476313180112],
+      "baselineRunToRunCv": 0,
+      "noiseFloor": 0.05,
+      "verdict": "INSUFFICIENT_DATA"
+    }
+  ],
+  "rawCounts": [
+    {
+      "arm": "baseline",
+      "maxPeakLockWaiters": 0,
+      "maxPeakActiveBackends": 7,
+      "failures": 0
+    },
+    {
+      "arm": "candidate",
+      "maxPeakLockWaiters": 0,
+      "maxPeakActiveBackends": 8,
+      "failures": 0
+    }
+  ],
+  "samples": [
+    {
+      "arm": "baseline",
+      "repetition": 0,
+      "p50Ms": 32.76824999996461,
+      "p95Ms": 39.898624999972526,
+      "p99Ms": 59.01625000004424,
+      "p999Ms": 127.01970899995649,
+      "maxMs": 162.06958300003316,
+      "throughputPerSec": 477.7181391798837,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 7,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "candidate",
+      "repetition": 0,
+      "p50Ms": 45.33254199998919,
+      "p95Ms": 61.88291699998081,
+      "p99Ms": 76.47108299995307,
+      "p999Ms": 117.45670799992513,
+      "maxMs": 129.84795800002757,
+      "throughputPerSec": 346.4639488778586,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 8,
+      "laneItemsProcessed": 18,
+      "noiseFailOpen": {
+        "deadline": 2774,
+        "error": 1
+      },
+      "noiseDecisions": 3353
+    }
+  ],
+  "interpretation": "Verdicts compare paired repetitions against measured baseline noise. NO_DETECTABLE_DIFFERENCE means the difference is within noise, not that it is zero. The gate judges the median paired difference in absolute milliseconds against the ingestion contract. Treat results from shared or loaded hosts as indicative only."
+}

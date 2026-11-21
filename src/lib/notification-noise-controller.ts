@@ -1,11 +1,17 @@
 import 'server-only';
 
-import type { NotificationTrafficClass, Prisma } from '@prisma/client';
+import type { NotificationChannel, NotificationTrafficClass, Prisma } from '@prisma/client';
+import { NOTIFICATION_PRIORITY } from './notification-priority';
+
+/** Low-urgency pages to one recipient on one channel inside this window arrive as one bundled notification. */
+export const BUNDLE_WINDOW_MS = 5 * 60_000;
 
 export type NoiseDecision =
   | { action: 'DELIVER' }
   | { action: 'GROUP'; groupKey: string }
   | { action: 'DEFER'; until: Date }
+  /** Held until the window closes, then sent once on behalf of every page suppressed behind it. */
+  | { action: 'BUNDLE'; until: Date }
   | { action: 'SUPPRESS'; reason: string };
 
 export type NoiseControlInput = {
@@ -15,14 +21,96 @@ export type NoiseControlInput = {
   eventType: string;
   trafficClass: NotificationTrafficClass;
   priority: number;
+  /**
+   * Set for a pre-paging storm child: the notification is keyed on the parent incident's source, so the
+   * parent's own post (or the first child's grouped post) counts as related and the rest roll up.
+   */
+  rollUpParentId?: string | null;
+  /**
+   * Set by the caller only when the recipient opted in to bundling and the page is low urgency. The
+   * controller still refuses to bundle a responder-critical or transactional notification.
+   */
+  bundle?: boolean;
+  /** Needed with `bundle`: pages are bundled per channel, so each channel still gets its first page at once. */
+  channel?: NotificationChannel;
 };
 
-/** Critical and transactional pages are deliberately outside noise control. */
+/**
+ * Bundling is opt-in per recipient and never touches a high-urgency page (priority RESPONDER_CRITICAL) or
+ * transactional traffic, whatever the caller asked for.
+ */
+export function isBundleCandidate(
+  input: Pick<
+    NoiseControlInput,
+    'bundle' | 'channel' | 'priority' | 'trafficClass' | 'rollUpParentId'
+  >
+): boolean {
+  return (
+    input.bundle === true &&
+    Boolean(input.channel) &&
+    !input.rollUpParentId &&
+    input.priority > NOTIFICATION_PRIORITY.RESPONDER_CRITICAL &&
+    input.trafficClass !== 'TRANSACTIONAL'
+  );
+}
+
+/**
+ * The first low-urgency page in a quiet window goes out at once. The next one is held until the window
+ * closes and stands for the bundle. Later ones are suppressed only while that held notification is still
+ * waiting, so a suppressed page is always followed by a delivery.
+ *
+ * @param latestScheduledAt latest `scheduledAt` among the recipient's recent low-urgency pages on this
+ *   channel that were not suppressed; null when there are none.
+ */
+export function decideBundle(
+  latestScheduledAt: Date | null,
+  now: Date = new Date()
+): NoiseDecision {
+  if (!latestScheduledAt) return { action: 'DELIVER' };
+  if (latestScheduledAt > now) {
+    return { action: 'SUPPRESS', reason: 'Bundled with other low-urgency pages' };
+  }
+  return { action: 'BUNDLE', until: new Date(now.getTime() + BUNDLE_WINDOW_MS) };
+}
+
+/** One index-backed read on ("userId", "createdAt"), bounded by the window. */
+export async function latestBundlePeerScheduledAt(
+  store: Pick<Prisma.TransactionClient, 'notification'>,
+  input: Pick<NoiseControlInput, 'recipientId' | 'channel' | 'eventType'>,
+  now: Date = new Date()
+): Promise<Date | null> {
+  const peer = await store.notification.findFirst({
+    where: {
+      userId: input.recipientId,
+      createdAt: { gte: new Date(now.getTime() - BUNDLE_WINDOW_MS) },
+      channel: input.channel,
+      eventType: input.eventType,
+      status: { not: 'SKIPPED' },
+      priority: { gt: NOTIFICATION_PRIORITY.RESPONDER_CRITICAL },
+    },
+    orderBy: { scheduledAt: 'desc' },
+    select: { scheduledAt: true },
+  });
+  return peer?.scheduledAt ?? null;
+}
+
+/**
+ * Critical and transactional pages are deliberately outside noise control, except a storm child's: its
+ * parent already paged, so the child is grouped once per recipient and window and suppressed after that.
+ */
 export function decideNotificationNoise(
   input: NoiseControlInput,
   relatedCount: number,
   now: Date = new Date()
 ): NoiseDecision {
+  if (input.rollUpParentId) {
+    const groupKey = [input.recipientId, input.sourceType, input.sourceId, input.eventType].join(
+      ':'
+    );
+    return relatedCount > 0
+      ? { action: 'SUPPRESS', reason: `Rolled up under parent incident ${input.rollUpParentId}` }
+      : { action: 'GROUP', groupKey };
+  }
   if (input.trafficClass === 'CRITICAL' || input.trafficClass === 'TRANSACTIONAL') {
     return { action: 'DELIVER' };
   }
@@ -40,7 +128,13 @@ export async function notificationNoiseDecision(
   input: NoiseControlInput,
   now: Date = new Date()
 ): Promise<NoiseDecision> {
-  if (input.trafficClass === 'CRITICAL' || input.trafficClass === 'TRANSACTIONAL') {
+  if (isBundleCandidate(input)) {
+    return decideBundle(await latestBundlePeerScheduledAt(store, input, now), now);
+  }
+  if (
+    !input.rollUpParentId &&
+    (input.trafficClass === 'CRITICAL' || input.trafficClass === 'TRANSACTIONAL')
+  ) {
     return { action: 'DELIVER' };
   }
   const relatedCount = await countRelatedNotifications(store, input, now);

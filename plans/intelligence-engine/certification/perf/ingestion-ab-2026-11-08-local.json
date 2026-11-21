@@ -1,0 +1,257 @@
+{
+  "generatedAt": "2026-11-08T02:41:54.353Z",
+  "options": {
+    "repetitions": 6,
+    "events": 200,
+    "concurrency": 8,
+    "backlog": 800,
+    "services": 4,
+    "maxP99DeltaMs": 10,
+    "maxP50DeltaMs": 2,
+    "gate": true,
+    "output": "plans/intelligence-engine/certification/perf/ingestion-ab-2026-11-08-local.json"
+  },
+  "laneWasBusyInEveryCandidateRun": true,
+  "node": "v20.20.2",
+  "pagingBackpressureBypassed": true,
+  "totalFailures": 0,
+  "gate": {
+    "contract": {
+      "maxP99DeltaMs": 10,
+      "maxP50DeltaMs": 2
+    },
+    "medianPairedDeltaMs": {
+      "p50": 7.609124000002339,
+      "p99": 4.039749999996275
+    },
+    "breaches": ["p50 +7.61 ms > 2 ms"],
+    "passed": false
+  },
+  "summary": [
+    {
+      "metric": "p50 latency (ms)",
+      "medianRatio": 1.295834087097389,
+      "ci95": [1.2026320496038267, 1.61543197267765],
+      "baselineRunToRunCv": 0.07821386473891087,
+      "noiseFloor": 0.15642772947782174,
+      "verdict": "REGRESSION"
+    },
+    {
+      "metric": "p95 latency (ms)",
+      "medianRatio": 1.0552671069412893,
+      "ci95": [0.4331370517707001, 2.9088102102217053],
+      "baselineRunToRunCv": 0.8266139121388991,
+      "noiseFloor": 1.6532278242777982,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p99 latency (ms)",
+      "medianRatio": 1.0821263352377222,
+      "ci95": [0.23034211837736854, 2.0641874630455033],
+      "baselineRunToRunCv": 0.9894035742910218,
+      "noiseFloor": 1.9788071485820435,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p99.9 latency (ms)",
+      "medianRatio": 1.0651209390126257,
+      "ci95": [0.17749961584204568, 2.105201794327407],
+      "baselineRunToRunCv": 1.0400528879891886,
+      "noiseFloor": 2.080105775978377,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "throughput (events/s)",
+      "medianRatio": 0.7803425995522737,
+      "ci95": [0.5872750294157457, 1.0925858521945067],
+      "baselineRunToRunCv": 0.25926355211885976,
+      "noiseFloor": 0.5185271042377195,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    }
+  ],
+  "rawCounts": [
+    {
+      "arm": "baseline",
+      "maxPeakLockWaiters": 0,
+      "maxPeakActiveBackends": 6,
+      "failures": 0
+    },
+    {
+      "arm": "candidate",
+      "maxPeakLockWaiters": 4,
+      "maxPeakActiveBackends": 8,
+      "failures": 0
+    }
+  ],
+  "samples": [
+    {
+      "arm": "baseline",
+      "repetition": 0,
+      "p50Ms": 27.988540999998804,
+      "p95Ms": 40.570166999999856,
+      "p99Ms": 47.3292079999992,
+      "p999Ms": 98.65445800000089,
+      "maxMs": 98.65445800000089,
+      "throughputPerSec": 258.6893761447009,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0
+    },
+    {
+      "arm": "candidate",
+      "repetition": 0,
+      "p50Ms": 45.213583999997354,
+      "p95Ms": 118.01091599999927,
+      "p99Ms": 139.86162499999773,
+      "p999Ms": 207.68754199999967,
+      "maxMs": 207.68754199999967,
+      "throughputPerSec": 151.9218109849201,
+      "failures": 0,
+      "peakLockWaiters": 2,
+      "peakActiveBackends": 8,
+      "laneItemsProcessed": 106
+    },
+    {
+      "arm": "candidate",
+      "repetition": 1,
+      "p50Ms": 43.818999999999505,
+      "p95Ms": 93.52858300000298,
+      "p99Ms": 101.22591699999975,
+      "p999Ms": 104.7198329999992,
+      "maxMs": 104.7198329999992,
+      "throughputPerSec": 164.8306421812118,
+      "failures": 0,
+      "peakLockWaiters": 2,
+      "peakActiveBackends": 8,
+      "laneItemsProcessed": 106
+    },
+    {
+      "arm": "baseline",
+      "repetition": 1,
+      "p50Ms": 26.94708300000275,
+      "p95Ms": 215.9330000000009,
+      "p99Ms": 439.4589999999989,
+      "p999Ms": 589.9721669999999,
+      "maxMs": 589.9721669999999,
+      "throughputPerSec": 150.86287439119062,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 6,
+      "laneItemsProcessed": 0
+    },
+    {
+      "arm": "baseline",
+      "repetition": 2,
+      "p50Ms": 31.227375000002212,
+      "p95Ms": 89.23291600000084,
+      "p99Ms": 108.5379589999975,
+      "p999Ms": 118.67012500000055,
+      "maxMs": 118.67012500000055,
+      "throughputPerSec": 186.37132512112524,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 5,
+      "laneItemsProcessed": 0
+    },
+    {
+      "arm": "candidate",
+      "repetition": 2,
+      "p50Ms": 37.55504199999996,
+      "p95Ms": 48.6195000000007,
+      "p99Ms": 54.20262499999808,
+      "p999Ms": 64.40366699999868,
+      "maxMs": 64.40366699999868,
+      "throughputPerSec": 215.55123088175426,
+      "failures": 0,
+      "peakLockWaiters": 2,
+      "peakActiveBackends": 8,
+      "laneItemsProcessed": 104
+    },
+    {
+      "arm": "candidate",
+      "repetition": 3,
+      "p50Ms": 33.330041000001074,
+      "p95Ms": 51.30145900000207,
+      "p99Ms": 66.66083399999843,
+      "p999Ms": 69.35612499999843,
+      "maxMs": 69.35612499999843,
+      "throughputPerSec": 226.1552612316701,
+      "failures": 0,
+      "peakLockWaiters": 4,
+      "peakActiveBackends": 7,
+      "laneItemsProcessed": 107
+    },
+    {
+      "arm": "baseline",
+      "repetition": 3,
+      "p50Ms": 25.720916999998735,
+      "p95Ms": 48.61466699999801,
+      "p99Ms": 55.9586249999993,
+      "p999Ms": 58.34733399999823,
+      "maxMs": 58.34733399999823,
+      "throughputPerSec": 282.4352296442297,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 5,
+      "laneItemsProcessed": 0
+    },
+    {
+      "arm": "baseline",
+      "repetition": 4,
+      "p50Ms": 28.023333000001003,
+      "p95Ms": 63.01124999999956,
+      "p99Ms": 285.80933300000106,
+      "p999Ms": 288.67849999999817,
+      "maxMs": 288.67849999999817,
+      "throughputPerSec": 195.2436451549253,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 6,
+      "laneItemsProcessed": 0
+    },
+    {
+      "arm": "candidate",
+      "repetition": 4,
+      "p50Ms": 33.710458999994444,
+      "p95Ms": 364.5732500000013,
+      "p99Ms": 589.9640419999996,
+      "p999Ms": 678.0950000000012,
+      "maxMs": 678.0950000000012,
+      "throughputPerSec": 131.587467397223,
+      "failures": 0,
+      "peakLockWaiters": 2,
+      "peakActiveBackends": 7,
+      "laneItemsProcessed": 100
+    },
+    {
+      "arm": "candidate",
+      "repetition": 5,
+      "p50Ms": 32.97033399999782,
+      "p95Ms": 44.1687080000047,
+      "p99Ms": 53.229208999997354,
+      "p999Ms": 55.648708000000624,
+      "maxMs": 55.648708000000624,
+      "throughputPerSec": 232.57243868336704,
+      "failures": 0,
+      "peakLockWaiters": 2,
+      "peakActiveBackends": 6,
+      "laneItemsProcessed": 121
+    },
+    {
+      "arm": "baseline",
+      "repetition": 5,
+      "p50Ms": 25.200667000004614,
+      "p95Ms": 37.068749999998545,
+      "p99Ms": 49.18945900000108,
+      "p999Ms": 52.24637499999517,
+      "maxMs": 52.24637499999517,
+      "throughputPerSec": 298.03888550593916,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0
+    }
+  ],
+  "interpretation": "Verdicts compare paired repetitions against measured baseline noise. NO_DETECTABLE_DIFFERENCE means the difference is within noise, not that it is zero. The gate judges the median paired difference in absolute milliseconds against the ingestion contract. Treat results from shared or loaded hosts as indicative only."
+}

@@ -488,8 +488,13 @@ export default function SlackIntegrationPage({
 
           {/* Missing Scopes Alert */}
           {missingRequiredScopes.length > 0 && (
-            <div className={cn('rounded-lg border p-4 sm:p-5 text-xs space-y-3', toneClasses('critical').soft)}
-              role="alert">
+            <div
+              className={cn(
+                'rounded-lg border p-4 sm:p-5 text-xs space-y-3',
+                toneClasses('critical').soft
+              )}
+              role="alert"
+            >
               <div className="flex items-center gap-2 font-semibold">
                 <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>Missing Slack scopes: {missingRequiredScopes.join(', ')}</span>
@@ -686,9 +691,7 @@ export default function SlackIntegrationPage({
                           <span className="text-2xs font-semibold text-foreground block">
                             {ep.name}
                           </span>
-                          <p className="text-2xs text-muted-foreground leading-snug">
-                            {ep.desc}
-                          </p>
+                          <p className="text-2xs text-muted-foreground leading-snug">{ep.desc}</p>
                         </div>
                         <div className="flex items-center gap-1.5 pt-1">
                           <code className="text-2xs font-mono bg-background px-2 py-1 rounded border flex-1 truncate text-foreground">
@@ -816,11 +819,7 @@ export default function SlackIntegrationPage({
 
             {isOAuthConfigured ? (
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Button
-                  size="lg"
-                  asChild
-                  className="gap-2 text-sm font-semibold h-11 px-6"
-                >
+                <Button size="lg" asChild className="gap-2 text-sm font-semibold h-11 px-6">
                   <a href="/api/slack/oauth">
                     <SlackLogo className="h-4 w-4" />
                     <span>{isAdmin ? 'Connect to Slack' : 'Ask admin to connect'}</span>

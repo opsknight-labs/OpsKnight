@@ -25,6 +25,12 @@ import { AlertTriangle, User, AlertCircle, CheckCircle2, Clock, ShieldOff } from
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+import { CAPABILITIES } from '@/lib/authorization';
+import {
+  getIncidentListBadges,
+  noiseFilterWhere,
+  normalizeNoiseFilter,
+} from '@/lib/intelligence/incident-ux/list-badges';
 import { requirePageAccess } from '@/lib/access/server';
 
 export const revalidate = 0;
@@ -47,6 +53,7 @@ export default async function IncidentsPage({
     serviceId?: string;
     createdAfter?: string;
     createdBefore?: string;
+    noise?: string;
   }>;
 }) {
   await requirePageAccess('/incidents');
@@ -72,6 +79,10 @@ export default async function IncidentsPage({
     getUserPermissions(),
     getCurrentAuthorizationActor(),
   ]);
+  const canReadIntelligence = permissions.capabilities.includes(
+    CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ
+  );
+  const currentNoise = canReadIntelligence ? normalizeNoiseFilter(params.noise) : null;
   const canCreateIncident = permissions.capabilities.some(
     capability => capability === 'incident.create.all' || capability === 'incident.create.scoped'
   );
@@ -113,7 +124,13 @@ export default async function IncidentsPage({
   if (currentFilter === 'all' && !currentStatus) {
     where.NOT = { status: 'SUPPRESSED', maintenanceWindowId: { not: null } };
   }
-  const effectiveWhere = { AND: [incidentReadWhere(actor), where] };
+  const effectiveWhere = {
+    AND: [
+      incidentReadWhere(actor),
+      where,
+      ...(currentNoise ? [noiseFilterWhere(currentNoise)] : []),
+    ],
+  };
 
   const orderBy = buildIncidentOrderBy(currentSort);
 
@@ -195,6 +212,13 @@ export default async function IncidentsPage({
     pagination.skip === requested.skip
       ? requestedIncidents
       : await listQuery(pagination.skip, pagination.take);
+
+  const intelligenceBadges = canReadIntelligence
+    ? await getIncidentListBadges(
+        storedIncidents.map(incident => incident.id),
+        actor
+      )
+    : {};
 
   const incidents = storedIncidents.map(incident =>
     visibleIncidentSource(incident, permissions.capabilities.includes('incident.sensitive.read'))
@@ -351,6 +375,8 @@ export default async function IncidentsPage({
           teams={allTeams}
           services={allServices}
           canCreateIncident={canCreateIncident}
+          showNoiseFilter={canReadIntelligence}
+          currentNoise={currentNoise ?? 'all'}
         />
 
         {/* List */}
@@ -359,6 +385,7 @@ export default async function IncidentsPage({
             incidents={incidents}
             users={users}
             canManageIncidents={permissions.isResponderOrAbove}
+            intelligenceBadges={intelligenceBadges}
             emptyState={
               accessContext.mode === 'NONE'
                 ? {
@@ -393,6 +420,7 @@ export default async function IncidentsPage({
               createdAfter: validCreatedAfter?.toISOString(),
               createdBefore: validCreatedBefore?.toISOString(),
               sort: currentSort,
+              noise: currentNoise ?? undefined,
             }}
           />
         </RealtimeProvider>

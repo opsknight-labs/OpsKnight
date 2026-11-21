@@ -230,9 +230,7 @@ function SummaryStrip({
 
       {/* Right: auto-refresh */}
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-2xs text-muted-foreground hidden sm:inline">
-          Auto-refresh (15s)
-        </span>
+        <span className="text-2xs text-muted-foreground hidden sm:inline">Auto-refresh (15s)</span>
         <Switch checked={autoRefresh} onCheckedChange={onAutoRefreshChange} />
       </div>
     </div>

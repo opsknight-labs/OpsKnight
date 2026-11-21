@@ -41,6 +41,8 @@ import SLABreachWarningBadge from './SLABreachWarningBadge';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useIncidentSlaState } from '@/hooks/useIncidentSlaState';
 import EmptyState from '@/components/ui/EmptyState';
+import IncidentListBadges from '@/components/incident/intelligence/IncidentListBadges';
+import type { IncidentListBadges as IncidentListBadgesMap } from '@/lib/intelligence/incident-ux/list-badges';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -91,7 +93,11 @@ type IncidentsListTableProps = {
     createdAfter?: string;
     createdBefore?: string;
     sort?: string;
+    /** Noise-decision filter (`?noise=`); realtime cannot evaluate it, so new rows are not inserted. */
+    noise?: string;
   };
+  /** Intelligence badges per incident id, from one batched query per page. */
+  intelligenceBadges?: IncidentListBadgesMap;
 };
 
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
@@ -330,6 +336,7 @@ export default function IncidentsListTable({
   readOnly = false,
   emptyState,
   realtimeFilter = {},
+  intelligenceBadges,
 }: IncidentsListTableProps) {
   const isManageable = !readOnly && canManageIncidents;
   const router = useRouter();
@@ -424,7 +431,7 @@ export default function IncidentsListTable({
       if (!id) continue;
 
       if (!displayedIncidentIdsRef.current.has(id)) {
-        if (isPageOne && matchesRealtimeFilter(item, realtimeFilter)) {
+        if (isPageOne && !realtimeFilter.noise && matchesRealtimeFilter(item, realtimeFilter)) {
           candidateNewIds.push(id);
           newIncomingItems.push(parseRealtimeIncident(item));
         }
@@ -1298,6 +1305,7 @@ export default function IncidentsListTable({
                               size="sm"
                             />
                           )}
+                          <IncidentListBadges badges={intelligenceBadges?.[incident.id]} />
                         </div>
                       </div>
 

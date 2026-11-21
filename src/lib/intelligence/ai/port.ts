@@ -1,0 +1,242 @@
+/**
+ * Provider-neutral language-model port. Squire, copilot features and the AI gateway all depend on
+ * this contract and never on a vendor SDK, so the runtime can change (for example AI SDK 6 -> 7
+ * after a separately certified Node 22 upgrade) by replacing one adapter.
+ *
+ * Safety properties every implementation must keep:
+ *  - the port is absent (resolver returns null) until an administrator configures a provider; callers
+ *    must then fall back to deterministic behaviour
+ *  - model output is untrusted data and is never authorization; tools execute under the actor's
+ *    real permissions and writes are proposals that need explicit confirmation
+ *  - data leaves the process only through a provider whose data policy allows the request's class
+ */
+
+/** Ordered from least to most sensitive. A provider may carry data up to its configured ceiling. */
+export const AI_DATA_CLASSES = ['PUBLIC', 'INTERNAL', 'PERSONAL', 'SENSITIVE'] as const;
+export type AiDataClass = (typeof AI_DATA_CLASSES)[number];
+
+/** Highest trusted declaration; an unrecognized runtime value fails closed. */
+export function highestDataClass(values: readonly (AiDataClass | undefined)[]): AiDataClass {
+  if (values.some(value => value !== undefined && !AI_DATA_CLASSES.includes(value)))
+    return 'SENSITIVE';
+  let highest: AiDataClass = 'PUBLIC';
+  for (const candidate of AI_DATA_CLASSES) if (values.includes(candidate)) highest = candidate;
+  return highest;
+}
+
+export const AI_CAPABILITIES = [
+  'SQUIRE_CHAT',
+  'SUMMARIZE',
+  'DIAGNOSE',
+  'POSTMORTEM',
+  'CLASSIFY',
+  'EMBED',
+] as const;
+export type AiCapability = (typeof AI_CAPABILITIES)[number];
+
+/**
+ * Where a model call comes from. Required on every request so the gateway can refuse calls made while a list
+ * view or badge renders: `interactive` is a person opening a feature, `proactive` a per-incident lane job
+ * behind a proactive switch, `background` any other scheduled work.
+ */
+export const AI_CALL_SITES = ['interactive', 'proactive', 'background'] as const;
+export type AiCallSite = (typeof AI_CALL_SITES)[number];
+
+export interface AiMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  /** Trusted server-side classification, never accepted from browser history. */
+  dataClass?: AiDataClass;
+}
+
+/** Who is asking and for what; used for budgets, audit and data-policy checks. */
+export interface AiRequestContext {
+  actorId: string;
+  capability: AiCapability;
+  callSite: AiCallSite;
+  /** Highest classification of any data included in the messages. */
+  dataClass: AiDataClass;
+  incidentId?: string;
+  /** Aborts the call (user navigated away, budget exceeded, timeout). */
+  signal?: AbortSignal;
+  /** Which registered prompt built the request, recorded in the audit trail. */
+  prompt?: { id: string; version: number; hash: string; guidanceRevision: number };
+}
+
+export interface AiToolDefinition {
+  /** Highest class a read may return; checked before a provider can invoke it. */
+  dataClass?: AiDataClass;
+  name: string;
+  description: string;
+  /** JSON-schema-shaped description of the input; validated again by the tool itself. */
+  inputSchema: Record<string, unknown>;
+  /** Read tools run automatically. Write tools only ever return a proposal for user confirmation. */
+  kind: 'READ' | 'PROPOSE_WRITE';
+  /**
+   * Runs a READ tool under the caller's own permissions. Absent for PROPOSE_WRITE tools, whose call is
+   * handed back to the caller instead of being executed. Output is untrusted data to the model.
+   */
+  execute?: (input: unknown) => Promise<unknown>;
+}
+
+export interface AiToolCall {
+  name: string;
+  input: unknown;
+}
+
+export interface AiGenerateRequest {
+  context: AiRequestContext;
+  messages: AiMessage[];
+  tools?: AiToolDefinition[];
+  maxOutputTokens?: number;
+  /** Upper bound on model/tool round trips within one request. */
+  maxSteps?: number;
+}
+
+export interface AiUsage {
+  /** Every prompt token, including the provider-cached ones below. */
+  inputTokens: number;
+  outputTokens: number;
+  /** Prompt tokens the provider served from, or wrote to, its prompt cache (when it reports them). */
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}
+
+export interface AiGenerateResult {
+  text: string;
+  toolCalls: AiToolCall[];
+  usage: AiUsage;
+  /** Which route/provider/model actually served the request, for audit and the status chip. */
+  served: { providerId: string; model: string; fallbackDepth: number };
+  /** Why the model stopped ("stop", "length", "content-filter", ...) when the provider says. */
+  finishReason?: string;
+  /** True when the answer came from the result cache: no model ran and `usage` is zero. */
+  cached?: boolean;
+  /** True when spend controls degraded the request (small model, shorter answer) past 80% of a daily budget. */
+  degraded?: boolean;
+}
+
+export type AiStreamEvent =
+  | { type: 'text-delta'; delta: string }
+  /** A READ tool started running; lets a UI show progress while the model gathers facts. */
+  | { type: 'tool-start'; name: string }
+  /** A PROPOSE_WRITE tool was called: a proposal for the caller to present, never something that ran. */
+  | { type: 'tool-call'; call: AiToolCall }
+  | { type: 'finish'; result: AiGenerateResult }
+  | { type: 'error'; message: string; retryable: boolean };
+
+/** A validator for structured output. Matches zod's `safeParse` without importing a schema library here. */
+export interface AiOutputSchema<T> {
+  safeParse(value: unknown): { success: true; data: T } | { success: false };
+}
+
+export interface AiStructuredRequest<T> extends AiGenerateRequest {
+  /** JSON Schema the model is asked to follow; `schema` re-validates whatever comes back. */
+  schema: AiOutputSchema<T> & object;
+  /** Short name for the object, shown to providers that support named outputs. */
+  schemaName: string;
+}
+
+export interface AiStructuredResult<T> extends Omit<AiGenerateResult, 'text' | 'toolCalls'> {
+  object: T;
+}
+
+export interface LanguageModelPort {
+  /** The model a request is routed to first; part of the result-cache key. Absent on test doubles. */
+  readonly model?: string;
+  generate(request: AiGenerateRequest): Promise<AiGenerateResult>;
+  stream(request: AiGenerateRequest): AsyncIterable<AiStreamEvent>;
+  /**
+   * Returns an object that passed `schema`. Output that fails validation is never returned: the next
+   * eligible provider is tried, and if none produces a valid object the call fails.
+   */
+  generateStructured<T>(request: AiStructuredRequest<T>): Promise<AiStructuredResult<T>>;
+}
+
+/** Turns text into vectors for semantic search. Resolved separately because few providers offer it. */
+export interface EmbeddingPort {
+  /** Opaque compatibility identity; never sent as the provider's model argument. */
+  readonly model: string;
+  /** Human-readable model alias for operator settings. */
+  readonly displayModel?: string;
+  readonly providerId: string;
+  embed(
+    values: string[],
+    context: Pick<AiRequestContext, 'actorId' | 'signal'>
+  ): Promise<{ vectors: number[][]; tokens: number }>;
+}
+
+/**
+ * Resolves the configured model for a capability, or null when AI is not configured, disabled,
+ * over budget, or no provider is allowed to receive this request's data class. Null always means
+ * "use the deterministic path"; callers never treat it as an error.
+ */
+export type LanguageModelResolver = (
+  capability: AiCapability,
+  dataClass: AiDataClass
+) => Promise<LanguageModelPort | null>;
+
+let resolver: LanguageModelResolver = async () => null;
+
+/** The AI gateway registers itself here; until then AI is reported as unavailable. */
+export function registerLanguageModelResolver(next: LanguageModelResolver): void {
+  resolver = next;
+}
+
+export async function resolveLanguageModel(
+  capability: AiCapability,
+  dataClass: AiDataClass
+): Promise<LanguageModelPort | null> {
+  try {
+    return await resolver(capability, dataClass);
+  } catch {
+    // A broken gateway must degrade to the deterministic path, never break the caller.
+    return null;
+  }
+}
+
+export type EmbeddingResolver = (dataClass: AiDataClass) => Promise<EmbeddingPort | null>;
+
+let embeddingResolver: EmbeddingResolver = async () => null;
+
+export function registerEmbeddingResolver(next: EmbeddingResolver): void {
+  embeddingResolver = next;
+}
+
+/** Null when embeddings are off, unconfigured, or no embedding provider may receive this data class. */
+export async function resolveEmbeddingModel(dataClass: AiDataClass): Promise<EmbeddingPort | null> {
+  try {
+    return await embeddingResolver(dataClass);
+  } catch {
+    return null;
+  }
+}
+
+/** True when `candidate` may carry data of `required` classification. */
+export function dataClassAllows(candidate: AiDataClass, required: AiDataClass): boolean {
+  return AI_DATA_CLASSES.indexOf(candidate) >= AI_DATA_CLASSES.indexOf(required);
+}
+
+/** Schema keywords that cost tokens on every request but never steer the model; each tool re-validates its input. */
+const ADVISORY_SCHEMA_KEYS = new Set(['additionalProperties', 'maxLength', 'maxItems', 'default']);
+
+/**
+ * The tool catalogue is most of every request, so its JSON schemas go out without advisory bounds: length caps,
+ * `additionalProperties: false` and `minLength: 1`. Enums, required fields, numeric ranges and real minimums
+ * (a 10-character resolution) stay, since they tell the model what a valid call is.
+ */
+export function compactToolSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(compactToolSchema);
+  if (!schema || typeof schema !== 'object') return schema;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (ADVISORY_SCHEMA_KEYS.has(key) || (key === 'minLength' && value === 1)) continue;
+    // `properties` maps field names to schemas, so its keys are names, never keywords to drop.
+    // eslint-disable-next-line security/detect-object-injection -- key comes from Object.entries of the schema
+    out[key] =
+      key === 'properties' && value && typeof value === 'object'
+        ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, compactToolSchema(v)]))
+        : compactToolSchema(value);
+  }
+  return out;
+}

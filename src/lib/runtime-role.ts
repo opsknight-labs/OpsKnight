@@ -12,6 +12,7 @@ export const OPSKNIGHT_PROCESS_ROLES = [
   'status-projector',
   'runbook-worker',
   'ingestion-worker',
+  'intelligence-worker',
 ] as const;
 
 export type OpsKnightProcessRole = (typeof OPSKNIGHT_PROCESS_ROLES)[number];
@@ -79,6 +80,8 @@ export function getRuntimeResponsibilities(
     case 'web':
     case 'http':
     case 'ingestion-worker':
+    // Runs only the optional intelligence lane (see shouldRunIntelligenceLane); no paging responsibilities.
+    case 'intelligence-worker':
       return {
         startScheduler: false,
         startJobWorker: false,
@@ -186,4 +189,11 @@ export function shouldRunIngestionConsumer(
  * the compatibility ingestion fallback; http requires dedicated consumers. */
 export function isDedicatedHttpRole(role: string): role is 'web' | 'http' {
   return role === 'web' || role === 'http';
+}
+
+/** Deployment-only isolation: feature policy remains database-backed. */
+export function isIntelligenceDedicatedProcess(
+  value = process.env.OPSKNIGHT_INTELLIGENCE_DEDICATED
+): boolean {
+  return value === 'true';
 }

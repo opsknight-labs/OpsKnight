@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { BarChart3, Download } from 'lucide-react';
+import AnalyticsAsk from '@/components/analytics/AnalyticsAsk';
 import AnalyticsFilters from '@/components/analytics/AnalyticsFilters';
 import AnalyticsFreshness from '@/components/analytics/AnalyticsFreshness';
 import AnalyticsViews from '@/components/analytics/AnalyticsViews';
@@ -31,6 +32,7 @@ import {
 } from '@/lib/analytics';
 import { getDefaultAnalyticsViewQuery, listAnalyticsViews } from '@/lib/analytics/views';
 import { getAuthOptions } from '@/lib/auth';
+import { opsHelpersOn } from '@/lib/intelligence/helpers/on-demand';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   dashboardUserReadWhere,
@@ -46,7 +48,8 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Analytics | OpsKnight',
-  description: 'Incident volume, response times, SLA, responder load and noise across your services.',
+  description:
+    'Incident volume, response times, SLA, responder load and noise across your services.',
 };
 
 // Bounded option lists; the comboboxes search within them.
@@ -71,7 +74,7 @@ export default async function AnalyticsPage({
   const params = parseAnalyticsParams(raw);
   const email = session?.user?.email ?? null;
 
-  const [user, accessContext, teams, services, users, views] = await Promise.all([
+  const [user, accessContext, teams, services, users, views, helpersOn] = await Promise.all([
     email ? prisma.user.findUnique({ where: { email }, select: { timeZone: true } }) : null,
     resolveAccessContext(actor),
     prisma.team.findMany({
@@ -95,6 +98,8 @@ export default async function AnalyticsPage({
       take: OPTION_LIMIT,
     }),
     listAnalyticsViews(actor),
+    // The plain-words box sits behind the small-helpers switch (off by default).
+    opsHelpersOn().catch(() => false),
   ]);
 
   const context = await createAnalyticsContext(actor, params, getUserTimeZone(user ?? undefined));
@@ -125,6 +130,8 @@ export default async function AnalyticsPage({
         }
       />
 
+      {helpersOn && <AnalyticsAsk />}
+
       <AnalyticsFilters
         teams={teams}
         services={services}
@@ -147,8 +154,9 @@ export default async function AnalyticsPage({
       )}
       {context.window.isClipped && (
         <InlineNotice tone="info">
-          The range starts at {formatDateKeyInTimeZone(context.window.start, context.window.timeZone)} because older incident
-          data is past the retention period.
+          The range starts at{' '}
+          {formatDateKeyInTimeZone(context.window.start, context.window.timeZone)} because older
+          incident data is past the retention period.
         </InlineNotice>
       )}
 
@@ -208,7 +216,9 @@ export default async function AnalyticsPage({
         </Suspense>
         <Suspense
           key={`follow-${key}`}
-          fallback={<SectionSkeleton title="follow-through" height="h-40" className="xl:col-span-5" />}
+          fallback={
+            <SectionSkeleton title="follow-through" height="h-40" className="xl:col-span-5" />
+          }
         >
           <FollowThroughSection context={context} />
         </Suspense>
@@ -219,7 +229,11 @@ export default async function AnalyticsPage({
 
 function KpiSkeleton() {
   return (
-    <ul role="status" aria-label="Loading key metrics" className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <ul
+      role="status"
+      aria-label="Loading key metrics"
+      className="grid grid-cols-2 gap-3 md:grid-cols-4"
+    >
       {Array.from({ length: 8 }, (_, index) => (
         <li key={index} className="h-[6.5rem] animate-pulse rounded-lg border bg-card shadow-sm" />
       ))}

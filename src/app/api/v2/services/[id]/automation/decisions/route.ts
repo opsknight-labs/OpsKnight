@@ -7,6 +7,7 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { requireAutomationService } from '@/lib/api-v2/automation-access';
 import { decodeCursor, formatCursorPagination } from '@/lib/api-v2/pagination';
+import { describeNoiseDecisions } from '@/lib/automation/presentation/pipeline-trace';
 
 export const GET = defineV2Route({
   action: AUTHORIZATION_ACTIONS.AUTOMATION_READ,
@@ -65,9 +66,34 @@ export const GET = defineV2Route({
       rows.map(row => ({ ...row, id: row.incidentId })),
       pagination.limit
     );
+    // One trace: the noise-control decisions made before automation routed each incident (J1.5), as
+    // sentences only. The incidents are already scoped above; raw evidence is never returned.
+    const noise = page.data.length
+      ? await prisma.prePagingDecision.findMany({
+          where: { serviceId: params.id, incidentId: { in: page.data.map(row => row.incidentId) } },
+          orderBy: { createdAt: 'asc' },
+          take: page.data.length * 5,
+          select: {
+            incidentId: true,
+            control: true,
+            action: true,
+            mode: true,
+            applied: true,
+            reason: true,
+            sourceName: true,
+            reversedAt: true,
+            evidence: true,
+          },
+        })
+      : [];
     return {
       ...page,
-      data: page.data.map(({ id: _id, ...row }) => row),
+      data: page.data.map(({ id: _id, ...row }) => ({
+        ...row,
+        preRoutingTrace: describeNoiseDecisions(
+          noise.filter(decision => decision.incidentId === row.incidentId)
+        ).map(step => step.text),
+      })),
       headers: { 'Cache-Control': 'no-store' },
     };
   },

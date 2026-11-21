@@ -45,7 +45,7 @@ export default async function MobileDashboard() {
   const firstName = context.user.name?.trim().split(/\s+/)[0] || 'there';
   const timeZone = context.user.timeZone || 'UTC';
   const hour = Number(
-    new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone }).format(
+    new Intl.DateTimeFormat('en-US', { hour: 'numeric', hourCycle: 'h23', timeZone }).format(
       new Date()
     )
   );

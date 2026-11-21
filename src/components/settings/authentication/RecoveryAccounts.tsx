@@ -446,10 +446,7 @@ export default function RecoveryAccounts() {
                   <div>
                     <dt className="text-xs text-muted-foreground font-medium">Readiness</dt>
                     <dd className="mt-0.5">
-                      <Badge
-                        variant={account.ready ? 'success' : 'warning'}
-                        className="text-2xs"
-                      >
+                      <Badge variant={account.ready ? 'success' : 'warning'} className="text-2xs">
                         {account.ready
                           ? 'Verified independent sign-in'
                           : 'Complete a fresh sign-in drill'}

@@ -48,7 +48,11 @@ function parseFilters(params: URLSearchParams): DashboardAnalyticsFilters {
   const range = single(params, 'range') ?? '30';
   const startDate = parseDate(single(params, 'startDate'), 'startDate');
   const endDate = parseDate(single(params, 'endDate'), 'endDate');
-  if ((startDate && !endDate) || (!startDate && endDate) || (startDate && endDate && startDate > endDate)) {
+  if (
+    (startDate && !endDate) ||
+    (!startDate && endDate) ||
+    (startDate && endDate && startDate > endDate)
+  ) {
     throw new Error('Invalid custom date range');
   }
   if (range === 'custom' && (!startDate || !endDate)) {
@@ -56,23 +60,29 @@ function parseFilters(params: URLSearchParams): DashboardAnalyticsFilters {
   }
   const includeAllTime = range === 'all';
   const rangeDays = includeAllTime || range === 'custom' ? undefined : Number(range);
-  if (rangeDays !== undefined && (!Number.isInteger(rangeDays) || rangeDays < 1 || rangeDays > 3650)) {
+  if (
+    rangeDays !== undefined &&
+    (!Number.isInteger(rangeDays) || rangeDays < 1 || rangeDays > 3650)
+  ) {
     throw new Error('Invalid range');
   }
   const urgencyValue = single(params, 'urgency');
-  const urgency = urgencyValue && ['HIGH', 'MEDIUM', 'LOW'].includes(urgencyValue)
-    ? (urgencyValue as 'HIGH' | 'MEDIUM' | 'LOW')
-    : undefined;
+  const urgency =
+    urgencyValue && ['HIGH', 'MEDIUM', 'LOW'].includes(urgencyValue)
+      ? (urgencyValue as 'HIGH' | 'MEDIUM' | 'LOW')
+      : undefined;
   if (urgencyValue && !urgency) throw new Error('Invalid urgency');
   const statusValue = single(params, 'status');
   const statuses = ['ACTIVE', 'OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED', 'RESOLVED'] as const;
-  const status = statusValue && statuses.includes(statusValue as (typeof statuses)[number])
-    ? (statusValue as (typeof statuses)[number])
-    : undefined;
+  const status =
+    statusValue && statuses.includes(statusValue as (typeof statuses)[number])
+      ? (statusValue as (typeof statuses)[number])
+      : undefined;
   if (statusValue && !status) throw new Error('Invalid status');
   const serviceId = parseIdentifier(single(params, 'service'), 'service');
   const rawAssignee = single(params, 'assignee');
-  const assignee = rawAssignee === 'unassigned' ? rawAssignee : parseIdentifier(rawAssignee, 'assignee');
+  const assignee =
+    rawAssignee === 'unassigned' ? rawAssignee : parseIdentifier(rawAssignee, 'assignee');
   return {
     rangeDays,
     includeAllTime,

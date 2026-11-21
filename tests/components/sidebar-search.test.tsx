@@ -1,5 +1,5 @@
 import { createRef } from 'react';
-import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import SidebarSearch from '@/components/SidebarSearch';
 import CommandPalette from '@/components/command-palette/CommandPalette';
@@ -115,5 +115,65 @@ describe('CommandPalette', () => {
     fireEvent.keyDown(input, { key: 'Enter', metaKey: true });
     expect(open).toHaveBeenCalledWith('/services', '_blank', 'noopener');
     expect(push).not.toHaveBeenCalled();
+  });
+
+  describe('assistant entry', () => {
+    const named = (name: string) => {
+      document.documentElement.dataset.squireName = name;
+      window.dispatchEvent(new Event('squire:ready'));
+    };
+    const listen = () => {
+      const opened = vi.fn();
+      window.addEventListener('squire:open', opened);
+      return opened;
+    };
+
+    afterEach(() => {
+      delete document.documentElement.dataset.squireName;
+    });
+
+    it('is absent while the assistant is switched off', () => {
+      const { input } = renderPalette();
+      fireEvent.change(input, { target: { value: 'ask' } });
+      expect(screen.queryByText(/^Ask /)).toBeNull();
+    });
+
+    it('appears with the configured name and opens the assistant empty when only the name is typed', async () => {
+      named('Pip');
+      const opened = listen();
+      const { input, onOpenChange } = renderPalette();
+      fireEvent.change(input, { target: { value: 'pip' } });
+      fireEvent.click(await screen.findByText('Ask Pip'));
+      expect(opened).toHaveBeenCalledTimes(1);
+      expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({});
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      window.removeEventListener('squire:open', opened);
+    });
+
+    it('hands the typed question to the assistant so it is asked without retyping', async () => {
+      named('Pip');
+      const opened = listen();
+      const { input } = renderPalette();
+      fireEvent.change(input, { target: { value: 'ask pip why is checkout failing?' } });
+      const entry = await screen.findByText('Ask Pip');
+      expect(screen.getByText('why is checkout failing?')).toBeInTheDocument();
+      fireEvent.click(entry);
+      expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({
+        message: 'why is checkout failing?',
+      });
+      window.removeEventListener('squire:open', opened);
+    });
+
+    it('offers the assistant for a plain question that does not name it', async () => {
+      named('Pip');
+      const opened = listen();
+      const { input } = renderPalette();
+      fireEvent.change(input, { target: { value: 'who is on call for checkout?' } });
+      fireEvent.click(await screen.findByText('Ask Pip'));
+      expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({
+        message: 'who is on call for checkout?',
+      });
+      window.removeEventListener('squire:open', opened);
+    });
   });
 });

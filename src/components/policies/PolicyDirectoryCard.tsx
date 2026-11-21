@@ -10,6 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
+import InsightBadge from '@/components/intelligence/insights/InsightBadge';
+import type { OpsInsightCount } from '@/lib/intelligence/ops-insights/contract';
 import { RelativeTime } from '@/components/patterns';
 import {
   ShieldAlert,
@@ -31,6 +33,8 @@ export type PolicyDirectoryItem = {
   stepCount: number;
   serviceCount: number;
   services: { id: string; name: string }[];
+  /** Open escalation insights on this policy, for the list badge. */
+  insights?: OpsInsightCount | null;
   steps: {
     id: string;
     stepOrder: number;
@@ -106,12 +110,15 @@ export default function PolicyDirectoryCard({ policy }: { policy: PolicyDirector
         {/* Header: Title, Description & Action Menu */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <Link
-              href={`/policies/${policy.id}`}
-              className="block truncate text-sm font-semibold text-foreground transition-colors group-hover:text-primary"
-            >
-              {policy.name}
-            </Link>
+            <div className="flex min-w-0 items-center gap-2">
+              <Link
+                href={`/policies/${policy.id}`}
+                className="block truncate text-sm font-semibold text-foreground transition-colors group-hover:text-primary"
+              >
+                {policy.name}
+              </Link>
+              <InsightBadge count={policy.insights} />
+            </div>
             {policy.description ? (
               <p className="line-clamp-1 text-xs text-muted-foreground" title={policy.description}>
                 {policy.description}

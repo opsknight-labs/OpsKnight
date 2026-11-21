@@ -58,7 +58,11 @@ export function describeDelta(
   const tone: DeltaTone = better === 'neutral' ? 'neutral' : direction === better ? 'good' : 'bad';
   const magnitude = Math.abs(change);
   const amount = magnitude >= 10 ? magnitude.toFixed(0) : magnitude.toFixed(1);
-  return { label: `${direction === 'up' ? '+' : '−'}${amount}${isPoints ? ' pts' : '%'}`, tone, direction };
+  return {
+    label: `${direction === 'up' ? '+' : '−'}${amount}${isPoints ? ' pts' : '%'}`,
+    tone,
+    direction,
+  };
 }
 
 /** Chart axis label for a bucket key like 2026-11-20T00:00:00. */

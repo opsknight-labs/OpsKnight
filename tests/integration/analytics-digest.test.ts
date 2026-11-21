@@ -46,14 +46,34 @@ describeIfRealDB('default weekly analytics digest', { timeout: 60_000 }, () => {
     const now = new Date();
     const lastMonday = analyticsReportWeekStart(now).getTime() - 7 * DAY;
     const team = await createTestTeam('payments');
-    const service = await testPrisma.service.create({ data: { name: 'payments-api', teamId: team.id } });
+    const service = await testPrisma.service.create({
+      data: { name: 'payments-api', teamId: team.id },
+    });
     const hidden = await testPrisma.service.create({ data: { name: 'hidden-svc' } });
     const at = (day: number) => new Date(lastMonday + day * DAY + 12 * 3_600_000);
     await testPrisma.incident.createMany({
       data: [
-        { title: 'a', serviceId: service.id, status: 'RESOLVED', createdAt: at(1), resolvedAt: at(1.1) },
-        { title: 'b', serviceId: service.id, status: 'RESOLVED', createdAt: at(2), resolvedAt: at(2.1) },
-        { title: 'c', serviceId: hidden.id, status: 'RESOLVED', createdAt: at(3), resolvedAt: at(3.1) },
+        {
+          title: 'a',
+          serviceId: service.id,
+          status: 'RESOLVED',
+          createdAt: at(1),
+          resolvedAt: at(1.1),
+        },
+        {
+          title: 'b',
+          serviceId: service.id,
+          status: 'RESOLVED',
+          createdAt: at(2),
+          resolvedAt: at(2.1),
+        },
+        {
+          title: 'c',
+          serviceId: hidden.id,
+          status: 'RESOLVED',
+          createdAt: at(3),
+          resolvedAt: at(3.1),
+        },
       ],
     });
     const member = await createTestUser({ name: 'Member', role: 'USER' });
@@ -99,7 +119,9 @@ describeIfRealDB('default weekly analytics digest', { timeout: 60_000 }, () => {
     expect(payload.html).toContain('/settings/profile');
     expect(payload.html).toContain('payments-api');
     expect(payload.html).not.toContain('hidden-svc');
-    expect(payload.listUnsubscribeUrl).toMatch(/\/api\/insights\/digest\/unsubscribe\/[A-Za-z0-9_-]{16,}$/);
+    expect(payload.listUnsubscribeUrl).toMatch(
+      /\/api\/insights\/digest\/unsubscribe\/[A-Za-z0-9_-]{16,}$/
+    );
 
     // Outsider had nothing to report; opted-out and disabled users are never emailed.
     const ids = [outsider.id, optedOut.id, disabled.id];
@@ -113,7 +135,9 @@ describeIfRealDB('default weekly analytics digest', { timeout: 60_000 }, () => {
   it('waits for an email provider, then sends without anyone having enabled alert emails', async () => {
     const { now, member } = await seed({ email: false });
     expect(await sendWeeklyDigests(now)).toMatchObject({ sent: 0, noEmailProvider: true });
-    expect(await testPrisma.analyticsDigestSubscription.count({ where: { lastSentAt: { not: null } } })).toBe(0);
+    expect(
+      await testPrisma.analyticsDigestSubscription.count({ where: { lastSentAt: { not: null } } })
+    ).toBe(0);
 
     await configureEmail();
     expect(await sendWeeklyDigests(now)).toMatchObject({ sent: 1 });
@@ -140,7 +164,9 @@ describeIfRealDB('default weekly analytics digest', { timeout: 60_000 }, () => {
         body,
       });
 
-    const bad = await oneClickUnsubscribe(request('foo=bar'), { params: Promise.resolve({ token }) });
+    const bad = await oneClickUnsubscribe(request('foo=bar'), {
+      params: Promise.resolve({ token }),
+    });
     expect(bad.status).toBe(400);
     expect(await isWeeklyDigestOptedIn(member.id)).toBe(true);
 

@@ -8,6 +8,7 @@ import NotificationPreferencesForm from '@/components/settings/NotificationPrefe
 import WeeklyDigestToggle from '@/components/settings/WeeklyDigestToggle';
 import { hasConfiguredEmailProvider, isWeeklyDigestEnabled } from '@/lib/analytics/digest';
 import QuietHoursForm from '@/components/settings/QuietHoursForm';
+import NoiseSettings from '@/components/settings/NoiseSettings';
 import ProfileDetailTabs from '@/components/settings/ProfileDetailTabs';
 import ProfileHeroBanner from '@/components/settings/ProfileHeroBanner';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
@@ -246,6 +247,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
               whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
               phoneNumber={user?.phoneNumber ?? null}
             />
+            {user?.id && <NoiseSettings viewer={{ id: user.id }} />}
             <WeeklyDigestToggle
               scope="me"
               enabled={!user?.analyticsDigest?.optedOut}

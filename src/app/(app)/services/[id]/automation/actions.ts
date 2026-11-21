@@ -28,7 +28,18 @@ import {
 } from '@/lib/automation/authoring';
 import { automationSimulationEventSchema as eventSchema } from '@/lib/automation/authoring-contract';
 import { readAutomationVersion } from '@/lib/automation/history';
-import { hasCapability } from '@/lib/authorization';
+import {
+  automationReplayRequestSchema,
+  getAutomationReplay,
+  replayIncidentScope,
+  startAutomationReplay,
+} from '@/lib/automation/replay-run';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
+import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
+import type { OpsInsightView } from '@/lib/intelligence/ops-insights/contract';
+import { listInsightsForScope } from '@/lib/intelligence/ops-insights/view';
 import { normalizeValue } from '@/lib/automation/context/normalize';
 const id = z.string().min(1).max(100);
 const actionSchema = z.discriminatedUnion('action', [
@@ -91,6 +102,11 @@ const actionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('discover'), serviceId: id, sample: z.unknown() }).strict(),
   z.object({ action: z.literal('discoverRecent'), serviceId: id }).strict(),
   z
+    .object({ action: z.literal('replay'), serviceId: id })
+    .merge(automationReplayRequestSchema)
+    .strict(),
+  z.object({ action: z.literal('replayStatus'), serviceId: id, runId: id }).strict(),
+  z
     .object({
       action: z.literal('test'),
       serviceId: id,
@@ -129,6 +145,23 @@ export async function automationAction(raw: unknown) {
       return { ok: true as const, data: await discardCandidate({ ...input, actorId: user.id }) };
     if (input.action === 'mode')
       return { ok: true as const, data: await changeMode({ ...input, actorId: user.id }) };
+    if (input.action === 'replay') {
+      // Replay results identify incidents: the replay reads only incidents this user can read.
+      const incidentScope = replayIncidentScope(await getCurrentAuthorizationActor());
+      return {
+        ok: true as const,
+        data: await prisma.$transaction(tx =>
+          startAutomationReplay(tx, { ...input, actorId: user.id, incidentScope })
+        ),
+      };
+    }
+    if (input.action === 'replayStatus') {
+      const actor = await getCurrentAuthorizationActor();
+      replayIncidentScope(actor);
+      const replay = await getAutomationReplay(prisma, input.serviceId, input.runId, actor);
+      if (!replay) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+      return { ok: true as const, data: replay };
+    }
     if (input.action === 'lint')
       return {
         ok: true as const,
@@ -242,6 +275,38 @@ function automationFailure(error: unknown): AutomationActionFailure {
   });
   return fail('UNEXPECTED', 'Automation request failed. Try again.');
 }
+const AUTOMATION_INSIGHT_KINDS = new Set(['automation.rule_health', 'automation.suggested_rule']);
+
+/**
+ * Open rule-health and suggested-rule insights for the workspace: rows the lane already stored, read under
+ * the viewer's own scope. Empty while operations insights are off; a failed read only hides them.
+ */
+async function readAutomationInsights(serviceId: string): Promise<{
+  items: OpsInsightView[];
+  canDecide: boolean;
+  squireName: string | null;
+}> {
+  const none = { items: [], canDecide: false, squireName: null };
+  try {
+    const actor = await getCurrentAuthorizationActor();
+    const items = (await listInsightsForScope(actor, { type: 'SERVICE', id: serviceId })).filter(
+      insight => AUTOMATION_INSIGHT_KINDS.has(insight.kind)
+    );
+    if (items.length === 0) return none;
+    const squire = await getAiPublicStatus().catch(() => null);
+    return {
+      items,
+      canDecide: hasCapability(actor.role, CAPABILITIES.INTELLIGENCE_FEEDBACK),
+      squireName: squire?.squireEnabled ? squire.squireName : null,
+    };
+  } catch (error) {
+    logger.warn('automation.insights.unavailable', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return none;
+  }
+}
+
 export async function getAutomationArea(
   serviceIdRaw: string,
   areaRaw: string = 'overview',
@@ -455,8 +520,18 @@ export async function getAutomationArea(
         select: { id: true, name: true },
       })
     : [];
+  const insights = ['overview', 'rules'].includes(area)
+    ? await readAutomationInsights(serviceId)
+    : { items: [], canDecide: false, squireName: null };
+  const intelligenceSettings = ['rules', 'test'].includes(area)
+    ? await getIntelligenceSettings()
+    : null;
   return {
     enabled: await automationEnabled(),
+    insights,
+    /** Intelligence fields join the condition picker only while their switch is on. */
+    intelligenceFieldsEnabled:
+      !!intelligenceSettings?.enabled && !!intelligenceSettings.automationIntelligenceFieldsEnabled,
     mode: config?.mode ?? 'DISABLED',
     activeVersionId: config?.activeVersionId ?? null,
     candidateVersionId: config?.candidateVersionId ?? null,

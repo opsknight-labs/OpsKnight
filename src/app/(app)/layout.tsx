@@ -1,6 +1,8 @@
 import prisma from '@/lib/prisma';
 import OperationalStatus from '@/components/OperationalStatus';
+import SquireMount from '@/components/squire/SquireMount';
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { forcedSignOutUrl } from '@/lib/app-routes';
 
 import Sidebar from '@/components/Sidebar';
@@ -9,6 +11,7 @@ import TopbarUserMenu from '@/components/TopbarUserMenu';
 import SidebarSearch from '@/components/SidebarSearch';
 import QuickActions from '@/components/QuickActions';
 import TopbarNotifications from '@/components/TopbarNotifications';
+import AttentionBadge from '@/components/intelligence/overview/AttentionBadge';
 import TopbarBreadcrumbs from '@/components/TopbarBreadcrumbs';
 import GlobalKeyboardHandlerWrapper from '@/components/GlobalKeyboardHandlerWrapper';
 import AppErrorBoundary from './error-boundary';
@@ -154,6 +157,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                             <SidebarSearch />
                           </div>
                           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+                            <Suspense fallback={null}>
+                              <AttentionBadge actor={requestContext.actor} />
+                            </Suspense>
                             <TopbarNotifications />
                             <QuickActions canCreate={canCreate} />
                             <TopbarUserMenu
@@ -167,7 +173,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                             />
                           </div>
                         </AppHeader>
-                        <div className="relative flex min-h-0 flex-1 pt-14">
+                        {/* A docked assistant sets --squire-dock-width; the content row makes room for it. */}
+                        <div className="relative flex min-h-0 flex-1 pt-14 lg:pr-[var(--squire-dock-width,0px)]">
                           <Sidebar
                             userName={userName}
                             userEmail={userEmail}
@@ -196,6 +203,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                         />
                       </div>
                       <CreateIncidentModal />
+                      <Suspense fallback={null}>
+                        <SquireMount />
+                      </Suspense>
                     </IncidentAlertProvider>
                   </RouteAwareRealtimeProvider>
                 </IncidentCreationModalProvider>

@@ -221,7 +221,9 @@ describeIfRealDB('event deduplication semantics', { timeout: 30000 }, () => {
     expect(latest.status).toBe('OPEN');
   });
 
-  it('releases a flapping hold once the alert keeps firing steadily', async () => {
+  it('releases a legacy flapping hold once the alert keeps firing steadily', async () => {
+    // New flapping holds come only from the policy noise control; holds opened by the old fixed-threshold
+    // check can still exist after an upgrade and must release on the next steady trigger.
     const service = await createTestService('Flapping release service');
     const dedupKey = `flapping-release-${Date.now()}`;
     const now = Date.now();
@@ -236,10 +238,20 @@ describeIfRealDB('event deduplication semantics', { timeout: 30000 }, () => {
       await fire(service.id, dedupKey, action);
     }
     await fire(service.id, dedupKey, 'trigger');
-    const held = await testPrisma.incident.findFirstOrThrow({
+    const latest = await testPrisma.incident.findFirstOrThrow({
       where: { serviceId: service.id },
       orderBy: { createdAt: 'desc' },
     });
+    await testPrisma.incident.updateMany({
+      where: { id: latest.id },
+      data: { status: 'SUPPRESSED', escalationStatus: 'COMPLETED', nextEscalationAt: null },
+    });
+    await testPrisma.incidentSlaPause.create({
+      data: { incidentId: latest.id, reason: 'flapping-suppression', startedAt: new Date() },
+    });
+    // Still oscillating inside the window: the hold stays.
+    await fire(service.id, dedupKey, 'trigger');
+    const held = await testPrisma.incident.findUniqueOrThrow({ where: { id: latest.id } });
     expect(held.status).toBe('SUPPRESSED');
 
     // The oscillation ages out of the window while the alert keeps firing.

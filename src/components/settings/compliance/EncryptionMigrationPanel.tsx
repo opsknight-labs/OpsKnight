@@ -610,12 +610,10 @@ export function EncryptionMigrationPanel({
                       <Badge
                         className={cn(
                           'text-2xs font-semibold',
-                          run.status === 'COMPLETED' &&
-                            toneClasses('ok').soft,
+                          run.status === 'COMPLETED' && toneClasses('ok').soft,
                           run.status === 'RUNNING' &&
                             'border-primary/30 bg-primary/10 text-primary animate-pulse',
-                          run.status === 'FAILED' &&
-                            toneClasses('critical').soft,
+                          run.status === 'FAILED' && toneClasses('critical').soft,
                           run.status === 'CANCELLED' &&
                             'border-border bg-muted text-muted-foreground'
                         )}
@@ -699,9 +697,7 @@ export function EncryptionMigrationPanel({
                   <span className="font-mono">{selectedRun.activeKeyId || 'none'}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-2xs">
-                    Safe for Retirement
-                  </span>
+                  <span className="text-muted-foreground block text-2xs">Safe for Retirement</span>
                   <span className="font-mono text-status-ok-deep dark:text-emerald-300">
                     {selectedRun.safeForDatabaseKeyRetirement &&
                     selectedRun.safeForDatabaseKeyRetirement.length > 0

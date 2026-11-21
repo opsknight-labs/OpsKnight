@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { getServiceRulePage } from '@/lib/runbooks/service-rule-page';
 import { getBindingReadiness, type BindingReadiness } from '@/lib/runbooks/binding-readiness';
@@ -42,6 +43,10 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import EmptyState from '@/components/ui/EmptyState';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import ServiceDetailTabs from '@/components/service/ServiceDetailTabs';
+import { resolveServiceIntelligenceAccess } from '@/lib/intelligence/surfaces/service-intelligence';
+import ServiceIntelligenceTab, {
+  ServiceIntelligenceTabSkeleton,
+} from './intelligence/ServiceIntelligenceTab';
 import ServiceMaintenancePanel, {
   type MaintenanceScheduleView,
   type MaintenanceWindowView,
@@ -99,6 +104,7 @@ import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingS
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import ServiceResponsePolicyHub from '@/components/service/ServiceResponsePolicyHub';
+import { MissingRunbookSuggestions } from '@/components/service/runbooks/MissingRunbookSuggestions';
 import ServiceRunbooks, {
   type ServiceRunbookUnattendedWriteDetails,
 } from '@/components/service/ServiceRunbooks';
@@ -245,6 +251,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   if (!serviceRaw) {
     notFound();
   }
+
+  // Intelligence tab: offered only to readers of intelligence, and not at all to a responder while both
+  // engines are off for this service. Its data loads only when the tab is the one being viewed.
+  const intelligenceAccess = await resolveServiceIntelligenceAccess(actor, id).catch(() => null);
 
   // Load secondary and integration data with isolated error boundaries
   const [
@@ -1385,7 +1395,17 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
       {/* Tabbed Workspace */}
       <ServiceDetailTabs
-        defaultTab={activeTab}
+        defaultTab={
+          activeTab === 'intelligence' && !intelligenceAccess?.visible ? 'incidents' : activeTab
+        }
+        showIntelligenceTab={Boolean(intelligenceAccess?.visible)}
+        intelligenceContent={
+          intelligenceAccess?.visible && activeTab === 'intelligence' ? (
+            <Suspense fallback={<ServiceIntelligenceTabSkeleton />}>
+              <ServiceIntelligenceTab access={intelligenceAccess} timeZone={userTimeZone} />
+            </Suspense>
+          ) : undefined
+        }
         activeIncidentCount={activeIncidentsCount ?? 0}
         integrationCount={service.integrations?.length || 0}
         runbooksCount={
@@ -1420,48 +1440,59 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               Runbook access requires additional permission.
             </p>
           ) : (
-            <ServiceRunbooks
-              serviceId={service.id}
-              rulesState={rulesState}
-              rulesSearch={rulesSearch}
-              pagination={{
-                after: rulesAfter,
-                hasNext:
-                  serviceAutomationRulesResult.status === 'fulfilled' &&
-                  serviceAutomationRulesResult.value.hasNext,
-                nextCursor:
-                  serviceAutomationRulesResult.status === 'fulfilled'
-                    ? serviceAutomationRulesResult.value.nextCursor
-                    : undefined,
-              }}
-              catalogQuery={catalogQuery}
-              targetQuery={targetQuery}
-              bindings={serviceAutomationRules.map(binding => ({
-                ...binding,
-                presentation: describeBinding(
-                  binding,
-                  availableRunbookAgents,
-                  availableRunbookAgentPools,
-                  runbooksLoadErrors
-                ),
-                readiness: runbookReadiness.get(binding.id),
-              }))}
-              availableRunbooks={availableRunbooks.map(workflow => ({
-                ...workflow,
-                versions: workflow.versions.map(version => ({ ...version, metadataOnly: true })),
-                publishedVersion: workflow.publishedVersion
-                  ? { ...workflow.publishedVersion, metadataOnly: true }
-                  : null,
-              }))}
-              availableAgents={availableRunbookAgents}
-              availableAgentPools={availableRunbookAgentPools}
-              canManage={canManageService && hasCapability(actor.role, CAPABILITIES.RUNBOOK_MANAGE)}
-              loadErrors={runbooksLoadErrors}
-              userTimeZone={userTimeZone}
-              automationContext={runbookAutomationContext}
-              unattendedWriteDetails={unattendedWriteDetails}
-              canAuthorizeUnattendedWrites={canAuthorizeUnattendedWrites}
-            />
+            <>
+              <Suspense fallback={null}>
+                <MissingRunbookSuggestions
+                  serviceId={service.id}
+                  actor={actor}
+                  canManage={hasCapability(actor.role, CAPABILITIES.RUNBOOK_MANAGE)}
+                />
+              </Suspense>
+              <ServiceRunbooks
+                serviceId={service.id}
+                rulesState={rulesState}
+                rulesSearch={rulesSearch}
+                pagination={{
+                  after: rulesAfter,
+                  hasNext:
+                    serviceAutomationRulesResult.status === 'fulfilled' &&
+                    serviceAutomationRulesResult.value.hasNext,
+                  nextCursor:
+                    serviceAutomationRulesResult.status === 'fulfilled'
+                      ? serviceAutomationRulesResult.value.nextCursor
+                      : undefined,
+                }}
+                catalogQuery={catalogQuery}
+                targetQuery={targetQuery}
+                bindings={serviceAutomationRules.map(binding => ({
+                  ...binding,
+                  presentation: describeBinding(
+                    binding,
+                    availableRunbookAgents,
+                    availableRunbookAgentPools,
+                    runbooksLoadErrors
+                  ),
+                  readiness: runbookReadiness.get(binding.id),
+                }))}
+                availableRunbooks={availableRunbooks.map(workflow => ({
+                  ...workflow,
+                  versions: workflow.versions.map(version => ({ ...version, metadataOnly: true })),
+                  publishedVersion: workflow.publishedVersion
+                    ? { ...workflow.publishedVersion, metadataOnly: true }
+                    : null,
+                }))}
+                availableAgents={availableRunbookAgents}
+                availableAgentPools={availableRunbookAgentPools}
+                canManage={
+                  canManageService && hasCapability(actor.role, CAPABILITIES.RUNBOOK_MANAGE)
+                }
+                loadErrors={runbooksLoadErrors}
+                userTimeZone={userTimeZone}
+                automationContext={runbookAutomationContext}
+                unattendedWriteDetails={unattendedWriteDetails}
+                canAuthorizeUnattendedWrites={canAuthorizeUnattendedWrites}
+              />
+            </>
           )
         }
         integrationsContent={integrationsContent}

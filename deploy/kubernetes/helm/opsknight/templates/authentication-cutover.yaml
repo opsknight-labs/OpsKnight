@@ -1,6 +1,6 @@
 {{- if .Release.IsUpgrade }}
 {{- $base := include "opsknight.fullname" . }}
-{{- $deployments := list $base (printf "%s-web" $base) (printf "%s-scheduler" $base) (printf "%s-general-worker" $base) (printf "%s-critical-worker" $base) (printf "%s-bulk-worker" $base) (printf "%s-runbook-worker" $base) (printf "%s-status-projector" $base) }}
+{{- $deployments := list $base (printf "%s-web" $base) (printf "%s-scheduler" $base) (printf "%s-intelligence-worker" $base) (printf "%s-general-worker" $base) (printf "%s-critical-worker" $base) (printf "%s-bulk-worker" $base) (printf "%s-runbook-worker" $base) (printf "%s-status-projector" $base) }}
 {{- /*
   The stopped-runtime gate protects migrations from overlapping with pods of an
   older application version. It is only needed when the upgrade changes the

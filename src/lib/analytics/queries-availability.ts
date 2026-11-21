@@ -23,7 +23,8 @@ const SERVICE_LIMIT = 500;
 export function errorBudget(uptime: number, target: number, windowMs: number) {
   const allowedMs = ((100 - target) / 100) * windowMs;
   const burnedMs = ((100 - uptime) / 100) * windowMs;
-  const remaining = allowedMs > 0 ? ((allowedMs - burnedMs) / allowedMs) * 100 : burnedMs > 0 ? -100 : 100;
+  const remaining =
+    allowedMs > 0 ? ((allowedMs - burnedMs) / allowedMs) * 100 : burnedMs > 0 ? -100 : 100;
   return { allowedMs, burnedMs, remaining };
 }
 
@@ -61,7 +62,10 @@ export async function queryAvailability(
   const objectiveByService = new Map<string, { name: string; target: number }>();
   for (const objective of objectives) {
     if (objective.serviceId && !objectiveByService.has(objective.serviceId)) {
-      objectiveByService.set(objective.serviceId, { name: objective.name, target: objective.target });
+      objectiveByService.set(objective.serviceId, {
+        name: objective.name,
+        target: objective.target,
+      });
     }
   }
 
@@ -76,7 +80,9 @@ export async function queryAvailability(
         uptime: value,
         downtimeMs: ((100 - value) / 100) * windowMs,
         objective,
-        budgetRemaining: objective ? errorBudget(value, objective.target, windowMs).remaining : null,
+        budgetRemaining: objective
+          ? errorBudget(value, objective.target, windowMs).remaining
+          : null,
       };
     })
     .sort((a, b) => a.uptime - b.uptime || a.name.localeCompare(b.name));

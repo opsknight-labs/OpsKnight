@@ -218,9 +218,7 @@ export default function McpAssistantsSection({
                         {CLIENT_TYPE_LABEL[row.type]}
                       </StatusPill>
                       {row.metadataHost && (
-                        <span className="text-2xs text-muted-foreground">
-                          {row.metadataHost}
-                        </span>
+                        <span className="text-2xs text-muted-foreground">{row.metadataHost}</span>
                       )}
                     </span>
                   </ResponsiveCell>

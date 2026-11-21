@@ -29,6 +29,340 @@ const FORBIDDEN_LABELS = new Set([
 
 export const OPERATIONAL_METRICS = [
   {
+    name: 'opsknight_intelligence_pool_waiting_queries',
+    help: 'Prisma queries waiting for a connection on this lane process at its last measured cycle; unavailable samples are omitted',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_suggestions_reviewed_last_24h',
+    help: 'Human accept or reject decisions in the most recent 5000 suggestion reviews within 24 hours; automatic actions are excluded',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_suggestion_acceptance_ratio_last_24h',
+    help: 'Fraction of sampled human suggestion reviews accepted within 24 hours; omitted when no reviews exist',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_suggestions_sample_truncated',
+    help: '1 when the 24-hour human suggestion review sample exceeds 5000 decisions, else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_time_to_first_insight_seconds',
+    help: 'Time from incident creation to first completed similarity analysis; backfill is separated from live incidents',
+    kind: 'histogram',
+    labels: ['origin'],
+    scope: 'instance',
+    estimatedMaxSeries: 24,
+    buckets: [0.25, 0.5, 1, 2, 5, 10, 30, 60, 300],
+  },
+  {
+    name: 'opsknight_intelligence_work_duration_seconds',
+    help: 'Duration of an intelligence work item by bounded work kind',
+    kind: 'histogram',
+    labels: ['kind'],
+    scope: 'instance',
+    estimatedMaxSeries: 96,
+    buckets: [0.01, 0.05, 0.1, 0.5, 1, 5, 15, 60, 120],
+  },
+  {
+    name: 'opsknight_intelligence_work_failures_total',
+    help: 'Failed intelligence work item attempts by bounded work kind',
+    kind: 'counter',
+    labels: ['kind'],
+    scope: 'counter',
+    estimatedMaxSeries: 8,
+  },
+  {
+    name: 'opsknight_intelligence_embedding_enabled',
+    help: '1 when background semantic indexing is enabled and has an eligible configured deployment, else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_embedding_pending',
+    help: 'Recent incidents awaiting compatible embeddings, capped at 1000',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_embedding_budget_remaining_tokens',
+    help: 'Remaining background embedding allocation after settled usage and live UTC-day reservations',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_digest_failed_recipients_last_7d',
+    help: 'Failed recipients in the most recent eight digest runs started within seven days',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_digest_oldest_sending_age_seconds',
+    help: 'Age of the oldest sending run in the bounded recent digest sample',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_digest_sample_truncated',
+    help: '1 when the seven-day digest sample exceeds eight runs, else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_squire_actions_confirmed_last_24h',
+    help: 'Confirmed action receipts in the most recent 5000 receipts within 24 hours',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_squire_actions_succeeded_last_24h',
+    help: 'Succeeded actions in the bounded 24-hour receipt sample',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_squire_actions_failed_last_24h',
+    help: 'Rejected actions in the bounded 24-hour receipt sample',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_squire_actions_uncertain_last_24h',
+    help: 'Unknown actions and unfinished actions older than five minutes in the bounded 24-hour sample',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_squire_actions_sample_truncated',
+    help: '1 when the 24-hour confirmed-action sample exceeds 5000 receipts, else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_feature_probe_failed',
+    help: '1 if any embedding, digest, confirmed-action or suggestion metric probe failed in this scrape, else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_queue_ready',
+    help: 'Intelligence work items ready to run',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_queue_oldest_ready_age_seconds',
+    help: 'Age of the oldest ready Intelligence work item',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_dead_letters',
+    help: 'Intelligence work items that exhausted their retries',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_lane_paused',
+    help: '1 while the Intelligence lane is paused to protect paging, else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_lane_last_cycle_age_seconds',
+    help: 'Seconds since the Intelligence lane last completed a cycle on this instance (since start, before the first cycle)',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_lane_up',
+    help: '1 while this instance runs the Intelligence lane; the series disappears with the process, so alert on its absence',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_lane_mode',
+    help: '1 for where this instance runs the Intelligence lane: thread (its own worker thread) or in-process (the main thread)',
+    kind: 'gauge',
+    labels: ['mode'],
+    scope: 'instance',
+    estimatedMaxSeries: 2,
+  },
+  {
+    name: 'opsknight_intelligence_lane_thread_fallback',
+    help: '1 while an integrated instance runs the Intelligence lane in-process because the lane thread is unavailable or switched off (outside the ingestion latency contract), else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_work_quarantined',
+    help: 'Intelligence work items that died twice within a day and wait for an operator replay',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_kind_paused',
+    help: '1 while this instance skips one kind of Intelligence work after repeated failures, else 0',
+    kind: 'gauge',
+    labels: ['kind'],
+    scope: 'instance',
+    estimatedMaxSeries: 8,
+  },
+  {
+    name: 'opsknight_intelligence_timed_out_in_flight',
+    help: 'Timed-out Intelligence handlers still holding a database connection on this instance',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_wake_leader',
+    help: '1 when this instance turns wake notifications into Intelligence work, else 0',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_retention_rows_deleted_total',
+    help: 'Rows removed by Intelligence retention sweeps by table',
+    kind: 'counter',
+    labels: ['table'],
+    scope: 'counter',
+    estimatedMaxSeries: 24,
+  },
+  // Squire knowledge memory and proactive notes (F4).
+  {
+    name: 'opsknight_squire_knowledge_chunks_written_total',
+    help: 'Knowledge chunks Squire wrote or rewrote while syncing its index, by bounded source kind',
+    kind: 'counter',
+    labels: ['kind'],
+    scope: 'counter',
+    estimatedMaxSeries: 4,
+  },
+  {
+    name: 'opsknight_squire_proactive_notes_total',
+    help: 'Proactive Squire notes written by bounded kind and mode (basic or AI)',
+    kind: 'counter',
+    labels: ['kind', 'mode'],
+    scope: 'counter',
+    estimatedMaxSeries: 6,
+  },
+  {
+    name: 'opsknight_intelligence_metric_evaluations_total',
+    help: 'Metric anomaly template evaluations by outcome (OK, NO_DATA, THIN_BASELINE, CONNECTOR_ERROR and scope problems)',
+    kind: 'counter',
+    labels: ['status'],
+    scope: 'counter',
+    estimatedMaxSeries: 8,
+  },
+  {
+    name: 'opsknight_prepaging_decisions_total',
+    help: 'Pre-paging noise control decisions by control, action and mode; SHADOW decisions were not applied',
+    kind: 'counter',
+    labels: ['control', 'action', 'mode'],
+    scope: 'counter',
+    // 7 controls x 7 non-NONE actions x 2 modes.
+    estimatedMaxSeries: 98,
+  },
+  {
+    name: 'opsknight_prepaging_fail_open_total',
+    help: 'Pre-paging evaluations that let the event page normally because the snapshot was cold, the deadline passed or a lookup failed',
+    kind: 'counter',
+    labels: ['reason'],
+    scope: 'counter',
+    estimatedMaxSeries: 3,
+  },
+  {
+    name: 'opsknight_prepaging_lookups_total',
+    help: 'Pre-paging evaluations that read the database, by route (dedicated pool or event-transaction savepoint) and whether they failed open',
+    kind: 'counter',
+    labels: ['route', 'outcome'],
+    scope: 'counter',
+    // 2 routes x 2 outcomes.
+    estimatedMaxSeries: 4,
+  },
+  {
+    name: 'opsknight_prepaging_evaluation_seconds',
+    help: 'Pre-paging noise control evaluation duration inside the ingestion transaction',
+    kind: 'histogram',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 10,
+    buckets: [0.0005, 0.001, 0.002, 0.005, 0.01, 0.05],
+  },
+  {
+    name: 'opsknight_heartbeat_monitors_missing',
+    help: 'Enabled heartbeat monitors past their interval and grace at the last sweep',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_heartbeat_pings_total',
+    help: 'Heartbeat pings by outcome (ok, recovered, paused, unknown); no monitor identifiers',
+    kind: 'counter',
+    labels: ['outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 4,
+  },
+  {
     name: 'opsknight_mcp_requests_total',
     help: 'MCP requests by bounded outcome and tool (named tools, other or none), without actor or client identifiers',
     kind: 'counter',
@@ -1700,6 +2034,40 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 1,
     buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
   },
+  // --- AI cost governance (Workstream F6) ---
+  {
+    name: 'opsknight_intelligence_ai_budget_rejections_total',
+    help: 'AI requests refused because a daily budget would be exceeded, by bounded budget scope (global, user, background, team, capability)',
+    kind: 'counter',
+    labels: ['scope'],
+    scope: 'counter',
+    estimatedMaxSeries: 5,
+  },
+  {
+    name: 'opsknight_intelligence_ai_spend_today_usd',
+    help: 'Settled AI spend for the current UTC day in US dollars, for calls whose model has a price',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_intelligence_ai_budget_utilization_max_ratio',
+    help: 'Highest utilisation (settled plus live reservations over limit) among enabled AI budgets of a bounded scope (global, team, capability) for the current UTC day',
+    kind: 'gauge',
+    labels: ['scope'],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 3,
+  },
+  {
+    name: 'opsknight_intelligence_ai_budgets_over_threshold',
+    help: 'Enabled AI budgets of a bounded scope at or above a fixed utilisation threshold (0.8 or 1) for the current UTC day',
+    kind: 'gauge',
+    labels: ['scope', 'threshold'],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 6,
+  },
+  // --- end AI cost governance ---
 ] as const satisfies readonly MetricDefinition[];
 
 type RegisteredMetricName = (typeof OPERATIONAL_METRICS)[number]['name'];
@@ -1791,6 +2159,98 @@ export function runtimeOperationalMetrics() {
   return new Map(
     [...runtimeValues].map(([name, rows]) => [name, [...rows.values()].map(row => ({ ...row }))])
   );
+}
+
+/** A structured-cloneable copy of this thread's runtime metrics, for a worker thread to report them. */
+export interface RuntimeOperationalMetricState {
+  values: Array<[string, RuntimeRow[]]>;
+  histograms: Array<[string, HistogramRow[]]>;
+}
+
+export function exportRuntimeOperationalMetricState(): RuntimeOperationalMetricState {
+  return {
+    values: [...runtimeValues].map(([name, rows]) => [
+      name,
+      [...rows.values()].map(row => ({ labels: { ...row.labels }, value: row.value })),
+    ]),
+    histograms: [...runtimeHistograms].map(([name, rows]) => [
+      name,
+      [...rows.values()].map(row => ({
+        labels: { ...row.labels },
+        value: row.value,
+        count: row.count,
+        buckets: [...row.buckets],
+      })),
+    ]),
+  };
+}
+
+/**
+ * Folds what a worker thread recorded since its `previous` report into this thread's metrics: counters and
+ * histograms by difference, gauges by value. `previous` is null for a thread's first report. Unknown
+ * metric names and invalid labels are ignored, so a bad report can never break the scrape.
+ */
+export function mergeRuntimeOperationalMetricState(
+  previous: RuntimeOperationalMetricState | null,
+  next: RuntimeOperationalMetricState
+) {
+  const before = new Map<string, number>();
+  for (const [name, rows] of previous?.values ?? [])
+    for (const row of rows) before.set(`${name}\u0000${runtimeKey(row.labels)}`, row.value);
+  for (const [name, rows] of next.values) {
+    const definition = OPERATIONAL_METRICS.find(metric => metric.name === name);
+    if (!definition) continue;
+    for (const row of rows) {
+      try {
+        if (definition.kind === 'gauge') {
+          setOperationalGauge(definition.name, row.value, row.labels);
+        } else if (definition.kind === 'counter') {
+          const prior = before.get(`${name}\u0000${runtimeKey(row.labels)}`) ?? 0;
+          const delta = row.value - prior;
+          if (delta > 0) addOperationalMetric(definition.name, delta, row.labels);
+        }
+      } catch {
+        // Invalid labels for this metric: skip the row.
+      }
+    }
+  }
+  const histogramsBefore = new Map<string, HistogramRow>();
+  for (const [name, rows] of previous?.histograms ?? [])
+    for (const row of rows) histogramsBefore.set(`${name}\u0000${runtimeKey(row.labels)}`, row);
+  for (const [name, rows] of next.histograms) {
+    const definition = OPERATIONAL_METRICS.find(metric => metric.name === name);
+    if (!definition || definition.kind !== 'histogram') continue;
+    for (const row of rows) {
+      try {
+        assertLabels(definition.name, row.labels);
+      } catch {
+        continue;
+      }
+      const prior = histogramsBefore.get(`${name}\u0000${runtimeKey(row.labels)}`);
+      const count = row.count - (prior?.count ?? 0);
+      if (count <= 0) continue;
+      const target = runtimeHistograms.get(definition.name) ?? new Map<string, HistogramRow>();
+      const key = runtimeKey(row.labels);
+      const boundaries = definition.buckets ?? [];
+      const current = target.get(key) ?? {
+        labels: { ...row.labels },
+        value: 0,
+        count: 0,
+        buckets: boundaries.map(() => 0),
+      };
+      target.set(key, {
+        labels: current.labels,
+        value: current.value + Math.max(0, row.value - (prior?.value ?? 0)),
+        count: current.count + count,
+        buckets: boundaries.map(
+          (_, index) =>
+            (current.buckets.at(index) ?? 0) +
+            Math.max(0, (row.buckets.at(index) ?? 0) - (prior?.buckets.at(index) ?? 0))
+        ),
+      });
+      runtimeHistograms.set(definition.name, target);
+    }
+  }
 }
 
 export function clearRuntimeOperationalMetrics() {

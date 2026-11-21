@@ -22,14 +22,12 @@ const lifecycleConfig: Record<
   },
   FUTURE: {
     label: 'Future Staged',
-    className:
-      'border-border bg-muted text-ink-600 font-semibold',
+    className: 'border-border bg-muted text-ink-600 font-semibold',
     icon: Clock,
   },
   SUPERSEDED: {
     label: 'Superseded',
-    className:
-      'border-border bg-muted text-ink-600 font-medium line-through',
+    className: 'border-border bg-muted text-ink-600 font-medium line-through',
     icon: CircleDashed,
   },
   REFERENCE_ONLY: {

@@ -807,6 +807,88 @@ test.describe.serial('dashboard live incidents', () => {
     }
   });
 
+  test('AIOps pulse and the largest open group appear only for intelligence readers with something to show', async ({}, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith('mobile'),
+      'the Ops Pulse rail and the wallboard rail are desktop layouts'
+    );
+    const relationshipWhere = { type: 'PARENT_CHILD' as const, engineVersion: 'e2e-dashboard' };
+    await prisma.incidentRelationship.deleteMany({ where: relationshipWhere });
+
+    // Silent when silent: with no open group, no noise decision and no pending triage, there is no tile.
+    await openDashboard(admin.page);
+    await expect(admin.page.getByTestId('ops-pulse')).toBeVisible();
+    await expect(admin.page.getByTestId('pulse-aiops')).toHaveCount(0);
+
+    const [parent, ...children] = await prisma.incident.findMany({
+      where: { status: 'OPEN' },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+      select: { id: true, title: true },
+    });
+    expect(children).toHaveLength(2);
+    await prisma.incidentRelationship.createMany({
+      data: children.map(child => ({
+        sourceIncidentId: child.id,
+        targetIncidentId: parent.id,
+        ...relationshipWhere,
+        origin: 'RULE' as const,
+        decision: 'ACCEPTED' as const,
+        evidence: { automatic: true },
+      })),
+    });
+    try {
+      await openDashboard(admin.page);
+      const tile = admin.page.getByTestId('pulse-aiops');
+      await expect(tile).toBeVisible();
+      await expect(tile.locator('[data-pulse-stat="groups"] dd')).toHaveText('1');
+      await expect(tile.getByRole('link', { name: /AIOps pulse/ })).toHaveAttribute(
+        'href',
+        '/intelligence'
+      );
+      // The core Ops Pulse sections keep their places above it.
+      await expect(admin.page.getByTestId('pulse-you')).toBeVisible();
+      await expect(admin.page.getByTestId('pulse-coverage')).toHaveCount(1);
+      expect(
+        await tile.evaluate(
+          (node, other) =>
+            Boolean(
+              document.querySelector(`[data-testid="${other}"]`)!.compareDocumentPosition(node) &
+              Node.DOCUMENT_POSITION_FOLLOWING
+            ),
+          'pulse-coverage'
+        )
+      ).toBe(true);
+
+      // A scoped user cannot read intelligence: no tile, on the dashboard or the wallboard.
+      await openDashboard(alpha.page);
+      await expect(alpha.page.getByTestId('pulse-aiops')).toHaveCount(0);
+      await alpha.page.goto('/wallboard');
+      await expect(alpha.page.getByTestId('wallboard')).toBeVisible();
+      await expect(alpha.page.getByTestId('wallboard-largest-group-tile')).toHaveCount(0);
+
+      await admin.page.goto('/wallboard');
+      await expect(admin.page.getByTestId('wallboard')).toBeVisible();
+      const group = admin.page.getByTestId('wallboard-largest-group-tile');
+      await expect(group).toBeVisible();
+      await expect(group.getByRole('heading', { name: 'Largest open group' })).toBeVisible();
+      await expect(group.getByRole('link', { name: parent.title })).toHaveAttribute(
+        'href',
+        `/incidents/${parent.id}`
+      );
+      await expect(group).toContainText('2');
+      await expect(group).toContainText('grouped incidents');
+      // The noise tile keeps its place next to it.
+      await expect(admin.page.getByTestId('wallboard-noise-tile')).toBeVisible();
+    } finally {
+      await prisma.incidentRelationship.deleteMany({ where: relationshipWhere });
+    }
+
+    await admin.page.goto('/wallboard');
+    await expect(admin.page.getByTestId('wallboard')).toBeVisible();
+    await expect(admin.page.getByTestId('wallboard-largest-group-tile')).toHaveCount(0);
+  });
+
   test('TV wallboard is chrome-free, read-only and enters real fullscreen', async ({
     browserName,
   }, testInfo) => {

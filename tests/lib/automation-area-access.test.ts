@@ -14,6 +14,12 @@ vi.mock('@/lib/automation/settings', () => ({
   getAutomationSettings: vi.fn(async () => ({ automationStoreObservationPreviews: false })),
 }));
 vi.mock('@/lib/automation/runtime', () => ({ automationEnabled: vi.fn(async () => true) }));
+vi.mock('@/lib/intelligence/settings/service', () => ({
+  getIntelligenceSettings: vi.fn(async () => ({
+    enabled: false,
+    automationIntelligenceFieldsEnabled: false,
+  })),
+}));
 vi.mock('@/lib/prisma', () => ({
   default: {
     serviceAutomationConfig: {

@@ -91,9 +91,7 @@ export function clickHouseLiteralToJson(text: string): string | null {
  * output, templated annotations), embedded JSON, or a ClickHouse literal.
  * Returns the text to show expanded under its key, or null to keep it inline.
  */
-export function expandStringValue(
-  literal: string
-): { kind: 'json' | 'text'; text: string } | null {
+export function expandStringValue(literal: string): { kind: 'json' | 'text'; text: string } | null {
   if (!literal.startsWith('"') || !literal.endsWith('"')) return null;
   let decoded: string;
   try {

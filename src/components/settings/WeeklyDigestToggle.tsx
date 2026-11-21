@@ -66,7 +66,11 @@ export default function WeeklyDigestToggle({
           checked={checked}
           onCheckedChange={onChange}
           disabled={isPending || (me && !workspaceEnabled)}
-          aria-label={me ? 'Email me the weekly analytics summary' : 'Send the weekly analytics summary to everyone'}
+          aria-label={
+            me
+              ? 'Email me the weekly analytics summary'
+              : 'Send the weekly analytics summary to everyone'
+          }
         />
       </SettingsRow>
     </SettingsSection>

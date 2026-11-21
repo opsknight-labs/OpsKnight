@@ -215,6 +215,12 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "allow:resource"
   },
+  "GET /incidents/{id}/intelligence [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /incidents/{id}/notes [incidents:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -1425,6 +1431,18 @@
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /services/{id}/automation/replay [automation:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /services/{id}/automation/replay [automation:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
     "USER": "deny:MISSING_CAPABILITY"
   },
   "POST /services/{id}/automation/restore [automation:write]": {

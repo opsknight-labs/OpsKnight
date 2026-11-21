@@ -40,29 +40,29 @@ const withPWA = withPWAInit({
         urlPattern: ({ request, url }: { request: Request; url: URL }) =>
           !url.pathname.startsWith('/api/') &&
           (request.mode === 'navigate' ||
-          request.destination === 'document' ||
-          url.pathname === '/' ||
-          url.pathname === '/m' ||
-          url.pathname.startsWith('/login') ||
-          url.pathname.startsWith('/auth') ||
-          url.pathname.startsWith('/m/') ||
-          url.pathname.startsWith('/incidents') ||
-          url.pathname.startsWith('/settings') ||
-          url.pathname.startsWith('/services') ||
-          url.pathname.startsWith('/teams') ||
-          url.pathname.startsWith('/users') ||
-          url.pathname.startsWith('/schedules') ||
-          url.pathname.startsWith('/policies') ||
-          url.pathname.startsWith('/insights') ||
-          url.pathname.startsWith('/reports') ||
-          url.pathname.startsWith('/runbooks') ||
-          url.pathname.startsWith('/postmortems') ||
-          url.pathname.startsWith('/action-items') ||
-          url.pathname.startsWith('/events') ||
-          url.pathname.startsWith('/status') ||
-          url.pathname.startsWith('/system-logs') ||
-          url.pathname.startsWith('/help') ||
-          url.pathname.startsWith('/shortcuts')),
+            request.destination === 'document' ||
+            url.pathname === '/' ||
+            url.pathname === '/m' ||
+            url.pathname.startsWith('/login') ||
+            url.pathname.startsWith('/auth') ||
+            url.pathname.startsWith('/m/') ||
+            url.pathname.startsWith('/incidents') ||
+            url.pathname.startsWith('/settings') ||
+            url.pathname.startsWith('/services') ||
+            url.pathname.startsWith('/teams') ||
+            url.pathname.startsWith('/users') ||
+            url.pathname.startsWith('/schedules') ||
+            url.pathname.startsWith('/policies') ||
+            url.pathname.startsWith('/insights') ||
+            url.pathname.startsWith('/reports') ||
+            url.pathname.startsWith('/runbooks') ||
+            url.pathname.startsWith('/postmortems') ||
+            url.pathname.startsWith('/action-items') ||
+            url.pathname.startsWith('/events') ||
+            url.pathname.startsWith('/status') ||
+            url.pathname.startsWith('/system-logs') ||
+            url.pathname.startsWith('/help') ||
+            url.pathname.startsWith('/shortcuts')),
         handler: 'NetworkOnly',
         options: { cacheName: 'no-cache-pages' },
       },
@@ -117,7 +117,9 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   // Instrumentation and handlers share a native Prisma client. Bundling a
   // second SQL-tag implementation breaks nested Prisma.sql fragment identity.
-  serverExternalPackages: ['@prisma/client', '.prisma/client'],
+  // ExcelJS's archive reader has optional S3 adapters. Native loading keeps
+  // those adapters lazy for the local XLSX export path.
+  serverExternalPackages: ['@prisma/client', '.prisma/client', 'exceljs'],
   outputFileTracingRoot: path.join(__dirname),
   // Instrumentation reads authentication policy before any request. Ensure the
   // generated Prisma client and native engine exist in the standalone artifact.

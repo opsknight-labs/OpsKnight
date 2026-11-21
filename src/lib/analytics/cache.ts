@@ -36,7 +36,13 @@ function refresh(key: string, compute: () => Promise<unknown>): Promise<Entry> {
   const request = Promise.all([compute(), getRealtimeChangeGeneration().catch(() => null)])
     .then(([value, generation]) => {
       const now = Date.now();
-      const entry = { value, generation, computedAt: now, freshUntil: now + FRESH_TTL_MS, staleUntil: now + STALE_TTL_MS };
+      const entry = {
+        value,
+        generation,
+        computedAt: now,
+        freshUntil: now + FRESH_TTL_MS,
+        staleUntil: now + STALE_TTL_MS,
+      };
       cache.delete(key);
       cache.set(key, entry);
       return entry;
@@ -49,7 +55,10 @@ function refresh(key: string, compute: () => Promise<unknown>): Promise<Entry> {
 export type Cached<T> = { value: T; asOf: Date };
 
 /** Like `cached`, plus when the returned value was computed. */
-export async function cachedWithTime<T>(key: string, compute: () => Promise<T>): Promise<Cached<T>> {
+export async function cachedWithTime<T>(
+  key: string,
+  compute: () => Promise<T>
+): Promise<Cached<T>> {
   const now = Date.now();
   prune(now);
   let entry = cache.get(key);

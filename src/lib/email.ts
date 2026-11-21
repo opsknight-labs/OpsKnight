@@ -9,7 +9,11 @@ import { IncidentEmail, incidentPresentation } from '@/emails/templates/incident
 import { ShiftReminderEmail } from '@/emails/templates/shift-reminder';
 import { ShiftHandoffEmail } from '@/emails/templates/shift-handoff';
 import type { EmailConfig } from './notification-providers';
-import { decodeNotificationEnvelope } from './notification-payload';
+import {
+  decodeNotificationEnvelope,
+  pageContextLines,
+  parsePageContext,
+} from './notification-payload';
 import { announcementEmailDeliveryEligibility } from './status-pages/announcement-delivery-eligibility';
 
 export type EmailOptions = {
@@ -119,9 +123,15 @@ async function buildRawMimeMessage(message: {
       sendMail(options: Record<string, unknown>): Promise<{ message: Buffer | string }>;
     };
   };
-  const composer = nodemailer.createTransport({ streamTransport: true, buffer: true, newline: 'windows' });
+  const composer = nodemailer.createTransport({
+    streamTransport: true,
+    buffer: true,
+    newline: 'windows',
+  });
   const info = await composer.sendMail(message);
-  return typeof info.message === 'string' ? Buffer.from(info.message) : new Uint8Array(info.message);
+  return typeof info.message === 'string'
+    ? Buffer.from(info.message)
+    : new Uint8Array(info.message);
 }
 
 async function sendWithSingleProvider(
@@ -129,7 +139,8 @@ async function sendWithSingleProvider(
   emailConfig: EmailConfig
 ): Promise<EmailDeliveryResult> {
   const textContent = options.text || htmlToPlainText(options.html);
-  const headers = options.headers && Object.keys(options.headers).length ? options.headers : undefined;
+  const headers =
+    options.headers && Object.keys(options.headers).length ? options.headers : undefined;
   if (emailConfig.provider === 'resend') {
     try {
       const resendModule = await import('resend');
@@ -219,8 +230,7 @@ async function sendWithSingleProvider(
       });
       const response = result[0];
       const responseHeaders = response?.headers as
-        | Record<string, string | string[] | undefined>
-        | undefined;
+        Record<string, string | string[] | undefined> | undefined;
       const messageId = responseHeaders?.['x-message-id'];
       return response && response.statusCode >= 200 && response.statusCode < 300
         ? { success: true, providerMessageId: Array.isArray(messageId) ? messageId[0] : messageId }
@@ -279,9 +289,7 @@ async function sendWithSingleProvider(
           text: textContent,
           headers,
         });
-        const rawResult = await client.send(
-          new SendRawEmailCommand({ RawMessage: { Data: raw } })
-        );
+        const rawResult = await client.send(new SendRawEmailCommand({ RawMessage: { Data: raw } }));
         logger.info('Email sent via Amazon SES (raw)', { messageId: rawResult.MessageId });
         return { success: true, providerMessageId: rawResult.MessageId };
       }
@@ -595,6 +603,8 @@ type IncidentEmailData = {
   acknowledgedAt?: Date | null;
   resolvedAt?: Date | null;
   incidentUrl?: string;
+  /** Precomputed leads from the page envelope (label + link). */
+  leads?: Array<{ label: string; value: string }>;
 };
 export function generateIncidentEmailHTML(
   incident: IncidentEmailData,
@@ -626,7 +636,10 @@ export async function renderIncidentEmail(
     { label: 'Status', value: incident.status },
     { label: 'Urgency', value: incident.urgency },
     { label: 'Assignee', value: assigneeName },
-    { label: 'Created', value: formatDateTime(incident.createdAt, timeZone, { format: 'datetime' }) },
+    {
+      label: 'Created',
+      value: formatDateTime(incident.createdAt, timeZone, { format: 'datetime' }),
+    },
   ];
   if (incident.acknowledgedAt)
     details.push({
@@ -638,6 +651,7 @@ export async function renderIncidentEmail(
       label: 'Resolved',
       value: formatDateTime(incident.resolvedAt, timeZone, { format: 'datetime' }),
     });
+  details.push(...(incident.leads ?? []));
 
   // Skip event context that only echoes the title ("[Service] Title").
   const rawService = incident.service?.name || '';
@@ -724,9 +738,10 @@ export async function sendIncidentEmail(
                 ? 'ELEVATED'
                 : 'NEW';
     const incidentUrl = `${getBaseUrl()}/incidents/${incidentId}`;
+    const leads = pageContextLines(parsePageContext(snapshot?.context), getBaseUrl());
     const userTimeZone = getUserTimeZone(user ?? undefined);
     const html = await generateIncidentEmailHTML(
-      { ...eventIncident, incidentUrl },
+      { ...eventIncident, incidentUrl, leads },
       userTimeZone,
       eventType,
       envelope?.displayMessage
@@ -737,7 +752,7 @@ export async function sendIncidentEmail(
         to: user.email,
         subject: `[${subjectTag}] ${eventIncident.title}`,
         html,
-        text: `${eventIncident.title}\n\nService: ${eventIncident.service.name}\nStatus: ${eventIncident.status}\nUrgency: ${eventIncident.urgency}${displayMessage ? `\n\n${displayMessage}` : ''}\n\nView: ${incidentUrl}`,
+        text: `${eventIncident.title}\n\nService: ${eventIncident.service.name}\nStatus: ${eventIncident.status}\nUrgency: ${eventIncident.urgency}${displayMessage ? `\n\n${displayMessage}` : ''}${leads.map(lead => `\n${lead.label}: ${lead.value}`).join('')}\n\nView: ${incidentUrl}`,
         idempotencyKey: notificationId,
       },
       providedConfig

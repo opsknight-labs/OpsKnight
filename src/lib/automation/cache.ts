@@ -1,9 +1,17 @@
 import { createHash } from 'crypto';
-import { LIMITS, type CompiledSnapshot, type CompiledField, builtinFields } from './contract';
+import {
+  LIMITS,
+  type CompiledSnapshot,
+  type CompiledField,
+  builtinFields,
+  usesIntelligenceFields,
+} from './contract';
 export type CachedCompiledVersion = CompiledSnapshot & {
   compiled: CompiledSnapshot;
   versionNumber: number;
   fieldsByKey: Map<string, CompiledField | (typeof builtinFields)[number]>;
+  /** Precomputed so a version that reads no intelligence field costs nothing extra per event. */
+  usesIntelligence: boolean;
 };
 // Versions are immutable once published, so the number is cached alongside the snapshot.
 const versions = new Map<string, CachedCompiledVersion>();
@@ -57,6 +65,7 @@ export function loadCompiledVersion(version: {
     compiled,
     versionNumber: version.versionNumber,
     fieldsByKey,
+    usesIntelligence: usesIntelligenceFields(compiled),
   };
   versions.set(version.id, entry);
   if (versions.size > LIMITS.cache) versions.delete(versions.keys().next().value!);

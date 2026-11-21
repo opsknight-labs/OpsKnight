@@ -52,6 +52,8 @@ export interface EscalationPageIntent {
   recipientAddress: string;
   /** Pre-resolved provider, so materialization needs no provider config read. */
   providerKey?: string;
+  /** The recipient opted in to bundling and the incident is low urgency. */
+  bundle?: boolean;
 }
 
 export interface EscalationNotificationPlan {
@@ -131,6 +133,8 @@ export type EscalationNotificationIncident = {
   service?: { id?: string; name?: string | null } | null;
   assignee?: { id?: string; name?: string | null; email?: string | null } | null;
   team?: { id?: string; name?: string | null } | null;
+  /** Precomputed leads on the incident row; the executor's full-row read already has it. */
+  pageContext?: unknown;
 };
 
 /**
@@ -191,6 +195,7 @@ export async function planEscalationNotificationIntents(input: {
           quietHoursStartMinutes: true,
           quietHoursEndMinutes: true,
           quietHoursWeekendAllDay: true,
+          bundleLowUrgencyPages: true,
         },
       }),
       getUserNotificationChannels(userId),
@@ -219,6 +224,11 @@ export async function planEscalationNotificationIntents(input: {
       continue;
     }
 
+    const bundle =
+      recipient.bundleLowUrgencyPages &&
+      incident.urgency === 'LOW' &&
+      incident.priority !== 'P1' &&
+      incident.priority !== 'P2';
     for (const channel of channels) {
       const recipientAddress = recipientAddressFor(channel, {
         userId,
@@ -239,6 +249,7 @@ export async function planEscalationNotificationIntents(input: {
         userId,
         channel,
         recipientAddress,
+        ...(bundle ? { bundle } : {}),
       });
     }
   }
@@ -300,7 +311,13 @@ export async function materializeEscalationNotificationIntents(
         eventKey: plan.eventKey,
         displayMessage: 'Incident notification',
         trafficClass: 'CRITICAL',
-        priority: NOTIFICATION_PRIORITY.RESPONDER_CRITICAL,
+        // A bundled page is low urgency by construction, and the noise controller only bundles below
+        // responder-critical priority.
+        priority: intent.bundle
+          ? NOTIFICATION_PRIORITY.RESPONDER
+          : NOTIFICATION_PRIORITY.RESPONDER_CRITICAL,
+        bundle: intent.bundle,
+        escalationStepIndex: plan.stepIndex,
         eventAt: plan.eventAt,
         payload: {
           kind: `INCIDENT_${intent.channel}`,

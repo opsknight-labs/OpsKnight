@@ -10,7 +10,14 @@ spec:
       serviceAccountName: opsknight-app
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
-      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      securityContext:
+        {
+          runAsNonRoot: true,
+          runAsUser: 1001,
+          runAsGroup: 1001,
+          fsGroup: 1001,
+          seccompProfile: { type: RuntimeDefault },
+        }
       containers:
         - name: opsknight-app
           securityContext:
@@ -22,19 +29,67 @@ spec:
           image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
-          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          envFrom:
+            [
+              { configMapRef: { name: opsknight-config } },
+              { secretRef: { name: opsknight-secrets } },
+            ]
           env:
             - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: web }
             - { name: DATABASE_POOL_SIZE_WEB, value: '10' }
-            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
-            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
+            - {
+                name: DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } },
+              }
+            - {
+                name: DIRECT_DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } },
+              }
           resources: { requests: { cpu: 250m, memory: 256Mi }, limits: { cpu: '1', memory: 1Gi } }
-          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
-          livenessProbe: { httpGet: { path: '/api/health', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
-          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          startupProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 30,
+            }
+          livenessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
+          readinessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: web } } }
+        - {
+            maxSkew: 1,
+            topologyKey: kubernetes.io/hostname,
+            whenUnsatisfiable: DoNotSchedule,
+            labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: web } },
+          }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -48,7 +103,14 @@ spec:
       serviceAccountName: opsknight-app
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
-      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      securityContext:
+        {
+          runAsNonRoot: true,
+          runAsUser: 1001,
+          runAsGroup: 1001,
+          fsGroup: 1001,
+          seccompProfile: { type: RuntimeDefault },
+        }
       containers:
         - name: opsknight-app
           securityContext:
@@ -60,20 +122,68 @@ spec:
           image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
-          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          envFrom:
+            [
+              { configMapRef: { name: opsknight-config } },
+              { secretRef: { name: opsknight-secrets } },
+            ]
           env:
             - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: scheduler }
             - { name: OPSKNIGHT_SCHEDULER_PROFILE, value: maintenance }
             - { name: DATABASE_POOL_SIZE_SCHEDULER, value: '3' }
-            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
-            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
+            - {
+                name: DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } },
+              }
+            - {
+                name: DIRECT_DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } },
+              }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
-          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
-          livenessProbe: { httpGet: { path: '/api/health', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
-          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          startupProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 30,
+            }
+          livenessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
+          readinessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: scheduler } } }
+        - {
+            maxSkew: 1,
+            topologyKey: kubernetes.io/hostname,
+            whenUnsatisfiable: DoNotSchedule,
+            labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: scheduler } },
+          }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -87,7 +197,14 @@ spec:
       serviceAccountName: opsknight-app
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
-      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      securityContext:
+        {
+          runAsNonRoot: true,
+          runAsUser: 1001,
+          runAsGroup: 1001,
+          fsGroup: 1001,
+          seccompProfile: { type: RuntimeDefault },
+        }
       containers:
         - name: opsknight-app
           securityContext:
@@ -99,23 +216,169 @@ spec:
           image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
-          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          envFrom:
+            [
+              { configMapRef: { name: opsknight-config } },
+              { secretRef: { name: opsknight-secrets } },
+            ]
           env:
             - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: general-worker }
+            - { name: OPSKNIGHT_INTELLIGENCE_DEDICATED, value: 'true' }
             - { name: DATABASE_POOL_SIZE_GENERAL_WORKER, value: '15' }
             - { name: OPSKNIGHT_WORKER_BATCH_SIZE, value: '100' }
             - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '15' }
             - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
             - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
-            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
-            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
+            - {
+                name: DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } },
+              }
+            - {
+                name: DIRECT_DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } },
+              }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
-          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
-          livenessProbe: { httpGet: { path: '/api/health', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
-          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          startupProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 30,
+            }
+          livenessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
+          readinessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: general-worker } } }
+        - {
+            maxSkew: 1,
+            topologyKey: kubernetes.io/hostname,
+            whenUnsatisfiable: DoNotSchedule,
+            labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: general-worker } },
+          }
+---
+# Advisory analysis runs apart from paging. Each replica uses its Prisma pool plus one direct session
+# for wake notifications; batch size and concurrency are set in Settings → Intelligence, not here.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: opsknight-intelligence-worker, namespace: opsknight }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: intelligence-worker } }
+  template:
+    metadata: { labels: { app: opsknight-app, opsknight-role: intelligence-worker } }
+    spec:
+      serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        {
+          runAsNonRoot: true,
+          runAsUser: 1001,
+          runAsGroup: 1001,
+          fsGroup: 1001,
+          seccompProfile: { type: RuntimeDefault },
+        }
+      containers:
+        - name: opsknight-app
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
+          imagePullPolicy: Always
+          ports: [{ name: http, containerPort: 3000 }]
+          envFrom:
+            [
+              { configMapRef: { name: opsknight-config } },
+              { secretRef: { name: opsknight-secrets } },
+            ]
+          env:
+            - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
+            - { name: OPSKNIGHT_PROCESS_ROLE, value: intelligence-worker }
+            - { name: OPSKNIGHT_INTELLIGENCE_DEDICATED, value: 'true' }
+            - { name: DATABASE_POOL_SIZE_INTELLIGENCE_WORKER, value: '2' }
+            - {
+                name: DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } },
+              }
+            - {
+                name: DIRECT_DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } },
+              }
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
+          startupProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 30,
+            }
+          livenessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
+          readinessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
+      topologySpreadConstraints:
+        - {
+            maxSkew: 1,
+            topologyKey: kubernetes.io/hostname,
+            whenUnsatisfiable: DoNotSchedule,
+            labelSelector:
+              { matchLabels: { app: opsknight-app, opsknight-role: intelligence-worker } },
+          }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -129,7 +392,14 @@ spec:
       serviceAccountName: opsknight-app
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
-      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      securityContext:
+        {
+          runAsNonRoot: true,
+          runAsUser: 1001,
+          runAsGroup: 1001,
+          fsGroup: 1001,
+          seccompProfile: { type: RuntimeDefault },
+        }
       containers:
         - name: opsknight-app
           securityContext:
@@ -141,7 +411,11 @@ spec:
           image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
-          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          envFrom:
+            [
+              { configMapRef: { name: opsknight-config } },
+              { secretRef: { name: opsknight-secrets } },
+            ]
           env:
             - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: critical-worker }
@@ -150,14 +424,58 @@ spec:
             - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '10' }
             - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
             - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
-            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
-            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
+            - {
+                name: DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } },
+              }
+            - {
+                name: DIRECT_DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } },
+              }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
-          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
-          livenessProbe: { httpGet: { path: '/api/health', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
-          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          startupProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 30,
+            }
+          livenessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
+          readinessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: critical-worker } } }
+        - {
+            maxSkew: 1,
+            topologyKey: kubernetes.io/hostname,
+            whenUnsatisfiable: DoNotSchedule,
+            labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: critical-worker } },
+          }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -171,7 +489,14 @@ spec:
       serviceAccountName: opsknight-app
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
-      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      securityContext:
+        {
+          runAsNonRoot: true,
+          runAsUser: 1001,
+          runAsGroup: 1001,
+          fsGroup: 1001,
+          seccompProfile: { type: RuntimeDefault },
+        }
       containers:
         - name: opsknight-app
           securityContext:
@@ -183,7 +508,11 @@ spec:
           image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
-          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          envFrom:
+            [
+              { configMapRef: { name: opsknight-config } },
+              { secretRef: { name: opsknight-secrets } },
+            ]
           env:
             - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: bulk-worker }
@@ -192,14 +521,58 @@ spec:
             - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '15' }
             - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
             - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
-            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
-            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
+            - {
+                name: DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } },
+              }
+            - {
+                name: DIRECT_DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } },
+              }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
-          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
-          livenessProbe: { httpGet: { path: '/api/health', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
-          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          startupProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 30,
+            }
+          livenessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
+          readinessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: bulk-worker } } }
+        - {
+            maxSkew: 1,
+            topologyKey: kubernetes.io/hostname,
+            whenUnsatisfiable: DoNotSchedule,
+            labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: bulk-worker } },
+          }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -213,7 +586,14 @@ spec:
       serviceAccountName: opsknight-app
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
-      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      securityContext:
+        {
+          runAsNonRoot: true,
+          runAsUser: 1001,
+          runAsGroup: 1001,
+          fsGroup: 1001,
+          seccompProfile: { type: RuntimeDefault },
+        }
       containers:
         - name: opsknight-app
           securityContext:
@@ -225,7 +605,11 @@ spec:
           image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
-          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          envFrom:
+            [
+              { configMapRef: { name: opsknight-config } },
+              { secretRef: { name: opsknight-secrets } },
+            ]
           env:
             - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: runbook-worker }
@@ -234,14 +618,58 @@ spec:
             - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '10' }
             - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
             - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
-            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
-            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
+            - {
+                name: DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } },
+              }
+            - {
+                name: DIRECT_DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } },
+              }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
-          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
-          livenessProbe: { httpGet: { path: '/api/health', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
-          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          startupProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 30,
+            }
+          livenessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
+          readinessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: runbook-worker } } }
+        - {
+            maxSkew: 1,
+            topologyKey: kubernetes.io/hostname,
+            whenUnsatisfiable: DoNotSchedule,
+            labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: runbook-worker } },
+          }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -255,7 +683,14 @@ spec:
       serviceAccountName: opsknight-app
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
-      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      securityContext:
+        {
+          runAsNonRoot: true,
+          runAsUser: 1001,
+          runAsGroup: 1001,
+          fsGroup: 1001,
+          seccompProfile: { type: RuntimeDefault },
+        }
       containers:
         - name: opsknight-app
           securityContext:
@@ -267,7 +702,11 @@ spec:
           image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
-          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          envFrom:
+            [
+              { configMapRef: { name: opsknight-config } },
+              { secretRef: { name: opsknight-secrets } },
+            ]
           env:
             - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: status-projector }
@@ -276,11 +715,56 @@ spec:
             - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '15' }
             - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
             - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
-            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
-            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
+            - {
+                name: DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } },
+              }
+            - {
+                name: DIRECT_DATABASE_URL,
+                valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } },
+              }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
-          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
-          livenessProbe: { httpGet: { path: '/api/health', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
-          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          startupProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 30,
+            }
+          livenessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
+          readinessProbe:
+            {
+              httpGet:
+                {
+                  path: '/api/health?mode=readiness',
+                  port: http,
+                  httpHeaders: [{ name: Host, value: 'localhost:3000' }],
+                },
+              periodSeconds: 10,
+              timeoutSeconds: 5,
+              failureThreshold: 3,
+            }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: status-projector } } }
+        - {
+            maxSkew: 1,
+            topologyKey: kubernetes.io/hostname,
+            whenUnsatisfiable: DoNotSchedule,
+            labelSelector:
+              { matchLabels: { app: opsknight-app, opsknight-role: status-projector } },
+          }

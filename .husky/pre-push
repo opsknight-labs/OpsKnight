@@ -36,7 +36,8 @@ npx tsc --noEmit || {
 # Run all unit tests
 echo ""
 echo "🧪 Running all unit tests..."
-npx vitest run -c vitest.unit.config.ts || {
+# Bound forks so the full suite fits alongside local services.
+npx vitest run -c vitest.unit.config.ts --maxWorkers=2 || {
   echo "❌ Unit tests failed. Please fix failing tests before pushing."
   exit 1
 }

@@ -250,7 +250,13 @@ const INTERRUPTION_SERIES: Series[] = [
   { key: 'overnight', label: 'Overnight', color: 'var(--chart-ordinal-3)' },
 ];
 
-export function InterruptionsChart({ data, bucket }: { data: InterruptionPoint[]; bucket: Bucket }) {
+export function InterruptionsChart({
+  data,
+  bucket,
+}: {
+  data: InterruptionPoint[];
+  bucket: Bucket;
+}) {
   return (
     <div>
       <div style={{ height: 180 }} aria-hidden>

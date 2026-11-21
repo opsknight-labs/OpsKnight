@@ -195,8 +195,8 @@ jobs:
           grep -q 'ghcr.io/opsknight-labs/opsknight:' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
           grep -q 'type: Recreate' /tmp/opsknight-helm.yaml
-          test "$(grep -c 'type: Recreate' /tmp/opsknight-helm-split.yaml)" -eq 7
-          test "$(grep -c 'type: Recreate' /tmp/opsknight-kustomize-split.yaml)" -eq 7
+          test "$(grep -c 'type: Recreate' /tmp/opsknight-helm-split.yaml)" -eq 8
+          test "$(grep -c 'type: Recreate' /tmp/opsknight-kustomize-split.yaml)" -eq 8
           grep -q 'topologySpreadConstraints:' /tmp/opsknight-helm.yaml
           grep -q 'checksum/config:' /tmp/opsknight-helm.yaml
           grep -q 'checksum/secret:' /tmp/opsknight-helm.yaml
@@ -204,16 +204,16 @@ jobs:
           grep -q 'NEXT_PUBLIC_APP_URL' /tmp/opsknight-kustomize-base.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize-integrated.yaml
-          for role in web scheduler general-worker critical-worker bulk-worker runbook-worker status-projector; do
+          for role in web scheduler intelligence-worker general-worker critical-worker bulk-worker runbook-worker status-projector; do
             grep -q "name: opsknight-$role" /tmp/opsknight-helm-split.yaml
             grep -q "name: opsknight-$role" /tmp/opsknight-helm-split-generic.yaml
             grep -q "name: opsknight-$role" /tmp/opsknight-kustomize-split.yaml
           done
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split.yaml)" -eq 7
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-generic.yaml)" -eq 7
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-pgbouncer.yaml)" -eq 8
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split.yaml)" -eq 7
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split-pgbouncer.yaml)" -eq 8
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split.yaml)" -eq 8
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-generic.yaml)" -eq 8
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-pgbouncer.yaml)" -eq 9
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split.yaml)" -eq 8
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split-pgbouncer.yaml)" -eq 9
           if grep -q 'whenUnsatisfiable: ScheduleAnyway' /tmp/opsknight-helm-split.yaml /tmp/opsknight-helm-split-generic.yaml /tmp/opsknight-helm-split-pgbouncer.yaml /tmp/opsknight-kustomize-split.yaml /tmp/opsknight-kustomize-split-pgbouncer.yaml; then
             echo 'split runtime unexpectedly allowed soft topology spreading'
             exit 1

@@ -46,7 +46,10 @@ describe('analytics cache', () => {
     vi.setSystemTime(T0 + 60_000); // past fresh (30s), within stale (5m)
     expect(await cachedWithTime('k', compute)).toEqual({ value: 'old', asOf: new Date(T0) });
     await new Promise(resolve => setTimeout(resolve, 0)); // let the background refresh land
-    expect(await cachedWithTime('k', compute)).toEqual({ value: 'new', asOf: new Date(T0 + 60_000) });
+    expect(await cachedWithTime('k', compute)).toEqual({
+      value: 'new',
+      asOf: new Date(T0 + 60_000),
+    });
     expect(compute).toHaveBeenCalledTimes(2);
   });
 

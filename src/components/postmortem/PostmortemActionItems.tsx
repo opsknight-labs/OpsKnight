@@ -24,6 +24,7 @@ import type { JiraCapability } from '@/lib/jira-capabilities';
 import type { JiraIssueReference } from '@/lib/jira-references';
 import ActionItemJiraContext from '@/components/action-items/ActionItemJiraContext';
 import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
+import ActionItemSuggestions from './ActionItemSuggestions';
 import { ACTION_ITEM_STATUS_CONFIG, ACTION_ITEM_PRIORITY_CONFIG } from './shared';
 
 interface PostmortemActionItemsProps {
@@ -40,6 +41,8 @@ interface PostmortemActionItemsProps {
   jiraCapability: JiraCapability;
   /** Read-only Jira issues owned by the parent incident. */
   incidentJiraIssues?: JiraIssueReference[];
+  /** The postmortem's incident; enables duplicate and owner hints for a new item. */
+  incidentId?: string;
 }
 
 export default function PostmortemActionItems({
@@ -49,6 +52,7 @@ export default function PostmortemActionItems({
   users = [],
   jiraCapability,
   incidentJiraIssues = [],
+  incidentId,
 }: PostmortemActionItemsProps) {
   const { userTimeZone } = useTimezone();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -180,6 +184,15 @@ export default function PostmortemActionItems({
               </Select>
             </div>
           </div>
+          {incidentId && (
+            <ActionItemSuggestions
+              incidentId={incidentId}
+              title={newItem.title || ''}
+              owner={newItem.owner}
+              selectableUserIds={new Set(users.map(user => user.id))}
+              onPickOwner={owner => setNewItem(previous => ({ ...previous, owner }))}
+            />
+          )}
           <div className="space-y-1.5">
             <Label>Description</Label>
             <Textarea

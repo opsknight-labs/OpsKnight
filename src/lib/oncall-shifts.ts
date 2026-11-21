@@ -15,6 +15,8 @@ export interface DynamicOnCallShift {
     emailNotificationsEnabled?: boolean;
   };
   scheduleId: string;
+  /** Winning layer of the effective block. Set by window reads only. */
+  layerId?: string;
   schedule: {
     id: string;
     name: string;
@@ -197,12 +199,13 @@ export async function getActiveOnCallShifts(
 export async function getWindowOnCallShifts(
   windowStart: Date,
   windowEnd: Date,
-  scheduleIdOrWhere?: string | Prisma.OnCallScheduleWhereInput
+  scheduleIdOrWhere?: string | Prisma.OnCallScheduleWhereInput,
+  client: Prisma.TransactionClient | typeof prisma = prisma
 ): Promise<DynamicOnCallShift[]> {
-  if (!prisma?.onCallSchedule?.findMany) {
+  if (!client?.onCallSchedule?.findMany) {
     return [];
   }
-  const schedules = await prisma.onCallSchedule.findMany({
+  const schedules = await client.onCallSchedule.findMany({
     where: typeof scheduleIdOrWhere === 'string' ? { id: scheduleIdOrWhere } : scheduleIdOrWhere,
     include: {
       layers: {
@@ -325,6 +328,7 @@ export async function getWindowOnCallShifts(
           emailNotificationsEnabled: block.userEmailNotificationsEnabled,
         },
         scheduleId: schedule.id,
+        layerId: block.layerId,
         schedule: {
           id: schedule.id,
           name: schedule.name,

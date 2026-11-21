@@ -23,6 +23,7 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
     vi.resetModules();
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-19T00:00:00Z'));
+    vi.stubEnv('REDIRECT_TO_CANONICAL_HOST', 'true');
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://www.opsnite.com');
     vi.stubEnv('NEXTAUTH_URL', 'https://www.opsnite.com');
     vi.stubEnv('NEXTAUTH_SECRET', 'test-secret-at-least-32-characters-long');

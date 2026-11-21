@@ -1,0 +1,579 @@
+.opsknight-squire {
+  --oksq-size: 96px;
+  --oksq-dur: 1;
+  --oksq-helm: #f4f1f3;
+  --oksq-helm-shade: #d9d2d7;
+  --oksq-rim: #bdb5bb;
+  --oksq-armor: #f1edf0;
+  --oksq-armor-shade: #d6ced4;
+  --oksq-joint: #3f434d;
+  --oksq-glove: #4b4f59;
+  --oksq-visor: #161a24;
+  --oksq-red: #d21a1b;
+  --oksq-red-shade: #9f1239;
+  --oksq-red-hi: #ef4444;
+  --oksq-eye: #ffffff;
+  --oksq-glow: rgba(255, 255, 255, 0.55);
+  --oksq-accent: #d21a1b;
+  display: inline-block;
+  width: var(--oksq-size);
+  height: var(--oksq-size);
+  overflow: visible;
+}
+.opsknight-squire[data-state='listening'] {
+  --oksq-eye: #bfdbfe;
+  --oksq-glow: rgba(96, 165, 250, 0.7);
+  --oksq-accent: #60a5fa;
+}
+.opsknight-squire[data-state='thinking'] {
+  --oksq-eye: #c4b5fd;
+  --oksq-glow: rgba(167, 139, 250, 0.75);
+  --oksq-accent: #a78bfa;
+}
+.opsknight-squire[data-state='success'] {
+  --oksq-eye: #a7f3d0;
+  --oksq-glow: rgba(16, 185, 129, 0.75);
+  --oksq-accent: #10b981;
+}
+.opsknight-squire[data-state='alert'] {
+  --oksq-eye: #fde68a;
+  --oksq-glow: rgba(245, 158, 11, 0.8);
+  --oksq-accent: #f59e0b;
+}
+.opsknight-squire[data-state='error'] {
+  --oksq-eye: #fecaca;
+  --oksq-glow: rgba(244, 63, 94, 0.8);
+  --oksq-accent: #f43f5e;
+}
+.opsknight-squire[data-state='offline'] {
+  --oksq-eye: #64748b;
+  --oksq-glow: transparent;
+  --oksq-visor: #1f2430;
+}
+.opsknight-squire * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.opsknight-squire .oksq-shadow {
+  fill: #0f172a;
+  opacity: 0.18;
+}
+.opsknight-squire .oksq-helm {
+  fill: var(--oksq-helm);
+}
+.opsknight-squire .oksq-helm-shade {
+  fill: var(--oksq-helm-shade);
+}
+.opsknight-squire .oksq-armor {
+  fill: var(--oksq-armor);
+}
+.opsknight-squire .oksq-armor-shade {
+  fill: var(--oksq-armor-shade);
+}
+.opsknight-squire .oksq-rim {
+  fill: var(--oksq-rim);
+}
+.opsknight-squire .oksq-fin {
+  fill: var(--oksq-rim);
+}
+.opsknight-squire .oksq-joint {
+  fill: var(--oksq-joint);
+}
+.opsknight-squire .oksq-glove {
+  fill: var(--oksq-glove);
+}
+.opsknight-squire .oksq-vent {
+  fill: none;
+  stroke: #6e6872;
+  stroke-width: 3.8;
+  stroke-linecap: round;
+}
+.opsknight-squire .oksq-seam {
+  fill: none;
+  stroke: var(--oksq-armor-shade);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.opsknight-squire .oksq-cape,
+.opsknight-squire .oksq-red {
+  fill: var(--oksq-red);
+}
+.opsknight-squire .oksq-cape-shade,
+.opsknight-squire .oksq-red-shade {
+  fill: var(--oksq-red-shade);
+}
+.opsknight-squire .oksq-red-hi {
+  fill: var(--oksq-red-hi);
+  opacity: 0.55;
+}
+.opsknight-squire .oksq-red-hi-line {
+  fill: none;
+  stroke: var(--oksq-red-hi);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+.opsknight-squire .oksq-visor {
+  fill: var(--oksq-visor);
+  transition: fill 0.3s;
+}
+.opsknight-squire .oksq-gloss {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  opacity: 0.28;
+}
+.opsknight-squire .oksq-face {
+  filter: drop-shadow(0 0 2.2px var(--oksq-glow));
+}
+.opsknight-squire .oksq-fill {
+  fill: var(--oksq-eye);
+  transition: fill 0.3s;
+}
+.opsknight-squire .oksq-ink {
+  fill: none;
+  stroke: var(--oksq-eye);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 0.3s;
+}
+.opsknight-squire .oksq-crest-ring,
+.opsknight-squire .oksq-ear-ring {
+  fill: none;
+  stroke: var(--oksq-accent);
+  stroke-width: 2;
+  opacity: 0;
+}
+.opsknight-squire .oksq-z {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.opsknight-squire .oksq-spark {
+  fill: var(--oksq-accent);
+}
+.opsknight-squire[data-variant='avatar'] .oksq-body,
+.opsknight-squire[data-variant='avatar'] .oksq-shadow {
+  display: none;
+}
+/* visibility per state */
+.opsknight-squire .oksq-eyes-happy,
+.opsknight-squire .oksq-eyes-closed,
+.opsknight-squire .oksq-mouth-o,
+.opsknight-squire .oksq-dots,
+.opsknight-squire .oksq-zzz,
+.opsknight-squire .oksq-spark {
+  opacity: 0;
+}
+.opsknight-squire[data-state='greeting'] .oksq-eyes-open,
+.opsknight-squire[data-state='success'] .oksq-eyes-open {
+  opacity: 0;
+}
+.opsknight-squire[data-state='greeting'] .oksq-eyes-happy,
+.opsknight-squire[data-state='success'] .oksq-eyes-happy {
+  opacity: 1;
+}
+.opsknight-squire[data-state='offline'] .oksq-eyes-open {
+  opacity: 0;
+}
+.opsknight-squire[data-state='offline'] .oksq-eyes-closed,
+.opsknight-squire[data-state='offline'] .oksq-zzz {
+  opacity: 1;
+}
+.opsknight-squire[data-state='offline'] .oksq-mouth {
+  transform: scale(0.6, 0.4);
+}
+.opsknight-squire[data-state='thinking'] .oksq-mouth {
+  opacity: 0;
+}
+.opsknight-squire[data-state='thinking'] .oksq-dots {
+  opacity: 1;
+}
+.opsknight-squire[data-state='alert'] .oksq-mouth {
+  opacity: 0;
+}
+.opsknight-squire[data-state='alert'] .oksq-mouth-o {
+  opacity: 1;
+}
+.opsknight-squire[data-state='error'] .oksq-mouth {
+  transform: translateY(1.5px) scaleY(-1);
+}
+.opsknight-squire[data-state='error'] .oksq-brow.l {
+  transform: translateY(1px) rotate(-16deg);
+}
+.opsknight-squire[data-state='error'] .oksq-brow.r {
+  transform: translateY(1px) rotate(16deg);
+}
+.opsknight-squire[data-state='alert'] .oksq-brows {
+  transform: translateY(-2.2px);
+}
+.opsknight-squire[data-state='thinking'] .oksq-brow.r {
+  transform: translateY(-2px) rotate(-6deg);
+}
+.opsknight-squire[data-state='success'] .oksq-spark {
+  opacity: 1;
+}
+.opsknight-squire[data-state='offline'] .oksq-brows {
+  opacity: 0.5;
+}
+.opsknight-squire[data-state='error'] .oksq-eye {
+  transform: scale(0.8);
+}
+.opsknight-squire .oksq-brow,
+.opsknight-squire .oksq-brows,
+.opsknight-squire .oksq-mouth {
+  transition:
+    transform 0.25s ease,
+    opacity 0.2s;
+}
+/* arm pivots */
+.opsknight-squire .oksq-arm-r {
+  transform-box: view-box;
+  transform-origin: 84px 90px;
+  transition: transform 0.35s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.opsknight-squire .oksq-arm-l {
+  transform-box: view-box;
+  transform-origin: 37px 92px;
+}
+.opsknight-squire .oksq-head {
+  transform-box: view-box;
+  transform-origin: 60px 78px;
+  transition: transform 0.35s ease;
+}
+.opsknight-squire .oksq-plume {
+  transform-box: view-box;
+  transform-origin: 47px 22px;
+}
+.opsknight-squire[data-state='greeting'] .oksq-arm-r,
+.opsknight-squire[data-state='success'] .oksq-arm-r {
+  transform: rotate(-140deg);
+}
+.opsknight-squire[data-state='listening'] .oksq-head {
+  transform: rotate(-7deg);
+}
+.opsknight-squire[data-state='error'] .oksq-head {
+  transform: translateY(2px) rotate(6deg);
+}
+.opsknight-squire[data-state='offline'] .oksq-head {
+  transform: translateY(2.5px) rotate(4deg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .opsknight-squire .oksq-rig {
+    animation: oksq-float calc(4s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  .opsknight-squire .oksq-shadow {
+    animation: oksq-shadow calc(4s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  .opsknight-squire .oksq-eye {
+    animation: oksq-blink calc(5s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  .opsknight-squire .oksq-plume {
+    animation: oksq-sway calc(4s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  /* greeting: wave */
+  .opsknight-squire[data-state='greeting'] .oksq-arm-r {
+    animation: oksq-wave calc(1.2s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  /* listening: ear rings ripple */
+  .opsknight-squire[data-state='listening'] .oksq-ear-ring {
+    animation: oksq-ripple calc(1.4s * var(--oksq-dur)) ease-out infinite;
+  }
+  .opsknight-squire[data-state='listening'] .oksq-eye {
+    animation: oksq-nod calc(1.4s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  /* thinking: eyes look around, dots bounce */
+  .opsknight-squire[data-state='thinking'] .oksq-eyes-open {
+    animation: oksq-look calc(2.4s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  .opsknight-squire[data-state='thinking'] .oksq-eye {
+    animation: none;
+  }
+  .opsknight-squire[data-state='thinking'] .oksq-dots circle {
+    animation: oksq-dot calc(1s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  .opsknight-squire[data-state='thinking'] .oksq-dots circle:nth-child(2) {
+    animation-delay: calc(0.15s * var(--oksq-dur));
+  }
+  .opsknight-squire[data-state='thinking'] .oksq-dots circle:nth-child(3) {
+    animation-delay: calc(0.3s * var(--oksq-dur));
+  }
+  /* speaking: mouth talks, head bobs */
+  .opsknight-squire[data-state='speaking'] .oksq-mouth {
+    animation: oksq-talk calc(0.3s * var(--oksq-dur)) ease-in-out infinite alternate;
+  }
+  .opsknight-squire[data-state='speaking'] .oksq-head {
+    animation: oksq-bob calc(0.9s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  /* success: hop, sparkles, fist pump */
+  .opsknight-squire[data-state='success'] .oksq-rig {
+    animation: oksq-hop calc(0.9s * var(--oksq-dur)) cubic-bezier(0.3, 1.5, 0.5, 1) infinite;
+  }
+  .opsknight-squire[data-state='success'] .oksq-spark {
+    animation: oksq-twinkle calc(0.9s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  .opsknight-squire[data-state='success'] .oksq-spark.s2 {
+    animation-delay: calc(-0.45s * var(--oksq-dur));
+  }
+  .opsknight-squire[data-state='success'] .oksq-crest-ring {
+    animation: oksq-ripple calc(0.9s * var(--oksq-dur)) ease-out infinite;
+  }
+  /* alert: shake, plume flick, crest pulse */
+  .opsknight-squire[data-state='alert'] .oksq-head {
+    animation: oksq-shake calc(1.6s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  .opsknight-squire[data-state='alert'] .oksq-plume {
+    animation: oksq-flick calc(0.4s * var(--oksq-dur)) ease-in-out infinite alternate;
+  }
+  .opsknight-squire[data-state='alert'] .oksq-crest-ring {
+    animation: oksq-ripple calc(1s * var(--oksq-dur)) ease-out infinite;
+  }
+  .opsknight-squire[data-state='alert'] .oksq-eye {
+    animation: none;
+    transform: scale(1.12);
+  }
+  /* error: droop + glitch flicker */
+  .opsknight-squire[data-state='error'] .oksq-face {
+    animation: oksq-glitch calc(2.2s * var(--oksq-dur)) steps(1) infinite;
+  }
+  .opsknight-squire[data-state='error'] .oksq-plume {
+    animation: none;
+    transform: rotate(-14deg);
+  }
+  .opsknight-squire[data-state='error'] .oksq-rig {
+    animation: oksq-float calc(6s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  /* offline: slow breathe, z's */
+  .opsknight-squire[data-state='offline'] .oksq-rig {
+    animation: oksq-breathe calc(5s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  .opsknight-squire[data-state='offline'] .oksq-plume {
+    animation: none;
+    transform: rotate(-10deg);
+  }
+  .opsknight-squire[data-state='offline'] .oksq-z {
+    animation: oksq-zz calc(3s * var(--oksq-dur)) ease-in-out infinite;
+  }
+  .opsknight-squire[data-state='offline'] .oksq-z.s {
+    animation-delay: calc(-1.5s * var(--oksq-dur));
+  }
+}
+@keyframes oksq-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2.5px);
+  }
+}
+@keyframes oksq-shadow {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.18;
+  }
+  50% {
+    transform: scaleX(0.88);
+    opacity: 0.11;
+  }
+}
+@keyframes oksq-blink {
+  0%,
+  45%,
+  49%,
+  100% {
+    transform: scaleY(1);
+  }
+  47% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes oksq-sway {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  50% {
+    transform: rotate(-5deg);
+  }
+}
+@keyframes oksq-wave {
+  0%,
+  100% {
+    transform: rotate(-140deg);
+  }
+  50% {
+    transform: rotate(-165deg);
+  }
+}
+@keyframes oksq-ripple {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+@keyframes oksq-nod {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.1);
+  }
+}
+@keyframes oksq-look {
+  0%,
+  100% {
+    transform: translate(-2px, -2px);
+  }
+  40%,
+  60% {
+    transform: translate(2.5px, -2.5px);
+  }
+}
+@keyframes oksq-dot {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+}
+@keyframes oksq-chin {
+  0%,
+  100% {
+    transform: rotate(-120deg);
+  }
+  50% {
+    transform: rotate(-126deg);
+  }
+}
+@keyframes oksq-talk {
+  0% {
+    transform: scaleY(0.5);
+  }
+  100% {
+    transform: scaleY(1.9);
+  }
+}
+@keyframes oksq-bob {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  50% {
+    transform: rotate(2.5deg);
+  }
+}
+@keyframes oksq-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes oksq-twinkle {
+  0%,
+  100% {
+    transform: scale(0.6) rotate(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.15) rotate(20deg);
+    opacity: 1;
+  }
+}
+@keyframes oksq-shake {
+  0%,
+  55%,
+  100% {
+    transform: rotate(0);
+  }
+  62% {
+    transform: rotate(-5deg);
+  }
+  70% {
+    transform: rotate(5deg);
+  }
+  78% {
+    transform: rotate(-3deg);
+  }
+  86% {
+    transform: rotate(2deg);
+  }
+}
+@keyframes oksq-flick {
+  from {
+    transform: rotate(-6deg);
+  }
+  to {
+    transform: rotate(6deg);
+  }
+}
+@keyframes oksq-glitch {
+  0%,
+  88%,
+  94% {
+    opacity: 1;
+    transform: none;
+  }
+  90% {
+    opacity: 0.4;
+    transform: translateX(1.5px);
+  }
+  96% {
+    opacity: 0.6;
+    transform: translateX(-1px);
+  }
+}
+@keyframes oksq-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+  50% {
+    transform: translateY(0.8px) scaleY(0.99);
+  }
+}
+@keyframes oksq-zz {
+  0% {
+    transform: translate(0, 3px);
+    opacity: 0;
+  }
+  30%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(3px, -4px);
+    opacity: 0;
+  }
+}
+
+/* The application preference disables all motion per instance; static state expressions remain. */
+.opsknight-squire[data-motion='off'],
+.opsknight-squire[data-motion='off'] * {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .opsknight-squire,
+  .opsknight-squire * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

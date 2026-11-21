@@ -194,9 +194,7 @@ export function ControlsView({
                     <Badge
                       variant="secondary"
                       className={`text-2xs py-0 ${
-                        isRuntime
-                          ? toneClasses(null).soft
-                          : toneClasses(null).soft
+                        isRuntime ? toneClasses(null).soft : toneClasses(null).soft
                       }`}
                     >
                       {isRuntime ? 'Runtime' : 'Repository'}

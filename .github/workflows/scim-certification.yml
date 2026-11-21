@@ -25,6 +25,9 @@ on:
       - 'prisma/**'
       - 'tests/**/scim*'
       - '.github/workflows/scim-certification.yml'
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 # A newer push to the same PR supersedes the running one; main and scheduled runs finish.
 concurrency:
   group: scim-certification-${{ github.event.pull_request.number || github.ref }}

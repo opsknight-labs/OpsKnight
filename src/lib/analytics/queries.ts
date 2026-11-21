@@ -41,7 +41,10 @@ export type KpiSection = {
   openNow: number;
 };
 
-export async function queryKpis(scope: AnalyticsScope, window: AnalyticsWindow): Promise<KpiSection> {
+export async function queryKpis(
+  scope: AnalyticsScope,
+  window: AnalyticsWindow
+): Promise<KpiSection> {
   const [rows, open] = await Promise.all([
     run<Array<AggregateRow & { in_current: boolean }>>(Prisma.sql`
       WITH ${metricRowsCte(scope, window, { includePrevious: true })}
@@ -82,7 +85,8 @@ export type TrendPoint = {
   previousMttrP50?: number | null;
 };
 
-const numOrNull = (value: unknown) => (value === null || value === undefined ? null : Number(value));
+const numOrNull = (value: unknown) =>
+  value === null || value === undefined ? null : Number(value);
 
 export async function queryTrend(
   scope: AnalyticsScope,
@@ -385,7 +389,10 @@ export async function queryResponders(
       };
     })
     .sort(
-      (a, b) => b.incidents - a.incidents || b.handlingHours - a.handlingHours || b.onCallHours - a.onCallHours
+      (a, b) =>
+        b.incidents - a.incidents ||
+        b.handlingHours - a.handlingHours ||
+        b.onCallHours - a.onCallHours
     )
     .slice(0, RESPONDER_LIMIT);
 }

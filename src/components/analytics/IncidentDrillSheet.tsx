@@ -68,9 +68,12 @@ export default function IncidentDrillSheet({
     const body = await response.json().catch(() => null);
     if (!response.ok || !body?.success) {
       // Say what actually failed (status + reference), not a generic connection hint.
-      throw Object.assign(new Error(body?.error || `The server returned HTTP ${response.status}.`), {
-        reference: body?.requestId ?? response.headers.get('x-request-id') ?? undefined,
-      });
+      throw Object.assign(
+        new Error(body?.error || `The server returned HTTP ${response.status}.`),
+        {
+          reference: body?.requestId ?? response.headers.get('x-request-id') ?? undefined,
+        }
+      );
     }
     return body.data as DrillPage;
   };
@@ -176,7 +179,9 @@ export default function IncidentDrillSheet({
                       )}
                       <RelativeTime date={incident.createdAt} />
                       <span className="tabular-nums">Ack {formatDuration(incident.ackMs)}</span>
-                      <span className="tabular-nums">Resolve {formatDuration(incident.resolveMs)}</span>
+                      <span className="tabular-nums">
+                        Resolve {formatDuration(incident.resolveMs)}
+                      </span>
                     </span>
                   </Link>
                 </li>
@@ -199,7 +204,11 @@ export default function IncidentDrillSheet({
                   disabled={moreState === 'loading'}
                   className="inline-flex h-11 items-center rounded-md border px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 sm:h-9"
                 >
-                  {moreState === 'loading' ? 'Loading…' : moreState === 'error' ? 'Retry' : 'Load more'}
+                  {moreState === 'loading'
+                    ? 'Loading…'
+                    : moreState === 'error'
+                      ? 'Retry'
+                      : 'Load more'}
                 </button>
               )}
             </div>

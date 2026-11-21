@@ -157,3 +157,34 @@ export const builtinFields: Field[] = [
     mappings: [],
   })),
 ];
+/**
+ * Read-only intelligence signals usable as rule conditions (J1.4). Values come from the 30 s pre-paging
+ * snapshot, never from a query per event; camelCase keys cannot collide with declared fields.
+ */
+const INTELLIGENCE_FIELD_LABELS = [
+  ['inMaintenance', 'In maintenance'],
+  ['recentRiskyChange', 'Recent risky change'],
+  ['sloBurning', 'SLO burning'],
+  ['flapping', 'Flapping'],
+  ['stormActive', 'Storm active'],
+] as const;
+export const INTELLIGENCE_FIELD_KEYS = INTELLIGENCE_FIELD_LABELS.map(([key]) => key);
+export type IntelligenceFieldKey = (typeof INTELLIGENCE_FIELD_LABELS)[number][0];
+export const intelligenceFields: Field[] = INTELLIGENCE_FIELD_LABELS.map(([key, label]) => ({
+  fieldId: key,
+  key,
+  label,
+  type: 'BOOLEAN' as const,
+  caseSensitive: false,
+  displayOnly: false,
+  aliases: {},
+  mappings: [],
+}));
+const intelligenceKeySet = new Set<string>(INTELLIGENCE_FIELD_KEYS);
+export const isIntelligenceFieldKey = (key: string): key is IntelligenceFieldKey =>
+  intelligenceKeySet.has(key);
+/** Whether any enabled rule reads an intelligence field; when false the runtime does no signal work. */
+export const usesIntelligenceFields = (snapshot: Pick<Snapshot, 'rules'>): boolean =>
+  snapshot.rules.some(
+    rule => rule.enabled && rule.conditions.some(c => isIntelligenceFieldKey(c.fieldKey))
+  );

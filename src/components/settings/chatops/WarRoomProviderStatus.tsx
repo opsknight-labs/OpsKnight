@@ -36,7 +36,12 @@ export function WarRoomProviderStatus({ slack, teams }: ProviderStatusProps) {
       </div>
 
       {!anyConnected && (
-        <div className={cn('rounded-lg border p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3', toneClasses('elevated').soft)}>
+        <div
+          className={cn(
+            'rounded-lg border p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3',
+            toneClasses('elevated').soft
+          )}
+        >
           <div className="space-y-1">
             <p className="font-semibold flex items-center gap-1.5">
               <AlertCircle className="h-4 w-4" aria-hidden="true" />
@@ -92,7 +97,10 @@ export function WarRoomProviderStatus({ slack, teams }: ProviderStatusProps) {
             <span className="text-2xs text-muted-foreground flex items-center gap-1">
               {slack.connected ? (
                 <>
-                  <CheckCircle2 className={cn('h-3.5 w-3.5', toneClasses('ok').text)} aria-hidden="true" />
+                  <CheckCircle2
+                    className={cn('h-3.5 w-3.5', toneClasses('ok').text)}
+                    aria-hidden="true"
+                  />
                   <span>War Rooms available</span>
                 </>
               ) : (
@@ -144,7 +152,10 @@ export function WarRoomProviderStatus({ slack, teams }: ProviderStatusProps) {
             <span className="text-2xs text-muted-foreground flex items-center gap-1">
               {teams.connected && teams.warRoomsEnabled ? (
                 <>
-                  <CheckCircle2 className={cn('h-3.5 w-3.5', toneClasses('ok').text)} aria-hidden="true" />
+                  <CheckCircle2
+                    className={cn('h-3.5 w-3.5', toneClasses('ok').text)}
+                    aria-hidden="true"
+                  />
                   <span>War Rooms available</span>
                 </>
               ) : (

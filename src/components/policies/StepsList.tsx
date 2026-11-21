@@ -29,6 +29,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { Clock, ShieldAlert } from 'lucide-react';
 import { notify } from '@/lib/toast';
 import PolicyStepCreateForm from '@/components/PolicyStepCreateForm';
+import type { PolicyStepStat } from '@/lib/intelligence/ops-insights/policy-intelligence';
 
 type EscalationStep = {
   id: string;
@@ -77,6 +78,10 @@ type StepsListProps = {
   }>;
   teams: Array<{ id: string; name: string }>;
   schedules: Array<{ id: string; name: string }>;
+  /** Per-step outcomes keyed by step id, from escalation insights. */
+  stepStats?: Readonly<Record<string, PolicyStepStat>>;
+  /** A suggested wait from an insight's "Apply suggestion": opens that step's editor pre-filled. */
+  suggestion?: { stepId: string; delayMinutes: number };
 };
 
 export default function StepsList({
@@ -91,6 +96,8 @@ export default function StepsList({
   users,
   teams,
   schedules,
+  stepStats,
+  suggestion,
 }: StepsListProps) {
   const [steps, setSteps] = useState(initialSteps);
   const router = useRouter();
@@ -194,6 +201,10 @@ export default function StepsList({
                     schedules={schedules}
                     isFirst={index === 0}
                     isLast={index === steps.length - 1}
+                    stat={stepStats?.[step.id]}
+                    suggestedDelayMinutes={
+                      suggestion?.stepId === step.id ? suggestion.delayMinutes : undefined
+                    }
                   />
                 ))}
               </div>

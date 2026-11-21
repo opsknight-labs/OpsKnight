@@ -139,7 +139,10 @@ export default function ServicesTable({ rows, compare }: { rows: ServiceRow[]; c
                   </Link>
                 </th>
                 {COLUMNS.map(column => (
-                  <td key={column.key} className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">
+                  <td
+                    key={column.key}
+                    className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums"
+                  >
                     {column.key === 'incidents' ? (
                       <span className="inline-flex items-center justify-end gap-2">
                         {drill(row)}

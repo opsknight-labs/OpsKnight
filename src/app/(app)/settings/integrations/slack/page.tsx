@@ -146,8 +146,13 @@ export default async function GlobalSlackIntegrationPage(props: {
       />
 
       {oauthError && (
-        <div className={cn('rounded-lg border p-4 sm:p-5 text-xs space-y-1.5', toneClasses('critical').soft)}
-          role="alert">
+        <div
+          className={cn(
+            'rounded-lg border p-4 sm:p-5 text-xs space-y-1.5',
+            toneClasses('critical').soft
+          )}
+          role="alert"
+        >
           <div className="flex items-center gap-2 font-semibold">
             <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span>

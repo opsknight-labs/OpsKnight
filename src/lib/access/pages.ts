@@ -129,6 +129,20 @@ export const PAGE_ACCESS: readonly PageAccessRule[] = [
 
   { pattern: '/system-logs', label: 'System logs', anyOf: ADMIN },
 
+  // Intelligence: pages filter what they show to the viewer's scope; admins change settings inside.
+  { pattern: '/intelligence', label: 'Intelligence overview', anyOf: [C.INTELLIGENCE_READ] },
+  { pattern: '/alerts', label: 'Alerts', anyOf: [C.INTELLIGENCE_READ] },
+  { pattern: '/alerts/[id]', label: 'Alert', anyOf: INCIDENT_READ, resource: 'incident' },
+  { pattern: '/changes', label: 'Changes', anyOf: [C.INTELLIGENCE_READ] },
+  { pattern: '/changes/[id]', label: 'Change', anyOf: SERVICE_READ, resource: 'service' },
+  {
+    pattern: '/services/[id]/intelligence',
+    label: 'Service intelligence',
+    anyOf: SERVICE_READ,
+    resource: 'service',
+  },
+  { pattern: '/settings/intelligence', label: 'Intelligence', anyOf: [C.INTELLIGENCE_READ] },
+
   { pattern: '/settings', label: 'Settings' },
   { pattern: '/settings/profile', label: 'Profile' },
   { pattern: '/settings/api-keys', label: 'API keys' },

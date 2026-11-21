@@ -121,6 +121,12 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       // URL buttons (View Details) carry no value: nothing to do and nothing to reply.
       if (!action?.value) return NextResponse.json(null);
 
+      // Squire suggestion buttons carry a sealed proposal, not an incident action.
+      const squire = await import('@/lib/chatops/squire/slack');
+      if (squire.isSlackSquireAction(action.action_id)) {
+        return NextResponse.json(await squire.handleSlackSquireButton(payload));
+      }
+
       let actionValue: Record<string, unknown>;
       try {
         actionValue = JSON.parse(action.value);
@@ -368,8 +374,8 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
   } catch (caught: unknown) {
     const error = caught as Error;
     logger.error('[Slack] Actions API error', {
-      error: error.message,
-      stack: error.stack,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
     // Worker mode: fail the intent so it is retried rather than completed with an error body.
     if (payload.__opsknightIntentId) throw error;

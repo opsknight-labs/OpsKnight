@@ -188,6 +188,15 @@ select.ui-select {
     min-height: calc(1.5em + 1rem) !important;
 }
 
+/* The !important above would otherwise beat the 44px touch-target rule in globals.css. */
+@media (hover: none) and (pointer: coarse) {
+    select,
+    .ui-select,
+    select.ui-select {
+        min-height: 44px !important;
+    }
+}
+
 /* Ensure dropdown options have proper spacing */
 select option {
     padding: 0.5rem 0.75rem !important;

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import UserAvatar from '@/components/UserAvatar';
@@ -22,6 +23,7 @@ import TeamMemberAddModal from '@/components/teams/TeamMemberAddModal';
 import TeamAssignServicesModal from '@/components/teams/TeamAssignServicesModal';
 import TeamLinkedPolicies from '@/components/teams/TeamLinkedPolicies';
 import TeamDetailTabs from '@/components/teams/TeamDetailTabs';
+import TeamIntelligenceTilesSection from '@/components/teams/TeamIntelligenceTilesSection';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import {
   Card,
@@ -270,6 +272,11 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
           </CardContent>
         </Card>
       </div>
+
+      {/* Intelligence: AI usage vs budget and noise load. Renders nothing when silent. */}
+      <Suspense fallback={null}>
+        <TeamIntelligenceTilesSection teamId={id} />
+      </Suspense>
 
       {/* Linked Escalation Policies & Blast Radius */}
       <Card className="overflow-hidden border-border/70 shadow-xs">

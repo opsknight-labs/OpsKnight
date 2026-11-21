@@ -115,11 +115,19 @@ export async function POST(req: NextRequest) {
       allDay,
       publishOption,
       notificationTiming,
+      incidentId,
     } = parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
 
     if (!(await affectedServicesBelongToPage(statusPageId, normalizedAffectedServiceIds))) {
       return jsonError('Affected services must belong to this status page.', 400);
+    }
+    // Private incidents never reach a public page (status drafts never offer them either).
+    if (
+      incidentId &&
+      !(await prisma.incident.count({ where: { id: incidentId, visibility: 'PUBLIC' } }))
+    ) {
+      return jsonError('The linked incident does not exist or is private.', 400);
     }
 
     const parsedStartDate = parseDate(startDate, 'startDate');
@@ -158,6 +166,7 @@ export async function POST(req: NextRequest) {
           publishAt: effectivePublishAt,
           notificationTiming: timing,
           isActive: active,
+          incidentId: incidentId ?? null,
           affectedServiceIds:
             normalizedAffectedServiceIds === null
               ? Prisma.JsonNull

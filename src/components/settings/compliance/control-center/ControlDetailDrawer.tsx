@@ -80,11 +80,7 @@ export function ControlDetailDrawer({
               </Badge>
               <Badge
                 variant="secondary"
-                className={
-                  isRuntime
-                    ? toneClasses(null).soft
-                    : toneClasses(null).soft
-                }
+                className={isRuntime ? toneClasses(null).soft : toneClasses(null).soft}
               >
                 {isRuntime ? 'Runtime Control' : 'Repository Control'}
               </Badge>
@@ -127,7 +123,9 @@ export function ControlDetailDrawer({
                       (Current)
                     </span>
                   ) : (
-                    <span className="text-status-elevated-deep dark:text-amber-300 text-2xs">(Stale)</span>
+                    <span className="text-status-elevated-deep dark:text-amber-300 text-2xs">
+                      (Stale)
+                    </span>
                   )}
                 </span>
               </div>

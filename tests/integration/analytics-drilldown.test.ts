@@ -70,8 +70,11 @@ describeIfRealDB('analytics drill-down', { timeout: 60_000 }, () => {
         data: { email: 'drill@example.com', name: 'Drill', role: 'USER', status: 'ACTIVE' },
       })
     ).id;
-    const mineSvc = await testPrisma.service.create({ data: { name: 'mine-svc', teamId: mine.id } });
-    otherSvc = (await testPrisma.service.create({ data: { name: 'other-svc', teamId: other.id } })).id;
+    const mineSvc = await testPrisma.service.create({
+      data: { name: 'mine-svc', teamId: mine.id },
+    });
+    otherSvc = (await testPrisma.service.create({ data: { name: 'other-svc', teamId: other.id } }))
+      .id;
     const tied = new Date(NOW.getTime() - 2 * DAY);
     const data = Array.from({ length: 70 }, (_, index) => {
       // 12 incidents share one timestamp so pagination must break ties by id.
@@ -101,7 +104,11 @@ describeIfRealDB('analytics drill-down', { timeout: 60_000 }, () => {
       select: { id: true },
     });
     await testPrisma.incidentEvent.createMany({
-      data: escalated.map(({ id }) => ({ incidentId: id, message: 'Escalated to Level 2', type: 'ESCALATED' as const })),
+      data: escalated.map(({ id }) => ({
+        incidentId: id,
+        message: 'Escalated to Level 2',
+        type: 'ESCALATED' as const,
+      })),
     });
   }, 60_000);
 
@@ -160,7 +167,12 @@ describeIfRealDB('analytics drill-down', { timeout: 60_000 }, () => {
   });
 
   it('never shows a scoped user incidents outside their scope', async () => {
-    const actor: AuthorizationActor = { id: user, role: 'USER', status: 'ACTIVE', teamIds: [mineTeam] };
+    const actor: AuthorizationActor = {
+      id: user,
+      role: 'USER',
+      status: 'ACTIVE',
+      teamIds: [mineTeam],
+    };
     const ctx = context(actor);
     const visible = await testPrisma.incident.findMany({
       where: {

@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import MobileSquireMount from '@/components/squire/MobileSquireMount';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
@@ -36,6 +38,10 @@ export default async function MobileServiceAutomationPage({
         <p className="text-sm text-muted-foreground">Automation workspace</p>
       </header>
       <AutomationShell serviceId={service.id} mobile />
+      {/* The assistant: optional and off by default; never delays or breaks the page. */}
+      <Suspense fallback={null}>
+        <MobileSquireMount />
+      </Suspense>
     </div>
   );
 }

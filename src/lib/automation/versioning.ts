@@ -139,7 +139,14 @@ export async function validateReferences(
       )
     ),
   ];
-  for (const policyId of [...policyIds].sort()) await assertPolicyActive(tx, policyId);
+  for (const policyId of [...policyIds].sort())
+    await assertPolicyActive(tx, policyId).catch((error: unknown) => {
+      // The lifecycle check reports a missing or archived policy as a plain Error: that is the author's
+      // mistake, not a server fault. Database errors (Prisma subclasses) pass through untouched.
+      if (error instanceof Error && Object.getPrototypeOf(error) === Error.prototype)
+        throw new AutomationValidationError(error.message);
+      throw error;
+    });
   const policies = await tx.escalationPolicy.findMany({
     where: { id: { in: policyIds } },
     select: { id: true, name: true, _count: { select: { steps: true } } },

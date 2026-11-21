@@ -81,7 +81,8 @@ export async function queryDrilldown(
   const a = Prisma.raw(INCIDENT_ALIAS);
   // Extra conditions narrow the actor's scope; they can never widen it.
   let incidentSql = scope.incidentSql;
-  if (input.serviceId) incidentSql = Prisma.sql`${incidentSql} AND ${a}."serviceId" = ${input.serviceId}`;
+  if (input.serviceId)
+    incidentSql = Prisma.sql`${incidentSql} AND ${a}."serviceId" = ${input.serviceId}`;
   let rowsWindow = window;
   if (input.drill === 'open') {
     // Same set as the KPI "Open now": every active incident in scope, regardless of the period.
@@ -134,6 +135,8 @@ export async function queryDrilldown(
   return {
     total: Number(rows[0]?.total ?? 0),
     incidents,
-    nextCursor: last ? encodeDrillCursor({ createdAt: last.createdAt, id: last.id as string }) : null,
+    nextCursor: last
+      ? encodeDrillCursor({ createdAt: last.createdAt, id: last.id as string })
+      : null,
   };
 }

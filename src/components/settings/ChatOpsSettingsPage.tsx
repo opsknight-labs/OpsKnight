@@ -296,7 +296,10 @@ export default function ChatOpsSettingsPage({
       <McpUnsavedChangesGuard dirty={isDirty} />
       {state?.code === 'SETTINGS_CHANGED' && (
         <div
-          className={cn('rounded-lg border p-4 text-xs flex flex-col sm:flex-row sm:items-start justify-between gap-3', toneClasses('elevated').soft)}
+          className={cn(
+            'rounded-lg border p-4 text-xs flex flex-col sm:flex-row sm:items-start justify-between gap-3',
+            toneClasses('elevated').soft
+          )}
           role="alert"
           aria-live="assertive"
         >
@@ -325,7 +328,10 @@ export default function ChatOpsSettingsPage({
 
       {state?.error && state.code !== 'SETTINGS_CHANGED' && (
         <div
-          className={cn('rounded-lg border p-4 text-xs flex items-start gap-3', toneClasses('critical').soft)}
+          className={cn(
+            'rounded-lg border p-4 text-xs flex items-start gap-3',
+            toneClasses('critical').soft
+          )}
           role="alert"
         >
           <XCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
@@ -351,10 +357,7 @@ export default function ChatOpsSettingsPage({
                 <h3 className="text-base font-semibold text-foreground">
                   War Room & Collaboration Policy
                 </h3>
-                <Badge
-                  variant={enabled ? 'default' : 'secondary'}
-                  className="text-2xs font-medium"
-                >
+                <Badge variant={enabled ? 'default' : 'secondary'} className="text-2xs font-medium">
                   {enabled ? 'Active' : 'Paused'}
                 </Badge>
               </div>
@@ -426,7 +429,10 @@ export default function ChatOpsSettingsPage({
                   ) : (
                     <Badge
                       variant="outline"
-                      className={cn('text-2xs px-1.5 py-0 font-normal', toneClasses('elevated').soft)}
+                      className={cn(
+                        'text-2xs px-1.5 py-0 font-normal',
+                        toneClasses('elevated').soft
+                      )}
                     >
                       Unavailable
                     </Badge>
@@ -471,7 +477,10 @@ export default function ChatOpsSettingsPage({
                   ) : (
                     <Badge
                       variant="outline"
-                      className={cn('text-2xs px-1.5 py-0 font-normal', toneClasses('elevated').soft)}
+                      className={cn(
+                        'text-2xs px-1.5 py-0 font-normal',
+                        toneClasses('elevated').soft
+                      )}
                     >
                       Unavailable
                     </Badge>
@@ -759,10 +768,7 @@ export default function ChatOpsSettingsPage({
 
         {selectedBridge !== 'NONE' && (
           <div className="space-y-2 pt-2">
-            <Label
-              htmlFor="customBridgeUrlTemplate"
-              className="text-sm font-medium"
-            >
+            <Label htmlFor="customBridgeUrlTemplate" className="text-sm font-medium">
               Bridge URL Template (Optional)
             </Label>
             <Input

@@ -79,6 +79,8 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
       });
       try {
         await markJobCompleted(id, job.attempts, job.claimToken);
+        // Query events can be delivered after the query's promise settles; let them land first.
+        await new Promise(resolve => setTimeout(resolve, 50));
       } finally {
         capture = false;
       }

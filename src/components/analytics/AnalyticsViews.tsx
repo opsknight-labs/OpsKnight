@@ -85,7 +85,12 @@ export default function AnalyticsViews({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9 max-w-[220px] gap-2" disabled={isPending}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 max-w-[220px] gap-2"
+            disabled={isPending}
+          >
             <Bookmark className="h-4 w-4 shrink-0" aria-hidden />
             <span className="truncate">{active ? active.name : 'Views'}</span>
             <ChevronDown className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
@@ -113,7 +118,9 @@ export default function AnalyticsViews({
                     onSelect={() =>
                       act(
                         () => setDefaultAnalyticsViewAction(view.isDefault ? null : view.id),
-                        view.isDefault ? 'Default view cleared' : `"${view.name}" is now your default`
+                        view.isDefault
+                          ? 'Default view cleared'
+                          : `"${view.name}" is now your default`
                       )
                     }
                   >
@@ -210,7 +217,9 @@ function ViewLabel({ view }: { view: AnalyticsViewSummary }) {
   return (
     <>
       <span className="min-w-0 flex-1 truncate">{view.name}</span>
-      {view.isDefault && <Star className="h-3.5 w-3.5 text-muted-foreground" aria-label="Default" />}
+      {view.isDefault && (
+        <Star className="h-3.5 w-3.5 text-muted-foreground" aria-label="Default" />
+      )}
       {view.visibility === 'TEAM' && (
         <Users
           className="h-3.5 w-3.5 text-muted-foreground"

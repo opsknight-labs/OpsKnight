@@ -14,6 +14,7 @@ import {
   type EscalationTargetResolution,
 } from './target-resolution';
 import { planEscalationStep, type EscalationPlan } from './planner';
+import { escalationAttemptForStep } from './step-attempts';
 import { escalationDueAt, escalationPolicyExhausted } from './state';
 import {
   deliverEscalationNotificationIntents,
@@ -213,6 +214,16 @@ export async function executeEscalation(
         stepIndex: currentStepIndex,
         delayMinutes: stepDelayMinutes,
         dueAt,
+        attempt: {
+          policyId: policy?.id ?? null,
+          policyRevision: policy?.revision || null,
+          targetType: step.targetType,
+          targetId: stepTargetId(step),
+          resolvedUserIds: [],
+          outcome: 'SCHEDULED',
+          skipReason: null,
+          notifiedAt: null,
+        },
       });
       if (!scheduled) return supersededEscalationResult();
       return {
@@ -346,6 +357,16 @@ export async function executeEscalation(
       workerToken,
       plan,
       notifications: notificationPlan,
+      attempt: escalationAttemptForStep({
+        policyId: policy?.id ?? null,
+        policyRevision: policy?.revision,
+        targetType: step.targetType,
+        targetId,
+        applicable,
+        resolution,
+        unreachableUserIds: notificationPlan?.unreachableUserIds,
+        now,
+      }),
     });
 
     if (!commit.committed) return supersededEscalationResult();

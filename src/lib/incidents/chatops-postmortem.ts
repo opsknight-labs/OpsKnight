@@ -3,6 +3,7 @@ import { runSerializableTransaction } from '@/lib/db-utils';
 import { executeIdempotentOperation, type IdempotencyContext } from '@/lib/idempotency';
 import { getBaseUrl } from '@/lib/env-validation';
 import { authorizeChatOpsIncidentInTransaction } from './chatops-lifecycle';
+import { loadPostmortemEvents } from './event-filters';
 import { createDraftActionItemRows } from '@/lib/postmortems/action-item-commands';
 
 export async function executeChatOpsPostmortemCommand(input: {
@@ -30,10 +31,7 @@ export async function executeChatOpsPostmortemCommand(input: {
         include: { user: { select: { name: true } } },
         orderBy: { createdAt: 'asc' },
       }),
-      tx.incidentEvent.findMany({
-        where: { incidentId: input.incidentId },
-        orderBy: { createdAt: 'asc' },
-      }),
+      loadPostmortemEvents(tx, input.incidentId),
     ]);
     const timeline = [
       ...events.map(event => ({
@@ -44,7 +42,9 @@ export async function executeChatOpsPostmortemCommand(input: {
             ? 'ESCALATION'
             : event.type === 'MANUAL_RESOLVED' || event.type === 'AUTO_RESOLVED'
               ? 'RESOLUTION'
-              : 'DETECTION',
+              : event.type === 'CHAT_MESSAGE'
+                ? 'MITIGATION'
+                : 'DETECTION',
         title: event.message.slice(0, 60),
         description: event.message,
         actor: 'System',

@@ -48,9 +48,7 @@ describe('LibraryFilterBar', () => {
   const tagsToggle = () => screen.getByRole('button', { name: /^Tags/ });
 
   it('keeps stable accessible names for the core filters, with no Apply button', () => {
-    render(
-      <LibraryFilterBar query={{}} teams={teams} popularTags={popularTags} counts={counts} />
-    );
+    render(<LibraryFilterBar query={{}} teams={teams} popularTags={popularTags} counts={counts} />);
     expect(screen.getByRole('searchbox', { name: 'Search runbooks' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Quick filters' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Filter by service' })).toBeInTheDocument();
@@ -60,7 +58,9 @@ describe('LibraryFilterBar', () => {
   });
 
   it('shows lifecycle counts and applies status immediately, dropping pagination', () => {
-    render(<LibraryFilterBar query={{ page: '3', owner: TEAM_ID }} teams={teams} counts={counts} />);
+    render(
+      <LibraryFilterBar query={{ page: '3', owner: TEAM_ID }} teams={teams} counts={counts} />
+    );
     const group = screen.getByRole('group', { name: 'Quick filters' });
     expect(within(group).getByRole('button', { name: /All active\s*12/ })).toHaveAttribute(
       'aria-pressed',

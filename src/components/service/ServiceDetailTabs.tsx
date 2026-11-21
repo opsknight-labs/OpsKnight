@@ -2,7 +2,19 @@
 
 import React, { type ReactNode } from 'react';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
-import { Flame, ShieldAlert, Zap, Bell, Settings, Workflow, Wrench } from 'lucide-react';
+import { Flame, ShieldAlert, Zap, Bell, Settings, Sparkles, Workflow, Wrench } from 'lucide-react';
+
+export type ServiceDetailTab =
+  | 'automation'
+  | 'incidents'
+  | 'escalation'
+  | 'runbooks'
+  | 'integrations'
+  | 'notifications'
+  | 'intelligence'
+  | 'maintenance'
+  | 'settings';
+
 export type ServiceDetailTabsProps = {
   defaultTab?: string;
   activeIncidentCount: number;
@@ -18,6 +30,9 @@ export type ServiceDetailTabsProps = {
   maintenanceContent: ReactNode;
   maintenanceActive?: boolean;
   settingsContent: ReactNode;
+  /** Offers the Intelligence tab. The page passes its content only while the tab is selected. */
+  showIntelligenceTab?: boolean;
+  intelligenceContent?: ReactNode;
   actions?: ReactNode;
 };
 
@@ -36,6 +51,8 @@ export default function ServiceDetailTabs({
   maintenanceContent,
   maintenanceActive,
   settingsContent,
+  showIntelligenceTab = false,
+  intelligenceContent,
   actions,
 }: ServiceDetailTabsProps) {
   const tabItems = [
@@ -71,6 +88,9 @@ export default function ServiceDetailTabs({
       icon: <Bell className="h-4 w-4" />,
       count: notificationsCount,
     },
+    ...(showIntelligenceTab
+      ? [{ id: 'intelligence', label: 'Intelligence', icon: <Sparkles className="h-4 w-4" /> }]
+      : []),
     {
       id: 'maintenance',
       label: 'Maintenance',
@@ -112,6 +132,11 @@ export default function ServiceDetailTabs({
       <DetailTabContent value="notifications" className="mt-0 space-y-6">
         {notificationsContent}
       </DetailTabContent>
+      {showIntelligenceTab && (
+        <DetailTabContent value="intelligence" className="mt-0 space-y-6">
+          {intelligenceContent}
+        </DetailTabContent>
+      )}
       <DetailTabContent value="maintenance" className="mt-0 space-y-6">
         {maintenanceContent}
       </DetailTabContent>

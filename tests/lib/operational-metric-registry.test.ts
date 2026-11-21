@@ -74,15 +74,32 @@ describe('operational metric registry', () => {
     const rendered = new OperationalMetricSnapshot().render();
     expect(rendered).toContain('# TYPE opsknight_responder_dashboard_inflight gauge');
     expect(rendered).toContain('opsknight_responder_dashboard_inflight 1');
-    expect(rendered).toContain(
-      '# TYPE opsknight_responder_dashboard_cache_hits_total counter'
-    );
-    expect(rendered).toContain(
-      'opsknight_responder_dashboard_cache_hits_total{state="fresh"} 1'
-    );
-    expect(rendered).toContain(
-      '# TYPE opsknight_responder_dashboard_duration_seconds histogram'
-    );
+    expect(rendered).toContain('# TYPE opsknight_responder_dashboard_cache_hits_total counter');
+    expect(rendered).toContain('opsknight_responder_dashboard_cache_hits_total{state="fresh"} 1');
+    expect(rendered).toContain('# TYPE opsknight_responder_dashboard_duration_seconds histogram');
     expect(rendered).toContain('# TYPE opsknight_responder_dashboard_failures_total counter');
   });
+});
+
+it('exports intelligence work and first-insight histograms without source identifiers', () => {
+  clearRuntimeOperationalMetrics();
+  observeOperationalHistogram('opsknight_intelligence_work_duration_seconds', 0.1, {
+    kind: 'INDEX_INCIDENT',
+  });
+  addOperationalMetric('opsknight_intelligence_work_failures_total', 1, {
+    kind: 'ANALYZE_RESPONSE',
+  });
+  observeOperationalHistogram('opsknight_intelligence_time_to_first_insight_seconds', 2, {
+    origin: 'live',
+  });
+  const rendered = new OperationalMetricSnapshot().render();
+  expect(rendered).toContain(
+    'opsknight_intelligence_work_duration_seconds_count{kind="INDEX_INCIDENT"} 1'
+  );
+  expect(rendered).toContain(
+    'opsknight_intelligence_time_to_first_insight_seconds_count{origin="live"} 1'
+  );
+  expect(rendered).toContain(
+    'opsknight_intelligence_work_failures_total{kind="ANALYZE_RESPONSE"} 1'
+  );
 });

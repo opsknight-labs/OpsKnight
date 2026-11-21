@@ -34,7 +34,11 @@ export default function ChartFrame({
   return (
     <div className="min-w-0">
       <div className="mb-3 flex justify-end">
-        <div role="group" aria-label={`${label} view`} className="inline-flex rounded-md bg-muted p-0.5">
+        <div
+          role="group"
+          aria-label={`${label} view`}
+          className="inline-flex rounded-md bg-muted p-0.5"
+        >
           {option('chart', <BarChart3 className="h-3.5 w-3.5" aria-hidden />, 'Chart')}
           {option('table', <Table2 className="h-3.5 w-3.5" aria-hidden />, 'Table')}
         </div>

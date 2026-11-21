@@ -598,7 +598,7 @@ export function formatDateForInput(date: Date | string, timeZone: string): strin
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    // hourCycle alone: with hour12 set too, Node 20's ICU picks h24 and writes midnight as "24:30".
     hourCycle: 'h23',
   });
 

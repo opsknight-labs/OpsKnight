@@ -1,8 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import {
+  configureIntelligenceLanePrismaDatasource,
   configurePrismaDatasource,
   configureMcpPrismaDatasource,
+  DEFAULT_INTELLIGENCE_LANE_POOL_SIZE,
+  intelligenceLanePoolSize,
+  isIntelligenceLaneThread,
   selectMcpPrismaDatasourceUrl,
+  rolePoolSize,
   selectPrismaDatasourceUrl,
 } from './prisma-datasource';
 import { getOpsKnightProcessRole, isDedicatedHttpRole } from './runtime-role';
@@ -20,47 +25,30 @@ import type {} from './database-workload';
  * DATABASE_URL="postgresql://...?connection_limit=10&pool_timeout=30"
  */
 
-function rolePoolSize(): string | undefined {
-  switch (getOpsKnightProcessRole()) {
-    case 'integrated':
-      return process.env.DATABASE_POOL_SIZE_INTEGRATED;
-    case 'web':
-    case 'http':
-      return process.env.DATABASE_POOL_SIZE_WEB;
-    case 'scheduler':
-      return process.env.DATABASE_POOL_SIZE_SCHEDULER;
-    case 'worker':
-      return process.env.DATABASE_POOL_SIZE_WORKER;
-    case 'general-worker':
-      return process.env.DATABASE_POOL_SIZE_GENERAL_WORKER;
-    case 'critical-worker':
-      return process.env.DATABASE_POOL_SIZE_CRITICAL_WORKER;
-    case 'bulk-worker':
-      return process.env.DATABASE_POOL_SIZE_BULK_WORKER;
-    case 'status-projector':
-      return process.env.DATABASE_POOL_SIZE_STATUS_PROJECTOR;
-    case 'runbook-worker':
-      return process.env.DATABASE_POOL_SIZE_RUNBOOK_WORKER;
-    case 'ingestion-worker':
-      return process.env.DATABASE_POOL_SIZE_INGESTION_WORKER;
-  }
-}
-
-const prismaClientSingleton = (workload: 'primary' | 'mcp' = 'primary') => {
+const prismaClientSingleton = (workload: 'primary' | 'mcp' | 'intelligence' = 'primary') => {
   const role = getOpsKnightProcessRole();
   const rawDatasourceUrl = selectPrismaDatasourceUrl(role);
-  // Log configuration for debugging
+  const transactionPooler = isDedicatedHttpRole(role) && process.env.PGBOUNCER_ENABLED === 'true';
+  // A lane thread's process client is the lane's own pool (see intelligence/jobs/lane-thread.ts).
+  const laneWorkload =
+    workload === 'intelligence' || (workload === 'primary' && isIntelligenceLaneThread());
   const datasourceUrl =
     workload === 'mcp'
       ? configureMcpPrismaDatasource(
           selectMcpPrismaDatasourceUrl(),
           process.env.MCP_DATABASE_POOL_SIZE
         )
-      : configurePrismaDatasource(
-          rawDatasourceUrl,
-          rolePoolSize() ?? process.env.DATABASE_POOL_SIZE,
-          isDedicatedHttpRole(role) && process.env.PGBOUNCER_ENABLED === 'true'
-        );
+      : laneWorkload
+        ? configureIntelligenceLanePrismaDatasource(
+            rawDatasourceUrl,
+            intelligenceLanePoolSize() || DEFAULT_INTELLIGENCE_LANE_POOL_SIZE,
+            transactionPooler
+          )
+        : configurePrismaDatasource(
+            rawDatasourceUrl,
+            rolePoolSize() ?? process.env.DATABASE_POOL_SIZE,
+            transactionPooler
+          );
 
   const client = new PrismaClient({
     log: [
@@ -82,7 +70,8 @@ const prismaClientSingleton = (workload: 'primary' | 'mcp' = 'primary') => {
       JSON.stringify({
         level: 'warn',
         event: 'prisma.slow_query',
-        workload,
+        // The lane thread's process client is the lane pool, so its slow queries are not ingestion's.
+        workload: laneWorkload ? 'intelligence' : workload,
         durationMs: event.duration,
         target: event.target,
         timestamp: new Date().toISOString(),
@@ -95,6 +84,7 @@ const prismaClientSingleton = (workload: 'primary' | 'mcp' = 'primary') => {
 declare global {
   var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
   var prismaMcpGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
+  var prismaIntelligenceGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
 }
 
 const primary = globalThis.prismaGlobal ?? prismaClientSingleton();
@@ -109,10 +99,15 @@ const prisma = new Proxy(primary, {
   get(_target, property) {
     // Read the server-installed context without importing async_hooks here:
     // legacy client utility imports also traverse this module's browser stub.
+    // The intelligence lane only enters its workload when it shares this process with ingestion
+    // and has a pool of its own configured (see intelligence/jobs/lane-pool.ts).
+    const workload = globalThis.opsKnightDatabaseWorkload?.getStore();
     const client =
-      globalThis.opsKnightDatabaseWorkload?.getStore() === 'mcp'
+      workload === 'mcp'
         ? (globalThis.prismaMcpGlobal ??= prismaClientSingleton('mcp'))
-        : primary;
+        : workload === 'intelligence'
+          ? (globalThis.prismaIntelligenceGlobal ??= prismaClientSingleton('intelligence'))
+          : primary;
     const value: unknown = Reflect.get(client, property, client);
     return typeof value === 'function' ? value.bind(client) : value;
   },
@@ -131,7 +126,11 @@ export async function checkDatabaseHealth(): Promise<{ ok: boolean; latencyMs: n
 
 // Graceful shutdown helper
 export async function disconnectPrisma(): Promise<void> {
-  await Promise.all([primary.$disconnect(), globalThis.prismaMcpGlobal?.$disconnect()]);
+  await Promise.all([
+    primary.$disconnect(),
+    globalThis.prismaMcpGlobal?.$disconnect(),
+    globalThis.prismaIntelligenceGlobal?.$disconnect(),
+  ]);
 }
 
 export default prisma;

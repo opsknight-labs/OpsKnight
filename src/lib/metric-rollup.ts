@@ -11,6 +11,7 @@ import { incidentEventWhereFor } from './incident-event-classifier';
 import { acquireAdvisoryLock, LOCK_KEYS } from './db-locks';
 import { resolveFrozenSlaTarget } from './metrics/domain/sla-target';
 import { capturedOrEffectiveElapsedMs, effectiveElapsedMs } from './metrics/domain/sla-clock';
+import { AUTO_RESOLVE_WINDOW_MINUTES } from './notification-noise/report';
 
 /**
  * Metric Rollup Service
@@ -1106,4 +1107,385 @@ export async function cleanupOldRollups(cutoffDateOverride?: Date): Promise<numb
   });
 
   return deletedCount;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Operations rollups (Workstream J). Daily aggregates the operations insights read, so no insight ever
+// scans raw Notification, RunbookExecution or automation decision history. Stored in the generic
+// MetricRollup table: `name` is the rollup, `bucket` the UTC day, `subjectKey` what the row is about,
+// `tags` the remaining dimensions. `serviceId` is left null on purpose: incident enrichment reads
+// MetricRollup by service as monitoring context and must not pick these rows up.
+// ---------------------------------------------------------------------------------------------------
+
+type PrismaNamespace = typeof import('@prisma/client').Prisma;
+
+export const OPS_ROLLUPS = {
+  /** subjectKey = user id. tags { hour: 0-23 in the user's time zone, weekend }. count = pages, sum = incidents. */
+  pagesPerUserHour: 'ops.pages.user_hour',
+  /**
+   * subjectKey = escalation policy id. tags { step (0-based), outcome, reason, hour, ackWithinMin }.
+   * count = attempts, sum = seconds to acknowledge (ACKED rows only).
+   * outcome: ACKED | TIMED_OUT (a later step was paged first) | UNANSWERED | SKIPPED | FAILED | SCHEDULED.
+   * reason = skip reason; hour = local hour of the page in the first paged person's time zone (UTC if none);
+   * ackWithinMin = smallest of 1,2,3,5,10,15,20,30,45,60,120 minutes the acknowledgement came within (null above).
+   */
+  escalationStepOutcome: 'ops.escalation.step_outcome',
+  /** subjectKey = runbook id. tags { status }. count = finished executions, sum = total run time in ms. */
+  runbookOutcome: 'ops.runbook.outcome',
+  /**
+   * subjectKey = runbook id. tags { status (SUCCEEDED | FAILED | TIMED_OUT), onIncident, fixMinutes,
+   * durationBucket }. count = finished runs. fixMinutes is set when the run succeeded and its incident resolved
+   * after the run started and at most a day after it finished: whole minutes from finish to resolution (0 when
+   * it resolved during the run). A reader counts runs with fixMinutes <= its fix window, so the window can
+   * change without a recompute. durationBucket = floor(4 * log2(seconds)), a histogram with about 19%
+   * resolution for the median (RUNBOOK_DURATION_BUCKETS_PER_DOUBLING). Computed a day late
+   * (OPS_ROLLUP_LAG_DAYS), once every resolution inside a day is in.
+   */
+  runbookRun: 'ops.runbook.run',
+  /**
+   * subjectKey = runbook id. tags { stepKey, name, status (SUCCEEDED | FAILED), retried (more than one
+   * attempt), errorCode (of the failure, or of the failed attempt before a retry) }. count = step runs.
+   */
+  runbookStepOutcome: 'ops.runbook.step_outcome',
+  /**
+   * subjectKey = automation version id. tags { serviceId, ruleId (null = no route rule matched), ruleName, mode }.
+   * count = decisions, sum = decisions that fell back.
+   */
+  automationRuleMatch: 'ops.automation.rule_match',
+  /**
+   * Personal noise (slice J6). A page is one incident that notified a person on the day (however many
+   * channels), at the local hour of its first notification that day. subjectKey = user id.
+   * tags { serviceId, hour, autoResolved }. count = pages, sum = pages the person acted on.
+   */
+  pagesPerUserService: 'ops.pages.user_service',
+  /** The same pages summed per service. subjectKey = service id. tags { autoResolved }. count = pages, sum = acted. */
+  pagesPerService: 'ops.pages.service',
+} as const;
+export type OpsRollupName = (typeof OPS_ROLLUPS)[keyof typeof OPS_ROLLUPS];
+
+type OpsRollupSourceRow = {
+  subjectKey: string;
+  count: number;
+  sum: number;
+  tags: Prisma.JsonObject;
+};
+type OpsRollupSource = (sql: PrismaNamespace['sql'], dayStart: Date, dayEnd: Date) => Prisma.Sql;
+
+/**
+ * One row per person and incident paged on the day, through idx_notification_created_cursor, then the
+ * incident by primary key. Acted on: acknowledged through the page itself (Notification.ackedAt), or as
+ * the incident's assignee after the page.
+ */
+const noisePagesSql = (sql: PrismaNamespace['sql'], dayStart: Date, dayEnd: Date) => sql`
+  WITH p AS (
+    SELECT n."userId", n."incidentId", min(n."createdAt") AS "firstAt",
+      bool_or(n."ackedAt" IS NOT NULL) AS "direct"
+    FROM "Notification" n
+    WHERE n."createdAt" >= ${dayStart} AND n."createdAt" < ${dayEnd}
+      AND n."category" = 'INCIDENT' AND n."incidentId" IS NOT NULL
+      AND n."eventType" IN ('incident-triggered', 'triggered') AND n."status" <> 'SKIPPED'
+    GROUP BY n."userId", n."incidentId"
+  ), page AS (
+    SELECT p."userId", i."serviceId", p."firstAt",
+      (p."direct" OR coalesce(i."assigneeId" = p."userId" AND i."acknowledgedAt" >= p."firstAt", false)) AS "acted",
+      coalesce(i."resolutionKind"::text IN ('SOURCE_RECOVERY', 'AUTOMATION', 'AUTO_TIMEOUT')
+        AND i."resolvedAt" <= i."createdAt" + make_interval(mins => ${AUTO_RESOLVE_WINDOW_MINUTES}::int), false)
+        AS "autoResolved"
+    FROM p JOIN "Incident" i ON i."id" = p."incidentId"
+  )`;
+
+/**
+ * The one statement that computes a rollup for one UTC day. Each is driven by an index on the day range
+ * (asserted by the query-plan tests) and returns one row per group, never one per source row.
+ */
+export const OPS_ROLLUP_SOURCES: Partial<Record<OpsRollupName, OpsRollupSource>> = {
+  // idx_notification_created_cursor ("createdAt", "id"). An unknown time zone is read as UTC.
+  [OPS_ROLLUPS.pagesPerUserHour]: (sql, dayStart, dayEnd) => sql`
+    SELECT page."userId" AS "subjectKey", count(*)::int AS "count",
+      count(DISTINCT page."incidentId")::float AS "sum",
+      jsonb_build_object('hour', page."hour", 'weekend', page."weekend") AS "tags"
+    FROM (
+      SELECT n."userId", n."incidentId",
+        extract(hour FROM (n."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE coalesce(zone."name", 'UTC'))::int AS "hour",
+        extract(isodow FROM (n."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE coalesce(zone."name", 'UTC')) >= 6 AS "weekend"
+      FROM "Notification" n
+      JOIN "User" u ON u."id" = n."userId"
+      LEFT JOIN pg_timezone_names zone ON zone."name" = u."timeZone"
+      WHERE n."createdAt" >= ${dayStart} AND n."createdAt" < ${dayEnd}
+        AND n."category" = 'INCIDENT' AND n."incidentId" IS NOT NULL
+    ) page
+    GROUP BY page."userId", page."hour", page."weekend"`,
+  // idx_escalation_step_attempt_created ("createdAt"); the next step and the incident by primary key.
+  // Acknowledgement is attributed to the last step paged before it, within the same escalation generation.
+  [OPS_ROLLUPS.escalationStepOutcome]: (sql, dayStart, dayEnd) => sql`
+    SELECT step."policyId" AS "subjectKey", count(*)::int AS "count",
+      coalesce(sum(step."ackSeconds") FILTER (WHERE step."outcome" = 'ACKED'), 0)::float AS "sum",
+      jsonb_build_object('step', step."stepIndex", 'outcome', step."outcome", 'reason', step."skipReason",
+        'hour', step."hour", 'ackWithinMin', step."ackWithinMin") AS "tags"
+    FROM (
+      SELECT judged.*,
+        (SELECT min(b) FROM unnest(ARRAY[1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 120]) b
+          WHERE judged."outcome" = 'ACKED' AND judged."ackSeconds" <= b * 60) AS "ackWithinMin"
+      FROM (
+        SELECT a."policyId", a."stepIndex", a."skipReason",
+          CASE
+            WHEN a."outcome" <> 'NOTIFIED' THEN a."outcome"
+            WHEN i."escalationGeneration" = a."generation" AND i."acknowledgedAt" >= a."notifiedAt"
+              AND (nxt."at" IS NULL OR i."acknowledgedAt" < nxt."at") THEN 'ACKED'
+            WHEN nxt."at" IS NOT NULL THEN 'TIMED_OUT'
+            ELSE 'UNANSWERED'
+          END AS "outcome",
+          extract(epoch FROM (i."acknowledgedAt" - a."notifiedAt")) AS "ackSeconds",
+          extract(hour FROM (coalesce(a."notifiedAt", a."createdAt") AT TIME ZONE 'UTC')
+            AT TIME ZONE coalesce(zone."name", 'UTC'))::int AS "hour"
+        FROM "EscalationStepAttempt" a
+        JOIN "Incident" i ON i."id" = a."incidentId"
+        LEFT JOIN LATERAL (
+          SELECT min(n."notifiedAt") AS "at" FROM "EscalationStepAttempt" n
+          WHERE n."incidentId" = a."incidentId" AND n."generation" = a."generation"
+            AND n."stepIndex" > a."stepIndex" AND n."notifiedAt" IS NOT NULL
+        ) nxt ON true
+        LEFT JOIN "User" u ON u."id" = a."resolvedUserIds"[1]
+        LEFT JOIN pg_timezone_names zone ON zone."name" = u."timeZone"
+        WHERE a."createdAt" >= ${dayStart} AND a."createdAt" < ${dayEnd} AND a."policyId" IS NOT NULL
+      ) judged
+    ) step
+    GROUP BY step."policyId", step."stepIndex", step."outcome", step."skipReason", step."hour",
+      step."ackWithinMin"`,
+  // idx_runbook_execution_completed ("completedAt").
+  [OPS_ROLLUPS.runbookOutcome]: (sql, dayStart, dayEnd) => sql`
+    SELECT e."runbookId" AS "subjectKey", count(*)::int AS "count",
+      coalesce(sum(extract(epoch FROM (e."completedAt" - e."startedAt")) * 1000)
+        FILTER (WHERE e."startedAt" IS NOT NULL), 0)::float AS "sum",
+      jsonb_build_object('status', e."status"::text) AS "tags"
+    FROM "RunbookExecution" e
+    WHERE e."completedAt" >= ${dayStart} AND e."completedAt" < ${dayEnd}
+    GROUP BY e."runbookId", e."status"`,
+  // idx_runbook_execution_completed, then the incident by primary key. 1440 = the largest fix window.
+  [OPS_ROLLUPS.runbookRun]: (sql, dayStart, dayEnd) => sql`
+    SELECT run."runbookId" AS "subjectKey", count(*)::int AS "count", 0::float AS "sum",
+      jsonb_build_object('status', run."status", 'onIncident', run."onIncident",
+        'fixMinutes', run."fixMinutes", 'durationBucket', run."durationBucket") AS "tags"
+    FROM (
+      SELECT e."runbookId", e."status"::text AS "status", e."incidentId" IS NOT NULL AS "onIncident",
+        CASE WHEN e."status" = 'SUCCEEDED' AND i."status" = 'RESOLVED' AND e."startedAt" IS NOT NULL
+            AND i."resolvedAt" >= e."startedAt"
+            AND i."resolvedAt" <= e."completedAt" + make_interval(mins => 1440)
+          THEN greatest(0, ceil(extract(epoch FROM (i."resolvedAt" - e."completedAt")) / 60))::int
+        END AS "fixMinutes",
+        CASE WHEN e."startedAt" IS NOT NULL
+          THEN floor(4 * log(2, greatest(1, extract(epoch FROM (e."completedAt" - e."startedAt")))::numeric))::int
+        END AS "durationBucket"
+      FROM "RunbookExecution" e
+      LEFT JOIN "Incident" i ON i."id" = e."incidentId"
+      WHERE e."completedAt" >= ${dayStart} AND e."completedAt" < ${dayEnd}
+        -- ::text keeps the planner off the (status, updatedAt) index, which is not bounded by the day.
+        AND e."status"::text IN ('SUCCEEDED', 'FAILED', 'TIMED_OUT')
+    ) run
+    GROUP BY run."runbookId", run."status", run."onIncident", run."fixMinutes", run."durationBucket"`,
+  // idx_runbook_execution_completed, then RunbookExecutionStep ("executionId") and the attempt by its
+  // unique ("executionStepId", "attemptNumber").
+  [OPS_ROLLUPS.runbookStepOutcome]: (sql, dayStart, dayEnd) => sql`
+    SELECT step."runbookId" AS "subjectKey", count(*)::int AS "count", 0::float AS "sum",
+      jsonb_build_object('stepKey', step."stepKey", 'name', max(step."name"), 'status', step."status",
+        'retried', step."retried", 'errorCode', step."errorCode") AS "tags"
+    FROM (
+      SELECT e."runbookId", s."stepKey", left(s."name", 120) AS "name", s."status"::text AS "status",
+        s."attemptCount" > 1 AS "retried",
+        CASE WHEN s."status" = 'FAILED' OR s."attemptCount" > 1
+          THEN left(coalesce(s."errorCode", attempt."errorCode"), 64) END AS "errorCode"
+      FROM "RunbookExecution" e
+      JOIN "RunbookExecutionStep" s ON s."executionId" = e."id"
+      LEFT JOIN LATERAL (
+        SELECT a."errorCode" FROM "RunbookStepAttempt" a
+        WHERE a."executionStepId" = s."id" AND a."status" IN ('FAILED', 'TIMED_OUT')
+          AND a."errorCode" IS NOT NULL
+        ORDER BY a."attemptNumber" DESC LIMIT 1
+      ) attempt ON true
+      WHERE e."completedAt" >= ${dayStart} AND e."completedAt" < ${dayEnd}
+        AND s."status" IN ('SUCCEEDED', 'FAILED')
+    ) step
+    GROUP BY step."runbookId", step."stepKey", step."status", step."retried", step."errorCode"`,
+  // One probe of IncidentAutomationDecision ("serviceId", "createdAt") per service that has automation.
+  [OPS_ROLLUPS.automationRuleMatch]: (sql, dayStart, dayEnd) => sql`
+    SELECT d."versionId" AS "subjectKey", count(*)::int AS "count",
+      (count(*) FILTER (WHERE d."fallbackReason" IS NOT NULL))::float AS "sum",
+      jsonb_build_object('serviceId', d."serviceId", 'ruleId', d."matchedRouteRuleId",
+        'ruleName', max(d."matchedRouteRuleName"), 'mode', d."mode"::text) AS "tags"
+    FROM "ServiceAutomationConfig" config
+    JOIN "IncidentAutomationDecision" d
+      ON d."serviceId" = config."serviceId" AND d."createdAt" >= ${dayStart} AND d."createdAt" < ${dayEnd}
+    WHERE d."versionId" IS NOT NULL
+    GROUP BY d."versionId", d."serviceId", d."matchedRouteRuleId", d."mode"`,
+  [OPS_ROLLUPS.pagesPerUserService]: (sql, dayStart, dayEnd) => sql`
+    ${noisePagesSql(sql, dayStart, dayEnd)}
+    SELECT local."userId" AS "subjectKey", count(*)::int AS "count",
+      (count(*) FILTER (WHERE local."acted"))::float AS "sum",
+      jsonb_build_object('serviceId', local."serviceId", 'hour', local."hour",
+        'autoResolved', local."autoResolved") AS "tags"
+    FROM (
+      SELECT page.*,
+        extract(hour FROM (page."firstAt" AT TIME ZONE 'UTC') AT TIME ZONE coalesce(zone."name", 'UTC'))::int AS "hour"
+      FROM page
+      JOIN "User" u ON u."id" = page."userId"
+      LEFT JOIN pg_timezone_names zone ON zone."name" = u."timeZone"
+    ) local
+    GROUP BY local."userId", local."serviceId", local."hour", local."autoResolved"`,
+  [OPS_ROLLUPS.pagesPerService]: (sql, dayStart, dayEnd) => sql`
+    ${noisePagesSql(sql, dayStart, dayEnd)}
+    SELECT page."serviceId" AS "subjectKey", count(*)::int AS "count",
+      (count(*) FILTER (WHERE page."acted"))::float AS "sum",
+      jsonb_build_object('autoResolved', page."autoResolved") AS "tags"
+    FROM page
+    GROUP BY page."serviceId", page."autoResolved"`,
+};
+
+/** Days a rollup waits after a day ends, for sources whose rows settle later (a resolution after a run). */
+export const OPS_ROLLUP_LAG_DAYS: Partial<Record<OpsRollupName, number>> = {
+  [OPS_ROLLUPS.runbookRun]: 1,
+  // A late-evening page is acknowledged, or passed to the next step, after midnight. shortcut: a step
+  // delayed by more than a day still lands as SCHEDULED; raise the lag if long delays become common.
+  [OPS_ROLLUPS.escalationStepOutcome]: 1,
+};
+
+const OPS_ROLLUP_DAY_MS = 86_400_000;
+const OPS_ROLLUP_WRITE_CHUNK = 1000;
+const opsRollupWatermark = (name: OpsRollupName) => `${name}.watermark`;
+
+/**
+ * Makes the next `generateOpsRollups` recompute `name` over its whole lookback window, for a source whose
+ * past days changed (a backfill inserted rows behind the watermark). Run it in the writer's transaction.
+ */
+export async function restartOpsRollup(
+  tx: Pick<Prisma.TransactionClient, 'metricRollup'>,
+  name: OpsRollupName
+): Promise<void> {
+  await tx.metricRollup.deleteMany({ where: { name: opsRollupWatermark(name) } });
+}
+
+/**
+ * Brings every operations rollup up to yesterday (UTC), one day per transaction, starting after its own
+ * watermark. Incremental and idempotent: a day is deleted and rewritten together with the watermark, so a
+ * crash or a second scheduler can never double-count. A rollup that has never run starts `lookbackDays`
+ * back; at most `maxDaysPerRun` days are computed per call. Does nothing while operations insights are off.
+ */
+export async function generateOpsRollups(
+  now: Date = new Date(),
+  options: { maxDaysPerRun?: number; lookbackDays?: number; force?: boolean } = {}
+): Promise<Partial<Record<OpsRollupName, number>>> {
+  const { default: prisma } = await import('./prisma');
+  const { Prisma: PrismaRuntime } = await import('@prisma/client');
+  if (!options.force) {
+    const settings = await prisma.intelligenceSettings.findUnique({
+      where: { id: 'default' },
+      select: { opsInsightsEnabled: true },
+    });
+    if (!settings?.opsInsightsEnabled) return {};
+  }
+  const maxDays = Math.max(1, Math.min(options.maxDaysPerRun ?? 31, 90));
+  const lookbackDays = Math.max(1, Math.min(options.lookbackDays ?? 30, 90));
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const earliest = new Date(today.getTime() - lookbackDays * OPS_ROLLUP_DAY_MS);
+  const done: Partial<Record<OpsRollupName, number>> = {};
+
+  for (const [name, source] of Object.entries(OPS_ROLLUP_SOURCES) as Array<
+    [OpsRollupName, OpsRollupSource]
+  >) {
+    // eslint-disable-next-line security/detect-object-injection -- name is a key of the fixed rollup map
+    done[name] = 0;
+    for (let run = 0; run < maxDays; run += 1) {
+      const advanced = await prisma.$transaction(
+        async tx => {
+          await acquireAdvisoryLock(tx, LOCK_KEYS.ROLLUP_WRITE);
+          const watermark = await tx.metricRollup.findFirst({
+            where: { name: opsRollupWatermark(name) },
+            select: { id: true, bucket: true },
+          });
+          const next = watermark
+            ? new Date(watermark.bucket.getTime() + OPS_ROLLUP_DAY_MS)
+            : earliest;
+          const day = next < earliest ? earliest : next;
+          // Only complete days are rolled up, and settled ones for a lagging source.
+          // eslint-disable-next-line security/detect-object-injection -- name is a key of the fixed rollup map
+          const lagDays = OPS_ROLLUP_LAG_DAYS[name] ?? 0;
+          if (day.getTime() >= today.getTime() - lagDays * OPS_ROLLUP_DAY_MS) return false;
+          const rows = await tx.$queryRaw<OpsRollupSourceRow[]>(
+            source(PrismaRuntime.sql, day, new Date(day.getTime() + OPS_ROLLUP_DAY_MS))
+          );
+          await tx.metricRollup.deleteMany({ where: { name, bucket: day } });
+          for (let start = 0; start < rows.length; start += OPS_ROLLUP_WRITE_CHUNK) {
+            await tx.metricRollup.createMany({
+              data: rows.slice(start, start + OPS_ROLLUP_WRITE_CHUNK).map(row => ({
+                name,
+                bucket: day,
+                subjectKey: row.subjectKey,
+                count: row.count,
+                sum: row.sum,
+                tags: row.tags,
+              })),
+            });
+          }
+          if (watermark) {
+            await tx.metricRollup.update({ where: { id: watermark.id }, data: { bucket: day } });
+          } else {
+            await tx.metricRollup.create({
+              data: { name: opsRollupWatermark(name), bucket: day, count: 0, sum: 0 },
+            });
+          }
+          return true;
+        },
+        { maxWait: 10000, timeout: 30000 }
+      );
+      if (!advanced) break;
+      // eslint-disable-next-line security/detect-object-injection -- name is a key of the fixed rollup map
+      done[name] = (done[name] ?? 0) + 1;
+    }
+  }
+
+  // Operations rollups follow the metrics retention; the generic table has no other cleaner.
+  const policy = await getRetentionPolicy();
+  await prisma.metricRollup.deleteMany({
+    where: {
+      name: { in: Object.values(OPS_ROLLUPS) },
+      bucket: { lt: new Date(today.getTime() - policy.metricsRetentionDays * OPS_ROLLUP_DAY_MS) },
+    },
+  });
+  return done;
+}
+
+export interface OpsRollupPoint {
+  bucket: Date;
+  subjectKey: string | null;
+  count: number;
+  sum: number;
+  tags: Prisma.JsonValue;
+}
+
+/**
+ * Reads one operations rollup over a date range, optionally for one subject (or a bounded list), on
+ * idx_metric_rollup_subject ("name", "subjectKey", "bucket"). Bounded: at most `limit` rows (default 2000).
+ */
+export async function queryOpsRollup(
+  name: OpsRollupName,
+  range: {
+    from: Date;
+    to: Date;
+    subjectKey?: string;
+    subjectKeys?: readonly string[];
+    limit?: number;
+  },
+  client?: Prisma.TransactionClient
+): Promise<OpsRollupPoint[]> {
+  const db = client ?? (await import('./prisma')).default;
+  return db.metricRollup.findMany({
+    where: {
+      name,
+      ...(range.subjectKey === undefined ? {} : { subjectKey: range.subjectKey }),
+      ...(range.subjectKeys === undefined ? {} : { subjectKey: { in: [...range.subjectKeys] } }),
+      bucket: { gte: range.from, lt: range.to },
+    },
+    orderBy: [{ bucket: 'asc' }, { id: 'asc' }],
+    take: Math.max(1, Math.min(range.limit ?? 2000, 10_000)),
+    select: { bucket: true, subjectKey: true, count: true, sum: true, tags: true },
+  });
 }

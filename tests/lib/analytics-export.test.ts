@@ -36,7 +36,11 @@ function data(overrides: Partial<AnalyticsExportData> = {}): AnalyticsExportData
       hasPrevious: true,
     },
     generatedAt: new Date('2026-01-15T00:00:00Z'),
-    kpis: { current: { ...empty, incidents: 3, mttaP50: 90_000, ackSla: 66.666 }, previous: empty, openNow: 1 },
+    kpis: {
+      current: { ...empty, incidents: 3, mttaP50: 90_000, ackSla: 66.666 },
+      previous: empty,
+      openNow: 1,
+    },
     services: [],
     trend: [],
     responders: [],
@@ -112,12 +116,26 @@ describe('buildAnalyticsCsv', () => {
   });
 
   it('includes breakdowns, availability and responder handling hours like the page', () => {
-    const row = { ...empty, key: 'P1', label: 'P1', incidents: 4, previousIncidents: 2, mttrP50: 600_000 };
+    const row = {
+      ...empty,
+      key: 'P1',
+      label: 'P1',
+      incidents: 4,
+      previousIncidents: 2,
+      mttrP50: 600_000,
+    };
     const csv = buildAnalyticsCsv(
       data({
         breakdowns: [{ title: 'priority', rows: [row] }],
         availability: [
-          { id: 's', name: 'api', uptime: 99.5, downtimeMs: 120_000, objective: { name: 'API SLO', target: 99.9 }, budgetRemaining: -400 },
+          {
+            id: 's',
+            name: 'api',
+            uptime: 99.5,
+            downtimeMs: 120_000,
+            objective: { name: 'API SLO', target: 99.9 },
+            budgetRemaining: -400,
+          },
         ],
         responders: [
           {

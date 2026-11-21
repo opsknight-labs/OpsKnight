@@ -50,18 +50,19 @@ Swarm deployment uses `docker stack deploy --prune` to ensure seamless, conflict
 
 ### Logical Role Breakdown (Split Topology)
 
-| Role                                       | Default Replicas | Placement Strategy                   | Update Strategy | Purpose & Isolation                                                               |
-| :----------------------------------------- | :--------------- | :----------------------------------- | :-------------- | :-------------------------------------------------------------------------------- |
-| **`opsknight-web`**                        | 2 (Scalable)     | Spread across nodes (`node.id`)      | `start-first`   | Serves UI & API traffic, health checks, authentication.                           |
-| **`opsknight-scheduler`**                  | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Maintenance cron jobs, SLA recalculation. Fenced by DB lease.                     |
-| **`opsknight-general-worker`**             | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Standard background queues, webhooks, non-urgent syncs.                           |
-| **`opsknight-critical-worker`**            | 2                | Spread across nodes (`node.id`)      | `stop-first`    | High-priority alerting, SMS, Twilio, push notifications.                          |
-| **`opsknight-bulk-worker`**                | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Heavy digest emails, compliance rollups, audit purging.                           |
-| **`opsknight-runbook-worker`**             | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Isolated runbook execution, retries, and reconciliation.                          |
-| **`opsknight-status-projector`**           | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Real-time incident timeline projection and public status sync.                    |
-| **`opsknight-pgbouncer`** _(Optional)_     | 2                | Spread across nodes (`node.id`)      | `start-first`   | Transaction connection pooler offloading PostgreSQL backend.                      |
-| **`opsknight-db`** _(Bundled)_             | 1                | Pinned: `opsknight.database == true` | `stop-first`    | Single-node PostgreSQL persistence (dev/simple deploys).                          |
-| **`opsknight-agent`** _(Optional overlay)_ | 1                | Operator selected                    | `stop-first`    | Outbound, policy-constrained execution with persistent identity and result spool. |
+| Role                                       | Default Replicas | Placement Strategy                   | Update Strategy | Purpose & Isolation                                                                                                                                 |
+| :----------------------------------------- | :--------------- | :----------------------------------- | :-------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`opsknight-web`**                        | 2 (Scalable)     | Spread across nodes (`node.id`)      | `start-first`   | Serves UI & API traffic, health checks, authentication.                                                                                             |
+| **`opsknight-scheduler`**                  | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Maintenance cron jobs, SLA recalculation. Fenced by DB lease.                                                                                       |
+| **`opsknight-general-worker`**             | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Standard background queues, webhooks, non-urgent syncs.                                                                                             |
+| **`opsknight-intelligence-worker`**        | 1                | Spread across nodes (`node.id`)      | `stop-first`    | Advisory analysis (similar incidents, correlation, root cause, runbook ranking) apart from paging; scale with `SWARM_REPLICAS_INTELLIGENCE_WORKER`. |
+| **`opsknight-critical-worker`**            | 2                | Spread across nodes (`node.id`)      | `stop-first`    | High-priority alerting, SMS, Twilio, push notifications.                                                                                            |
+| **`opsknight-bulk-worker`**                | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Heavy digest emails, compliance rollups, audit purging.                                                                                             |
+| **`opsknight-runbook-worker`**             | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Isolated runbook execution, retries, and reconciliation.                                                                                            |
+| **`opsknight-status-projector`**           | 2                | Spread across nodes (`node.id`)      | `stop-first`    | Real-time incident timeline projection and public status sync.                                                                                      |
+| **`opsknight-pgbouncer`** _(Optional)_     | 2                | Spread across nodes (`node.id`)      | `start-first`   | Transaction connection pooler offloading PostgreSQL backend.                                                                                        |
+| **`opsknight-db`** _(Bundled)_             | 1                | Pinned: `opsknight.database == true` | `stop-first`    | Single-node PostgreSQL persistence (dev/simple deploys).                                                                                            |
+| **`opsknight-agent`** _(Optional overlay)_ | 1                | Operator selected                    | `stop-first`    | Outbound, policy-constrained execution with persistent identity and result spool.                                                                   |
 
 > [!IMPORTANT]
 > **Database HA Architecture Distinction**:

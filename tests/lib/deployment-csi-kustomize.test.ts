@@ -68,7 +68,8 @@ describe('Kustomize Secrets Store CSI components', () => {
     it(`mounts every ${mode} role without rendering the externally owned Secret or bundled database`, () => {
       const docs = render(path.join(root, 'profiles', `${mode}-csi`));
       const deployments = workloads(docs);
-      expect(deployments.length).toBe(mode === 'integrated' ? 1 : 7);
+      // Split: web, scheduler, intelligence, general, critical, bulk, runbook, projector.
+      expect(deployments.length).toBe(mode === 'integrated' ? 1 : 8);
       for (const doc of deployments) {
         expectMount(doc);
         const container = doc.spec.template.spec.containers[0];
@@ -91,7 +92,7 @@ describe('Kustomize Secrets Store CSI components', () => {
         {
           target: {
             kind: 'Deployment',
-            name: 'opsknight-(app|web|scheduler|general-worker|critical-worker|bulk-worker|runbook-worker|status-projector)',
+            name: 'opsknight-(app|web|scheduler|intelligence-worker|general-worker|critical-worker|bulk-worker|runbook-worker|status-projector)',
           },
           patch: stringify({
             apiVersion: 'apps/v1',
@@ -119,7 +120,7 @@ describe('Kustomize Secrets Store CSI components', () => {
       ];
       const docs = overlay(`${mode}-csi`, ['secrets-store-csi', 'openshift'], patches);
       const apps = appWorkloads(docs);
-      expect(apps.length).toBe(mode === 'integrated' ? 2 : 8);
+      expect(apps.length).toBe(mode === 'integrated' ? 2 : 9);
       for (const doc of apps) {
         expectMount(doc);
         const pod = doc.spec.template.spec;

@@ -123,6 +123,28 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         keywords: ['slo', 'objectives', 'uptime', 'availability', 'mtta', 'mttr'],
       },
       {
+        id: 'intelligence',
+        label: 'Intelligence',
+        description:
+          'Similar incidents, correlation, possible causes, insights and the AI assistant. Off by default and never on the paging path',
+        href: '/settings/intelligence',
+        icon: 'activity',
+        keywords: [
+          'aiops',
+          'intelligence',
+          'similar incidents',
+          'correlation',
+          'noise',
+          'ai',
+          'assistant',
+          'squire',
+          'llm',
+          'insights',
+          'dependencies',
+          'root cause',
+        ],
+      },
+      {
         id: 'custom-fields',
         label: 'Custom Fields',
         description: 'Define custom incident metadata, dropdown attributes, and validation rules',

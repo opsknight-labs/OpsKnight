@@ -26,7 +26,12 @@ import { isValidTimeZone, startOfDayInTimeZone, startOfNextDayInTimeZone } from 
 export type EscalationTargetResolution =
   | { outcome: 'RESOLVED'; userIds: string[]; targetName: string }
   | { outcome: 'NO_ELIGIBLE_RESPONDERS'; targetName: string }
-  | { outcome: 'INVALID_TARGET'; reason: string };
+  | {
+      outcome: 'INVALID_TARGET';
+      reason: string;
+      /** Machine-readable cause for analytics; `reason` stays telemetry only. */
+      code?: 'TARGET_MISSING' | 'TARGET_INACTIVE' | 'TARGET_INVALID';
+    };
 
 /**
  * A resolution attempt that failed for infrastructure reasons. The caller must
@@ -65,12 +70,17 @@ async function resolveUserTarget(targetId: string): Promise<EscalationTargetReso
   );
 
   if (!user) {
-    return { outcome: 'INVALID_TARGET', reason: 'Target user no longer exists' };
+    return {
+      outcome: 'INVALID_TARGET',
+      reason: 'Target user no longer exists',
+      code: 'TARGET_MISSING',
+    };
   }
   if (user.status !== 'ACTIVE') {
     return {
       outcome: 'INVALID_TARGET',
       reason: `Target user is ${user.status.toLowerCase()}, not an active responder`,
+      code: 'TARGET_INACTIVE',
     };
   }
   return { outcome: 'RESOLVED', userIds: [user.id], targetName: user.name || 'Unknown User' };
@@ -95,7 +105,11 @@ async function resolveTeamTarget(
   );
 
   if (!team) {
-    return { outcome: 'INVALID_TARGET', reason: 'Target team no longer exists' };
+    return {
+      outcome: 'INVALID_TARGET',
+      reason: 'Target team no longer exists',
+      code: 'TARGET_MISSING',
+    };
   }
 
   const targetName = team.name || 'Unknown Team';
@@ -148,7 +162,11 @@ async function resolveScheduleTarget(
   );
 
   if (!schedule) {
-    return { outcome: 'INVALID_TARGET', reason: 'Target schedule no longer exists' };
+    return {
+      outcome: 'INVALID_TARGET',
+      reason: 'Target schedule no longer exists',
+      code: 'TARGET_MISSING',
+    };
   }
 
   const targetName = schedule.name || 'Unknown Schedule';

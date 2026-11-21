@@ -300,10 +300,7 @@ export async function getStatusBarData(actor: AuthorizationActor): Promise<Statu
   return {
     counts: counts.status === 'fulfilled' ? counts.value : { assigned: 0, unacked: 0 },
     shifts: shifts.status === 'fulfilled' ? shifts.value : [],
-    health:
-      health.status === 'fulfilled'
-        ? health.value
-        : { ...EMPTY_HEALTH, asOf: now.getTime() },
+    health: health.status === 'fulfilled' ? health.value : { ...EMPTY_HEALTH, asOf: now.getTime() },
     renderedAt: now.getTime(),
   };
 }

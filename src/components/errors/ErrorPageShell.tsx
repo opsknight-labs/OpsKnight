@@ -26,9 +26,7 @@ export default function ErrorPageShell({
         >
           {icon ?? <SearchX />}
         </div>
-        {code ? (
-          <p className="mb-1 font-mono text-sm text-muted-foreground">{code}</p>
-        ) : null}
+        {code ? <p className="mb-1 font-mono text-sm text-muted-foreground">{code}</p> : null}
         <h1 className="mb-2 font-display text-2xl font-extrabold tracking-tight">{title}</h1>
         <p className="mb-6 text-base leading-relaxed text-muted-foreground">{message}</p>
         <div className="flex flex-wrap justify-center gap-3">

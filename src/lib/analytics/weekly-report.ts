@@ -82,8 +82,13 @@ function delta(current: number | null, previous: number | null, id: MetricId): W
   const metric = definition(id);
   const described = describeDelta(current, previous, metric.unit, metric.better);
   if (!described) return null;
-  if (described.direction === 'flat') return { text: 'no change', direction: 'flat', tone: 'neutral' };
-  return { text: described.label.replace(/^[+−-]/, ''), direction: described.direction, tone: described.tone };
+  if (described.direction === 'flat')
+    return { text: 'no change', direction: 'flat', tone: 'neutral' };
+  return {
+    text: described.label.replace(/^[+−-]/, ''),
+    direction: described.direction,
+    tone: described.tone,
+  };
 }
 
 const dayLabel = (bucket: string) =>
@@ -115,19 +120,26 @@ export function weeklyHighlights({ kpis, services, followThrough }: Sections): s
   ];
   for (const [id, cur, prev] of slaDrops) {
     if (cur !== null && prev !== null && prev - cur >= NOTABLE_POINTS) {
-      lines.push(`${definition(id).label} fell to ${formatMetric(cur, 'percent')} from ${formatMetric(prev, 'percent')}.`);
+      lines.push(
+        `${definition(id).label} fell to ${formatMetric(cur, 'percent')} from ${formatMetric(prev, 'percent')}.`
+      );
     }
   }
   const riser = [...services]
     .filter(service => service.incidents >= 2 && service.incidents > service.previousIncidents)
     .sort((a, b) => b.incidents - b.previousIncidents - (a.incidents - a.previousIncidents))[0];
-  if (riser) lines.push(`${riser.name} had ${riser.incidents} incidents, up from ${riser.previousIncidents}.`);
+  if (riser)
+    lines.push(
+      `${riser.name} had ${riser.incidents} incidents, up from ${riser.previousIncidents}.`
+    );
   if (followThrough.actionItemsOverdue > 0) {
     const n = followThrough.actionItemsOverdue;
     lines.push(`${n} postmortem action item${n === 1 ? ' is' : 's are'} overdue.`);
   }
   if ((now.afterHoursRate ?? 0) >= 40 && now.incidents >= 5) {
-    lines.push(`${formatMetric(now.afterHoursRate, 'percent')} of incidents arrived outside business hours.`);
+    lines.push(
+      `${formatMetric(now.afterHoursRate, 'percent')} of incidents arrived outside business hours.`
+    );
   }
   return lines.slice(0, MAX_HIGHLIGHTS);
 }
@@ -167,13 +179,26 @@ export function buildWeeklyReportProps(input: {
         ],
     kpis: [
       kpi('incidents', current.incidents, previous.incidents),
-      kpi('mttaP50', current.mttaP50, previous.mttaP50, current.mttaP90 === null ? undefined : `p90 ${formatMetric(current.mttaP90, 'duration')}`),
-      kpi('mttrP50', current.mttrP50, previous.mttrP50, current.mttrP90 === null ? undefined : `p90 ${formatMetric(current.mttrP90, 'duration')}`),
+      kpi(
+        'mttaP50',
+        current.mttaP50,
+        previous.mttaP50,
+        current.mttaP90 === null ? undefined : `p90 ${formatMetric(current.mttaP90, 'duration')}`
+      ),
+      kpi(
+        'mttrP50',
+        current.mttrP50,
+        previous.mttrP50,
+        current.mttrP90 === null ? undefined : `p90 ${formatMetric(current.mttrP90, 'duration')}`
+      ),
       kpi('ackSla', current.ackSla, previous.ackSla),
       kpi('resolveSla', current.resolveSla, previous.resolveSla),
       kpi('afterHoursRate', current.afterHoursRate, previous.afterHoursRate),
     ],
-    days: trend.map(point => ({ label: dayLabel(point.bucket), count: point.high + point.medium + point.low })),
+    days: trend.map(point => ({
+      label: dayLabel(point.bucket),
+      count: point.high + point.medium + point.low,
+    })),
     services: services.slice(0, TOP_ROWS).map(service => ({
       name: service.name,
       incidents: String(service.incidents),

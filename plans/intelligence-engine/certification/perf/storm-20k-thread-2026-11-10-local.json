@@ -1,0 +1,139 @@
+{
+  "measuredAt": "2026-11-10T09:29:03.947Z",
+  "node": "v20.20.2",
+  "engineVersion": "1.5.0",
+  "options": {
+    "history": 20000,
+    "burst": 1000,
+    "services": 50,
+    "batchSize": 50,
+    "concurrency": 8,
+    "reuseHistory": false,
+    "maxDrainSeconds": 600,
+    "maxKindP99Ms": 10000,
+    "gate": true,
+    "output": "/private/tmp/claude-501/-Users-dushyantrahangdale-Desktop-Projects/320ca8a9-b6ca-4d2d-a846-6b75432ba1ce/scratchpad/runs-v2/storm-a12.json",
+    "laneMode": "thread"
+  },
+  "host": {
+    "cpus": 12,
+    "loadAverageAtStart": [3.958984375, 4.39013671875, 5.3330078125],
+    "loadAverageAtEnd": [5.95263671875, 4.8037109375, 5.45849609375]
+  },
+  "seedSeconds": 4,
+  "drainSeconds": 14.5,
+  "incidentsPerSecond": 68.8,
+  "cycles": 81,
+  "averageCycleMs": 180,
+  "handlerBusyFraction": 0.864,
+  "failedItems": 0,
+  "deadLetters": 0,
+  "activeFindings": 10000,
+  "correlationGroups": 989,
+  "perKind": {
+    "INDEX_INCIDENT": {
+      "count": 1000,
+      "p50Ms": 16.6,
+      "p95Ms": 23.6,
+      "p99Ms": 40.6
+    },
+    "ANALYZE_INCIDENT": {
+      "count": 1000,
+      "p50Ms": 44.9,
+      "p95Ms": 60,
+      "p99Ms": 70.6
+    },
+    "CORRELATE_INCIDENT": {
+      "count": 1000,
+      "p50Ms": 11.1,
+      "p95Ms": 14.8,
+      "p99Ms": 18.7
+    },
+    "ANALYZE_RESPONSE": {
+      "count": 1000,
+      "p50Ms": 24.8,
+      "p95Ms": 33.8,
+      "p99Ms": 40.2
+    }
+  },
+  "gate": {
+    "contract": {
+      "maxDrainSeconds": 600,
+      "maxKindP99Ms": 10000
+    },
+    "breaches": [],
+    "passed": true
+  },
+  "note": "Single process, local PostgreSQL. Indicative only; certification needs dedicated hardware.",
+  "hostValidation": {
+    "rule": "valid iff 1-min load < maxLoad1 at start, no other heavy process at any sample, no gap > 15 s between samples; peak recorded, not judged",
+    "maxLoad1": 4.0,
+    "startLoad1": 3.84,
+    "peakLoad1": 5.95,
+    "maxSampleGapSec": 4,
+    "samples": [
+      {
+        "at": 1794302913,
+        "load1": 3.84,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302917,
+        "load1": 3.84,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302920,
+        "load1": 3.69,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302923,
+        "load1": 3.96,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302926,
+        "load1": 3.96,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302929,
+        "load1": 4.12,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302932,
+        "load1": 4.12,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302935,
+        "load1": 4.75,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302938,
+        "load1": 5.25,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302941,
+        "load1": 5.25,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302944,
+        "load1": 5.95,
+        "otherHeavy": []
+      },
+      {
+        "at": 1794302947,
+        "load1": 5.95,
+        "otherHeavy": []
+      }
+    ],
+    "valid": true,
+    "reasons": []
+  }
+}

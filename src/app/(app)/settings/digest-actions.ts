@@ -3,10 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { logAudit } from '@/lib/audit';
-import {
-  setWeeklyDigestEnabled,
-  setWeeklyDigestOptOut,
-} from '@/lib/analytics/digest';
+import { setWeeklyDigestEnabled, setWeeklyDigestOptOut } from '@/lib/analytics/digest';
 import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
 
 const enabledSchema = z.boolean();

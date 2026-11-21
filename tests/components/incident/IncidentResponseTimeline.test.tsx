@@ -178,9 +178,9 @@ describe('IncidentResponseTimeline', () => {
 
   it('links each entry to its underlying record', () => {
     render(<IncidentResponseTimeline timeline={timeline} timeZone="UTC" />);
-    expect(
-      screen.getByRole('link', { name: /View routing decision/ }).getAttribute('href')
-    ).toBe('#automation-decision');
+    expect(screen.getByRole('link', { name: /View routing decision/ }).getAttribute('href')).toBe(
+      '#automation-decision'
+    );
     expect(screen.getByRole('link', { name: /View execution/ }).getAttribute('href')).toBe(
       '/runbooks/executions/x1'
     );
@@ -198,16 +198,10 @@ describe('IncidentResponseTimeline', () => {
     expect(recordLink({ type: 'APPROVAL', id: 's1', executionId: 'x1' }, false).href).toBe(
       '#runbook-execution-x1'
     );
-    expect(recordLink({ type: 'NOTIFICATION', id: 'n1' }, false).href).toBe(
-      '#timeline-notif-n1'
-    );
+    expect(recordLink({ type: 'NOTIFICATION', id: 'n1' }, false).href).toBe('#timeline-notif-n1');
     expect(recordLink({ type: 'EVENT', id: 'e1' }, true).href).toBe('#timeline-e1');
-    expect(recordLink({ type: 'SUGGESTION', id: 'g1' }, false).href).toBe(
-      '#runbook-suggestion-g1'
-    );
-    expect(recordLink({ type: 'ESCALATION_STEP', id: '0' }, false).href).toBe(
-      '#escalation-health'
-    );
+    expect(recordLink({ type: 'SUGGESTION', id: 'g1' }, false).href).toBe('#runbook-suggestion-g1');
+    expect(recordLink({ type: 'ESCALATION_STEP', id: '0' }, false).href).toBe('#escalation-health');
   });
 
   it('surfaces human intervention, resolution recommendations and waiting approvals', () => {
@@ -243,7 +237,12 @@ describe('IncidentResponseTimeline', () => {
     const all = [...entries, ...extra];
     render(
       <IncidentResponseTimeline
-        timeline={{ ...timeline, entries: all, lanes: lanes({}, all), humanInterventionRequired: true }}
+        timeline={{
+          ...timeline,
+          entries: all,
+          lanes: lanes({}, all),
+          humanInterventionRequired: true,
+        }}
         timeZone="UTC"
       />
     );

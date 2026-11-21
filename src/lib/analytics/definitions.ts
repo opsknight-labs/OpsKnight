@@ -42,7 +42,8 @@ export const METRICS = {
     label: 'MTTA (p90)',
     unit: 'duration',
     better: 'down',
-    description: '90th percentile time to acknowledge: nine in ten incidents were acknowledged faster.',
+    description:
+      '90th percentile time to acknowledge: nine in ten incidents were acknowledged faster.',
   },
   mttrP50: {
     label: 'MTTR (median)',
@@ -88,7 +89,8 @@ export const METRICS = {
     label: 'Alerts per incident',
     unit: 'ratio',
     better: 'down',
-    description: 'Alerts grouped into each incident on average. High values point at noisy, duplicated signals.',
+    description:
+      'Alerts grouped into each incident on average. High values point at noisy, duplicated signals.',
   },
   autoResolvedRate: {
     label: 'Auto-resolved',

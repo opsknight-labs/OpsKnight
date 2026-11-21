@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { revalidatePath } from 'next/cache';
-import type { IncidentStatus } from '@prisma/client';
+import type { IncidentStatus, Prisma } from '@prisma/client';
 
 import {
   assertCanAcknowledgeIncident,
@@ -13,11 +13,20 @@ import { AppError } from '@/lib/errors';
 import { emitAuditEvent } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import type { IdempotencyContext } from '@/lib/idempotency';
-import type { IncidentLifecycleResult, IncidentLifecycleSource } from '@/lib/incidents/lifecycle';
+import type {
+  IncidentLifecycleInput,
+  IncidentLifecycleResult,
+  IncidentLifecycleSource,
+} from '@/lib/incidents/lifecycle';
 import {
   executeIdempotentIncidentLifecycleCommand,
   transitionIncidentToStatusIdempotent,
 } from '@/lib/incidents/idempotent-commands';
+
+export interface OperatorLifecycleHooks {
+  beforeTx?: (tx: Prisma.TransactionClient) => Promise<void>;
+  inTx?: (tx: Prisma.TransactionClient) => Promise<void>;
+}
 
 type OperatorLifecycleSource = Extract<IncidentLifecycleSource, 'WEB' | 'MOBILE'>;
 
@@ -61,7 +70,9 @@ export async function updateIncidentStatus(
   status: IncidentStatus,
   expectedStatus: IncidentStatus | undefined,
   source: OperatorLifecycleSource,
-  idempotency?: IdempotencyContext
+  idempotency?: IdempotencyContext,
+  hooks?: OperatorLifecycleHooks,
+  ackedNotification?: IncidentLifecycleInput['ackedNotification']
 ): Promise<{ replayed: boolean }> {
   if (status === 'RESOLVED') {
     throw new AppError({
@@ -88,9 +99,12 @@ export async function updateIncidentStatus(
       status,
       expectedStatus,
       source,
+      ...(status === 'ACKNOWLEDGED' && ackedNotification ? { ackedNotification } : {}),
       actor: { id: user.id, name: user.name ?? undefined },
     },
-    idempotency
+    idempotency,
+    hooks?.inTx,
+    hooks?.beforeTx
   );
 
   if (result.value.changed && !result.replayed) {
@@ -104,7 +118,8 @@ export async function resolveIncidentWithNote(
   id: string,
   resolution: string,
   source: OperatorLifecycleSource = 'WEB',
-  idempotency?: IdempotencyContext
+  idempotency?: IdempotencyContext,
+  hooks?: OperatorLifecycleHooks
 ): Promise<{ replayed: boolean }> {
   await assertCanResolveIncident(id);
 
@@ -149,7 +164,9 @@ export async function resolveIncidentWithNote(
       actor: { id: user.id, name: user.name ?? undefined },
       resolutionNote: trimmedResolution,
     },
-    idempotency
+    idempotency,
+    hooks?.inTx,
+    hooks?.beforeTx
   );
 
   if (result.value.changed && !result.replayed) {

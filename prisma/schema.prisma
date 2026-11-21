@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["metrics"]
 }
 
 datasource db {
@@ -374,6 +375,7 @@ enum IncidentEventType {
   RUNBOOK_SKIPPED
   RUNBOOK_VERIFIED
   RUNBOOK_UNVERIFIED
+  CHAT_MESSAGE
 }
 
 enum ActionItemStatus {
@@ -529,6 +531,8 @@ model User {
   quietHoursStartMinutes       Int        @default(1080)
   quietHoursEndMinutes         Int        @default(480)
   quietHoursWeekendAllDay      Boolean    @default(true)
+  /// Opt-in: related low-urgency pages within a short window arrive as one bundled notification.
+  bundleLowUrgencyPages        Boolean    @default(false)
   department                   String?
   jobTitle                     String?
   avatarUrl                    String?
@@ -542,6 +546,7 @@ model User {
   assignedIncidents           Incident[]
   teamMemberships             TeamMember[]
   onCallShifts                OnCallShift[]
+  onCallCoverageDays          OnCallCoverageDay[]
   escalationRules             EscalationRule[]
   incidentNotes               IncidentNote[]
   postmortems                 Postmortem[]
@@ -562,6 +567,16 @@ model User {
   runbookUnattendedWritesAuthorized ServiceAutomationRule[]  @relation("ServiceRunbookBindingUnattendedWritesAuthorizedBy")
   runbookTriggersCreated      RunbookTrigger[]             @relation("RunbookTriggerCreatedBy")
   runbookExecutionsTriggered  RunbookExecution[]           @relation("RunbookExecutionTriggeredBy")
+  intelligenceFeedback        IntelligenceFeedback[]
+  intelligencePolicyVersions  IntelligencePolicyVersion[]
+  intelligenceEvaluationRuns  IntelligenceEvaluationRun[]
+  squireConversations         SquireConversation[]
+  squireDialogueStates        SquireDialogueState[]
+  aiUsageDays                 AiUsageUserDay[]
+  squireActionReceipts        SquireActionReceipt[]
+  squireFeedback              SquireFeedback[]
+  opsInsightDecisions         OpsInsight[]
+  knowledgeFactsApproved      KnowledgeChunk[]             @relation("KnowledgeFactApprovedBy")
   runbookStepsApproved        RunbookExecutionStep[]       @relation("RunbookStepApprovedBy")
   runbookAgentsCreated        RunbookAgent[]               @relation("RunbookAgentCreatedBy")
   runbookAgentsRevoked        RunbookAgent[]               @relation("RunbookAgentRevokedBy")
@@ -682,6 +697,15 @@ model TeamMember {
 }
 
 model Service {
+  metricTemplates          ServiceMetricTemplate[]
+  metricAnomalies          MetricAnomaly[]
+  noiseControlPolicies     NoiseControlPolicy[]
+  noiseControlVersions     NoiseControlPolicyVersion[]
+  noiseMaintenanceWindows  NoiseMaintenanceWindow[]
+  suppressionRules         SuppressionRule[]
+  heartbeatMonitors        HeartbeatMonitor[]
+  prePagingDecisions       PrePagingDecision[]
+  intelligenceObservations DependencyObservationBucket[]
   automationConfig                ServiceAutomationConfig?
   automationDraft                 AutomationDraft?
   automationVersions              AutomationVersion[]
@@ -736,7 +760,15 @@ model Service {
   subscriptionServices            StatusPageSubscriptionService[]
   slackDestinations               SlackDestination[]
   microsoftTeamsDestinations      MicrosoftTeamsDestination[]
-  maintenanceWindows              MaintenanceWindowService[]
+  intelligencePolicy              IntelligencePolicy?
+  incidentFingerprints            IncidentFingerprint[]
+  knowledgeChunks                 KnowledgeChunk[]
+  squireServicePolicy             SquireServicePolicy?
+  upstreamDependencies            ServiceDependency[]             @relation("DependencyDownstream")
+  downstreamDependencies          ServiceDependency[]             @relation("DependencyUpstream")
+  changeEvents                    ChangeEvent[]
+  catalogAliases                  CatalogServiceAlias[]
+  maintenanceWindows             MaintenanceWindowService[]
   maintenanceSchedules            MaintenanceScheduleService[]
 
   @@index([teamId])
@@ -759,6 +791,30 @@ model EscalationPolicy {
   updatedAt   DateTime         @updatedAt
   services    Service[]
   automationDecisions IncidentAutomationDecision[]
+}
+
+/// One row per escalation step execution (incident + generation + step). Written in the same
+/// statement as the step's timeline event; analytics only, never read by the escalation engine.
+model EscalationStepAttempt {
+  incidentId      String
+  generation      Int
+  stepIndex       Int
+  policyId        String?
+  policyRevision  Int?
+  targetType      String?
+  targetId        String?
+  resolvedUserIds String[]  @default([])
+  /// SCHEDULED | NOTIFIED | SKIPPED | FAILED. Acknowledged / timed out are derived by the step-outcome rollup.
+  outcome         String
+  skipReason      String?
+  notifiedAt      DateTime?
+  /// True for rows reconstructed by the 90-day backfill from timeline text.
+  approximate     Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  incident        Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@id([incidentId, generation, stepIndex])
+  @@index([createdAt], map: "idx_escalation_step_attempt_created")
 }
 
 model EscalationRule {
@@ -823,6 +879,8 @@ model Integration {
   /// True only for integrations that existed before routing keys were shown in plaintext: /api/events
   /// then also accepts the exact stored (encrypted) key value the old UI displayed. Cleared on rotation.
   legacyStoredKeyAccepted Boolean @default(false)
+  changeServiceMapping   ChangeServiceMapping?
+  unmappedChanges        ChangeEvent[] @relation("ChangeEventUnmappedIntegration")
 }
 
 // No cascading foreign keys: deleting a service must never discard accepted work.
@@ -1365,6 +1423,14 @@ model WarRoomProviderEventStage {
 }
 
 model Alert {
+  fingerprint AlertFingerprint?
+  /// Common bounded metadata; legacy rows are populated by the cursor backfill.
+  severity   String? @db.VarChar(16)
+  resourceKey String? @db.VarChar(256)
+  labels     Json?
+  fingerprintHash String? @db.VarChar(64)
+  /// Nullable for legacy rows; ORM edits are discoverable by the incremental Intelligence lane.
+  updatedAt  DateTime? @updatedAt
   id         String    @id @default(cuid())
   dedupKey   String?
   status     String    @default("TRIGGERED")
@@ -1386,6 +1452,7 @@ model Alert {
 }
 
 model Incident {
+  prePagingDecisions                  PrePagingDecision[]
   automationSourceRestricted          Boolean @default(false)
   automationDecision                  IncidentAutomationDecision?
   automationTraces                    AutomationTrace[]
@@ -1406,6 +1473,10 @@ model Incident {
   escalationProcessingAt              DateTime?
   escalationGeneration                Int                             @default(0)
   acknowledgedAt                      DateTime?
+  /// Who acknowledged and through which channel (IncidentLifecycleSource). Null for system acks and legacy rows.
+  acknowledgedById                    String?
+  acknowledgedVia                     String?
+  escalationStepAttempts              EscalationStepAttempt[]
   resolvedAt                          DateTime?
   resolutionKind                      IncidentResolutionKind?
   snoozedUntil                        DateTime?
@@ -1450,6 +1521,9 @@ model Incident {
   warRoomProvisioningStatus           WarRoomProvisioningStatus       @default(NONE)
   warRoomProvisioningToken            String?
   warRoomProvisioningAt               DateTime?
+  /// Written by the intelligence lane when findings change (see intelligence/helpers/page-context.ts); read by
+  /// page notifications from the incident row they already load. Ids and scores only, never text.
+  pageContext                         Json?
   createdAt                           DateTime                        @default(now())
   updatedAt                           DateTime                        @updatedAt
   service                             Service                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
@@ -1465,6 +1539,16 @@ model Incident {
   watchers                            IncidentWatcher[]
   tags                                IncidentTag[]
   actionItemRecords                   ActionItem[]
+  intelligenceFingerprint             IncidentFingerprint?
+  intelligenceEmbedding               IncidentEmbedding?
+  correlationMemberships              CorrelationMember[]
+  correlationAnchoredGroups           CorrelationGroup[]
+  relationshipsAsSource               IncidentRelationship[]       @relation("IncidentRelationshipSource")
+  relationshipsAsTarget               IncidentRelationship[]       @relation("IncidentRelationshipTarget")
+  intelligenceFindings                IntelligenceFinding[]
+  intelligenceAnalyses                IntelligenceAnalysisSnapshot[]
+  knowledgeChunks                     KnowledgeChunk[]
+  squireProactiveNotes                SquireProactiveNote[]
   externalIssueLinks                  ExternalIssueLink[]
   pinnedMessages                      SlackPinnedMessage[]
   microsoftTeamsMessages              MicrosoftTeamsIncidentMessage[]
@@ -1732,8 +1816,10 @@ model IncidentNote {
   channel    String?  @default(dbgenerated("NULLIF(current_setting('opsknight.channel'::text, true), ''::text)"))
   incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  knowledgeChunks KnowledgeChunk[]
 
   @@index([incidentId, createdAt])
+  @@index([createdAt, id], map: "idx_incident_note_created_id")
 }
 
 model Postmortem {
@@ -1761,10 +1847,12 @@ model Postmortem {
   actionItemRecords ActionItem[]
   contributors      PostmortemContributor[]
   versions          PostmortemVersion[]
+  knowledgeChunks   KnowledgeChunk[]
 
   @@index([incidentId])
   @@index([status, createdAt])
   @@index([createdById])
+  @@index([updatedAt, id], map: "idx_postmortem_updated_id")
 }
 
 model PostmortemVersion {
@@ -1890,6 +1978,7 @@ model OnCallSchedule {
   layers          OnCallLayer[]
   overrides       OnCallOverride[]
   shifts          OnCallShift[]
+  coverageDays    OnCallCoverageDay[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   escalationRules EscalationRule[]
@@ -1957,6 +2046,24 @@ model OnCallShift {
   @@index([userId, start, end])
 }
 
+// Daily history of who was effectively on call, so load and fairness survive later layer edits.
+// `date` is the calendar day in the schedule's time zone. `layerId` is a plain id (no relation):
+// history must outlive a deleted layer.
+model OnCallCoverageDay {
+  id         String         @id @default(cuid())
+  scheduleId String
+  date       DateTime       @db.Date
+  userId     String
+  layerId    String
+  seconds    Int
+  createdAt  DateTime       @default(now())
+  schedule   OnCallSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, date, userId, layerId])
+  @@index([userId, date])
+}
+
 model Notification {
   id                     String                        @id @default(cuid())
   incidentId             String?
@@ -1997,6 +2104,11 @@ model Notification {
   deliveryProvider       String?
   providerMessageId      String?                       @unique
   attempts               Int                           @default(0)
+  /// Set when the acknowledgement arrived through this notification (voice key press, push action; SMS/LINK reserved).
+  ackedAt                DateTime?
+  ackedVia               String?
+  /// Escalation step that sent this page; null for anything that is not an escalation page.
+  escalationStepIndex    Int?
   createdAt              DateTime                      @default(now())
   incident               Incident?                     @relation(fields: [incidentId], references: [id])
   user                   User?                         @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -2564,6 +2676,8 @@ model StatusPage {
   enableUptimeExports         Boolean                    @default(false)
   statusApiRequireToken       Boolean                    @default(false)
   statusApiRateLimitEnabled   Boolean                    @default(false)
+  /// Minutes between status updates while an incident is open (incident page "next update due"). Null = 30.
+  updateCadenceMinutes        Int?
   statusApiRateLimitMax       Int                        @default(120)
   statusApiRateLimitWindowSec Int                        @default(60)
   uptimeExcellentThreshold    Float                      @default(99.9)
@@ -2641,6 +2755,7 @@ model StatusPageService {
 
   @@unique([statusPageId, serviceId])
   @@index([statusPageId, order])
+  @@index([serviceId])
 }
 
 model StatusPageAnnouncement {
@@ -2809,9 +2924,12 @@ model MetricRollup {
   min       Float?
   max       Float?
   tags      Json?
+  /// Operations rollups only: the user, runbook, policy or automation version the row is about.
+  subjectKey String?
   createdAt DateTime @default(now())
 
   @@index([name, bucket])
+  @@index([name, subjectKey, bucket], map: "idx_metric_rollup_subject")
   @@index([serviceId, bucket])
   @@index([bucket])
 }
@@ -3875,6 +3993,7 @@ model Runbook {
   versions         RunbookVersion[]        @relation("RunbookVersions")
   bindings         ServiceAutomationRule[]
   executions       RunbookExecution[]
+  knowledgeChunks  KnowledgeChunk[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4123,7 +4242,10 @@ model RunbookExecution {
   @@index([incidentId])
   @@index([incidentId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_runbook_execution_incident_cursor")
   @@index([serviceId])
+  @@index([serviceId, createdAt], map: "idx_runbook_execution_service_recent")
+  @@index([runbookId, createdAt(sort: Desc)], map: "idx_runbook_execution_runbook_recent")
   @@index([runbookId])
+  @@index([completedAt], map: "idx_runbook_execution_completed")
   @@index([runbookVersionId])
   @@index([triggerId])
   @@index([resolvedTargetAgentId])
@@ -4921,6 +5043,1326 @@ model ScimEvent {
   @@index([connectorId, createdAt, id])
 }
 
+// ---------------------------------------------------------------------------
+// OpsKnight Intelligence (AIOps)
+//
+// Derived, rebuildable data kept off the paging-critical path. Nothing here is
+// the source of truth for incidents or alerts, and no row ever rewrites
+// incident/alert history. Every incident-linked table cascades so retention
+// cleanup of incidents never blocks on intelligence data.
+// ---------------------------------------------------------------------------
+
+enum IntelligenceMode {
+  OFF
+  SHADOW
+  SUGGEST
+  AUTO
+}
+
+enum CorrelationGroupStatus {
+  OPEN
+  CLOSED
+}
+
+enum CorrelationDecision {
+  SHADOW
+  SUGGESTED
+  ACCEPTED
+  REJECTED
+  REVERTED
+}
+
+enum CorrelationMemberRole {
+  ANCHOR
+  MEMBER
+}
+
+enum IntelligenceActorType {
+  SYSTEM
+  USER
+}
+
+enum IncidentRelationshipType {
+  RELATED
+  DUPLICATE_OF
+  CAUSED_BY
+  /// Storm or correlation child grouped under a parent incident; the child's paging rolls up to the parent.
+  PARENT_CHILD
+}
+
+enum IntelligenceOrigin {
+  RULE
+  LEARNED
+  HUMAN
+}
+
+enum IntelligenceFindingKind {
+  SIMILAR_INCIDENT
+  RELATED_INCIDENT
+  RUNBOOK_RECOMMENDATION
+  PROBABLE_CAUSE
+  CHANGE_CORRELATION
+  NOISE
+  TRIAGE_URGENCY
+  TRIAGE_ASSIGNMENT
+  TRIAGE_DUPLICATE
+  TRIAGE_RESOLUTION_TIME
+  METRIC_ANOMALY
+}
+
+enum IntelligenceFindingStatus {
+  ACTIVE
+  SUPERSEDED
+  DISMISSED
+}
+
+enum IntelligenceFeedbackSubject {
+  FINDING
+  CORRELATION_MEMBER
+  INCIDENT_RELATIONSHIP
+}
+
+enum IntelligenceFeedbackVerdict {
+  HELPFUL
+  NOT_HELPFUL
+  CORRECT
+  INCORRECT
+}
+
+enum IntelligenceEvaluationKind {
+  SHADOW
+  REPLAY
+  CERTIFICATION
+}
+
+enum IntelligenceEvaluationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum OpsInsightScopeType {
+  SERVICE
+  POLICY
+  SCHEDULE
+  RUNBOOK
+  USER
+  TEAM
+}
+
+// Declared lowest first: max("severity") is the highest severity.
+enum OpsInsightSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum OpsInsightStatus {
+  OPEN
+  ACCEPTED
+  DISMISSED
+  RESOLVED
+}
+
+// One stored operations insight (Workstream J). Recomputation updates the row on its unique key; an insight
+// that is no longer produced is RESOLVED, never deleted, so a person's decision is kept.
+model OpsInsight {
+  id          String              @id @default(cuid())
+  scopeType   OpsInsightScopeType
+  scopeId     String
+  kind        String
+  key         String              @default("")
+  area        String
+  severity    OpsInsightSeverity
+  title       String
+  summary     String
+  evidence    Json
+  /// In-app path of the pre-filled editor or draft this insight opens. A person publishes there.
+  draftHref   String?
+  inputHash   String
+  status      OpsInsightStatus    @default(OPEN)
+  generation  Int                 @default(0)
+  firstSeenAt DateTime            @default(now())
+  lastSeenAt  DateTime            @default(now())
+  resolvedAt  DateTime?
+  decidedById String?
+  decidedAt   DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  decidedBy   User?               @relation(fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@unique([scopeType, scopeId, kind, key], map: "uq_ops_insight_scope_kind_key")
+  @@index([status, severity(sort: Desc), lastSeenAt(sort: Desc), id(sort: Desc)], map: "idx_ops_insight_inbox")
+  @@index([status, updatedAt], map: "idx_ops_insight_retention")
+  @@index([decidedById], map: "idx_ops_insight_decided_by")
+}
+
+// When a scope's insights were last computed and from which inputs: unchanged inputs are skipped.
+model OpsInsightScopeState {
+  scopeType  OpsInsightScopeType
+  scopeId    String
+  inputHash  String
+  computedAt DateTime
+
+  @@id([scopeType, scopeId])
+  @@index([scopeType, computedAt], map: "idx_ops_insight_scope_due")
+}
+
+// Singleton. Every operational knob is edited from the UI and audited; revision is an optimistic lock.
+model IntelligenceSettings {
+  id                          String   @id @default("default")
+  enabled                     Boolean  @default(false)
+  maxConcurrency              Int      @default(2)
+  batchSize                   Int      @default(20)
+  maxJobMs                    Int      @default(5000)
+  maxDbMs                     Int      @default(2000)
+  candidateCap                Int      @default(50)
+  lookbackDays                Int      @default(30)
+  backpressureEscalationLagMs Int      @default(15000)
+  fingerprintRetentionDays    Int      @default(730)
+  correlationRetentionDays    Int      @default(365)
+  findingRetentionDays        Int      @default(365)
+  feedbackRetentionDays       Int      @default(730)
+  /// Send incoming on-call responders a deterministic handoff summary at each shift rotation.
+  handoffSummaryEnabled       Boolean  @default(false)
+  /// Operations insights (Workstream J): the lane job, then one switch per area. All off by default.
+  opsInsightsEnabled              Boolean  @default(false)
+  opsInsightsAutomationEnabled    Boolean  @default(false)
+  opsInsightsEscalationEnabled    Boolean  @default(false)
+  opsInsightsOnCallEnabled        Boolean  @default(false)
+  opsInsightsPostmortemsEnabled   Boolean  @default(false)
+  opsInsightsRunbooksEnabled      Boolean  @default(false)
+  opsInsightsNotificationsEnabled Boolean  @default(false)
+  opsInsightsIntelligenceEnabled  Boolean  @default(false)
+  /// A run fixed its incident when the incident resolved within this many minutes after the run finished.
+  runbookFixWindowMinutes     Int      @default(120)
+  /// Small deterministic helpers (create-form suggestions, status-update drafts, knowledge search in the
+  /// command palette, "why did this change" on analytics). Default off.
+  opsHelpersEnabled           Boolean  @default(false)
+  /// Intelligence fields (inMaintenance, recentRiskyChange, sloBurning, flapping, stormActive) as
+  /// automation rule conditions, read from the 30 s pre-paging snapshot. Default off.
+  automationIntelligenceFieldsEnabled Boolean @default(false)
+  /// Top similar incident, likely change and best runbook in page notifications, precomputed by the lane. Default off.
+  pageContextEnabled          Boolean  @default(false)
+  /// People suggestions: cover candidates on overrides, experts on incidents, personal noise and load cards.
+  peopleInsightsEnabled       Boolean  @default(false)
+  /// Post one deterministic kickoff message (similar incidents, likely causes, runbooks) when a war room opens.
+  warRoomKickoffEnabled       Boolean  @default(false)
+  /// Save war-room channel messages to the incident timeline (bounded, secrets redacted). Default off.
+  warRoomCaptureEnabled       Boolean  @default(false)
+  revision                    Int      @default(1)
+  updatedBy                   String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+}
+
+// One policy per scope: scopeKey is "global" or "service:<serviceId>". Behaviour lives in immutable versions.
+model IntelligencePolicy {
+  id          String                      @id @default(cuid())
+  scopeKey    String                      @unique
+  serviceId   String?                     @unique
+  service     Service?                    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  headVersion Int                         @default(0)
+  // False when an administrator chose "use the global policy" for a service. History is kept; a new
+  // publish or rollback re-activates the override.
+  overrideActive Boolean                  @default(true)
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  versions    IntelligencePolicyVersion[]
+  groups      CorrelationGroup[]
+}
+
+// Append-only. Rollback publishes a new version cloned from an older one; history is never rewritten.
+model IntelligencePolicyVersion {
+  id                 String             @id @default(cuid())
+  policyId           String
+  policy             IntelligencePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  version            Int
+  mode               IntelligenceMode   @default(OFF)
+  definition         Json
+  reason             String?
+  createdFromVersion Int?
+  createdById        String?
+  createdBy          User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt          DateTime           @default(now())
+
+  @@unique([policyId, version])
+  @@index([createdById])
+}
+
+// Scope-aware, window-bucketed identity. Creation is INSERT .. ON CONFLICT DO NOTHING, never read-then-write.
+model CorrelationGroup {
+  id               String                 @id @default(cuid())
+  policyId         String
+  policy           IntelligencePolicy     @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  policyVersion    Int
+  ruleId           String
+  scopeKind        String
+  scopeHash        String
+  signatureHash    String
+  windowStart      DateTime
+  windowEnd        DateTime
+  maxWindowEnd     DateTime
+  status           CorrelationGroupStatus @default(OPEN)
+  anchorIncidentId String?
+  anchorIncident   Incident?              @relation(fields: [anchorIncidentId], references: [id], onDelete: SetNull)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  members          CorrelationMember[]
+
+  @@unique([policyId, policyVersion, ruleId, scopeHash, signatureHash, windowStart], map: "uq_correlation_group_identity")
+  @@index([status, windowEnd], map: "idx_correlation_group_open_window")
+  @@index([anchorIncidentId])
+  @@index([createdAt], map: "idx_correlation_group_retention")
+}
+
+// Incident-level membership (not per alert). Alert counts are derived from Alert.incidentId.
+model CorrelationMember {
+  id            String                     @id @default(cuid())
+  groupId       String
+  group         CorrelationGroup           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  incidentId    String
+  incident      Incident                   @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  role          CorrelationMemberRole      @default(MEMBER)
+  decision      CorrelationDecision        @default(SHADOW)
+  score         Float                      @default(0)
+  evidence      Json
+  policyVersion Int
+  engineVersion String
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+  events        CorrelationDecisionEvent[]
+
+  @@unique([groupId, incidentId])
+  @@index([incidentId])
+  @@index([groupId, decision])
+}
+
+// Append-only audit of every decision change; reversal is a new row, never a delete or rewrite.
+model CorrelationDecisionEvent {
+  id           String                @id @default(cuid())
+  memberId     String
+  member       CorrelationMember     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  fromDecision CorrelationDecision?
+  toDecision   CorrelationDecision
+  actorType    IntelligenceActorType @default(SYSTEM)
+  actorId      String?
+  reasonCode   String
+  note         String?
+  createdAt    DateTime              @default(now())
+
+  @@index([memberId, createdAt])
+}
+
+model IncidentRelationship {
+  id               String                     @id @default(cuid())
+  sourceIncidentId String
+  source           Incident                   @relation("IncidentRelationshipSource", fields: [sourceIncidentId], references: [id], onDelete: Cascade)
+  targetIncidentId String
+  target           Incident                   @relation("IncidentRelationshipTarget", fields: [targetIncidentId], references: [id], onDelete: Cascade)
+  type             IncidentRelationshipType
+  origin           IntelligenceOrigin
+  decision         CorrelationDecision        @default(SUGGESTED)
+  score            Float                      @default(0)
+  evidence         Json
+  engineVersion    String
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  events           IncidentRelationshipEvent[]
+
+  @@unique([sourceIncidentId, targetIncidentId, type])
+  @@index([targetIncidentId])
+  @@index([updatedAt], map: "idx_incident_relationship_updated")
+}
+
+model IncidentRelationshipEvent {
+  id             String                @id @default(cuid())
+  relationshipId String
+  relationship   IncidentRelationship  @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  fromDecision   CorrelationDecision?
+  toDecision     CorrelationDecision
+  actorType      IntelligenceActorType @default(SYSTEM)
+  actorId        String?
+  reasonCode     String
+  note           String?
+  createdAt      DateTime              @default(now())
+
+  @@index([relationshipId, createdAt])
+}
+
+// Rebuildable masked text, refreshed by bounded background work after creation, source edits or
+// resolution. Full-text and trigram indexes are SQL expression indexes.
+model IncidentFingerprint {
+  alertFingerprints AlertFingerprint[]
+  lastIndexedAlertId String?
+  lastIndexedAlertAt DateTime?
+  lastModifiedAlertId String?
+  lastModifiedAlertAt DateTime?
+  alertInputDigest String?
+  indexedAlertCount Int?
+  alertNormalizationHash String?
+  /// True while a large incident's alert bootstrap is spread over several bounded passes; analysis waits.
+  alertIndexPartial Boolean @default(false)
+  /// Digest of analysis inputs, excluding incidental source timestamps.
+  analysisInputHash String?
+  /// Incident version actually consumed by the indexer; independent of later aggregate updates.
+  sourceUpdatedAt DateTime?
+  incidentId        String    @id
+  incident          Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  serviceId         String
+  service           Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  template          String
+  /// sha256 of the template (32 hex chars); compared with an embedding's source hash.
+  templateHash      String?
+  /// Generated from the template by the database (to_tsvector('simple', template)); never written by the app.
+  searchVector      Unsupported("tsvector")?
+  tokens            String[]
+  labels            Json
+  resolutionSummary String?
+  /// Whether this fingerprint has contributed to the rebuildable outcome aggregates.
+  patternVersion    Int       @default(0)
+  engineVersion     String
+  incidentCreatedAt DateTime
+  resolvedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([serviceId, incidentCreatedAt(sort: Desc)], map: "idx_incident_fingerprint_service_recent")
+  @@index([incidentCreatedAt], map: "idx_incident_fingerprint_retention")
+  @@index([serviceId, template, incidentCreatedAt], map: "idx_incident_fingerprint_problem")
+}
+
+/// Derived in the Intelligence lane; never written inside event ingestion.
+model AlertFingerprint {
+  alertId        String @id
+  alert          Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  incidentId     String
+  fingerprint    IncidentFingerprint @relation(fields: [incidentId], references: [incidentId], onDelete: Cascade)
+  serviceId      String
+  template       String
+  templateHash   String?
+  tokens         String[]
+  labels         Json
+  sourceHash     String
+  engineVersion  String
+  alertCreatedAt DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([incidentId])
+  @@index([incidentId, alertCreatedAt, alertId], map: "idx_alert_fingerprint_incident_cursor")
+  @@index([serviceId, templateHash, alertCreatedAt(sort: Desc)], map: "idx_alert_fingerprint_match")
+}
+
+/// Rebuildable service/time aggregates; no payloads, person identifiers or incident identifiers.
+model DependencyObservationBucket {
+  bucket DateTime
+  serviceId String
+  firstIncidentAt DateTime
+  updatedAt DateTime @default(now()) @updatedAt
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([bucket, serviceId])
+  @@index([serviceId, bucket], map: "idx_dependency_observation_service")
+}
+
+// Aggregate counters only; never raw alert payloads. scopeKey is a service id or "global".
+model IntelligencePattern {
+  id         String   @id @default(cuid())
+  scopeKey   String
+  kind       String
+  key        String
+  successes  Int      @default(0)
+  failures   Int      @default(0)
+  support    Int      @default(0)
+  resolutionTotalMs Float @default(0)
+  stats      Json     @default("{}")
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([scopeKey, kind, key])
+  @@index([lastSeenAt])
+}
+
+// Evidence-backed conclusions. generation fences stale results; superseded rows are kept for audit.
+model IntelligenceFinding {
+  id            String                    @id @default(cuid())
+  incidentId    String
+  incident      Incident                  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  kind          IntelligenceFindingKind
+  status        IntelligenceFindingStatus @default(ACTIVE)
+  rank          Int                       @default(0)
+  confidence    Float                     @default(0)
+  subjectRef    String?
+  evidence      Json
+  generation    Int
+  engineVersion String
+  policyVersion Int?
+  createdAt     DateTime                  @default(now())
+  supersededAt  DateTime?
+
+  @@index([incidentId, status, kind, rank], map: "idx_intelligence_finding_lookup")
+  @@index([createdAt], map: "idx_intelligence_finding_retention")
+  @@index([status, supersededAt], map: "idx_intelligence_finding_superseded")
+}
+
+model IntelligenceFeedback {
+  id          String                      @id @default(cuid())
+  subjectType IntelligenceFeedbackSubject
+  subjectId   String
+  verdict     IntelligenceFeedbackVerdict
+  reasonCode  String?
+  note        String?
+  serviceId   String?
+  actorId     String?
+  actor       User?                       @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime                    @default(now())
+
+  @@index([subjectType, subjectId])
+  @@index([serviceId, createdAt])
+  @@index([actorId])
+  @@index([createdAt], map: "idx_intelligence_feedback_retention")
+}
+
+model IntelligenceEvaluationRun {
+  id          String                       @id @default(cuid())
+  kind        IntelligenceEvaluationKind
+  status      IntelligenceEvaluationStatus @default(PENDING)
+  policyId    String?
+  policyVersion Int?
+  windowStart DateTime
+  windowEnd   DateTime
+  metrics     Json?
+  error       String?
+  createdById String?
+  createdBy   User?                        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime                     @default(now())
+
+  @@index([kind, createdAt])
+  @@index([createdById])
+}
+
+// Coalesced dirty markers: an alert storm yields one unit of work per (kind, subject), never one per alert.
+model IntelligenceWorkItem {
+  /// Explicit operator refresh bypasses input-aware fan-out suppression.
+  force       Boolean   @default(false)
+  id          String    @id @default(cuid())
+  kind        String
+  subjectKey  String
+  priority    Int       @default(100)
+  generation  Int       @default(1)
+  attempts    Int       @default(0)
+  scheduledAt DateTime  @default(now())
+  claimToken  String?
+  claimedAt   DateTime?
+  leaseUntil  DateTime?
+  lastError   String?
+  /// When the item last exhausted its attempts (a dead letter); used to revive it after a cool-down.
+  failedAt    DateTime?
+  /// Set when the same work died twice within a day. Never revived automatically; an operator replays it.
+  quarantinedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([kind, subjectKey], map: "uq_intelligence_work_item_subject")
+  @@index([priority, scheduledAt], map: "idx_intelligence_work_item_ready")
+  @@index([leaseUntil])
+}
+
+// Keyset watermark for discovering new incidents without any write on the ingestion path.
+model IntelligenceCursor {
+  name        String   @id
+  watermarkAt DateTime
+  lastId      String
+  updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// OpsKnight Intelligence: pre-paging noise controls (maintenance windows, suppression rules,
+// orchestration, content dedup, flapping, storms, heartbeats). Everything is default OFF per service,
+// SHADOW before ON, and every decision is recorded and reversible. Nothing here is read on the hot path
+// directly: the ingestion hook reads an in-process snapshot refreshed every 30 seconds.
+// ---------------------------------------------------------------------------
+
+enum NoiseControlMode {
+  OFF
+  SHADOW
+  ON
+}
+
+enum NoiseControlEffect {
+  SUPPRESS
+  DOWNGRADE
+}
+
+enum MaintenanceScope {
+  SERVICE
+  TEAM
+  LABEL
+  ALL
+}
+
+enum HeartbeatState {
+  PENDING
+  HEALTHY
+  LATE
+  MISSING
+  PAUSED
+}
+
+enum PrePagingControl {
+  MAINTENANCE
+  SUPPRESSION
+  ORCHESTRATION
+  CONTENT_DEDUP
+  FLAPPING
+  STORM
+  HEARTBEAT
+}
+
+enum PrePagingAction {
+  NONE
+  SUPPRESS
+  DOWNGRADE
+  APPEND
+  GROUP_CHILD
+  HOLD
+  DROP
+  TRANSFORM
+}
+
+/// Per-service (or global) switch and tuning for the pre-paging controls. `definition` is validated by
+/// noiseControlDefinitionSchema; `revision` is compare-and-set on every save.
+model NoiseControlPolicy {
+  id          String           @id @default(cuid())
+  scopeKey    String           @unique
+  serviceId   String?
+  service     Service?         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  mode        NoiseControlMode @default(OFF)
+  definition  Json
+  revision    Int              @default(1)
+  /// One pipeline order: OFF (null) runs automation before the noise-control static decision, SHADOW
+  /// records what noise-first would decide, ON applies noise-first (reroute and attach included).
+  pipelineOrder NoiseControlMode?
+  updatedById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  /// The published version whose definition this row carries. Null until the first publish (or the
+  /// backfill) after versioning shipped; a version whose policyRevision differs from `revision` is stale.
+  activeVersionId String?
+  activeVersion   NoiseControlPolicyVersion? @relation("ActiveNoiseControlVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+
+  @@index([serviceId])
+  @@index([mode])
+}
+
+/// An immutable, published snapshot of a noise-control policy (mode + definition, orchestration rules
+/// included). Every save publishes one; a rollback publishes a clone of an earlier one. Pre-paging
+/// decisions carry the id of the version they were evaluated against.
+model NoiseControlPolicyVersion {
+  id              String                @id @default(cuid())
+  scopeKey        String
+  serviceId       String?
+  service         Service?              @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  versionNumber   Int
+  schemaVersion   Int                   @default(1)
+  mode            NoiseControlMode
+  definition      Json
+  /// The live row's pipelineOrder when this version was published (null = OFF, or captured before it existed).
+  pipelineOrder   NoiseControlMode?
+  checksum        String                @db.VarChar(64)
+  /// NoiseControlPolicy.revision this version was published at.
+  policyRevision  Int
+  /// PUBLISH, ROLLBACK, or BACKFILL (captured from a row saved before versioning existed).
+  origin          String                @default("PUBLISH") @db.VarChar(16)
+  /// The version a ROLLBACK cloned.
+  sourceVersionId String?
+  publishedById   String?
+  publishedAt     DateTime              @default(now())
+  activeFor       NoiseControlPolicy[]  @relation("ActiveNoiseControlVersion")
+
+  @@unique([scopeKey, versionNumber])
+  @@index([serviceId])
+}
+
+/// A planned period during which matching alerts are stored but never page (or page at a lower urgency).
+model NoiseMaintenanceWindow {
+  id                       String             @id @default(cuid())
+  name                     String             @db.VarChar(120)
+  description              String?            @db.VarChar(500)
+  scope                    MaintenanceScope
+  serviceId                String?
+  service                  Service?           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  teamId                   String?
+  labelKey                 String?            @db.VarChar(64)
+  labelValue               String?            @db.VarChar(128)
+  startsAt                 DateTime
+  endsAt                   DateTime
+  /// Bounded RRULE subset (FREQ, INTERVAL, BYDAY, COUNT, UNTIL); null for a one-off window.
+  recurrence               String?            @db.VarChar(512)
+  effect                   NoiseControlEffect @default(SUPPRESS)
+  downgradeUrgency         IncidentUrgency?
+  statusPageAnnouncementId String?
+  enabled                  Boolean            @default(true)
+  /// Set when an operator ends the window early; the window no longer matches from this instant.
+  endedAt                  DateTime?
+  endedById                String?
+  createdById              String?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  @@index([enabled, endsAt])
+  @@index([serviceId])
+  @@index([teamId])
+}
+
+/// Label/text matchers that suppress or downgrade matching alerts until they expire. Owned and audited.
+model SuppressionRule {
+  id               String             @id @default(cuid())
+  name             String             @db.VarChar(120)
+  description      String?            @db.VarChar(500)
+  serviceId        String?
+  service          Service?           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  matchers         Json
+  effect           NoiseControlEffect @default(SUPPRESS)
+  downgradeUrgency IncidentUrgency?
+  expiresAt        DateTime?
+  ownerId          String?
+  enabled          Boolean            @default(true)
+  /// MANUAL, or SUGGESTED when created from the alert-quality leaderboard.
+  origin           String             @default("MANUAL") @db.VarChar(16)
+  suggestion       Json?
+  createdById      String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([enabled, expiresAt])
+  @@index([serviceId])
+}
+
+/// A dead-man's switch: a missing ping raises an incident through the normal ingestion path.
+model HeartbeatMonitor {
+  id              String          @id @default(cuid())
+  name            String          @db.VarChar(120)
+  description     String?         @db.VarChar(500)
+  serviceId       String
+  service         Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  /// sha256 of the ping token; the token itself is shown once at creation.
+  tokenHash       String          @unique @db.VarChar(64)
+  tokenPrefix     String          @db.VarChar(8)
+  intervalSeconds Int
+  graceSeconds    Int             @default(60)
+  urgency         IncidentUrgency @default(MEDIUM)
+  enabled         Boolean         @default(true)
+  state           HeartbeatState  @default(PENDING)
+  lastPingAt      DateTime?
+  missingSince    DateTime?
+  lastIncidentId  String?
+  createdById     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([enabled, state])
+  @@index([serviceId])
+}
+
+/// Every pre-paging decision, shadow or applied, with the evidence that produced it. Reversible.
+model PrePagingDecision {
+  id           String           @id @default(cuid())
+  serviceId    String
+  service      Service          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  incidentId   String?
+  incident     Incident?        @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  alertId      String?
+  control      PrePagingControl
+  action       PrePagingAction
+  mode         NoiseControlMode
+  applied      Boolean
+  sourceId     String?
+  sourceName   String?          @db.VarChar(120)
+  reason       String           @db.VarChar(500)
+  evidence     Json
+  reversedAt   DateTime?
+  reversedById String?
+  createdAt    DateTime         @default(now())
+  /// The NoiseControlPolicyVersion the decision was evaluated against (soft reference: no FK, so the
+  /// hot-path insert costs exactly what it did before versioning).
+  policyVersionId String?
+
+  @@index([serviceId, createdAt])
+  @@index([incidentId])
+  @@index([control, mode, createdAt])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// OpsKnight Intelligence: response intelligence (dependencies and change events)
+// ---------------------------------------------------------------------------
+
+enum DependencyOrigin {
+  DECLARED
+  OBSERVED
+}
+
+enum DependencyStatus {
+  ACTIVE
+  SUGGESTED
+  REJECTED
+}
+
+enum ChangeKind {
+  DEPLOY
+  CONFIG
+  FEATURE_FLAG
+  INFRA
+}
+
+// "downstream depends on upstream". Observed edges are only ever suggestions until an operator approves.
+model ServiceDependency {
+  id                  String           @id @default(cuid())
+  upstreamServiceId   String
+  upstream            Service          @relation("DependencyUpstream", fields: [upstreamServiceId], references: [id], onDelete: Cascade)
+  downstreamServiceId String
+  downstream          Service          @relation("DependencyDownstream", fields: [downstreamServiceId], references: [id], onDelete: Cascade)
+  origin              DependencyOrigin
+  status              DependencyStatus @default(ACTIVE)
+  confidence          Float            @default(1)
+  evidence            Json
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([upstreamServiceId, downstreamServiceId])
+  @@index([downstreamServiceId, status])
+  @@index([upstreamServiceId, status])
+}
+
+// Something that changed in production. summary and metadata are bounded, operator-supplied text.
+model ChangeEvent {
+  id         String     @id @default(cuid())
+  serviceId  String?
+  service    Service?   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  source     String
+  kind       ChangeKind
+  summary    String
+  version    String?
+  component  String?
+  labels     Json       @default("{}")
+  url        String?
+  dedupKey   String?
+  occurredAt DateTime
+  createdAt  DateTime   @default(now())
+  /// 0..1 ranking signal computed in the lane from history, blast radius, timing and size; never a verdict.
+  riskScore      Float?
+  riskEvidence   Json?
+  riskComputedAt DateTime?
+  /// Set when a multi-service integration sent the change but no app/component label resolved to a service.
+  /// Such a change has no service yet, but unlike a global change (both null) it affects no service.
+  unmappedIntegrationId String?
+  unmappedIntegration   Integration? @relation("ChangeEventUnmappedIntegration", fields: [unmappedIntegrationId], references: [id], onDelete: Cascade)
+
+  @@unique([source, dedupKey], map: "uq_change_event_source_dedup")
+  @@index([serviceId, occurredAt(sort: Desc)], map: "idx_change_event_service_recent")
+  @@index([occurredAt], map: "idx_change_event_retention")
+  @@index([source, occurredAt], map: "idx_change_event_source_recent")
+  @@index([unmappedIntegrationId, occurredAt(sort: Desc)], map: "idx_change_event_unmapped_recent")
+}
+
+/// Per change integration: app/component label value -> service, for one webhook that carries changes of many
+/// services. Its presence makes the integration multi-service. `version` increases on every edit.
+model ChangeServiceMapping {
+  integrationId String      @id
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  /// { "<lower-cased label value>": "<serviceId>" }
+  mappings      Json        @default("{}")
+  version       Int         @default(1)
+  updatedById   String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+/// Backstage catalog entity name (lower-cased metadata.name) -> the service it resolved to on the last import.
+model CatalogServiceAlias {
+  name      String   @id
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+
+  @@index([serviceId])
+}
+
+// A declared-topology source (a Backstage catalog export) pulled on a schedule into DECLARED dependencies.
+model TopologySource {
+  id              String    @id @default(cuid())
+  name            String    @unique
+  kind            String    @default("BACKSTAGE_CATALOG")
+  url             String
+  enabled         Boolean   @default(true)
+  intervalMinutes Int       @default(60)
+  lastSyncedAt    DateTime?
+  lastStatus      String?
+  lastSummary     Json?
+  createdById     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([enabled, lastSyncedAt])
+}
+
+// ---------------------------------------------------------------------------
+// OpsKnight Intelligence: AI gateway and the Squire assistant (all UI-configured)
+// ---------------------------------------------------------------------------
+
+enum AiProviderKind {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  OPENAI_COMPATIBLE
+  AZURE_OPENAI
+  BEDROCK
+  VERTEX
+  MISTRAL
+  GROQ
+}
+
+enum AiDataClass {
+  PUBLIC
+  INTERNAL
+  PERSONAL
+  SENSITIVE
+}
+
+// Singleton. Disabled by default; nothing leaves the process until an administrator enables it.
+model AiSettings {
+  id                      String   @id @default("default")
+  enabled                 Boolean  @default(false)
+  squireEnabled           Boolean  @default(false)
+  squireName              String   @default("Squire")
+  // Personalisation is opt-in: the default is a plain icon, a floating button and no motion.
+  squireAvatar            String   @default("SQUIRE")
+  squireLauncher          String   @default("FLOATING")
+  squireAnimations        Boolean  @default(false)
+  // Residency: when non-empty, only providers tagged with one of these regions are ever used.
+  allowedDataRegions      String[] @default([])
+  embeddingsEnabled       Boolean  @default(false)
+  // Saved assistant conversations are opt-in, encrypted and visible only to their owner.
+  squireHistoryEnabled    Boolean  @default(true)
+  squireHistoryRetentionDays Int   @default(90)
+  // Extended assistant actions (escalate, urgency, snooze, Jira, status drafts, runbooks): opt-in.
+  squireExtendedActions   Boolean  @default(false)
+  // Squire outside the web app, each opt-in: Slack/Teams (@squire), MCP (ask_squire), mobile pages.
+  squireChatOpsEnabled    Boolean  @default(false)
+  squireMcpEnabled        Boolean  @default(false)
+  squireMobileEnabled     Boolean  @default(false)
+  allowExternalFallback   Boolean  @default(false)
+  requestsPerMinutePerUser Int     @default(20)
+  dailyTokenBudget        Int      @default(500000)
+  // A sub-limit inside the global budget; background backfills cannot consume it all.
+  backgroundEmbeddingBudgetPercent Int @default(20)
+  // Per person per UTC day, so one heavy user cannot spend the whole budget for everyone.
+  userDailyTokenBudget    Int      @default(100000)
+  maxOutputTokens         Int      @default(1024)
+  requestTimeoutMs        Int      @default(30000)
+  // Optional per-capability routing: {"DIAGNOSE": {"providerId": "...", "model": "..."}}. Null uses the
+  // provider priority chain for every capability. Routing only reorders providers the data policy allows.
+  capabilityRouting       Json?
+  // Multi-step investigation mode for diagnostic questions (plan, parallel reads, ranked hypotheses).
+  squireInvestigationEnabled Boolean @default(false)
+  // Reuse an earlier AI answer when the exact same input is asked again in the same scope. Opt-in.
+  resultCacheEnabled      Boolean  @default(false)
+  // Spend controls (off by default): default model routing, the background allowance and degradation.
+  spendControlsEnabled    Boolean  @default(false)
+  backgroundAiBudgetPercent Int    @default(30)
+  proactiveNotesPerServiceDaily Int @default(20)
+  revision                Int      @default(1)
+  updatedBy               String?
+  updatedAt               DateTime @updatedAt
+}
+
+// One model endpoint. The API key is encrypted at rest and never returned to the browser.
+model AiProvider {
+  id                  String         @id @default(cuid())
+  name                String         @unique
+  kind                AiProviderKind
+  model               String
+  baseUrl             String?
+  apiKeyEncrypted     String?
+  enabled             Boolean        @default(true)
+  // True when requests leave the operator's own infrastructure.
+  isExternal          Boolean        @default(true)
+  // Highest data classification this endpoint may receive.
+  maxDataClass        AiDataClass    @default(INTERNAL)
+  // Explicit administrator consent to reach a private-network address (for example Ollama).
+  allowPrivateNetwork Boolean        @default(false)
+  // Lower runs first; later enabled providers are fallbacks.
+  priority            Int            @default(100)
+  // Non-secret, kind-specific settings (Azure resource and API version, AWS region, GCP project and location).
+  options             Json           @default("{}")
+  // Residency tag such as "eu" or "us"; matched against AiSettings.allowedDataRegions.
+  dataRegion          String?
+  // When set, this provider can also produce embeddings for semantic search.
+  embeddingModel      String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([enabled, priority])
+}
+
+// Token accounting per UTC day, used for the daily budget. Aggregate only: no user or content.
+model AiUsageDay {
+  day          String   @id
+  requests     Int      @default(0)
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  backgroundEmbeddingTokens Int @default(0)
+  // Settled tokens of non-interactive (proactive and background) calls, for the background allowance.
+  backgroundAiTokens Int @default(0)
+  // Dollar cost in millionths of a US dollar for calls whose model has a price; null before cost tracking.
+  costMicros   BigInt?
+  updatedAt    DateTime @updatedAt
+}
+
+// Bounded, expiring token holds. Settled receipts remain briefly so accounting retries are idempotent.
+model AiTokenReservation {
+  id        String   @id @default(cuid())
+  day       String
+  actorId   String
+  tokens    Int
+  expiresAt DateTime
+  settledAt DateTime?
+  // Attribution for team and capability budgets; null on holds made before cost governance.
+  teamId     String?
+  capability String?
+  // Estimated dollar cost of the hold in millionths of a dollar; null when the model has no price.
+  costMicros BigInt?
+  // interactive | proactive | background; null on holds made before spend controls.
+  callSite  String?
+  createdAt DateTime @default(now())
+
+  @@index([day, expiresAt], map: "idx_ai_token_reservation_day")
+  @@index([day, actorId, expiresAt], map: "idx_ai_token_reservation_actor")
+  @@index([expiresAt], map: "idx_ai_token_reservation_retention")
+}
+
+// One confirmed assistant action. Proposals are sealed and expire after minutes; inserting this row first
+// prevents automatic replay. Versioned states and encrypted outcomes support read-only recovery for a day.
+// Administrator-editable "suggested checks" for basic mode: a bounded title/label pattern and the checks
+// shown when it matches. Investigation prompts only; nothing here is executed.
+model SquireCheckTemplate {
+  id          String   @id @default(cuid())
+  title       String
+  pattern     String
+  checks      String[]
+  enabled     Boolean  @default(true)
+  position    Int      @default(100)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([enabled, position], map: "idx_squire_check_template_enabled")
+}
+
+// A person's rating of one assistant answer or suggestion chip. Stores the intent and mode, never the
+// question or answer text (a digest only), so quality can be measured without keeping more content.
+model SquireFeedback {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String?
+  mode           String
+  intent         String?
+  rating         String
+  reason         String?
+  questionHash   String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt], map: "idx_squire_feedback_recent")
+  @@index([userId, createdAt], map: "idx_squire_feedback_owner")
+}
+
+// Shared circuit-breaker reading per AI provider, so one replica's discovery that a provider is down is
+// seen by the others. Advisory: every replica keeps working from its own in-process state if this is stale.
+model AiProviderBreaker {
+  providerId String    @id
+  failures   Int       @default(0)
+  openUntil  DateTime?
+  updatedAt  DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Squire observability connectors (read-only, outbound, UI-configured, default off)
+// ---------------------------------------------------------------------------
+
+enum ObservabilityConnectionKind {
+  PROMETHEUS
+  LOKI
+  TEMPO
+  GRAFANA
+  DATADOG
+  ELASTIC
+  CLOUDWATCH
+  SENTRY
+  GITHUB
+  GITLAB
+  KUBERNETES
+  GITHUB_ACTIONS
+  GITLAB_CI
+  AZURE_DEVOPS
+  ARGOCD
+  BASE14_SCOUT
+}
+
+// A read-only connection Squire may query during an AI turn. Credentials are encrypted at rest and never
+// leave the server; every request goes through the SSRF-safe guarded fetch with a timeout and a size cap.
+model ObservabilityConnection {
+  id                  String                      @id @default(cuid())
+  name                String                      @unique
+  kind                ObservabilityConnectionKind
+  baseUrl             String
+  credentialEncrypted String?
+  // Kind-specific, non-secret scoping: AWS region, Sentry/Grafana org, Sentry project, Elastic index, Grafana datasource.
+  region              String?
+  org                 String?
+  project             String?
+  // Empty means every team; otherwise only members of these teams (and global readers) can use it.
+  allowedTeamIds      String[]                    @default([])
+  // Explicit administrator consent to reach a private-network address, pinned to the saved origin.
+  allowPrivateNetwork Boolean                     @default(false)
+  enabled             Boolean                     @default(false)
+  timeoutMs           Int                         @default(10000)
+  createdById         String?
+  updatedById         String?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  metricTemplates     ServiceMetricTemplate[]
+}
+
+model SquireActionReceipt {
+  id              String   @id
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action          String
+  incidentId      String?
+  version         Int      @default(1)
+  status          String   @default("UNKNOWN")
+  intentEncrypted String?
+  resultEncrypted String?
+  failureCode     String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  updatedAt       DateTime @default(now()) @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt], map: "idx_squire_action_receipt_retention")
+}
+
+// Tokens one person used on one UTC day, for the per-user budget. Counts only; deleted with the person.
+model AiUsageUserDay {
+  day       String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokens    Int      @default(0)
+  costMicros BigInt?
+  updatedAt DateTime @updatedAt
+
+  @@id([day, userId])
+  @@index([day], map: "idx_ai_usage_user_day_retention")
+}
+
+// --- AI cost governance (Workstream F6) ---
+// Administrator price for one model of one provider kind, in US dollars per million tokens. Overrides the
+// built-in list price table. Configuration only: no personal data.
+model AiModelPrice {
+  id               String         @id @default(cuid())
+  providerKind     AiProviderKind
+  model            String
+  inputUsdPerMTok  Float
+  outputUsdPerMTok Float          @default(0)
+  updatedBy        String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([providerKind, model])
+}
+
+// Optional daily limit for one team or one capability, in tokens and/or dollars. Absent rows mean no limit.
+// key is "team:<teamId>" or "capability:<CAPABILITY>". Enforced in the same reservation as the global budget.
+model AiBudget {
+  id                   String   @id @default(cuid())
+  key                  String   @unique
+  scope                String
+  teamId               String?
+  capability           String?
+  dailyTokenLimit      Int?
+  dailyCostLimitMicros BigInt?
+  enabled              Boolean  @default(true)
+  revision             Int      @default(1)
+  updatedBy            String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// Aggregate spend per UTC day by attributed team ("" when none), capability and model. Counts only: no
+// prompts, answers or people. Feeds team and capability budgets and the usage page.
+model AiUsageBreakdownDay {
+  day              String
+  teamId           String   @default("")
+  capability       String
+  providerKind     String
+  model            String
+  requests         Int      @default(0)
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  costMicros       BigInt   @default(0)
+  // Calls whose model had no price; their tokens count, their dollars are unknown.
+  unpricedRequests Int      @default(0)
+  // Provider prompt-cache tokens (a subset of inputTokens) and result-cache reuse. Null on rows written
+  // before these columns existed.
+  cacheReadTokens  Int?
+  cacheWriteTokens Int?
+  resultCacheHits  Int?
+  // Tokens a result-cache hit did not spend, and dollars saved by both caches (net of cache-write premiums).
+  savedTokens      Int?
+  savedCostMicros  BigInt?
+  updatedAt        DateTime @updatedAt
+
+  @@id([day, teamId, capability, providerKind, model])
+}
+
+// One stored AI answer, keyed by the hash of the exact model input plus the scope it was produced for. The
+// answer is encrypted; rows expire and are swept by the retention job. A new prompt version never matches.
+model AiResultCache {
+  id              String   @id @default(cuid())
+  capability      String
+  promptId        String
+  promptVersion   Int
+  model           String
+  // Data class and team the answer was produced for; an identical input in another scope is a miss.
+  scopeKey        String
+  inputHash       String
+  outputEncrypted String
+  providerKind    String
+  servedModel     String
+  inputTokens     Int      @default(0)
+  outputTokens    Int      @default(0)
+  costMicros      BigInt?
+  hits            Int      @default(0)
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  @@unique([capability, promptId, promptVersion, model, scopeKey, inputHash], map: "AiResultCache_lookup_key")
+  @@index([expiresAt])
+}
+// --- end AI cost governance ---
+
+// Optional organisation guidance an administrator appends to a built-in prompt. It is added after the fixed
+// safety rules and cannot replace them. Every change is audited with the previous text.
+model AiPromptGuidance {
+  promptId  String   @id
+  text      String
+  revision  Int      @default(1)
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+// Semantic vector for an incident's masked title, unit-normalised so similarity is a dot product. Derived data:
+// rebuilt on demand, ignored when the configured embedding model changes, and removed with its incident.
+model IncidentEmbedding {
+  incidentId        String   @id
+  incident          Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  serviceId         String
+  model             String
+  /// Hash of the embedded text, so an unchanged incident is never embedded twice.
+  sourceHash        String
+  dims              Int
+  vector            Float[]  @db.Real
+  incidentCreatedAt DateTime
+  createdAt         DateTime @default(now())
+
+  @@index([model, incidentCreatedAt(sort: Desc)], map: "idx_incident_embedding_model_recent")
+  @@index([serviceId, model, incidentCreatedAt(sort: Desc)], map: "idx_incident_embedding_service_recent")
+  @@index([incidentCreatedAt], map: "idx_incident_embedding_retention")
+}
+
+// Schedule for the weekly intelligence digest email. Off by default; edited from Insights.
+model IntelligenceDigestSettings {
+  id        String   @id @default("default")
+  enabled   Boolean  @default(false)
+  // 0 = Sunday ... 6 = Saturday, at `hourUtc` in UTC.
+  dayOfWeek Int      @default(1)
+  hourUtc   Int      @default(8)
+  revision  Int      @default(1)
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+// One row per ISO week: claiming it is what makes the digest go out once, however many workers run.
+model IntelligenceDigestRun {
+  weekKey      String    @id
+  scheduledFor DateTime
+  status       String    @default("SENDING")
+  recipients   Int       @default(0)
+  sentTo       String[]  @default([])
+  failedTo     String[]  @default([])
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  @@index([startedAt], map: "idx_intelligence_digest_run_started")
+}
+
+// Saved assistant conversations: opt-in by an administrator, visible only to their owner, encrypted at
+// rest, bounded per person, removed by retention, and deleted with the person.
+model SquireConversation {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  titleEncrypted String
+  // Context only, not a foreign key: access is re-checked on every question, and a deleted incident
+  // must not take the person's conversation with it.
+  incidentId     String?
+  messageCount   Int             @default(0)
+  /// Basic-mode dialogue state (pending clarification, page cursor); no message text is stored here.
+  state          Json?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  messages       SquireMessage[]
+
+  @@index([userId, updatedAt(sort: Desc)], map: "idx_squire_conversation_owner_recent")
+  @@index([updatedAt], map: "idx_squire_conversation_retention")
+}
+
+// Basic-mode dialogue state when there is no saved conversation (history off), shared by every replica.
+// One row per person and incident context ('' for none); encrypted; short-lived and swept on write.
+model SquireDialogueState {
+  // Surrogate key so key-rotation migration can page through encrypted rows like every other target.
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopeKey       String
+  stateEncrypted String
+  expiresAt      DateTime
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, scopeKey])
+  @@index([expiresAt], map: "idx_squire_dialogue_state_expiry")
+}
+
+model SquireMessage {
+  id               String             @id @default(cuid())
+  conversationId   String
+  conversation     SquireConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role             String
+  contentEncrypted String
+  envelopeEncrypted String?
+  dataClass        AiDataClass @default(PERSONAL)
+  createdAt        DateTime           @default(now())
+
+  @@index([conversationId, createdAt], map: "idx_squire_message_conversation")
+}
+
 // MCP grants are resource-bound. Secrets are persisted only as keyed digests.
 model McpPolicy {
   id String @id @default("default")
@@ -5196,6 +6638,188 @@ model McpConsentRequest {
   @@index([expiresAt])
 }
 
+// One bounded success marker per recommendation kind, including analyses with zero findings.
+model IntelligenceAnalysisSnapshot {
+  incidentId String
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  kind IntelligenceFindingKind
+  generation Int
+  policyVersion Int?
+  policyHash String?
+  sourceUpdatedAt DateTime?
+  fingerprintUpdatedAt DateTime?
+  completedAt DateTime @default(now())
+  engineVersion String
+  rowCount Int @default(0)
+  @@id([incidentId, kind])
+  @@index([completedAt], map: "idx_intelligence_analysis_snapshot_retention")
+}
+
+// ---------------------------------------------------------------------------
+// Squire knowledge memory and proactive notes (opt-in; see docs/architecture/intelligence.md)
+// ---------------------------------------------------------------------------
+
+enum KnowledgeSourceKind {
+  POSTMORTEM
+  RUNBOOK_STEP
+  RESOLUTION_NOTE
+  INCIDENT_NOTE
+  SERVICE_FACT
+}
+
+/// Bounded, secret-redacted text chunks Squire can search. Everything except SERVICE_FACT is derived in the
+/// intelligence lane from its source and is rebuildable; a SERVICE_FACT exists only because a person confirmed it.
+/// Visibility is never decided by this table: every search re-checks the source through the reader's own rules.
+model KnowledgeChunk {
+  id              String              @id @default(cuid())
+  sourceKind      KnowledgeSourceKind
+  sourceId        String
+  chunkIndex      Int                 @default(0)
+  serviceId       String?
+  service         Service?            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  /// Scope hint for the search pre-filter only (incident team, else service team, else runbook owner team).
+  teamId          String?
+  incidentId      String?
+  incident        Incident?           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  postmortemId    String?
+  postmortem      Postmortem?         @relation(fields: [postmortemId], references: [id], onDelete: Cascade)
+  incidentNoteId  String?
+  incidentNote    IncidentNote?       @relation(fields: [incidentNoteId], references: [id], onDelete: Cascade)
+  runbookId       String?
+  runbook         Runbook?            @relation(fields: [runbookId], references: [id], onDelete: Cascade)
+  title           String
+  text            String
+  /// sha256 of title and text: an unchanged source is never rewritten or re-embedded.
+  contentHash     String
+  /// Generated by the database (to_tsvector('simple', title || ' ' || text)); never written by the app.
+  searchVector    Unsupported("tsvector")?
+  embedding       Float[]             @db.Real
+  embeddingModel  String?
+  approvedById    String?
+  approvedBy      User?               @relation("KnowledgeFactApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  sourceCreatedAt DateTime
+  sourceUpdatedAt DateTime
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([sourceKind, sourceId, chunkIndex], map: "uq_knowledge_chunk_source")
+  @@index([serviceId, sourceKind], map: "idx_knowledge_chunk_service")
+  @@index([teamId], map: "idx_knowledge_chunk_team")
+  @@index([sourceCreatedAt], map: "idx_knowledge_chunk_retention")
+  @@index([embeddingModel], map: "idx_knowledge_chunk_embedding_model")
+  @@index([incidentId], map: "idx_knowledge_chunk_incident")
+  @@index([postmortemId], map: "idx_knowledge_chunk_postmortem")
+  @@index([incidentNoteId], map: "idx_knowledge_chunk_note")
+  @@index([runbookId], map: "idx_knowledge_chunk_runbook")
+}
+
+/// Global switch for the knowledge index; default off, changed with a revision compare-and-set and audited.
+model SquireMemorySettings {
+  id               String   @id @default("default")
+  knowledgeEnabled Boolean  @default(false)
+  revision         Int      @default(0)
+  updatedAt        DateTime @updatedAt
+}
+
+/// Per-service opt-in for proactive Squire; every switch defaults off. Changed with a revision compare-and-set.
+model SquireServicePolicy {
+  serviceId              String   @id
+  service                Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  briefingEnabled        Boolean  @default(false)
+  /// Minutes without a stakeholder update before a nudge; null turns nudges off.
+  nudgeAfterMinutes      Int?
+  postmortemDraftEnabled Boolean  @default(false)
+  revision               Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+/// A briefing, stakeholder-update nudge or postmortem draft written by a lane job for one incident. Rendered on
+/// the incident page, filtered through the viewer's read rules; never a note, never published, never paged.
+model SquireProactiveNote {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  kind       String
+  mode       String
+  content    Json
+  model      String?
+  generation Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([incidentId, kind], map: "uq_squire_proactive_note")
+  @@index([createdAt], map: "idx_squire_proactive_note_retention")
+}
+
+// Optional per-service metric query an administrator points at an observability connection. The intelligence
+// lane evaluates enabled templates on their schedule against a seasonal baseline; nothing here is read on the
+// paging path. Off by default.
+model ServiceMetricTemplate {
+  id              String                   @id @default(cuid())
+  serviceId       String
+  service         Service                  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  // Cleared when the connection is deleted; the template then stays inert until re-pointed.
+  connectionId    String?
+  connection      ObservabilityConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  name            String
+  query           String
+  enabled         Boolean                  @default(false)
+  // UP, DOWN or BOTH: which deviations count.
+  direction       String                   @default("BOTH")
+  thresholdMad    Float                    @default(5)
+  baselineWeeks   Int                      @default(4)
+  windowMinutes   Int                      @default(60)
+  stepSeconds     Int                      @default(60)
+  intervalMinutes Int                      @default(15)
+  // Absolute difference from the baseline median below which nothing counts (flat or near-zero metrics).
+  minDeviation    Float                    @default(0)
+  lastEvaluatedAt DateTime?
+  lastStatus      String?
+  // Generation fence: the newest work generation whose result was written.
+  lastGeneration  Int                      @default(0)
+  createdById     String?
+  updatedById     String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  anomalies       MetricAnomaly[]
+
+  @@unique([serviceId, name])
+  @@index([enabled, lastEvaluatedAt])
+  @@index([connectionId])
+}
+
+// One detected deviation of a template's series from its seasonal baseline. Numeric evidence only.
+model MetricAnomaly {
+  id              String                @id @default(cuid())
+  templateId      String
+  template        ServiceMetricTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  serviceId       String
+  service         Service               @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  // Stable hash of the series labels, so one template with several series keeps them apart.
+  seriesKey       String
+  labels          Json?
+  at              DateTime
+  peakAt          DateTime
+  endAt           DateTime
+  // UP or DOWN.
+  direction       String
+  // Peak deviation in robust standard units: |value - median| / max(1.4826 * MAD, floor).
+  score           Float
+  value           Float
+  baselineMedian  Float
+  baselineMad     Float
+  baselineSamples Int
+  points          Int
+  generation      Int
+  detectedAt      DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([templateId, seriesKey, at])
+  @@index([serviceId, at])
+  @@index([at])
+}
+
 // ─── Access control ────────────────────────────────────────────────────────────
 
 /// Additional permission set layered on top of a person's built-in role.
@@ -5432,4 +7056,24 @@ model MaintenanceScheduleService {
 
   @@id([scheduleId, serviceId])
   @@index([serviceId])
+}
+
+// A Squire investigation started over MCP and polled until done. Only the person who started it, on
+// the same connection, can read it; it is unreadable after expiresAt and purged by MCP maintenance.
+model SquireMcpInvestigation {
+  // Unpredictable server-generated id.
+  id               String   @id
+  actorId          String
+  grantId          String
+  // RUNNING, COMPLETED or FAILED.
+  status           String   @default("RUNNING")
+  // Encrypted JSON { progress, result }: the steps seen so far and, once done, the answer for MCP.
+  payloadEncrypted String?
+  error            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  expiresAt        DateTime
+
+  @@index([actorId, status, createdAt])
+  @@index([expiresAt])
 }

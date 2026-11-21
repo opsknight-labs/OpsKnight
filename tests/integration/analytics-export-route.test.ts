@@ -48,9 +48,29 @@ describeIfRealDB('GET /api/insights/export', { timeout: 60_000 }, () => {
     const now = Date.now();
     await testPrisma.incident.createMany({
       data: [
-        { title: '=HYPERLINK("http://evil")', serviceId: service.id, status: 'OPEN', urgency: 'HIGH', createdAt: new Date(now - DAY) },
-        { title: 'normal', serviceId: service.id, status: 'RESOLVED', urgency: 'LOW', createdAt: new Date(now - 2 * DAY), resolvedAt: new Date(now - DAY) },
-        { title: 'too old', serviceId: service.id, status: 'RESOLVED', urgency: 'LOW', createdAt: new Date(now - 400 * DAY), resolvedAt: new Date(now - 399 * DAY) },
+        {
+          title: '=HYPERLINK("http://evil")',
+          serviceId: service.id,
+          status: 'OPEN',
+          urgency: 'HIGH',
+          createdAt: new Date(now - DAY),
+        },
+        {
+          title: 'normal',
+          serviceId: service.id,
+          status: 'RESOLVED',
+          urgency: 'LOW',
+          createdAt: new Date(now - 2 * DAY),
+          resolvedAt: new Date(now - DAY),
+        },
+        {
+          title: 'too old',
+          serviceId: service.id,
+          status: 'RESOLVED',
+          urgency: 'LOW',
+          createdAt: new Date(now - 400 * DAY),
+          resolvedAt: new Date(now - 399 * DAY),
+        },
       ],
     });
 
@@ -65,7 +85,11 @@ describeIfRealDB('GET /api/insights/export', { timeout: 60_000 }, () => {
     const csv = new TextDecoder().decode(bytes);
 
     const actor = { id: admin.id, role: 'ADMIN' as const, status: 'ACTIVE' as const, teamIds: [] };
-    const context = await createAnalyticsContext(actor, parseAnalyticsParams({ range: '30d' }), 'UTC');
+    const context = await createAnalyticsContext(
+      actor,
+      parseAnalyticsParams({ range: '30d' }),
+      'UTC'
+    );
     const kpis = await getAnalyticsSection(context, 'kpis');
     expect(kpis.current.incidents).toBe(2);
     expect(csv).toContain(`\r\n${METRICS.incidents.label},${kpis.current.incidents},`);

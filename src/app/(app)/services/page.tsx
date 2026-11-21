@@ -24,7 +24,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/aler
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+import { getServiceListBadges } from '@/lib/intelligence/surfaces/service-list-badges';
 import { requirePageAccess } from '@/lib/access/server';
+import { seedShadowServicePolicy } from '@/lib/intelligence/settings/service-defaults';
 
 export const revalidate = 0;
 
@@ -83,6 +85,7 @@ async function createService(formData: FormData) {
       actorId: currentUser.id,
       details: { name: normalizedName, teamId: teamId || null },
     });
+    await seedShadowServicePolicy(service.id, { actorId: currentUser.id, source: 'UI' });
 
     revalidatePath('/services');
     revalidatePath('/audit');
@@ -348,6 +351,12 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     }
   }
 
+  // Optional intelligence badges for this page's rows: a fixed number of queries, fail-soft.
+  const intelligenceBadgesPromise = getServiceListBadges(
+    services.map(s => s.id),
+    actor
+  ).catch(() => ({}) as Awaited<ReturnType<typeof getServiceListBadges>>);
+
   const { calculateActorSLAMetrics } = await import('@/lib/actor-metrics');
   const slaWindowDays = 30;
   // SLA server is the source of truth for service metrics/status
@@ -362,6 +371,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const slaServiceMap = new Map((slaMetrics?.serviceMetrics || []).map(s => [s.id, s]));
   const metricDataState = slaMetrics ? ('available' as const) : ('unavailable' as const);
 
+  const intelligenceBadges = await intelligenceBadgesPromise;
   const inMaintenance = await findServicesInMaintenance(services.map(s => s.id));
   const paginatedServices = services.map(service => {
     const slaData = slaServiceMap.get(service.id);
@@ -385,6 +395,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       hasCritical,
       incidentCount,
       metricDataState,
+      intelligenceBadges: intelligenceBadges[service.id],
       maintenanceTitle: inMaintenance.get(service.id)?.title ?? null,
     };
   });

@@ -13,6 +13,9 @@ import {
   ClipboardList,
   BarChart,
   Workflow,
+  Sparkles,
+  BellRing,
+  GitCommitHorizontal,
   LucideIcon,
 } from 'lucide-react';
 import { getRoleCapabilities, isAppRole, type Capability } from '@/lib/authorization';
@@ -109,6 +112,26 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     label: 'Runbooks',
     releaseStage: 'Beta',
     icon: Workflow,
+    section: 'MAIN',
+  },
+  {
+    // Shown by the page access rule (intelligence.read), like every other entry.
+    href: '/alerts',
+    label: 'Alerts',
+    icon: BellRing,
+    section: 'MAIN',
+  },
+  {
+    href: '/changes',
+    label: 'Changes',
+    icon: GitCommitHorizontal,
+    section: 'MAIN',
+  },
+  {
+    // Shown by the page access rule (intelligence.read); pinned by tests/unit/intelligence-overview.test.ts.
+    href: '/intelligence',
+    label: 'Intelligence',
+    icon: Sparkles,
     section: 'MAIN',
   },
 

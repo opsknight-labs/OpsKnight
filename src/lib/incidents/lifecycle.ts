@@ -47,6 +47,12 @@ export interface IncidentLifecycleInput {
   snoozedUntil?: Date | null;
   snoozeReason?: string | null;
   eventMessage?: string;
+  /**
+   * The page this acknowledgement arrived through, when the transport can name it (voice key press, push
+   * action). Stamped on that one notification inside the acknowledgement transaction; `userId` keeps a
+   * caller from marking somebody else's page.
+   */
+  ackedNotification?: { id: string; via: 'VOICE' | 'PUSH' | 'SMS' | 'LINK'; userId: string };
   /** Test seam. Production callers should use the server/DB clock. */
   now?: Date;
 }
@@ -60,7 +66,7 @@ export interface IncidentLifecycleResult {
   changed: boolean;
 }
 
-type IncidentLifecycleSnapshot = {
+export type IncidentLifecycleSnapshot = {
   serviceId: string;
   status: IncidentStatus;
   createdAt: Date;
@@ -403,7 +409,7 @@ function eventForCommand(
   }
 }
 
-function updateDataForCommand(
+export function updateDataForCommand(
   incident: IncidentLifecycleSnapshot,
   input: IncidentLifecycleInput,
   now: Date
@@ -450,6 +456,9 @@ function updateDataForCommand(
     case 'ACKNOWLEDGE':
       if (!incident.acknowledgedAt) {
         data.acknowledgedAt = now;
+        // Analytics only: who acknowledged and through which channel.
+        data.acknowledgedById = input.actor?.id ?? null;
+        data.acknowledgedVia = input.source;
         // ACK SLA is incident-lifetime truth. REOPEN/UNACKNOWLEDGE reset the
         // operational state, but a later acknowledgement must not replace the
         // immutable first-ACK sample.
@@ -493,6 +502,8 @@ function updateDataForCommand(
     case 'REOPEN': {
       const delayMinutes = escalationDelayMinutes(incident, 0);
       data.acknowledgedAt = null;
+      data.acknowledgedById = null;
+      data.acknowledgedVia = null;
       data.resolvedAt = null;
       // Preserve the first-ACK SLA capture across operational reopen cycles.
       data.slaResolveElapsedMs = null;
@@ -509,6 +520,8 @@ function updateDataForCommand(
     case 'UNACKNOWLEDGE': {
       const stepIndex = incident.currentEscalationStep ?? 0;
       data.acknowledgedAt = null;
+      data.acknowledgedById = null;
+      data.acknowledgedVia = null;
       // Unacknowledgement is operational; it cannot erase lifetime ACK truth.
       data.escalationStatus = 'ESCALATING';
       data.nextEscalationAt = atDelay(now, escalationDelayMinutes(incident, stepIndex));
@@ -676,6 +689,17 @@ export async function applyIncidentLifecycleCommand(
       events: { create: lifecycleEvent },
     },
   });
+  if (input.command === 'ACKNOWLEDGE' && input.ackedNotification) {
+    await tx.notification.updateMany({
+      where: {
+        id: input.ackedNotification.id,
+        incidentId: input.incidentId,
+        userId: input.ackedNotification.userId,
+        ackedAt: null,
+      },
+      data: { ackedAt: now, ackedVia: input.ackedNotification.via },
+    });
+  }
   if (targetStatus === 'RESOLVED') {
     await fenceAutomaticRemediation(
       tx,
@@ -874,6 +898,49 @@ export async function executeIncidentLifecycleTargetBatch(
     }
     return results;
   });
+}
+
+/**
+ * Pages an OPEN incident that is not escalating with a fresh escalation run, the way UNSUPPRESS does:
+ * a storm child whose parent resolved while it still fires. Fenced on the escalation generation the
+ * caller read, so it is a no-op when the incident moved on in between. Returns whether it paged.
+ */
+export async function repageOpenIncident(
+  tx: Prisma.TransactionClient,
+  input: { incidentId: string; generation: number; eventMessage: string; now?: Date }
+): Promise<boolean> {
+  const now = input.now ?? new Date();
+  const incident = await tx.incident.findUnique({
+    where: { id: input.incidentId },
+    select: { serviceId: true },
+  });
+  if (!incident) return false;
+  const routing = await resolveIncidentResponderRouting(input.incidentId, incident.serviceId, tx);
+  if (routing.type === 'NO_ESCALATION') return false;
+  const updated = await tx.incident.updateMany({
+    where: { id: input.incidentId, status: 'OPEN', escalationGeneration: input.generation },
+    data: {
+      escalationStatus: 'ESCALATING',
+      currentEscalationStep: 0,
+      nextEscalationAt: now,
+      escalationProcessingAt: null,
+      escalationGeneration: { increment: 1 },
+    },
+  });
+  if (updated.count === 0) return false;
+  await tx.incidentEvent.create({
+    data: {
+      incidentId: input.incidentId,
+      type: 'STATUS_CHANGE',
+      message: input.eventMessage.trim().slice(0, MAX_EVENT_MESSAGE_LENGTH),
+    },
+  });
+  const { resumeEscalationExecution } = await import('@/lib/escalation/repository');
+  await resumeEscalationExecution(tx, {
+    incidentId: input.incidentId,
+    reason: 'Superseded by a re-page',
+  });
+  return true;
 }
 
 /** Lifecycle-owned repair used when an engagement gate is released. */

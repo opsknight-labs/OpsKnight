@@ -1,7 +1,10 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
-import { assertCanViewSchedule } from '@/lib/rbac';
+import { assertCanViewSchedule, getCurrentAuthorizationActor } from '@/lib/rbac';
+import { enabledOpsInsightAreas } from '@/lib/intelligence/ops-insights/contract';
+import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
 import { buildScheduleBlocks, getFinalScheduleBlocks } from '@/lib/oncall';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 import {
@@ -39,6 +42,8 @@ import ScheduleCoverageExplorer from '@/components/schedules/ScheduleCoverageExp
 import ScheduleCoveragePreview from '@/components/schedules/ScheduleCoveragePreview';
 import ScheduleActivityFeed from '@/components/schedules/ScheduleActivityFeed';
 import ScheduleHealthCheck from '@/components/ScheduleHealthCheck';
+import ScheduleLoadPanel from '@/components/schedules/ScheduleLoadPanel';
+import { SectionSkeleton } from '@/components/intelligence/overview/primitives';
 import ScheduleLinkedPolicies, {
   type LinkedPolicy,
 } from '@/components/schedules/ScheduleLinkedPolicies';
@@ -101,9 +106,12 @@ export default async function ScheduleDetailPage({
   const historyPageSize = 8;
   const requestedHistoryPage = parsePageParam(query?.history);
 
-  const [authResult, schedule] = await Promise.all([
+  const [authResult, schedule, onCallInsightsOn] = await Promise.all([
     assertCanViewSchedule(id).catch(() => null),
     getScheduleDetails(id),
+    getIntelligenceSettings()
+      .then(settings => enabledOpsInsightAreas(settings).includes('onCall'))
+      .catch(() => false),
   ]);
 
   if (!authResult && schedule) await denyResourceAccess({ resource: 'schedule', id });
@@ -766,6 +774,13 @@ export default async function ScheduleDetailPage({
         rotation={rotation}
         overrides={overrides}
         settings={settings}
+        load={
+          onCallInsightsOn ? (
+            <Suspense fallback={<SectionSkeleton title="load and fairness" />}>
+              <ScheduleLoadPanel actor={await getCurrentAuthorizationActor()} scheduleId={id} />
+            </Suspense>
+          ) : undefined
+        }
       />
     </main>
   );

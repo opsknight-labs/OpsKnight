@@ -1,6 +1,7 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- output paths are fixed repository artifacts */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { format, resolveConfig } from 'prettier';
 import { getOpenApiV2Spec } from '../../src/lib/api-v2/openapi';
 import { V2_OPERATIONS } from '../../src/lib/api-v2/openapi-registry';
 import { V2_MUTATION_CONTRACT } from '../../src/lib/api-v2/mutation-contract';
@@ -162,13 +163,15 @@ for (const definition of V2_OPERATIONS) {
     if (operation.requestBody?.required) required.push('body');
   }
   const request: Schema = { type: 'object', additionalProperties: false, properties, required };
-  const response = definition.kind === 'binary'
-    ? { type: 'string', format: 'binary' }
-    : Object.entries(operation.responses).find(([status]) =>
-        status.startsWith('2')
-      )?.[1].content?.['application/json']?.schema ?? { type: 'null' };
+  const response =
+    definition.kind === 'binary'
+      ? { type: 'string', format: 'binary' }
+      : (Object.entries(operation.responses).find(([status]) => status.startsWith('2'))?.[1]
+          .content?.['application/json']?.schema ?? { type: 'null' });
   tsRequests.push(`  ${definition.operationId}: ${ts(request)};`);
-  tsResponses.push(`  ${definition.operationId}: ${definition.kind === 'binary' ? 'Uint8Array' : ts(response)};`);
+  tsResponses.push(
+    `  ${definition.operationId}: ${definition.kind === 'binary' ? 'Uint8Array' : ts(response)};`
+  );
   const name = title(definition.operationId);
   const requestName = py(request, `${name}Request`);
   const responseName = definition.kind === 'binary' ? 'bytes' : py(response, `${name}Response`);
@@ -220,23 +223,35 @@ for (const file of [
   artifacts[file] = JSON.stringify(synchronizeOperationCounts(current), null, 2) + '\n';
 }
 const check = process.argv.includes('--check');
-let failed = false;
-for (const [file, contents] of Object.entries(artifacts)) {
-  const path = join(process.cwd(), file);
-  if (check) {
-    let current = '';
-    try {
-      current = readFileSync(path, 'utf8');
-    } catch {
-      /* Missing generated output is stale. */
+async function writeArtifacts(): Promise<void> {
+  let failed = false;
+  for (const [file, generated] of Object.entries(artifacts)) {
+    const path = join(process.cwd(), file);
+    // Match lint-staged's formatting so committing generated files does not make --check fail.
+    // Python artifacts have no Prettier parser and retain the generator's native formatting.
+    const contents =
+      file.endsWith('.ts') || file.endsWith('.json')
+        ? await format(generated, { ...(await resolveConfig(path)), filepath: path })
+        : generated;
+    if (check) {
+      let current = '';
+      try {
+        current = readFileSync(path, 'utf8');
+      } catch {
+        /* Missing generated output is stale. */
+      }
+      if (current !== contents) {
+        process.stderr.write(`Stale generated artifact: ${file}\n`);
+        failed = true;
+      }
+    } else {
+      mkdirSync(join(path, '..'), { recursive: true });
+      writeFileSync(path, contents);
     }
-    if (current !== contents) {
-      process.stderr.write(`Stale generated artifact: ${file}\n`);
-      failed = true;
-    }
-  } else {
-    mkdirSync(join(path, '..'), { recursive: true });
-    writeFileSync(path, contents);
   }
+  if (failed) process.exitCode = 1;
 }
-if (failed) process.exitCode = 1;
+writeArtifacts().catch(error => {
+  process.stderr.write(`API client generation failed: ${String(error)}\n`);
+  process.exitCode = 1;
+});

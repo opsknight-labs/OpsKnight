@@ -20,8 +20,7 @@ export default function DeltaBadge({
       : delta.tone === 'bad'
         ? toneClasses('critical').soft
         : 'border-border bg-muted text-muted-foreground';
-  const meaning =
-    delta.tone === 'good' ? 'better' : delta.tone === 'bad' ? 'worse' : 'neutral';
+  const meaning = delta.tone === 'good' ? 'better' : delta.tone === 'bad' ? 'worse' : 'neutral';
   return (
     <span
       title={`${delta.label} vs previous period (${meaning})`}

@@ -58,6 +58,11 @@ await p.systemSettings.create({data:{id:'default',appUrl:'https://localhost:3261
 await p.authenticationPolicy.create({data:{id:'default',mode:'PASSWORD_ONLY',legacySnapshot:{}}});
 await p.user.create({data:{id:'browser-secondary-user',email:'browser-secondary@example.test',name:'Browser Secondary',role:'USER',status:'ACTIVE',passwordHash:await bcrypt.hash('Local certification browser passphrase October 2026',12)}});
 await p.user.create({data:{id:'browser-password-certifier',email:'browser-certifier@example.test',name:'Browser Certifier',role:'ADMIN',status:'ACTIVE',passwordHash:await bcrypt.hash('Local certification browser passphrase October 2026',12)}});
+// Two inert drafts exercise saved-revision selection without discovery or a live IdP.
+// No secret or verification proof is seeded, and neither draft is activated.
+for (const suffix of ['one','two']) {
+await p.oidcRevision.create({data:{id:'browser-saved-'+suffix,baseConfigVersion:0,createdBy:'browser-password-certifier',configuration:{issuer:'https://accounts.google.com',clientId:'browser-client-'+suffix,clientSecret:'',providerType:'google'}}});
+}
 })().catch(e=>{console.error(e.message);process.exitCode=1}).finally(()=>p.$disconnect());'''
  seed=seed.replace('https://localhost:32615',origin)
  subprocess.run(['node','-e',seed],cwd=root,env=env,check=True)

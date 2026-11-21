@@ -1,4 +1,5 @@
 import { mcpCompositeCost } from '@/lib/mcp/core/composites';
+import { isAskSquireEnabled } from '@/lib/mcp/core/ask-squire-settings';
 import { RESOURCE_LIST_COST } from '@/lib/mcp/protocol/resource-list';
 import { endMcpSpan, linkMcpTrace, startMcpSpan } from '@/lib/mcp/protocol/tracing';
 import { withMcpRuntime } from '@/lib/mcp/auth/config';
@@ -326,6 +327,8 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
       error.challengeScope = stepUp.join(' ');
       return mcpHttpError(error);
     }
+    // ask_squire is listed only while an administrator has it on (AI settings).
+    const squire = await isAskSquireEnabled();
     const handler = createMcpHandler(
       () =>
         createOpsKnightMcpServer(
@@ -334,7 +337,8 @@ async function handlePost(request: Request, requestId: string, browserOrigin: st
           identity.policy.writesEnabled,
           identity.policy.sensitiveReadsEnabled,
           [...identity.policy.disabledCapabilities, ...context.hiddenCapabilities],
-          identity.policy.responderDirectWritesEnabled
+          identity.policy.responderDirectWritesEnabled,
+          { squire }
         ),
       {
         // Pre-2026 clients: one fresh server per request, no session.
@@ -522,6 +526,7 @@ async function openListenStream(
 ) {
   const releaseStream = acquireStreamSlot(identity.grantId, identity.auth.actor.id);
   const untrack = trackSubscription(uris);
+  const squire = await isAskSquireEnabled();
   const handler = createMcpHandler(
     () =>
       createOpsKnightMcpServer(
@@ -530,7 +535,8 @@ async function openListenStream(
         identity.policy.writesEnabled,
         identity.policy.sensitiveReadsEnabled,
         [...identity.policy.disabledCapabilities, ...(context.hiddenCapabilities ?? [])],
-        identity.policy.responderDirectWritesEnabled
+        identity.policy.responderDirectWritesEnabled,
+        { squire }
       ),
     {
       legacy: 'reject',

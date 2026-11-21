@@ -27,7 +27,8 @@ const statusConfig: Record<
   },
   ACTION_REQUIRED: {
     label: 'Action Required',
-    className: 'border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 font-semibold',
+    className:
+      'border-status-critical-border/25 bg-status-critical-soft dark:border-status-critical/35 dark:bg-status-critical/15 text-status-critical-deep dark:text-rose-300 font-semibold',
     icon: AlertCircle,
   },
   UNVERIFIED: {

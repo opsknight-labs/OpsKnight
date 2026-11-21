@@ -23,10 +23,19 @@ import {
   BellRing,
   Loader2,
   Workflow,
+  Sparkles,
 } from 'lucide-react';
+import Link from 'next/link';
+import UngroupButton from '../intelligence/UngroupButton';
+import {
+  INTELLIGENCE_TIMELINE_KIND_LABEL,
+  formatOnsetOffset,
+  type IntelligenceTimelineEvent,
+} from '@/lib/intelligence/incident-ux/timeline-overlay';
 
 type TimelineFilter =
   | 'ALL'
+  | 'INTELLIGENCE'
   | 'LIFECYCLE'
   | 'ESCALATION'
   | 'ASSIGNMENT'
@@ -50,7 +59,8 @@ const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
 // structured "category" field on IncidentEvent, so this is a heuristic filter,
 // not an authoritative classification.
 export function categorize(type: string, message: string): TimelineFilter {
-  if (type === 'NOTE' || type === 'COMMENT') return 'NOTES';
+  if (type === 'INTELLIGENCE') return 'INTELLIGENCE';
+  if (type === 'NOTE' || type === 'COMMENT' || type === 'CHAT_MESSAGE') return 'NOTES';
   if (type === 'CREATED' || type === 'ACKNOWLEDGED' || type === 'RESOLVED') return 'LIFECYCLE';
   if (type === 'NOTIFICATION') return 'NOTIFICATIONS';
   if (isRunbookEventType(type)) return 'RUNBOOKS';
@@ -188,10 +198,28 @@ export type IncidentTimelineProps = {
   totalNotesCount?: number;
   totalNotificationsCount?: number;
   totalActivityCount?: number;
+  /**
+   * Intelligence events (noise decisions, changes, upstream incidents, grouping, suggestion and triage
+   * decisions, briefings) already filtered to what the viewer may read. Shown as rows of this timeline behind
+   * the "Show intelligence events" toggle; absent or empty means the toggle is not rendered at all.
+   */
+  intelligenceEvents?: IntelligenceTimelineEvent[];
 };
 
 const EMPTY_NOTES: Note[] = [];
 const EMPTY_NOTIFICATIONS: IncidentTimelineNotification[] = [];
+const EMPTY_INTELLIGENCE: IntelligenceTimelineEvent[] = [];
+const INTELLIGENCE_FILTER = { id: 'INTELLIGENCE' as const, label: 'Intelligence' };
+
+type TimelineRow = {
+  id: string;
+  message: string;
+  createdAt: Date;
+  type: string;
+  sortPriority: number;
+  channel?: string | null;
+  intelligence?: IntelligenceTimelineEvent;
+};
 
 export default function IncidentTimeline({
   incidentId,
@@ -205,9 +233,13 @@ export default function IncidentTimeline({
   totalNotesCount,
   totalNotificationsCount,
   totalActivityCount,
+  intelligenceEvents = EMPTY_INTELLIGENCE,
 }: IncidentTimelineProps) {
   const { userTimeZone } = useTimezone();
   const [activeFilter, setActiveFilter] = useState<TimelineFilter>('ALL');
+  // On by default whenever there is something to show; the toggle itself is absent otherwise.
+  const [showIntelligence, setShowIntelligence] = useState(true);
+  const hasIntelligence = intelligenceEvents.length > 0;
   const [loadedEvents, setLoadedEvents] = useState<Event[]>(events);
   const [loadedNotes, setLoadedNotes] = useState<Note[]>(notes);
   const [loadedNotifications, setLoadedNotifications] =
@@ -378,14 +410,20 @@ export default function IncidentTimeline({
 
   // Create a comprehensive timeline with incident lifecycle events and notes
   const timelineEvents = useMemo(() => {
-    const eventsList: Array<{
-      id: string;
-      message: string;
-      createdAt: Date;
-      type: string;
-      sortPriority: number;
-      channel?: string | null;
-    }> = [];
+    const eventsList: TimelineRow[] = [];
+
+    if (showIntelligence) {
+      for (const item of intelligenceEvents) {
+        eventsList.push({
+          id: item.id,
+          message: item.title,
+          createdAt: item.at,
+          type: 'INTELLIGENCE',
+          sortPriority: 4,
+          intelligence: item,
+        });
+      }
+    }
 
     let hasCreatedDbEvent = false;
     let hasAckDbEvent = false;
@@ -441,9 +479,10 @@ export default function IncidentTimeline({
     // Add regular events
     loadedEvents.forEach(event => {
       const isNoteEvent =
-        event.type === 'NOTE' ||
-        event.type === 'COMMENT' ||
-        /\bnote\b|pinned message|comment/i.test(event.message);
+        event.type !== 'CHAT_MESSAGE' &&
+        (event.type === 'NOTE' ||
+          event.type === 'COMMENT' ||
+          /\bnote\b|pinned message|comment/i.test(event.message));
 
       let message = event.message;
       let eventType = event.type || 'EVENT';
@@ -584,7 +623,14 @@ export default function IncidentTimeline({
     incidentCreatedAt,
     incidentAcknowledgedAt,
     incidentResolvedAt,
+    intelligenceEvents,
+    showIntelligence,
   ]);
+
+  // Hiding intelligence events while their filter is selected would leave an empty, confusing list.
+  if (activeFilter === 'INTELLIGENCE' && (!hasIntelligence || !showIntelligence)) {
+    setActiveFilter('ALL');
+  }
 
   const filteredEvents = useMemo(() => {
     return activeFilter === 'ALL'
@@ -595,6 +641,7 @@ export default function IncidentTimeline({
   const filterCounts = useMemo(() => {
     const counts: Record<TimelineFilter, number> = {
       ALL: timelineEvents.length,
+      INTELLIGENCE: 0,
       LIFECYCLE: 0,
       ESCALATION: 0,
       ASSIGNMENT: 0,
@@ -614,6 +661,14 @@ export default function IncidentTimeline({
 
   const getEventConfig = (type: string, message: string) => {
     switch (type) {
+      case 'INTELLIGENCE':
+        return {
+          variant: 'info' as const,
+          icon: <Sparkles className="h-4 w-4" />,
+          label: 'Intelligence',
+          avatarBg: 'bg-status-shift-soft dark:bg-status-shift/20',
+          avatarText: 'text-status-shift-deep dark:text-status-shift',
+        };
       case 'CREATED':
         return {
           variant: 'danger' as const,
@@ -644,6 +699,14 @@ export default function IncidentTimeline({
           variant: 'info' as const,
           icon: <MessageSquare className="h-4 w-4" />,
           label: 'Note',
+          avatarBg: 'bg-blue-100 dark:bg-blue-950/40',
+          avatarText: 'text-blue-600 dark:text-blue-400',
+        };
+      case 'CHAT_MESSAGE':
+        return {
+          variant: 'info' as const,
+          icon: <MessageSquare className="h-4 w-4" />,
+          label: 'War room',
           avatarBg: 'bg-blue-100 dark:bg-blue-950/40',
           avatarText: 'text-blue-600 dark:text-blue-400',
         };
@@ -688,9 +751,31 @@ export default function IncidentTimeline({
     );
   }
 
+  const visibleFilters =
+    hasIntelligence && showIntelligence
+      ? [FILTERS[0], INTELLIGENCE_FILTER, ...FILTERS.slice(1)]
+      : FILTERS;
+
+  const intelligenceToggle = hasIntelligence ? (
+    <div id="timeline-intelligence" className="mb-2 flex scroll-mt-24 items-center">
+      <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-xs font-medium text-foreground sm:min-h-8">
+        <input
+          type="checkbox"
+          checked={showIntelligence}
+          onChange={event => setShowIntelligence(event.target.checked)}
+          className="h-4 w-4 rounded border-border accent-primary"
+        />
+        Show intelligence events
+        <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">
+          {intelligenceEvents.length}
+        </span>
+      </label>
+    </div>
+  ) : null;
+
   const filterChips = (
     <div className="flex flex-wrap gap-1.5 mb-2" role="group" aria-label="Filter timeline events">
-      {FILTERS.map(filter => {
+      {visibleFilters.map(filter => {
         const count = filterCounts[filter.id] ?? 0;
         return (
           <button
@@ -724,7 +809,10 @@ export default function IncidentTimeline({
   if (filteredEvents.length === 0) {
     return (
       <div className="space-y-6">
-        {filterChips}
+        <div>
+          {intelligenceToggle}
+          {filterChips}
+        </div>
         <div className="text-center py-12">
           <Clock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">No matching events</h3>
@@ -738,7 +826,10 @@ export default function IncidentTimeline({
 
   return (
     <div className="space-y-6">
-      {filterChips}
+      <div>
+        {intelligenceToggle}
+        {filterChips}
+      </div>
       <div className="space-y-6 relative ml-2">
         {/* Continuous vertical line background */}
         <div className="absolute left-[19px] top-2 bottom-4 w-px bg-border/70" />
@@ -747,6 +838,110 @@ export default function IncidentTimeline({
           const isLifecycleEvent =
             event.type === 'CREATED' || event.type === 'ACKNOWLEDGED' || event.type === 'RESOLVED';
           const isNote = event.type === 'NOTE' || event.type === 'COMMENT';
+          const intel = event.intelligence;
+
+          if (intel) {
+            const titleClass = 'font-medium text-slate-800 hover:underline dark:text-slate-200';
+            return (
+              <div
+                key={event.id}
+                id={`timeline-${event.id}`}
+                data-intelligence-kind={intel.kind}
+                className="relative flex scroll-mt-24 gap-4 group target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
+              >
+                <div
+                  className={`relative z-10 rounded-full border-4 border-background shrink-0 h-10 w-10 flex items-center justify-center shadow-xs ${config.avatarBg} ${config.avatarText}`}
+                >
+                  {config.icon}
+                </div>
+                <div className="flex-1 pt-1.5 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-semibold text-foreground/90">
+                        {INTELLIGENCE_TIMELINE_KIND_LABEL[intel.kind]}
+                      </span>
+                      <Badge variant="info" size="xs" className="uppercase h-5 text-[10px]">
+                        Intelligence
+                      </Badge>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground font-mono tabular-nums">
+                      {formatDateTime(event.createdAt, userTimeZone, { format: 'datetime' })}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm leading-relaxed text-slate-800 dark:text-slate-200">
+                        {!intel.href ? (
+                          <span className="font-medium">{intel.title}</span>
+                        ) : intel.insightsSection ? (
+                          <a
+                            href={intel.href}
+                            data-insights-open={intel.insightsSection}
+                            className={titleClass}
+                          >
+                            {intel.title}
+                          </a>
+                        ) : intel.href.startsWith('/') ? (
+                          <Link href={intel.href} className={titleClass}>
+                            {intel.title}
+                          </Link>
+                        ) : (
+                          <a
+                            href={intel.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={titleClass}
+                          >
+                            {intel.title}
+                          </a>
+                        )}
+                        {intel.riskPercent !== undefined && intel.riskPercent !== null && (
+                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[11px] font-normal text-foreground">
+                            risk {intel.riskPercent}%
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatOnsetOffset(intel.offsetMinutes)}
+                        {intel.detail ? ` · ${intel.detail}` : ''}
+                      </p>
+                      {intel.why && intel.why.length > 0 && (
+                        <details className="text-xs">
+                          <summary className="inline-flex min-h-11 cursor-pointer items-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8">
+                            Why?
+                          </summary>
+                          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-foreground/80">
+                            {intel.why.map((line, lineIndex) => (
+                              <li key={lineIndex}>{line}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
+                    {incidentId && (intel.reversal || intel.reversed) && (
+                      // Stays mounted once reversed so the result survives the refresh the action triggers.
+                      <UngroupButton
+                        incidentId={incidentId}
+                        target={{ type: 'decision', decisionId: intel.reversal?.decisionId ?? '' }}
+                        settled={!intel.reversal}
+                        label={intel.reversal?.pages ? 'Reverse and page' : 'Mark wrong'}
+                        confirmTitle={
+                          intel.reversal?.pages
+                            ? 'Reverse this decision and page?'
+                            : 'Mark this decision wrong?'
+                        }
+                        confirmBody={
+                          intel.reversal?.pages
+                            ? 'The alert is re-ingested as its own incident and pages normally. The decision is recorded as wrong, which counts against the rule in noise-control reports.'
+                            : 'Nothing pages: the decision only changed how the alert was handled. It is recorded as wrong, which counts against the rule in noise-control reports.'
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          }
 
           return (
             <div

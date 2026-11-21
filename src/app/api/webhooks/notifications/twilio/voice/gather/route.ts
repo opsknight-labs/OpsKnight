@@ -186,6 +186,7 @@ export async function POST(request: NextRequest) {
         source: 'VOICE',
         actor: { id: notification.user.id, name: notification.user.name || undefined },
         expectedStatus: 'OPEN',
+        ackedNotification: { id: notification.id, via: 'VOICE', userId: notification.user.id },
         eventMessage: `Incident acknowledged by ${notification.user.name || 'responder'} via voice call`,
       });
     } catch (error) {

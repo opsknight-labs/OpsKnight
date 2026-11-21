@@ -144,9 +144,13 @@ export function SlackScopeList({
                 >
                   <div className="flex items-start gap-2.5 min-w-0 flex-1">
                     {hasScope ? (
-                      <CheckCircle2 className={cn('h-4 w-4 shrink-0 mt-0.5', toneClasses('ok').text)} />
+                      <CheckCircle2
+                        className={cn('h-4 w-4 shrink-0 mt-0.5', toneClasses('ok').text)}
+                      />
                     ) : (
-                      <XCircle className={cn('h-4 w-4 shrink-0 mt-0.5', toneClasses('critical').text)} />
+                      <XCircle
+                        className={cn('h-4 w-4 shrink-0 mt-0.5', toneClasses('critical').text)}
+                      />
                     )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">

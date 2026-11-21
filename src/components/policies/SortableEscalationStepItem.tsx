@@ -3,6 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import EscalationStepItem from './EscalationStepItem';
+import type { PolicyStepStat } from '@/lib/intelligence/ops-insights/policy-intelligence';
 import { GripVertical } from 'lucide-react';
 
 type EscalationStep = {
@@ -49,6 +50,8 @@ type SortableEscalationStepItemProps = {
   }>;
   teams?: Array<{ id: string; name: string }>;
   schedules?: Array<{ id: string; name: string }>;
+  stat?: PolicyStepStat;
+  suggestedDelayMinutes?: number;
 };
 
 export default function SortableEscalationStepItem(props: SortableEscalationStepItemProps) {

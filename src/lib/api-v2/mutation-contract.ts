@@ -638,6 +638,9 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'POST /api/v2/services/[id]/automation/simulate': natural(
     'Read-only evaluation; never creates incidents, notifications, observations or replay records.'
   ),
+  'POST /api/v2/services/[id]/automation/replay': natural(
+    'Queues a read-only replay; an identical request within 10 minutes returns the same run, and replay never changes operational state.'
+  ),
   'POST /api/v2/services/[id]/automation/restore': {
     idempotency: 'required',
     concurrency: 'etag',

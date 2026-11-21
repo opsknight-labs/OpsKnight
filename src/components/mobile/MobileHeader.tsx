@@ -29,6 +29,8 @@ function getListTitle(pathname: string): string {
       return 'Users';
     case '/m/policies':
       return 'Policies';
+    case '/m/intelligence':
+      return 'AIOps';
     case '/m/postmortems':
       return 'Postmortems';
     case '/m/status':

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { RunbookPagination, runbookPageQuery } from '@/components/runbooks/RunbookPagination';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
@@ -29,7 +30,12 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
+import {
+  assertCapability,
+  getCurrentAuthorizationActor,
+  getCurrentUser,
+  getUserPermissions,
+} from '@/lib/rbac';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
 import { checkRunbookDeleteEligibility } from '@/lib/runbooks/lifecycle';
 import { RunbookCannotDeleteError } from '@/lib/runbooks/errors';
@@ -55,6 +61,7 @@ import {
 } from '@/components/runbooks/RunbookControls';
 import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
 import { RunbookOverview, computeSuccessRate } from '@/components/runbooks/detail/RunbookOverview';
+import { RunbookHealthSection } from '@/components/runbooks/detail/RunbookHealthSection';
 import { VersionTimeline } from '@/components/runbooks/detail/VersionTimeline';
 import { RunbookDetailsSheet } from '@/components/runbooks/detail/RunbookDetailsSheet';
 import { RunbookActionsMenu } from '@/components/runbooks/detail/RunbookActionsMenu';
@@ -79,6 +86,7 @@ export default async function RunbookDetailPage({
   const rawBindingPage = Math.max(1, Math.min(10000, Number(query.bindingPage) || 1));
   const permissionsPromise = getUserPermissions();
   const userPromise = getCurrentUser();
+  const actorPromise = getCurrentAuthorizationActor();
 
   const runbookMeta = await prisma.runbook.findUnique({
     where: { id },
@@ -158,6 +166,7 @@ export default async function RunbookDetailPage({
       getRunbookNavigationSummary(),
     ]);
   if (!runbook) notFound();
+  const authorizationActor = await actorPromise;
   const userTimeZone = getUserTimeZone(user);
   const isArchived = Boolean(runbook.archivedAt);
   const hasManageCapability = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE);
@@ -749,6 +758,13 @@ export default async function RunbookDetailPage({
             content: (
               <div className="space-y-6">
                 {overview}
+                <Suspense fallback={null}>
+                  <RunbookHealthSection
+                    runbookId={id}
+                    actor={authorizationActor}
+                    formatTimestamp={formatTimestamp}
+                  />
+                </Suspense>
                 {dangerZoneCard}
               </div>
             ),

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
   upsertPostmortem,
   type PostmortemData,
@@ -12,6 +12,7 @@ import { normalizeLegacyActionItems, type ActionItem } from '@/lib/action-items'
 import type { JiraCapability } from '@/lib/jira-capabilities';
 import type { JiraIssueReference } from '@/lib/jira-references';
 import { notify as toast } from '@/lib/toast';
+import { AI_LEAN_NOTICE } from '@/lib/intelligence/ai/notices';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -46,10 +47,26 @@ import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { AlertCircle, AlertTriangle, Loader2, Wand2, Sparkles } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod/v3';
 import { POSTMORTEM_STATUS_CONFIG } from './postmortem/shared';
+import { draftPostmortemWithAiAction } from '@/app/(app)/postmortems/ai-actions';
+import { mergeAiDraft } from './postmortem/merge-ai-draft';
+import {
+  getPostmortemAssistAction,
+  type PostmortemAssistView,
+} from '@/app/(app)/postmortems/intelligence-actions';
+import {
+  findDuplicateActionItem,
+  type ActionItemSuggestion,
+} from '@/lib/intelligence/postmortems/evidence-draft';
+import { checkPostmortemQuality } from '@/lib/intelligence/postmortems/quality';
+import {
+  PostmortemActionSuggestions,
+  PostmortemQualityChecklist,
+  PostmortemRecurrenceStrip,
+} from './postmortem/PostmortemIntelligence';
 import {
   formatFiveWhys,
   parseStoredFactors,
@@ -84,6 +101,8 @@ type PostmortemFormProps = {
     status?: string;
     isPublic?: boolean | null;
   };
+  /** Shows "Draft with AI" when an administrator has enabled AI. */
+  aiDraftAvailable?: boolean;
   users?: Array<{ id: string; name: string; email: string }>;
   resolvedIncidents?: Array<{
     id: string;
@@ -118,6 +137,7 @@ export default function PostmortemForm({
   resolvedIncidents = [],
   jiraCapability,
   incidentJiraIssues = [],
+  aiDraftAvailable = false,
 }: PostmortemFormProps) {
   const router = useRouter();
   const { userTimeZone } = useTimezone();
@@ -128,14 +148,17 @@ export default function PostmortemForm({
   // Parse initial data with proper types
   const parseTimeline = (timeline: unknown): TimelineEvent[] => {
     if (!timeline || !Array.isArray(timeline)) return [];
-    return timeline.map((e: Partial<TimelineEvent>) => ({
-      id: e.id || `event-${Date.now()}-${Math.random()}`,
-      timestamp: e.timestamp || new Date().toISOString(),
-      type: e.type || 'DETECTION',
-      title: e.title || '',
-      description: e.description || '',
-      actor: e.actor,
-    }));
+    return timeline.map((raw: unknown) => {
+      const e = (raw && typeof raw === 'object' ? raw : {}) as Partial<TimelineEvent>;
+      return {
+        id: e.id || `event-${Date.now()}-${Math.random()}`,
+        timestamp: e.timestamp || new Date().toISOString(),
+        type: e.type || 'DETECTION',
+        title: e.title || '',
+        description: e.description || '',
+        actor: e.actor,
+      };
+    });
   };
 
   const parseImpact = (impact: unknown): ImpactMetrics => {
@@ -237,8 +260,8 @@ export default function PostmortemForm({
         } else {
           setGeneralError('Failed to save postmortem');
         }
-      } catch (err) {
-        setGeneralError(err instanceof Error ? err.message : 'Failed to save postmortem');
+      } catch (err: unknown) {
+        setGeneralError((err instanceof Error && err.message) || 'Failed to save postmortem');
       }
     });
   };
@@ -282,14 +305,103 @@ export default function PostmortemForm({
       setSelectedFactors(inferred);
 
       toast.success('Draft generated successfully');
-    } catch (err) {
+    } catch (err: unknown) {
       toast.error(
-        'Failed to generate draft: ' + (err instanceof Error ? err.message : 'Unknown error')
+        'Failed to generate draft: ' + ((err instanceof Error && err.message) || 'Unknown error')
       );
     } finally {
       setIsDrafting(false);
     }
   };
+
+  const [isAiDrafting, setIsAiDrafting] = useState(false);
+
+  const handleAiDraft = async () => {
+    const targetId = incidentId || selectedIncidentId;
+    if (!targetId) {
+      toast.error('Please select an incident first');
+      return;
+    }
+    setIsAiDrafting(true);
+    try {
+      const result = await draftPostmortemWithAiAction(targetId);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      const values = form.getValues();
+      const merged = mergeAiDraft(
+        {
+          summary: values.summary ?? '',
+          rootCause: values.rootCause ?? '',
+          resolution: values.resolution ?? '',
+          lessons: values.lessons ?? '',
+        },
+        actionItems,
+        result.draft,
+        index => `ai-action-${Date.now()}-${index}`
+      );
+      for (const [key, value] of Object.entries(merged.fields)) {
+        if (value)
+          form.setValue(key as 'summary' | 'rootCause' | 'resolution' | 'lessons', value, {
+            shouldDirty: true,
+          });
+      }
+      if (merged.addedItems.length) setActionItems(current => [...current, ...merged.addedItems]);
+      if (result.degraded) toast.info(AI_LEAN_NOTICE);
+      toast.success(
+        merged.kept.length
+          ? 'AI draft added to empty fields; fields you had already written were kept. Review everything before saving.'
+          : 'AI draft added. Review and edit it before saving; nothing has been saved.'
+      );
+    } catch {
+      toast.error('AI is unavailable right now. Try again later.');
+    } finally {
+      setIsAiDrafting(false);
+    }
+  };
+
+  // Postmortem intelligence: null while the switch is off, and then nothing below renders.
+  const assistIncidentId = incidentId || selectedIncidentId;
+  const [assist, setAssist] = useState<{ for: string; view: PostmortemAssistView } | null>(null);
+  useEffect(() => {
+    if (!assistIncidentId) return;
+    let live = true;
+    getPostmortemAssistAction(assistIncidentId)
+      .then(view => {
+        if (live) setAssist(view ? { for: assistIncidentId, view } : null);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [assistIncidentId]);
+  const assistView = assist?.for === assistIncidentId ? assist.view : null;
+  const rootCauseDraft = useWatch({ control: form.control, name: 'rootCause' });
+  const qualityIssues = assistView
+    ? checkPostmortemQuality({
+        rootCause: rootCauseDraft,
+        actionItems,
+        timeline: timelineEvents,
+        window: assistView.window,
+      })
+    : [];
+  // A suggestion the person already added (or wrote themselves) is shown as covered, not offered again.
+  const suggestions = (assistView?.suggestions ?? []).map(suggestion => ({
+    ...suggestion,
+    duplicateOf: suggestion.duplicateOf ?? findDuplicateActionItem(suggestion.title, actionItems),
+  }));
+  const addSuggestion = (suggestion: ActionItemSuggestion) =>
+    setActionItems(current => [
+      ...current,
+      {
+        id: `suggested-${suggestion.key}`,
+        title: suggestion.title,
+        description: suggestion.description,
+        status: 'OPEN',
+        priority: suggestion.priority,
+      },
+    ]);
 
   const selectedIncident = resolvedIncidents.find(inc => inc.id === selectedIncidentId);
   const effectiveIncidentJiraIssues = incidentId
@@ -357,6 +469,8 @@ export default function PostmortemForm({
           </Card>
         )}
 
+        <PostmortemRecurrenceStrip recurrence={assistView?.recurrence} />
+
         {/* Basic Information */}
         <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
           <CardHeader className="flex flex-row justify-between items-center space-y-0 pb-4">
@@ -376,6 +490,23 @@ export default function PostmortemForm({
               )}
               Auto-Draft
             </Button>
+            {aiDraftAvailable && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAiDraft}
+                disabled={isAiDrafting || isDrafting || (!incidentId && !selectedIncidentId)}
+                className="ml-2 bg-white hover:bg-purple-50 hover:text-purple-700 transition-colors border-purple-200"
+              >
+                {isAiDrafting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4 mr-2 text-purple-600" />
+                )}
+                Draft with AI
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <FormField
@@ -566,7 +697,9 @@ export default function PostmortemForm({
           users={users}
           jiraCapability={jiraCapability}
           incidentJiraIssues={effectiveIncidentJiraIssues}
+          incidentId={assistIncidentId || undefined}
         />
+        <PostmortemActionSuggestions suggestions={suggestions} onAdd={addSuggestion} />
 
         {/* Lessons Learned */}
         <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
@@ -604,6 +737,8 @@ export default function PostmortemForm({
             <AlertDescription>{generalError}</AlertDescription>
           </Alert>
         )}
+
+        <PostmortemQualityChecklist issues={qualityIssues} />
 
         {/* Form Actions */}
         <div className="flex justify-end gap-3 pt-4 border-t border-ink-200">

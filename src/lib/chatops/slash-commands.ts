@@ -36,7 +36,7 @@ interface SlackResponse {
 /**
  * Resolve a Slack user ID to an active OpsKnight user by verified Slack email.
  */
-async function resolveOpsKnightUser(slackUserId: string, botToken: string) {
+export async function resolveOpsKnightUser(slackUserId: string, botToken: string) {
   try {
     let slackEmail: string | undefined;
 
@@ -138,6 +138,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
               '`/incident note <message>` — Add an incident note',
               '`/incident who` — Show who is on-call',
               '`/incident postmortem` — Create a postmortem draft from timeline & notes',
+              '`/incident ask <question>` — Ask Squire about this incident (when enabled)',
               '`/incident help` — Show this help message',
             ].join('\n'),
           },
@@ -155,7 +156,17 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
 
   // Get bot token for user resolution
   const botToken = await getSlackBotToken(incident.service.id);
-  const mutatingCommands = new Set(['ack', 'acknowledge', 'resolve', 'note', 'postmortem', 'who']);
+  const mutatingCommands = new Set([
+    'ack',
+    'acknowledge',
+    'resolve',
+    'note',
+    'postmortem',
+    'who',
+    // Squire answers under the asker's own permissions, so it needs the linked account too.
+    'ask',
+    'squire',
+  ]);
   const actor =
     mutatingCommands.has(subcommand) && botToken
       ? await resolveOpsKnightUser(user_id, botToken)
@@ -401,6 +412,13 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
           text: '⚠️ Failed to generate postmortem draft.',
         };
       }
+    }
+
+    case 'ask':
+    case 'squire': {
+      // Answered privately to the asker; suggestions carry Confirm buttons only they can use.
+      const { answerSlackSquireSlash } = await import('@/lib/chatops/squire/slack');
+      return answerSlackSquireSlash({ userId: actor!.id, incidentId: incident.id, question: args });
     }
 
     default:

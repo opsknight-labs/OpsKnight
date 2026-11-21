@@ -2,7 +2,15 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { CalendarRange, Check, ChevronsUpDown, GitCompare, Server, User, Users } from 'lucide-react';
+import {
+  CalendarRange,
+  Check,
+  ChevronsUpDown,
+  GitCompare,
+  Server,
+  User,
+  Users,
+} from 'lucide-react';
 import { FilterBar, FilterChip, FilterField } from '@/components/patterns';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -13,7 +21,12 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/shadcn/command';
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/shadcn/popover';
 import {
   Select,
   SelectContent,
@@ -210,7 +223,9 @@ export default function AnalyticsFilters({
   const navigate = (next: AnalyticsParams) => {
     const query = toAnalyticsSearchParams(next).toString();
     if (query === searchParams.toString()) return;
-    startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }));
+    startTransition(() =>
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+    );
   };
   const update = (patch: Partial<AnalyticsParams>) => navigate({ ...params, ...patch });
   const setRange = (range: AnalyticsParams['range']) =>
@@ -269,7 +284,9 @@ export default function AnalyticsFilters({
       <FilterField label="Urgency" htmlFor="analytics-urgency">
         <Select
           value={params.urgency ?? ALL}
-          onValueChange={value => update({ urgency: value === ALL ? undefined : (value as AnalyticsParams['urgency']) })}
+          onValueChange={value =>
+            update({ urgency: value === ALL ? undefined : (value as AnalyticsParams['urgency']) })
+          }
         >
           <SelectTrigger id="analytics-urgency" className={TRIGGER}>
             <SelectValue />
@@ -285,7 +302,9 @@ export default function AnalyticsFilters({
       <FilterField label="Status" htmlFor="analytics-status">
         <Select
           value={params.status ?? ALL}
-          onValueChange={value => update({ status: value === ALL ? undefined : (value as AnalyticsParams['status']) })}
+          onValueChange={value =>
+            update({ status: value === ALL ? undefined : (value as AnalyticsParams['status']) })
+          }
         >
           <SelectTrigger id="analytics-status" className={TRIGGER}>
             <SelectValue />
@@ -342,7 +361,13 @@ export default function AnalyticsFilters({
         advancedActiveCount={params.priorities.length + Number(Boolean(params.assignee))}
         hasActiveFilters={hasActiveAnalyticsFilters(params)}
         onClearAll={() =>
-          navigate({ ...parseAnalyticsParams({}), range: params.range, from: params.from, to: params.to, compare: params.compare })
+          navigate({
+            ...parseAnalyticsParams({}),
+            range: params.range,
+            from: params.from,
+            to: params.to,
+            compare: params.compare,
+          })
         }
         clearLabel="Clear filters"
         actions={actions}

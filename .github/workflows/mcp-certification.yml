@@ -14,6 +14,9 @@ permissions:
 concurrency:
   group: mcp-${{ github.ref }}
   cancel-in-progress: true
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
 jobs:
   detect-changes:
     name: Detect MCP-related changes
@@ -61,7 +64,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.mcp == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16-alpine

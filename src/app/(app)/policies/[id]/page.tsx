@@ -1,6 +1,11 @@
 import PolicyDependencies from '@/components/policies/PolicyDependencies';
 import prisma from '@/lib/prisma';
-import { assertCanViewPolicy, getUserPermissions } from '@/lib/rbac';
+import { assertCanViewPolicy, getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
+import { loadPolicyIntelligence } from '@/lib/intelligence/ops-insights/policy-intelligence';
+import { parseEscalationDelayMinutes } from '@/lib/escalation/policy-validation';
+import InsightsPanel from '@/components/intelligence/insights/InsightsPanel';
+import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
+import { logger } from '@/lib/logger';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
@@ -39,6 +44,7 @@ import {
   ExternalLink,
   Layers,
   Clock,
+  Lightbulb,
 } from 'lucide-react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -51,7 +57,13 @@ export default async function PolicyDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ error?: string; tab?: string; depPage?: string }>;
+  searchParams?: Promise<{
+    error?: string;
+    tab?: string;
+    depPage?: string;
+    suggestStep?: string;
+    suggestDelay?: string;
+  }>;
 }) {
   await requirePageAccess('/policies/[id]');
   const { id } = await params;
@@ -137,6 +149,28 @@ export default async function PolicyDetailPage({
   if (!policy) notFound();
 
   const canManagePolicies = permissions.isAdmin;
+  // Quiet by default: nothing here while escalation insights are off, and a failed read only hides them.
+  const intelligence = await loadPolicyIntelligence(
+    await getCurrentAuthorizationActor(),
+    policy
+  ).catch((error: unknown) => {
+    logger.warn('[Intelligence] Policy insights not shown', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  });
+  const squire =
+    intelligence && intelligence.insights.length > 0
+      ? await getAiPublicStatus().catch(() => null)
+      : null;
+  // "Apply suggestion" links here with a step and a wait; the editor opens pre-filled and saves nothing.
+  const suggestedDelay = parseEscalationDelayMinutes(resolvedSearchParams?.suggestDelay);
+  const suggestion =
+    resolvedSearchParams?.suggestStep &&
+    suggestedDelay &&
+    policy.steps.some(step => step.id === resolvedSearchParams.suggestStep)
+      ? { stepId: resolvedSearchParams.suggestStep, delayMinutes: suggestedDelay }
+      : undefined;
   const totalDuration = policy.steps.reduce((acc, s) => acc + s.delayMinutes, 0);
 
   // Tab 1: Escalation Steps Content
@@ -156,7 +190,34 @@ export default async function PolicyDetailPage({
       users={users}
       teams={teams}
       schedules={schedules}
+      stepStats={intelligence?.stepStats}
+      suggestion={suggestion}
     />
+  );
+
+  // Escalation insights: same card as the Activity tab, the list itself from the shared InsightsPanel.
+  const insightsContent = intelligence && intelligence.insights.length > 0 && (
+    <Card className="border-border bg-card shadow-2xs">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-base font-bold flex items-center gap-2">
+          <Lightbulb className="h-4 w-4 text-primary" />
+          Insights
+        </CardTitle>
+        <CardDescription className="text-xs">
+          What OpsKnight noticed about this policy over the last 30 days. Applying a suggestion
+          opens the step editor with the change filled in; nothing changes until you save.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <InsightsPanel
+          insights={intelligence.insights}
+          canDecide={intelligence.canDecide}
+          squireName={squire?.squireEnabled ? squire.squireName : null}
+          draftLabel="Apply suggestion"
+          label="Escalation policy insights"
+        />
+      </CardContent>
+    </Card>
   );
 
   // Tab 2: Linked Services Content
@@ -391,6 +452,8 @@ export default async function PolicyDetailPage({
         steps={stepsContent}
         services={servicesContent}
         activity={activityContent}
+        insightCount={intelligence?.insights.length ?? 0}
+        insights={insightsContent || undefined}
         settings={settingsContent}
         dependencies={
           <PolicyDependencies

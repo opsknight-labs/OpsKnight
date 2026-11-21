@@ -54,6 +54,8 @@ describe('operator-lifecycle resolution guard', () => {
     await updateIncidentStatus('inc-1', 'ACKNOWLEDGED', 'OPEN', 'MOBILE');
     expect(transitionIncidentToStatusIdempotent).toHaveBeenCalledWith(
       expect.objectContaining({ actor: { id: 'user-1', name: 'Test User' } }),
+      undefined,
+      undefined,
       undefined
     );
     expect(emitAuditEvent).toHaveBeenCalledWith(

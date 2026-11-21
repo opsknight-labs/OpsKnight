@@ -99,16 +99,26 @@ function KpiGrid({ kpis }: { kpis: WeeklyKpi[] }) {
               key={kpi.label}
               width="50%"
               valign="top"
-              style={{ width: '50%', padding: `0 ${c === 0 ? '6px' : '0'} 12px ${c === 1 ? '6px' : '0'}` }}
+              style={{
+                width: '50%',
+                padding: `0 ${c === 0 ? '6px' : '0'} 12px ${c === 1 ? '6px' : '0'}`,
+              }}
             >
               <Table
                 className="dm-bg-muted dm-border"
                 bgcolor={L.muted}
-                style={{ border: `1px solid ${L.border}`, borderRadius: '10px', backgroundColor: L.muted }}
+                style={{
+                  border: `1px solid ${L.border}`,
+                  borderRadius: '10px',
+                  backgroundColor: L.muted,
+                }}
               >
                 <tr>
                   <td style={{ padding: '14px 16px' }}>
-                    <div className="dm-text-muted" style={{ ...cellText(12, 600), color: L.muted_text }}>
+                    <div
+                      className="dm-text-muted"
+                      style={{ ...cellText(12, 600), color: L.muted_text }}
+                    >
                       {kpi.label}
                     </div>
                     <div
@@ -167,9 +177,16 @@ function DayBars({ days }: { days: WeeklyDay[] }) {
               align="center"
               valign="bottom"
               height={BAR_MAX_PX + 36}
-              style={{ padding: '16px 4px 0', height: `${BAR_MAX_PX + 36}px`, verticalAlign: 'bottom' }}
+              style={{
+                padding: '16px 4px 0',
+                height: `${BAR_MAX_PX + 36}px`,
+                verticalAlign: 'bottom',
+              }}
             >
-              <div className="dm-text-heading" style={{ ...cellText(12, 600), color: L.heading, marginBottom: '4px' }}>
+              <div
+                className="dm-text-heading"
+                style={{ ...cellText(12, 600), color: L.heading, marginBottom: '4px' }}
+              >
                 {day.count}
               </div>
               {height ? (
@@ -329,7 +346,10 @@ export function AnalyticsWeeklyEmail({
           )}
         </Paragraph>
 
-        <Callout tone={attention ? 'elevated' : 'ok'} title={attention ? 'Needs attention' : 'All clear'}>
+        <Callout
+          tone={attention ? 'elevated' : 'ok'}
+          title={attention ? 'Needs attention' : 'All clear'}
+        >
           <BulletList tone={attention ? 'elevated' : 'ok'} items={highlights} />
         </Callout>
         <Spacer height={8} />
@@ -380,7 +400,12 @@ export function AnalyticsWeeklyEmail({
                 { label: 'Off-hours', align: 'right' },
                 { label: 'Hours', align: 'right' },
               ]}
-              rows={responders.map(person => [person.name, person.incidents, person.offHours, person.hours])}
+              rows={responders.map(person => [
+                person.name,
+                person.incidents,
+                person.offHours,
+                person.hours,
+              ])}
             />
           </>
         ) : null}
@@ -429,11 +454,29 @@ AnalyticsWeeklyEmail.PreviewProps = {
   ],
   kpis: [
     { label: 'Incidents', value: '12', delta: { text: '33%', direction: 'up', tone: 'bad' } },
-    { label: 'MTTA (median)', value: '4m', delta: { text: '33%', direction: 'down', tone: 'good' }, hint: 'p90 11m' },
-    { label: 'MTTR (median)', value: '1h 12m', delta: { text: '24%', direction: 'up', tone: 'bad' }, hint: 'p90 3h 5m' },
+    {
+      label: 'MTTA (median)',
+      value: '4m',
+      delta: { text: '33%', direction: 'down', tone: 'good' },
+      hint: 'p90 11m',
+    },
+    {
+      label: 'MTTR (median)',
+      value: '1h 12m',
+      delta: { text: '24%', direction: 'up', tone: 'bad' },
+      hint: 'p90 3h 5m',
+    },
     { label: 'Ack SLA met', value: '92%', delta: { text: '4 pts', direction: 'up', tone: 'good' } },
-    { label: 'Resolve SLA met', value: '83%', delta: { text: '7 pts', direction: 'down', tone: 'bad' } },
-    { label: 'After hours', value: '42%', delta: { text: 'no change', direction: 'flat', tone: 'neutral' } },
+    {
+      label: 'Resolve SLA met',
+      value: '83%',
+      delta: { text: '7 pts', direction: 'down', tone: 'bad' },
+    },
+    {
+      label: 'After hours',
+      value: '42%',
+      delta: { text: 'no change', direction: 'flat', tone: 'neutral' },
+    },
   ],
   days: [
     { label: 'Mon', count: 2 },
@@ -445,9 +488,27 @@ AnalyticsWeeklyEmail.PreviewProps = {
     { label: 'Sun', count: 1 },
   ],
   services: [
-    { name: 'payments-api', incidents: '6', delta: { text: '100%', direction: 'up', tone: 'bad' }, mttr: '1h 30m', sla: '80%' },
-    { name: 'checkout-web', incidents: '4', delta: { text: 'no change', direction: 'flat', tone: 'neutral' }, mttr: '48m', sla: '100%' },
-    { name: 'ledger', incidents: '2', delta: { text: '100%', direction: 'up', tone: 'bad' }, mttr: '2h 10m', sla: '50%' },
+    {
+      name: 'payments-api',
+      incidents: '6',
+      delta: { text: '100%', direction: 'up', tone: 'bad' },
+      mttr: '1h 30m',
+      sla: '80%',
+    },
+    {
+      name: 'checkout-web',
+      incidents: '4',
+      delta: { text: 'no change', direction: 'flat', tone: 'neutral' },
+      mttr: '48m',
+      sla: '100%',
+    },
+    {
+      name: 'ledger',
+      incidents: '2',
+      delta: { text: '100%', direction: 'up', tone: 'bad' },
+      mttr: '2h 10m',
+      sla: '50%',
+    },
   ],
   responders: [
     { name: 'Priya Nair', incidents: '5', offHours: '2', hours: '6.5h' },

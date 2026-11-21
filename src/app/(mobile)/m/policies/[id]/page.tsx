@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import MobileSquireMount from '@/components/squire/MobileSquireMount';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -158,6 +160,10 @@ export default async function MobilePolicyDetailPage({ params, searchParams }: P
           </div>
         </div>
       )}
+      {/* The assistant: optional and off by default; never delays or breaks the page. */}
+      <Suspense fallback={null}>
+        <MobileSquireMount />
+      </Suspense>
     </div>
   );
 }

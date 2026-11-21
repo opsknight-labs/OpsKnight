@@ -67,8 +67,9 @@ export function escapeCsvCell(value: Cell): string {
 const UNIT_SUFFIX = { count: '', duration: ' (min)', percent: ' (%)', ratio: '', hours: ' (h)' };
 
 /** Column header for a metric, from the registry. */
-// eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
-export const metricHeader = (id: MetricId) => `${METRICS[id].label}${UNIT_SUFFIX[METRICS[id].unit]}`;
+export const metricHeader = (id: MetricId) =>
+  // eslint-disable-next-line security/detect-object-injection -- id is a typed MetricId and unit a closed union, not user input
+  `${METRICS[id].label}${UNIT_SUFFIX[METRICS[id].unit]}`;
 
 const round = (value: number, digits: number) => Number(value.toFixed(digits));
 
@@ -114,13 +115,20 @@ export function buildAnalyticsCsv(data: AnalyticsExportData): string {
   rows.push(['Timezone', tz]);
   rows.push(['Business-hours timezone', window.businessTimeZone]);
   if (window.isClipped) rows.push(['Note', 'Period shortened by the data retention policy.']);
-  const filters = [...toAnalyticsSearchParams(data.params)].map(([key, value]) => `${key}=${value}`);
+  const filters = [...toAnalyticsSearchParams(data.params)].map(
+    ([key, value]) => `${key}=${value}`
+  );
   rows.push(['Filters', filters.join('; ') || 'None']);
 
   section('Summary', ['Metric', 'Current', 'Previous period', 'Definition']);
   const kpi = (id: MetricId, current: number | null, previous: number | null) =>
-    // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
-    rows.push([metricHeader(id), metricValue(id, current), metricValue(id, previous), METRICS[id].description]);
+    rows.push([
+      metricHeader(id),
+      metricValue(id, current),
+      metricValue(id, previous),
+      // eslint-disable-next-line security/detect-object-injection -- id is a typed MetricId, not user input
+      METRICS[id].description,
+    ]);
   kpi('incidents', kpis.current.incidents, kpis.previous.incidents);
   kpi('openNow', kpis.openNow, null);
   // eslint-disable-next-line security/detect-object-injection -- key is a typed literal, enum value or array index, not user input
@@ -170,7 +178,14 @@ export function buildAnalyticsCsv(data: AnalyticsExportData): string {
   }
 
   if (data.availability?.length) {
-    section('Availability', ['Service', 'Uptime (%)', 'Downtime (min)', 'Objective', 'Objective target (%)', 'Error budget left (%)']);
+    section('Availability', [
+      'Service',
+      'Uptime (%)',
+      'Downtime (min)',
+      'Objective',
+      'Objective target (%)',
+      'Error budget left (%)',
+    ]);
     for (const a of data.availability) {
       rows.push([
         a.name,
@@ -234,10 +249,16 @@ export function buildAnalyticsCsv(data: AnalyticsExportData): string {
   const { noise, followThrough: ft } = data;
   section('Noise', ['Metric', 'Value']);
   rows.push(['Alerts', noise.alerts]);
-  rows.push([metricHeader('alertsPerIncident'), metricValue('alertsPerIncident', noise.alertsPerIncident)]);
+  rows.push([
+    metricHeader('alertsPerIncident'),
+    metricValue('alertsPerIncident', noise.alertsPerIncident),
+  ]);
   rows.push(['Resolved incidents', noise.resolved]);
   rows.push(['Auto-resolved incidents', noise.autoResolved]);
-  rows.push([metricHeader('autoResolvedRate'), metricValue('autoResolvedRate', noise.autoResolvedRate)]);
+  rows.push([
+    metricHeader('autoResolvedRate'),
+    metricValue('autoResolvedRate', noise.autoResolvedRate),
+  ]);
   section('Noisiest services', ['Service', 'Alerts', metricHeader('incidents')]);
   for (const s of noise.noisyServices) rows.push([s.name, s.alerts, s.incidents]);
   section('Recurring incident titles', ['Title', metricHeader('incidents'), 'Last seen']);
@@ -257,7 +278,18 @@ export function buildAnalyticsCsv(data: AnalyticsExportData): string {
     truncated
       ? `Incidents (newest ${data.incidentLimit} of ${kpis.current.incidents}; narrow the filters for the rest)`
       : 'Incidents',
-    ['ID', 'Title', 'Service', 'Status', 'Urgency', 'Priority', 'Assignee', 'Created', 'Acknowledged', 'Resolved']
+    [
+      'ID',
+      'Title',
+      'Service',
+      'Status',
+      'Urgency',
+      'Priority',
+      'Assignee',
+      'Created',
+      'Acknowledged',
+      'Resolved',
+    ]
   );
   for (const i of data.incidents.slice(0, data.incidentLimit)) {
     rows.push([

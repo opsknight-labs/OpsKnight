@@ -1,4 +1,11 @@
+import IncidentInsights, {
+  IncidentGroupLine,
+  IncidentTimelineWithIntelligence,
+  SuggestedRunbooks,
+} from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
+import { CHAT_EVENT_DISPLAY_MAX, LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
+import { Suspense } from 'react';
 import UserAvatar from '@/components/UserAvatar';
 import { incidentStatusTone, statusGradientClass } from '@/lib/design/status-palette';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
@@ -6,6 +13,10 @@ import EscalationExecutionHealth from '@/components/incident/detail/EscalationEx
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import { CAPABILITIES } from '@/lib/authorization';
+import { resolveEffectivePolicyForRequest } from '@/lib/intelligence/settings/service';
+import { getAiSettings } from '@/lib/intelligence/ai/settings';
+import { loadIncidentStatusUpdate } from '@/lib/intelligence/helpers/status-draft-loader';
+import { draftIncidentSummaryNoteAction } from '@/app/(app)/incidents/[id]/intelligence-actions';
 import Link from 'next/link';
 import ListReturnLink from '@/components/layout/ListReturnLink';
 import { notFound } from 'next/navigation';
@@ -18,6 +29,7 @@ import { denyResourceAccess } from '@/lib/access/server';
 import { getPostmortem } from '@/app/(app)/postmortems/actions';
 import IncidentHeader from '@/components/incident/IncidentHeader';
 import IncidentWatchers from '@/components/incident/detail/IncidentWatchers';
+import IncidentExperts from '@/components/incident/detail/IncidentExperts';
 import IncidentCommandBar from '@/components/incident/detail/IncidentCommandBar';
 import IncidentDetailTabs from '@/components/incident/IncidentDetailTabs';
 import IncidentRunbooks from '@/components/incident/IncidentRunbooks';
@@ -129,7 +141,12 @@ export default async function IncidentDetailScreen({
       },
       assignee: { select: CLIENT_USER_SELECT },
       team: { select: { id: true, name: true } },
-      events: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 200 },
+      // Captured chat is read separately below so it cannot push lifecycle events out of the window.
+      events: {
+        where: LIFECYCLE_EVENT_WHERE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 200,
+      },
       notes: {
         include: { user: { select: CLIENT_USER_SELECT } },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -163,6 +180,20 @@ export default async function IncidentDetailScreen({
 
   if (!storedIncident) notFound();
   const permissions = await getUserPermissions();
+  const canReadIntelligence = permissions.capabilities.includes(
+    CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ
+  );
+  // The service's mode decides every intelligence surface on this page. OFF renders nothing for responders;
+  // intelligence managers alone can still open the inspector, which then explains that it is off.
+  const intelligenceMode = canReadIntelligence
+    ? await resolveEffectivePolicyForRequest(storedIncident.serviceId)
+        .then(policy => policy.effectiveMode)
+        .catch(() => 'OFF' as const)
+    : ('OFF' as const);
+  const showIntelligence = canReadIntelligence && intelligenceMode !== 'OFF';
+  const showInsightsInspector =
+    showIntelligence ||
+    (canReadIntelligence && permissions.capabilities.includes(CAPABILITIES.INTELLIGENCE_MANAGE));
   const sensitive = permissions.capabilities.includes(CAPABILITIES.INCIDENT_SENSITIVE_READ);
   const sourceRestricted =
     (storedIncident.automationSourceRestricted ||
@@ -199,30 +230,45 @@ export default async function IncidentDetailScreen({
     permissions.capabilities.includes(CAPABILITIES.AUTOMATION_READ) &&
     !!storedIncident.automationDecision;
 
-  const [users, teams, customFields, totalEventsCount, totalNotesCount, totalNotificationsCount] =
-    await Promise.all([
-      canManageIncident
-        ? prisma.user.findMany({
-            where: { status: 'ACTIVE' },
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatarUrl: true,
-              gender: true,
-              role: true,
-            },
-            orderBy: { name: 'asc' },
-          })
-        : Promise.resolve([]),
-      canManageIncident
-        ? prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })
-        : Promise.resolve([]),
-      prisma.customField.findMany({ orderBy: { order: 'asc' } }),
-      prisma.incidentEvent.count({ where: { incidentId: id } }),
-      prisma.incidentNote.count({ where: { incidentId: id } }),
-      prisma.notification.count({ where: { incidentId: id } }),
-    ]);
+  const [
+    users,
+    teams,
+    customFields,
+    totalEventsCount,
+    totalNotesCount,
+    totalNotificationsCount,
+    chatEvents,
+  ] = await Promise.all([
+    canManageIncident
+      ? prisma.user.findMany({
+          where: { status: 'ACTIVE' },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+            gender: true,
+            role: true,
+          },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    canManageIncident
+      ? prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })
+      : Promise.resolve([]),
+    prisma.customField.findMany({ orderBy: { order: 'asc' } }),
+    prisma.incidentEvent.count({ where: { incidentId: id } }),
+    prisma.incidentNote.count({ where: { incidentId: id } }),
+    prisma.notification.count({ where: { incidentId: id } }),
+    prisma.incidentEvent.findMany({
+      where: { incidentId: id, type: 'CHAT_MESSAGE' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: CHAT_EVENT_DISPLAY_MAX,
+    }),
+  ]);
+  const events = [...incident.events, ...chatEvents].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id)
+  );
 
   const totalActivityCount = totalEventsCount + totalNotesCount + totalNotificationsCount;
 
@@ -234,7 +280,7 @@ export default async function IncidentDetailScreen({
 
   // Rendering an incident must not perform hidden Jira or provider network I/O.
   // Persisted state is refreshed by background webhooks or explicit sync actions.
-  const [jiraLinks, collaboration, escalationHealth] = await Promise.all([
+  const [jiraLinks, collaboration, escalationHealth, statusUpdate] = await Promise.all([
     prisma.externalIssueLink.findMany({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
@@ -242,6 +288,10 @@ export default async function IncidentDetailScreen({
     getIncidentCollaborationView({ incidentId: id, userId: user.id }),
     // A health read failure must not block the incident page.
     getEscalationExecutionHealth(id).catch(() => null),
+    // "Post status update": the status-page publish permission (admin), like the announcement API.
+    permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE)
+      ? loadIncidentStatusUpdate(storedIncident).catch(() => null)
+      : null,
   ]);
 
   // The access check above already ran; the viewer's capabilities drive lane redaction.
@@ -272,6 +322,14 @@ export default async function IncidentDetailScreen({
       ? 'from-slate-600 to-slate-500'
       : statusGradientClass('critical');
 
+  // "Insert summary" in the note composer: only where summaries exist and the viewer may post a note.
+  const canInsertSummary =
+    showIntelligence && (canManageIncident || canAddIncidentNote)
+      ? await getAiSettings()
+          .then(settings => settings.enabled)
+          .catch(() => false)
+      : false;
+
   const activityContent = (
     <IncidentNotes
       incidentId={id}
@@ -284,45 +342,53 @@ export default async function IncidentDetailScreen({
       canManage={canManageIncident || canAddIncidentNote}
       onAddNote={handleAddNote}
       totalNotesCount={totalNotesCount}
+      onDraftSummary={canInsertSummary ? draftIncidentSummaryNoteAction.bind(null, id) : undefined}
     />
   );
 
-  const timelineContent = (
-    <IncidentTimeline
-      incidentId={id}
-      events={incident.events.map(event => ({
-        id: event.id,
-        message: event.message,
-        type: event.type,
-        createdAt: event.createdAt,
-        channel: event.channel,
-      }))}
-      notes={incident.notes.map(note => ({
-        id: note.id,
-        content: note.content,
-        user: note.user,
-        createdAt: note.createdAt,
-      }))}
-      notifications={incident.notifications.map(notif => ({
-        id: notif.id,
-        channel: notif.channel,
-        status: notif.status,
-        recipientDisplay: notif.recipientDisplay,
-        errorMsg: redactNotificationError(notif.errorMsg),
-        createdAt: notif.createdAt,
-        sentAt: notif.sentAt,
-        deliveredAt: notif.deliveredAt,
-        failedAt: notif.failedAt,
-        user: notif.user,
-      }))}
-      incidentCreatedAt={incident.createdAt}
-      incidentAcknowledgedAt={incident.acknowledgedAt}
-      incidentResolvedAt={incident.resolvedAt}
-      totalEventsCount={totalEventsCount}
-      totalNotesCount={totalNotesCount}
-      totalNotificationsCount={totalNotificationsCount}
-      totalActivityCount={totalActivityCount}
-    />
+  const timelineProps = {
+    incidentId: id,
+    events: events.map(event => ({
+      id: event.id,
+      message: event.message,
+      type: event.type,
+      createdAt: event.createdAt,
+      channel: event.channel,
+    })),
+    notes: incident.notes.map(note => ({
+      id: note.id,
+      content: note.content,
+      user: note.user,
+      createdAt: note.createdAt,
+    })),
+    notifications: incident.notifications.map(notif => ({
+      id: notif.id,
+      channel: notif.channel,
+      status: notif.status,
+      recipientDisplay: notif.recipientDisplay,
+      errorMsg: redactNotificationError(notif.errorMsg),
+      createdAt: notif.createdAt,
+      sentAt: notif.sentAt,
+      deliveredAt: notif.deliveredAt,
+      failedAt: notif.failedAt,
+      user: notif.user,
+    })),
+    incidentCreatedAt: incident.createdAt,
+    incidentAcknowledgedAt: incident.acknowledgedAt,
+    incidentResolvedAt: incident.resolvedAt,
+    totalEventsCount: totalEventsCount,
+    totalNotesCount: totalNotesCount,
+    totalNotificationsCount: totalNotificationsCount,
+    totalActivityCount: totalActivityCount,
+  };
+  // Intelligence events join the core timeline once read; until then (and on any failure) the core
+  // timeline renders on its own.
+  const timelineContent = showIntelligence ? (
+    <Suspense fallback={<IncidentTimeline {...timelineProps} />}>
+      <IncidentTimelineWithIntelligence {...timelineProps} />
+    </Suspense>
+  ) : (
+    <IncidentTimeline {...timelineProps} />
   );
 
   const responseContent = (
@@ -349,7 +415,7 @@ export default async function IncidentDetailScreen({
       incidentId={id}
       incidentStatus={incident.status}
       canManage={canManageIncident}
-      eventCount={incident.events.length}
+      eventCount={events.length}
       noteCount={incident.notes.length}
       users={users}
       postmortem={postmortem}
@@ -358,7 +424,7 @@ export default async function IncidentDetailScreen({
     />
   );
 
-  const watchersContent = (
+  const watchersCard = (
     <IncidentWatchers
       watchers={incident.watchers.map(watcher => ({
         id: watcher.id,
@@ -371,6 +437,17 @@ export default async function IncidentDetailScreen({
       onAddWatcher={handleAddWatcher}
       onRemoveWatcher={handleRemoveWatcher}
     />
+  );
+  // Suggested responders sit with the responders card; only people who can add responders see them.
+  const watchersContent = (
+    <div className="space-y-3">
+      {watchersCard}
+      {canManageIncident && (
+        <Suspense fallback={null}>
+          <IncidentExperts incidentId={id} viewerId={user.id} onAddWatcher={handleAddWatcher} />
+        </Suspense>
+      )}
+    </div>
   );
 
   const customFieldsContent = (
@@ -452,6 +529,11 @@ export default async function IncidentDetailScreen({
               <h1 className="mt-2 break-words text-base font-bold leading-snug tracking-tight text-foreground">
                 {incident.title}
               </h1>
+              {showIntelligence && (
+                <Suspense fallback={null}>
+                  <IncidentGroupLine incidentId={incident.id} presentation="mobile" />
+                </Suspense>
+              )}
             </div>
           </div>
 
@@ -534,6 +616,11 @@ export default async function IncidentDetailScreen({
                   </h1>
                   <StatusBadge status={incident.status} live={incident.status === 'OPEN'} />
                 </div>
+                {showIntelligence && (
+                  <Suspense fallback={null}>
+                    <IncidentGroupLine incidentId={incident.id} />
+                  </Suspense>
+                )}
                 <IncidentSLABadges sla={incidentSla} />
               </div>
             </div>
@@ -609,7 +696,21 @@ export default async function IncidentDetailScreen({
           color: tagLink.tag.color,
         }))}
         jiraCapability={incidentJiraCapability}
+        statusUpdate={
+          statusUpdate && {
+            href: `/settings/status-pages/${statusUpdate.statusPageId}?announce=${encodeURIComponent(id)}`,
+            statusPageName: statusUpdate.statusPageName,
+            nextDueAt: statusUpdate.nextDueAt?.toISOString() ?? null,
+          }
+        }
       />
+
+      {/* Intelligence: one row of chips, and the inspector they open. Silent when there is nothing to say. */}
+      {showInsightsInspector && (
+        <Suspense fallback={null}>
+          <IncidentInsights incidentId={incident.id} presentation={presentation} />
+        </Suspense>
+      )}
 
       {/* Escalation Execution Health: Compact status strip or alert banner */}
       <EscalationExecutionHealth health={escalationHealth} />
@@ -704,7 +805,14 @@ export default async function IncidentDetailScreen({
             responseContent={responseContent}
             runbooksContent={
               canReadRunbooks ? (
-                <IncidentRunbooks incidentId={incident.id} serviceId={incident.serviceId} />
+                <>
+                  {showIntelligence && (
+                    <Suspense fallback={null}>
+                      <SuggestedRunbooks incidentId={incident.id} />
+                    </Suspense>
+                  )}
+                  <IncidentRunbooks incidentId={incident.id} serviceId={incident.serviceId} />
+                </>
               ) : null
             }
             timelineContent={timelineContent}

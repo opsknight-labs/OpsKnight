@@ -171,6 +171,29 @@ const STANDALONE_TOOLS: readonly Omit<McpCapability, 'kind' | 'curated' | 'tool'
     approval: false,
     summary: 'Read a postmortem with action items, contributors and history.',
   },
+  {
+    id: 'ask_squire',
+    domain: 'intelligence',
+    risk: 'R0',
+    approval: false,
+    summary:
+      'Ask the Squire assistant a question; read-only, suggested actions are described and never run.',
+  },
+  {
+    id: 'squire_start_investigation',
+    domain: 'intelligence',
+    risk: 'R0',
+    approval: false,
+    summary:
+      'Start a longer read-only Squire investigation; returns an id to poll instead of waiting.',
+  },
+  {
+    id: 'squire_get_investigation',
+    domain: 'intelligence',
+    risk: 'R0',
+    approval: false,
+    summary: 'Read the progress and answer of a Squire investigation you started.',
+  },
 ];
 
 /** Prompts registered by the MCP server; a test pins this list to the server's registrations. */

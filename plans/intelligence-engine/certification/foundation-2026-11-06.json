@@ -1,0 +1,368 @@
+{
+  "generatedAt": "2026-11-07T03:16:56.173Z",
+  "node": "v20.20.2",
+  "database": {
+    "fsync": "on",
+    "synchronous_commit": "on",
+    "full_page_writes": "on",
+    "version": "PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit"
+  },
+  "historyIncidents": 1000000,
+  "historyFixtureExample": "intel-perf-history-0000001",
+  "historyCacheState": "real normalized fingerprints; lazy input/cursor caches not precomputed",
+  "alertsBeforeMeasurement": 5000,
+  "samples": 20,
+  "bootstrapMs": 493.2155419999999,
+  "incremental": {
+    "p50Ms": 12.52612500000032,
+    "p99Ms": 15.209375000000364,
+    "maxMs": 15.209375000000364
+  },
+  "targetP99Ms": 200,
+  "passed": true,
+  "historyCounts": {
+    "incidents": 1000000,
+    "alerts": 1000000,
+    "fingerprints": 1000000
+  },
+  "durable": true,
+  "indexesUsed": {
+    "alertContentLookup": ["idx_alert_service_fingerprint_recent"],
+    "alertModifiedCursor": ["idx_alert_incident_modified"],
+    "historicalFingerprint": ["idx_incident_fingerprint_retention"],
+    "sparseHistoricalFingerprint": ["idx_incident_fingerprint_service_recent"]
+  },
+  "expectedIndexes": {
+    "alertContentLookup": ["idx_alert_service_fingerprint_recent"],
+    "alertModifiedCursor": ["idx_alert_incident_modified"],
+    "historicalFingerprint": [
+      "idx_incident_fingerprint_service_recent",
+      "idx_incident_fingerprint_retention"
+    ],
+    "sparseHistoricalFingerprint": ["idx_incident_fingerprint_service_recent"]
+  },
+  "requiredIndexesUsed": true,
+  "timingsMs": [
+    15.209375000000364, 13.211083000000144, 12.85662500000035, 12.620750000000044,
+    12.515250000000378, 13.261415999999372, 12.52612500000032, 11.829416999999921,
+    13.154708000000028, 13.26208299999962, 12.650708000000122, 11.484917000000678,
+    12.00658299999941, 13.634417000000212, 12.914832999999817, 12.297625000000153,
+    12.33141599999999, 11.99145800000042, 11.145542000000205, 12.061666999999943
+  ],
+  "plans": {
+    "alertContentLookup": [
+      {
+        "QUERY PLAN": [
+          {
+            "Plan": {
+              "Node Type": "Limit",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 0.56,
+              "Total Cost": 8.43,
+              "Plan Rows": 1,
+              "Plan Width": 60,
+              "Actual Startup Time": 0.044,
+              "Actual Total Time": 0.044,
+              "Actual Rows": 0,
+              "Actual Loops": 1,
+              "Shared Hit Blocks": 4,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Index Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Scan Direction": "Forward",
+                  "Index Name": "idx_alert_service_fingerprint_recent",
+                  "Relation Name": "Alert",
+                  "Alias": "Alert",
+                  "Startup Cost": 0.56,
+                  "Total Cost": 8.43,
+                  "Plan Rows": 1,
+                  "Plan Width": 60,
+                  "Actual Startup Time": 0.044,
+                  "Actual Total Time": 0.044,
+                  "Actual Rows": 0,
+                  "Actual Loops": 1,
+                  "Index Cond": "((\"serviceId\" = 'cmw59p5gg000013him1ozelm4'::text) AND ((\"fingerprintHash\")::text = '5ad2dd2497bd70686dd21b98708d6205'::text) AND (\"createdAt\" >= (now() - '00:05:00'::interval)))",
+                  "Rows Removed by Index Recheck": 0,
+                  "Shared Hit Blocks": 4,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 9,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.104,
+            "Triggers": [],
+            "Execution Time": 0.052
+          }
+        ]
+      }
+    ],
+    "alertModifiedCursor": [
+      {
+        "QUERY PLAN": [
+          {
+            "Plan": {
+              "Node Type": "Limit",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 0.43,
+              "Total Cost": 8.45,
+              "Plan Rows": 1,
+              "Plan Width": 33,
+              "Actual Startup Time": 0.02,
+              "Actual Total Time": 0.026,
+              "Actual Rows": 20,
+              "Actual Loops": 1,
+              "Shared Hit Blocks": 9,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Index Only Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Scan Direction": "Forward",
+                  "Index Name": "idx_alert_incident_modified",
+                  "Relation Name": "Alert",
+                  "Alias": "Alert",
+                  "Startup Cost": 0.43,
+                  "Total Cost": 8.45,
+                  "Plan Rows": 1,
+                  "Plan Width": 33,
+                  "Actual Startup Time": 0.02,
+                  "Actual Total Time": 0.024,
+                  "Actual Rows": 20,
+                  "Actual Loops": 1,
+                  "Index Cond": "((\"incidentId\" = 'cmw5u12ts0006qd77cwl4lu43'::text) AND (\"updatedAt\" > (now() - '00:00:01'::interval)))",
+                  "Rows Removed by Index Recheck": 0,
+                  "Heap Fetches": 20,
+                  "Shared Hit Blocks": 9,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 4,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.057,
+            "Triggers": [],
+            "Execution Time": 0.032
+          }
+        ]
+      }
+    ],
+    "historicalFingerprint": [
+      {
+        "QUERY PLAN": [
+          {
+            "Plan": {
+              "Node Type": "Limit",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 0.42,
+              "Total Cost": 19.71,
+              "Plan Rows": 50,
+              "Plan Width": 35,
+              "Actual Startup Time": 0.015,
+              "Actual Total Time": 0.097,
+              "Actual Rows": 50,
+              "Actual Loops": 1,
+              "Shared Hit Blocks": 21,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Index Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Scan Direction": "Backward",
+                  "Index Name": "idx_incident_fingerprint_retention",
+                  "Relation Name": "IncidentFingerprint",
+                  "Alias": "IncidentFingerprint",
+                  "Startup Cost": 0.42,
+                  "Total Cost": 96039.57,
+                  "Plan Rows": 248969,
+                  "Plan Width": 35,
+                  "Actual Startup Time": 0.015,
+                  "Actual Total Time": 0.093,
+                  "Actual Rows": 50,
+                  "Actual Loops": 1,
+                  "Filter": "(\"serviceId\" = 'cmw59p5gg000013him1ozelm4'::text)",
+                  "Rows Removed by Filter": 146,
+                  "Shared Hit Blocks": 21,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 0,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.034,
+            "Triggers": [],
+            "Execution Time": 0.102
+          }
+        ]
+      }
+    ],
+    "sparseHistoricalFingerprint": [
+      {
+        "QUERY PLAN": [
+          {
+            "Plan": {
+              "Node Type": "Limit",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 0.42,
+              "Total Cost": 8.44,
+              "Plan Rows": 1,
+              "Plan Width": 35,
+              "Actual Startup Time": 0.01,
+              "Actual Total Time": 0.011,
+              "Actual Rows": 2,
+              "Actual Loops": 1,
+              "Shared Hit Blocks": 6,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Index Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Scan Direction": "Forward",
+                  "Index Name": "idx_incident_fingerprint_service_recent",
+                  "Relation Name": "IncidentFingerprint",
+                  "Alias": "IncidentFingerprint",
+                  "Startup Cost": 0.42,
+                  "Total Cost": 8.44,
+                  "Plan Rows": 1,
+                  "Plan Width": 35,
+                  "Actual Startup Time": 0.01,
+                  "Actual Total Time": 0.01,
+                  "Actual Rows": 2,
+                  "Actual Loops": 1,
+                  "Index Cond": "(\"serviceId\" = 'cmw5u09yj0004zm6s2dip18mq'::text)",
+                  "Rows Removed by Index Recheck": 0,
+                  "Shared Hit Blocks": 6,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 0,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.027,
+            "Triggers": [],
+            "Execution Time": 0.015
+          }
+        ]
+      }
+    ]
+  },
+  "limitation": "Local shared host; indexing benchmark only. Not the full OFF/SHADOW/ON ingestion release gate."
+}

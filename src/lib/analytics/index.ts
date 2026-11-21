@@ -108,6 +108,9 @@ export function getAnalyticsSectionWithTime<K extends AnalyticsSectionKey>(
 }
 
 /** Forces fresh numbers for this actor and filter set on the next read. */
-export function invalidateAnalyticsCache(actor: AuthorizationActor, params: AnalyticsParams): number {
+export function invalidateAnalyticsCache(
+  actor: AuthorizationActor,
+  params: AnalyticsParams
+): number {
   return invalidateCached(filterCacheKey(buildAnalyticsScope(actor, params), params));
 }

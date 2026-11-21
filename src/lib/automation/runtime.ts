@@ -18,6 +18,7 @@ import {
   observeOperationalHistogram,
 } from '@/lib/metrics/operational/registry';
 import { builtinContext } from './context/builtins';
+import { automationIntelligenceContext } from '@/lib/intelligence/ingest-hooks';
 import { LIMITS, type Context } from './contract';
 import { extractContextWithProvenance } from './context/extract';
 import { getCachedCompiledVersion, loadCompiledVersion } from './cache';
@@ -90,6 +91,8 @@ export type RuntimeEvaluation = {
   decisionBytes?: number;
   observations: ReturnType<typeof discoverFields>;
   normalization: ReturnType<typeof extractContextWithProvenance>['normalization'];
+  /** J1.5 (pipeline order ON): an orchestration reroute applied through the automation route. */
+  orchestration?: { reroute: { serviceId: string; serviceName: string; policyId: string } };
 };
 export async function prepareAutomation(
   tx: Prisma.TransactionClient,
@@ -138,12 +141,12 @@ export async function prepareAutomation(
   const servicePolicy =
     defaultPolicy !== undefined
       ? defaultPolicy
-      : (
+      : ((
           await tx.service.findUnique({
             where: { id: envelope.serviceId },
             select: { policy: { select: { id: true, name: true } } },
           })
-        )?.policy ?? null;
+        )?.policy ?? null);
   runtime.policyLookupMs = performance.now() - defaultPolicyLookupStarted;
   const engineStartedAt = performance.now();
   try {
@@ -176,10 +179,7 @@ export async function prepareAutomation(
       if (isPhaseChange || !position || (++guardCheckCounter & 3) === 0) {
         const now = performance.now();
         if (isPhaseChange) {
-          phaseDurations.set(
-            prevPhase,
-            (phaseDurations.get(prevPhase) ?? 0) + now - phaseStarted
-          );
+          phaseDurations.set(prevPhase, (phaseDurations.get(prevPhase) ?? 0) + now - phaseStarted);
           phaseStarted = now;
         }
         const elapsedMs = now - evalStart;
@@ -228,6 +228,9 @@ export async function prepareAutomation(
         source: envelope.event.payload.source,
       })
     );
+    // Snapshot lookup only (no query); skipped entirely unless a rule reads an intelligence field.
+    if (version.usesIntelligence)
+      Object.assign(context, automationIntelligenceContext(envelope.serviceId, evaluationAt));
     guard();
     const pureEvalStart = performance.now();
     const result = evaluateAutomation({
@@ -387,6 +390,11 @@ export async function prepareAutomation(
           source: envelope.event.payload.source,
         })
       );
+      if (candidateVersion.usesIntelligence)
+        Object.assign(
+          candidateContext,
+          automationIntelligenceContext(envelope.serviceId, evaluationAt)
+        );
       candGuard();
       const candidateResult = evaluateAutomation({
         version: candidateVersion,
@@ -560,6 +568,7 @@ export async function persistAutomation(
     normalization: runtime.normalization,
     policyName: runtime.policyName,
     destinationNames,
+    ...(runtime.orchestration ? { orchestration: runtime.orchestration } : {}),
     ...(runtime.candidateVersionId
       ? {
           candidate: {
@@ -594,6 +603,7 @@ export async function persistAutomation(
         writes: compactSummaryWrites(result?.writes),
         supplementalActions: result?.supplementalActions ?? [],
         outcome: result?.outcome ?? { type: 'SERVICE_DEFAULT' },
+        ...(runtime.orchestration ? { orchestration: runtime.orchestration } : {}),
       },
       MAX_AUTOMATION_DECISION_BYTES
     );
@@ -660,6 +670,7 @@ export async function persistAutomation(
           diagnosticLevel: 'COMPACT',
           policyName: runtime.policyName,
           destinationNames,
+          ...(runtime.orchestration ? { orchestration: runtime.orchestration } : {}),
           actual,
           fallbackReason: runtime.fallbackReason,
           shadowDifferent: runtime.shadowDifferent,
@@ -739,7 +750,7 @@ export async function persistAutomation(
               ) VALUES (
                 ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
                 ${runtime.mode}::"AutomationMode",
-                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${result?.outcome.type ?? 'SERVICE_DEFAULT'}::"AutomationRouteType",
                 ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
                 ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
                 ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
@@ -779,7 +790,7 @@ export async function persistAutomation(
               ) VALUES (
                 ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
                 ${runtime.mode}::"AutomationMode",
-                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${result?.outcome.type ?? 'SERVICE_DEFAULT'}::"AutomationRouteType",
                 ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
                 ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
                 ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
@@ -833,7 +844,7 @@ export async function persistAutomation(
               ) VALUES (
                 ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
                 ${runtime.mode}::"AutomationMode",
-                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${result?.outcome.type ?? 'SERVICE_DEFAULT'}::"AutomationRouteType",
                 ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
                 ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
                 ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},
@@ -865,7 +876,7 @@ export async function persistAutomation(
               ) VALUES (
                 ${incidentId}, ${envelope.serviceId}, ${runtime.versionId},
                 ${runtime.mode}::"AutomationMode",
-                ${(result?.outcome.type ?? 'SERVICE_DEFAULT')}::"AutomationRouteType",
+                ${result?.outcome.type ?? 'SERVICE_DEFAULT'}::"AutomationRouteType",
                 ${runtime.policyId ?? null}, ${runtime.policyName ?? null},
                 ${result?.matchedRule?.id ?? null}, ${result?.matchedRule?.name ?? null},
                 ${runtime.basePriority ?? null}, ${runtime.finalPriority ?? null},

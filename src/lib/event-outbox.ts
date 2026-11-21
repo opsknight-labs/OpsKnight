@@ -363,6 +363,27 @@ export async function enqueueEventSideEffects(
     automationDecision
   );
 }
+/**
+ * A pre-paging storm child pages through its parent: no escalation, webhook, status page or war room of
+ * its own. Only the service-channel post is queued, and the notification noise controller rolls it up
+ * under the parent's post.
+ */
+export async function enqueueStormChildSideEffects(
+  tx: Prisma.TransactionClient,
+  incidentId: string,
+  incidentSnapshot: { escalationGeneration?: number | null; status?: IncidentStatus | null }
+): Promise<void> {
+  await enqueueSideEffects(
+    tx,
+    incidentId,
+    ['TRIGGER_SERVICE_NOTIFICATION'],
+    undefined,
+    undefined,
+    undefined,
+    incidentSnapshot,
+    null
+  );
+}
 export async function enqueueIncidentUpdateSideEffects(
   tx: Prisma.TransactionClient,
   incidentId: string,
@@ -386,7 +407,13 @@ export type RunbookEvaluationSource = 'MONITORING' | 'MANUAL';
  */
 export async function enqueueIncidentCreatedRunbookEvaluation(
   tx: Prisma.TransactionClient,
-  input: { incidentId: string; status: IncidentStatus; source: RunbookEvaluationSource }
+  input: {
+    incidentId: string;
+    status: IncidentStatus;
+    source: RunbookEvaluationSource;
+    /** Orchestration ATTACH_RUNBOOK (pipeline order ON): suggest these through the service's bindings. */
+    attachRunbookIds?: string[];
+  }
 ): Promise<boolean> {
   if (input.status !== 'OPEN') return false;
   await tx.backgroundJob.create({
@@ -400,6 +427,7 @@ export async function enqueueIncidentCreatedRunbookEvaluation(
         incidentId: input.incidentId,
         sourceEventId: crypto.randomUUID(),
         source: input.source,
+        ...(input.attachRunbookIds?.length ? { attachRunbookIds: input.attachRunbookIds } : {}),
       },
     },
   });

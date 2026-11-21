@@ -32,13 +32,10 @@ describe('mobile incident status idempotency', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: true });
-    expect(updateIncidentStatus).toHaveBeenCalledWith(
-      'inc-1',
-      'ACKNOWLEDGED',
-      'OPEN',
-      'MOBILE',
-      { key: 'offline-action-1', principalId: 'responder@example.com' }
-    );
+    expect(updateIncidentStatus).toHaveBeenCalledWith('inc-1', 'ACKNOWLEDGED', 'OPEN', 'MOBILE', {
+      key: 'offline-action-1',
+      principalId: 'responder@example.com',
+    });
   });
 
   it('returns the persisted result as a duplicate without inventing a second mutation path', async () => {
@@ -68,6 +65,26 @@ describe('mobile incident status idempotency', () => {
       undefined,
       'MOBILE',
       undefined
+    );
+  });
+
+  it('names the page a push action was tapped on, scoped to the signed-in responder', async () => {
+    getServerSession.mockResolvedValue({ user: { email: 'responder@example.com', id: 'user-1' } });
+    const req = new NextRequest('https://ops.example.com/api/mobile/incidents/inc-1/status', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
+      headers: { 'content-type': 'application/json', 'x-opsknight-notification-id': 'ntf-9' },
+    });
+
+    expect((await PATCH(req, props)).status).toBe(200);
+    expect(updateIncidentStatus).toHaveBeenCalledWith(
+      'inc-1',
+      'ACKNOWLEDGED',
+      undefined,
+      'MOBILE',
+      undefined,
+      undefined,
+      { id: 'ntf-9', via: 'PUSH', userId: 'user-1' }
     );
   });
 });

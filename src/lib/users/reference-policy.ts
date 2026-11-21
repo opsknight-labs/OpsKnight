@@ -10,6 +10,7 @@ export const USER_REFERENCE_POLICY = {
   incidentNotes: { deactivate: 'KEEP', delete: 'SET_NULL' },
   postmortems: { deactivate: 'KEEP', delete: 'SET_NULL' },
   postmortemContributions: { deactivate: 'KEEP', delete: 'CASCADE' },
+  onCallCoverageDays: { deactivate: 'KEEP', delete: 'CASCADE' },
   notifications: { deactivate: 'KEEP', delete: 'SET_NULL' },
   notificationEndpoints: { deactivate: 'SUPPRESS', delete: 'CASCADE' },
   inAppNotifications: { deactivate: 'SUPPRESS', delete: 'CASCADE' },
@@ -69,6 +70,16 @@ export const USER_REFERENCE_POLICY = {
   createdRetentionHolds: { deactivate: 'KEEP', delete: 'SET_NULL' },
   releasedRetentionHolds: { deactivate: 'KEEP', delete: 'SET_NULL' },
   initiatedEncryptionRuns: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  intelligenceFeedback: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  intelligencePolicyVersions: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  intelligenceEvaluationRuns: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  squireConversations: { deactivate: 'KEEP', delete: 'CASCADE' },
+  aiUsageDays: { deactivate: 'KEEP', delete: 'CASCADE' },
+  squireActionReceipts: { deactivate: 'KEEP', delete: 'CASCADE' },
+  squireFeedback: { deactivate: 'KEEP', delete: 'CASCADE' },
+  squireDialogueStates: { deactivate: 'KEEP', delete: 'CASCADE' },
+  knowledgeFactsApproved: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  opsInsightDecisions: { deactivate: 'KEEP', delete: 'SET_NULL' },
 } as const;
 
 export type UserReferenceName = keyof typeof USER_REFERENCE_POLICY;

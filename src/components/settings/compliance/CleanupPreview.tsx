@@ -177,7 +177,9 @@ export default function CleanupPreview({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Will Delete:</span>
-                  <span className="font-semibold text-status-critical-deep dark:text-rose-300">{preview.incidents}</span>
+                  <span className="font-semibold text-status-critical-deep dark:text-rose-300">
+                    {preview.incidents}
+                  </span>
                 </div>
               </div>
             </div>

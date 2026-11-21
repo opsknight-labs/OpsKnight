@@ -26,6 +26,9 @@ import {
 } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/service/Pagination';
+import ServiceIntelligenceBadges, {
+  type ServiceIntelligenceBadgeData,
+} from '@/components/service/ServiceIntelligenceBadges';
 import { ServicesSortSelect, useServicesParams } from '@/components/service/ServicesFilters';
 import {
   DirectoryCardGrid,
@@ -51,6 +54,8 @@ export type ServiceListItem = {
   hasCritical: boolean;
   incidentCount?: number;
   metricDataState?: 'available' | 'unavailable';
+  /** Optional intelligence badges; absent when there is nothing to show or the viewer may not see them. */
+  intelligenceBadges?: ServiceIntelligenceBadgeData;
   maintenanceTitle?: string | null;
   team?: { id: string; name: string } | null;
   policy?: { id: string; name: string } | null;
@@ -111,6 +116,15 @@ function ServiceStatusBadge({ status }: { status: string }) {
 function StatusCell({ service }: { service: ServiceListItem }) {
   return (
     <span className="flex flex-wrap items-center gap-1.5">
+      <ServiceIntelligenceBadges
+        serviceId={service.id}
+        // One "In maintenance" chip per row: the service's own window wins over a noise-control window.
+        badges={
+          service.maintenanceTitle && service.intelligenceBadges
+            ? { ...service.intelligenceBadges, maintenance: undefined }
+            : service.intelligenceBadges
+        }
+      />
       <ServiceStatusBadge status={service.dynamicStatus} />
       {service.maintenanceTitle && (
         <Badge variant="info" size="xs" title={service.maintenanceTitle}>

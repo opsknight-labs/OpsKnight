@@ -53,14 +53,17 @@ function deny(message: string): never {
 
 function assertCan(actor: AuthorizationActor, write: boolean) {
   const action = write ? AUTHORIZATION_ACTIONS.REPORT_MANAGE : AUTHORIZATION_ACTIONS.REPORT_READ;
-  if (!authorize({ actor, action }).allowed) deny("You don't have permission to use analytics views.");
+  if (!authorize({ actor, action }).allowed)
+    deny("You don't have permission to use analytics views.");
 }
 
 function readWhere(actor: AuthorizationActor): Prisma.AnalyticsViewWhereInput {
   return {
     OR: [
       { userId: actor.id },
-      ...(actor.teamIds.length ? [{ visibility: 'TEAM' as const, teamId: { in: [...actor.teamIds] } }] : []),
+      ...(actor.teamIds.length
+        ? [{ visibility: 'TEAM' as const, teamId: { in: [...actor.teamIds] } }]
+        : []),
     ],
   };
 }
@@ -76,7 +79,9 @@ async function ownView(actor: AuthorizationActor, id: string) {
   return view;
 }
 
-export async function listAnalyticsViews(actor: AuthorizationActor): Promise<AnalyticsViewSummary[]> {
+export async function listAnalyticsViews(
+  actor: AuthorizationActor
+): Promise<AnalyticsViewSummary[]> {
   assertCan(actor, false);
   const rows = await prisma.analyticsView.findMany({
     where: readWhere(actor),
@@ -135,7 +140,10 @@ export async function createAnalyticsView(actor: AuthorizationActor, input: unkn
 
 export async function renameAnalyticsView(actor: AuthorizationActor, id: string, newName: string) {
   const view = await ownView(actor, id);
-  await prisma.analyticsView.update({ where: { id: view.id }, data: { name: name.parse(newName) } });
+  await prisma.analyticsView.update({
+    where: { id: view.id },
+    data: { name: name.parse(newName) },
+  });
 }
 
 export async function deleteAnalyticsView(actor: AuthorizationActor, id: string) {
@@ -167,7 +175,10 @@ export async function setAnalyticsViewWeeklyEmail(
   // Subscribing mid-week waits for the next weekly run instead of sending at once.
   await prisma.analyticsView.update({
     where: { id: view.id },
-    data: { emailWeekly: z.boolean().parse(enabled), ...(enabled ? { lastSentAt: new Date() } : {}) },
+    data: {
+      emailWeekly: z.boolean().parse(enabled),
+      ...(enabled ? { lastSentAt: new Date() } : {}),
+    },
   });
 }
 

@@ -21,7 +21,15 @@ import {
 } from '@/components/ui/shadcn/command';
 import { Button } from '@/components/ui/shadcn/button';
 import { FilterBar, FilterChip, FilterField } from '@/components/patterns';
-import { Flame, AlertCircle, MinusCircle, Server, Check, ChevronsUpDown } from 'lucide-react';
+import {
+  Flame,
+  AlertCircle,
+  MinusCircle,
+  Server,
+  Check,
+  ChevronsUpDown,
+  Layers,
+} from 'lucide-react';
 
 type IncidentsFiltersProps = {
   currentFilter: string;
@@ -34,6 +42,9 @@ type IncidentsFiltersProps = {
   teams?: Array<{ id: string; name: string }>;
   services?: Array<{ id: string; name: string }>;
   canCreateIncident?: boolean;
+  /** Noise-decision filter; shown only when the viewer may read intelligence. */
+  showNoiseFilter?: boolean;
+  currentNoise?: string;
 };
 
 const TRIGGER = 'h-9 text-sm';
@@ -53,6 +64,8 @@ export default function IncidentsFilters({
   teams = [],
   services = [],
   canCreateIncident = false,
+  showNoiseFilter = false,
+  currentNoise = 'all',
 }: IncidentsFiltersProps) {
   const router = useRouter();
   const { openCreateIncident } = useCreateIncidentModal();
@@ -110,7 +123,9 @@ export default function IncidentsFilters({
   };
 
   const serviceActive = currentServiceId !== 'all' && currentServiceId !== '';
-  const advancedActiveCount = Number(serviceActive) + Number(currentSort !== 'newest');
+  const noiseActive = currentNoise !== 'all';
+  const advancedActiveCount =
+    Number(serviceActive) + Number(currentSort !== 'newest') + Number(noiseActive);
 
   const hasActiveFilters =
     currentSearch !== '' ||
@@ -119,6 +134,7 @@ export default function IncidentsFilters({
     currentSort !== 'newest' ||
     currentFilter !== 'all' ||
     currentTeamId !== 'all' ||
+    noiseActive ||
     serviceActive;
 
   const toggleFilter = (value: string) =>
@@ -416,6 +432,25 @@ export default function IncidentsFilters({
               </Command>
             </PopoverContent>
           </Popover>
+        </FilterField>
+      )}
+
+      {showNoiseFilter && (
+        <FilterField label="Noise decisions" htmlFor="incident-filter-noise">
+          <Select value={currentNoise} onValueChange={val => updateParams({ noise: val })}>
+            <SelectTrigger id="incident-filter-noise" className={`${TRIGGER} w-[190px]`}>
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <SelectValue placeholder="Any" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any</SelectItem>
+              <SelectItem value="grouped">Grouped</SelectItem>
+              <SelectItem value="suppressed">Suppressed by a rule</SelectItem>
+              <SelectItem value="maintenance">In maintenance</SelectItem>
+            </SelectContent>
+          </Select>
         </FilterField>
       )}
 

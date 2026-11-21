@@ -464,7 +464,10 @@ export default function SystemHealthCenter({ initialReport }: Props) {
       {refreshError && (
         <div
           role="alert"
-          className={cn('flex items-start gap-2 rounded-lg border p-3 text-xs', toneClasses('elevated').soft)}
+          className={cn(
+            'flex items-start gap-2 rounded-lg border p-3 text-xs',
+            toneClasses('elevated').soft
+          )}
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
@@ -501,7 +504,12 @@ export default function SystemHealthCenter({ initialReport }: Props) {
               <SlidersHorizontal className="h-3.5 w-3.5" />
               Needs Attention Only
               {attentionCount > 0 && (
-                <span className={cn('ml-1 rounded-full border px-1.5 text-2xs font-semibold tabular-nums', toneClasses('elevated').soft)}>
+                <span
+                  className={cn(
+                    'ml-1 rounded-full border px-1.5 text-2xs font-semibold tabular-nums',
+                    toneClasses('elevated').soft
+                  )}
+                >
                   {attentionCount}
                 </span>
               )}
@@ -699,11 +707,12 @@ function HealthHistoryRibbon({
             <span className={cn('h-1.5 w-1.5 rounded-full', toneClasses('ok').solid)} /> Normal
           </span>
           <span className="flex items-center gap-1">
-            <span className={cn('h-1.5 w-1.5 rounded-full', toneClasses('elevated').solid)} /> Degraded
+            <span className={cn('h-1.5 w-1.5 rounded-full', toneClasses('elevated').solid)} />{' '}
+            Degraded
           </span>
           <span className="flex items-center gap-1">
-            <span className={cn('h-1.5 w-1.5 rounded-full', toneClasses('critical').solid)} /> Action
-            Required
+            <span className={cn('h-1.5 w-1.5 rounded-full', toneClasses('critical').solid)} />{' '}
+            Action Required
           </span>
         </div>
       </div>

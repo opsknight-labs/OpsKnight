@@ -450,9 +450,7 @@ export default function PrivacyRequestDetailDialog({
                         <div className="hidden sm:block">
                           <p className="text-xs font-medium leading-none">{step.label}</p>
                           {step.caption && (
-                            <p className="mt-0.5 text-2xs text-muted-foreground">
-                              {step.caption}
-                            </p>
+                            <p className="mt-0.5 text-2xs text-muted-foreground">{step.caption}</p>
                           )}
                         </div>
                       </div>

@@ -152,7 +152,10 @@ describe('Sentry payload shapes', () => {
       action: 'triggered',
       data: { event: { issue_id: 7, title: { x: 1 }, level: 3 } },
     });
-    expect(fromEvent).toMatchObject({ dedup_key: 'sentry-7', payload: { summary: 'Sentry Error' } });
+    expect(fromEvent).toMatchObject({
+      dedup_key: 'sentry-7',
+      payload: { summary: 'Sentry Error' },
+    });
     expect(parseSentry({ data: { issue: { id: '2', level: 5 } } }).payload.severity).toBe('error');
   });
 });

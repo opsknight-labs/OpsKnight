@@ -1,4 +1,6 @@
+import { Suspense } from 'react';
 import IncidentDetailScreen from '@/components/incident/IncidentDetailScreen';
+import MobileSquireMount from '@/components/squire/MobileSquireMount';
 import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
@@ -17,11 +19,17 @@ export default async function MobileIncidentDetailPage({
     searchParams ? searchParams : Promise.resolve(undefined),
   ]);
   return (
-    <IncidentDetailScreen
-      id={id}
-      backHref="/m/incidents"
-      presentation="mobile"
-      initialTab={resolvedSearchParams?.tab}
-    />
+    <>
+      <IncidentDetailScreen
+        id={id}
+        backHref="/m/incidents"
+        presentation="mobile"
+        initialTab={resolvedSearchParams?.tab}
+      />
+      {/* Optional and off by default; never delays or breaks the incident itself. */}
+      <Suspense fallback={null}>
+        <MobileSquireMount />
+      </Suspense>
+    </>
   );
 }

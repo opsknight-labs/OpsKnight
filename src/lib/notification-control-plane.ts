@@ -256,6 +256,12 @@ export type CentralNotificationInput = {
   contentId?: string;
   fanoutId?: string;
   tenantKey?: string;
+  /** Pre-paging storm child: roll this notification up under the parent incident's (noise controller). */
+  rollUpParentId?: string;
+  /** Recipient opted in to bundling and this page is low urgency (noise controller decides). */
+  bundle?: boolean;
+  /** Escalation step that sent this page, stored for step analytics. */
+  escalationStepIndex?: number;
 };
 
 const centralNotificationInputSchema = z
@@ -299,6 +305,9 @@ const centralNotificationInputSchema = z
     contentId: z.string().max(191).optional(),
     fanoutId: z.string().max(191).optional(),
     tenantKey: z.string().trim().min(1).max(191).optional(),
+    rollUpParentId: z.string().max(191).optional(),
+    bundle: z.boolean().optional(),
+    escalationStepIndex: z.number().int().min(0).max(1_000).optional(),
   })
   .strict();
 
@@ -594,8 +603,14 @@ export async function createCentralNotificationIntent(
         eventType: input.templateKey,
         trafficClass,
         priority,
+        rollUpParentId: input.rollUpParentId,
+        bundle: input.bundle,
+        channel: input.channel,
       });
-  const effectiveScheduledAt = noiseDecision.action === 'DEFER' ? noiseDecision.until : scheduledAt;
+  const effectiveScheduledAt =
+    noiseDecision.action === 'DEFER' || noiseDecision.action === 'BUNDLE'
+      ? noiseDecision.until
+      : scheduledAt;
 
   try {
     await store.notification.create({
@@ -612,7 +627,9 @@ export async function createCentralNotificationIntent(
                 0,
                 2_000
               )
-            : input.displayMessage.slice(0, 2_000),
+            : noiseDecision.action === 'BUNDLE'
+              ? `Bundled low-urgency pages: ${input.displayMessage}`.slice(0, 2_000)
+              : input.displayMessage.slice(0, 2_000),
         eventType: input.templateKey,
         category: input.category,
         recipientType: input.recipientType,
@@ -622,6 +639,7 @@ export async function createCentralNotificationIntent(
         templateKey: input.templateKey,
         sourceType: input.sourceType,
         sourceId: input.sourceId,
+        escalationStepIndex: input.escalationStepIndex,
         deliveryKey,
         payloadEncrypted,
         contentId: input.contentId,
@@ -707,6 +725,7 @@ export async function createCentralNotificationIntentsBatch(
           eventType: input.templateKey,
           trafficClass,
           priority,
+          rollUpParentId: input.rollUpParentId,
         },
         persistedNoiseCount + inputNoiseCount,
         now
@@ -3534,7 +3553,9 @@ export const CENTRAL_NOTIFICATION_LIMITS = Object.freeze({
  * One-click unsubscribe headers (RFC 2369 + RFC 8058). Gmail and Yahoo require them for
  * bulk senders and show a native "Unsubscribe" control when present.
  */
-export function listUnsubscribeHeaders(url: string | undefined): Record<string, string> | undefined {
+export function listUnsubscribeHeaders(
+  url: string | undefined
+): Record<string, string> | undefined {
   if (!url || !/^https:\/\//i.test(url)) return undefined;
   return {
     'List-Unsubscribe': `<${url}>`,

@@ -282,11 +282,7 @@ export default function ProfileDetailTabs({
                             {m.team.name}
                           </h4>
                           {isLead ? (
-                            <Badge
-                              variant="outline"
-                              size="xs"
-                              className="text-2xs gap-1 shrink-0"
-                            >
+                            <Badge variant="outline" size="xs" className="text-2xs gap-1 shrink-0">
                               <Crown className="h-2.5 w-2.5" /> Lead
                             </Badge>
                           ) : (

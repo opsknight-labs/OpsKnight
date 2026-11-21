@@ -12,10 +12,15 @@ import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
+import { getAiSettings } from '@/lib/intelligence/ai/settings';
 import { requirePageAccess } from '@/lib/access/server';
 
 export default async function CreatePostmortemPage() {
   await requirePageAccess('/postmortems/create');
+  // AI drafting is offered only while an administrator has enabled AI.
+  const aiDraftAvailable = await getAiSettings()
+    .then(settings => settings.enabled)
+    .catch(() => false);
   const session = await getServerSession(await getAuthOptions());
   if (!session) {
     redirect('/login');
@@ -119,6 +124,7 @@ export default async function CreatePostmortemPage() {
         </Card>
       ) : (
         <PostmortemForm
+          aiDraftAvailable={aiDraftAvailable}
           incidentId=""
           users={users}
           resolvedIncidents={resolvedIncidents}

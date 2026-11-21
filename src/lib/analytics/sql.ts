@@ -149,7 +149,10 @@ export function toAggregateMetrics(row: AggregateRow | undefined): AggregateMetr
     mttaP90: num(row?.mtta_p90),
     mttrP50: num(row?.mttr_p50),
     mttrP90: num(row?.mttr_p90),
-    ackSla: pct(Number(row?.ack_met ?? 0), Number(row?.ack_met ?? 0) + Number(row?.ack_breached ?? 0)),
+    ackSla: pct(
+      Number(row?.ack_met ?? 0),
+      Number(row?.ack_met ?? 0) + Number(row?.ack_breached ?? 0)
+    ),
     resolveSla: pct(
       Number(row?.resolve_met ?? 0),
       Number(row?.resolve_met ?? 0) + Number(row?.resolve_breached ?? 0)

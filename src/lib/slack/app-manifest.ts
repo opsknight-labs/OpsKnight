@@ -36,7 +36,14 @@ export const SLACK_BOT_SCOPES: string[] = [
 ];
 
 /** Bot events OpsKnight subscribes to. */
-export const SLACK_BOT_EVENTS = ['reaction_added', 'app_uninstalled', 'tokens_revoked'] as const;
+export const SLACK_BOT_EVENTS = [
+  'reaction_added',
+  'app_uninstalled',
+  'tokens_revoked',
+  // War-room channel capture (Settings → Intelligence); ignored unless that switch is on.
+  'message.channels',
+  'message.groups',
+] as const;
 
 /** Subcommands the dispatcher actually implements — keeps the hint honest. */
 export const SLACK_COMMAND_USAGE_HINT =

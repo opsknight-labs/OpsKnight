@@ -160,7 +160,10 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
       </dl>
       <DecisionReason reason={preview.decisionReason} />
       {summary.inputs.length > 0 && (
-        <section className="space-y-2 rounded-lg border border-border p-4" aria-labelledby="runbook-inputs">
+        <section
+          className="space-y-2 rounded-lg border border-border p-4"
+          aria-labelledby="runbook-inputs"
+        >
           <h2 id="runbook-inputs" className="font-display text-lg font-semibold">
             Inputs the assistant supplied
           </h2>

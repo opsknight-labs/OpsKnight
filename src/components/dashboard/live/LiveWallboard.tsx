@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -141,7 +148,14 @@ function readStoredScale(): number | null {
 const controlClass =
   'inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-zinc-800 outline-none focus-visible:ring-4 focus-visible:ring-sky-400/70';
 
-export default function LiveWallboard({ timeZone }: { timeZone: string }) {
+export default function LiveWallboard({
+  timeZone,
+  noiseTile,
+}: {
+  timeZone: string;
+  /** Server-rendered noise KPI tile; omitted when the viewer may not read intelligence. */
+  noiseTile?: ReactNode;
+}) {
   const { snapshot, query, setQuery, health, syncedAt, now } = useLiveDashboard();
   const searchParams = useSearchParams();
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -501,6 +515,7 @@ export default function LiveWallboard({ timeZone }: { timeZone: string }) {
               <OnCallCard />
             </div>
             <SlaRiskCard />
+            {noiseTile && <div className="mt-[1.2vw]">{noiseTile}</div>}
           </aside>
         </div>
       </div>

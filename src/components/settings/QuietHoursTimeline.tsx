@@ -196,7 +196,10 @@ export default function QuietHoursTimeline({
       {/* Details & Legend */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 border-t border-border text-xs">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <div aria-hidden="true" className="h-2.5 w-2.5 rounded-sm border border-ink-300 bg-ink-200" />
+          <div
+            aria-hidden="true"
+            className="h-2.5 w-2.5 rounded-sm border border-ink-300 bg-ink-200"
+          />
           <span>
             <strong>Quiet:</strong> {formatMinutesToLabel(startMinutes)} –{' '}
             {formatMinutesToLabel(endMinutes)} ({quietDurationHours}h)
@@ -204,7 +207,10 @@ export default function QuietHoursTimeline({
         </div>
 
         <div className="flex items-center gap-2 text-muted-foreground">
-          <div aria-hidden="true" className={cn('h-2.5 w-2.5 rounded-sm border', toneClasses('ok').soft)} />
+          <div
+            aria-hidden="true"
+            className={cn('h-2.5 w-2.5 rounded-sm border', toneClasses('ok').soft)}
+          />
           <span>
             <strong>Active Paging:</strong> {activeDurationHours}h / day
           </span>
@@ -212,9 +218,7 @@ export default function QuietHoursTimeline({
 
         <div className="flex items-center gap-1.5 text-muted-foreground sm:justify-end">
           <ShieldAlert aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="text-2xs">
-            Medium and High urgency alerts always bypass quiet hours
-          </span>
+          <span className="text-2xs">Medium and High urgency alerts always bypass quiet hours</span>
         </div>
       </div>
     </div>

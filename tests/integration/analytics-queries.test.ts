@@ -122,8 +122,16 @@ describeIfRealDB('analytics section queries', { timeout: 60_000 }, () => {
       data: [
         { title: 'at start', serviceId: service.id, createdAt: window.start },
         { title: 'at end', serviceId: service.id, createdAt: window.end },
-        { title: 'previous', serviceId: service.id, createdAt: new Date(window.start.getTime() - 1) },
-        { title: 'too old', serviceId: service.id, createdAt: new Date(window.previousStart.getTime() - 1) },
+        {
+          title: 'previous',
+          serviceId: service.id,
+          createdAt: new Date(window.start.getTime() - 1),
+        },
+        {
+          title: 'too old',
+          serviceId: service.id,
+          createdAt: new Date(window.previousStart.getTime() - 1),
+        },
       ],
     });
     const { scope } = context();
@@ -235,8 +243,12 @@ describeIfRealDB('analytics section queries', { timeout: 60_000 }, () => {
     const user = await testPrisma.user.create({
       data: { email: 'scoped@example.com', name: 'Scoped', role: 'USER', status: 'ACTIVE' },
     });
-    const mineSvc = await testPrisma.service.create({ data: { name: 'mine-svc', teamId: mine.id } });
-    const otherSvc = await testPrisma.service.create({ data: { name: 'other-svc', teamId: other.id } });
+    const mineSvc = await testPrisma.service.create({
+      data: { name: 'mine-svc', teamId: mine.id },
+    });
+    const otherSvc = await testPrisma.service.create({
+      data: { name: 'other-svc', teamId: other.id },
+    });
     const createdAt = new Date(NOW.getTime() - DAY);
     await testPrisma.incident.createMany({
       data: [
@@ -245,7 +257,12 @@ describeIfRealDB('analytics section queries', { timeout: 60_000 }, () => {
         { title: 'assigned', serviceId: otherSvc.id, assigneeId: user.id, createdAt },
       ],
     });
-    const actor: AuthorizationActor = { id: user.id, role: 'USER', status: 'ACTIVE', teamIds: [mine.id] };
+    const actor: AuthorizationActor = {
+      id: user.id,
+      role: 'USER',
+      status: 'ACTIVE',
+      teamIds: [mine.id],
+    };
     const { scope, window } = context({}, { actor });
     expect((await queryKpis(scope, window)).current.incidents).toBe(2);
     const services = await queryServices(scope, window);
@@ -256,7 +273,9 @@ describeIfRealDB('analytics section queries', { timeout: 60_000 }, () => {
   it('applies service, urgency and unassigned filters', async () => {
     const a = await testPrisma.service.create({ data: { name: 'fa' } });
     const b = await testPrisma.service.create({ data: { name: 'fb' } });
-    const user = await testPrisma.user.create({ data: { email: 'f@example.com', name: 'F', status: 'ACTIVE' } });
+    const user = await testPrisma.user.create({
+      data: { email: 'f@example.com', name: 'F', status: 'ACTIVE' },
+    });
     const createdAt = new Date(NOW.getTime() - DAY);
     await testPrisma.incident.createMany({
       data: [
@@ -278,8 +297,11 @@ describeIfRealDB('analytics section queries', { timeout: 60_000 }, () => {
 
   it('reports noise, responder bands and follow-through', async () => {
     const service = await testPrisma.service.create({ data: { name: 'noisy' } });
-    const user = await testPrisma.user.create({ data: { email: 'r@example.com', name: 'Responder', status: 'ACTIVE' } });
-    const day = (hourUtc: number) => new Date(`2026-01-14T${String(hourUtc).padStart(2, '0')}:30:00Z`);
+    const user = await testPrisma.user.create({
+      data: { email: 'r@example.com', name: 'Responder', status: 'ACTIVE' },
+    });
+    const day = (hourUtc: number) =>
+      new Date(`2026-01-14T${String(hourUtc).padStart(2, '0')}:30:00Z`);
     const working = await testPrisma.incident.create({
       data: {
         title: 'Disk full',
@@ -320,7 +342,12 @@ describeIfRealDB('analytics section queries', { timeout: 60_000 }, () => {
     });
     await testPrisma.actionItem.createMany({
       data: [
-        { postmortemId: postmortem.id, incidentId: overnight.id, title: 'a', dueDate: new Date('2026-01-01') },
+        {
+          postmortemId: postmortem.id,
+          incidentId: overnight.id,
+          title: 'a',
+          dueDate: new Date('2026-01-01'),
+        },
         { postmortemId: postmortem.id, incidentId: overnight.id, title: 'b', status: 'COMPLETED' },
       ],
     });
@@ -330,12 +357,16 @@ describeIfRealDB('analytics section queries', { timeout: 60_000 }, () => {
     expect(noise.alerts).toBe(3);
     expect(noise.alertsPerIncident).toBe(1);
     expect(noise.autoResolvedRate).toBe(50);
-    expect(noise.recurringTitles).toEqual([
-      expect.objectContaining({ count: 2 }),
-    ]);
+    expect(noise.recurringTitles).toEqual([expect.objectContaining({ count: 2 })]);
 
     const [responder] = await queryResponders(scope, window);
-    expect(responder).toMatchObject({ id: user.id, incidents: 3, working: 1, evening: 1, overnight: 1 });
+    expect(responder).toMatchObject({
+      id: user.id,
+      incidents: 3,
+      working: 1,
+      evening: 1,
+      overnight: 1,
+    });
 
     const follow = await queryFollowThrough(scope, window);
     expect(follow).toMatchObject({

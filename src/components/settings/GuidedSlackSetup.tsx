@@ -346,7 +346,8 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="clientId">
-                      Client ID <span className="text-destructive" aria-hidden="true">
+                      Client ID{' '}
+                      <span className="text-destructive" aria-hidden="true">
                         *
                       </span>
                       <span className="sr-only">(required)</span>
@@ -385,7 +386,8 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
 
                   <div className="space-y-2">
                     <Label htmlFor="clientSecret">
-                      Client Secret <span className="text-destructive" aria-hidden="true">
+                      Client Secret{' '}
+                      <span className="text-destructive" aria-hidden="true">
                         *
                       </span>
                       <span className="sr-only">(required)</span>
@@ -407,7 +409,8 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
 
                   <div className="space-y-2">
                     <Label htmlFor="signingSecret">
-                      Signing Secret <span className="text-destructive" aria-hidden="true">
+                      Signing Secret{' '}
+                      <span className="text-destructive" aria-hidden="true">
                         *
                       </span>
                       <span className="sr-only">(required)</span>
@@ -422,7 +425,9 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                       aria-required="true"
                       aria-invalid={secretsIdentical || undefined}
                       aria-describedby={
-                        secretsIdentical ? 'signingSecret-help signingSecret-error' : 'signingSecret-help'
+                        secretsIdentical
+                          ? 'signingSecret-help signingSecret-error'
+                          : 'signingSecret-help'
                       }
                     />
                     <p id="signingSecret-help" className="text-xs text-muted-foreground">
@@ -432,13 +437,13 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                       will not fill it in.
                     </p>
                     {secretsIdentical && (
-                        <p id="signingSecret-error" className="text-xs text-destructive font-medium">
-                          ⚠️ Client Secret and Signing Secret are identical. In Slack under Basic
-                          Information &gt; App Credentials, Client Secret and Signing Secret are two
-                          distinct keys. Click &quot;Show&quot; next to each to copy their separate
-                          values.
-                        </p>
-                      )}
+                      <p id="signingSecret-error" className="text-xs text-destructive font-medium">
+                        ⚠️ Client Secret and Signing Secret are identical. In Slack under Basic
+                        Information &gt; App Credentials, Client Secret and Signing Secret are two
+                        distinct keys. Click &quot;Show&quot; next to each to copy their separate
+                        values.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

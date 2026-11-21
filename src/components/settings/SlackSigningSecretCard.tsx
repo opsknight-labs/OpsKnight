@@ -126,7 +126,12 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
       </div>
 
       {isConfigured && !isEditing ? (
-        <div className={cn('rounded-lg border p-3.5 flex items-start gap-3 text-xs', toneClasses('ok').soft)}>
+        <div
+          className={cn(
+            'rounded-lg border p-3.5 flex items-start gap-3 text-xs',
+            toneClasses('ok').soft
+          )}
+        >
           <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
           <div className="space-y-0.5">
             <p className="font-semibold">Request Signature Verification Active</p>
@@ -139,7 +144,12 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
       ) : (
         <div className="space-y-4 pt-1">
           {!isConfigured && (
-            <div className={cn('rounded-lg border p-3.5 text-xs flex items-start gap-2.5', toneClasses('critical').soft)}>
+            <div
+              className={cn(
+                'rounded-lg border p-3.5 text-xs flex items-start gap-2.5',
+                toneClasses('critical').soft
+              )}
+            >
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
               <p className="leading-relaxed">
                 Without a signing secret, slash commands like{' '}
@@ -152,10 +162,7 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
 
           <div className="space-y-2 max-w-xl">
             <div className="flex items-center justify-between">
-              <Label
-                htmlFor="slackSigningSecret"
-                className="text-sm font-medium"
-              >
+              <Label htmlFor="slackSigningSecret" className="text-sm font-medium">
                 App Signing Secret
                 <span className="ml-1 text-destructive" aria-hidden="true">
                   *

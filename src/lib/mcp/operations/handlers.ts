@@ -151,6 +151,10 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/incidents/[id]/escalate/route')).POST,
   ],
   ['listIncidentNotes', async () => (await import('@/app/api/v2/incidents/[id]/notes/route')).GET],
+  [
+    'getIncidentIntelligence',
+    async () => (await import('@/app/api/v2/incidents/[id]/intelligence/route')).GET,
+  ],
   ['addIncidentNote', async () => (await import('@/app/api/v2/incidents/[id]/notes/route')).POST],
   ['resolveIncident', async () => (await import('@/app/api/v2/incidents/[id]/resolve/route')).POST],
   // Routine responder actions run directly, like acknowledge; snooze and unacknowledge stay gated.

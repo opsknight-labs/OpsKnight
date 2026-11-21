@@ -61,13 +61,43 @@ describeIfRealDB('responder interruptions and workload', { timeout: 60_000 }, ()
     await testPrisma.incident.createMany({
       data: [
         // UTC: Fri 10:00 working, Fri 19:00 evening, Sat 12:00 evening, Mon 23:00 overnight.
-        { title: 'a', serviceId: service.id, assigneeId: utc.id, createdAt: at('2026-01-09T10:00:00Z') },
-        { title: 'b', serviceId: service.id, assigneeId: utc.id, createdAt: at('2026-01-09T19:00:00Z') },
-        { title: 'c', serviceId: service.id, assigneeId: utc.id, createdAt: at('2026-01-10T12:00:00Z') },
-        { title: 'd', serviceId: service.id, assigneeId: utc.id, createdAt: at('2026-01-12T23:00:00Z') },
+        {
+          title: 'a',
+          serviceId: service.id,
+          assigneeId: utc.id,
+          createdAt: at('2026-01-09T10:00:00Z'),
+        },
+        {
+          title: 'b',
+          serviceId: service.id,
+          assigneeId: utc.id,
+          createdAt: at('2026-01-09T19:00:00Z'),
+        },
+        {
+          title: 'c',
+          serviceId: service.id,
+          assigneeId: utc.id,
+          createdAt: at('2026-01-10T12:00:00Z'),
+        },
+        {
+          title: 'd',
+          serviceId: service.id,
+          assigneeId: utc.id,
+          createdAt: at('2026-01-12T23:00:00Z'),
+        },
         // India: 20:00Z Tue = 01:30 Wed overnight; 07:00Z Wed = 12:30 working.
-        { title: 'e', serviceId: service.id, assigneeId: india.id, createdAt: at('2026-01-13T20:00:00Z') },
-        { title: 'f', serviceId: service.id, assigneeId: india.id, createdAt: at('2026-01-14T07:00:00Z') },
+        {
+          title: 'e',
+          serviceId: service.id,
+          assigneeId: india.id,
+          createdAt: at('2026-01-13T20:00:00Z'),
+        },
+        {
+          title: 'f',
+          serviceId: service.id,
+          assigneeId: india.id,
+          createdAt: at('2026-01-14T07:00:00Z'),
+        },
         { title: 'unassigned', serviceId: service.id, createdAt: at('2026-01-13T23:00:00Z') },
       ],
     });
@@ -182,7 +212,11 @@ describeIfRealDB('responder interruptions and workload', { timeout: 60_000 }, ()
     });
     const { scope, window } = context();
     const [row] = await queryResponders(scope, window);
-    expect(row).toMatchObject({ handlingHours: 1, handlingOvernightHours: 1, handlingEveningHours: 0 });
+    expect(row).toMatchObject({
+      handlingHours: 1,
+      handlingOvernightHours: 1,
+      handlingEveningHours: 0,
+    });
   });
 });
 
@@ -224,7 +258,12 @@ describeIfRealDB('service availability', { timeout: 60_000 }, () => {
       },
     });
 
-    const actor: AuthorizationActor = { id: user.id, role: 'USER', status: 'ACTIVE', teamIds: [mine.id] };
+    const actor: AuthorizationActor = {
+      id: user.id,
+      role: 'USER',
+      status: 'ACTIVE',
+      teamIds: [mine.id],
+    };
     const { scope, window } = context({}, { actor, now });
     const rows = await queryAvailability(scope, window);
     expect(rows.map(row => row.name)).toEqual(['flaky', 'healthy']);
@@ -237,9 +276,9 @@ describeIfRealDB('service availability', { timeout: 60_000 }, () => {
     expect(best).toMatchObject({ uptime: 100, objective: null, budgetRemaining: null });
 
     const filtered = context({ service: healthy.id }, { actor, now });
-    expect((await queryAvailability(filtered.scope, filtered.window)).map(row => row.name)).toEqual([
-      'healthy',
-    ]);
+    expect((await queryAvailability(filtered.scope, filtered.window)).map(row => row.name)).toEqual(
+      ['healthy']
+    );
     // Filtering to a service outside the actor's scope never leaks it.
     const leak = context({ service: hidden.id }, { actor, now });
     expect(await queryAvailability(leak.scope, leak.window)).toEqual([]);

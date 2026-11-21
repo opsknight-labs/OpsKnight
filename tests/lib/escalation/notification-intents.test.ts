@@ -111,4 +111,52 @@ describe('central escalation notification intents', () => {
     ]);
     expect(mocks.deliverCentralNotification).not.toHaveBeenCalled();
   });
+
+  it('records the step on every page and keeps a page critical unless the recipient opted in to bundling', async () => {
+    const plan = await planEscalationNotificationIntents({ ...input, stepIndex: 2 });
+    await materializeEscalationNotificationIntents({} as never, plan);
+    expect(mocks.createCentralNotificationIntent.mock.calls[0][0]).toMatchObject({
+      escalationStepIndex: 2,
+      priority: 0,
+      trafficClass: 'CRITICAL',
+      bundle: undefined,
+    });
+  });
+
+  it('asks for bundling only for a low-urgency incident and an opted-in recipient', async () => {
+    const optedIn = {
+      status: 'ACTIVE',
+      email: 'responder@example.com',
+      phoneNumber: '+15550100',
+      timeZone: 'UTC',
+      quietHoursEnabled: false,
+      quietHoursStartMinutes: 0,
+      quietHoursEndMinutes: 0,
+      quietHoursWeekendAllDay: false,
+      bundleLowUrgencyPages: true,
+    };
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(optedIn as never);
+    const low = { ...input.incident, urgency: 'LOW' as const };
+
+    for (const incident of [input.incident, { ...low, priority: 'P1' }]) {
+      const plan = await planEscalationNotificationIntents({ ...input, incident });
+      expect(plan.intents[0].bundle).toBeUndefined();
+    }
+
+    const plan = await planEscalationNotificationIntents({ ...input, incident: low });
+    expect(plan.intents[0].bundle).toBe(true);
+    await materializeEscalationNotificationIntents({} as never, plan);
+    expect(mocks.createCentralNotificationIntent.mock.calls[0][0]).toMatchObject({
+      bundle: true,
+      priority: 1,
+      trafficClass: 'CRITICAL',
+    });
+
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      ...optedIn,
+      bundleLowUrgencyPages: false,
+    } as never);
+    const notOptedIn = await planEscalationNotificationIntents({ ...input, incident: low });
+    expect(notOptedIn.intents[0].bundle).toBeUndefined();
+  });
 });

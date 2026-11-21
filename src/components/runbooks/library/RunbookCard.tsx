@@ -7,6 +7,8 @@ import { Pill } from '../ui/primitives';
 import { formatDateTime } from '@/lib/timezone';
 import { formatRelativeShort } from '@/lib/mobile-time';
 import { cn } from '@/lib/utils';
+import InsightBadge from '@/components/intelligence/insights/InsightBadge';
+import type { OpsInsightCount } from '@/lib/intelligence/ops-insights/contract';
 
 export type RunbookCardData = {
   id: string;
@@ -18,6 +20,8 @@ export type RunbookCardData = {
   executions: number;
   archivedAt?: string | null;
   updatedAt: string;
+  /** Open operations insights on this runbook, for the badge; absent while runbook insights are off. */
+  insights?: OpsInsightCount | null;
   sampleServices?: string[];
   ownerTeam?: { id: string; name: string } | null;
   tags?: string[];
@@ -135,6 +139,7 @@ export function RunbookCard({ runbook, userTimeZone, updatedLabel }: RunbookCard
             </h2>
           </div>
           <div className="relative z-10 flex flex-wrap items-center gap-1.5 shrink-0 sm:justify-end">
+            <InsightBadge count={runbook.insights} />
             <RunbookStatusBadge status={statusLabel} size="sm" context="lifecycle" />
             {isPublished && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 shadow-2xs">

@@ -3,6 +3,8 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import UserAvatar from '@/components/UserAvatar';
 import { RelativeTime } from '@/components/patterns';
 import { Clock, Layers, Users, Calendar } from 'lucide-react';
+import InsightBadge from '@/components/intelligence/insights/InsightBadge';
+import type { OpsInsightCount } from '@/lib/intelligence/ops-insights/contract';
 import type { ScheduleOnCallSummary } from '@/components/schedules/schedule-oncall-summary';
 
 type ScheduleCardSchedule = {
@@ -75,7 +77,14 @@ export function ScheduleResponderStack({
   );
 }
 
-export default function ScheduleCard({ schedule }: { schedule: ScheduleCardSchedule }) {
+export default function ScheduleCard({
+  schedule,
+  insights,
+}: {
+  schedule: ScheduleCardSchedule;
+  /** Open operations insights on this schedule, for the list badge. */
+  insights?: OpsInsightCount | null;
+}) {
   const uniqueUsers = scheduleResponders(schedule);
 
   return (
@@ -95,10 +104,13 @@ export default function ScheduleCard({ schedule }: { schedule: ScheduleCardSched
             {schedule.name}
           </span>
         </div>
-        <Badge variant="outline" size="xs" className="shrink-0 gap-1.5">
-          <Clock className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
-          {schedule.timeZone}
-        </Badge>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <InsightBadge count={insights} />
+          <Badge variant="outline" size="xs" className="gap-1.5">
+            <Clock className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+            {schedule.timeZone}
+          </Badge>
+        </div>
       </div>
 
       <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">

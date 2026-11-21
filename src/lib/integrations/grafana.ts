@@ -101,7 +101,10 @@ export function transformGrafanaToEvent(
       payload.ruleName ||
       parsed.annotations.summary ||
       alertName ||
-      payload.message?.split('\n').find(line => line.trim())?.trim() ||
+      payload.message
+        ?.split('\n')
+        .find(line => line.trim())
+        ?.trim() ||
       'Grafana Alert';
     // Stable key (never Date.now(), which defeats deduplication). Without rule
     // identity, the alert's labels identify it, so different alerts stay apart.

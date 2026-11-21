@@ -63,6 +63,10 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
       payload: { summary: 'Example', source: 'api', severity: 'info' },
     },
   },
+  'POST /services/{id}/automation/replay': {
+    snapshot: { schemaVersion: 1, fields: [], rules: [] },
+    days: 7,
+  },
   'POST /services/{id}/automation/restore': { sourceVersionId: 'cm123456789012345678901234' },
   'PATCH /services/{id}/automation/mode': { mode: 'DISABLED', expectedActiveVersionId: null },
   'POST /services/{id}/automation/publish': { expectedActiveVersionId: null },

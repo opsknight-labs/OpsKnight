@@ -109,6 +109,26 @@ export const CAPABILITY_CATALOG: Record<Capability, CapabilityInfo> = {
   [C.AUDIT_EXPORT]: { label: 'Export the audit log', group: 'governance', risk: 'medium' },
   [C.POSTMORTEM_DRAFT_READ]: { label: 'View draft postmortems', group: 'incidents', risk: 'low' },
   [C.REPORT_READ]: { label: 'View reports and dashboards', group: 'reporting', risk: 'low' },
+  [C.INTELLIGENCE_READ]: {
+    label: 'View intelligence (AIOps) pages and settings',
+    group: 'reporting',
+    risk: 'low',
+  },
+  [C.INTELLIGENCE_SUGGESTIONS_READ]: {
+    label: 'See intelligence suggestions on incidents you can see',
+    group: 'incidents',
+    risk: 'low',
+  },
+  [C.INTELLIGENCE_FEEDBACK]: {
+    label: 'Accept or dismiss intelligence suggestions',
+    group: 'incidents',
+    risk: 'low',
+  },
+  [C.INTELLIGENCE_MANAGE]: {
+    label: 'Change intelligence (AIOps) settings and policies',
+    group: 'administration',
+    risk: 'high',
+  },
   [C.REPORT_EXPORT]: {
     label: 'Export reports and analytics',
     group: 'reporting',

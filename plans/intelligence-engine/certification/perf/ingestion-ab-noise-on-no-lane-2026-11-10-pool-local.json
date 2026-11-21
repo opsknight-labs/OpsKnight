@@ -1,0 +1,292 @@
+{
+  "generatedAt": "2026-11-10T05:00:53.125Z",
+  "options": {
+    "noiseControls": true,
+    "noiseLookups": "pool",
+    "lane": false,
+    "history": 0,
+    "repetitions": 6,
+    "events": 200,
+    "concurrency": 8,
+    "backlog": 800,
+    "services": 4,
+    "maxP99DeltaMs": 10,
+    "maxP50DeltaMs": 2,
+    "gate": true,
+    "output": "plans/intelligence-engine/certification/perf/ingestion-ab-noise-on-no-lane-2026-11-10-pool-local.json"
+  },
+  "laneWasBusyInEveryCandidateRun": true,
+  "noiseControlsInCandidate": true,
+  "noiseFailOpenInCandidate": {
+    "deadline": 1
+  },
+  "noiseDecisionsInCandidate": 0,
+  "node": "v20.20.2",
+  "pagingBackpressureBypassed": true,
+  "totalFailures": 0,
+  "gate": {
+    "contract": {
+      "maxP99DeltaMs": 10,
+      "maxP50DeltaMs": 2
+    },
+    "medianPairedDeltaMs": {
+      "p50": 1.1376660000005359,
+      "p99": 0.3378740000007383
+    },
+    "breaches": [],
+    "passed": true
+  },
+  "summary": [
+    {
+      "metric": "p50 latency (ms)",
+      "medianRatio": 1.0611477140622594,
+      "ci95": [0.8374254959450218, 1.0928417265651564],
+      "baselineRunToRunCv": 0.12539339813835293,
+      "noiseFloor": 0.25078679627670586,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p95 latency (ms)",
+      "medianRatio": 1.0110896749357552,
+      "ci95": [0.3146728505389778, 1.2920861471444156],
+      "baselineRunToRunCv": 0.6202361833187883,
+      "noiseFloor": 1.2404723666375765,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p99 latency (ms)",
+      "medianRatio": 1.0137141347677854,
+      "ci95": [0.3164829145511259, 1.552944562939832],
+      "baselineRunToRunCv": 0.7183168183903487,
+      "noiseFloor": 1.4366336367806973,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "p99.9 latency (ms)",
+      "medianRatio": 1.0642351903532703,
+      "ci95": [0.31542391083472504, 1.1691362214654237],
+      "baselineRunToRunCv": 0.6684836222653504,
+      "noiseFloor": 1.3369672445307008,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    },
+    {
+      "metric": "throughput (events/s)",
+      "medianRatio": 0.9285181771682396,
+      "ci95": [0.8279347217463452, 1.497848717132892],
+      "baselineRunToRunCv": 0.23015006890950224,
+      "noiseFloor": 0.4603001378190045,
+      "verdict": "NO_DETECTABLE_DIFFERENCE"
+    }
+  ],
+  "rawCounts": [
+    {
+      "arm": "baseline",
+      "maxPeakLockWaiters": 0,
+      "maxPeakActiveBackends": 5,
+      "failures": 0
+    },
+    {
+      "arm": "candidate",
+      "maxPeakLockWaiters": 0,
+      "maxPeakActiveBackends": 6,
+      "failures": 0
+    }
+  ],
+  "samples": [
+    {
+      "arm": "baseline",
+      "repetition": 0,
+      "p50Ms": 19.005999999999403,
+      "p95Ms": 22.037874999999985,
+      "p99Ms": 23.769333999998707,
+      "p999Ms": 32.67066599999998,
+      "maxMs": 32.67066599999998,
+      "throughputPerSec": 419.04383073175376,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "candidate",
+      "repetition": 0,
+      "p50Ms": 20.678125000000364,
+      "p95Ms": 28.474833000000217,
+      "p99Ms": 36.91245799999888,
+      "p999Ms": 38.19645899999887,
+      "maxMs": 38.19645899999887,
+      "throughputPerSec": 365.8781154807378,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 6,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "candidate",
+      "repetition": 1,
+      "p50Ms": 19.742874999999913,
+      "p95Ms": 23.097374999999374,
+      "p99Ms": 24.97479100000055,
+      "p999Ms": 26.463583000000654,
+      "maxMs": 26.463583000000654,
+      "throughputPerSec": 400.0344365644381,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 6,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "baseline",
+      "repetition": 1,
+      "p50Ms": 18.605208999999377,
+      "p95Ms": 22.844042000000627,
+      "p99Ms": 24.636916999999812,
+      "p999Ms": 24.866292000000612,
+      "maxMs": 24.866292000000612,
+      "throughputPerSec": 417.105640808634,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 5,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "baseline",
+      "repetition": 2,
+      "p50Ms": 18.1491670000014,
+      "p95Ms": 20.940583999999944,
+      "p99Ms": 22.588291000000027,
+      "p999Ms": 22.982208999999784,
+      "maxMs": 22.982208999999784,
+      "throughputPerSec": 435.45717350984495,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "candidate",
+      "repetition": 2,
+      "p50Ms": 19.83416700000089,
+      "p95Ms": 21.794917000001078,
+      "p99Ms": 23.950874999998632,
+      "p999Ms": 24.758374999999432,
+      "maxMs": 24.758374999999432,
+      "throughputPerSec": 404.32990098219506,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "candidate",
+      "repetition": 3,
+      "p50Ms": 19.720000000001164,
+      "p95Ms": 22.54754200000025,
+      "p99Ms": 28.23833299999933,
+      "p999Ms": 28.328457999999955,
+      "maxMs": 28.328457999999955,
+      "throughputPerSec": 401.7648186589191,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "baseline",
+      "repetition": 3,
+      "p50Ms": 19.36358300000211,
+      "p95Ms": 71.6539159999993,
+      "p99Ms": 89.2254580000008,
+      "p999Ms": 89.81075000000055,
+      "maxMs": 89.81075000000055,
+      "throughputPerSec": 268.22790183240767,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "baseline",
+      "repetition": 4,
+      "p50Ms": 24.353707999998733,
+      "p95Ms": 51.6372080000001,
+      "p99Ms": 74.02375000000029,
+      "p999Ms": 76.90429099999892,
+      "maxMs": 76.90429099999892,
+      "throughputPerSec": 260.5734602999227,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 5,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "candidate",
+      "repetition": 4,
+      "p50Ms": 20.394415999999183,
+      "p95Ms": 23.313750000001164,
+      "p99Ms": 25.229834000001574,
+      "p999Ms": 26.610583999998198,
+      "maxMs": 26.610583999998198,
+      "throughputPerSec": 390.79349152979563,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "candidate",
+      "repetition": 5,
+      "p50Ms": 20.511042000001908,
+      "p95Ms": 29.700167000002693,
+      "p99Ms": 34.010708999998315,
+      "p999Ms": 35.340250000001106,
+      "maxMs": 35.340250000001106,
+      "throughputPerSec": 370.92260406466437,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 4,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {
+        "deadline": 1
+      },
+      "noiseDecisions": 0
+    },
+    {
+      "arm": "baseline",
+      "repetition": 5,
+      "p50Ms": 17.62816699999894,
+      "p95Ms": 20.42987500000163,
+      "p99Ms": 21.46412500000224,
+      "p999Ms": 23.253458000002865,
+      "maxMs": 23.253458000002865,
+      "throughputPerSec": 448.0094798805939,
+      "failures": 0,
+      "peakLockWaiters": 0,
+      "peakActiveBackends": 5,
+      "laneItemsProcessed": 0,
+      "noiseFailOpen": {},
+      "noiseDecisions": 0
+    }
+  ],
+  "interpretation": "Verdicts compare paired repetitions against measured baseline noise. NO_DETECTABLE_DIFFERENCE means the difference is within noise, not that it is zero. The gate judges the median paired difference in absolute milliseconds against the ingestion contract. Treat results from shared or loaded hosts as indicative only."
+}

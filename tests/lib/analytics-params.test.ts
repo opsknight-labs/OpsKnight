@@ -87,7 +87,11 @@ describe('resolveAnalyticsWindow', () => {
   const now = new Date('2026-06-01T12:00:00Z');
 
   it('builds a half-open window with an adjacent previous window of equal length', () => {
-    const window = resolveAnalyticsWindow({ params: parseAnalyticsParams({ range: '7d' }), policy, now });
+    const window = resolveAnalyticsWindow({
+      params: parseAnalyticsParams({ range: '7d' }),
+      policy,
+      now,
+    });
     expect(window.end).toEqual(now);
     expect(window.start).toEqual(new Date('2026-05-25T12:00:00Z'));
     expect(window.previousEnd).toEqual(window.start);
@@ -96,33 +100,59 @@ describe('resolveAnalyticsWindow', () => {
   });
 
   it('clips to retention and reports it', () => {
-    const window = resolveAnalyticsWindow({ params: parseAnalyticsParams({ range: '365d' }), policy, now });
+    const window = resolveAnalyticsWindow({
+      params: parseAnalyticsParams({ range: '365d' }),
+      policy,
+      now,
+    });
     expect(window.isClipped).toBe(true);
     expect(window.start).toEqual(new Date(now.getTime() - 90 * 86_400_000));
   });
 
   it('drops the previous period when it would reach past retention', () => {
-    const clipped = resolveAnalyticsWindow({ params: parseAnalyticsParams({ range: '90d' }), policy, now });
+    const clipped = resolveAnalyticsWindow({
+      params: parseAnalyticsParams({ range: '90d' }),
+      policy,
+      now,
+    });
     expect(clipped.hasPrevious).toBe(false);
     expect(clipped.previousStart).toEqual(clipped.start);
     expect(clipped.previousEnd).toEqual(clipped.start);
-    const fits = resolveAnalyticsWindow({ params: parseAnalyticsParams({ range: '30d' }), policy, now });
+    const fits = resolveAnalyticsWindow({
+      params: parseAnalyticsParams({ range: '30d' }),
+      policy,
+      now,
+    });
     expect(fits.hasPrevious).toBe(true);
     expect(fits.previousStart).toEqual(new Date(fits.start.getTime() - 30 * 86_400_000));
   });
 
   it("runs custom ranges midnight-to-midnight in the viewer's timezone", () => {
     const params = parseAnalyticsParams({ from: '2026-01-01', to: '2026-01-02' });
-    const ny = resolveAnalyticsWindow({ params, policy: { ...policy, incidentRetentionDays: 730 }, userTimeZone: 'America/New_York', now });
+    const ny = resolveAnalyticsWindow({
+      params,
+      policy: { ...policy, incidentRetentionDays: 730 },
+      userTimeZone: 'America/New_York',
+      now,
+    });
     expect(ny.start).toEqual(new Date('2026-01-01T05:00:00Z'));
     expect(ny.end).toEqual(new Date('2026-01-03T05:00:00Z'));
-    const tokyo = resolveAnalyticsWindow({ params, policy: { ...policy, incidentRetentionDays: 730 }, userTimeZone: 'Asia/Tokyo', now });
+    const tokyo = resolveAnalyticsWindow({
+      params,
+      policy: { ...policy, incidentRetentionDays: 730 },
+      userTimeZone: 'Asia/Tokyo',
+      now,
+    });
     expect(tokyo.start).toEqual(new Date('2025-12-31T15:00:00Z'));
   });
 
   it('supports 3-year ranges with monthly buckets, still clipped by retention', () => {
     const params = parseAnalyticsParams({ range: '1095d' });
-    const long = resolveAnalyticsWindow({ params, policy: { ...policy, incidentRetentionDays: 1095 }, now });
+    const long = resolveAnalyticsWindow({
+      params,
+      policy: { ...policy, incidentRetentionDays: 1095 },
+      now,
+    });
     expect(long.bucket).toBe('month');
     expect(long.isClipped).toBe(false);
     expect(resolveAnalyticsWindow({ params, policy, now }).isClipped).toBe(true);

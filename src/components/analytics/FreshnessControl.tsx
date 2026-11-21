@@ -45,7 +45,10 @@ export default function FreshnessControl({ asOf }: { asOf: string | null }) {
         disabled={pending}
         className="inline-flex min-h-11 items-center gap-1 rounded-sm px-1 font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 sm:min-h-0"
       >
-        <RotateCw className={cn('h-3.5 w-3.5', pending && 'motion-safe:animate-spin')} aria-hidden />
+        <RotateCw
+          className={cn('h-3.5 w-3.5', pending && 'motion-safe:animate-spin')}
+          aria-hidden
+        />
         {pending ? 'Refreshing…' : 'Refresh'}
       </button>
     </div>

@@ -615,7 +615,8 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
     // WRITE quota is a fixed window; two calls straddling its boundary would count 1, not 2.
     const { windowMs } = RATE_LIMIT_CONFIGS.WRITE;
     const untilBoundary = windowMs - (Date.now() % windowMs);
-    if (untilBoundary < 5_000) await new Promise(resolve => setTimeout(resolve, untilBoundary + 50));
+    if (untilBoundary < 5_000)
+      await new Promise(resolve => setTimeout(resolve, untilBoundary + 50));
     await callMcpOperation(ctx, 'addIncidentNote', args);
     await callMcpOperation(ctx, 'addIncidentNote', args);
     expect(await db.incidentNote.count({ where: { incidentId: incident.id } })).toBe(1);

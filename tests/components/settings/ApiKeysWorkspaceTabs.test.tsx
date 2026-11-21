@@ -22,7 +22,9 @@ describe('ApiKeysWorkspaceTabs Component', () => {
         endpointCount={63}
         isAdmin={true}
         apiKeysContent={<div data-testid="api-keys-content">API Keys Content</div>}
-        serviceAccountsContent={<div data-testid="service-accounts-content">Service Accounts Content</div>}
+        serviceAccountsContent={
+          <div data-testid="service-accounts-content">Service Accounts Content</div>
+        }
         explorerContent={<div data-testid="explorer-content">Explorer Content</div>}
         activityContent={<div data-testid="activity-content">Activity Content</div>}
       />
@@ -47,7 +49,9 @@ describe('ApiKeysWorkspaceTabs Component', () => {
         endpointCount={63}
         isAdmin={true}
         apiKeysContent={<div data-testid="api-keys-content">API Keys Content</div>}
-        serviceAccountsContent={<div data-testid="service-accounts-content">Service Accounts Content</div>}
+        serviceAccountsContent={
+          <div data-testid="service-accounts-content">Service Accounts Content</div>
+        }
         explorerContent={<div data-testid="explorer-content">Explorer Content</div>}
         activityContent={<div data-testid="activity-content">Activity Content</div>}
       />
@@ -71,7 +75,9 @@ describe('ApiKeysWorkspaceTabs Component', () => {
         endpointCount={63}
         isAdmin={true}
         apiKeysContent={<div data-testid="api-keys-content">API Keys Content</div>}
-        serviceAccountsContent={<div data-testid="service-accounts-content">Service Accounts Content</div>}
+        serviceAccountsContent={
+          <div data-testid="service-accounts-content">Service Accounts Content</div>
+        }
         explorerContent={<div data-testid="explorer-content">Explorer Content</div>}
         activityContent={<div data-testid="activity-content">Activity Content</div>}
       />

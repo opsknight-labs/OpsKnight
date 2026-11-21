@@ -14,6 +14,8 @@ import {
   type ServiceObjectiveItem,
 } from '@/components/settings/ServiceObjectivesDirectory';
 import { summarizeObjective } from '@/components/settings/serviceObjectiveSummary';
+import ObjectiveBudgetForecast from '@/components/settings/ObjectiveBudgetForecast';
+import { getObjectiveForecasts } from '@/lib/slo/forecast-loader';
 
 export const revalidate = 0;
 export default async function ServiceObjectivesPage({
@@ -51,7 +53,10 @@ export default async function ServiceObjectivesPage({
     take: 26,
   });
   const admin = hasCapability(actor.role, CAPABILITIES.ADMIN_MANAGE);
-  const items: ServiceObjectiveItem[] = rows.slice(0, 25).map(row => ({
+  const forecasts = await getObjectiveForecasts(actor, rows.slice(0, 25));
+  const items: ServiceObjectiveItem[] = rows.slice(0, 25).map(row => {
+    const forecast = forecasts.get(row.id);
+    return {
     id: row.id,
     lineageId: row.lineageId,
     version: row.version,
@@ -70,7 +75,9 @@ export default async function ServiceObjectivesPage({
       snapshot: row.snapshots?.[0] ?? null,
       canReadHistory,
     }),
-  }));
+      forecast: forecast ? <ObjectiveBudgetForecast forecast={forecast} /> : undefined,
+    };
+  });
   const total = rows.length > 25 ? '25+' : String(rows.length);
   const count = (health: ServiceObjectiveItem['health']) =>
     items.filter(item => item.health === health).length;

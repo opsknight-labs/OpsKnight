@@ -22,7 +22,9 @@ const adoptedPaths = [
 
 describe('time and retention adoption', () => {
   it.each(adoptedPaths)('%s uses a centralized retained reporting window', (_path, source) => {
-    expect(source).toMatch(/buildRetainedDateFilter|getReportingWindowForDays|resolveReportingWindow|createAnalyticsContext/);
+    expect(source).toMatch(
+      /buildRetainedDateFilter|getReportingWindowForDays|resolveReportingWindow|createAnalyticsContext/
+    );
   });
 
   it.each(adoptedPaths)('%s does not independently mutate calendar dates', (_path, source) => {

@@ -185,6 +185,15 @@ test.describe('mobile responsive visual integrity matrix', () => {
       // 3. Incident Detail
       await page.goto('/m/incidents/mobile-matrix-incident-fixture');
       await assertResponsiveIntegrity(page);
+      // Intelligence is one strip under the actions (only when it has something to say) and a bottom
+      // sheet on demand: there is no separate mobile intelligence card, and never an empty one.
+      await expect(page.getByTestId('mobile-intelligence')).toHaveCount(0);
+      const intelligenceStrip = page.getByTestId('intelligence-strip');
+      if (await intelligenceStrip.count()) {
+        const stripBox = (await intelligenceStrip.boundingBox())!;
+        expect(stripBox.y + stripBox.height).toBeLessThanOrEqual(vp.height);
+        expect(stripBox.x + stripBox.width).toBeLessThanOrEqual(vp.width);
+      }
       await page.screenshot({ path: `screenshots/responsive/incident-detail-${vp.width}.png` });
 
       // 4. Create Incident
@@ -241,6 +250,12 @@ test.describe('mobile responsive visual integrity matrix', () => {
       // 15. Analytics (responsive desktop page; no /m twin)
       await page.goto('/insights');
       await assertResponsiveIntegrity(page);
+
+      // 16. AIOps (More menu): the overview's Noise section and, when non-empty, its inbox
+      await page.goto('/m/intelligence');
+      await expect(page.getByRole('region', { name: 'Noise', exact: true })).toBeVisible();
+      await assertResponsiveIntegrity(page);
+      await page.screenshot({ path: `screenshots/responsive/intelligence-${vp.width}.png` });
     });
   }
 });

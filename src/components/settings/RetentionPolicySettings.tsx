@@ -326,7 +326,9 @@ export default function RetentionPolicySettings() {
                 <Database className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-foreground">Database Storage Footprint</h3>
+                <h3 className="text-base font-semibold text-foreground">
+                  Database Storage Footprint
+                </h3>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                   Live record counts and oldest recorded data points across historical telemetry
                   tables.
@@ -394,7 +396,9 @@ export default function RetentionPolicySettings() {
               <Clock className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-foreground">Retention Schedule & Rules</h3>
+              <h3 className="text-base font-semibold text-foreground">
+                Retention Schedule & Rules
+              </h3>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                 Define how long records are kept before becoming eligible for automated lifecycle
                 pruning.

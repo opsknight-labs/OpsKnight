@@ -13,6 +13,7 @@ let stopScheduler: (() => Promise<void>) | null = null;
 let stopJobWorkerService: (() => Promise<void>) | null = null;
 let stopIntegratedRunbookWorkerService: (() => Promise<void>) | null = null;
 let stopIngestionWorkerService: (() => Promise<void>) | null = null;
+let stopIntelligenceLaneService: (() => Promise<void>) | null = null;
 let shutdownPromise: Promise<void> | null = null;
 
 async function stopRuntimeServices(): Promise<void> {
@@ -48,6 +49,10 @@ async function stopRuntimeServices(): Promise<void> {
   if (stopIntegratedRunbookWorkerService) {
     await stopIntegratedRunbookWorkerService();
     stopIntegratedRunbookWorkerService = null;
+  }
+  if (stopIntelligenceLaneService) {
+    stops.push(stopIntelligenceLaneService());
+    stopIntelligenceLaneService = null;
   }
 
   const results = await Promise.allSettled(stops);
@@ -144,6 +149,45 @@ export async function register() {
         await import('./lib/runbooks/integrated-worker');
       startIntegratedRunbookWorker();
       stopIntegratedRunbookWorkerService = stopIntegratedRunbookWorker;
+    }
+
+    // Intelligence is optional and disabled by default; a failure to start it must never affect boot.
+    try {
+      const { shouldRunIntelligenceLane, startIntelligenceLane, stopIntelligenceLane } =
+        await import('./lib/intelligence/jobs/runner');
+      if (shouldRunIntelligenceLane(role)) {
+        // In `integrated` the lane runs in a child process of its own, so its heap, garbage collection and
+        // Prisma client never pause ingestion on this thread. The lane process exists only while intelligence is
+        // enabled. Without the thread bundle (or with INTELLIGENCE_LANE_THREAD=off) the lane runs here as
+        // before; that fallback is outside the ingestion latency contract, so it is never silent.
+        const { planIntegratedLane, startIntelligenceLaneThread, stopIntelligenceLaneThread } =
+          await import('./lib/intelligence/jobs/lane-thread');
+        const { setIntelligenceLaneMode } = await import('./lib/intelligence/jobs/runner');
+        const plan = planIntegratedLane(role);
+        const { mainThreadLaneStandIn } = await import('./lib/intelligence/jobs/lane-stand-in');
+        if (
+          plan.mode === 'thread' &&
+          startIntelligenceLaneThread({ standIn: mainThreadLaneStandIn })
+        ) {
+          setIntelligenceLaneMode({ mode: 'thread', fallbackReason: null });
+          stopIntelligenceLaneService = stopIntelligenceLaneThread;
+        } else {
+          setIntelligenceLaneMode({ mode: 'in-process', fallbackReason: plan.fallbackReason });
+          if (plan.fallbackReason) {
+            const { logger } = await import('./lib/logger');
+            logger.warn(
+              '[Intelligence] The lane runs on the main thread beside ingestion (in-process mode). ' +
+                'This mode is outside the ingestion latency contract. ' +
+                plan.remedy,
+              { reason: plan.fallbackReason }
+            );
+          }
+          startIntelligenceLane();
+          stopIntelligenceLaneService = stopIntelligenceLane;
+        }
+      }
+    } catch (error) {
+      console.error('[Runtime] Intelligence lane failed to start; continuing without it', error);
     }
 
     const { logger } = await import('./lib/logger');

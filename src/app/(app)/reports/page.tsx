@@ -30,6 +30,12 @@ import { DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import DashboardCard from '@/components/reports/DashboardCard';
 import { requirePageAccess } from '@/lib/access/server';
+import OnDemandExplain from '@/components/intelligence/OnDemandExplain';
+import { opsHelpersOn } from '@/lib/intelligence/helpers/on-demand';
+import { actorHasCapability } from '@/lib/authorization-policy';
+import { CAPABILITIES } from '@/lib/authorization';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { weeklyNarrativeAction } from './helper-actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +73,10 @@ export default async function ReportsPage() {
   }
 
   const userTimeZone = getUserTimeZone(user);
+  // The weekly paragraph: behind the small-helpers switch and for people who may read intelligence.
+  const showNarrative =
+    (await opsHelpersOn().catch(() => false)) &&
+    actorHasCapability(await getCurrentAuthorizationActor(), CAPABILITIES.INTELLIGENCE_READ);
   const userTeamIds = user.teamMemberships.map(m => m.teamId);
 
   // Fetch user's dashboards and shared team/public dashboards
@@ -147,6 +157,10 @@ export default async function ReportsPage() {
           },
         ]}
       />
+
+      {showNarrative && (
+        <OnDemandExplain label="Summarise this week" load={weeklyNarrativeAction} />
+      )}
 
       {/* Templates Section */}
       <section className="space-y-4">

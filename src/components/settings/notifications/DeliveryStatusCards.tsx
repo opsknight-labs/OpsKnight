@@ -1,6 +1,14 @@
 'use client';
 
-import { type LucideIcon, Activity, AlertTriangle, CheckCircle2, Clock3, HelpCircle, XCircle } from 'lucide-react';
+import {
+  type LucideIcon,
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  HelpCircle,
+  XCircle,
+} from 'lucide-react';
 import { toneClasses, type ToneKey } from '@/components/patterns';
 import { cn } from '@/lib/utils';
 
