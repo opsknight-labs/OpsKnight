@@ -44,9 +44,13 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/OpsKnightLabs/OpsKnight-backup
             org.opencontainers.image.revision=${{ github.sha }}
+          # Same heap as docker-image.yml (4 GB OOMs). The main repo's PR gate already
+          # type-checks every commit, so skipping it here makes the build faster and lighter.
           build-args: |
             SOURCE_CODE_URL=https://github.com/opsknight-labs/OpsKnight/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
+            SKIP_BUILD_TYPECHECK=true
           cache-from: type=gha,scope=backup-test-amd64
           cache-to: type=gha,scope=backup-test-amd64,mode=max
           provenance: false
