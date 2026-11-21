@@ -213,7 +213,7 @@ export async function NoiseSection({ scope, range, canManage }: SectionProps) {
       icon={<Volume2 />}
       drilldown={{ href: '/alerts', label: 'View alerts' }}
       title={SECTION_TITLES.noise}
-      description="Alerts received against incidents created, and what noise controls held back."
+      description="Alerts received, incidents created and what noise controls held back."
       footer="Shadow decisions show what would have happened and are never counted as avoided pages."
     >
       {result.ok ? (
@@ -233,7 +233,7 @@ export async function SpeedSection({ scope, range, canManage, status }: SectionP
       icon={<Timer />}
       drilldown={{ href: '/incidents', label: 'View incidents' }}
       title={SECTION_TITLES.speed}
-      description="How soon Intelligence offered its first suggestion, and how often responders accepted what it suggested."
+      description="How soon the first suggestion arrived, and how often suggestions were accepted."
     >
       {result.ok ? (
         <SpeedPanel
@@ -261,7 +261,7 @@ export async function QualitySection({
       icon={<Gauge />}
       drilldown={{ href: '/services', label: 'View services' }}
       title={SECTION_TITLES.quality}
-      description="Services whose incidents mostly clear on their own, go unacknowledged or flap, over the last 30 days."
+      description="Services that self-clear, go unacknowledged or flap, over the last 30 days."
     >
       {result.ok ? (
         <QualityPanel data={result.data} canManage={canManage} />
@@ -280,7 +280,7 @@ export async function ChangeSection({ scope, range, canManage, status }: Section
       icon={<GitCommitHorizontal />}
       drilldown={{ href: '/changes', label: 'View changes' }}
       title={SECTION_TITLES.change}
-      description="Incidents with a suggested change cause, and the changes most likely to be followed by one."
+      description="Incidents linked to a likely change, and the riskiest recent changes."
       footer="Risk is a ranking signal to help you look in the right place, never a verdict."
     >
       {result.ok ? (
@@ -306,7 +306,6 @@ export async function OutcomesSection({ scope, range }: SectionProps) {
       drilldown={{ href: '/insights', label: 'Open analytics' }}
       title={SECTION_TITLES.outcomes}
       description="Mean time to acknowledge and resolve for incidents created in this window, compared with the window before it."
-      className="lg:col-span-2"
     >
       {result.ok ? (
         <OutcomesPanel data={result.data} windowKey={range.key} since={range.since} />
@@ -327,7 +326,6 @@ export async function HealthSection({ actor }: SectionProps & { actor: Authoriza
       title={SECTION_TITLES.health}
       description="Whether the Intelligence lane is running here, and how much work is waiting."
       footer="Visible to administrators. Intelligence runs off the paging path; a degraded lane never delays notifications."
-      className="lg:col-span-2"
     >
       {result.ok && result.data ? (
         <HealthPanel data={result.data} />

@@ -97,6 +97,7 @@ function incidentItems(
       detail: 'Open the incident list to work through them.',
       href: '/incidents',
       at: pending[shown.length].at,
+      more: true,
     });
   return items;
 }

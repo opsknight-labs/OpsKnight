@@ -2,7 +2,8 @@ import { logger } from '@/lib/logger';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { GitCommitHorizontal, Siren } from 'lucide-react';
-import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { getCurrentAuthorizationActor, getCurrentUser } from '@/lib/rbac';
+import { getUserTimeZone } from '@/lib/timezone';
 import { readChangeReference } from '@/lib/intelligence/squire/references';
 import { requirePageAccess } from '@/lib/access/server';
 import { getChangeFollowers, FOLLOW_WINDOW_MINUTES } from '@/lib/intelligence/changes/followers';
@@ -17,6 +18,7 @@ const kindLabel = (kind: string) => kind.toLowerCase().replace(/_/g, ' ');
 
 export default async function ChangeReferencePage({ params }: { params: Promise<{ id: string }> }) {
   await requirePageAccess('/changes/[id]');
+  const timeZone = getUserTimeZone(await getCurrentUser());
   const { id } = await params;
   const actor = await getCurrentAuthorizationActor();
   let change;
@@ -42,7 +44,7 @@ export default async function ChangeReferencePage({ params }: { params: Promise<
         badges={<ListChip>{kindLabel(change.kind)}</ListChip>}
         description="Timing is evidence to investigate; it does not establish that a change caused an incident."
         stats={[
-          { label: 'Occurred', value: <ListWhen value={change.occurredAt} /> },
+          { label: 'Occurred', value: <ListWhen value={change.occurredAt} timeZone={timeZone} /> },
           { label: 'Source', value: change.source },
           {
             label: 'Service',

@@ -240,6 +240,34 @@ describe('NeedsAttention with operations insights', () => {
     expect(section).toHaveTextContent('Accept or dismiss some to see more.');
   });
 
+  it('keeps Accept and Dismiss as buttons and moves the other actions into a menu', async () => {
+    render(<NeedsAttention items={[]} insights={[insight()]} canDecide squireName="Squire" />);
+    const section = screen.getByRole('region', { name: 'Needs attention' });
+    expect(within(section).getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(within(section).queryByRole('button', { name: 'Evidence' })).toBeNull();
+    expect(within(section).queryByRole('link', { name: 'Create draft' })).toBeNull();
+    const more = within(section).getByRole('button', { name: 'More actions' });
+    fireEvent.pointerDown(more, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    expect(await screen.findByRole('menuitem', { name: 'Create draft' })).toHaveAttribute(
+      'href',
+      '/services/svc-1/integrations'
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Ask Squire about this' }));
+    expect(openSquire).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(within(section).getByRole('button', { name: 'More actions' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Evidence' }));
+    const dialog = await screen.findByRole('dialog', { name: 'No alerts for 3 days' });
+    expect(within(dialog).getByText('Usual alerts per day')).toBeInTheDocument();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(within(section).getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(decideInsightAction).toHaveBeenCalledWith('ins-1', 'dismiss'));
+  });
+
   it('renders nothing when both sources are empty', () => {
     const { container } = render(<NeedsAttention items={[]} insights={[]} />);
     expect(container).toBeEmptyDOMElement();

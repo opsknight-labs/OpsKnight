@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { Fragment, Suspense } from 'react';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
 import {
@@ -25,6 +25,9 @@ import {
 import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
+
+// Two panels side by side from lg; each keeps its own height, so a short card leaves no empty block.
+const PANEL_ROW = 'grid grid-cols-1 items-start gap-6 lg:grid-cols-2';
 export const revalidate = 0;
 
 /**
@@ -53,7 +56,7 @@ export default async function IntelligenceOverviewPage({
   const props = { scope, range, canManage, status };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-4 sm:space-y-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       {/* The band renders at once; its stat strip fills in from the Noise and Speed loaders. */}
       <Suspense
         key={`header-${range.key}`}
@@ -78,28 +81,33 @@ export default async function IntelligenceOverviewPage({
         <AttentionSection actor={actor} />
       </Suspense>
 
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2" key={`panels-${range.key}`}>
-        <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.noise} tiles={6} />}>
-          <NoiseSection {...props} />
-        </Suspense>
-        <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.speed} tiles={5} />}>
-          <SpeedSection {...props} />
-        </Suspense>
+      {/* Keyed by window so every panel's Suspense boundary shows its skeleton again on a switch. */}
+      <Fragment key={`panels-${range.key}`}>
+        <div className={PANEL_ROW}>
+          <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.noise} tiles={6} />}>
+            <NoiseSection {...props} />
+          </Suspense>
+          <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.speed} tiles={5} />}>
+            <SpeedSection {...props} />
+          </Suspense>
+        </div>
         <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.outcomes} />}>
           <OutcomesSection {...props} />
         </Suspense>
-        <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.quality} tiles={2} />}>
-          <QualitySection {...props} actor={actor} />
-        </Suspense>
-        <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.change} tiles={2} />}>
-          <ChangeSection {...props} />
-        </Suspense>
+        <div className={PANEL_ROW}>
+          <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.quality} tiles={2} />}>
+            <QualitySection {...props} actor={actor} />
+          </Suspense>
+          <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.change} tiles={2} />}>
+            <ChangeSection {...props} />
+          </Suspense>
+        </div>
         {canManage && (
           <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.health} tiles={4} />}>
             <HealthSection {...props} actor={actor} />
           </Suspense>
         )}
-      </div>
+      </Fragment>
     </div>
   );
 }

@@ -8,7 +8,8 @@ import { ListChip, ListWhen } from '@/components/intelligence/lists/shared';
 import { EmptyState, PageHeader } from '@/components/patterns';
 import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
 import { Button } from '@/components/ui/shadcn/button';
-import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { getCurrentAuthorizationActor, getCurrentUser } from '@/lib/rbac';
+import { getUserTimeZone } from '@/lib/timezone';
 import { readAlertReference } from '@/lib/intelligence/squire/references';
 import { getListedAlert, type AlertListDecision } from '@/lib/intelligence/lists/alerts';
 import { ALERT_DECISION_LABELS } from '@/lib/intelligence/lists/contract';
@@ -73,6 +74,7 @@ const statusLabel = (status: string) => status.charAt(0) + status.slice(1).toLow
 
 export default async function AlertReferencePage({ params }: { params: Promise<{ id: string }> }) {
   await requirePageAccess('/alerts/[id]');
+  const timeZone = getUserTimeZone(await getCurrentUser());
   const { id } = await params;
   let alert;
   let listed = null;
@@ -128,7 +130,7 @@ export default async function AlertReferencePage({ params }: { params: Promise<{
           ) : undefined
         }
         stats={[
-          { label: 'Received', value: <ListWhen value={receivedAt} /> },
+          { label: 'Received', value: <ListWhen value={receivedAt} timeZone={timeZone} /> },
           { label: 'Status', value: statusLabel(status) },
           ...(listed
             ? [

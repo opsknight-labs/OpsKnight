@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react';
 import LineChart from '@/components/charts/LineChart';
 import type { OverviewOutcomes } from '@/lib/intelligence/overview/outcomes';
 import {
@@ -56,10 +57,12 @@ function TrendChart({
         <div
           role="img"
           aria-label={`${title} per period, this window compared with the previous one. The data table below lists every value.`}
+          // LineChart reserves its padding and axis below the surface; let the box hug the surface instead.
+          className="[&>.analytics-line-chart]:!h-auto"
         >
           <LineChart
             data={data}
-            height={160}
+            height={150}
             lines={[
               { key: previousKey, color: 'var(--overview-context)', label: 'Previous window' },
               { key: currentKey, color: 'var(--overview-accent)', label: 'This window' },
@@ -67,7 +70,7 @@ function TrendChart({
           />
         </div>
       ) : (
-        <p className="py-6 text-center text-sm text-muted-foreground">
+        <p className="py-4 text-center text-sm text-muted-foreground">
           No acknowledged or resolved incidents yet.
         </p>
       )}
@@ -95,7 +98,7 @@ export default function OutcomesPanel({
   }));
   return (
     <div className={`space-y-4 ${OVERVIEW_CHART_VARS}`}>
-      <StatGrid label={`Outcomes, ${spec.label.toLowerCase()}`}>
+      <StatGrid flush columns={3} label={`Outcomes, ${spec.label.toLowerCase()}`}>
         <StatTile
           label="Mean time to acknowledge"
           value={formatDuration(data.current.mttaSeconds)}
@@ -128,7 +131,7 @@ export default function OutcomesPanel({
           hint={`${formatCount(data.previous.incidents)} in the previous ${period}`}
         />
       </StatGrid>
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
         <TrendChart
           id="overview-mtta"
           title="Mean time to acknowledge"
@@ -144,8 +147,12 @@ export default function OutcomesPanel({
           previousKey="mttrPrevious"
         />
       </div>
-      <details className="rounded-lg border border-border/70 p-3 text-sm">
-        <summary className="min-h-11 cursor-pointer content-center font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0">
+      <details className="group text-sm">
+        <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0 [&::-webkit-details-marker]:hidden">
+          <ChevronRight
+            className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none"
+            aria-hidden="true"
+          />
           Show data table
         </summary>
         <div className="mt-3 overflow-x-auto">

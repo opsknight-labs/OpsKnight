@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
@@ -35,13 +35,21 @@ describe('Needs attention on mobile', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('points insight scope and draft links at the resolved (mobile) routes', () => {
+  it('points insight scope and draft links at the resolved (mobile) routes', async () => {
     render(<NeedsAttention items={[]} insights={[insight]} resolveHref={href => `/m${href}`} />);
     expect(screen.getByRole('link', { name: /Payments/ })).toHaveAttribute(
       'href',
       '/m/services/svc-1'
     );
-    const hrefs = screen.getAllByRole('link').map(link => link.getAttribute('href'));
-    expect(hrefs).toContain('/m/services/svc-1/settings');
+    // The draft link lives in the row's "More actions" menu.
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse',
+    });
+    expect(await screen.findByRole('menuitem', { name: 'Create draft' })).toHaveAttribute(
+      'href',
+      '/m/services/svc-1/settings'
+    );
   });
 });

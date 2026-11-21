@@ -1,9 +1,11 @@
 import Link from 'next/link';
-import { ChevronRight, Inbox } from 'lucide-react';
+import { ArrowRight, ChevronRight, Inbox } from 'lucide-react';
 import {
   ATTENTION_KIND_LABELS,
   rankAttention,
   type AttentionItem,
+  type AttentionKind,
+  type RankedAttention,
 } from '@/lib/intelligence/overview/attention-contract';
 import {
   InsightRow,
@@ -38,6 +40,7 @@ export default function NeedsAttention({
 }) {
   const rows = rankAttention(items, insights);
   if (rows.length === 0) return null;
+  const blocks = groupRows(rows);
   return (
     <section
       aria-labelledby="overview-attention-title"
@@ -47,7 +50,8 @@ export default function NeedsAttention({
         className
       )}
     >
-      <header className="flex items-start gap-3 border-b border-border px-4 py-3 sm:px-5">
+      {/* Every block below opens with its own hairline, so the header needs none. */}
+      <header className="flex items-start gap-3 px-4 py-3 sm:px-5">
         <span
           aria-hidden="true"
           className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground ring-1 ring-inset ring-border"
@@ -78,35 +82,109 @@ export default function NeedsAttention({
           </p>
         </div>
       </header>
-      <ul className="divide-y divide-border">
-        {rows.map(row =>
-          row.type === 'insight' ? (
-            <InsightRow
-              key={`insight:${row.id}`}
-              insight={{
-                ...row.insight,
-                scopeHref: row.insight.scopeHref && resolveHref(row.insight.scopeHref),
-                draftHref: row.insight.draftHref && resolveHref(row.insight.draftHref),
-              }}
-              canDecide={canDecide}
-              squireName={squireName}
-              className="px-4 py-3 sm:px-5"
-            />
-          ) : (
+      {blocks.map(block =>
+        block.type === 'insights' ? (
+          <ul
+            key={`insights:${block.rows[0].id}`}
+            className="divide-y divide-border border-t border-border"
+          >
+            {block.rows.map(row => (
+              <InsightRow
+                key={`insight:${row.id}`}
+                insight={{
+                  ...row.insight,
+                  scopeHref: row.insight.scopeHref && resolveHref(row.insight.scopeHref),
+                  draftHref: row.insight.draftHref && resolveHref(row.insight.draftHref),
+                }}
+                canDecide={canDecide}
+                squireName={squireName}
+                compact
+                className="px-4 py-3 transition-colors duration-150 hover:bg-muted/50 sm:px-5"
+              />
+            ))}
+          </ul>
+        ) : (
+          <ProbeGroup key={`group:${block.kind}`} block={block} resolveHref={resolveHref} />
+        )
+      )}
+      {moreInsights && (
+        <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground sm:px-5">
+          Showing the most severe insights. Accept or dismiss some to see more.
+        </p>
+      )}
+    </section>
+  );
+}
+
+type Ranked = RankedAttention<InsightsPanelItem>;
+type ProbeRow = Extract<Ranked, { type: 'probe' }>;
+type Block =
+  | { type: 'insights'; rows: Extract<Ranked, { type: 'insight' }>[] }
+  | { type: 'group'; kind: AttentionKind; rows: ProbeRow[] };
+
+const GROUP_TITLES: Partial<Record<AttentionKind, string>> = { triage: 'Triage suggestions' };
+
+/**
+ * Keeps the ranked order but gathers probe rows of one kind under a single sub-heading, placed where the
+ * kind's first (highest-ranked) row falls; consecutive insights share one list.
+ */
+export function groupRows(rows: readonly Ranked[]): Block[] {
+  const blocks: Block[] = [];
+  const groups = new Map<AttentionKind, Extract<Block, { type: 'group' }>>();
+  for (const row of rows) {
+    if (row.type === 'insight') {
+      const last = blocks.at(-1);
+      if (last?.type === 'insights') last.rows.push(row);
+      else blocks.push({ type: 'insights', rows: [row] });
+      continue;
+    }
+    let group = groups.get(row.item.kind);
+    if (!group) {
+      group = { type: 'group', kind: row.item.kind, rows: [] };
+      groups.set(row.item.kind, group);
+      blocks.push(group);
+    }
+    group.rows.push(row);
+  }
+  return blocks;
+}
+
+function ProbeGroup({
+  block,
+  resolveHref,
+}: {
+  block: Extract<Block, { type: 'group' }>;
+  resolveHref: (href: string) => string;
+}) {
+  const shown = block.rows.filter(row => !row.item.more);
+  const more = block.rows.find(row => row.item.more);
+  const headingId = `overview-attention-${block.kind}`;
+  return (
+    <div className="border-t border-border">
+      <h3
+        id={headingId}
+        className="flex items-center gap-2 px-4 pb-1 pt-3 text-xs font-semibold text-muted-foreground sm:px-5"
+      >
+        {GROUP_TITLES[block.kind] ?? ATTENTION_KIND_LABELS[block.kind]}
+        <span className="rounded-full border border-border px-1.5 text-2xs font-semibold tabular-nums text-foreground">
+          {shown.length}
+          {more && '+'}
+        </span>
+      </h3>
+      {shown.length > 0 && (
+        <ul aria-labelledby={headingId}>
+          {shown.map(row => (
             <li key={row.id}>
               <Link
                 href={resolveHref(row.item.href)}
                 data-attention-item={row.item.kind}
-                className="flex min-h-11 items-center gap-3 px-4 py-2.5 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
+                className="flex min-h-11 items-center gap-3 px-4 py-2 transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
               >
-                <span className="min-w-0 flex-1 space-y-0.5">
-                  <span className="block text-xs font-medium text-muted-foreground">
-                    {ATTENTION_KIND_LABELS[row.item.kind]}
-                  </span>
-                  <span className="block break-words text-sm font-medium text-foreground">
+                <span className="flex min-w-0 flex-1 flex-col gap-x-3 sm:flex-row sm:items-baseline">
+                  <span className="min-w-0 break-words text-sm font-medium text-foreground">
                     {row.item.title}
                   </span>
-                  <span className="block break-words text-xs text-muted-foreground">
+                  <span className="min-w-0 break-words text-xs text-muted-foreground">
                     {row.item.detail}
                   </span>
                 </span>
@@ -116,14 +194,19 @@ export default function NeedsAttention({
                 />
               </Link>
             </li>
-          )
-        )}
-      </ul>
-      {moreInsights && (
-        <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground sm:px-5">
-          Showing the most severe insights. Accept or dismiss some to see more.
-        </p>
+          ))}
+        </ul>
       )}
-    </section>
+      {more && (
+        <Link
+          href={resolveHref(more.item.href)}
+          data-attention-item={more.item.kind}
+          className="flex min-h-11 items-center gap-1 px-4 pb-2 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-9 sm:px-5"
+        >
+          {more.item.title}
+          <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        </Link>
+      )}
+    </div>
   );
 }

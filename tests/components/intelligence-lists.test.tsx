@@ -85,7 +85,8 @@ describe('AlertsTable', () => {
 
   it('frames the rows in a directory card with a summary, an empty state and a footer', () => {
     const { rerender } = render(
-      <AlertsTable timeZone="UTC"
+      <AlertsTable
+        timeZone="UTC"
         rows={[alert()]}
         summary="1 on this page · 12 matching"
         footer={<p>footer slot</p>}
@@ -102,7 +103,8 @@ describe('AlertsTable', () => {
 
   it('sorts the page by a column header', () => {
     render(
-      <AlertsTable timeZone="UTC"
+      <AlertsTable
+        timeZone="UTC"
         rows={[
           alert({ id: 'a', summary: 'Beta alert' }),
           alert({ id: 'b', summary: 'Alpha alert', incidentId: null }),
@@ -120,7 +122,8 @@ describe('AlertsTable', () => {
 
   it('is silent about a decision, severity, labels and incident the alert does not have', () => {
     render(
-      <AlertsTable timeZone="UTC"
+      <AlertsTable
+        timeZone="UTC"
         rows={[alert({ severity: null, labels: [], moreLabels: 0, incidentId: null })]}
       />
     );
@@ -189,7 +192,8 @@ describe('ChangesTable', () => {
 
   it('says a change is not scored instead of showing a zero, and omits absent links', () => {
     render(
-      <ChangesTable timeZone="UTC"
+      <ChangesTable
+        timeZone="UTC"
         rows={[
           change({
             riskScore: null,
@@ -369,9 +373,51 @@ describe('NeedsAttention', () => {
       '/settings/intelligence/services#dependencies',
     ]);
     for (const link of links) expect(link.className).toContain('min-h-11');
-    expect(within(section).getByText('Triage')).toBeInTheDocument();
+    expect(
+      within(section).getByRole('heading', { name: /Triage suggestions/ })
+    ).toBeInTheDocument();
     expect(within(section).getByText('Dependencies')).toBeInTheDocument();
     expect(section).toHaveTextContent('2 items');
+  });
+
+  it('groups rows of one kind under a sub-heading, with the overflow row as its footer link', () => {
+    render(
+      <NeedsAttention
+        items={[
+          ...items,
+          {
+            id: 'triage:inc-2',
+            kind: 'triage',
+            title: 'Search errors',
+            detail: '1 triage suggestion awaiting a decision',
+            href: '/incidents/inc-2?insights=triage',
+          },
+          {
+            id: 'triage:more',
+            kind: 'triage',
+            title: '3 more incidents with triage suggestions to review',
+            detail: 'Open the incident list to work through them.',
+            href: '/incidents',
+            more: true,
+          },
+        ]}
+      />
+    );
+    const triage = screen.getByRole('list', { name: /Triage suggestions/ });
+    expect(
+      within(triage)
+        .getAllByRole('listitem')
+        .map(row => row.textContent)
+    ).toEqual([
+      expect.stringContaining('Checkout latency'),
+      expect.stringContaining('Search errors'),
+    ]);
+    expect(screen.getByRole('heading', { name: /Triage suggestions/ })).toHaveTextContent('2+');
+    expect(
+      screen.getByRole('link', { name: '3 more incidents with triage suggestions to review' })
+    ).toHaveAttribute('href', '/incidents');
+    // One sub-heading per kind, not a kicker on every row.
+    expect(screen.getAllByRole('heading', { name: /Triage suggestions/ })).toHaveLength(1);
   });
 
   it('lets the mobile page point rows at mobile routes', () => {

@@ -17,7 +17,7 @@ export default function NoisePanel({
   const shadowOnly = data.modes.on === 0 && data.modes.shadow > 0;
   return (
     <div className="space-y-4">
-      <StatGrid label={`Noise, ${windowLabel.toLowerCase()}`}>
+      <StatGrid flush label={`Noise, ${windowLabel.toLowerCase()}`}>
         <StatTile
           label="Alerts received"
           value={formatCount(data.alerts)}

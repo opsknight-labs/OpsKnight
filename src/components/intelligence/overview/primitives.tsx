@@ -108,9 +108,13 @@ export interface StatDelta {
 /** Placeholder for a value that does not exist yet; the tile's hint says why. */
 export const NO_VALUE = '—';
 
+// Inside a flush `StatGrid` (`data-flush`), tiles draw their own hairlines and take the card's padding.
+const FLUSH_TILE =
+  'group-data-[flush]/stats:border-b group-data-[flush]/stats:border-r group-data-[flush]/stats:px-4 group-data-[flush]/stats:py-3 sm:group-data-[flush]/stats:px-5';
+
 /**
- * One cell of a stat strip, styled like the header band's stats: micro-label, tabular value, then the
- * delta and a one-line hint. A "—" value is muted, and its hint carries the reason.
+ * One cell of a stat strip: sentence-case label, tabular value, then the delta and a one-line hint. A "—"
+ * value is muted, and its hint carries the reason.
  */
 export function StatTile({
   label,
@@ -126,13 +130,16 @@ export function StatTile({
   const Icon =
     delta?.direction === 'up' ? ArrowUpRight : delta?.direction === 'down' ? ArrowDownRight : Minus;
   return (
-    <div className="min-w-0 flex-[1_1_9rem] space-y-0.5 bg-card px-3 py-2.5">
-      <dt className="text-balance text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </dt>
+    <div
+      className={cn(
+        'min-w-0 flex-[1_1_9rem] space-y-0.5 border-border bg-card px-3 py-2.5',
+        FLUSH_TILE
+      )}
+    >
+      <dt className="line-clamp-2 text-xs font-medium text-muted-foreground">{label}</dt>
       <dd
         className={cn(
-          'break-words text-xl font-semibold tabular-nums',
+          'break-words font-display text-xl font-semibold tabular-nums group-data-[flush]/stats:text-2xl',
           value === NO_VALUE ? 'text-muted-foreground' : 'text-foreground'
         )}
       >
@@ -161,8 +168,48 @@ export function StatTile({
   );
 }
 
-/** A hairline-divided strip of `StatTile`s that wraps; tiles grow to fill each row, so no gaps show. */
-export function StatGrid({ label, children }: { label: string; children: ReactNode }) {
+// A lone tile on the last row of a two-column layout spans the row, so no empty cell shows.
+const statColumns = (columns: 2 | 3 | 4) =>
+  columns === 4
+    ? 'grid-cols-2 lg:grid-cols-4 lg:[&>*:last-child:nth-child(odd)]:col-span-1'
+    : columns === 3
+      ? 'grid-cols-2 sm:grid-cols-3 sm:[&>*:last-child:nth-child(odd)]:col-span-1'
+      : 'grid-cols-2';
+
+/**
+ * A hairline-divided strip of `StatTile`s that wraps; tiles grow to fill each row, so no gaps show.
+ *
+ * `flush` is for the strip inside an `OverviewSection` body: it runs edge to edge of the card, divided from
+ * the rest by hairlines instead of a box of its own, so a panel stays one card. `columns` is the most tiles
+ * per row (two in a half-width card, three or four only in a full-width one).
+ */
+export function StatGrid({
+  label,
+  children,
+  flush = false,
+  columns = 2,
+}: {
+  label: string;
+  children: ReactNode;
+  flush?: boolean;
+  columns?: 2 | 3 | 4;
+}) {
+  if (flush)
+    return (
+      <div className="-mx-4 overflow-hidden border-y border-border first:-mt-4 first:border-t-0 last:-mb-4 last:border-b-0 sm:-mx-5 sm:first:-mt-5 sm:last:-mb-5">
+        {/* The grid overhangs by a pixel so the outer tiles' own right and bottom hairlines are clipped. */}
+        <dl
+          aria-label={label}
+          data-flush=""
+          className={cn(
+            'group/stats -mb-px -mr-px grid [&>*:last-child:nth-child(odd)]:col-span-2',
+            statColumns(columns)
+          )}
+        >
+          {children}
+        </dl>
+      </div>
+    );
   return (
     <dl
       aria-label={label}
@@ -242,16 +289,19 @@ export function SectionSkeleton({ title, tiles = 3 }: { title: string; tiles?: n
           <Skeleton className="h-3 w-2/3" />
         </div>
       </div>
-      <div className="space-y-4 p-4 sm:p-5">
-        <div className="flex flex-wrap gap-px overflow-hidden rounded-lg border border-border bg-border">
-          {Array.from({ length: tiles }, (_, index) => (
-            <div key={index} className="flex-[1_1_9rem] space-y-1.5 bg-card px-3 py-2.5">
-              <Skeleton className="h-2.5 w-16" />
-              <Skeleton className="h-6 w-12" />
-              <Skeleton className="h-3 w-24" />
-            </div>
-          ))}
-        </div>
+      <div className="-mb-px -mr-px grid grid-cols-2">
+        {Array.from({ length: tiles }, (_, index) => (
+          <div
+            key={index}
+            className="space-y-1.5 border-b border-r border-border px-4 py-3 sm:px-5"
+          >
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-7 w-12" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-border p-4 sm:p-5">
         <Skeleton className="h-24 w-full" />
       </div>
     </section>
@@ -323,6 +373,7 @@ export function FeatureOff({
   return (
     <EmptyState
       size="sm"
+      variant="simple"
       icon={icon}
       title={title}
       description={description}

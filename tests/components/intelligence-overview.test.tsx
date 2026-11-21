@@ -118,20 +118,20 @@ const speed = (overrides: Partial<OverviewSpeed> = {}): OverviewSpeed => ({
 describe('SpeedPanel', () => {
   it('shows time to first insight and acceptance, and never fabricates a rate without reviews', () => {
     render(<SpeedPanel data={speed()} windowLabel="Last 7 days" triageEnabled canManage={false} />);
-    expect(within(tile('First insight, median')).getByText('45 s')).toBeInTheDocument();
+    expect(within(tile('First insight (median)')).getByText('45 s')).toBeInTheDocument();
     expect(
-      within(tile('First insight, median')).getByText('30 of 40 incidents had an insight')
+      within(tile('First insight (median)')).getByText('30 of 40 incidents had an insight')
     ).toBeInTheDocument();
-    expect(within(tile('First insight, 90th percentile')).getByText('12 min')).toBeInTheDocument();
-    expect(within(tile('Related suggestions accepted')).getByText('75%')).toBeInTheDocument();
-    expect(within(tile('Findings rated helpful')).getByText('—')).toBeInTheDocument();
-    expect(within(tile('Findings rated helpful')).getByText('None rated yet')).toBeInTheDocument();
-    expect(within(tile('Triage chips accepted')).getByText('50%')).toBeInTheDocument();
+    expect(within(tile('First insight (p90)')).getByText('12 min')).toBeInTheDocument();
+    expect(within(tile('Related accepted')).getByText('75%')).toBeInTheDocument();
+    expect(within(tile('Rated helpful')).getByText('—')).toBeInTheDocument();
+    expect(within(tile('Rated helpful')).getByText('None rated yet')).toBeInTheDocument();
+    expect(within(tile('Triage accepted')).getByText('50%')).toBeInTheDocument();
   });
 
   it('replaces the triage tile with a turn-on hint when triage is off', () => {
     render(<SpeedPanel data={speed()} windowLabel="Last 7 days" triageEnabled={false} canManage />);
-    expect(screen.queryByText('Triage chips accepted')).toBeNull();
+    expect(screen.queryByText('Triage accepted')).toBeNull();
     expect(screen.getByText('Triage suggestions are off')).toBeInTheDocument();
   });
 });
@@ -184,6 +184,13 @@ describe('QualityPanel', () => {
       'href',
       '/services/svc-1'
     );
+  });
+
+  it('gives the noisy list the full width and says so in one line when nothing flaps', () => {
+    render(<QualityPanel data={{ ...data, flapping: [] }} canManage />);
+    expect(screen.getByRole('list', { name: 'Noisiest services' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Flapping services' })).toBeNull();
+    expect(screen.getByText('No flapping services in the last 30 days.')).toBeInTheDocument();
   });
 
   it('hides the Jira action when Jira is not configured and explains an empty list', () => {

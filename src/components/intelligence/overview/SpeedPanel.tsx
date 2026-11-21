@@ -20,9 +20,9 @@ export default function SpeedPanel({
 }) {
   return (
     <div className="space-y-4">
-      <StatGrid label={`Speed, ${windowLabel.toLowerCase()}`}>
+      <StatGrid flush label={`Speed, ${windowLabel.toLowerCase()}`}>
         <StatTile
-          label="First insight, median"
+          label="First insight (median)"
           value={formatDuration(data.firstInsightP50Seconds)}
           hint={
             data.incidents === 0
@@ -31,23 +31,23 @@ export default function SpeedPanel({
           }
         />
         <StatTile
-          label="First insight, 90th percentile"
+          label="First insight (p90)"
           value={formatDuration(data.firstInsightP90Seconds)}
           hint="From incident creation to the first suggestion"
         />
         <StatTile
-          label="Related suggestions accepted"
+          label="Related accepted"
           value={formatPercent(data.relatedSuggestions.rate)}
           hint={reviewedHint(data.relatedSuggestions, 'reviewed')}
         />
         <StatTile
-          label="Findings rated helpful"
+          label="Rated helpful"
           value={formatPercent(data.findings.rate)}
           hint={reviewedHint(data.findings, 'rated')}
         />
         {triageEnabled && (
           <StatTile
-            label="Triage chips accepted"
+            label="Triage accepted"
             value={formatPercent(data.triage.rate)}
             hint={reviewedHint(data.triage, 'decided')}
           />
