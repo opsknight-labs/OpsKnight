@@ -6,6 +6,7 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { deleteIncidentWatcher } from '@/lib/incidents/watchers';
 import { AppError } from '@/lib/errors';
+import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
 
 const paramsSchema = z
   .object({ id: z.string().trim().min(1).max(100), watcherId: z.string().trim().min(1).max(100) })
@@ -18,7 +19,11 @@ export const GET = defineV2Route({
   resourceExtractor: async ({ actor, params }) => {
     const incident = await prisma.incident.findFirst({
       where: { AND: [{ id: params.id }, incidentReadWhere(actor)] },
-      include: { service: { select: { teamId: true } }, watchers: { select: { userId: true } } },
+      include: {
+        service: { select: { teamId: true } },
+        watchers: { select: { userId: true } },
+        roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
+      },
     });
     if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
     return {
@@ -28,6 +33,7 @@ export const GET = defineV2Route({
       serviceTeamId: incident.service.teamId,
       visibility: incident.visibility,
       watcherIds: incident.watchers.map(item => item.userId),
+      ...incidentRoleRelations(incident.roleAssignments),
     };
   },
   handler: async ({ params }) => {

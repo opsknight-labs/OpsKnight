@@ -21,6 +21,7 @@ import { AppError } from '@/lib/errors';
 import { resolveIncidentResourceForActor } from '@/lib/access/incident-relations';
 import type { Prisma } from '@prisma/client';
 import { withV2Observability } from '@/lib/api-v2/observability';
+import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
 
 export const GET = withV2Observability(async function GET(
   req: NextRequest,
@@ -37,6 +38,7 @@ export const GET = withV2Observability(async function GET(
       include: {
         service: { select: { id: true, name: true, teamId: true } },
         watchers: { select: { userId: true } },
+        roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       },
     });
 
@@ -51,6 +53,7 @@ export const GET = withV2Observability(async function GET(
       type: 'incident',
       assigneeId: incident.assigneeId,
       watcherIds: incident.watchers.map(w => w.userId),
+      ...incidentRoleRelations(incident.roleAssignments),
       visibility: incident.visibility,
       serviceTeamId: incident.service.teamId,
       assignedTeamId: incident.teamId,
@@ -107,6 +110,7 @@ export const POST = withV2Observability(async function POST(
           include: {
             service: { select: { id: true, name: true, teamId: true } },
             watchers: { select: { userId: true } },
+            roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
           },
         });
 
@@ -124,6 +128,7 @@ export const POST = withV2Observability(async function POST(
             type: 'incident',
             assigneeId: incident.assigneeId,
             watcherIds: incident.watchers.map((w: { userId: string }) => w.userId),
+            ...incidentRoleRelations(incident.roleAssignments),
             visibility: incident.visibility,
             serviceTeamId: incident.service.teamId,
             assignedTeamId: incident.teamId,

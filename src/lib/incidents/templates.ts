@@ -3,6 +3,17 @@ import { IncidentUrgency, Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import { AppError } from '@/lib/errors';
 
+const roleHolderId = z.string().trim().min(1).max(100).optional();
+/** `{ COMMANDER: userId, … }` applied to incidents created from the template. */
+export const IncidentTemplateDefaultRolesSchema = z
+  .object({
+    COMMANDER: roleHolderId,
+    OPS_LEAD: roleHolderId,
+    COMMS_LEAD: roleHolderId,
+    SCRIBE: roleHolderId,
+  })
+  .strict();
+
 export const IncidentTemplateInputSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
@@ -13,6 +24,7 @@ export const IncidentTemplateInputSchema = z
     defaultPriority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).nullable().default(null),
     defaultServiceId: z.string().min(1).max(100).nullable().default(null),
     isPublic: z.boolean().default(false),
+    defaultRoles: IncidentTemplateDefaultRolesSchema.optional(),
   })
   .strict();
 

@@ -38,6 +38,7 @@ import { loadEffectiveDisabledMcpCapabilities } from '../auth/effective-capabili
 import { ERROR_REGISTRY } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
 
 // Static: the reads that some approval-gated destructive operation declares as its preview.
 const MCP_CATALOG_PREVIEW_IDS = new Set(
@@ -531,6 +532,7 @@ async function executeMcpOperation(
               teamId: true,
               service: { select: { teamId: true } },
               watchers: { select: { userId: true } },
+              roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
             },
           });
           requireMcp(incident, 'MCP_RESOURCE_UNAVAILABLE', 404);
@@ -551,6 +553,7 @@ async function executeMcpOperation(
             assignedTeamId: incident.teamId,
             serviceTeamId: incident.service.teamId,
             watcherIds: incident.watchers.map(watcher => watcher.userId),
+            ...incidentRoleRelations(incident.roleAssignments),
           });
         }
       }

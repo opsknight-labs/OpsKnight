@@ -227,6 +227,7 @@ enum WarRoomParticipantSource {
   ESCALATION
   TEAM
   MANUAL
+  ROLE
 }
 
 enum WarRoomParticipantState {
@@ -376,6 +377,8 @@ enum IncidentEventType {
   RUNBOOK_VERIFIED
   RUNBOOK_UNVERIFIED
   CHAT_MESSAGE
+  ROLE_ASSIGNED
+  ROLE_UNASSIGNED
 }
 
 enum ActionItemStatus {
@@ -556,6 +559,8 @@ model User {
   inAppNotifications          InAppNotification[]
   devices                     UserDevice[]
   incidentWatchers            IncidentWatcher[]
+  incidentRoles               IncidentRoleAssignment[]        @relation("IncidentRoleHolder")
+  incidentRolesAssigned       IncidentRoleAssignment[]        @relation("IncidentRoleAssigner")
   auditLogs                   AuditLog[]
   overrides                   OnCallOverride[]             @relation("OverrideUser")
   overrideReplacements        OnCallOverride[]             @relation("OverrideReplacesUser")
@@ -1537,6 +1542,7 @@ model Incident {
   alerts                              Alert[]
   notifications                       Notification[]
   watchers                            IncidentWatcher[]
+  roleAssignments                     IncidentRoleAssignment[]
   tags                                IncidentTag[]
   actionItemRecords                   ActionItem[]
   intelligenceFingerprint             IncidentFingerprint?
@@ -1761,6 +1767,8 @@ model IncidentTemplate {
   defaultUrgency   IncidentUrgency @default(HIGH)
   defaultPriority  String?
   defaultServiceId String?
+  /// Optional `{ [roleKey]: userId }` applied when an incident is created from the template.
+  defaultRoles     Json?
   createdById      String?
   isPublic         Boolean         @default(false)
   createdAt        DateTime        @default(now())
@@ -1783,6 +1791,22 @@ model IncidentWatcher {
   user       User     @relation(fields: [userId], references: [id])
 
   @@unique([incidentId, userId])
+}
+
+/// One holder per role per incident; roles are a code catalog (`src/lib/incidents/roles.ts`).
+model IncidentRoleAssignment {
+  id           String   @id @default(cuid())
+  incidentId   String
+  roleKey      String
+  userId       String
+  assignedById String?
+  assignedAt   DateTime @default(now())
+  incident     Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user         User     @relation("IncidentRoleHolder", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy   User?    @relation("IncidentRoleAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([incidentId, roleKey])
+  @@index([userId])
 }
 
 model IncidentEvent {
