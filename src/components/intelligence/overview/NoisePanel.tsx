@@ -1,6 +1,6 @@
 import type { OverviewNoise } from '@/lib/intelligence/overview/noise';
 import { formatCount, formatPercent } from '@/lib/intelligence/overview/window';
-import { FeatureOff, RankedBars, StatGrid, StatTile } from './primitives';
+import { FeatureOff, NO_VALUE, RankedBars, StatGrid, StatTile } from './primitives';
 
 const NOISE_SETTINGS = '/settings/intelligence/noise-controls';
 
@@ -44,7 +44,7 @@ export default function NoisePanel({
         />
         <StatTile
           label="False-group rate"
-          value={data.grouped === 0 ? '—' : formatPercent(data.falseGroupRate)}
+          value={data.grouped === 0 ? NO_VALUE : formatPercent(data.falseGroupRate)}
           hint={
             data.grouped === 0
               ? 'No alerts were grouped'
@@ -69,7 +69,9 @@ export default function NoisePanel({
         />
       ) : (
         <div className="space-y-2">
-          <h3 className="text-sm font-medium">Suppressed by rule or maintenance window</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            Suppressed by rule or maintenance window
+          </h3>
           {shadowOnly && (
             <p className="text-xs text-muted-foreground">
               Every control is in shadow mode, so nothing is suppressed yet. See &ldquo;Would have

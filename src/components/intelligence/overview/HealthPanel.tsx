@@ -2,8 +2,11 @@ import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, MinusCircle } from 'lucide-react';
 import type { OverviewHealth } from '@/lib/intelligence/overview/health';
 import { formatCount } from '@/lib/intelligence/overview/window';
+import { toneClasses } from '@/components/patterns/status-tone';
 import { cn } from '@/lib/utils';
 import { actionLinkClass, StatGrid, StatTile } from './primitives';
+
+const LANE_TONE = { healthy: 'ok', degraded: 'elevated', disabled: 'neutral' } as const;
 
 const formatAge = (ms: number | null) => {
   if (ms === null) return 'None waiting';
@@ -34,25 +37,13 @@ export default function HealthPanel({ data }: { data: OverviewHealth }) {
       <div
         className={cn(
           'flex items-start gap-3 rounded-lg border p-3',
-          lane.status === 'healthy' &&
-            'border-status-ok-border/40 bg-status-ok-soft dark:bg-status-ok/10',
-          lane.status === 'degraded' &&
-            'border-status-elevated-border/40 bg-status-elevated-soft dark:bg-status-elevated/10',
-          lane.status === 'disabled' && 'border-border bg-muted/40'
+          toneClasses(LANE_TONE[lane.status]).soft
         )}
       >
-        <view.Icon
-          className={cn(
-            'mt-0.5 h-5 w-5 shrink-0',
-            lane.status === 'healthy' && 'text-status-ok-deep dark:text-status-ok',
-            lane.status === 'degraded' && 'text-status-elevated-deep dark:text-status-elevated',
-            lane.status === 'disabled' && 'text-muted-foreground'
-          )}
-          aria-hidden="true"
-        />
+        <view.Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
         <div>
-          <p className="text-sm font-semibold text-foreground">Lane: {view.label}</p>
-          <p className="text-xs text-muted-foreground">{view.detail}</p>
+          <p className="text-sm font-semibold">Lane: {view.label}</p>
+          <p className="text-xs opacity-90">{view.detail}</p>
         </div>
       </div>
       <StatGrid label="Intelligence work backlog">

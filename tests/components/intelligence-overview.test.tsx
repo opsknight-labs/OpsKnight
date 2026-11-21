@@ -91,14 +91,14 @@ describe('NoisePanel', () => {
     const off = noise({ modes: { on: 0, shadow: 0 }, suppressedBySource: [] });
     const { unmount } = render(<NoisePanel data={off} windowLabel="Last 7 days" canManage />);
     expect(screen.getByText('Noise controls are off')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open settings' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Turn on in settings' })).toHaveAttribute(
       'href',
       '/settings/intelligence/noise-controls'
     );
     unmount();
     render(<NoisePanel data={off} windowLabel="Last 7 days" canManage={false} />);
     expect(screen.getByText('Noise controls are off')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Open settings' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Turn on in settings' })).toBeNull();
     expect(screen.getByText(/Ask an administrator/)).toBeInTheDocument();
   });
 });
@@ -193,9 +193,12 @@ describe('QualityPanel', () => {
     expect(screen.queryByRole('button', { name: /Open Jira issue/ })).toBeNull();
     unmount();
     render(<QualityPanel data={{ ...data, noisy: [], flapping: [] }} canManage />);
-    expect(
-      screen.getByText(/No noisy or flapping services in the last 30 days/)
-    ).toBeInTheDocument();
+    expect(screen.getByText('No noisy or flapping services')).toBeInTheDocument();
+    expect(screen.getByText(/Nothing stood out in the last 30 days/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View services' })).toHaveAttribute(
+      'href',
+      '/services'
+    );
   });
 });
 
@@ -272,7 +275,7 @@ describe('ChangePanel', () => {
       />
     );
     expect(screen.getByText('No changes recorded in this window')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open settings' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Set up change sources' })).toHaveAttribute(
       'href',
       '/settings/intelligence/services#change-sources'
     );
@@ -365,6 +368,27 @@ describe('overview primitives', () => {
   it('shows the how-to only to administrators', () => {
     render(<FeatureOff title="Off" adminHint="Do this" href="/x" canManage={false} />);
     expect(screen.queryByText('Do this')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('renders the page-wide off state as a compact labelled banner with one action', () => {
+    render(
+      <FeatureOff
+        variant="banner"
+        title="Intelligence is off"
+        adminHint="Turn it on."
+        href="/s"
+        canManage
+      />
+    );
+    const banner = screen.getByRole('region', { name: 'Intelligence is off' });
+    expect(within(banner).getByRole('heading', { level: 2 })).toHaveTextContent(
+      'Intelligence is off'
+    );
+    expect(within(banner).getByRole('link', { name: 'Turn on in settings' })).toHaveAttribute(
+      'href',
+      '/s'
+    );
   });
 
   it('computes signed relative deltas', () => {

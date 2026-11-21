@@ -1,3 +1,15 @@
+import { cache } from 'react';
+import {
+  Activity,
+  Brain,
+  Gauge,
+  GitCommitHorizontal,
+  Timer,
+  TrendingUp,
+  Volume2,
+} from 'lucide-react';
+import { PageHeader } from '@/components/patterns';
+import type { DetailStatItem } from '@/components/ui/DetailHeroBanner';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
@@ -22,7 +34,13 @@ import NoisePanel from '@/components/intelligence/overview/NoisePanel';
 import OutcomesPanel from '@/components/intelligence/overview/OutcomesPanel';
 import QualityPanel from '@/components/intelligence/overview/QualityPanel';
 import SpeedPanel from '@/components/intelligence/overview/SpeedPanel';
-import { OverviewSection, SectionError } from '@/components/intelligence/overview/primitives';
+import WindowSelector from '@/components/intelligence/overview/WindowSelector';
+import {
+  NO_VALUE,
+  OverviewSection,
+  SectionError,
+} from '@/components/intelligence/overview/primitives';
+import { formatCount, formatDuration, formatPercent } from '@/lib/intelligence/overview/window';
 
 /**
  * One async server component per overview section. Each loads its own data through a fail-soft loader
@@ -38,6 +56,110 @@ interface SectionProps {
 }
 
 const ATTENTION_INSIGHT_LIMIT = 10;
+
+// One read per request: the header's stat strip and the Noise/Speed cards share these. `cache` keys on the
+// argument identity, so callers pass the same `scope` and `range` objects the page built.
+const loadNoise = cache((scope: OverviewScope, range: OverviewWindow) =>
+  loadSection('noise', () => getOverviewNoise(scope, range))
+);
+const loadSpeed = cache((scope: OverviewScope, range: OverviewWindow) =>
+  loadSection('speed', () => getOverviewSpeed(scope, range))
+);
+
+const HEADER_STAT_LABELS = [
+  'Alerts received',
+  'Pages avoided',
+  'First insight, median',
+  'Suggestions accepted',
+] as const;
+
+/**
+ * The overview's page band: eyebrow, title, the window selector as its action and the headline numbers.
+ * `stats` is null while they load (the strip shows placeholders), so the band never shifts.
+ */
+export function OverviewHeader({
+  scope,
+  range,
+  stats,
+}: {
+  scope: OverviewScope;
+  range: OverviewWindow;
+  stats: DetailStatItem[] | null;
+}) {
+  return (
+    <PageHeader
+      eyebrow="AIOps"
+      title="AIOps overview"
+      icon={Brain}
+      description={
+        <>
+          <p>
+            What Intelligence and the noise controls did for the incidents you can see: noise held
+            back, how quickly suggestions arrived and how often they helped.
+          </p>
+          {!scope.global && (
+            <p className="mt-1 text-xs">
+              Showing your teams&apos; services and incidents only.
+              {scope.servicesTruncated && ' Limited to the first 2,000 services.'}
+            </p>
+          )}
+        </>
+      }
+      primaryAction={<WindowSelector current={range.key} />}
+      stats={
+        stats ?? HEADER_STAT_LABELS.map(label => ({ label, value: NO_VALUE, subtext: 'Loading' }))
+      }
+    />
+  );
+}
+
+/** The header with its stat strip filled from the Noise and Speed loaders (shared with their cards). */
+export async function OverviewHeaderWithStats({ scope, range }: SectionProps) {
+  const [noise, speed] = await Promise.all([loadNoise(scope, range), loadSpeed(scope, range)]);
+  const unavailable = { value: NO_VALUE, subtext: 'Unavailable' };
+  const stats: DetailStatItem[] = [
+    {
+      label: HEADER_STAT_LABELS[0],
+      ...(noise.ok
+        ? {
+            value: formatCount(noise.data.alerts),
+            subtext: `${formatCount(noise.data.incidents)} incidents created`,
+          }
+        : unavailable),
+    },
+    {
+      label: HEADER_STAT_LABELS[1],
+      ...(noise.ok
+        ? { value: formatCount(noise.data.pagesAvoided), subtext: 'Held back by noise controls' }
+        : unavailable),
+    },
+    {
+      label: HEADER_STAT_LABELS[2],
+      ...(speed.ok
+        ? {
+            value: formatDuration(speed.data.firstInsightP50Seconds),
+            subtext:
+              speed.data.incidents === 0
+                ? 'No incidents in this window'
+                : `${formatCount(speed.data.incidentsWithInsight)} of ${formatCount(speed.data.incidents)} incidents`,
+          }
+        : unavailable),
+    },
+    {
+      label: HEADER_STAT_LABELS[3],
+      ...(speed.ok
+        ? {
+            value: formatPercent(speed.data.relatedSuggestions.rate),
+            subtext:
+              speed.data.relatedSuggestions.reviewed === 0
+                ? 'None reviewed yet'
+                : `${formatCount(speed.data.relatedSuggestions.accepted)} of ${formatCount(speed.data.relatedSuggestions.reviewed)} reviewed`,
+          }
+        : unavailable),
+    },
+  ];
+  return <OverviewHeader scope={scope} range={range} stats={stats} />;
+}
 
 export const SECTION_TITLES = {
   noise: 'Noise',
@@ -84,13 +206,15 @@ export async function AttentionSection({
 }
 
 export async function NoiseSection({ scope, range, canManage }: SectionProps) {
-  const result = await loadSection('noise', () => getOverviewNoise(scope, range));
+  const result = await loadNoise(scope, range);
   return (
     <OverviewSection
       id="overview-noise"
+      icon={<Volume2 />}
       drilldown={{ href: '/alerts', label: 'View alerts' }}
       title={SECTION_TITLES.noise}
-      description="Alerts received against incidents created, and what noise controls held back. Shadow decisions show what would have happened and are never counted as avoided pages."
+      description="Alerts received against incidents created, and what noise controls held back."
+      footer="Shadow decisions show what would have happened and are never counted as avoided pages."
     >
       {result.ok ? (
         <NoisePanel data={result.data} windowLabel={range.label} canManage={canManage} />
@@ -102,10 +226,11 @@ export async function NoiseSection({ scope, range, canManage }: SectionProps) {
 }
 
 export async function SpeedSection({ scope, range, canManage, status }: SectionProps) {
-  const result = await loadSection('speed', () => getOverviewSpeed(scope, range));
+  const result = await loadSpeed(scope, range);
   return (
     <OverviewSection
       id="overview-speed"
+      icon={<Timer />}
       drilldown={{ href: '/incidents', label: 'View incidents' }}
       title={SECTION_TITLES.speed}
       description="How soon Intelligence offered its first suggestion, and how often responders accepted what it suggested."
@@ -133,6 +258,7 @@ export async function QualitySection({
   return (
     <OverviewSection
       id="overview-quality"
+      icon={<Gauge />}
       drilldown={{ href: '/services', label: 'View services' }}
       title={SECTION_TITLES.quality}
       description="Services whose incidents mostly clear on their own, go unacknowledged or flap, over the last 30 days."
@@ -151,9 +277,11 @@ export async function ChangeSection({ scope, range, canManage, status }: Section
   return (
     <OverviewSection
       id="overview-change"
+      icon={<GitCommitHorizontal />}
       drilldown={{ href: '/changes', label: 'View changes' }}
       title={SECTION_TITLES.change}
-      description="Incidents with a suggested change cause, and the changes most likely to be followed by an incident. Risk is a ranking signal, never a verdict."
+      description="Incidents with a suggested change cause, and the changes most likely to be followed by one."
+      footer="Risk is a ranking signal to help you look in the right place, never a verdict."
     >
       {result.ok ? (
         <ChangePanel
@@ -174,6 +302,7 @@ export async function OutcomesSection({ scope, range }: SectionProps) {
   return (
     <OverviewSection
       id="overview-outcomes"
+      icon={<TrendingUp />}
       drilldown={{ href: '/insights', label: 'Open analytics' }}
       title={SECTION_TITLES.outcomes}
       description="Mean time to acknowledge and resolve for incidents created in this window, compared with the window before it."
@@ -194,8 +323,10 @@ export async function HealthSection({ actor }: SectionProps & { actor: Authoriza
   return (
     <OverviewSection
       id="overview-health"
+      icon={<Activity />}
       title={SECTION_TITLES.health}
-      description="Visible to administrators. Intelligence runs off the paging path; a degraded lane never delays notifications."
+      description="Whether the Intelligence lane is running here, and how much work is waiting."
+      footer="Visible to administrators. Intelligence runs off the paging path; a degraded lane never delays notifications."
       className="lg:col-span-2"
     >
       {result.ok && result.data ? (

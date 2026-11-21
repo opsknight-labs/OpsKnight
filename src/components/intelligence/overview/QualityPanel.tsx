@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { CheckCircle2 } from 'lucide-react';
+import EmptyState from '@/components/patterns/EmptyState';
 import type { AlertQualityRow } from '@/lib/intelligence/triage/alert-quality';
 import type { OverviewQuality } from '@/lib/intelligence/overview/quality';
 import { formatPercent } from '@/lib/intelligence/overview/window';
@@ -99,15 +101,22 @@ export default function QualityPanel({
   const empty = data.noisy.length === 0 && data.flapping.length === 0;
   if (empty)
     return (
-      <p className="text-sm text-muted-foreground">
-        No noisy or flapping services in the last {data.windowDays} days. Services need at least
-        five incidents before they are ranked.
-      </p>
+      <EmptyState
+        size="sm"
+        icon={<CheckCircle2 aria-hidden="true" />}
+        title="No noisy or flapping services"
+        description={`Nothing stood out in the last ${data.windowDays} days. Services need at least five incidents before they are ranked.`}
+        primaryAction={
+          <Link href="/services" className={actionLinkClass}>
+            View services
+          </Link>
+        }
+      />
     );
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="min-w-0 space-y-2">
-        <h3 className="text-sm font-medium">Noisiest services</h3>
+        <h3 className="text-sm font-semibold text-foreground">Noisiest services</h3>
         {data.noisy.length > 0 ? (
           <ServiceList
             label="Noisiest services"
@@ -123,7 +132,7 @@ export default function QualityPanel({
         )}
       </div>
       <div className="min-w-0 space-y-2">
-        <h3 className="text-sm font-medium">Flapping services</h3>
+        <h3 className="text-sm font-semibold text-foreground">Flapping services</h3>
         {data.flapping.length > 0 ? (
           <ServiceList
             label="Flapping services"

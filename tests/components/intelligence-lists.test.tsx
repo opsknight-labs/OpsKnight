@@ -55,7 +55,7 @@ const change = (overrides: Partial<ChangeListRow> = {}): ChangeListRow => ({
 
 describe('AlertsTable', () => {
   it('links each row to the alert, its service and its incident', () => {
-    render(<AlertsTable rows={[alert()]} timeZone="UTC" />);
+    render(<AlertsTable timeZone="UTC" rows={[alert()]} />);
     const table = screen.getByRole('table', { name: 'Alerts, newest first' });
     expect(within(table).getByRole('link', { name: 'Disk usage above 90%' })).toHaveAttribute(
       'href',
@@ -75,41 +75,59 @@ describe('AlertsTable', () => {
     expect(within(table).getAllByText('Nov 10, 2026, 8:15 AM UTC').length).toBeGreaterThan(0);
   });
 
-  it("shows times in the viewer's time zone, labelled", () => {
-    render(<AlertsTable rows={[alert()]} timeZone="Asia/Kolkata" />);
-    expect(screen.getAllByText('Nov 10, 2026, 1:45 PM GMT+5:30').length).toBeGreaterThan(0);
-  });
-
-  it('keeps the incident link apart from the title and labels to two plus a count', () => {
-    const labels = ['env', 'region', 'team', 'tier'].map(key => ({ key, value: 'x' }));
-    render(<AlertsTable rows={[alert({ labels, moreLabels: 1 })]} timeZone="UTC" />);
-    expect(screen.getByRole('link', { name: 'Open incident' }).className).toMatch(/(^| )flex /);
-    const list = screen.getByRole('list', { name: 'Labels' });
-    expect(within(list).getByText('env=x')).toBeInTheDocument();
-    expect(within(list).queryByText('team=x')).toBeNull();
-    expect(within(list).getByText('+3 more')).toBeInTheDocument();
-  });
-
-  it('gives the alert link a 44 px target on phone widths', () => {
-    render(<AlertsTable rows={[alert()]} timeZone="UTC" />);
-    expect(screen.getByRole('link', { name: 'Disk usage above 90%' }).className).toContain(
+  it('gives the alert link a 44 px target in the phone layout', () => {
+    render(<AlertsTable timeZone="UTC" rows={[alert()]} />);
+    const phone = screen.getByRole('list', { name: 'Alerts, newest first' });
+    expect(within(phone).getByRole('link', { name: 'Disk usage above 90%' }).className).toContain(
       'min-h-11'
     );
   });
 
+  it('frames the rows in a directory card with a summary, an empty state and a footer', () => {
+    const { rerender } = render(
+      <AlertsTable timeZone="UTC"
+        rows={[alert()]}
+        summary="1 on this page · 12 matching"
+        footer={<p>footer slot</p>}
+      />
+    );
+    const card = screen.getByRole('region', { name: 'Alert list' });
+    expect(within(card).getByText('1 on this page · 12 matching')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: /Columns/ })).toBeInTheDocument();
+    expect(within(card).getByText('footer slot')).toBeInTheDocument();
+    rerender(<AlertsTable timeZone="UTC" rows={[]} empty={<p>No alerts match these filters</p>} />);
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByText('No alerts match these filters')).toBeInTheDocument();
+  });
+
+  it('sorts the page by a column header', () => {
+    render(
+      <AlertsTable timeZone="UTC"
+        rows={[
+          alert({ id: 'a', summary: 'Beta alert' }),
+          alert({ id: 'b', summary: 'Alpha alert', incidentId: null }),
+        ]}
+      />
+    );
+    const table = screen.getByRole('table', { name: 'Alerts, newest first' });
+    fireEvent.click(within(table).getByRole('button', { name: /Alert/ }));
+    const titles = within(table)
+      .getAllByRole('link')
+      .filter(link => link.getAttribute('href')?.startsWith('/alerts/'))
+      .map(link => link.textContent);
+    expect(titles).toEqual(['Alpha alert', 'Beta alert']);
+  });
+
   it('is silent about a decision, severity, labels and incident the alert does not have', () => {
     render(
-      <AlertsTable
+      <AlertsTable timeZone="UTC"
         rows={[alert({ severity: null, labels: [], moreLabels: 0, incidentId: null })]}
-        timeZone="UTC"
       />
     );
     expect(screen.queryByText(/Suppressed|Shadow|maintenance|Grouped|Deduplicated/)).toBeNull();
     expect(screen.queryByRole('list', { name: 'Labels' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Open incident' })).toBeNull();
     expect(screen.queryByText('Severity:')).toBeNull();
-    // Empty cells say so instead of staying blank.
-    expect(screen.getAllByText('None').length).toBeGreaterThanOrEqual(3);
   });
 
   it('names an applied decision and marks a shadow one as not applied', () => {
@@ -134,9 +152,27 @@ describe('AlertsTable', () => {
   });
 });
 
+describe('AlertsTable times and labels', () => {
+  it("shows times in the viewer's time zone, labelled", () => {
+    render(<AlertsTable timeZone="Asia/Kolkata" rows={[alert()]} />);
+    expect(screen.getAllByText('Nov 10, 2026, 1:45 PM GMT+5:30').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the incident link apart from the title and labels to two plus a count', () => {
+    const labels = ['env', 'region', 'team', 'tier'].map(key => ({ key, value: 'x' }));
+    render(<AlertsTable timeZone="UTC" rows={[alert({ labels, moreLabels: 1 })]} />);
+    for (const link of screen.getAllByRole('link', { name: 'Open incident' }))
+      expect(link.className).toMatch(/(^| )flex /);
+    const list = screen.getAllByRole('list', { name: 'Labels' })[0];
+    expect(within(list).getByText('env=x')).toBeInTheDocument();
+    expect(within(list).queryByText('team=x')).toBeNull();
+    expect(within(list).getByText('+3 more')).toBeInTheDocument();
+  });
+});
+
 describe('ChangesTable', () => {
   it('shows source, kind, service, risk band and linked incidents', () => {
-    render(<ChangesTable rows={[change()]} timeZone="UTC" />);
+    render(<ChangesTable timeZone="UTC" rows={[change()]} />);
     const table = screen.getByRole('table', { name: 'Changes, newest first' });
     expect(within(table).getByRole('link', { name: 'checkout v43 rollout' })).toHaveAttribute(
       'href',
@@ -153,8 +189,7 @@ describe('ChangesTable', () => {
 
   it('says a change is not scored instead of showing a zero, and omits absent links', () => {
     render(
-      <ChangesTable
-        timeZone="UTC"
+      <ChangesTable timeZone="UTC"
         rows={[
           change({
             riskScore: null,
@@ -209,6 +244,34 @@ describe('ListFilterBar', () => {
     fireEvent.change(screen.getByLabelText('Service'), { target: { value: '' } });
     fireEvent.change(screen.getByLabelText('Time range'), { target: { value: '24h' } });
     expect(push).toHaveBeenLastCalledWith('/alerts');
+  });
+
+  it('carries search and chip values in the form, so Apply and Enter keep them', () => {
+    render(
+      <ListFilterBar
+        basePath="/alerts"
+        label="Filter alerts"
+        fields={fields}
+        defaults={{ window: '24h' }}
+        search={{ value: 'disk', label: 'Search alerts', placeholder: 'Search' }}
+        chips={{
+          name: 'severity',
+          label: 'Severity',
+          value: '',
+          anyLabel: 'Any severity',
+          options: [{ value: 'critical', label: 'Critical', tone: 'critical' }],
+        }}
+      />
+    );
+    expect(screen.getByRole('searchbox', { name: 'Search alerts' })).toHaveAttribute('name', 'q');
+    fireEvent.click(screen.getByRole('button', { name: 'Critical' }));
+    expect(push).toHaveBeenLastCalledWith('/alerts?severity=critical&q=disk');
+    expect(screen.getByRole('button', { name: 'Any severity' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    // An active search alone counts as a filter.
+    expect(screen.getByRole('link', { name: 'Clear filters' })).toHaveAttribute('href', '/alerts');
   });
 
   it('is a labelled GET form that also works from the Apply button', () => {

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AlertTriangle, CircleDot, Info } from 'lucide-react';
+import { AlertTriangle, CircleDot, GitCommitHorizontal, Info } from 'lucide-react';
 import { RISK_HIGH_THRESHOLD, RISK_MEDIUM_THRESHOLD } from '@/lib/intelligence/lists/contract';
 import type { OverviewChange } from '@/lib/intelligence/overview/change';
 import { formatCount, formatPercent } from '@/lib/intelligence/overview/window';
@@ -91,12 +91,14 @@ export default function ChangePanel({
           adminHint="Send deploys, config changes and feature flags to the change events webhook so incidents can be linked to them."
           href="/settings/intelligence/services#change-sources"
           canManage={canManage}
+          actionLabel="Set up change sources"
+          icon={<GitCommitHorizontal aria-hidden="true" />}
         />
       ) : null}
 
       {data.riskiest.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-medium">Riskiest recent changes</h3>
+          <h3 className="text-sm font-semibold text-foreground">Riskiest recent changes</h3>
           <ul aria-label="Riskiest recent changes" className="divide-y divide-border">
             {data.riskiest.map(change => (
               <li
@@ -125,7 +127,7 @@ export default function ChangePanel({
 
       {data.recentLinked.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-medium">Recent change-linked incidents</h3>
+          <h3 className="text-sm font-semibold text-foreground">Recent change-linked incidents</h3>
           <ul aria-label="Recent change-linked incidents" className="divide-y divide-border">
             {data.recentLinked.map(row => (
               <li key={row.incidentId} className="space-y-0.5 py-2">

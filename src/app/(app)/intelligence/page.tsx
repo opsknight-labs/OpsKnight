@@ -8,7 +8,7 @@ import {
   resolveOverviewScope,
   resolveOverviewWindow,
 } from '@/lib/intelligence/overview';
-import WindowSelector from '@/components/intelligence/overview/WindowSelector';
+import { Brain } from 'lucide-react';
 import { FeatureOff, SectionSkeleton } from '@/components/intelligence/overview/primitives';
 import {
   AttentionSection,
@@ -16,6 +16,8 @@ import {
   HealthSection,
   NoiseSection,
   OutcomesSection,
+  OverviewHeader,
+  OverviewHeaderWithStats,
   QualitySection,
   SECTION_TITLES,
   SpeedSection,
@@ -51,31 +53,23 @@ export default async function IntelligenceOverviewPage({
   const props = { scope, range, canManage, status };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-3xl space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">AIOps overview</h1>
-          <p className="text-sm text-muted-foreground">
-            What Intelligence and the noise controls did for the incidents you can see: noise held
-            back, how quickly suggestions arrived and how often they helped, noisy services to fix,
-            risky changes and response times.
-          </p>
-          {!scope.global && (
-            <p className="text-xs text-muted-foreground">
-              Showing your teams&apos; services and incidents only.
-              {scope.servicesTruncated && ' Limited to the first 2,000 services.'}
-            </p>
-          )}
-        </div>
-        <WindowSelector current={range.key} />
-      </header>
+    <div className="mx-auto w-full max-w-7xl space-y-4 sm:space-y-6">
+      {/* The band renders at once; its stat strip fills in from the Noise and Speed loaders. */}
+      <Suspense
+        key={range.key}
+        fallback={<OverviewHeader scope={scope} range={range} stats={null} />}
+      >
+        <OverviewHeaderWithStats {...props} />
+      </Suspense>
 
       {!status.enabled && (
         <FeatureOff
+          variant="banner"
           title="Intelligence is off"
-          adminHint="Turn on Intelligence to analyse incidents for similar past incidents, related incidents, possible causes, runbooks and triage suggestions. Noise controls and response metrics below work either way."
+          adminHint="Turn it on to find similar and related incidents, possible causes, runbooks and triage suggestions. Noise controls and response metrics below work either way."
           href="/settings/intelligence"
           canManage={canManage}
+          icon={<Brain aria-hidden="true" />}
         />
       )}
 
@@ -84,7 +78,7 @@ export default async function IntelligenceOverviewPage({
         <AttentionSection actor={actor} />
       </Suspense>
 
-      <div className="grid gap-4 lg:grid-cols-2" key={range.key}>
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2" key={range.key}>
         <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.noise} tiles={6} />}>
           <NoiseSection {...props} />
         </Suspense>

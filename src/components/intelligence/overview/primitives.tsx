@@ -1,7 +1,16 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { AlertCircle, ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
-import EmptyState from '@/components/ui/EmptyState';
+import {
+  AlertCircle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Minus,
+  PowerOff,
+  Settings2,
+} from 'lucide-react';
+import EmptyState from '@/components/patterns/EmptyState';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { Button } from '@/components/ui/shadcn/button';
 import { Skeleton } from '@/components/ui/shadcn/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -20,14 +29,21 @@ export function OverviewSection({
   id,
   title,
   description,
+  icon,
   children,
+  footer,
   className,
   drilldown,
 }: {
   id: string;
   title: string;
+  /** One line on what the card shows. */
   description?: ReactNode;
+  /** A rendered lucide icon, drawn in the card's icon tile. */
+  icon?: ReactNode;
   children: ReactNode;
+  /** Muted note under the body (caveats, how the numbers are counted). */
+  footer?: ReactNode;
   className?: string;
   /** Where the full list behind this section lives. */
   drilldown?: { href: string; label: string };
@@ -37,29 +53,45 @@ export function OverviewSection({
       aria-labelledby={`${id}-title`}
       data-overview-section={id}
       className={cn(
-        'min-w-0 space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5',
+        'flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm',
         className
       )}
     >
-      <header className="space-y-1">
-        <div className="flex flex-wrap items-center justify-between gap-x-3">
-          <h2 id={`${id}-title`} className="text-base font-semibold tracking-tight">
+      <header className="flex items-start gap-3 border-b border-border px-4 py-3 sm:px-5">
+        {icon && (
+          <span
+            aria-hidden="true"
+            className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground ring-1 ring-inset ring-border [&_svg]:h-4 [&_svg]:w-4"
+          >
+            {icon}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <h2
+            id={`${id}-title`}
+            className="font-display text-base font-semibold tracking-tight text-foreground"
+          >
             {title}
           </h2>
-          {drilldown && (
-            <Link
-              href={drilldown.href}
-              data-overview-drilldown={id}
-              className="inline-flex min-h-11 items-center gap-1 rounded-md text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
-            >
-              {drilldown.label}
-              <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            </Link>
-          )}
+          {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
         </div>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        {drilldown && (
+          <Link
+            href={drilldown.href}
+            data-overview-drilldown={id}
+            className="-my-1 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground underline-offset-4 transition-colors duration-150 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+          >
+            {drilldown.label}
+            <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          </Link>
+        )}
       </header>
-      {children}
+      <div className="flex-1 space-y-4 p-4 sm:p-5">{children}</div>
+      {footer && (
+        <footer className="border-t border-border bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground sm:px-5">
+          {footer}
+        </footer>
+      )}
     </section>
   );
 }
@@ -73,6 +105,13 @@ export interface StatDelta {
   tone: DeltaTone;
 }
 
+/** Placeholder for a value that does not exist yet; the tile's hint says why. */
+export const NO_VALUE = '—';
+
+/**
+ * One cell of a stat strip, styled like the header band's stats: micro-label, tabular value, then the
+ * delta and a one-line hint. A "—" value is muted, and its hint carries the reason.
+ */
 export function StatTile({
   label,
   value,
@@ -87,15 +126,24 @@ export function StatTile({
   const Icon =
     delta?.direction === 'up' ? ArrowUpRight : delta?.direction === 'down' ? ArrowDownRight : Minus;
   return (
-    <div className="min-w-0 space-y-1 rounded-lg border border-border/70 bg-background/60 p-3">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="break-words text-xl font-semibold text-foreground">{value}</dd>
+    <div className="min-w-0 flex-[1_1_9rem] space-y-0.5 bg-card px-3 py-2.5">
+      <dt className="text-balance text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </dt>
+      <dd
+        className={cn(
+          'break-words text-xl font-semibold tabular-nums',
+          value === NO_VALUE ? 'text-muted-foreground' : 'text-foreground'
+        )}
+      >
+        {value}
+      </dd>
       {delta && (
         <dd
           className={cn(
-            'flex items-center gap-1 text-xs font-medium',
-            delta.tone === 'good' && 'text-status-ok-deep dark:text-status-ok-soft',
-            delta.tone === 'bad' && 'text-status-critical-deep dark:text-status-critical-soft',
+            'flex items-center gap-1 text-xs font-medium tabular-nums',
+            delta.tone === 'good' && toneClasses('ok').text,
+            delta.tone === 'bad' && toneClasses('critical').text,
             delta.tone === 'neutral' && 'text-muted-foreground'
           )}
         >
@@ -113,9 +161,13 @@ export function StatTile({
   );
 }
 
+/** A hairline-divided strip of `StatTile`s that wraps; tiles grow to fill each row, so no gaps show. */
 export function StatGrid({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <dl aria-label={label} className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-3">
+    <dl
+      aria-label={label}
+      className="flex flex-wrap gap-px overflow-hidden rounded-lg border border-border bg-border"
+    >
       {children}
     </dl>
   );
@@ -164,7 +216,10 @@ export function SectionError({ message }: { message: string }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-2 rounded-lg border border-status-critical-border/40 bg-status-critical-soft p-3 text-sm text-status-critical-deep dark:bg-status-critical/10 dark:text-foreground"
+      className={cn(
+        'flex items-start gap-2 rounded-lg border p-3 text-sm',
+        toneClasses('critical').soft
+      )}
     >
       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <p>{message}</p>
@@ -172,54 +227,106 @@ export function SectionError({ message }: { message: string }) {
   );
 }
 
+/** Loading card in the shape of `OverviewSection`: header, a stat strip and a body block. */
 export function SectionSkeleton({ title, tiles = 3 }: { title: string; tiles?: number }) {
   return (
     <section
       aria-busy="true"
       aria-label={`Loading ${title}`}
-      className="min-w-0 space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5"
+      className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm"
     >
-      <Skeleton className="h-[18px] w-2/5" />
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {Array.from({ length: tiles }, (_, index) => (
-          <Skeleton key={index} className="h-[72px] w-full" />
-        ))}
+      <div className="flex items-start gap-3 border-b border-border px-4 py-3 sm:px-5">
+        <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
+        <div className="flex-1 space-y-1.5">
+          <Skeleton className="h-4 w-1/3" />
+          <Skeleton className="h-3 w-2/3" />
+        </div>
       </div>
-      <Skeleton className="h-24 w-full" />
+      <div className="space-y-4 p-4 sm:p-5">
+        <div className="flex flex-wrap gap-px overflow-hidden rounded-lg border border-border bg-border">
+          {Array.from({ length: tiles }, (_, index) => (
+            <div key={index} className="flex-[1_1_9rem] space-y-1.5 bg-card px-3 py-2.5">
+              <Skeleton className="h-2.5 w-16" />
+              <Skeleton className="h-6 w-12" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          ))}
+        </div>
+        <Skeleton className="h-24 w-full" />
+      </div>
     </section>
   );
 }
 
 /**
- * Shown when the feature behind a section is off. Only administrators are told how to turn it on;
- * everyone else learns that it is off and whom to ask.
+ * Shown when the feature behind a section (or the whole page) is off. Administrators get one sentence on
+ * what it does and a button to the settings that turn it on; everyone else learns that it is off and whom
+ * to ask, with no button, since they cannot open those settings. `banner` is the compact page-wide
+ * callout under the header; `panel` sits inside a card.
  */
 export function FeatureOff({
   title,
   adminHint,
   href,
   canManage,
+  actionLabel = 'Turn on in settings',
+  icon = <PowerOff aria-hidden="true" />,
+  variant = 'panel',
 }: {
   title: string;
   adminHint: string;
   href: string;
   canManage: boolean;
+  actionLabel?: string;
+  /** A rendered icon element. */
+  icon?: ReactNode;
+  variant?: 'panel' | 'banner';
 }) {
+  const description = canManage
+    ? adminHint
+    : 'Ask an administrator if you would like it turned on.';
+  const action = canManage ? (
+    <Button
+      asChild
+      size="sm"
+      variant={variant === 'banner' ? 'default' : 'outline'}
+      className="h-11 shrink-0 sm:h-9"
+    >
+      <Link href={href}>
+        <Settings2 className="h-4 w-4" aria-hidden="true" />
+        {actionLabel}
+      </Link>
+    </Button>
+  ) : undefined;
+
+  if (variant === 'banner')
+    return (
+      <section
+        aria-label={title}
+        data-feature-off="banner"
+        className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center"
+      >
+        <span
+          aria-hidden="true"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground ring-1 ring-inset ring-border [&_svg]:h-4 [&_svg]:w-4"
+        >
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+        </div>
+        {action}
+      </section>
+    );
+
   return (
     <EmptyState
       size="sm"
+      icon={icon}
       title={title}
-      description={canManage ? adminHint : 'Ask an administrator if you would like it turned on.'}
-      action={
-        canManage ? (
-          <Link
-            href={href}
-            className="inline-flex min-h-11 items-center rounded-md border border-border px-3 text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Open settings
-          </Link>
-        ) : undefined
-      }
+      description={description}
+      primaryAction={action}
     />
   );
 }
