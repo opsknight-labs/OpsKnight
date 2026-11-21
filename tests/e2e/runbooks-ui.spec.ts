@@ -823,7 +823,7 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
   await login(page);
   await noOverflow(page);
   await page.getByLabel('Search runbooks').fill('UI Service');
-  await expect(page.getByRole('heading', { name: 'UI Service Recovery' }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'UI Service Recovery', exact: true })).toBeVisible();
   for (const route of [
     '/runbooks/agents',
     '/runbooks/health',
