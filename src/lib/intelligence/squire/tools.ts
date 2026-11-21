@@ -405,6 +405,7 @@ export function buildSquireTools(
             title: short(item.title, 160),
             matchPercent: item.matchPercent,
             status: item.status,
+            openedAt: item.createdAt.toISOString(),
           })),
           relatedIncidents: (related ?? [])
             .slice(0, 5)

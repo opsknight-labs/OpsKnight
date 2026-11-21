@@ -914,7 +914,7 @@ export async function answerBasicRead(
   return result ? result.text : null;
 }
 
-async function timeZoneFor(actorId: string): Promise<string> {
+export async function timeZoneFor(actorId: string): Promise<string> {
   const cached = timeZones.get(actorId);
   if (cached) return cached;
   const user = await prisma.user.findUnique({ where: { id: actorId }, select: { timeZone: true } });

@@ -180,7 +180,7 @@ describe('basic mode (no AI)', () => {
     const target = await createTestIncident('Database connection errors on db-1', service.id, {
       createdAt: at(5),
     });
-    await createTestIncident('Database connection errors on db-9', service.id, {
+    const precedent = await createTestIncident('Database connection errors on db-9', service.id, {
       createdAt: at(600),
       status: 'RESOLVED',
       resolvedAt: at(590),
@@ -200,9 +200,10 @@ describe('basic mode (no AI)', () => {
     });
     await analyzeResponse({ subjectKey: target.id, generation: 1 }, settings);
 
-    expect(
-      textOf(await turn(admin.id, 'any similar incidents?', { incidentId: target.id }))
-    ).toContain('db-9');
+    const similar = textOf(await turn(admin.id, 'any similar incidents?', { incidentId: target.id }));
+    expect(similar).toContain('db-9');
+    // Look-alikes carry their short id and opening date, so same-titled ones can be told apart.
+    expect(similar).toContain(`#${precedent.id.slice(-5).toUpperCase()}, opened `);
     const causes = textOf(await turn(admin.id, 'what caused this?', { incidentId: target.id }));
     expect(causes).toContain('api v7 rollout');
     expect(causes).toMatch(/verify/i);

@@ -1,5 +1,6 @@
 import { renderPrompt, type RenderedPrompt } from '../ai/prompts';
 import { sanitizeUntrusted, UNTRUSTED_DATA_PREAMBLE } from '../ai/redact';
+import { incidentRef } from '../incident-ux/explain';
 import type { ReadableIncident } from './deterministic';
 import type { IncidentAnalysisState } from '../analysis/contract';
 
@@ -51,6 +52,7 @@ export function buildSystemPrompt(
   const context: string[] = [
     'Cite only sources returned in this turn. Evidence handles identify reads, not proof of a causal claim.',
     'Keep suspected causes qualified. Earlier answers are dated history; use tools to verify current facts.',
+    'When several incidents share a title, tell them apart by their short id (#ABCDE, the last five characters of the id) and when they opened.',
     timeZoneRule(timeZone, now),
   ];
   const volatile: string[] = [];
@@ -79,7 +81,7 @@ export function buildSystemPrompt(
         'Similar past incidents:',
         ...briefing.similar.map(
           s =>
-            `- ${line(s.title)} /incidents/${s.id} (${s.matchPercent}% match, ${s.status.toLowerCase()})`
+            `- ${line(s.title)} ${incidentRef(s.id)} /incidents/${s.id} (${s.matchPercent}% match, ${s.status.toLowerCase()})`
         )
       );
     }

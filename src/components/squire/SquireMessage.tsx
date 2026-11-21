@@ -9,7 +9,8 @@ import SquireProposalCard from './SquireProposalCard';
 import SquireSavedAction from './SquireSavedAction';
 import OpsKnightSquire from './OpsKnightSquire';
 import SquireInvestigationSteps from './SquireInvestigationSteps';
-import type { Turn } from './chat-types';
+import type { Citation, Turn } from './chat-types';
+import { incidentRef } from '@/lib/intelligence/incident-ux/explain';
 import { SquireCitationFindingLink } from './SquireSurfaceControls';
 
 // Parsing markdown is the most expensive part of a message. Memoized on its props, a finished answer is
@@ -19,6 +20,17 @@ const Markdown = memo(
     loading: () => <span>Formatting answer…</span>,
   })
 );
+
+/** One chip per source; records that share a title (five "Workflow failed: Tests") carry their short id. */
+export function distinctCitations(citations: readonly Citation[]) {
+  const unique = [...new Map(citations.map(citation => [citation.href, citation])).values()];
+  const shared = new Map<string, number>();
+  for (const citation of unique) shared.set(citation.label, (shared.get(citation.label) ?? 0) + 1);
+  return unique.map(citation => ({
+    citation,
+    ref: (shared.get(citation.label) ?? 0) > 1 ? incidentRef(citation.id) : null,
+  }));
+}
 
 export default memo(function SquireMessage({
   turn,
@@ -134,7 +146,7 @@ export default memo(function SquireMessage({
         ))}
         {!!turn.citations?.length && (
           <ul aria-label="Sources" className="mt-3 flex flex-wrap gap-2">
-            {turn.citations.map(citation => (
+            {distinctCitations(turn.citations).map(({ citation, ref }) => (
               <li
                 key={`${citation.kind}:${citation.id}`}
                 className="flex min-w-0 max-w-full items-center gap-1"
@@ -147,6 +159,7 @@ export default memo(function SquireMessage({
                   <span className="truncate">
                     {citation.kind === 'runbook' ? 'Runbook: ' : ''}
                     {citation.label}
+                    {ref && <span className="text-muted-foreground"> · {ref}</span>}
                   </span>
                   <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
                 </Link>
