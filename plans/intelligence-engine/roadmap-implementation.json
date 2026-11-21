@@ -591,10 +591,11 @@
         "Proactive anomaly: scheduled EVALUATE_METRIC_TEMPLATE lane job feeds a metric early-warning OpsInsight (never pages; default off)",
         "SHADOW defaults: new services get one CONTENT_TEMPLATE correlation rule in SHADOW while intelligence is on",
         "Changes: versioned label->service mapping with Backstage alias and exact-name fallback, unmapped list and one-click mapping on /changes",
-        "Changes: GitHub/GitLab deployment and Kubernetes rollout mappers with signature verification and startedAt"
+        "Changes: GitHub/GitLab deployment and Kubernetes rollout mappers with signature verification and startedAt",
+        "Alert time partitioning (opt-in): scripts/partition-alerts.ts prepare/copy/swap/finalize/rollback with mirror triggers, dry-run default and pool/paging pause; lane partition maintenance behind ALERT_PARTITION_MAINTENANCE (default off); docs/v2.2.0/operate/data/alert-partitioning.md"
       ],
       "gaps": [
-        "Noise-under-storm, pre-page grouping, HIGH storms, event model, service tier and scale items tracked by earlier waves; Alert partitioning remains design-only"
+        "Noise-under-storm, pre-page grouping, HIGH storms, event model, service tier and scale items tracked by earlier waves"
       ]
     },
     "M4": {
@@ -604,9 +605,10 @@
         "Read-only Kubernetes connector, get_k8s_state tool and connection UI",
         "Hybrid lexical + vector knowledge retrieval (RRF), section-aware chunking, 180-day learned-fact re-confirmation",
         "Basic-mode dialogue state persisted encrypted in the database (10 minute TTL)",
-        "MCP long-running investigation: squire_start_investigation / squire_get_investigation, caller-scoped, encrypted, 1 h expiry, 2 per person, squireMcpEnabled + capability catalog"
+        "MCP long-running investigation: squire_start_investigation / squire_get_investigation, caller-scoped, encrypted, 1 h expiry, 2 per person, squireMcpEnabled + capability catalog",
+        "Read-only CI/CD connector (GITHUB_ACTIONS, GITLAB_CI kinds), get_pipeline_runs tool (recent runs, failed jobs, bounded log tail), evidence citations and connection UI"
       ],
-      "gaps": ["CI/CD pipeline connector not started"]
+      "gaps": []
     },
     "M5": {
       "status": "implemented_pending_full_ci",

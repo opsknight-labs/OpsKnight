@@ -28,6 +28,10 @@ import { IngestionYield } from './ingestion-yield';
 import type { IngestionActivitySnapshot } from '@/lib/ingestion/activity';
 import { listenForIntelligenceWake } from './wake-listener';
 import { purgeExpiredIntelligenceData, RETENTION_INTERVAL_MS } from './retention';
+import {
+  alertPartitionMaintenanceEnabled,
+  maintainAlertPartitions,
+} from '@/lib/alerts/partition-maintenance';
 import { analyzeIncident } from '../similarity/analyzer';
 import { correlateIncident } from '../correlation/handler';
 import { OBSERVE_INTERVAL_MS, observeDependencyPass } from '../dependencies/observer';
@@ -668,6 +672,12 @@ async function runCycle(
           error: error instanceof Error ? error.message : String(error),
         });
       }
+      if (alertPartitionMaintenanceEnabled())
+        await maintainAlertPartitions(new Date(now())).catch(error =>
+          logger.warn('[Intelligence] Alert partition maintenance failed; will retry', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        );
     }
 
     // Saved assistant conversations are swept even with intelligence off: their retention, and their
