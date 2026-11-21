@@ -56,8 +56,8 @@
     --color-neutral-900: #111827;
 
     /* Background Colors - Clean & Sophisticated */
-    /* Neutral canvas: white cards still separate clearly, without the blue cast of slate-200. */
-    --bg-primary: #f3f4f6;
+    /* Warm neutral canvas (stone-100): white cards separate clearly, no blue cast. */
+    --bg-primary: #f5f5f4;
     --bg-secondary: #ffffff;
     --bg-dark: #111827;
     --bg-surface: #ffffff;
