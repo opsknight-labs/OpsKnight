@@ -424,7 +424,7 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       { say: 'That change has no commit link.' },
     ],
     // A change without a commit or pull-request link is answered plainly; no backend is queried.
-    expect: { mode: 'ai', toolSaw: ['no GitHub or GitLab'], modelNeverSaw: ['pool-config.ts'] },
+    expect: { mode: 'ai', toolSaw: ['no GitHub, GitLab or Azure DevOps'], modelNeverSaw: ['pool-config.ts'] },
   },
   {
     id: 'tool-slo-status',

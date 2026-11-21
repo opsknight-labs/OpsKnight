@@ -40,6 +40,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The unused intelligence `InsightStrip` component and the separate insights inbox section (merged into Needs attention).
 
+## [2.2.1] - 2026-11-21
+
+First published build of the 2.2 line; 2.2.0 was tagged but never published. It contains everything listed under 2.2.0 below.
+
+### Fixed
+
+- The image build now defaults to a 6 GB Node.js heap (`BUILD_NODE_MAX_OLD_SPACE_SIZE=6144`). The 4 GB default ran out of memory, which stopped the 2.2.0 release before publishing. If you build the image yourself, give the builder at least 6 GB.
+
 ## [2.2.0] - 2026-11-20
 
 The headline of 2.2.0 is the **AI assistant (MCP) server**. Workflow automation in this release is per-service automation rules (Services → Automations); an organisation-wide trigger-and-steps workflow builder and alert correlation (AIOps) are planned for the next release.

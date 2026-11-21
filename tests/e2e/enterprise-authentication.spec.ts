@@ -378,7 +378,8 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
       if (width < 768) {
         // Below md the tab row is replaced by one full-width section picker (#997); it must
         // still be fully keyboard operable: open with Enter, choose the section with Enter.
-        const picker = page.getByRole('button', { name: /^Section: / });
+        // The system settings page has its own section picker too; target the console's steps.
+        const picker = page.getByRole('button', { name: /^Section: \d+ · / });
         await picker.focus();
         await page.keyboard.press('Enter');
         const item = page.getByRole('menuitemradio', { name: /^1 · Connect provider/ });

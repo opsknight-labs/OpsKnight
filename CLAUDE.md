@@ -35,8 +35,8 @@ npx prisma studio
 
 ## 2. Critical Workflow Rules
 
-1. **NEVER Merge Directly**: Under no circumstances execute `git merge`, `gh pr merge`, or merge into `main` directly.
-2. **Feature Branching**: Always create a feature branch (`feat/...`, `fix/...`) for all changes.
+1. **NEVER Merge Directly**: Under no circumstances execute `git merge`, `gh pr merge`, or merge into `main` or `develop` directly.
+2. **Feature Branching**: Branch `feat/...` or `fix/...` from `develop` and open the PR against `develop`. Only `develop` (releases) and `hotfix/*` (patches branched from `main`) may target `main`; after a hotfix, PR `main` back into `develop`.
 3. **PR Protocol**: Push the branch, create a Pull Request with a clear description, share the PR URL with the user, and stop.
 4. **Pre-Push Gate**: Always run `npx tsc --noEmit`, `npx eslint`, and relevant `vitest` tests before committing.
 

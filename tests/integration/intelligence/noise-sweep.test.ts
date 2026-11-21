@@ -269,6 +269,7 @@ describe('un-suppress sweep', () => {
     for (const { id } of held) expect((await incident(id)).status).toBe('SUPPRESSED');
 
     for (const [index, data] of ends.entries())
+      // eslint-disable-next-line security/detect-object-injection -- array index from entries()
       await db.suppressionRule.update({ where: { id: held[index].ruleId }, data });
     await runUnsuppressSweep(budget);
     for (const { id } of held) {

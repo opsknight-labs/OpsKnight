@@ -1376,8 +1376,7 @@ test('administrator explicitly opts into discovery previews and disables storage
   await page.request.post('/api/auth/callback/credentials', {
     form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
   });
-  await page.goto('/settings/system');
-  await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+  await page.goto('/settings/system?section=automation');
   const settings = page.getByRole('region', { name: 'Global automation settings' });
   const previews = settings.getByRole('checkbox', {
     name: 'Store diagnostic field-value previews',
@@ -1489,8 +1488,7 @@ test('administrator sees failed diagnostic cleanup and retries it to completion'
       payload: { task: 'AUTOMATION_PRIVACY_CLEANUP', cleanupId, batch: 0 },
     },
   });
-  await page.goto('/settings/system');
-  await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+  await page.goto('/settings/system?section=automation');
   const settings = page.getByRole('region', { name: 'Global automation settings' });
   await expect(settings.getByText(/Diagnostic cleanup: FAILED/)).toBeVisible();
   await settings.getByRole('button', { name: 'Retry diagnostic cleanup', exact: true }).click();

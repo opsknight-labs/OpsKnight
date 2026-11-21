@@ -437,17 +437,17 @@ describe('observability tools inside a Squire turn', () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     await setupAi(admin.id);
     model.script.push({ content: 'ok' });
-    await turn(admin.id, 'hello');
+    await turn(admin.id, 'show the metrics for this service');
     expect(toolNames()).not.toContain('query_metrics');
 
     const id = await addConnection(admin.id, { enabled: false });
     model.script.push({ content: 'ok' });
-    await turn(admin.id, 'hello');
+    await turn(admin.id, 'show the metrics for this service');
     expect(toolNames(1)).not.toContain('query_metrics');
 
     await db.observabilityConnection.update({ where: { id }, data: { enabled: true } });
     model.script.push({ content: 'ok' });
-    await turn(admin.id, 'hello');
+    await turn(admin.id, 'show the metrics for this service');
     expect(toolNames(2)).toContain('query_metrics');
     expect(toolNames(2)).not.toContain('search_logs');
 
@@ -456,7 +456,7 @@ describe('observability tools inside a Squire turn', () => {
     await db.observabilityConnection.update({ where: { id }, data: { allowedTeamIds: [team.id] } });
     const outsider = await createTestUser({ role: 'USER' });
     model.script.push({ content: 'ok' });
-    await turn(outsider.id, 'hello');
+    await turn(outsider.id, 'show the metrics for this service');
     expect(toolNames(3)).not.toContain('query_metrics');
   });
 

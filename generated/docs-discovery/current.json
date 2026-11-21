@@ -89673,7 +89673,7 @@
         "operation"
       ],
       "defaults": [
-        "ghcr.io/opsknight-labs/opsknight:2.2.0",
+        "ghcr.io/opsknight-labs/opsknight:2.2.1",
         "opsknight-local:test"
       ],
       "allowedValues": [],
@@ -320318,7 +320318,7 @@
             "operation"
           ],
           "defaults": [
-            "ghcr.io/opsknight-labs/opsknight:2.2.0",
+            "ghcr.io/opsknight-labs/opsknight:2.2.1",
             "opsknight-local:test"
           ],
           "allowedValues": [],

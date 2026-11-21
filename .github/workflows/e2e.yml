@@ -4,7 +4,7 @@ name: Browser E2E
 # `ci:full` label is added (one run per add), so the required PR gate in tests.yml stays light.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 

@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     branches:
       - main
+      - develop
     paths:
       - 'src/lib/integrations/**'
       - 'src/lib/chatops/**'

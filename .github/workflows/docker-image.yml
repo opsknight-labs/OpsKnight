@@ -3,7 +3,7 @@ name: Docker Image (build + push)
 on:
   # Pull requests build the image once each time `ci:full` is added; main always does.
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
@@ -295,8 +295,9 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_NAME_TEST }}
+          # `main` holds released code under Git Flow; staging tracks develop via the backup repo.
           tags: |
-            type=raw,value=latest
+            type=raw,value=main
             type=sha,format=short,prefix=sha-
 
       - name: Docker metadata (release staging - version tag)
@@ -852,9 +853,20 @@ jobs:
           }
           NODE
 
-  pgbouncer-image:
+  # One approval per release: builds and tests above run unattended; everything that
+  # publishes to users (images, promotion, GitHub release) waits for the production review.
+  approve-release:
     needs: sbom-provenance
     if: startsWith(github.ref, 'refs/tags/v') && needs.sbom-provenance.result == 'success'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "Release ${GITHUB_REF_NAME} approved for publishing."
+
+  pgbouncer-image:
+    needs: [sbom-provenance, approve-release]
+    if: startsWith(github.ref, 'refs/tags/v') && needs.approve-release.result == 'success'
     runs-on: ubuntu-22.04
     outputs:
       pgbouncer_image_digest: ${{ steps.pgbouncer_build.outputs.digest }}
@@ -908,8 +920,8 @@ jobs:
   agent-image:
     outputs:
       image_digest: ${{ steps.agent_build.outputs.digest }}
-    needs: sbom-provenance
-    if: startsWith(github.ref, 'refs/tags/v') && needs.sbom-provenance.result == 'success'
+    needs: [sbom-provenance, approve-release]
+    if: startsWith(github.ref, 'refs/tags/v') && needs.approve-release.result == 'success'
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout

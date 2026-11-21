@@ -3,7 +3,7 @@ name: Microsoft Teams Contract + DB Integration
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'src/lib/microsoft-teams/**'
       - 'src/lib/war-room/**'

@@ -2,6 +2,8 @@ version: 2
 updates:
   - package-ecosystem: 'npm'
     directory: '/'
+    # Git Flow: updates land in the next release, not straight into released code.
+    target-branch: 'develop'
     schedule:
       interval: 'weekly'
     open-pull-requests-limit: 10
@@ -11,5 +13,7 @@ updates:
           - '*'
   - package-ecosystem: 'github-actions'
     directory: '/'
+    # Git Flow: updates land in the next release, not straight into released code.
+    target-branch: 'develop'
     schedule:
       interval: 'monthly'

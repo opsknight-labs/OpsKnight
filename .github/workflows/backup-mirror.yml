@@ -1,13 +1,13 @@
 name: Backup mirror
 
-# Mirrors main and release tags to the backup repo OpsKnightLabs/OpsKnight-backup, where only
+# Mirrors develop (as the backup's main, so staging shows the next release) and release tags to the backup repo OpsKnightLabs/OpsKnight-backup, where only
 # backup-test-image.yml runs (it publishes ghcr.io/opsknightlabs/opsknight-test). Every
 # other workflow there is kept disabled, so the backup adds no CI load of its own.
 # Needs the BACKUP_TOKEN secret: a classic PAT with the repo and workflow scopes
 # (fine-grained PATs are rejected by GitHub's LFS API).
 on:
   push:
-    branches: [main]
+    branches: [develop]
     tags: ['v*']
   workflow_dispatch:
 
@@ -25,6 +25,10 @@ env:
 jobs:
   mirror:
     if: github.repository == 'opsknight-labs/OpsKnight'
+    # Shows the staging build as a deployment; no approval (develop is staging).
+    environment:
+      name: staging
+      url: https://opssentinal.com
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

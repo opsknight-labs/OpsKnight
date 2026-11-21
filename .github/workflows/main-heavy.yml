@@ -1,6 +1,6 @@
 name: Main heavy batch
 
-# Heavy suites run in batches instead of on every merge to main: every 6 hours this
+# Heavy suites run in batches instead of on every merge to develop: every 6 hours this
 # starts each suite whose paths changed since the last batch. Release tags still run
 # runbook and SBOM validation directly. Use "Run workflow" with force before a release.
 on:
@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: main
+          ref: develop
           fetch-depth: 0
       - name: Start heavy suites for changes since the last batch
         env:

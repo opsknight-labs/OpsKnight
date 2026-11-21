@@ -73,7 +73,7 @@ def wants(workflow, changed):
 
 def last_batch_sha(repo):
     try:
-        runs = json.loads(sh('gh', 'api', f'repos/{repo}/actions/workflows/main-heavy.yml/runs?branch=main&status=success&per_page=1'))
+        runs = json.loads(sh('gh', 'api', f'repos/{repo}/actions/workflows/main-heavy.yml/runs?branch=develop&status=success&per_page=1'))
     except subprocess.CalledProcessError:
         return None  # workflow not on main yet, so there is no previous batch
     return runs['workflow_runs'][0]['head_sha'] if runs.get('workflow_runs') else None
@@ -104,7 +104,7 @@ def main():
     for workflow in picked:
         extra = ['-f', f'base_sha={base}'] if workflow in SELF_GATED and changed is not None else []
         if not dry:
-            sh('gh', 'workflow', 'run', workflow, '--repo', repo, '--ref', 'main', *extra)
+            sh('gh', 'workflow', 'run', workflow, '--repo', repo, '--ref', 'develop', *extra)
     with open(os.environ.get('GITHUB_STEP_SUMMARY', os.devnull), 'a') as summary:
         summary.write(f'### Heavy batch for `{head[:12]}`\n\n{reason}\n\nStarted: {", ".join(picked) or "none"}\n')
 
