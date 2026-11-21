@@ -93,7 +93,8 @@ const MemberRow = memo(function MemberRow({
           showGrade={false}
           showUptimeInline={display.showMetrics}
           showHistoryBars={display.showUptimeHistory}
-          showSlaMetrics={display.showSlaMetrics}
+          // Members stay compact: their bars and headline uptime, without the 30/90-day ledger.
+          showSlaMetrics={false}
         />
       )}
     </div>

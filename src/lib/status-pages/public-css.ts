@@ -3090,24 +3090,24 @@ ${R} .status-v3-business__tally {
   white-space: nowrap;
 }
 ${R} .status-v3-business[data-status="degraded"] .status-v3-business__tally--impacted {
-  color: var(--status-degraded);
-  background: var(--status-degraded-bg);
-  border-color: color-mix(in srgb, var(--status-degraded) 30%, transparent);
+  color: color-mix(in srgb, var(--status-degraded) 60%, var(--status-text-strong));
+  background: color-mix(in srgb, var(--status-degraded) 12%, transparent);
+  border-color: color-mix(in srgb, var(--status-degraded) 35%, transparent);
 }
 ${R} .status-v3-business[data-status="partial-outage"] .status-v3-business__tally--impacted {
-  color: var(--status-partial-outage);
-  background: var(--status-partial-outage-bg);
-  border-color: color-mix(in srgb, var(--status-partial-outage) 30%, transparent);
+  color: color-mix(in srgb, var(--status-partial-outage) 60%, var(--status-text-strong));
+  background: color-mix(in srgb, var(--status-partial-outage) 12%, transparent);
+  border-color: color-mix(in srgb, var(--status-partial-outage) 35%, transparent);
 }
 ${R} .status-v3-business[data-status="major-outage"] .status-v3-business__tally--impacted {
-  color: var(--status-major-outage);
-  background: var(--status-major-outage-bg);
-  border-color: color-mix(in srgb, var(--status-major-outage) 30%, transparent);
+  color: color-mix(in srgb, var(--status-major-outage) 60%, var(--status-text-strong));
+  background: color-mix(in srgb, var(--status-major-outage) 12%, transparent);
+  border-color: color-mix(in srgb, var(--status-major-outage) 35%, transparent);
 }
 ${R} .status-v3-business[data-status="maintenance"] .status-v3-business__tally--impacted {
-  color: var(--status-maintenance);
-  background: var(--status-maintenance-bg);
-  border-color: color-mix(in srgb, var(--status-maintenance) 30%, transparent);
+  color: color-mix(in srgb, var(--status-maintenance) 60%, var(--status-text-strong));
+  background: color-mix(in srgb, var(--status-maintenance) 12%, transparent);
+  border-color: color-mix(in srgb, var(--status-maintenance) 35%, transparent);
 }
 ${R} .status-v3-business__members {
   display: grid;
