@@ -9,10 +9,13 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { IncidentCreateSchema } from '@/lib/validation';
 import { assertCanCreateIncidentForService, getCurrentUser } from '@/lib/rbac';
 import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
+import { applyTemplateDefaultRoles } from '@/lib/incidents/roles-command';
+import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 
 const BrowserIncidentCreateSchema = IncidentCreateSchema.extend({
   assigneeId: z.string().trim().max(100).optional().nullable(),
   visibility: z.enum(['PUBLIC', 'PRIVATE']).optional(),
+  templateId: z.string().trim().min(1).max(100).optional().nullable(),
 }).strict();
 
 const IDEMPOTENCY_HEADER = 'idempotency-key';
@@ -82,6 +85,18 @@ async function createBrowserIncident(request: NextRequest) {
       },
       { key: idempotencyKey, principalId: user.id }
     );
+
+    if (parsed.data.templateId && !execution.replayed && execution.value.outcome === 'CREATED') {
+      await applyTemplateDefaultRoles({
+        incidentId: execution.value.id,
+        templateId: parsed.data.templateId,
+        actor: {
+          id: user.id,
+          name: user.name,
+          isAdmin: hasCapability(user.role as AppRole, CAPABILITIES.ADMIN_MANAGE),
+        },
+      });
+    }
 
     revalidatePath('/');
     revalidatePath('/incidents');

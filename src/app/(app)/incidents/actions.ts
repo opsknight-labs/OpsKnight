@@ -21,6 +21,7 @@ import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/inci
 import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 import { applyIncidentUrgencyChange } from '@/lib/incidents/urgency-command';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
+import { applyTemplateDefaultRoles } from '@/lib/incidents/roles-command';
 import { setIncidentWatcher, deleteIncidentWatcher } from '@/lib/incidents/watchers';
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
 
@@ -162,6 +163,18 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
     source,
     actor: { id: currentUser.id, name: currentUser.name ?? undefined },
   });
+  const templateId = String(formData.get('templateId') ?? '').trim();
+  if (templateId && result.outcome === 'CREATED') {
+    await applyTemplateDefaultRoles({
+      incidentId: result.id,
+      templateId,
+      actor: {
+        id: currentUser.id,
+        name: currentUser.name,
+        isAdmin: hasCapability(currentUser.role as AppRole, CAPABILITIES.ADMIN_MANAGE),
+      },
+    });
+  }
 
   revalidatePath('/incidents');
   revalidatePath(`/incidents/${result.id}`);
