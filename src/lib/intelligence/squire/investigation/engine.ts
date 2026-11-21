@@ -1,10 +1,11 @@
 import { z } from 'zod/v4';
-import type {
-  AiDataClass,
-  AiMessage,
-  AiRequestContext,
-  AiToolDefinition,
-  LanguageModelPort,
+import {
+  compactToolSchema,
+  type AiDataClass,
+  type AiMessage,
+  type AiRequestContext,
+  type AiToolDefinition,
+  type LanguageModelPort,
 } from '../../ai/port';
 import { outputTokensFor } from '../../ai/output-limits';
 import { redactSecrets } from '../../ai/redact';
@@ -171,7 +172,7 @@ function toolCatalog(tools: AiToolDefinition[]): string {
   return tools
     .map(
       tool =>
-        `- ${tool.name}: ${tool.description} Input schema: ${JSON.stringify(tool.inputSchema)}`
+        `- ${tool.name}: ${tool.description} Input schema: ${JSON.stringify(compactToolSchema(tool.inputSchema))}`
     )
     .join('\n');
 }

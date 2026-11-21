@@ -216,3 +216,27 @@ export async function resolveEmbeddingModel(dataClass: AiDataClass): Promise<Emb
 export function dataClassAllows(candidate: AiDataClass, required: AiDataClass): boolean {
   return AI_DATA_CLASSES.indexOf(candidate) >= AI_DATA_CLASSES.indexOf(required);
 }
+
+/** Schema keywords that cost tokens on every request but never steer the model; each tool re-validates its input. */
+const ADVISORY_SCHEMA_KEYS = new Set(['additionalProperties', 'maxLength', 'maxItems', 'default']);
+
+/**
+ * The tool catalogue is most of every request, so its JSON schemas go out without advisory bounds: length caps,
+ * `additionalProperties: false` and `minLength: 1`. Enums, required fields, numeric ranges and real minimums
+ * (a 10-character resolution) stay, since they tell the model what a valid call is.
+ */
+export function compactToolSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(compactToolSchema);
+  if (!schema || typeof schema !== 'object') return schema;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (ADVISORY_SCHEMA_KEYS.has(key) || (key === 'minLength' && value === 1)) continue;
+    // `properties` maps field names to schemas, so its keys are names, never keywords to drop.
+    // eslint-disable-next-line security/detect-object-injection -- key comes from Object.entries of the schema
+    out[key] =
+      key === 'properties' && value && typeof value === 'object'
+        ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, compactToolSchema(v)]))
+        : compactToolSchema(value);
+  }
+  return out;
+}

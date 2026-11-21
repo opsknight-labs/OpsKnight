@@ -37,6 +37,7 @@ import { applyCapabilityRoute, applyDefaultTiers, CAPABILITY_TIERS } from './rou
 import { redactSecrets, sanitizeUntrusted, UNTRUSTED_DATA_PREAMBLE } from './redact';
 import {
   highestDataClass,
+  compactToolSchema,
   registerEmbeddingResolver,
   registerLanguageModelResolver,
   type AiCapability,
@@ -253,7 +254,7 @@ function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undef
   for (const definition of definitions) {
     const execute = definition.kind === 'READ' ? definition.execute : undefined;
     const inputSchema = jsonSchema<unknown>(
-      definition.inputSchema as Parameters<typeof jsonSchema>[0]
+      compactToolSchema(definition.inputSchema) as Parameters<typeof jsonSchema>[0]
     );
     set[definition.name] = execute
       ? tool<unknown, unknown>({

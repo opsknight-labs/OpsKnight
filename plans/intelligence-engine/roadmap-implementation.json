@@ -551,11 +551,16 @@
         "8 compact, block-stable history",
         "9 one handoff narrative per handoff; stakeholder nudge has its own prompt (stakeholder.update) and schema; one shared incident summary reused by inspector, pinned briefing and the chat-turn brief",
         "10 per-step holds; cache reads weighted 0.1 against daily, per-user, team and capability token budgets (dollars unchanged)",
-        "11 scripted investigation prompt-token median gated in baseline.json"
+        "11 scripted investigation prompt-token median gated in baseline.json",
+        "12 compact tool JSON schemas at the gateway and in the planner prompt (no length caps, minLength 1, additionalProperties, default; enums, required, ranges and real minimums kept): tools were ~86% of scripted prompt tokens",
+        "13 read-tool families (observability x8, automation x2) offered only when the message or intent asks for that evidence; also applied to action messages; UNKNOWN non-action messages keep the full set",
+        "14 scripted model median 11851.5 -> 7857 (-33.7%); investigation median 6545 -> 5943 (-9.2%); all 106 model + 14 investigation evals green",
+        "15 offline cache estimator (src/lib/intelligence/ai/cache-estimate.ts) + eval gate asserting a stable tool/message prefix across steps; estimated cache-read share 0.514 recorded as baseline.json modelCacheReadShare; with reads weighted 0.1 the effective input is ~54% of raw (~-64% vs the uncached old median)",
+        "16 live cache measurement: SQUIRE_EVAL_PROVIDER_KIND=ANTHROPIC|BEDROCK npm run test:squire:eval writes cache.cacheReadShare to reports/squire-eval.json (documented in docs/v2.2.0/operate/intelligence/production.md)"
       ],
       "gaps": [
-        "Target (-50-70% input tokens per turn) not met: scripted eval median -1.2%, representative incident turn -26.5%",
-        "Provider prompt-cache savings unmeasured (needs a live Anthropic/Bedrock eval run)"
+        "Raw (uncached) input-token cut is -33.7% scripted / -9.2% investigation, below the -50-70% target; reaching it cache-adjusted relies on the offline estimate",
+        "Live Anthropic/Bedrock cache run not yet executed (paid; command documented)"
       ]
     },
     "review_fixes": {

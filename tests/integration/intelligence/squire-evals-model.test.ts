@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { estimateTokens, utcDay } from '@/lib/intelligence/ai/budget';
+import { estimateCacheReads } from '@/lib/intelligence/ai/cache-estimate';
 import { breakers, invalidateGatewayCache } from '@/lib/intelligence/ai/gateway';
 import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import { saveObservabilityConnection } from '@/lib/intelligence/connectors/service';
@@ -408,6 +409,8 @@ describe('Squire scripted-model evaluation', () => {
 
   /** Prompt tokens each case sent the model (every request of every turn), for the token-regression guard. */
   const promptTokens = new Map<string, number>();
+  /** Every request body each case sent, per turn and in order, for the offline cache estimate. */
+  const caseRequests = new Map<string, unknown[][]>();
   const tokensSent = (result: { requests: unknown[] }) =>
     result.requests.reduce<number>((sum, body) => sum + estimateTokens(JSON.stringify(body)), 0);
 
@@ -622,6 +625,7 @@ describe('Squire scripted-model evaluation', () => {
       const first = await turn(c, c.question, c.script, history);
       check(c.id, c.expect, first);
       promptTokens.set(c.id, tokensSent(first));
+      caseRequests.set(c.id, [first.requests]);
       if (c.then) {
         const next = await turn(c, c.then.question, c.then.script, [
           { role: 'user', content: fill(c.question), contextProof: first.context?.userProof },
@@ -633,6 +637,7 @@ describe('Squire scripted-model evaluation', () => {
         ]);
         check(`${c.id} (follow-up)`, c.then.expect, next);
         promptTokens.set(c.id, (promptTokens.get(c.id) ?? 0) + tokensSent(next));
+        caseRequests.get(c.id)?.push(next.requests);
       }
     });
   });
@@ -650,6 +655,41 @@ describe('Squire scripted-model evaluation', () => {
       median,
       `median prompt tokens per case ${median} vs baseline ${baseline.modelMedianPromptTokens}; if the rise is intended, commit the new median in tests/evals/squire/baseline.json`
     ).toBeLessThanOrEqual(allowed);
+  });
+
+  // M2: the steps of one turn resend the same catalogue and history, so with the gateway's cache markers
+  // (system prompt + rolling breakpoint on the newest message) each later step reads that prefix from cache.
+  // Estimated offline from the scripted requests; a live run reports the provider's real cache reads.
+  it('keeps a stable prompt prefix across steps, so the estimated cache-read share holds', ctx => {
+    if (caseRequests.size < MODEL_CASES.length) ctx.skip();
+    type Body = { tools?: unknown; messages: unknown[] };
+    for (const [id, turns] of caseRequests)
+      for (const steps of turns as Body[][])
+        for (let i = 1; i < steps.length; i += 1) {
+          const [before, after] = [steps.at(i - 1)!, steps.at(i)!];
+          // A step continues the previous request: same tools, its messages first, unchanged.
+          expect(JSON.stringify(after.tools), `${id} step ${i} changed the tool catalogue`).toBe(
+            JSON.stringify(before.tools)
+          );
+          expect(
+            JSON.stringify(after.messages.slice(0, before.messages.length)),
+            `${id} step ${i} rewrote an earlier message`
+          ).toBe(JSON.stringify(before.messages));
+        }
+    const totals = [...caseRequests.values()]
+      .map(turns => estimateCacheReads(turns.flat()))
+      .reduce(
+        (sum, e) => ({
+          input: sum.input + e.inputTokens,
+          read: sum.read + e.cacheReadTokens,
+        }),
+        { input: 0, read: 0 }
+      );
+    const share = Math.round((totals.read / totals.input) * 1000) / 1000;
+    expect(
+      share,
+      `estimated cache-read share ${share} (${totals.read} of ${totals.input} prompt tokens) vs baseline ${baseline.modelCacheReadShare}; commit a deliberate change in tests/evals/squire/baseline.json`
+    ).toBeGreaterThanOrEqual(baseline.modelCacheReadShare - 0.05);
   });
 
   it('exercises every tool and proposal the assistant offers, so a new one cannot land unevaluated', () => {

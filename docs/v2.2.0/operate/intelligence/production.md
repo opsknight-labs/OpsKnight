@@ -293,6 +293,22 @@ safety case, the per-case token ceiling or the judge's scores fall below `tests/
 the report is uploaded as the `squire-eval-report` artifact. Set `SQUIRE_EVAL_JUDGE=off` to run without
 the judge. Raise the baseline only by committing a reviewed value.
 
+**Prompt size and caching.** The scripted tier also gates the median prompt tokens per case and an offline
+estimate of how much of each prompt a cache-marking provider (Anthropic, Bedrock) reads from its cache: the
+steps of one turn must resend the same tool list and history unchanged, so each later step can read that
+prefix from the cache. To measure real cache reads, run the live evaluation by hand against Anthropic or
+Bedrock. This costs money and never runs in CI:
+
+```bash
+SQUIRE_EVAL_PROVIDER_KIND=ANTHROPIC SQUIRE_EVAL_MODEL=<model id> SQUIRE_EVAL_API_KEY=<key> \
+SQUIRE_EVAL_JUDGE=off DATABASE_URL=<disposable *_test database> npm run test:squire:eval
+# Bedrock: SQUIRE_EVAL_PROVIDER_KIND=BEDROCK SQUIRE_EVAL_AWS_ACCESS_KEY_ID=<id>
+#          SQUIRE_EVAL_API_KEY=<secret access key> SQUIRE_EVAL_AWS_REGION=<region>
+```
+
+`reports/squire-eval.json` then records `cache.promptTokens`, `cache.cacheReadTokens` and
+`cache.cacheReadShare` as the provider reported them.
+
 ## Robustness and self-protection
 
 The lane is built to fail small and heal on its own. What you will see, and what to do:

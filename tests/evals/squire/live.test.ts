@@ -19,6 +19,7 @@ import { judgeAnswer, judgeEnabled, type JudgeVerdict } from './judge';
 
 const key = process.env.SQUIRE_EVAL_API_KEY;
 const localModel = process.env.SQUIRE_EVAL_ALLOW_PRIVATE_NETWORK === '1';
+const providerKind = process.env.SQUIRE_EVAL_PROVIDER_KIND ?? 'OPENAI_COMPATIBLE';
 const results: Array<{
   id: string;
   category: string;
@@ -124,10 +125,22 @@ describe.skipIf(!key)('Squire live-model evaluation', () => {
       null,
       {
         name: 'Live eval',
-        kind: 'OPENAI_COMPATIBLE',
+        // ANTHROPIC or BEDROCK measures real prompt-cache reads (M2); the nightly job stays OpenAI-compatible.
+        ...(providerKind === 'BEDROCK'
+          ? {
+              kind: 'BEDROCK' as const,
+              awsAccessKeyId: process.env.SQUIRE_EVAL_AWS_ACCESS_KEY_ID,
+              awsSecretAccessKey: key,
+              awsRegion: process.env.SQUIRE_EVAL_AWS_REGION ?? 'us-east-1',
+            }
+          : providerKind === 'ANTHROPIC'
+            ? { kind: 'ANTHROPIC' as const, apiKey: key }
+            : {
+                kind: 'OPENAI_COMPATIBLE' as const,
+                baseUrl: process.env.SQUIRE_EVAL_BASE_URL ?? 'https://api.openai.com/v1',
+                apiKey: key,
+              }),
         model: process.env.SQUIRE_EVAL_MODEL ?? 'gpt-4.1-mini',
-        baseUrl: process.env.SQUIRE_EVAL_BASE_URL ?? 'https://api.openai.com/v1',
-        apiKey: key,
         enabled: true,
         // A local smoke run against a model on this machine is the only private-network case; the nightly
         // job never sets SQUIRE_EVAL_ALLOW_PRIVATE_NETWORK.
@@ -141,6 +154,13 @@ describe.skipIf(!key)('Squire live-model evaluation', () => {
     invalidateGatewayCache();
   });
   afterAll(async () => {
+    // What the provider itself reported: prompt tokens and how many of them were read from its cache.
+    const usageRows = await db.aiUsageBreakdownDay.findMany({
+      where: { day: utcDay() },
+      select: { inputTokens: true, cacheReadTokens: true },
+    });
+    const promptTokens = usageRows.reduce((sum, row) => sum + row.inputTokens, 0);
+    const cacheReadTokens = usageRows.reduce((sum, row) => sum + (row.cacheReadTokens ?? 0), 0);
     await mkdir('reports', { recursive: true });
     await writeFile(
       'reports/squire-eval.json',
@@ -152,6 +172,12 @@ describe.skipIf(!key)('Squire live-model evaluation', () => {
               process.env.SQUIRE_EVAL_MODEL ??
               'gpt-4.1-mini')
             : null,
+          providerKind,
+          cache: {
+            promptTokens,
+            cacheReadTokens,
+            cacheReadShare: promptTokens ? cacheReadTokens / promptTokens : 0,
+          },
           results,
         },
         null,

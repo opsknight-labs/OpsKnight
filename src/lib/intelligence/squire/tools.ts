@@ -842,6 +842,34 @@ export function buildSquireTools(
   }));
 }
 
+/**
+ * Read-tool families whose schemas are large and whose use the message names. Each is offered only when the
+ * message (or a recognised investigative intent) asks for that kind of evidence; the small incident read tools
+ * are always on offer.
+ */
+const READ_FAMILIES: Array<{ tools: Set<string>; words: RegExp; intents?: Set<string> }> = [
+  {
+    tools: new Set([
+      'query_metrics',
+      'search_logs',
+      'get_traces',
+      'get_error_events',
+      'get_change_diff',
+      'list_metrics',
+      'label_values',
+      'list_metric_templates',
+    ]),
+    // Bounded, literal alternatives over a message capped by the request schema.
+    words:
+      /\b(logs?|metrics?|promql|traces?|spans?|errors?|exceptions?|stack|latency|slow|cpu|memory|5\d\d|4\d\d|diffs?|commits?|code|deploy\w*|release\w*|queries|query|dashboards?|labels?|series|spikes?|timeouts?|why|cause\w*|root|investigat\w*|debug\w*|fail\w*|broke\w*|down|outage|evidence|signals?|telemetry|sentry|loki|tempo|prometheus|datadog|cloudwatch|grafana|github)\b/,
+    intents: new Set(['CAUSES', 'SERVICE_HEALTH', 'INCIDENT_SUMMARY']),
+  },
+  {
+    tools: new Set(['get_automation_decision', 'explain_automation_rule']),
+    words: /\b(automat\w*|rules?|rout\w*|priorit\w*|escalat\w*|assign\w*|paged|page|why)\b/,
+  },
+];
+
 /** The everyday incident actions stay on offer for any question; the rest only when the message asks to act. */
 const CORE_PROPOSALS = new Set([
   'propose_acknowledge_incident',
@@ -854,9 +882,10 @@ const ACTION_WORDS =
   /\b(ack|acknowledge|resolve|close|reopen|re-?assign|assign|hand ?over|snooze|mute|escalate|page|un-?link|link|note|add|remove|draft|start|open|create|run|execute|publish|post|mark|set|raise|lower|bump|make|remember|learn|follow(?!-ups)|unfollow|notify|invite|subscribe|propose|suggest)\b/;
 
 /**
- * Tool subset by intent, so a plain question does not carry every proposal schema. Uses the basic-mode NLU:
- * an action-like message (slash command or action verb) or an UNKNOWN intent keeps the full set; any other
- * recognised question keeps every read tool and only the core incident proposals.
+ * Tool subset by intent, so a question does not carry every schema. Uses the basic-mode NLU: a message with
+ * no recognised intent and no action keeps the full set. Otherwise proposals beyond the core incident actions
+ * need an action-like message (slash command or action verb), and the large read families (observability,
+ * automation) need the message to ask for that kind of evidence.
  */
 export function toolsForMessage(
   tools: AiToolDefinition[],
@@ -864,9 +893,17 @@ export function toolsForMessage(
   onIncident: boolean
 ): AiToolDefinition[] {
   const text = normalizeMessage(message);
-  if (parseSlashCommand(message) || ACTION_WORDS.test(text)) return tools;
-  if (classifyIntent(text, onIncident).intent === 'UNKNOWN') return tools;
-  return tools.filter(tool => tool.kind !== 'PROPOSE_WRITE' || CORE_PROPOSALS.has(tool.name));
+  const acting = Boolean(parseSlashCommand(message)) || ACTION_WORDS.test(text);
+  const { intent } = classifyIntent(text, onIncident);
+  if (!acting && intent === 'UNKNOWN') return tools;
+  const unasked = READ_FAMILIES.filter(
+    family => !family.words.test(text) && !family.intents?.has(intent)
+  );
+  return tools.filter(tool =>
+    tool.kind === 'PROPOSE_WRITE'
+      ? acting || CORE_PROPOSALS.has(tool.name)
+      : !unasked.some(family => family.tools.has(tool.name))
+  );
 }
 
 function proposalTool(name: SquireActionName): AiToolDefinition {
