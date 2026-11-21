@@ -56,7 +56,8 @@
     --color-neutral-900: #111827;
 
     /* Background Colors - Clean & Sophisticated */
-    --bg-primary: #e2e8f0;
+    /* Neutral canvas: white cards still separate clearly, without the blue cast of slate-200. */
+    --bg-primary: #f3f4f6;
     --bg-secondary: #ffffff;
     --bg-dark: #111827;
     --bg-surface: #ffffff;
