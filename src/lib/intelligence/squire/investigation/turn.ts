@@ -41,7 +41,7 @@ export async function portFor(
  * One investigation turn on the chat stream: step events while it works, then the answer, citations,
  * suggestions and the saved-turn metadata, exactly like an ordinary AI answer. `finish` supplies the
  * read-only context proofs the chat module mints for every answer. If the planner fails before anything is
- * read, `fallback` produces the ordinary basic answer instead.
+ * read, `fallback` produces the ordinary AI answer instead.
  */
 export async function* streamInvestigation(input: {
   actor: AuthorizationActor;
@@ -116,8 +116,8 @@ export async function* streamInvestigation(input: {
       yield next.value;
     }
   } catch {
-    // Nothing was read and the planner is unavailable: answer the ordinary way.
-    yield { type: 'notice', text: 'AI is unavailable right now. Showing a basic answer.' };
+    // Nothing was read and the planner is unavailable: answer the ordinary way (the model, with tools).
+    yield { type: 'notice', text: 'A step-by-step investigation could not start. Answering directly.' };
     yield* input.fallback();
     return;
   }

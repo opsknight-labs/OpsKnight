@@ -220,6 +220,164 @@ export async function* streamSquire(
         ? [{ role: 'user', content: prompt.volatile, dataClass }]
         : [];
 
+      const chatPort = port;
+      // The ordinary AI answer: the model with tools. Also what an investigation falls back to when its
+      // planner fails before reading anything, so a basic answer never replaces an available model.
+      const ordinary = async function* (): AsyncGenerator<SquireEvent> {
+        const messages: AiMessage[] = [
+          system,
+          ...(personal
+            ? history
+            : history
+                .filter(message => message.role === 'user')
+                .map(message => ({
+                  ...message,
+                  content: redactPersonalData(message.content),
+                  dataClass: 'INTERNAL' as const,
+                }))),
+          ...volatile,
+          { role: 'user', content: question, dataClass },
+        ];
+        let answer = '';
+        let proposals = 0;
+        let failed = false;
+        // The classes of the tools that actually ran decide what the saved turn is classified as, and
+        // whether a proposal was made after reading third-party text (alerts, notes, payloads).
+        const ranClasses: AiDataClass[] = [];
+        let readUntrusted = false;
+        const emittedCoverage = new Set<string>();
+        for await (const event of chatPort.stream({
+          context: {
+            actorId: actor.id,
+            capability: 'SQUIRE_CHAT',
+            callSite: 'interactive' as const,
+            dataClass,
+            incidentId: incident?.id,
+            signal,
+            prompt: prompt.meta,
+          },
+          messages,
+          tools: toolsForMessage(
+            buildSquireTools(actor, {
+              personal,
+              extendedActions: settings.squireExtendedActions,
+              // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
+              knowledge: await squireKnowledgeEnabled(),
+              dataClass,
+              signal,
+              observability,
+              observe: (name, input, result) => {
+                // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
+                ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
+                readUntrusted = true;
+                return evidence.observe(name, input, result);
+              },
+            }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
+            request.message,
+            Boolean(incident)
+          ),
+          maxSteps: SQUIRE_LIMITS.maxSteps,
+        })) {
+          for (const text of evidence.notices()) {
+            if (!emittedCoverage.has(text)) {
+              emittedCoverage.add(text);
+              yield { type: 'notice', text };
+            }
+          }
+          if (event.type === 'text-delta') {
+            answer += event.delta;
+            yield { type: 'delta', text: event.delta };
+          } else if (event.type === 'finish') {
+            if (event.result.degraded) yield { type: 'notice', text: AI_LEAN_NOTICE };
+          } else if (event.type === 'tool-start') {
+            const label = TOOL_LABELS[event.name];
+            if (label) yield { type: 'tool', label };
+          } else if (event.type === 'tool-call') {
+            const action = actionForTool(event.call.name);
+            if (!action || proposals >= MAX_PROPOSALS) continue;
+            const proposal = await buildProposal(actor, action, event.call.input).catch(() => null);
+            if (proposal) {
+              proposals += 1;
+              yield {
+                type: 'proposal',
+                proposal: { ...proposal, ...(readUntrusted ? { untrustedContext: true } : {}) },
+              };
+            }
+          } else if (event.type === 'error') {
+            const limit = aiLimitFrom(event.message);
+            if (answer || proposals > 0) {
+              yield {
+                type: 'error',
+                message: event.message,
+                availability: limit ? 'quota' : 'unavailable',
+                ...(limit ? { limit } : {}),
+              };
+              failed = true;
+              break;
+            }
+            // Nothing shown yet: answer from the intelligence data instead.
+            yield {
+              type: 'notice',
+              text:
+                event.retryable && /Too many|budget/i.test(event.message)
+                  ? `${event.message}. Showing a basic answer.`
+                  : 'AI is unavailable right now. Showing a basic answer.',
+            };
+            yield* basicAnswer(
+              actor,
+              request,
+              incident,
+              settings.squireName,
+              dataClass,
+              savedConversation,
+              limit ? 'quota' : 'unavailable',
+              page,
+              limit
+            );
+            return;
+          }
+        }
+        if (failed) return;
+        // The model can spend its whole step budget on tools and end without a word; never answer with nothing.
+        if (!answer.trim() && proposals === 0) {
+          yield { type: 'notice', text: 'I could not finish that answer. Here is what I know.' };
+          yield* basicAnswer(
+            actor,
+            request,
+            incident,
+            settings.squireName,
+            dataClass,
+            savedConversation,
+            'ready',
+            page
+          );
+          return;
+        }
+        const citations = evidence.citations(answer);
+        if (citations.length > 0) yield { type: 'citations', items: citations };
+        yield { type: 'suggestions', items: followUps(incident, true) };
+        yield {
+          type: 'memory',
+          turn: {
+            mode: 'ai',
+            dataClass: highestDataClass([dataClass, ...ranClasses]),
+            completion: 'COMPLETED',
+            sources: evidence.sources(),
+            verified: evidence.verified,
+            authorizationHash: authorizationContextHash(actor),
+          },
+        };
+        yield await contextProofs(
+          actor,
+          { ...request, incidentId: incident?.id },
+          answer,
+          dataClass,
+          evidence.sources(),
+          evidence.verified
+        );
+        yield { type: 'done' };
+      };
+
       // ---- Investigation mode (off unless an administrator enables it) ----
       const investigationContext = {
         actorId: actor.id,
@@ -264,173 +422,12 @@ export async function* streamSquire(
               evidence.sources(),
               evidence.verified
             ),
-          fallback: () =>
-            basicAnswer(
-              actor,
-              request,
-              incident,
-              settings.squireName,
-              dataClass,
-              savedConversation,
-              'unavailable',
-              page
-            ),
+          fallback: ordinary,
         });
         return;
       }
 
-      const messages: AiMessage[] = [
-        system,
-        ...(personal
-          ? history
-          : history
-              .filter(message => message.role === 'user')
-              .map(message => ({
-                ...message,
-                content: redactPersonalData(message.content),
-                dataClass: 'INTERNAL' as const,
-              }))),
-        ...volatile,
-        { role: 'user', content: question, dataClass },
-      ];
-      let answer = '';
-      let proposals = 0;
-      let failed = false;
-      // The classes of the tools that actually ran decide what the saved turn is classified as, and
-      // whether a proposal was made after reading third-party text (alerts, notes, payloads).
-      const ranClasses: AiDataClass[] = [];
-      let readUntrusted = false;
-      const emittedCoverage = new Set<string>();
-      for await (const event of port.stream({
-        context: {
-          actorId: actor.id,
-          capability: 'SQUIRE_CHAT',
-          callSite: 'interactive' as const,
-          dataClass,
-          incidentId: incident?.id,
-          signal,
-          prompt: prompt.meta,
-        },
-        messages,
-        tools: toolsForMessage(
-          buildSquireTools(actor, {
-            personal,
-            extendedActions: settings.squireExtendedActions,
-            // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
-            knowledge: await squireKnowledgeEnabled(),
-            dataClass,
-            signal,
-            observability,
-            observe: (name, input, result) => {
-              // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
-              ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
-              readUntrusted = true;
-              return evidence.observe(name, input, result);
-            },
-          }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
-          request.message,
-          Boolean(incident)
-        ),
-        maxSteps: SQUIRE_LIMITS.maxSteps,
-      })) {
-        for (const text of evidence.notices()) {
-          if (!emittedCoverage.has(text)) {
-            emittedCoverage.add(text);
-            yield { type: 'notice', text };
-          }
-        }
-        if (event.type === 'text-delta') {
-          answer += event.delta;
-          yield { type: 'delta', text: event.delta };
-        } else if (event.type === 'finish') {
-          if (event.result.degraded) yield { type: 'notice', text: AI_LEAN_NOTICE };
-        } else if (event.type === 'tool-start') {
-          const label = TOOL_LABELS[event.name];
-          if (label) yield { type: 'tool', label };
-        } else if (event.type === 'tool-call') {
-          const action = actionForTool(event.call.name);
-          if (!action || proposals >= MAX_PROPOSALS) continue;
-          const proposal = await buildProposal(actor, action, event.call.input).catch(() => null);
-          if (proposal) {
-            proposals += 1;
-            yield {
-              type: 'proposal',
-              proposal: { ...proposal, ...(readUntrusted ? { untrustedContext: true } : {}) },
-            };
-          }
-        } else if (event.type === 'error') {
-          const limit = aiLimitFrom(event.message);
-          if (answer || proposals > 0) {
-            yield {
-              type: 'error',
-              message: event.message,
-              availability: limit ? 'quota' : 'unavailable',
-              ...(limit ? { limit } : {}),
-            };
-            failed = true;
-            break;
-          }
-          // Nothing shown yet: answer from the intelligence data instead.
-          yield {
-            type: 'notice',
-            text:
-              event.retryable && /Too many|budget/i.test(event.message)
-                ? `${event.message}. Showing a basic answer.`
-                : 'AI is unavailable right now. Showing a basic answer.',
-          };
-          yield* basicAnswer(
-            actor,
-            request,
-            incident,
-            settings.squireName,
-            dataClass,
-            savedConversation,
-            limit ? 'quota' : 'unavailable',
-            page,
-            limit
-          );
-          return;
-        }
-      }
-      if (failed) return;
-      // The model can spend its whole step budget on tools and end without a word; never answer with nothing.
-      if (!answer.trim() && proposals === 0) {
-        yield { type: 'notice', text: 'I could not finish that answer. Here is what I know.' };
-        yield* basicAnswer(
-          actor,
-          request,
-          incident,
-          settings.squireName,
-          dataClass,
-          savedConversation,
-          'ready',
-          page
-        );
-        return;
-      }
-      const citations = evidence.citations(answer);
-      if (citations.length > 0) yield { type: 'citations', items: citations };
-      yield { type: 'suggestions', items: followUps(incident, true) };
-      yield {
-        type: 'memory',
-        turn: {
-          mode: 'ai',
-          dataClass: highestDataClass([dataClass, ...ranClasses]),
-          completion: 'COMPLETED',
-          sources: evidence.sources(),
-          verified: evidence.verified,
-          authorizationHash: authorizationContextHash(actor),
-        },
-      };
-      yield await contextProofs(
-        actor,
-        { ...request, incidentId: incident?.id },
-        answer,
-        dataClass,
-        evidence.sources(),
-        evidence.verified
-      );
-      yield { type: 'done' };
+      yield* ordinary();
       return;
     }
 
