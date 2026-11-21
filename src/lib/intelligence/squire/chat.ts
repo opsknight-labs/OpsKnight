@@ -434,12 +434,7 @@ export async function* streamSquire(
       return;
     }
 
-    if (settings.enabled) {
-      yield {
-        type: 'notice',
-        text: `AI conversation requires a provider permitted to receive ${dataClass === 'SENSITIVE' ? 'Sensitive' : 'Personal'} data. Showing a basic answer.`,
-      };
-    }
+    // Provider policy, not a passing failure: the reason rides on the meta event (shown once, in the banner).
     yield* basicAnswer(
       actor,
       request,
@@ -448,7 +443,13 @@ export async function* streamSquire(
       dataClass,
       savedConversation,
       settings.enabled ? 'unavailable' : 'disabled',
-      page
+      page,
+      undefined,
+      settings.enabled
+        ? dataClass === 'SENSITIVE'
+          ? 'No AI provider is allowed to receive Sensitive data, which this conversation holds'
+          : 'No enabled AI provider is allowed to receive Internal data'
+        : undefined
     );
   } catch (error) {
     if (signal?.aborted) return;
@@ -468,7 +469,8 @@ async function* basicAnswer(
   savedConversation: ConversationDetail | null = null,
   availability: 'ready' | 'disabled' | 'quota' | 'unavailable' = 'disabled',
   page: ResolvedPageContext | null = null,
-  limit?: SquireAiLimit
+  limit?: SquireAiLimit,
+  reason?: string
 ): AsyncGenerator<SquireEvent> {
   const scope = {
     userId: actor.id,
@@ -500,6 +502,7 @@ async function* basicAnswer(
     name,
     availability,
     ...(limit ? { limit } : {}),
+    ...(reason ? { reason } : {}),
     intent: plan.intent,
     ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
   };

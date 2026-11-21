@@ -67,9 +67,12 @@ export default function SquireAvailabilityNotice({
   canManageAi,
   canRetry,
   onRetry,
+  reason = null,
 }: {
   state: SquireAvailabilityState;
   rateLimit: SquireRateLimit | null;
+  /** In `basic`: the setting that keeps AI out (e.g. no provider may receive the data). Retrying cannot help. */
+  reason?: string | null;
   /** The person may change AI settings, so the action links there instead of asking an administrator. */
   canManageAi: boolean;
   /** There is a question to ask again. */
@@ -110,7 +113,9 @@ export default function SquireAvailabilityNotice({
           ? canManageAi
             ? 'Answers use your incident data. You can turn on AI in settings.'
             : 'Answers use your incident data. An administrator can turn on AI.'
-          : 'AI could not answer, so this answer uses your incident data.';
+          : reason
+            ? `${reason}. Answers use your incident data${canManageAi ? '' : ' until an administrator changes the AI providers'}.`
+            : 'AI could not answer, so this answer uses your incident data.';
   return (
     <div
       role="status"
@@ -122,7 +127,7 @@ export default function SquireAvailabilityNotice({
       <p className="min-w-0 flex-1">
         <span className="font-medium">{title}.</span> {detail}
       </p>
-      {(state === 'rate_limited' || state === 'basic') && canRetry && (
+      {(state === 'rate_limited' || (state === 'basic' && !reason)) && canRetry && (
         <button
           type="button"
           className={actionClass}
@@ -136,6 +141,11 @@ export default function SquireAvailabilityNotice({
       {(state === 'budget' || state === 'disabled') && canManageAi && (
         <Link href={AI_SETTINGS_HREF} className={actionClass}>
           {state === 'budget' ? 'Review AI budget' : 'Turn on AI'}
+        </Link>
+      )}
+      {state === 'basic' && reason && canManageAi && (
+        <Link href={`${AI_SETTINGS_HREF}#providers`} className={actionClass}>
+          Review AI providers
         </Link>
       )}
     </div>

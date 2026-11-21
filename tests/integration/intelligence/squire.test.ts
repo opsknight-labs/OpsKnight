@@ -516,7 +516,7 @@ it('never downgrades trusted Sensitive saved turns to a Personal-only provider',
   expect(model.requests).toHaveLength(0);
   expect(events).toContainEqual(expect.objectContaining({ type: 'meta', mode: 'basic' }));
   expect(events).toContainEqual(
-    expect.objectContaining({ type: 'notice', text: expect.stringContaining('Sensitive') })
+    expect.objectContaining({ type: 'meta', reason: expect.stringContaining('Sensitive') })
   );
 });
 
@@ -536,7 +536,7 @@ it('preserves trusted Sensitive browser context and omits unproved assistant his
   });
   expect(model.requests).toHaveLength(0);
   expect(events).toContainEqual(
-    expect.objectContaining({ type: 'notice', text: expect.stringContaining('Sensitive') })
+    expect.objectContaining({ type: 'meta', reason: expect.stringContaining('Sensitive') })
   );
   model.script.push({ content: 'Fresh answer' });
   await turn(admin.id, 'Check current facts', {

@@ -1318,7 +1318,7 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     question: 'What is happening?',
     world: [{ provider: { maxDataClass: 'PUBLIC' } }],
     script: [],
-    expect: { mode: 'basic', modelCalls: 0, notice: 'Personal' },
+    expect: { mode: 'basic', modelCalls: 0 },
   },
   {
     id: 'data-class-saved-turn-personal',

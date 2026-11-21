@@ -177,6 +177,8 @@ export default function SquireLauncher({
     aiEnabled ? 'ready' : 'disabled'
   );
   const [rateLimit, setRateLimit] = useState<SquireRateLimit | null>(null);
+  // Why a setting keeps AI out; shown once in the banner instead of on every answer.
+  const [policyReason, setPolicyReason] = useState<string | null>(null);
   const [attention, setAttention] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [historySearch, setHistorySearch] = useState('');
@@ -480,6 +482,7 @@ export default function SquireLauncher({
             mode?: 'ai' | 'basic';
             intent?: string;
             availability?: AiAvailability;
+            reason?: string;
             limit?: 'rate' | 'budget';
             attention?: boolean;
             id?: string;
@@ -500,6 +503,7 @@ export default function SquireLauncher({
             ['ready', 'disabled', 'quota', 'unavailable'].includes(event.availability)
           ) {
             setAvailability(event.availability);
+            setPolicyReason(typeof event.reason === 'string' ? event.reason.slice(0, 200) : null);
             if (event.availability === 'quota' && event.limit === 'rate')
               setRateLimit({ until: null });
           } else if (event.type === 'meta' && event.mode === 'ai') setAvailability('ready');
@@ -966,6 +970,7 @@ export default function SquireLauncher({
             <SquireAvailabilityNotice
               state={availabilityState}
               rateLimit={rateLimit}
+              reason={policyReason}
               canManageAi={canManageAi}
               canRetry={canRetry}
               onRetry={retryLatest}
