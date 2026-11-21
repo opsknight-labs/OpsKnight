@@ -183,6 +183,7 @@ jobs:
           build-args: |
             SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
 
       - name: Build Swarm PgBouncer Test Container Image
         run: |
