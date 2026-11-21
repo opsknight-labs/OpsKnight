@@ -39,7 +39,8 @@ block the page behind it, and can be resized by dragging its left edge or with t
 resize handle; the width is remembered in this browser. On a phone it opens as a sheet from the bottom.
 
 A small dot at the end of the strip appears only while analysis is waiting, out of date, paused or
-failed. Select it to read why; intelligence managers can refresh the analysis from there.
+failed. It reads **Refreshing** only while new analysis is queued; **Out of date** means nothing is
+queued yet. Select it to read why; intelligence managers can refresh the analysis from there.
 
 Insights has up to eight sections, always in this order, and a section with nothing to show is left
 out: Briefing, Triage, Similar, Related and group, Why, Runbooks, Impact, Summary. When enabled for the
