@@ -1,0 +1,25 @@
+name: Main source guard
+
+# main only takes release PRs from develop and hotfix/* PRs. Rulesets cannot match a PR's
+# source branch, so this required check (on main's ruleset) enforces it.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions: {}
+
+jobs:
+  release-source:
+    name: Release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Allow only develop or hotfix/* into main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          case "$HEAD_REF" in
+            develop|hotfix/*) echo "OK: $HEAD_REF -> main" ;;
+            *) echo "::error::PRs into main must come from develop (release) or hotfix/*. Retarget this PR to develop."; exit 1 ;;
+          esac

@@ -3,7 +3,7 @@ name: Docker Image (build + push)
 on:
   # Pull requests build the image once each time `ci:full` is added; main always does.
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
