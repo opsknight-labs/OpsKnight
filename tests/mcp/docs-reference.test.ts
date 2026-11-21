@@ -139,7 +139,7 @@ describe('F3: generated MCP reference pages', () => {
   });
 
   it('keeps the catalog counts and the coverage table in step with the registry (DX-12)', () => {
-    const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
+    const catalog = readFileSync('docs/v2.3.0/reference/mcp/catalog.md', 'utf8');
     const counts = renderCatalogCounts();
     for (const [name, text] of counts)
       expect(catalog).toContain(`<!-- generated:${name} -->${text}<!-- /generated:${name} -->`);
@@ -156,7 +156,7 @@ describe('F3: generated MCP reference pages', () => {
   });
 
   it('lists exactly the fields the projection removes, and every listed field is removed (DX-5)', () => {
-    const page = readFileSync('docs/v2.2.0/guides/mcp/security-and-data.md', 'utf8');
+    const page = readFileSync('docs/v2.3.0/guides/mcp/security-and-data.md', 'utf8');
     for (const [name, text] of renderSecurityBlocks())
       expect(page).toContain(`<!-- generated:${name} -->${text}<!-- /generated:${name} -->`);
     const { contains, exact } = redactedFieldRule();
@@ -172,7 +172,7 @@ describe('F3: generated MCP reference pages', () => {
   });
 
   it('documents that call_operation refuses reads, with no removal release left over (DX-7)', () => {
-    const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
+    const catalog = readFileSync('docs/v2.3.0/reference/mcp/catalog.md', 'utf8');
     expect(catalog).toContain('`call_operation` serves routine changes only');
     expect(catalog).not.toContain('still serves reads');
     expect(readFileSync('CHANGELOG.md', 'utf8')).not.toContain('reads through `call_operation`');
@@ -190,8 +190,8 @@ describe('F3: generated MCP reference pages', () => {
     );
     const codes = new Set(scanMcpCodes().keys());
     for (const file of [
-      'docs/v2.2.0/guides/mcp/what-to-ask.md',
-      'docs/v2.2.0/guides/mcp/build-an-agent.md',
+      'docs/v2.3.0/guides/mcp/what-to-ask.md',
+      'docs/v2.3.0/guides/mcp/build-an-agent.md',
     ]) {
       const text = readFileSync(file, 'utf8');
       for (const [, name] of text.matchAll(/`([a-z_]+)`/g))
@@ -200,7 +200,7 @@ describe('F3: generated MCP reference pages', () => {
         expect(codes.has(code), `${file}: ${code}`).toBe(true);
     }
     // Every built-in prompt has at least one example request.
-    const ask = readFileSync('docs/v2.2.0/guides/mcp/what-to-ask.md', 'utf8');
+    const ask = readFileSync('docs/v2.3.0/guides/mcp/what-to-ask.md', 'utf8');
     for (const prompt of MCP_PROMPT_NAMES) expect(ask, prompt).toContain(`\`${prompt}\` prompt`);
     expect(ask).toContain('`assigneeId: "me"`');
   });
@@ -232,7 +232,7 @@ describe('F3: generated MCP reference pages', () => {
 describe('F4: MCP docs are findable', () => {
   const mcpPages = execFileSync(
     'git',
-    ['ls-files', '--others', '--cached', '--exclude-standard', 'docs/v2.2.0'],
+    ['ls-files', '--others', '--cached', '--exclude-standard', 'docs/v2.3.0'],
     {
       encoding: 'utf8',
     }
@@ -245,7 +245,7 @@ describe('F4: MCP docs are findable', () => {
     for (const path of mcpPages)
       expect(readFileSync(path, 'utf8'), path).toMatch(/^---\n[\s\S]*?\n---\n/);
     expect(
-      execFileSync(process.execPath, ['scripts/docs/check-frontmatter.mjs', 'docs/v2.2.0'], {
+      execFileSync(process.execPath, ['scripts/docs/check-frontmatter.mjs', 'docs/v2.3.0'], {
         encoding: 'utf8',
       })
     ).toContain('passed');
@@ -272,9 +272,9 @@ describe('F4: MCP docs are findable', () => {
 
   it('has an index for each MCP section, a README section and in-app links to real files', () => {
     for (const index of [
-      'docs/v2.2.0/guides/mcp/README.md',
-      'docs/v2.2.0/operate/mcp/README.md',
-      'docs/v2.2.0/reference/mcp/README.md',
+      'docs/v2.3.0/guides/mcp/README.md',
+      'docs/v2.3.0/operate/mcp/README.md',
+      'docs/v2.3.0/reference/mcp/README.md',
     ])
       expect(existsSync(index), index).toBe(true);
     const readme = readFileSync('README.md', 'utf8');
@@ -296,7 +296,7 @@ describe('F4: MCP docs are findable', () => {
   });
 
   const compatibility = () => {
-    const guide = readFileSync('docs/v2.2.0/guides/mcp/self-hosted-setup.md', 'utf8');
+    const guide = readFileSync('docs/v2.3.0/guides/mcp/self-hosted-setup.md', 'utf8');
     const rows = guide
       .split('## Client compatibility')[1]
       .split('\n## ')[0]
@@ -337,7 +337,7 @@ describe('F4: MCP docs are findable', () => {
   });
 
   it('ties every Tested or Verified status to a recorded live checkpoint (CERT-05)', () => {
-    const certification = readFileSync('docs/v2.2.0/operate/mcp/certification.md', 'utf8');
+    const certification = readFileSync('docs/v2.3.0/operate/mcp/certification.md', 'utf8');
     const checkpoint = certification.split('## Live client checkpoint')[1]?.split('\n## ')[0];
     expect(checkpoint).toBeTruthy();
     const entries = checkpoint!.split('\n### ').slice(1);
@@ -381,7 +381,7 @@ describe('F4: MCP docs are findable', () => {
   });
 
   it('shows the same setup commands as the Connect tab', () => {
-    const guide = readFileSync('docs/v2.2.0/guides/mcp/self-hosted-setup.md', 'utf8');
+    const guide = readFileSync('docs/v2.3.0/guides/mcp/self-hosted-setup.md', 'utf8');
     const commands = mcpSetupCommands('https://ops.your-company.com/mcp', '2.2.0');
     for (const command of [
       commands.claudeCode,
@@ -401,10 +401,10 @@ describe('F4: MCP docs are findable', () => {
 });
 
 describe('F1/F2: the guides describe current behaviour', () => {
-  const guide = readFileSync('docs/v2.2.0/guides/mcp/self-hosted-setup.md', 'utf8');
-  const catalog = readFileSync('docs/v2.2.0/reference/mcp/catalog.md', 'utf8');
-  const architecture = readFileSync('docs/v2.2.0/operate/mcp/architecture.md', 'utf8');
-  const quickstart = readFileSync('docs/v2.2.0/operate/mcp/contributing.md', 'utf8');
+  const guide = readFileSync('docs/v2.3.0/guides/mcp/self-hosted-setup.md', 'utf8');
+  const catalog = readFileSync('docs/v2.3.0/reference/mcp/catalog.md', 'utf8');
+  const architecture = readFileSync('docs/v2.3.0/operate/mcp/architecture.md', 'utf8');
+  const quickstart = readFileSync('docs/v2.3.0/operate/mcp/contributing.md', 'utf8');
 
   it('uses the tab and control names the settings page renders', () => {
     const page = readFileSync('src/app/(app)/settings/integrations/mcp/page.tsx', 'utf8');

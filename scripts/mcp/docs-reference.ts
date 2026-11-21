@@ -35,7 +35,7 @@ import {
 import { MCP_AUTH_CONCURRENCY, MCP_MAX_OPERATIONS } from '../../src/lib/mcp/core/budget';
 import { MCP_TOOLS_PAGE, renderTools } from './docs-tools';
 
-export const MCP_DOCS_ROOT = 'docs/v2.2.0';
+export const MCP_DOCS_ROOT = 'docs/v2.3.0';
 /** Date the hand-written explanations below were last checked against the code. */
 export const MCP_DOCS_VERIFIED_AT = '2026-11-09';
 export const MCP_TROUBLESHOOTING_PAGE = `${MCP_DOCS_ROOT}/guides/mcp/troubleshooting.md`;

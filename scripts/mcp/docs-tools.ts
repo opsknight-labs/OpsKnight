@@ -1,5 +1,5 @@
 /**
- * DX-6: the generated per-tool reference (docs/v2.2.0/reference/mcp/tools.md). Built from the
+ * DX-6: the generated per-tool reference (docs/v2.3.0/reference/mcp/tools.md). Built from the
  * server's own tools/list and prompts/list, so it lists exactly what assistants are offered; the
  * catalog supplies scopes, domains and the approval workflow. `npm run mcp:docs` writes it and
  * `mcp:docs:check` fails when it drifts.
@@ -13,7 +13,7 @@ import { MCP_CAPABILITIES } from '../../src/lib/mcp/catalog/capabilities';
 import { ASK_SQUIRE_SCOPES } from '../../src/lib/mcp/core/ask-squire-contract';
 import type { AuthorizationActor } from '../../src/lib/authorization-policy';
 
-export const MCP_TOOLS_PAGE = 'docs/v2.2.0/reference/mcp/tools.md';
+export const MCP_TOOLS_PAGE = 'docs/v2.3.0/reference/mcp/tools.md';
 
 type JsonSchema = {
   type?: string | string[];
