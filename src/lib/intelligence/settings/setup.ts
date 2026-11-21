@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { getAiPublicStatus } from '../ai/settings';
 import { getNoiseControlPolicy, saveNoiseControlPolicy } from '../noise-controls/manage';
+import type { NoiseControlDefinition } from '../noise-controls/contract';
 import { OPS_INSIGHT_SWITCHES } from '../ops-insights/contract';
 import {
   getIntelligenceSettings,
@@ -28,14 +29,18 @@ export async function getSetupState(): Promise<SetupState> {
       mode: policy.mode,
       triageEnabled: policy.definition.triage.enabled,
     },
-    noise: { revision: noise.revision, mode: noise.mode },
+    noise: { revision: noise.revision, mode: noise.mode, detectorsOn: detectorsOn(noise.definition) },
     squireEnabled: ai?.squireEnabled ?? false,
   };
 }
 
+const detectorsOn = (definition: NoiseControlDefinition) =>
+  definition.contentDedup.enabled || definition.flapping.enabled || definition.storm.enabled;
+
 /**
- * The Recommended preset: turns on the engine, every operations-insight area, triage suggestions (global
- * policy SUGGEST when it was OFF or SHADOW) and global noise controls in SHADOW when they were OFF. It never
+ * The Recommended preset: turns on the engine, every operations-insight area, the small helpers, triage
+ * suggestions (global policy SUGGEST when it was OFF or SHADOW) and global noise controls in SHADOW with
+ * dedup, flapping and storm grouping enabled when they were OFF (or SHADOW recording nothing). It never
  * lowers anything, never sets AUTO or noise ON (nothing that changes who is paged) and never touches AI.
  * Each write goes through its own service, so revision checks and audit entries are the usual ones; the
  * engine settings and the policy commit together, the noise policy (its own service and transaction) after.
@@ -56,8 +61,9 @@ export async function applyRecommendedPreset(
     const done: string[] = [];
     const { revision, ...settings } = await getIntelligenceSettings(tx);
     if (revision !== expected.settingsRevision) throw new AppError({ code: 'PRECONDITION_FAILED' });
-    // eslint-disable-next-line security/detect-object-injection -- keys come from the fixed OPS_INSIGHT_SWITCHES list
-    const switches = ['enabled' as const, ...OPS_INSIGHT_SWITCHES].filter(key => !settings[key]);
+    const presetKeys = ['enabled' as const, 'opsHelpersEnabled' as const, ...OPS_INSIGHT_SWITCHES];
+    // eslint-disable-next-line security/detect-object-injection -- keys come from the fixed list above
+    const switches = presetKeys.filter(key => !settings[key]);
     if (switches.length > 0) {
       await updateIntelligenceSettings(
         {
@@ -91,12 +97,19 @@ export async function applyRecommendedPreset(
     return done;
   });
 
-  if (noise.mode === 'OFF') {
+  // Shadow never pages differently, so its detectors are safe to enable; without them it records nothing.
+  if (noise.mode === 'OFF' || (noise.mode === 'SHADOW' && !detectorsOn(noise.definition))) {
+    const { contentDedup, flapping, storm } = noise.definition;
     await saveNoiseControlPolicy(
       {
         serviceId: null,
         mode: 'SHADOW',
-        definition: noise.definition,
+        definition: {
+          ...noise.definition,
+          contentDedup: { ...contentDedup, enabled: true },
+          flapping: { ...flapping, enabled: true },
+          storm: { ...storm, enabled: true },
+        },
         expectedRevision: expected.noiseRevision,
       },
       actor

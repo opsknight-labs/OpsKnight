@@ -30,7 +30,7 @@ describe('Recommended intelligence preset', () => {
     const before = await getSetupState();
     const changed = await applyRecommendedPreset(setupRevisions(before), actor);
     expect(changed).toEqual(
-      expect.arrayContaining(['enabled', 'triageSuggestions', 'noiseShadow'])
+      expect.arrayContaining(['enabled', 'opsHelpersEnabled', 'triageSuggestions', 'noiseShadow'])
     );
 
     const settings = await getIntelligenceSettings();
@@ -40,7 +40,13 @@ describe('Recommended intelligence preset', () => {
     const policy = await resolveEffectivePolicy(null);
     expect(policy.mode).toBe('SUGGEST');
     expect(policy.definition.triage.enabled).toBe(true);
-    expect((await getNoiseControlPolicy(null)).mode).toBe('SHADOW');
+    const shadow = await getNoiseControlPolicy(null);
+    expect(shadow.mode).toBe('SHADOW');
+    // Shadow records what dedup, flapping and storm grouping would do, so they are on.
+    expect(shadow.definition.contentDedup.enabled).toBe(true);
+    expect(shadow.definition.flapping.enabled).toBe(true);
+    expect(shadow.definition.storm.enabled).toBe(true);
+    expect(settings.opsHelpersEnabled).toBe(true);
 
     const after = await getSetupState();
     expect(
@@ -52,6 +58,22 @@ describe('Recommended intelligence preset', () => {
     expect(audits).toBeGreaterThanOrEqual(3);
 
     expect(await applyRecommendedPreset(setupRevisions(after), actor)).toEqual([]);
+  });
+
+  it('enables the detectors of a SHADOW policy that records nothing', async () => {
+    const actor = await setup();
+    const noise = await getNoiseControlPolicy(null);
+    await saveNoiseControlPolicy(
+      { serviceId: null, mode: 'SHADOW', definition: noise.definition, expectedRevision: noise.revision },
+      actor
+    );
+    const changed = await applyRecommendedPreset(setupRevisions(await getSetupState()), actor);
+    expect(changed).toContain('noiseShadow');
+    const after = await getNoiseControlPolicy(null);
+    expect(after.mode).toBe('SHADOW');
+    expect(after.definition.contentDedup.enabled).toBe(true);
+    expect(after.definition.flapping.enabled).toBe(true);
+    expect(after.definition.storm.enabled).toBe(true);
   });
 
   it('refuses a stale page and never lowers noise ON to SHADOW', async () => {
