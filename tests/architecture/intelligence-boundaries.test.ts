@@ -505,6 +505,8 @@ describe('intelligence architecture boundaries', () => {
       'src/lib/intelligence/response/view.ts',
       'src/lib/intelligence/root-cause/analyzer.ts',
       'src/lib/intelligence/timeline/service.ts',
+      'src/lib/slo/burn-alerts/evaluate.ts',
+      'src/lib/slo/burn-alerts/service.ts',
     ]);
     // Its tables are registered for privacy like every other intelligence table.
     const registry = read(join(root, 'src/lib/privacy/registry.ts'));

@@ -698,6 +698,7 @@ model TeamMember {
 
 model Service {
   metricTemplates          ServiceMetricTemplate[]
+  sloAlertPolicies         SloAlertPolicy[]
   metricAnomalies          MetricAnomaly[]
   noiseControlPolicies     NoiseControlPolicy[]
   noiseControlVersions     NoiseControlPolicyVersion[]
@@ -6138,6 +6139,7 @@ model ObservabilityConnection {
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
   metricTemplates     ServiceMetricTemplate[]
+  sloAlertPolicies    SloAlertPolicy[]
 }
 
 model SquireActionReceipt {
@@ -6818,6 +6820,71 @@ model MetricAnomaly {
   @@unique([templateId, seriesKey, at])
   @@index([serviceId, at])
   @@index([at])
+}
+
+// Burn-rate alerting for one service objective, keyed on its lineage (an edit creates a new objective row).
+// Measured from two metric queries (good and total events) through an observability connection, in the lane.
+model SloAlertPolicy {
+  id              String                   @id @default(cuid())
+  lineageId       String                   @unique
+  serviceId       String
+  service         Service                  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  // Cleared when the connection is deleted; the policy then reports NO_CONNECTION until re-pointed.
+  connectionId    String?
+  connection      ObservabilityConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  goodQuery       String
+  totalQuery      String
+  stepSeconds     Int                      @default(300)
+  enabled         Boolean                  @default(false)
+  ticketsEnabled  Boolean                  @default(true)
+  // OK, TICKET or PAGE.
+  state           String                   @default("OK")
+  stateSince      DateTime                 @default(now())
+  // Consecutive evaluations below the current state; de-escalation waits for three.
+  belowStreak     Int                      @default(0)
+  lastEvaluatedAt DateTime?
+  lastStatus      String?
+  lastError       String?
+  lastIncidentId  String?
+  // Start of the oldest stored bucket; a tier arms only once coverage spans its long window.
+  coverageFrom    DateTime?
+  // Generation fence: the newest work generation whose result was written.
+  lastGeneration  Int                      @default(0)
+  createdById     String?
+  updatedById     String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  points          SloSliPoint[]
+  transitions     SloAlertTransition[]
+
+  @@index([enabled, lastEvaluatedAt])
+  @@index([serviceId])
+  @@index([connectionId])
+}
+
+// One 5-minute bucket of good and total events for a policy; kept 30 days.
+model SloSliPoint {
+  policyId    String
+  policy      SloAlertPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  bucketStart DateTime
+  good        Float
+  total       Float
+
+  @@id([policyId, bucketStart])
+}
+
+// A change of alert state, with the burn rate of every window at that evaluation.
+model SloAlertTransition {
+  id           String         @id @default(cuid())
+  policyId     String
+  policy       SloAlertPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  from         String
+  to           String
+  burnByWindow Json
+  incidentId   String?
+  at           DateTime       @default(now())
+
+  @@index([policyId, at])
 }
 
 // ─── Access control ────────────────────────────────────────────────────────────
