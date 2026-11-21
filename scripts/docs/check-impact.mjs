@@ -17,6 +17,7 @@ const changed = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], {
 }).trim().split('\n').filter(Boolean);
 const versions = JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/versions.json'), 'utf8'));
 const inventories = loadCapabilityInventories(repositoryRoot, versions);
+const upcomingDocs = inventories.at(-1)?.version === versions.upcomingVersion ? versions.upcomingVersion : null;
 const currentGraph = JSON.parse(readFileSync(resolve(repositoryRoot, 'generated/docs-contracts/current.json'), 'utf8'));
 let baseGraph = { contracts: [] };
 try {
@@ -43,7 +44,12 @@ for (const [docsVersion, id, capability] of inventories.flatMap(({ version, capa
   if (productChanges.length === 0) continue;
   const mappedDocs = ['concepts', 'guides', 'reference']
     .flatMap(group => capability[group] ?? [])
-    .map(path => `docs/${docsVersion}/${path}`);
+    // A current-release capability is also documented by the same page in the upcoming version's docs.
+    .flatMap(path =>
+      [docsVersion, ...(upcomingDocs && upcomingDocs !== docsVersion ? [upcomingDocs] : [])].map(
+        version => `docs/${version}/${path}`
+      )
+    );
   const documentationChanges = changed.filter(file =>
     mappedDocs.includes(file)
   );
