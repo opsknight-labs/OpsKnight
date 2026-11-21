@@ -18,7 +18,13 @@ jobs:
       - name: Allow only develop or hotfix/* into main
         env:
           HEAD_REF: ${{ github.head_ref }}
+          # A fork can name its branch `develop`; only this repo's own branches count.
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::PRs into main must come from this repository's develop or hotfix/* branch, not a fork ($HEAD_REPO)."
+            exit 1
+          fi
           case "$HEAD_REF" in
             develop|hotfix/*) echo "OK: $HEAD_REF -> main" ;;
             *) echo "::error::PRs into main must come from develop (release) or hotfix/*. Retarget this PR to develop."; exit 1 ;;

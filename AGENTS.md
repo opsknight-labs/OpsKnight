@@ -189,7 +189,7 @@ Zero errors and zero warnings are required before pushing.
 
 ## 8. CI Structure: Light Pull Requests, Full `develop` and `main`
 
-Pull requests run only the fast required gate. Everything heavy runs after merge on `main`, or on a PR that opts in. Keep new work inside this structure. The full inventory is in [`docs/CI_TEST_INVENTORY.md`](docs/CI_TEST_INVENTORY.md).
+Pull requests run only the fast required gate. Everything heavy runs in batches on `develop` after merge, on release tags, or on a PR that opts in. Keep new work inside this structure. The full inventory is in [`docs/CI_TEST_INVENTORY.md`](docs/CI_TEST_INVENTORY.md).
 
 - **Every PR** runs `tests.yml` (static checks, unit tests, database integration in 4 shards, ingestion durability, database secret scripts, Next.js build, aggregated into the required `test` check) and `security.yml` (required `Security Summary`). The target is about 10 minutes.
 - **`develop` and `main`** run the PR gate and security on every merge; `main` also builds the Docker image, and `develop` feeds staging through the backup mirror. The heavy suites (browser E2E, runbook with deployment and swarm, MCP, SSO, SCIM, Teams, automation, integration certification, SBOM) run in **batches**: every 6 hours `main-heavy.yml` starts each suite whose paths changed since the last successful batch, once, on the latest `develop`. Release tags still run runbook and SBOM validation directly. Before cutting a release, run **Main heavy batch** with `force`.
