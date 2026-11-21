@@ -56,7 +56,7 @@ export default async function IntelligenceOverviewPage({
     <div className="mx-auto w-full max-w-7xl space-y-4 sm:space-y-6">
       {/* The band renders at once; its stat strip fills in from the Noise and Speed loaders. */}
       <Suspense
-        key={range.key}
+        key={`header-${range.key}`}
         fallback={<OverviewHeader scope={scope} range={range} stats={null} />}
       >
         <OverviewHeaderWithStats {...props} />
@@ -78,7 +78,7 @@ export default async function IntelligenceOverviewPage({
         <AttentionSection actor={actor} />
       </Suspense>
 
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2" key={range.key}>
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2" key={`panels-${range.key}`}>
         <Suspense fallback={<SectionSkeleton title={SECTION_TITLES.noise} tiles={6} />}>
           <NoiseSection {...props} />
         </Suspense>
