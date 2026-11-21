@@ -141,7 +141,12 @@ describe('opsknight-mcp stdio bridge', () => {
     bridge.send(call('b', 'incident_get ü'));
     await bridge.waitFor(m => m.id === 'b');
     await bridge.close();
-    const [initialize, notification, whoami, unicode] = seen;
+    // The notification and both calls are forwarded concurrently, so pick requests by content, not arrival order.
+    const byId = (id: unknown) => seen.find(entry => entry.body?.id === id)!;
+    const initialize = byId(0);
+    const notification = seen.find(entry => entry.body?.method === 'notifications/initialized')!;
+    const whoami = byId('a');
+    const unicode = byId('b');
     expect(initialize.path).toBe('/mcp');
     expect(initialize.headers).toMatchObject({
       authorization: `Bearer ${PAT}`,
