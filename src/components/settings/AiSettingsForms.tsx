@@ -718,7 +718,8 @@ export function ProviderForm({
             <option value="PUBLIC">Public</option>
             <option value="INTERNAL">Internal (incident titles and operational data)</option>
             <option value="PERSONAL">
-              Personal (notes and timelines, used for summaries and postmortem drafts)
+              Personal (notes, timelines and people: needed for incident summaries, stakeholder
+              updates, postmortem drafts and the assistant&apos;s timeline and on-call tools)
             </option>
             <option value="SENSITIVE">Sensitive</option>
           </select>
