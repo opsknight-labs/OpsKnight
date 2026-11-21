@@ -58,4 +58,20 @@ describe('provider-neutral war-room projection', () => {
     );
     expect(renderMicrosoftTeamsWarRoomProjection(model).actions).toEqual([]);
   });
+
+  it('maps Take command to one transport binding per provider', async () => {
+    const { slackContractForKind, kindForSlackValue } = await import('@/lib/chatops/slack-action-map');
+    const { chatOpsKindForTeamsVerb, teamsVerbForChatOpsKind } = await import(
+      '@/lib/chatops/teams-action-map'
+    );
+    const { chatOpsCommandKindForActionKind } = await import('@/lib/chatops/action-contract');
+    expect(slackContractForKind('TAKE_COMMAND')).toEqual({
+      actionId: 'take_command_incident',
+      actionValue: 'take_command',
+      label: 'Take command',
+    });
+    expect(kindForSlackValue('take_command')).toBe('TAKE_COMMAND');
+    expect(chatOpsKindForTeamsVerb(teamsVerbForChatOpsKind('TAKE_COMMAND'))).toBe('TAKE_COMMAND');
+    expect(chatOpsCommandKindForActionKind('TAKE_COMMAND')).toBe('SET_ROLE');
+  });
 });
