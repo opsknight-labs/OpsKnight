@@ -587,7 +587,7 @@ describe('deployment configuration invariants', () => {
   it('keeps main builds fast and publishes multi-arch tagged releases with attestations', () => {
     const workflow = read('.github/workflows/docker-image.yml');
     const workflowConfig = YAML.parse(workflow) as {
-      jobs: Record<string, { needs?: string | string[]; if?: string }>;
+      jobs: Record<string, { needs?: string | string[]; if?: string; environment?: string }>;
     };
     const needsFor = (job: string) => {
       const needs = Reflect.get(workflowConfig.jobs, job).needs;
@@ -623,7 +623,9 @@ describe('deployment configuration invariants', () => {
     expect(workflowConfig.jobs['approve-release'].environment).toBe('production');
     expect(needsFor('pgbouncer-image')).toEqual(['sbom-provenance', 'approve-release']);
     expect(needsFor('agent-image')).toEqual(['sbom-provenance', 'approve-release']);
-    expect(workflowConfig.jobs['agent-image'].if).toContain("needs.approve-release.result == 'success'");
+    expect(workflowConfig.jobs['agent-image'].if).toContain(
+      "needs.approve-release.result == 'success'"
+    );
     expect(needsFor('promote-release-tags')).toEqual(
       expect.arrayContaining(['build', 'pgbouncer-image'])
     );
