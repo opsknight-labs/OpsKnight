@@ -20,6 +20,7 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import OrchestrationRulesBuilder from '@/components/settings/noise-controls/OrchestrationRulesBuilder';
+import { highUrgencyNote } from '@/components/settings/noise-controls/shared';
 import type { NoiseControlKpis } from '@/lib/intelligence/noise-controls/kpis';
 import type {
   MaintenanceWindowView,
@@ -997,6 +998,9 @@ export function SimulationForm({ services }: { services: Option[] }) {
               .join(', ') || 'none'}
             .
           </p>
+          {highUrgencyNote(result) && (
+            <p className="text-muted-foreground">{highUrgencyNote(result)}</p>
+          )}
           {result.examples.length > 0 && (
             <ul className="divide-y divide-border rounded-md border border-border">
               {result.examples.map(example => (

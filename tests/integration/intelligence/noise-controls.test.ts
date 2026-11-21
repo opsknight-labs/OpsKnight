@@ -15,6 +15,7 @@ import {
   createSuppressionRule,
   endMaintenanceWindow,
   evaluatePrePagingControls,
+  getNoiseControlPolicy,
   getNoiseControlKpis,
   listMaintenanceWindows,
   listPrePagingDecisions,
@@ -455,6 +456,47 @@ describe('suggestions, simulation and correlation upgrades', () => {
       (await db.intelligenceEvaluationRun.findUniqueOrThrow({ where: { id: outcome.runId } }))
         .status
     ).toBe('COMPLETED');
+  });
+
+  it('counts HIGH urgency incidents the replay left alone because the policy exempts them', async () => {
+    const { service, actor } = await setup();
+    for (let i = 0; i < 3; i += 1) {
+      const createdAt = new Date(Date.now() - (i + 1) * 600_000);
+      const incident = await createTestIncident('Workflow failed: Tests', service.id, {
+        createdAt,
+        urgency: 'HIGH',
+      });
+      await db.alert.create({
+        data: {
+          incidentId: incident.id,
+          serviceId: service.id,
+          createdAt,
+          dedupKey: `tests-${i}`,
+          fingerprintHash: 'fp-tests',
+          labels: {},
+          payload: { summary: 'Workflow failed: Tests', source: 'github' },
+        },
+      });
+    }
+    const noise = await getNoiseControlPolicy(service.id);
+    await saveNoiseControlPolicy(
+      {
+        serviceId: service.id,
+        mode: 'SHADOW',
+        definition: {
+          ...noise.definition,
+          contentDedup: { ...noise.definition.contentDedup, enabled: true },
+        },
+        expectedRevision: noise.revision,
+      },
+      actor
+    );
+    const outcome = await simulatePrePagingControls(settings, {
+      serviceId: service.id,
+      days: 7,
+      createdById: actor.actorId,
+    });
+    expect(outcome).toMatchObject({ incidentsEvaluated: 3, pagesAvoided: 0, highUrgencyExempt: 3 });
   });
 
   it('lets HIGH urgency join a rule that allows it, as a suggestion, and can propose parent/child links', async () => {

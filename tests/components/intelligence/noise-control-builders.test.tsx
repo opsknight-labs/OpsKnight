@@ -25,7 +25,7 @@ import MaintenanceWindowsPanel, {
   MaintenanceWindowBuilder,
   windowInputFromDraft,
 } from '@/components/settings/noise-controls/MaintenanceWindowsPanel';
-import { toLocalInput } from '@/components/settings/noise-controls/shared';
+import { ReplaySummary, toLocalInput } from '@/components/settings/noise-controls/shared';
 import { TimezoneProvider } from '@/contexts/TimezoneContext';
 import { upcomingOccurrences } from '@/lib/intelligence/noise-controls/builders';
 import SuppressionRuleBuilder, {
@@ -54,6 +54,7 @@ function outcome(overrides: Partial<SimulationOutcome> = {}): SimulationOutcome 
     held: 0,
     transformed: 0,
     failOpen: 0,
+    highUrgencyExempt: 0,
     byControl: { MAINTENANCE: 4 },
     byAction: { SUPPRESS: 4 },
     bySource: {},
@@ -736,5 +737,27 @@ describe('HeartbeatPanel', () => {
       expect(writeText).toHaveBeenCalledWith('https://ops.example.com/api/heartbeats/tok_secret')
     );
     expect(await within(box).findByText('Ping URL copied')).toBeInTheDocument();
+  });
+});
+
+describe('ReplaySummary', () => {
+  it('says when HIGH urgency incidents were exempt instead of only reporting nothing held', () => {
+    render(
+      <ReplaySummary
+        outcome={outcome({
+          incidentsEvaluated: 118,
+          pagesAvoided: 0,
+          byControl: {},
+          byAction: {},
+          examples: [],
+          highUrgencyExempt: 118,
+        })}
+      />
+    );
+    expect(
+      screen.getByText(
+        '118 of 118 incidents are HIGH urgency and exempt; enable "Let dedup, flapping and storms touch HIGH urgency" to include them.'
+      )
+    ).toBeInTheDocument();
   });
 });
