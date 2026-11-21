@@ -20,7 +20,7 @@ This directory contains all supported Docker Compose manifests and overlays for 
 
 ## Common Invocations
 
-Runbook Agent installation and security boundaries are documented in `docs/v2.2.1/operate/deploy/agent-operations.md`.
+Runbook Agent installation and security boundaries are documented in `docs/v2.2.0/operate/deploy/agent-operations.md`.
 
 Run all commands from the repository root:
 
