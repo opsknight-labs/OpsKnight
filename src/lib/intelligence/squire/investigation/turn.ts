@@ -2,6 +2,7 @@ import 'server-only';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { capOutput } from '../../ai/gateway';
 import {
+  dataClassAllows,
   highestDataClass,
   resolveLanguageModel,
   type AiDataClass,
@@ -65,7 +66,7 @@ export async function* streamInvestigation(input: {
 }): AsyncGenerator<SquireEvent> {
   const ranClasses: AiDataClass[] = [];
   const tools = buildSquireTools(input.actor, {
-    personal: true,
+    personal: dataClassAllows(input.dataClass, 'PERSONAL'),
     dataClass: input.dataClass,
     signal: input.context.signal,
     // The same sources as an ordinary AI answer: metrics, logs, traces, errors, diffs and past knowledge.

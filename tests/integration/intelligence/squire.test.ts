@@ -414,21 +414,52 @@ it('prefetches recent timeline context only for providers allowed Personal data'
     'Responder Alice reviewed the rollback'
   );
   await db.aiProvider.updateMany({ data: { maxDataClass: 'INTERNAL' } });
+  invalidateGatewayCache();
   model.script.push({ content: 'Read the incident.' });
   await turn(admin.id, 'What happened?', { incidentId: incident.id });
+  // An Internal-only provider still answers, but the briefing leaves the timeline out.
+  expect(model.requests).toHaveLength(2);
+  expect(JSON.stringify(model.requests[1].body.messages)).not.toContain('Responder Alice');
+});
+
+it('answers at Internal with a redacted question and no Personal tools when no provider may receive Personal data', async () => {
+  const admin = await setup({ ai: true, provider: true });
+  await db.aiProvider.updateMany({ data: { maxDataClass: 'INTERNAL' } });
+  invalidateGatewayCache();
+  model.script.push({ content: 'Check the checkout service.' });
+  const events = await turn(admin.id, 'Why is checkout slow? Mail ops-lead@example.com');
   expect(model.requests).toHaveLength(1);
+  expect(events).toContainEqual(expect.objectContaining({ type: 'meta', mode: 'ai' }));
+  const body = model.requests[0].body as {
+    messages: Array<{ content: string }>;
+    tools?: Array<{ function: { name: string } }>;
+  };
+  expect(JSON.stringify(body.messages)).not.toContain('ops-lead@example.com');
+  expect(JSON.stringify(body.messages)).toContain('[email]');
+  const tools = body.tools?.map(t => t.function.name) ?? [];
+  expect(tools).toContain('get_incident');
+  for (const personal of ['get_timeline', 'find_people', 'who_is_on_call', 'get_alert_payload'])
+    expect(tools).not.toContain(personal);
+  expect(events).toContainEqual(
+    expect.objectContaining({
+      type: 'memory',
+      turn: expect.objectContaining({ dataClass: 'INTERNAL' }),
+    })
+  );
 });
 
 it('keeps browser conversation history away from an Internal-only provider', async () => {
   const admin = await setup({ ai: true, provider: true });
   await db.aiProvider.updateMany({ data: { maxDataClass: 'INTERNAL' } });
   invalidateGatewayCache();
+  model.script.push({ content: 'Check the latest deploy.' });
   const events = await turn(admin.id, 'What should I check next?', {
     history: [{ role: 'assistant', content: 'Responder Alice, personal-canary-73, investigated.' }],
   });
-  expect(model.requests).toHaveLength(0);
-  expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
-  expect(events.some(event => event.type === 'notice' && /Personal/.test(event.text))).toBe(true);
+  // The Internal turn answers without replaying earlier answers.
+  expect(model.requests).toHaveLength(1);
+  expect(JSON.stringify(model.requests[0].body.messages)).not.toContain('personal-canary-73');
+  expect(events.some(event => event.type === 'meta' && event.mode === 'ai')).toBe(true);
 });
 
 it('keeps saved Personal history away from Internal-only fallback after a provider policy change', async () => {
@@ -442,9 +473,10 @@ it('keeps saved Personal history away from Internal-only fallback after a provid
   });
   await db.aiProvider.updateMany({ data: { maxDataClass: 'INTERNAL' } });
   invalidateGatewayCache();
-  const events = await turn(admin.id, 'Continue', { conversationId });
-  expect(model.requests).toHaveLength(0);
-  expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
+  model.script.push({ content: 'Continuing from the incident record.' });
+  await turn(admin.id, 'Continue', { conversationId });
+  expect(model.requests).toHaveLength(1);
+  expect(JSON.stringify(model.requests[0].body.messages)).not.toContain('saved-personal-canary-89');
 });
 
 it('rejects saved incident history in a global conversation before provider egress', async () => {

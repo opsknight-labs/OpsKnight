@@ -13,11 +13,12 @@ import { registerAiGateway } from '../ai/gateway';
 import {
   resolveLanguageModel,
   highestDataClass,
+  dataClassAllows,
   type AiMessage,
   type LanguageModelPort,
   type AiDataClass,
 } from '../ai/port';
-import { redactSecrets } from '../ai/redact';
+import { redactPersonalData, redactSecrets } from '../ai/redact';
 import { AI_LEAN_NOTICE } from '../ai/contract';
 import { getAiSettings } from '../ai/settings';
 import { getGuidance } from '../ai/prompts';
@@ -168,9 +169,6 @@ export async function* streamSquire(
           priorTurns(actor, request, savedConversation, incident?.id ?? null),
         ])
       : Promise.resolve(null);
-    // Free-text questions and history may identify people, even without personal-data tools.
-    // Legacy and browser messages have no trusted classification: require Personal clearance
-    // for the entire turn rather than silently downgrading their classification on fallback.
     const [briefing, guidance, context] = (await preparation) ?? [
       null,
       null,
@@ -182,11 +180,21 @@ export async function* streamSquire(
         type: 'notice',
         text: 'Some earlier answers were omitted because their context could not be verified. Ask about the current evidence again if needed.',
       };
-    const dataClass = highestDataClass(['PERSONAL', ...history.map(message => message.dataClass)]);
+    // Prefer a provider cleared for Personal data: it may run the Personal tools and replay history as stored.
+    // Without one, the turn runs at Internal: the person's questions PII-redacted, no saved answers replayed,
+    // no notes or timeline in the briefing and no Personal tools, so the turn never carries Personal data.
+    const historyClass = highestDataClass(['INTERNAL', ...history.map(message => message.dataClass)]);
+    let dataClass: AiDataClass = highestDataClass(['PERSONAL', historyClass]);
     let port: LanguageModelPort | null = null;
     if (settings.enabled) {
       port = await resolveLanguageModel('SQUIRE_CHAT', dataClass);
+      if (!port && historyClass !== 'SENSITIVE') {
+        port = await resolveLanguageModel('SQUIRE_CHAT', 'INTERNAL');
+        if (port) dataClass = 'INTERNAL';
+      }
     }
+    const personal = dataClassAllows(dataClass, 'PERSONAL');
+    const question = personal ? request.message : redactPersonalData(request.message);
 
     if (port) {
       yield {
@@ -196,16 +204,20 @@ export async function* streamSquire(
         ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
       };
       const evidence = new SquireEvidenceRegistry(actor, dataClass);
-      const prepared = briefing ? await evidence.briefing(briefing) : null;
+      const prepared = briefing
+        ? await evidence.briefing(
+            personal ? briefing : { ...briefing, summary: undefined, timeline: undefined }
+          )
+        : null;
       // Observability connectors are optional: a lookup failure only means their tools are not offered.
       const observability = !mayRead(scope, ...OBSERVABILITY_TOOL_NAMES)
         ? []
         : await listEligibleConnections(actor).catch(() => []);
       const prompt = buildSystemPrompt(settings.squireName, prepared, guidance);
-      const system: AiMessage = { role: 'system', content: prompt.system, dataClass: 'PERSONAL' };
+      const system: AiMessage = { role: 'system', content: prompt.system, dataClass };
       // The parts of the briefing that change between turns, sent after the cached prefix.
       const volatile: AiMessage[] = prompt.volatile
-        ? [{ role: 'user', content: prompt.volatile, dataClass: 'PERSONAL' }]
+        ? [{ role: 'user', content: prompt.volatile, dataClass }]
         : [];
 
       // ---- Investigation mode (off unless an administrator enables it) ----
@@ -219,7 +231,7 @@ export async function* streamSquire(
       };
       if (
         settings.squireInvestigationEnabled &&
-        (await wantsInvestigation(request.message, {
+        (await wantsInvestigation(question, {
           onIncident: Boolean(incident),
           classifier: () => portFor('CLASSIFY', dataClass, port!),
           context: investigationContext,
@@ -228,7 +240,7 @@ export async function* streamSquire(
       ) {
         yield* streamInvestigation({
           actor,
-          question: request.message,
+          question,
           // Only the final diagnosis reads this (the planner has its own prompt): the system prompt and
           // the current briefing, without the chat history.
           preamble: [system, ...volatile],
@@ -269,9 +281,17 @@ export async function* streamSquire(
 
       const messages: AiMessage[] = [
         system,
-        ...history,
+        ...(personal
+          ? history
+          : history
+              .filter(message => message.role === 'user')
+              .map(message => ({
+                ...message,
+                content: redactPersonalData(message.content),
+                dataClass: 'INTERNAL' as const,
+              }))),
         ...volatile,
-        { role: 'user', content: request.message, dataClass: 'PERSONAL' },
+        { role: 'user', content: question, dataClass },
       ];
       let answer = '';
       let proposals = 0;
@@ -294,7 +314,7 @@ export async function* streamSquire(
         messages,
         tools: toolsForMessage(
           buildSquireTools(actor, {
-            personal: true,
+            personal,
             extendedActions: settings.squireExtendedActions,
             // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
             knowledge: await squireKnowledgeEnabled(),
