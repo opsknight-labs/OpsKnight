@@ -12,6 +12,7 @@ import {
   incidentTemplateReadWhere,
   IncidentTemplateInputSchema,
 } from '@/lib/incidents/templates';
+import { INCIDENT_ROLE_KEYS } from '@/lib/incidents/roles';
 
 export async function createTemplate(formData: FormData) {
   try {
@@ -29,6 +30,12 @@ export async function createTemplate(formData: FormData) {
   const defaultPriority = formData.get('defaultPriority') as string | null;
   const defaultServiceId = formData.get('defaultServiceId') as string | null;
   const isPublic = formData.get('isPublic') === 'on';
+  const defaultRoles = Object.fromEntries(
+    INCIDENT_ROLE_KEYS.flatMap(roleKey => {
+      const userId = formData.get(`defaultRole_${roleKey}`);
+      return typeof userId === 'string' && userId.trim() ? [[roleKey, userId.trim()]] : [];
+    })
+  );
 
   let normalizedName = name;
   try {
@@ -51,6 +58,7 @@ export async function createTemplate(formData: FormData) {
       defaultPriority: defaultPriority || null,
       defaultServiceId: defaultServiceId || null,
       isPublic,
+      ...(Object.keys(defaultRoles).length ? { defaultRoles } : {}),
     }),
     user.id
   );
