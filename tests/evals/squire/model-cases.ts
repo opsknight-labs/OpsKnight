@@ -1301,16 +1301,9 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     category: 'data-class',
     question: 'Who responded to this? Reach me at alice@example.com',
     world: [{ provider: { maxDataClass: 'INTERNAL' } }],
-    script: [{ say: 'The incident record does not name responders I can read here.' }],
-    // An Internal-only provider answers at Internal: the question PII-redacted and no Personal tools.
-    expect: {
-      mode: 'ai',
-      modelCalls: 1,
-      toolsOffered: ['get_incident'],
-      toolsNotOffered: ['get_timeline', 'find_people', 'who_is_on_call', 'get_alert_payload'],
-      modelNeverSaw: ['alice@example.com'],
-      memoryClass: 'INTERNAL',
-    },
+    script: [],
+    // Conversation turns are Personal; an Internal-only provider never receives one.
+    expect: { mode: 'basic', modelCalls: 0, modelNeverSaw: ['alice@example.com'] },
   },
   {
     id: 'data-class-public-provider',

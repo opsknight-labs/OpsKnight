@@ -186,19 +186,13 @@ export async function* streamSquire(
         type: 'notice',
         text: 'Some earlier answers were omitted because their context could not be verified. Ask about the current evidence again if needed.',
       };
-    // Prefer a provider cleared for Personal data: it may run the Personal tools and replay history as stored.
-    // Without one, the turn runs at Internal: the person's questions PII-redacted, no saved answers replayed,
-    // no notes or timeline in the briefing and no Personal tools, so the turn never carries Personal data.
+    // A conversation turn is Personal: free text can name people and customers, and redaction only removes
+    // emails, phones and IPs. Without a provider cleared for Personal data the turn gets a basic answer.
     const historyClass = highestDataClass(['INTERNAL', ...history.map(message => message.dataClass)]);
-    let dataClass: AiDataClass = highestDataClass(['PERSONAL', historyClass]);
-    let port: LanguageModelPort | null = null;
-    if (settings.enabled) {
-      port = await resolveLanguageModel('SQUIRE_CHAT', dataClass);
-      if (!port && historyClass !== 'SENSITIVE') {
-        port = await resolveLanguageModel('SQUIRE_CHAT', 'INTERNAL');
-        if (port) dataClass = 'INTERNAL';
-      }
-    }
+    const dataClass: AiDataClass = highestDataClass(['PERSONAL', historyClass]);
+    const port: LanguageModelPort | null = settings.enabled
+      ? await resolveLanguageModel('SQUIRE_CHAT', dataClass)
+      : null;
     const personal = dataClassAllows(dataClass, 'PERSONAL');
     const question = personal ? request.message : redactPersonalData(request.message);
 
