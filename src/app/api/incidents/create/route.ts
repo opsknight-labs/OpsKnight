@@ -9,7 +9,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { IncidentCreateSchema } from '@/lib/validation';
 import { assertCanCreateIncidentForService, getCurrentUser } from '@/lib/rbac';
 import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
-import { applyTemplateDefaultRoles } from '@/lib/incidents/roles-command';
+import { loadTemplateDefaultRoles } from '@/lib/incidents/roles-command';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 
 const BrowserIncidentCreateSchema = IncidentCreateSchema.extend({
@@ -71,8 +71,18 @@ async function createBrowserIncident(request: NextRequest) {
     }
 
     await assertCanCreateIncidentForService(parsed.data.serviceId);
+    const defaultRoles = parsed.data.templateId
+      ? await loadTemplateDefaultRoles({
+          templateId: parsed.data.templateId,
+          actor: {
+            id: user.id,
+            isAdmin: hasCapability(user.role as AppRole, CAPABILITIES.ADMIN_MANAGE),
+          },
+        })
+      : [];
     const execution = await executeIdempotentIncidentCreation(
       {
+        ...(defaultRoles.length ? { defaultRoles } : {}),
         title: parsed.data.title,
         description: parsed.data.description ?? null,
         serviceId: parsed.data.serviceId,
@@ -85,18 +95,6 @@ async function createBrowserIncident(request: NextRequest) {
       },
       { key: idempotencyKey, principalId: user.id }
     );
-
-    if (parsed.data.templateId && !execution.replayed && execution.value.outcome === 'CREATED') {
-      await applyTemplateDefaultRoles({
-        incidentId: execution.value.id,
-        templateId: parsed.data.templateId,
-        actor: {
-          id: user.id,
-          name: user.name,
-          isAdmin: hasCapability(user.role as AppRole, CAPABILITIES.ADMIN_MANAGE),
-        },
-      });
-    }
 
     revalidatePath('/');
     revalidatePath('/incidents');

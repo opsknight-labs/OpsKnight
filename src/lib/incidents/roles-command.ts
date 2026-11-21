@@ -8,6 +8,9 @@ import { emitAuditEvent, type AuditEventSource } from '@/lib/audit';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import { enqueueIncidentUpdateSideEffects, enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 import { logger } from '@/lib/logger';
+import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
+import { authorizationActorFromUser } from '@/lib/authorization-actors';
+import { effectiveAccessSelect } from '@/lib/access/effective';
 import {
   INCIDENT_ROLE_KEYS,
   getIncidentRole,
@@ -205,15 +208,17 @@ export async function listIncidentRoles(
   });
 }
 
+/** A role a new incident should start with, e.g. from `IncidentTemplate.defaultRoles`. */
+export type IncidentDefaultRole = { roleKey: IncidentRoleKey; userId: string };
+
 /**
- * Applies `IncidentTemplate.defaultRoles` to a freshly created incident. Only templates the
- * creator can read are honoured; a holder who is no longer active is skipped, never fatal.
+ * Reads a template's default roles for the creator. Only templates the creator can read are
+ * honoured; unknown role keys are dropped. Read before the creation transaction (configuration).
  */
-export async function applyTemplateDefaultRoles(input: {
-  incidentId: string;
+export async function loadTemplateDefaultRoles(input: {
   templateId: string;
-  actor: { id: string; name?: string | null; isAdmin: boolean };
-}): Promise<number> {
+  actor: { id: string; isAdmin: boolean };
+}): Promise<IncidentDefaultRole[]> {
   const template = await prisma.incidentTemplate.findFirst({
     where: {
       AND: [
@@ -223,10 +228,48 @@ export async function applyTemplateDefaultRoles(input: {
     },
     select: { defaultRoles: true },
   });
+  return parseDefaultRoles(template?.defaultRoles);
+}
+
+/**
+ * Applies default roles inside the incident creation transaction. A holder who is explicitly
+ * ineligible (not an active user, or with no incident access at all) is skipped; any other
+ * failure throws so the whole creation rolls back and a replay can apply everything.
+ */
+export async function applyDefaultRolesInTx(
+  tx: Prisma.TransactionClient,
+  input: {
+    incidentId: string;
+    roles: readonly IncidentDefaultRole[];
+    actor: { id: string | null; name?: string | null };
+  }
+): Promise<number> {
   let applied = 0;
-  for (const { roleKey, userId } of parseDefaultRoles(template?.defaultRoles)) {
-    try {
-      const result = await assignIncidentRoleCommand({
+  for (const { roleKey, userId } of input.roles) {
+    const holder = await tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        teamMemberships: { select: { teamId: true } },
+        ...effectiveAccessSelect(),
+      },
+    });
+    const holderActor = holder?.status === 'ACTIVE' ? authorizationActorFromUser(holder) : null;
+    if (
+      !holderActor ||
+      !authorize({ actor: holderActor, action: AUTHORIZATION_ACTIONS.INCIDENT_READ }).allowed
+    ) {
+      logger.info('incident.default_role_skipped_ineligible', {
+        incidentId: input.incidentId,
+        roleKey,
+        reason: holder ? 'NO_INCIDENT_ACCESS' : 'NOT_ACTIVE',
+      });
+      continue;
+    }
+    const result = await assignIncidentRoleCommand(
+      {
         incidentId: input.incidentId,
         roleKey,
         userId,
@@ -234,15 +277,10 @@ export async function applyTemplateDefaultRoles(input: {
           id: input.actor.id,
           name: input.actor.name ? `${input.actor.name} (template)` : null,
         },
-      });
-      if (result.changed) applied += 1;
-    } catch (error) {
-      logger.warn('incident.template_role_skipped', {
-        incidentId: input.incidentId,
-        roleKey,
-        error,
-      });
-    }
+      },
+      tx
+    );
+    if (result.changed) applied += 1;
   }
   return applied;
 }
