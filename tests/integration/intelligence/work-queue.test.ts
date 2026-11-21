@@ -144,7 +144,9 @@ describe('completion and generations', () => {
     expect(await db.intelligenceWorkItem.count()).toBe(0);
 
     await enqueueWorkItems([item('a')]);
-    const [second] = await claimWorkItems({ limit: 1 });
+    // Read the row, not a claim: the property is the stored generation, and a claim races any lane timer
+    // an earlier test file left running in this worker.
+    const second = await db.intelligenceWorkItem.findFirstOrThrow({ where: { subjectKey: 'a' } });
     // A restarted counter would make the new analysis look older than findings already written.
     expect(second.generation).toBeGreaterThan(first.generation);
   });
