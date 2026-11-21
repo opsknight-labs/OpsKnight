@@ -5,6 +5,7 @@ import type { SourceReference } from '../conversations/contract';
 import { readAlertReference, readChangeReference } from './references';
 import 'server-only';
 import prisma from '@/lib/prisma';
+import { getUserTimeZone } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, runbookReadWhere } from '@/lib/authorization-filters';
@@ -167,12 +168,17 @@ export async function* streamSquire(
           incident ? brief(actor, incident) : Promise.resolve(null),
           getGuidance('squire.system').catch(() => null),
           priorTurns(actor, request, savedConversation, incident?.id ?? null),
+          // Answers state times in the person's zone, as basic answers do.
+          prisma.user
+            .findUnique({ where: { id: actor.id }, select: { timeZone: true } })
+            .catch(() => null),
         ])
       : Promise.resolve(null);
-    const [briefing, guidance, context] = (await preparation) ?? [
+    const [briefing, guidance, context, viewer] = (await preparation) ?? [
       null,
       null,
       { messages: [] as AiMessage[], omitted: false },
+      null,
     ];
     const history = context.messages;
     if (context.omitted)
@@ -213,7 +219,12 @@ export async function* streamSquire(
       const observability = !mayRead(scope, ...OBSERVABILITY_TOOL_NAMES)
         ? []
         : await listEligibleConnections(actor).catch(() => []);
-      const prompt = buildSystemPrompt(settings.squireName, prepared, guidance);
+      const prompt = buildSystemPrompt(
+        settings.squireName,
+        prepared,
+        guidance,
+        getUserTimeZone(viewer ?? undefined)
+      );
       const system: AiMessage = { role: 'system', content: prompt.system, dataClass };
       // The parts of the briefing that change between turns, sent after the cached prefix.
       const volatile: AiMessage[] = prompt.volatile
