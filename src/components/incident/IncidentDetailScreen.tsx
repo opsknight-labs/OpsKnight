@@ -496,14 +496,8 @@ export default async function IncidentDetailScreen({
     >
       {presentation === 'mobile' ? (
         <section className="rounded-xl border border-border bg-card p-3.5 text-card-foreground shadow-none">
-          <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-border/70 pb-2">
-            <ListReturnLink
-              href={backHref}
-              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>{backLabel}</span>
-            </ListReturnLink>
+          {/* The mobile header already has the back arrow; a second "Back to Incidents" here repeated it. */}
+          <div className="mb-2.5 flex items-center justify-end gap-2 border-b border-border/70 pb-2">
             <div className="flex shrink-0 items-center gap-1">
               <CopyButton text={id} label="ID" className="h-7 px-2 text-[10px]" />
               <CopyButton
