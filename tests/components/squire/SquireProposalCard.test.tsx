@@ -128,6 +128,20 @@ it('restores a completed outcome after remount and expiry using only a read requ
   expect(fetchMock.mock.calls[0][1].method).toBeUndefined();
 });
 
+it('treats a null outcome as no result yet and still offers confirmation', async () => {
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    status: 200,
+    json: async () => ({ data: { outcome: null } }),
+  });
+  render(<SquireProposalCard proposal={proposal({ receiptId: 'receipt-1' })} />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument();
+  expect(screen.queryByRole('status')).toBeNull();
+});
+
 it('recovers a lost confirmation response without sending another mutation', async () => {
   fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
   fetchMock.mockRejectedValueOnce(new Error('Lost response'));
