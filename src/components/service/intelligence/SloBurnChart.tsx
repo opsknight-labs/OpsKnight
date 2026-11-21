@@ -24,11 +24,14 @@ const formatBurn = (value: number | null) => (value === null ? '—' : `${value}
 const formatSli = (value: number | null) => (value === null ? 'No events' : `${value}%`);
 
 /**
- * SLI per 5-minute step and burn over the trailing hour, with the tier thresholds as dashed lines and the
+ * SLI per 5-minute step and burn over the trailing hour, with the one-hour page threshold as a dashed line and the
  * alert transitions listed underneath. Every value is also in the table view.
  */
 export default function SloBurnChart({ history, name }: { history: SloBurnHistory; name: string }) {
-  const thresholds = [...new Set(history.tiers.map(tier => tier.threshold))];
+  // The burn line is the trailing hour, so only a tier measured over one hour can be drawn against it.
+  const thresholds = [
+    ...new Set(history.tiers.filter(tier => tier.long === '1h').map(tier => tier.threshold)),
+  ];
   const points = history.points.map(point => ({ ...point, label: point.at }));
   const legend = [
     { key: 'sli', label: 'SLI (%)', color: SLI_COLOR },
@@ -141,7 +144,7 @@ export default function SloBurnChart({ history, name }: { history: SloBurnHistor
               className="w-3 border-t-2 border-dashed"
               style={{ borderColor: THRESHOLD_COLOR }}
             />
-            Tier thresholds ({thresholds.map(value => `${value}×`).join(', ')})
+            Page threshold over one hour ({thresholds.map(value => `${value}×`).join(', ')})
           </li>
         </ul>
       </div>

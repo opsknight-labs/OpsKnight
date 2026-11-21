@@ -453,6 +453,34 @@ describe('evaluateSloPolicy', () => {
     expect(row).toMatchObject({ state: 'OK', lastStatus: 'CONNECTOR_ERROR:TIMEOUT' });
   });
 
+  it('neither pages nor stores measurements when the settings change while the connector is queried', async () => {
+    const { policy } = await enabledPolicy();
+    const fake = fakeConnector(() => 0.5);
+    const emit = vi.fn(async () => ({}));
+    for (const change of [{ enabled: false }, { goodQuery: 'sum(rate(other_total[5m]))' }]) {
+      await db.sloAlertPolicy.update({
+        where: { id: policy.id },
+        data: { enabled: true, goodQuery: policy.goodQuery },
+      });
+      const racing: SloSeriesFetcher = async (connection, query, signal) => {
+        await db.sloAlertPolicy.update({ where: { id: policy.id }, data: change });
+        return fake.fetchSeries(connection, query, signal);
+      };
+      const result = await evaluateSloPolicy(
+        { subjectKey: policy.id, generation: 1 },
+        settings,
+        never,
+        { fetchSeries: racing, processEvent: emit as never, now: () => at(0) }
+      );
+      expect(result.outcome).toBe('stale');
+    }
+    expect(emit).not.toHaveBeenCalled();
+    expect(await db.sloSliPoint.count()).toBe(0);
+    expect((await db.sloAlertPolicy.findUniqueOrThrow({ where: { id: policy.id } })).state).toBe(
+      'OK'
+    );
+  });
+
   it('keeps the state when the incident cannot be raised, so the next evaluation retries', async () => {
     const { policy } = await enabledPolicy();
     const fake = fakeConnector(() => 0.5);

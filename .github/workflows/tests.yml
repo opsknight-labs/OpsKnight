@@ -220,7 +220,8 @@ jobs:
   db-integration:
     name: Database integration (L2, shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The intelligence suites pushed the slowest shard past 20 minutes (shards are split by file count, not time).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

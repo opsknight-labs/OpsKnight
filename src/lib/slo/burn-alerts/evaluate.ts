@@ -96,6 +96,41 @@ const POLICY_SELECT = {
 } as const;
 type PolicyRow = Prisma.SloAlertPolicyGetPayload<{ select: typeof POLICY_SELECT }>;
 
+/** The settings an evaluation acts on; a save that changes any of them makes an in-flight evaluation stale. */
+const CONFIG_FIELDS = [
+  'enabled',
+  'connectionId',
+  'goodQuery',
+  'totalQuery',
+  'stepSeconds',
+  'ticketsEnabled',
+] as const;
+type ConfigRow = Pick<PolicyRow, (typeof CONFIG_FIELDS)[number]> & { lastGeneration: number };
+
+function sameConfig(loaded: PolicyRow, current: ConfigRow | null | undefined, generation: number) {
+  return (
+    !!current &&
+    current.lastGeneration <= generation &&
+    // eslint-disable-next-line security/detect-object-injection -- keys are the fixed CONFIG_FIELDS constants
+    CONFIG_FIELDS.every(field => current[field] === loaded[field])
+  );
+}
+
+/** Re-reads the policy right before a side effect, so a save made while the connector was queried wins. */
+async function stillCurrent(
+  policy: PolicyRow,
+  generation: number,
+  settings: { maxDbMs: number }
+): Promise<boolean> {
+  const current = await withDbBudget(settings, tx =>
+    tx.sloAlertPolicy.findUnique({
+      where: { id: policy.id },
+      select: { ...Object.fromEntries(CONFIG_FIELDS.map(f => [f, true])), lastGeneration: true },
+    })
+  );
+  return sameConfig(policy, current as ConfigRow | null, generation);
+}
+
 interface Outcome {
   status: string;
   error?: string | null;
@@ -142,6 +177,8 @@ export async function evaluateSloPolicy(
     // Switched off (or the objective is gone) while alerting: close what it opened, once.
     const outcome: Outcome = { status, next: { state: 'OK', belowStreak: 0 } };
     if (state !== 'OK') {
+      if (!(await stillCurrent(policy, item.generation, settings)))
+        return { outcome: 'stale', status: null, state: null, stored: 0 };
       const resolved = await sendResolve(emit, policy, objective?.name ?? null);
       if (resolved) outcome.transition = { from: state, to: 'OK', burns: emptyBurns() };
       else outcome.next = { state, belowStreak: policy.belowStreak };
@@ -247,6 +284,9 @@ export async function evaluateSloPolicy(
   let transition: Outcome['transition'];
 
   if (next.state !== state) {
+    // The connector calls above can take a while; never page or resolve on settings changed meanwhile.
+    if (!(await stillCurrent(policy, item.generation, settings)))
+      return { outcome: 'stale', status: null, state: null, stored: 0 };
     const raised = sloAlertRank(next.state) > sloAlertRank(state);
     let delivered = true;
     if (raised) {
@@ -372,10 +412,11 @@ async function record(
   outcome: Outcome
 ): Promise<true | null> {
   return withDbBudget(settings, async tx => {
-    const [locked] = await tx.$queryRaw<Array<{ lastGeneration: number }>>(
-      Prisma.sql`SELECT "lastGeneration" FROM "SloAlertPolicy" WHERE "id" = ${policy.id} FOR UPDATE`
+    const [locked] = await tx.$queryRaw<ConfigRow[]>(
+      Prisma.sql`SELECT "lastGeneration", "enabled", "connectionId", "goodQuery", "totalQuery", "stepSeconds", "ticketsEnabled" FROM "SloAlertPolicy" WHERE "id" = ${policy.id} FOR UPDATE`
     );
-    if (!locked || locked.lastGeneration > item.generation) return null;
+    // A newer run won, or the settings changed since this run loaded them (their measurements would be wrong).
+    if (!sameConfig(policy, locked, item.generation)) return null;
     if (outcome.points?.length)
       await tx.sloSliPoint.createMany({
         data: outcome.points.map(point => ({
