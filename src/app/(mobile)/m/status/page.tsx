@@ -21,6 +21,9 @@ import { getRequestActorContext } from '@/lib/request-actor-context';
 import { getInternalOperationalStatusSnapshot } from '@/lib/status/internal-operational-status-snapshot';
 import { logger } from '@/lib/logger';
 import { requirePageAccess } from '@/lib/access/server';
+import prisma from '@/lib/prisma';
+import { businessServiceReadWhere } from '@/lib/business-services/commands';
+import { worstServiceStatus } from '@/components/service/BusinessServiceStatusPill';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,6 +97,29 @@ export default async function MobileStatusPage() {
   const overall = statusMeta(snapshot.overallStatus);
   const OverallIcon = overall.Icon;
   const impactedServices = snapshot.services.filter(service => service.status !== 'OPERATIONAL');
+  const statusByService = new Map(snapshot.services.map(service => [service.id, service.status]));
+  const businessServices = (
+    await prisma.businessService.findMany({
+      where: businessServiceReadWhere(context.actor),
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, members: { select: { serviceId: true } } },
+    })
+  ).flatMap(item => {
+    const statuses = item.members.flatMap(member => {
+      const status = statusByService.get(member.serviceId);
+      return status ? [status] : [];
+    });
+    if (!statuses.length) return [];
+    return [
+      {
+        id: item.id,
+        name: item.name,
+        status: worstServiceStatus(statuses),
+        affected: statuses.filter(status => status !== 'OPERATIONAL').length,
+        total: statuses.length,
+      },
+    ];
+  });
 
   return (
     <div className="responsive-page space-y-5">
@@ -185,6 +211,42 @@ export default async function MobileStatusPage() {
                 </article>
               );
             })}
+          </Card>
+        </section>
+      )}
+
+      {businessServices.length > 0 && (
+        <section aria-labelledby="health-business-heading" className="space-y-2">
+          <h2 id="health-business-heading" className="px-0.5 text-sm font-bold text-foreground">
+            Business services
+          </h2>
+          <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
+            <ul>
+              {businessServices.map((item, index) => {
+                const meta = statusMeta(item.status);
+                return (
+                  <li
+                    key={item.id}
+                    className={`flex min-h-[52px] items-center gap-3 px-3.5 py-2.5 ${index > 0 ? 'border-t border-border/70' : ''}`}
+                  >
+                    <span
+                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px] font-semibold text-foreground">
+                        {item.name}
+                      </span>
+                      <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                        {item.affected > 0
+                          ? `${item.affected} of ${item.total} services affected`
+                          : 'Operational'}
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           </Card>
         </section>
       )}

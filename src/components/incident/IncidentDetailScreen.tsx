@@ -27,6 +27,8 @@ import {
   getUserPermissions,
 } from '@/lib/rbac';
 import IncidentRoles, { type IncidentRoleSlot } from '@/components/incident/detail/IncidentRoles';
+import IncidentImpacts from '@/components/incident/detail/IncidentImpacts';
+import { businessServicesForServices } from '@/lib/business-services/commands';
 import { INCIDENT_ROLES } from '@/lib/incidents/roles';
 import { loadIncidentRoleAccess } from '@/lib/incidents/role-access';
 import { denyResourceAccess } from '@/lib/access/server';
@@ -491,6 +493,7 @@ export default async function IncidentDetailScreen({
     canClear: roleAccess?.access.canClear[role.key] ?? false,
   }));
   const handleSetRole = setIncidentDetailRole.bind(null, id);
+  const impactedBusinessServices = await businessServicesForServices([incident.serviceId]);
   const canTakeCommand =
     incident.status !== 'RESOLVED' &&
     (roleAccess?.access.canTakeSelf.COMMANDER ?? false) &&
@@ -605,6 +608,12 @@ export default async function IncidentDetailScreen({
             </div>
           </div>
 
+          {impactedBusinessServices.length > 0 && (
+            <div className="mt-3">
+              <IncidentImpacts businessServices={impactedBusinessServices} linkable={false} />
+            </div>
+          )}
+
           <div className="mt-3 border-t border-border/70 pt-3">{rolesContent}</div>
         </section>
       ) : (
@@ -663,6 +672,7 @@ export default async function IncidentDetailScreen({
                   </Suspense>
                 )}
                 <IncidentSLABadges sla={incidentSla} />
+                <IncidentImpacts businessServices={impactedBusinessServices} />
               </div>
             </div>
             <div className="mt-3.5 border-t border-border/70 pt-3">{rolesContent}</div>

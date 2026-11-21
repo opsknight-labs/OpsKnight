@@ -1,11 +1,17 @@
 'use client';
 
-import { memo, useEffect, useMemo, useState } from 'react';
-import type { PublicServiceStatus, PublicStatusService } from '@/lib/status-pages/public-contract';
+import { memo, useMemo, useState } from 'react';
+import type {
+  PublicBusinessService,
+  PublicServiceLayout,
+  PublicServiceStatus,
+  PublicStatusService,
+} from '@/lib/status-pages/public-contract';
 import { serviceRegionBucket, serviceSearchKey } from '@/lib/status-pages/presentation';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
 import ServiceHistoryV3 from './ServiceHistoryV3';
+import { BusinessServiceRowV3 } from './BusinessServiceHealthV3';
 
 type FilterKey =
   | 'all'
@@ -59,7 +65,19 @@ function sortServices(
   });
 }
 
-function serviceMatches(service: PublicStatusService, filter: FilterKey) {
+function sortRows<T extends { id: string; name: string; status: PublicServiceStatus }>(
+  items: T[],
+  mode: SortMode
+): T[] {
+  if (mode === 'alphabetical') return [...items].sort((a, b) => a.name.localeCompare(b.name));
+  if (mode === 'issues')
+    return [...items].sort(
+      (a, b) => IMPACT_ORDER[b.status] - IMPACT_ORDER[a.status] || a.name.localeCompare(b.name)
+    );
+  return items;
+}
+
+function serviceMatches(service: { status: PublicServiceStatus }, filter: FilterKey) {
   if (filter === 'all') return true;
   if (filter === 'issues') return service.status !== 'OPERATIONAL';
   if (filter === 'OUTAGE') {
@@ -217,9 +235,14 @@ export default function ServiceHealthV3({
   showMetrics,
   showUptimeHistory,
   showSlaMetrics = true,
+  layout = 'FLAT',
+  businessServices = [],
 }: {
   services: PublicStatusService[];
   timeZone: string;
+  /** BUSINESS and BUSINESS_EXPANDABLE group rows under business services. */
+  layout?: PublicServiceLayout;
+  businessServices?: PublicBusinessService[];
   groupByRegion?: boolean;
   showUptime?: boolean;
   showMetrics?: boolean;
@@ -230,10 +253,19 @@ export default function ServiceHealthV3({
   const [filter, setFilter] = useState<FilterKey>('all');
   const [sortMode, setSortMode] = useState<SortMode>('configured');
   const [groupRegions, setGroupRegions] = useState(groupByRegion);
+  const businessMode = layout !== 'FLAT' && businessServices.length > 0;
+  const expandable = layout === 'BUSINESS_EXPANDABLE';
+  // Affected business services start open so visitors see which part is down.
+  const [openIds, setOpenIds] = useState<Set<string>>(
+    () => new Set(businessServices.filter(item => item.status !== 'OPERATIONAL').map(i => i.id))
+  );
 
-  useEffect(() => {
+  // Follow the page setting when it changes (live preview) without an effect round-trip.
+  const [groupSetting, setGroupSetting] = useState(groupByRegion);
+  if (groupSetting !== groupByRegion) {
+    setGroupSetting(groupByRegion);
     setGroupRegions(groupByRegion);
-  }, [groupByRegion]);
+  }
 
   const originalOrder = useMemo(() => {
     const map = new Map<string, number>();
@@ -247,16 +279,50 @@ export default function ServiceHealthV3({
     return services.filter(service => serviceSearchKey(service).includes(needle));
   }, [services, query]);
 
-  const canGroup = services.some(service => (service.regions?.length ?? 0) > 0);
+  const canGroup = !businessMode && services.some(service => (service.regions?.length ?? 0) > 0);
+
 
   const filtered = useMemo(() => {
     const matched = searched.filter(service => serviceMatches(service, filter));
     return sortServices(matched, sortMode, originalOrder);
   }, [searched, filter, sortMode, originalOrder]);
 
+  const serviceById = useMemo(
+    () => new Map(services.map(service => [service.id, service])),
+    [services]
+  );
+  const business = useMemo(() => {
+    if (!businessMode) return null;
+    const needle = query.trim().toLowerCase();
+    const grouped = new Set(businessServices.flatMap(item => item.memberServiceIds));
+    const rows = businessServices.flatMap(item => {
+      const members = item.memberServiceIds.flatMap(id => {
+        const service = serviceById.get(id);
+        return service ? [service] : [];
+      });
+      const nameMatch = !needle || item.name.toLowerCase().includes(needle);
+      const memberMatch =
+        Boolean(needle) && members.some(member => serviceSearchKey(member).includes(needle));
+      if (!serviceMatches(item, filter) || (!nameMatch && !memberMatch)) return [];
+      return [{ item, members, revealedBySearch: memberMatch && !nameMatch }];
+    });
+    const sorted = sortRows(
+      rows.map(row => ({ ...row, id: row.item.id, name: row.item.name, status: row.item.status })),
+      sortMode
+    );
+    const others = filtered.filter(service => !grouped.has(service.id));
+    return { rows: sorted, others, total: businessServices.length };
+  }, [businessMode, businessServices, filter, filtered, query, serviceById, sortMode]);
+
   if (services.length === 0) return null;
 
   const grouped = groupRegions && canGroup;
+  const rowDisplay = {
+    timeZone,
+    showMetrics: showMetrics ?? showUptime,
+    showUptimeHistory: showUptimeHistory ?? true,
+    showSlaMetrics,
+  };
 
   const groups = grouped
     ? (() => {
@@ -452,9 +518,13 @@ export default function ServiceHealthV3({
 
           <div className="status-v3-services__legend-window">
             <span className="status-v3-services__legend-count">
-              {filtered.length === services.length
-                ? `${services.length} services`
-                : `${filtered.length} of ${services.length}`}
+              {business
+                ? business.rows.length === business.total
+                  ? `${business.total} business services`
+                  : `${business.rows.length} of ${business.total}`
+                : filtered.length === services.length
+                  ? `${services.length} services`
+                  : `${filtered.length} of ${services.length}`}
             </span>
             <span className="status-v3-services__legend-dot" aria-hidden="true">
               ·
@@ -479,7 +549,68 @@ export default function ServiceHealthV3({
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {business ? (
+        business.rows.length === 0 && business.others.length === 0 ? (
+          <div className="status-v3-services__empty" role="status">
+            <p className="status-v3-services__empty-title">No services match your filters.</p>
+            <button
+              type="button"
+              className="status-v3-services__empty-reset"
+              onClick={() => {
+                setFilter('all');
+                setQuery('');
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <>
+            {business.rows.length > 0 && (
+              <div className="status-v3-services__list" role="list" aria-label="Business services">
+                {business.rows.map(({ item, members, revealedBySearch }) => (
+                  <BusinessServiceRowV3
+                    key={item.id}
+                    item={item}
+                    members={members}
+                    expandable={expandable}
+                    open={revealedBySearch || openIds.has(item.id)}
+                    onToggle={() =>
+                      setOpenIds(current => {
+                        const next = new Set(current);
+                        if (next.has(item.id)) next.delete(item.id);
+                        else next.add(item.id);
+                        return next;
+                      })
+                    }
+                    display={rowDisplay}
+                  />
+                ))}
+              </div>
+            )}
+            {business.others.length > 0 && (
+              <div className="status-v3-group status-v3-business-others">
+                <div className="status-v3-group__head">
+                  <div className="status-v3-group__title-wrap">
+                    <h3 className="status-v3-group__title">Other services</h3>
+                    <span className="status-v3-group__subtitle">
+                      {business.others.length} service{business.others.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                </div>
+                <ServiceList
+                  services={business.others}
+                  timeZone={timeZone}
+                  showUptime={showUptime}
+                  showMetrics={showMetrics}
+                  showUptimeHistory={showUptimeHistory}
+                  showSlaMetrics={showSlaMetrics}
+                />
+              </div>
+            )}
+          </>
+        )
+      ) : filtered.length === 0 ? (
         <div className="status-v3-services__empty" role="status">
           <div className="status-v3-services__empty-icon-wrap" aria-hidden="true">
             <svg

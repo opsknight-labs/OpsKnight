@@ -149,7 +149,17 @@ export default function StatusPageV3({
   const apiPath =
     page.slug && !page.isDefault ? `/api/status/${encodeURIComponent(page.slug)}` : '/api/status';
 
-  const serviceOptions = snapshot.services.map(s => ({ id: s.id, name: s.name }));
+  // Grouped pages let visitors follow a business service; services outside every group stay
+  // individually selectable.
+  const businessOptions =
+    page.serviceLayout && page.serviceLayout !== 'FLAT' ? (snapshot.businessServices ?? []) : [];
+  const groupedServiceIds = new Set(businessOptions.flatMap(item => item.memberServiceIds));
+  const serviceOptions = [
+    ...businessOptions.map(item => ({ id: item.id, name: item.name, kind: 'business' as const })),
+    ...snapshot.services
+      .filter(service => !groupedServiceIds.has(service.id))
+      .map(service => ({ id: service.id, name: service.name, kind: 'service' as const })),
+  ];
   const rssHref = showRss ? `${apiPath}/rss` : null;
 
   return (
@@ -211,6 +221,8 @@ export default function StatusPageV3({
         {showServices && (
           <ServiceHealthV3
             services={snapshot.services}
+            layout={page.serviceLayout ?? 'FLAT'}
+            businessServices={snapshot.businessServices}
             timeZone={timeZone}
             groupByRegion={page.showServicesByRegion === true}
             showUptime={showUptime}
