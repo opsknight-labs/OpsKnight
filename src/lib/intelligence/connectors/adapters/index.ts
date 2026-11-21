@@ -1,5 +1,8 @@
 import type { ObservabilityKind } from '../contract';
 import { githubActionsAdapter, gitlabCiAdapter } from './cicd';
+import { argoCdAdapter } from './argocd';
+import { azureDevOpsAdapter } from './azure-devops';
+import { base14Adapter } from './base14';
 import { cloudwatchAdapter } from './cloudwatch';
 import { datadogAdapter } from './datadog';
 import { elasticAdapter } from './elastic';
@@ -23,6 +26,9 @@ export const CONNECTOR_ADAPTERS: Readonly<Record<ObservabilityKind, ConnectorAda
   KUBERNETES: kubernetesAdapter,
   GITHUB_ACTIONS: githubActionsAdapter,
   GITLAB_CI: gitlabCiAdapter,
+  AZURE_DEVOPS: azureDevOpsAdapter,
+  ARGOCD: argoCdAdapter,
+  BASE14_SCOUT: base14Adapter,
 };
 
 export type * from './types';

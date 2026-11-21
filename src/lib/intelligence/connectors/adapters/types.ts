@@ -129,15 +129,40 @@ export interface PipelineSummary {
 }
 
 export interface ChangeRef {
-  provider: 'github' | 'gitlab';
+  provider: 'github' | 'gitlab' | 'azure';
   host: string;
-  /** owner/repo for GitHub, the full namespaced path for GitLab. */
+  /** owner/repo for GitHub, the full namespaced path for GitLab, project/repo for Azure DevOps. */
   repository: string;
   type: 'commit' | 'pull' | 'compare' | 'merge_request';
   /** Commit sha, pull/merge request number, or base...head for compare. */
   id: string;
   url: string;
 }
+
+/** Validated names only: Azure DevOps project and repository, optional branch (without refs/heads/). */
+export interface RepositoryQuery {
+  project: string;
+  repository: string;
+  branch?: string;
+}
+export interface AzurePipelineQuery {
+  project: string;
+  pipelineId?: number;
+  branch?: string;
+}
+/** Argo CD: one application (validated name), or the application list when absent. */
+export interface DeploymentQuery {
+  app?: string;
+  appNamespace?: string;
+}
+/** APM rollups: KPIs for one service, its dependencies, or the whole topology. */
+export interface ApmQuery {
+  view: 'kpis' | 'dependencies' | 'topology' | 'services';
+  service?: string;
+  window: TimeWindow;
+}
+/** Bounded, JSON-shaped summaries of the delivery and APM reads; redaction happens in the tool runner. */
+export type ReadSummary = Record<string, unknown>;
 
 /** One small adapter per kind: a typed query in, a bounded summary out. Unsupported capabilities are absent. */
 export interface ConnectorAdapter {
@@ -159,6 +184,14 @@ export interface ConnectorAdapter {
   labelValues?(context: AdapterContext, metric: string, label: string): Promise<string[]>;
   kubernetes?(context: AdapterContext, query: KubernetesQuery): Promise<KubernetesSummary>;
   pipelines?(context: AdapterContext, query: PipelineQuery): Promise<PipelineSummary>;
+  /** Recent commits and pull requests on a repository branch (Azure DevOps). */
+  repository?(context: AdapterContext, query: RepositoryQuery): Promise<ReadSummary>;
+  /** Recent pipeline runs, the newest failure's failed records and a log tail (Azure Pipelines). */
+  azurePipelines?(context: AdapterContext, query: AzurePipelineQuery): Promise<ReadSummary>;
+  /** Application sync, health, deploy history and resource health (Argo CD). */
+  deployments?(context: AdapterContext, query: DeploymentQuery): Promise<ReadSummary>;
+  /** Service KPIs and topology (base14 Scout APM). */
+  apm?(context: AdapterContext, query: ApmQuery): Promise<ReadSummary>;
 }
 
 export function httpFor(

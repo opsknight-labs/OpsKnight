@@ -186,6 +186,21 @@ const CREDENTIAL_LABELS: Record<
     secondary: null,
     help: 'A project or group token with read_api (Reporter role, to read job logs).',
   },
+  AZURE_DEVOPS: {
+    secret: 'Personal access token',
+    secondary: null,
+    help: 'A PAT with read-only Code and Build scopes. The test lists one project.',
+  },
+  ARGOCD: {
+    secret: 'API token',
+    secondary: null,
+    help: 'A token for an account or project role allowed only applications, get.',
+  },
+  BASE14_SCOUT: {
+    secret: 'Client secret',
+    secondary: 'Client ID',
+    help: 'An API key (client credentials) with the Scout Read role.',
+  },
 };
 
 export function ConnectionForm({
@@ -248,16 +263,22 @@ export function ConnectionForm({
             name="baseUrl"
             label="Base URL"
             help={
-              defaultBase
-                ? `Leave blank for ${defaultBase}.`
-                : kind === 'GITHUB' ||
-                    kind === 'GITLAB' ||
-                    kind === 'GITHUB_ACTIONS' ||
-                    kind === 'GITLAB_CI'
-                  ? 'The API address.'
-                  : kind === 'KUBERNETES'
-                    ? 'The API server, for example https://k8s.example.com:6443. Its certificate must be publicly trusted.'
-                    : 'For example https://prometheus.example.com'
+              kind === 'BASE14_SCOUT'
+                ? 'Leave blank to discover your Scout API URL; an override must be a base14.io address.'
+                : defaultBase
+                  ? `Leave blank for ${defaultBase}.`
+                  : kind === 'GITHUB' ||
+                      kind === 'GITLAB' ||
+                      kind === 'GITHUB_ACTIONS' ||
+                      kind === 'GITLAB_CI'
+                    ? 'The API address.'
+                    : kind === 'AZURE_DEVOPS'
+                      ? 'The organization or collection, for example https://dev.azure.com/acme or https://tfs.example.com/tfs/DefaultCollection'
+                      : kind === 'ARGOCD'
+                        ? 'The Argo CD API server, for example https://argocd.example.com'
+                        : kind === 'KUBERNETES'
+                          ? 'The API server, for example https://k8s.example.com:6443. Its certificate must be publicly trusted.'
+                          : 'For example https://prometheus.example.com'
             }
             placeholder={defaultBase ?? 'https://'}
             defaultValue={connection?.baseUrl ?? ''}
@@ -275,19 +296,20 @@ export function ConnectionForm({
             required
           />
         )}
-        {(kind === 'SENTRY' || kind === 'GRAFANA') && (
+        {(kind === 'SENTRY' || kind === 'GRAFANA' || kind === 'BASE14_SCOUT') && (
           <Field
             name="org"
-            label={kind === 'SENTRY' ? 'Organization slug' : 'Organization ID (optional)'}
+            label={kind === 'GRAFANA' ? 'Organization ID (optional)' : 'Organization slug'}
             defaultValue={connection?.org}
             disabled={disabled}
-            required={kind === 'SENTRY'}
+            required={kind !== 'GRAFANA'}
           />
         )}
         {(kind === 'SENTRY' ||
           kind === 'GRAFANA' ||
           kind === 'ELASTIC' ||
-          kind === 'CLOUDWATCH') && (
+          kind === 'CLOUDWATCH' ||
+          kind === 'AZURE_DEVOPS') && (
           <Field
             name="project"
             label={
@@ -297,7 +319,9 @@ export function ConnectionForm({
                   ? 'Data source UID (Prometheus or Loki)'
                   : kind === 'ELASTIC'
                     ? 'Index pattern'
-                    : 'Log group (for log search)'
+                    : kind === 'AZURE_DEVOPS'
+                      ? 'Default project (optional)'
+                      : 'Log group (for log search)'
             }
             placeholder={kind === 'ELASTIC' ? 'logs-*' : undefined}
             defaultValue={connection?.project}
@@ -362,7 +386,7 @@ export function ConnectionForm({
         defaultChecked={connection?.enabled ?? false}
         disabled={disabled}
       />
-      {kind !== 'CLOUDWATCH' && (
+      {kind !== 'CLOUDWATCH' && kind !== 'BASE14_SCOUT' && (
         <Check
           name="allowPrivateNetwork"
           label="Allow a private-network address"

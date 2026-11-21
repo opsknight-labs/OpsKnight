@@ -608,6 +608,7 @@
       "done": [
         "list_metrics, label_values and per-service saved queries (list_metric_templates); search_logs schema/description fixed",
         "Read-only Kubernetes connector, get_k8s_state tool and connection UI",
+        "Read-only Azure DevOps (Repos diffs/activity, Pipelines runs with failed-record log tail), Argo CD (sync/health/history/resources) and base14 Scout (OAuth2 client credentials, discovery, clamped windows; metrics/logs/traces/APM KPIs/topology) connectors with Squire tools, citations and connection UI",
         "Hybrid lexical + vector knowledge retrieval (RRF), section-aware chunking, 180-day learned-fact re-confirmation",
         "Basic-mode dialogue state persisted encrypted in the database (10 minute TTL)",
         "MCP long-running investigation: squire_start_investigation / squire_get_investigation, caller-scoped, encrypted, 1 h expiry, 2 per person, squireMcpEnabled + capability catalog",

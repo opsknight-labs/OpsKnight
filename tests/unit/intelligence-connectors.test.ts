@@ -47,6 +47,9 @@ const BASE: Record<ObservabilityKind, string> = {
   KUBERNETES: 'https://k8s.example.com:6443',
   GITHUB_ACTIONS: 'https://api.github.com',
   GITLAB_CI: 'https://gitlab.com',
+  AZURE_DEVOPS: 'https://dev.azure.com/acme',
+  ARGOCD: 'https://argocd.example.com',
+  BASE14_SCOUT: 'https://api.base14.io',
 };
 
 function connection(
@@ -59,14 +62,14 @@ function connection(
     kind,
     baseUrl: BASE[kind],
     region: kind === 'CLOUDWATCH' ? 'eu-west-1' : null,
-    org: kind === 'SENTRY' ? 'acme' : kind === 'GRAFANA' ? '2' : null,
+    org: kind === 'SENTRY' || kind === 'BASE14_SCOUT' ? 'acme' : kind === 'GRAFANA' ? '2' : null,
     project: kind === 'GRAFANA' ? 'prom-uid' : kind === 'CLOUDWATCH' ? '/aws/lambda/api' : null,
     allowPrivateNetwork: false,
     timeoutMs: 1_000,
     credential:
       kind === 'CLOUDWATCH'
         ? { secret: 'secretsecretsecretsecret', secondary: 'AKIAABCDEFGHIJKLMNOP' }
-        : kind === 'DATADOG'
+        : kind === 'DATADOG' || kind === 'BASE14_SCOUT'
           ? { secret: 'dd-api', secondary: 'dd-app' }
           : { secret: 'tok-123' },
     ...overrides,
@@ -500,7 +503,8 @@ describe('connector adapters: success paths, one per kind and capability', () =>
 describe('connector adapters: failure modes for every kind', () => {
   const kinds = [...OBSERVABILITY_KINDS];
 
-  it.each(kinds)(
+  // base14 Scout exchanges a token and discovers its API URL first; its test read is covered on its own.
+  it.each(kinds.filter(kind => kind !== 'BASE14_SCOUT'))(
     '%s: a harmless test read is a GET (or a read-only POST) that succeeds',
     async kind => {
       const { fetch, calls } = fakeFetch(() => json({ status: 'success' }));

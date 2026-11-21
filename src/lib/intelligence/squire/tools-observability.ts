@@ -24,6 +24,12 @@ import {
   DISCOVERY_TOOL_DATA_CLASS,
   DISCOVERY_TOOL_LABELS,
 } from './tools-discovery';
+import {
+  buildDeliveryTools,
+  DELIVERY_TOOL_CAPABILITY,
+  DELIVERY_TOOL_DATA_CLASS,
+  DELIVERY_TOOL_LABELS,
+} from './tools-delivery';
 
 /**
  * Squire's observability read tools. Each one is offered only when the person has at least one enabled
@@ -38,6 +44,7 @@ export const OBSERVABILITY_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>
   get_error_events: 'INTERNAL',
   get_change_diff: 'INTERNAL',
   ...DISCOVERY_TOOL_DATA_CLASS,
+  ...DELIVERY_TOOL_DATA_CLASS,
 };
 
 export const OBSERVABILITY_TOOL_LABELS: Readonly<Record<string, string>> = {
@@ -47,6 +54,7 @@ export const OBSERVABILITY_TOOL_LABELS: Readonly<Record<string, string>> = {
   get_error_events: 'Checking error events',
   get_change_diff: 'Reading the change diff',
   ...DISCOVERY_TOOL_LABELS,
+  ...DELIVERY_TOOL_LABELS,
 };
 
 export const OBSERVABILITY_TOOL_NAMES = Object.keys(OBSERVABILITY_TOOL_DATA_CLASS);
@@ -58,6 +66,7 @@ const TOOL_CAPABILITY: Readonly<Record<string, ConnectorCapability>> = {
   get_error_events: 'errors',
   get_change_diff: 'diff',
   ...DISCOVERY_TOOL_CAPABILITY,
+  ...DELIVERY_TOOL_CAPABILITY,
 };
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
@@ -252,7 +261,7 @@ export function buildObservabilityTools(
 
   add(
     'query_metrics',
-    "Query a metrics backend (PromQL for Prometheus and Grafana, a Datadog metrics query, or a CloudWatch Metrics Insights / SEARCH expression). Returns per-series min, max, mean, last value, the biggest jump and a few samples. Default window: one hour around the incident's start when incidentId is given, otherwise the last hour; at most 24 hours.",
+    "Query a metrics backend (PromQL for Prometheus and Grafana, a Datadog metrics query, a CloudWatch Metrics Insights / SEARCH expression, or for base14 Scout key=value filters: service=<name> metric=<name> [group_by=<attr>] [attr_<key>=<value>]). Returns per-series min, max, mean, last value, the biggest jump and a few samples. Default window: one hour around the incident's start when incidentId is given, otherwise the last hour; at most 24 hours.",
     { query: { type: 'string', minLength: 1, maxLength: 1000 }, ...windowFields },
     ['query'],
     async input => {
@@ -271,7 +280,7 @@ export function buildObservabilityTools(
 
   add(
     'search_logs',
-    `Search logs (LogQL for Loki and Grafana, a Datadog or Lucene query for Elasticsearch, a CloudWatch filter pattern). Returns the newest matching lines with timestamps, at most ${MAX_LOG_LINES}. Same default window as query_metrics.`,
+    `Search logs (LogQL for Loki and Grafana, a Datadog or Lucene query for Elasticsearch, a CloudWatch filter pattern, or for base14 Scout service=<name> [severity=ERROR] [trace_id=<id>] [log_attr_<key>=<value>] plus free text matched in the body; Scout reads at most the newest hour). Returns the newest matching lines with timestamps, at most ${MAX_LOG_LINES}. Same default window as query_metrics.`,
     {
       query: { type: 'string', minLength: 1, maxLength: 1000 },
       limit: { type: 'integer', minimum: 1, maximum: MAX_LOG_LINES, default: MAX_LOG_LINES },
@@ -303,7 +312,7 @@ export function buildObservabilityTools(
 
   add(
     'get_traces',
-    'Read distributed traces: one trace by traceId as a span tree (slowest paths first, errors marked), or a search (TraceQL for Tempo, a span query for Datadog; default: traces with errors). Same default window as query_metrics.',
+    'Read distributed traces: one trace by traceId as a span tree (slowest paths first, errors marked), or a search (TraceQL for Tempo, a span query for Datadog, base14 Scout key=value filters service=<name> [span=<name>] [status=Error] [span_attr_<key>=<value>], which also need service with traceId; default: traces with errors). Same default window as query_metrics.',
     {
       traceId: { type: 'string', maxLength: 32, description: 'Hexadecimal trace id' },
       query: { type: 'string', maxLength: 500 },
@@ -358,7 +367,7 @@ export function buildObservabilityTools(
 
   add(
     'get_change_diff',
-    'Read the code diff behind a recorded change (a GitHub commit, pull request or compare view, or a GitLab commit or merge request): changed files, additions and deletions and a truncated patch. Give the change id from get_recent_changes or get_intelligence.',
+    'Read the code diff behind a recorded change (a GitHub commit, pull request or compare view, a GitLab commit or merge request, or an Azure DevOps commit or pull request): changed files, additions and deletions and a truncated patch. Give the change id from get_recent_changes or get_intelligence.',
     { changeId: { type: 'string', minLength: 1, maxLength: 64 } },
     ['changeId'],
     async input => {
@@ -385,18 +394,27 @@ export function buildObservabilityTools(
       if (!change) return NOT_FOUND;
       const ref: ChangeRef | null = change.url ? parseChangeUrl(change.url) : null;
       if (!ref)
-        return { error: 'This change has no GitHub or GitLab commit or pull request link.' };
-      const kind = ref.provider === 'github' ? 'GITHUB' : 'GITLAB';
+        return {
+          error: 'This change has no GitHub, GitLab or Azure DevOps commit or pull request link.',
+        };
+      const kind =
+        ref.provider === 'github'
+          ? 'GITHUB'
+          : ref.provider === 'gitlab'
+            ? 'GITLAB'
+            : 'AZURE_DEVOPS';
       const matching = capable('diff').filter(
         connection =>
           connection.kind === kind &&
-          webHostOf(kind, connection.baseUrl) === ref.host &&
+          (kind === 'AZURE_DEVOPS'
+            ? // An Azure DevOps connection serves the URLs under its organization or collection.
+              ref.url.startsWith(`${connection.baseUrl.replace(/\/+$/, '')}/`)
+            : webHostOf(kind, connection.baseUrl) === ref.host) &&
           (!parsed.data.connectionId || connection.id === parsed.data.connectionId)
       );
       if (matching.length === 0)
-        return {
-          error: `No ${kind === 'GITHUB' ? 'GitHub' : 'GitLab'} connection for ${ref.host}.`,
-        };
+        // eslint-disable-next-line security/detect-object-injection -- kind is a member of the closed union
+        return { error: `No ${KIND_LABELS[kind]} connection for ${ref.host}.` };
       return run(
         'get_change_diff',
         matching[0].id,
@@ -408,5 +426,6 @@ export function buildObservabilityTools(
   );
 
   buildDiscoveryTools(actor, connections, add, run);
+  buildDeliveryTools(actor, add, run);
   return tools;
 }

@@ -270,6 +270,11 @@ export class SquireEvidenceRegistry {
       case 'get_change_diff':
       case 'get_k8s_state':
       case 'get_pipeline_runs':
+      case 'get_repo_activity':
+      case 'get_azure_pipeline_runs':
+      case 'get_deployment_status':
+      case 'get_apm_kpis':
+      case 'get_service_topology':
       case 'list_metrics':
       case 'label_values':
         add('observability', {

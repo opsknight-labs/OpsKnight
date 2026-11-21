@@ -1,0 +1,3 @@
+ALTER TYPE "ObservabilityConnectionKind" ADD VALUE IF NOT EXISTS 'AZURE_DEVOPS';
+ALTER TYPE "ObservabilityConnectionKind" ADD VALUE IF NOT EXISTS 'ARGOCD';
+ALTER TYPE "ObservabilityConnectionKind" ADD VALUE IF NOT EXISTS 'BASE14_SCOUT';

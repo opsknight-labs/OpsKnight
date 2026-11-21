@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "36d8637865e0981cb14d8b87c9309c8d4b56d78a",
+  "sourceRevision": "1a07ab350c84458a207f4bd15feafadb1ba4161b",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -22734,6 +22734,233 @@
       ]
     },
     {
+      "id": "configuration:ALERT_PARTITION_MAINTENANCE",
+      "kind": "configuration",
+      "name": "ALERT_PARTITION_MAINTENANCE",
+      "owner": "incident",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/lib/alerts/partition-maintenance.ts"
+      ],
+      "contract": {
+        "name": "ALERT_PARTITION_MAINTENANCE",
+        "sources": [
+          "src/lib/alerts/partition-maintenance.ts"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [
+          "on"
+        ],
+        "semanticClassification": "PRODUCT_RUNTIME",
+        "type": "enum/string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "derived"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:ALERT_PARTITION_MAINTENANCE:classification",
+          "text": "ALERT_PARTITION_MAINTENANCE is classified as OPERATOR_FEATURE and owned by incident.",
+          "evidence": [
+            "src/lib/alerts/partition-maintenance.ts"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/events",
+        "api:/api/incidents/[id]",
+        "api:/api/incidents",
+        "ui:/alerts/[id]",
+        "ui:/alerts",
+        "ui:/events",
+        "ui:/events/test",
+        "ui:/incidents/[id]",
+        "ui:/incidents/create",
+        "ui:/incidents",
+        "ui:/incidents/templates/create",
+        "ui:/incidents/templates"
+      ]
+    },
+    {
+      "id": "configuration:ALERT_PARTITION_MONTHS_AHEAD",
+      "kind": "configuration",
+      "name": "ALERT_PARTITION_MONTHS_AHEAD",
+      "owner": "incident",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/lib/alerts/partition-maintenance.ts"
+      ],
+      "contract": {
+        "name": "ALERT_PARTITION_MONTHS_AHEAD",
+        "sources": [
+          "src/lib/alerts/partition-maintenance.ts"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "semanticClassification": "PRODUCT_RUNTIME",
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:ALERT_PARTITION_MONTHS_AHEAD:classification",
+          "text": "ALERT_PARTITION_MONTHS_AHEAD is classified as OPERATOR_FEATURE and owned by incident.",
+          "evidence": [
+            "src/lib/alerts/partition-maintenance.ts"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/events",
+        "api:/api/incidents/[id]",
+        "api:/api/incidents",
+        "ui:/alerts/[id]",
+        "ui:/alerts",
+        "ui:/events",
+        "ui:/events/test",
+        "ui:/incidents/[id]",
+        "ui:/incidents/create",
+        "ui:/incidents",
+        "ui:/incidents/templates/create",
+        "ui:/incidents/templates"
+      ]
+    },
+    {
+      "id": "configuration:ALERT_PARTITION_RETENTION_MONTHS",
+      "kind": "configuration",
+      "name": "ALERT_PARTITION_RETENTION_MONTHS",
+      "owner": "incident",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/lib/alerts/partition-maintenance.ts"
+      ],
+      "contract": {
+        "name": "ALERT_PARTITION_RETENTION_MONTHS",
+        "sources": [
+          "src/lib/alerts/partition-maintenance.ts"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "semanticClassification": "PRODUCT_RUNTIME",
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:ALERT_PARTITION_RETENTION_MONTHS:classification",
+          "text": "ALERT_PARTITION_RETENTION_MONTHS is classified as OPERATOR_FEATURE and owned by incident.",
+          "evidence": [
+            "src/lib/alerts/partition-maintenance.ts"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/events",
+        "api:/api/incidents/[id]",
+        "api:/api/incidents",
+        "ui:/alerts/[id]",
+        "ui:/alerts",
+        "ui:/events",
+        "ui:/events/test",
+        "ui:/incidents/[id]",
+        "ui:/incidents/create",
+        "ui:/incidents",
+        "ui:/incidents/templates/create",
+        "ui:/incidents/templates"
+      ]
+    },
+    {
       "id": "configuration:ALERT_QUALITY_WINDOW_DAYS",
       "kind": "configuration",
       "name": "ALERT_QUALITY_WINDOW_DAYS",
@@ -27079,6 +27306,79 @@
             "scripts/dist/intelligence-lane-thread-integration.cjs",
             "scripts/dist/intelligence-lane-thread.cjs",
             "src/components/settings/AiRoutingForm.tsx"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/status/[slug]/history",
+        "api:/api/status/[slug]",
+        "api:/api/status/[slug]/rss",
+        "api:/api/status/[slug]/subscribe",
+        "api:/api/status/history",
+        "api:/api/status",
+        "api:/api/status/rss",
+        "api:/api/status/subscribe",
+        "api:/api/status/subscriptions/unsubscribe/one-click/[token]",
+        "api:/api/status/subscriptions/unsubscribe",
+        "api:/api/status/subscriptions/verify",
+        "ui:/action-items"
+      ]
+    },
+    {
+      "id": "configuration:CASCADE_CURSOR",
+      "kind": "configuration",
+      "name": "CASCADE_CURSOR",
+      "owner": "platform",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/lib/intelligence/noise-controls/sweep.ts"
+      ],
+      "contract": {
+        "name": "CASCADE_CURSOR",
+        "sources": [
+          "src/lib/intelligence/noise-controls/sweep.ts"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "semanticClassification": "PRODUCT_RUNTIME",
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:CASCADE_CURSOR:classification",
+          "text": "CASCADE_CURSOR is classified as OPERATOR_FEATURE and owned by platform.",
+          "evidence": [
+            "src/lib/intelligence/noise-controls/sweep.ts"
           ],
           "verification": "source"
         }
@@ -32002,6 +32302,79 @@
       ]
     },
     {
+      "id": "configuration:DISCOVERY",
+      "kind": "configuration",
+      "name": "DISCOVERY",
+      "owner": "platform",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/lib/intelligence/connectors/adapters/base14.ts"
+      ],
+      "contract": {
+        "name": "DISCOVERY",
+        "sources": [
+          "src/lib/intelligence/connectors/adapters/base14.ts"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "semanticClassification": "PRODUCT_RUNTIME",
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:DISCOVERY:classification",
+          "text": "DISCOVERY is classified as OPERATOR_FEATURE and owned by platform.",
+          "evidence": [
+            "src/lib/intelligence/connectors/adapters/base14.ts"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/status/[slug]/history",
+        "api:/api/status/[slug]",
+        "api:/api/status/[slug]/rss",
+        "api:/api/status/[slug]/subscribe",
+        "api:/api/status/history",
+        "api:/api/status",
+        "api:/api/status/rss",
+        "api:/api/status/subscribe",
+        "api:/api/status/subscriptions/unsubscribe/one-click/[token]",
+        "api:/api/status/subscriptions/unsubscribe",
+        "api:/api/status/subscriptions/verify",
+        "ui:/action-items"
+      ]
+    },
+    {
       "id": "configuration:DISCOVERY_CAP",
       "kind": "configuration",
       "name": "DISCOVERY_CAP",
@@ -35613,6 +35986,79 @@
           "text": "IDEMPOTENCY_LABEL is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
             "src/lib/api-v2/docs-render.ts"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/status/[slug]/history",
+        "api:/api/status/[slug]",
+        "api:/api/status/[slug]/rss",
+        "api:/api/status/[slug]/subscribe",
+        "api:/api/status/history",
+        "api:/api/status",
+        "api:/api/status/rss",
+        "api:/api/status/subscribe",
+        "api:/api/status/subscriptions/unsubscribe/one-click/[token]",
+        "api:/api/status/subscriptions/unsubscribe",
+        "api:/api/status/subscriptions/verify",
+        "ui:/action-items"
+      ]
+    },
+    {
+      "id": "configuration:IDENTITY",
+      "kind": "configuration",
+      "name": "IDENTITY",
+      "owner": "platform",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/lib/intelligence/connectors/adapters/base14.ts"
+      ],
+      "contract": {
+        "name": "IDENTITY",
+        "sources": [
+          "src/lib/intelligence/connectors/adapters/base14.ts"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "semanticClassification": "PRODUCT_RUNTIME",
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:IDENTITY:classification",
+          "text": "IDENTITY is classified as OPERATOR_FEATURE and owned by platform.",
+          "evidence": [
+            "src/lib/intelligence/connectors/adapters/base14.ts"
           ],
           "verification": "source"
         }
@@ -45225,6 +45671,152 @@
           "text": "MINING_LIMITS is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
             "src/app/(app)/settings/intelligence/insights/actions.ts"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/status/[slug]/history",
+        "api:/api/status/[slug]",
+        "api:/api/status/[slug]/rss",
+        "api:/api/status/[slug]/subscribe",
+        "api:/api/status/history",
+        "api:/api/status",
+        "api:/api/status/rss",
+        "api:/api/status/subscribe",
+        "api:/api/status/subscriptions/unsubscribe/one-click/[token]",
+        "api:/api/status/subscriptions/unsubscribe",
+        "api:/api/status/subscriptions/verify",
+        "ui:/action-items"
+      ]
+    },
+    {
+      "id": "configuration:MIRROR_FORWARD",
+      "kind": "configuration",
+      "name": "MIRROR_FORWARD",
+      "owner": "platform",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/lib/alerts/partitioning.ts"
+      ],
+      "contract": {
+        "name": "MIRROR_FORWARD",
+        "sources": [
+          "src/lib/alerts/partitioning.ts"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "semanticClassification": "PRODUCT_RUNTIME",
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:MIRROR_FORWARD:classification",
+          "text": "MIRROR_FORWARD is classified as OPERATOR_FEATURE and owned by platform.",
+          "evidence": [
+            "src/lib/alerts/partitioning.ts"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/status/[slug]/history",
+        "api:/api/status/[slug]",
+        "api:/api/status/[slug]/rss",
+        "api:/api/status/[slug]/subscribe",
+        "api:/api/status/history",
+        "api:/api/status",
+        "api:/api/status/rss",
+        "api:/api/status/subscribe",
+        "api:/api/status/subscriptions/unsubscribe/one-click/[token]",
+        "api:/api/status/subscriptions/unsubscribe",
+        "api:/api/status/subscriptions/verify",
+        "ui:/action-items"
+      ]
+    },
+    {
+      "id": "configuration:MIRROR_REVERSE",
+      "kind": "configuration",
+      "name": "MIRROR_REVERSE",
+      "owner": "platform",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/lib/alerts/partitioning.ts"
+      ],
+      "contract": {
+        "name": "MIRROR_REVERSE",
+        "sources": [
+          "src/lib/alerts/partitioning.ts"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "semanticClassification": "PRODUCT_RUNTIME",
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:MIRROR_REVERSE:classification",
+          "text": "MIRROR_REVERSE is classified as OPERATOR_FEATURE and owned by platform.",
+          "evidence": [
+            "src/lib/alerts/partitioning.ts"
           ],
           "verification": "source"
         }
@@ -56736,6 +57328,79 @@
           "text": "PANEL_GLOBE_WIDTH is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
             "src/components/auth/LoginAnimation.tsx"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/status/[slug]/history",
+        "api:/api/status/[slug]",
+        "api:/api/status/[slug]/rss",
+        "api:/api/status/[slug]/subscribe",
+        "api:/api/status/history",
+        "api:/api/status",
+        "api:/api/status/rss",
+        "api:/api/status/subscribe",
+        "api:/api/status/subscriptions/unsubscribe/one-click/[token]",
+        "api:/api/status/subscriptions/unsubscribe",
+        "api:/api/status/subscriptions/verify",
+        "ui:/action-items"
+      ]
+    },
+    {
+      "id": "configuration:PARTITIONED",
+      "kind": "configuration",
+      "name": "PARTITIONED",
+      "owner": "platform",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/lib/alerts/partitioning.ts"
+      ],
+      "contract": {
+        "name": "PARTITIONED",
+        "sources": [
+          "src/lib/alerts/partitioning.ts"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "semanticClassification": "PRODUCT_RUNTIME",
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:PARTITIONED:classification",
+          "text": "PARTITIONED is classified as OPERATOR_FEATURE and owned by platform.",
+          "evidence": [
+            "src/lib/alerts/partitioning.ts"
           ],
           "verification": "source"
         }
@@ -71047,6 +71712,79 @@
           "text": "UNMAPPED_WINDOW_DAYS is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
             "src/components/intelligence/lists/ChangeMappingSection.tsx"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/status/[slug]/history",
+        "api:/api/status/[slug]",
+        "api:/api/status/[slug]/rss",
+        "api:/api/status/[slug]/subscribe",
+        "api:/api/status/history",
+        "api:/api/status",
+        "api:/api/status/rss",
+        "api:/api/status/subscribe",
+        "api:/api/status/subscriptions/unsubscribe/one-click/[token]",
+        "api:/api/status/subscriptions/unsubscribe",
+        "api:/api/status/subscriptions/verify",
+        "ui:/action-items"
+      ]
+    },
+    {
+      "id": "configuration:UNPARTITIONED",
+      "kind": "configuration",
+      "name": "UNPARTITIONED",
+      "owner": "platform",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/lib/alerts/partitioning.ts"
+      ],
+      "contract": {
+        "name": "UNPARTITIONED",
+        "sources": [
+          "src/lib/alerts/partitioning.ts"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "semanticClassification": "PRODUCT_RUNTIME",
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:UNPARTITIONED:classification",
+          "text": "UNPARTITIONED is classified as OPERATOR_FEATURE and owned by platform.",
+          "evidence": [
+            "src/lib/alerts/partitioning.ts"
           ],
           "verification": "source"
         }
@@ -92688,6 +93426,70 @@
           "text": "MAX_TOKENS_PER_CALL has the discovered numeric value 2000000.",
           "evidence": [
             "src/lib/intelligence/ai/budget.ts"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/status/[slug]/history",
+        "api:/api/status/[slug]",
+        "api:/api/status/[slug]/rss",
+        "api:/api/status/[slug]/subscribe",
+        "api:/api/status/history",
+        "api:/api/status",
+        "api:/api/status/rss",
+        "api:/api/status/subscribe",
+        "api:/api/status/subscriptions/unsubscribe/one-click/[token]",
+        "api:/api/status/subscriptions/unsubscribe",
+        "api:/api/status/subscriptions/verify",
+        "ui:/action-items"
+      ]
+    },
+    {
+      "id": "limit:src/lib/intelligence/ai/cache-estimate.ts:MIN_CACHEABLE_PREFIX_TOKENS",
+      "kind": "limit",
+      "name": "src/lib/intelligence/ai/cache-estimate.ts:MIN_CACHEABLE_PREFIX_TOKENS",
+      "owner": "platform",
+      "classification": "PUBLIC_FEATURE",
+      "sources": [
+        "src/lib/intelligence/ai/cache-estimate.ts"
+      ],
+      "contract": {
+        "id": "src/lib/intelligence/ai/cache-estimate.ts:MIN_CACHEABLE_PREFIX_TOKENS",
+        "name": "MIN_CACHEABLE_PREFIX_TOKENS",
+        "value": 1024,
+        "expression": "1024",
+        "source": "src/lib/intelligence/ai/cache-estimate.ts",
+        "references": 2,
+        "semanticClassification": "SECURITY_OR_PUBLIC_BOUND"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/limits.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "limit:src/lib/intelligence/ai/cache-estimate.ts:MIN_CACHEABLE_PREFIX_TOKENS:classification",
+          "text": "src/lib/intelligence/ai/cache-estimate.ts:MIN_CACHEABLE_PREFIX_TOKENS is classified as PUBLIC_FEATURE and owned by platform.",
+          "evidence": [
+            "src/lib/intelligence/ai/cache-estimate.ts"
+          ],
+          "verification": "source"
+        },
+        {
+          "id": "limit:src/lib/intelligence/ai/cache-estimate.ts:MIN_CACHEABLE_PREFIX_TOKENS:value",
+          "text": "MIN_CACHEABLE_PREFIX_TOKENS has the discovered numeric value 1024.",
+          "evidence": [
+            "src/lib/intelligence/ai/cache-estimate.ts"
           ],
           "verification": "source"
         }

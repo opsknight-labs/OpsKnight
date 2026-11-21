@@ -19,6 +19,28 @@ type Observed = {
 };
 
 describe('SquireEvidenceRegistry.observe', () => {
+  it.each([
+    'get_repo_activity',
+    'get_azure_pipeline_runs',
+    'get_deployment_status',
+    'get_apm_kpis',
+    'get_service_topology',
+  ])('cites the queried connection for %s', async tool => {
+    const evidence = registry();
+    const out = (await evidence.observe(
+      tool,
+      {},
+      {
+        connectionId: 'conn-1',
+        connectionName: 'Delivery',
+        kind: 'x',
+      }
+    )) as Observed;
+    expect(out.error).toBeUndefined();
+    expect(out.evidence.map(e => [e.kind, e.id])).toEqual([['observability', 'conn-1']]);
+    expect(evidence.verified).toBe(true);
+  });
+
   it('verifies an automation decision as evidence for the incident and its service', async () => {
     const evidence = registry();
     const out = (await evidence.observe(

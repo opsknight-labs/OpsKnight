@@ -6110,6 +6110,9 @@ enum ObservabilityConnectionKind {
   KUBERNETES
   GITHUB_ACTIONS
   GITLAB_CI
+  AZURE_DEVOPS
+  ARGOCD
+  BASE14_SCOUT
 }
 
 // A read-only connection Squire may query during an AI turn. Credentials are encrypted at rest and never

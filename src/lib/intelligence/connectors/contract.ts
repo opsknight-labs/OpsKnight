@@ -18,6 +18,9 @@ export const OBSERVABILITY_KINDS = [
   'KUBERNETES',
   'GITHUB_ACTIONS',
   'GITLAB_CI',
+  'AZURE_DEVOPS',
+  'ARGOCD',
+  'BASE14_SCOUT',
 ] as const;
 export type ObservabilityKind = (typeof OBSERVABILITY_KINDS)[number];
 
@@ -30,7 +33,11 @@ export const CONNECTOR_CAPABILITIES = [
   'diff',
   'catalog',
   'kubernetes',
+  'repository',
   'pipelines',
+  'azurePipelines',
+  'deployments',
+  'apm',
 ] as const;
 export type ConnectorCapability = (typeof CONNECTOR_CAPABILITIES)[number];
 
@@ -51,6 +58,9 @@ export const KIND_CAPABILITIES: Readonly<
   KUBERNETES: ['kubernetes'],
   GITHUB_ACTIONS: ['pipelines'],
   GITLAB_CI: ['pipelines'],
+  AZURE_DEVOPS: ['diff', 'repository', 'azurePipelines'],
+  ARGOCD: ['deployments'],
+  BASE14_SCOUT: ['metrics', 'logs', 'traces', 'apm'],
 };
 
 const CAPABILITY_LABELS: Readonly<Record<ConnectorCapability, string>> = {
@@ -61,7 +71,11 @@ const CAPABILITY_LABELS: Readonly<Record<ConnectorCapability, string>> = {
   diff: 'code diffs',
   catalog: 'metric names and label values',
   kubernetes: 'workload state and events',
+  repository: 'recent commits and pull requests',
   pipelines: 'CI/CD runs and failed jobs',
+  azurePipelines: 'Azure pipeline runs and failed-job logs',
+  deployments: 'application sync, health and deploy history',
+  apm: 'service KPIs and topology',
 };
 
 /** "metrics, logs" — what a kind of connection can answer, for the settings page. */
@@ -84,6 +98,9 @@ export const KIND_LABELS: Readonly<Record<ObservabilityKind, string>> = {
   KUBERNETES: 'Kubernetes (read-only)',
   GITHUB_ACTIONS: 'GitHub Actions (read-only)',
   GITLAB_CI: 'GitLab CI (read-only)',
+  AZURE_DEVOPS: 'Azure DevOps (Repos and Pipelines)',
+  ARGOCD: 'Argo CD',
+  BASE14_SCOUT: 'base14 Scout',
 };
 
 /** The public endpoint used when an administrator leaves the base URL blank. */
@@ -94,6 +111,8 @@ export const KIND_DEFAULT_BASE_URL: Readonly<Partial<Record<ObservabilityKind, s
   GITLAB: 'https://gitlab.com',
   GITHUB_ACTIONS: 'https://api.github.com',
   GITLAB_CI: 'https://gitlab.com',
+  // The discovery service; the organization's Scout API URL is looked up from it.
+  BASE14_SCOUT: 'https://api.base14.io',
 };
 
 export const CONNECTOR_BOUNDS = {
@@ -175,11 +194,31 @@ export const observabilityConnectionInputSchema = z
         message: 'The Grafana data source UID is required',
       });
     }
-    if (Boolean(value.secret) !== Boolean(value.secondary) && value.kind === 'CLOUDWATCH') {
+    if (value.kind === 'BASE14_SCOUT' && !value.org) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['org'],
+        message: 'The base14 organization is required',
+      });
+    }
+    if (value.kind === 'BASE14_SCOUT' && value.allowPrivateNetwork) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['allowPrivateNetwork'],
+        message: 'base14 Scout is reached at its public endpoints',
+      });
+    }
+    if (
+      Boolean(value.secret) !== Boolean(value.secondary) &&
+      (value.kind === 'CLOUDWATCH' || value.kind === 'BASE14_SCOUT')
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['secondary'],
-        message: 'Enter both the access key ID and the secret access key',
+        message:
+          value.kind === 'CLOUDWATCH'
+            ? 'Enter both the access key ID and the secret access key'
+            : 'Enter both the client ID and the client secret',
       });
     }
   });

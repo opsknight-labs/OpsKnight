@@ -347,7 +347,7 @@ export interface RawDiffFile {
 
 export interface DiffSummary {
   kind: 'diff';
-  provider: 'github' | 'gitlab';
+  provider: 'github' | 'gitlab' | 'azure';
   ref: string;
   title: string;
   url: string;
@@ -373,7 +373,7 @@ export function countPatchLines(patch: string): { additions: number; deletions: 
 }
 
 export function summarizeDiff(input: {
-  provider: 'github' | 'gitlab';
+  provider: 'github' | 'gitlab' | 'azure';
   ref: string;
   title: unknown;
   url: string;

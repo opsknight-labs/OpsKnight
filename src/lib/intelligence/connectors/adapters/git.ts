@@ -14,6 +14,8 @@ const NUMBER = /^\d{1,9}$/;
 // A path segment, never "." or "..".
 const SEGMENT = /^(?!\.{1,2}$)[A-Za-z0-9_.-]{1,100}$/;
 const REF = /^[A-Za-z0-9_./-]{1,200}$/;
+// Azure DevOps project and repository names may contain spaces.
+export const AZURE_SEGMENT = /^(?!\.{1,2}$)(?! )[A-Za-z0-9_. -]{1,100}$/;
 
 /**
  * Parses the web URL of a commit, pull request, compare view or merge request. Anything else, including
@@ -32,6 +34,18 @@ export function parseChangeUrl(raw: string): ChangeRef | null {
   try {
     parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
   } catch {
+    return null;
+  }
+  const git = parts.indexOf('_git');
+  if (git >= 2) {
+    // Azure DevOps: /<org or collection path>/<project>/_git/<repo>/commit/<sha> or /pullrequest/<id>
+    const [project, repo, type, id] = [parts[git - 1], ...parts.slice(git + 1)];
+    if (!project || !repo || !AZURE_SEGMENT.test(project) || !AZURE_SEGMENT.test(repo)) return null;
+    const repository = `${project}/${repo}`;
+    if (type === 'commit' && id && SHA.test(id))
+      return { provider: 'azure', host: url.host, repository, type: 'commit', id, url: raw };
+    if (type === 'pullrequest' && id && NUMBER.test(id))
+      return { provider: 'azure', host: url.host, repository, type: 'pull', id, url: raw };
     return null;
   }
   const dash = parts.indexOf('-');
