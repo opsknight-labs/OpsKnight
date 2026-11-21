@@ -1085,7 +1085,9 @@ jobs:
           EOF
           docker buildx imagetools create "${tag_args[@]}" "$source_ref"
           for tag in "${verified_tags[@]}"; do
-            promoted_digest="$(docker buildx imagetools inspect "$tag" | awk '/^Digest:/ {print $2; exit}')"
+            # No pipe: under pipefail, awk exiting early killed inspect (exit 255) after a good promotion.
+            inspected="$(docker buildx imagetools inspect "$tag")"
+            promoted_digest="$(awk '/^Digest:/ {print $2; exit}' <<<"$inspected")"
             test "$promoted_digest" = "$RELEASE_IMAGE_DIGEST"
           done
 
