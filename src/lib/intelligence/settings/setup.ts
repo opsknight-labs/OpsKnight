@@ -35,7 +35,7 @@ export async function getSetupState(): Promise<SetupState> {
 }
 
 const detectorsOn = (definition: NoiseControlDefinition) =>
-  definition.contentDedup.enabled || definition.flapping.enabled || definition.storm.enabled;
+  definition.contentDedup.enabled && definition.flapping.enabled && definition.storm.enabled;
 
 /**
  * The Recommended preset: turns on the engine, every operations-insight area, the small helpers, triage

@@ -18,7 +18,7 @@ export interface SetupState {
     boolean
   >;
   policy: { version: number; mode: IntelligenceModeValue; triageEnabled: boolean };
-  /** `detectorsOn`: dedup, flapping or storm grouping is enabled, so shadow mode has something to record. */
+  /** `detectorsOn`: dedup, flapping and storm grouping are all enabled, as the Recommended preset sets them. */
   noise: { revision: number; mode: 'OFF' | 'SHADOW' | 'ON'; detectorsOn: boolean };
   squireEnabled: boolean;
 }
