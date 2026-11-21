@@ -297,3 +297,25 @@ it('keeps completed analysis current after an unrelated update without changing 
     before.completedAt
   );
 });
+
+it('converges to current when analysis lands after an unrelated update was re-indexed as unchanged', async () => {
+  const { actor, incident } = await fixture();
+  await db.$transaction(tx => indexIncident(incident.id, tx));
+  const read = await db.incidentFingerprint.findUniqueOrThrow({
+    where: { incidentId: incident.id },
+  });
+  // An escalation step bumps Incident.updatedAt; reconciliation re-indexes it as unchanged...
+  await db.incident.update({
+    where: { id: incident.id },
+    data: { updatedAt: new Date(Date.now() + 1000) },
+  });
+  expect(await db.$transaction(tx => indexIncident(incident.id, tx))).toBe('unchanged');
+  // ...while an analysis that read the fingerprint before that writes its result afterwards, so the
+  // snapshot records the older source version of the same fingerprint content.
+  await analyzeIncident({ subjectKey: incident.id, generation: 1 }, await getIntelligenceSettings());
+  await db.intelligenceAnalysisSnapshot.updateMany({
+    where: { incidentId: incident.id },
+    data: { sourceUpdatedAt: read.sourceUpdatedAt },
+  });
+  expect(await readIncidentAnalysisState(actor, incident.id)).toMatchObject({ status: 'CURRENT' });
+});

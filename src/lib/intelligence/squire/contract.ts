@@ -86,6 +86,8 @@ export type SquireEvent =
       mode: 'ai' | 'basic';
       name: string;
       availability?: 'ready' | 'disabled' | 'quota' | 'unavailable';
+      /** With `availability: 'unavailable'`: a setting, not a passing failure, kept AI out (no retry helps). */
+      reason?: string;
       /** With `availability: 'quota'`: whether a short-term request rate or the daily budget was hit. */
       limit?: SquireAiLimit;
       attention?: boolean;

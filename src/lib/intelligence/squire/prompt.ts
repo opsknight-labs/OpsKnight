@@ -1,5 +1,6 @@
 import { renderPrompt, type RenderedPrompt } from '../ai/prompts';
 import { sanitizeUntrusted, UNTRUSTED_DATA_PREAMBLE } from '../ai/redact';
+import { incidentRef } from '../incident-ux/explain';
 import type { ReadableIncident } from './deterministic';
 import type { IncidentAnalysisState } from '../analysis/contract';
 
@@ -27,14 +28,32 @@ const line = (text: string, max = 160) =>
  * On an incident page the briefing is included up front (as data), which saves a tool round trip before the
  * first word of most answers.
  */
+/** Tool and prompt timestamps are UTC; the person reads times in their own zone, as basic answers show them. */
+export function timeZoneRule(timeZone: string, now: Date): string {
+  let offset = 'GMT';
+  try {
+    offset =
+      new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
+        .formatToParts(now)
+        .find(part => part.type === 'timeZoneName')?.value ?? 'GMT';
+  } catch {
+    return 'Timestamps are UTC (ISO 8601, ending in Z). State times with their zone, e.g. "08:10 UTC".';
+  }
+  return `The person's time zone is ${timeZone} (${offset} now). Timestamps from tools and this prompt are UTC (ISO 8601, ending in Z): convert every time you state to ${timeZone} and label it with the zone, never a bare clock time.`;
+}
+
 export function buildSystemPrompt(
   name: string,
   briefing: IncidentBriefing | null,
-  guidance: { text: string; revision: number } | null = null
+  guidance: { text: string; revision: number } | null = null,
+  timeZone = 'UTC',
+  now = new Date()
 ): RenderedPrompt & { volatile?: string } {
   const context: string[] = [
     'Cite only sources returned in this turn. Evidence handles identify reads, not proof of a causal claim.',
     'Keep suspected causes qualified. Earlier answers are dated history; use tools to verify current facts.',
+    'When several incidents share a title, tell them apart by their short id (#ABCDE, the last five characters of the id) and when they opened.',
+    timeZoneRule(timeZone, now),
   ];
   const volatile: string[] = [];
   if (briefing) {
@@ -62,7 +81,7 @@ export function buildSystemPrompt(
         'Similar past incidents:',
         ...briefing.similar.map(
           s =>
-            `- ${line(s.title)} /incidents/${s.id} (${s.matchPercent}% match, ${s.status.toLowerCase()})`
+            `- ${line(s.title)} ${incidentRef(s.id)} /incidents/${s.id} (${s.matchPercent}% match, ${s.status.toLowerCase()})`
         )
       );
     }

@@ -18,6 +18,8 @@ export interface IncidentAnalysisState {
   message: string;
   lastSuccessfulAt?: string;
   retryAt?: string;
+  /** Analysis work is queued or running for this incident (a STALE state is being refreshed). */
+  pending?: boolean;
   canRefresh: boolean;
   diagnosticsHref?: string;
 }

@@ -405,6 +405,7 @@ export function buildSquireTools(
             title: short(item.title, 160),
             matchPercent: item.matchPercent,
             status: item.status,
+            openedAt: item.createdAt.toISOString(),
           })),
           relatedIncidents: (related ?? [])
             .slice(0, 5)
@@ -826,8 +827,15 @@ export function buildSquireTools(
     tools.push(proposalTool(name));
   }
   // Each tool carries the class of what it can return; the turn's class is the highest of the tools that
-  // actually ran plus the conversation baseline the caller chose.
-  return tools.map(tool => ({
+  // actually ran plus the conversation baseline the caller chose. Without Personal clearance, no tool that
+  // can return Personal data is offered, whichever module defined it.
+  return tools
+    .filter(
+      tool =>
+        options.personal ||
+        (tool.dataClass ?? SQUIRE_TOOL_DATA_CLASS[tool.name] ?? 'INTERNAL') !== 'PERSONAL'
+    )
+    .map(tool => ({
     ...tool,
     dataClass: highestDataClass([
       options.dataClass ?? 'INTERNAL',

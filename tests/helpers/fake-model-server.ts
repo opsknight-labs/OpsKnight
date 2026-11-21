@@ -74,7 +74,12 @@ export async function startFakeModel(): Promise<FakeServer> {
         );
         return;
       }
-      const next = state.script.shift() ?? { content: 'ok' };
+      const scripted = state.script.shift() ?? { content: 'ok' };
+      // Like a real provider, a request with tool_choice "none" is answered in text, never a tool call.
+      const next =
+        body.tool_choice === 'none' && scripted.toolCall
+          ? { content: 'From what I read so far, the incident is still open.' }
+          : scripted;
       if (next.status && next.status >= 400) {
         res.writeHead(next.status, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: { message: 'upstream failure' } }));

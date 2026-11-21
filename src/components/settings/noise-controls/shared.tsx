@@ -130,6 +130,12 @@ const ACTION_LABEL = new Map<string, string>([
   ['TRANSFORM', 'transformed'],
 ]);
 
+/** Why a replay changed nothing: its HIGH urgency incidents are exempt unless the policy allows them. */
+export function highUrgencyNote(outcome: Pick<SimulationOutcome, 'highUrgencyExempt' | 'incidentsEvaluated'>) {
+  if (!outcome.highUrgencyExempt) return null;
+  return `${outcome.highUrgencyExempt} of ${outcome.incidentsEvaluated} incidents are HIGH urgency and exempt; enable "Let dedup, flapping and storms touch HIGH urgency" to include them.`;
+}
+
 /** The result of a 7-day replay: headline numbers, then up to ten example incidents. */
 export function ReplaySummary({
   outcome,
@@ -154,6 +160,9 @@ export function ReplaySummary({
             }.`}
       </p>
       {note && <p className="text-xs text-muted-foreground">{note}</p>}
+      {highUrgencyNote(outcome) && (
+        <p className="text-xs text-muted-foreground">{highUrgencyNote(outcome)}</p>
+      )}
       {actions.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label="Replayed decisions">
           {actions.map(([action, count]) => (

@@ -118,11 +118,14 @@ export async function readIncidentAnalysisState(
         'No complete freshness record is available. Earlier suggestions, if shown, remain unverified until new analysis finishes.',
     };
   const pending = jobs.length > 0;
+  // Fresh = the fingerprint has consumed the latest incident version and each snapshot analysed that
+  // fingerprint's content (its updatedAt moves only when analysis inputs change). The snapshot's own
+  // source version is not compared: an analysis that read the fingerprint just before an unrelated update
+  // (an escalation step) was re-indexed as unchanged would otherwise stay stale with nothing queued.
   const fresh =
     relevant.length === expected.length &&
     relevant.every(
       snapshot =>
-        snapshot.sourceUpdatedAt?.getTime() === incident.updatedAt.getTime() &&
         incident.intelligenceFingerprint?.sourceUpdatedAt?.getTime() ===
           incident.updatedAt.getTime() &&
         snapshot.fingerprintUpdatedAt?.getTime() ===
@@ -134,6 +137,7 @@ export async function readIncidentAnalysisState(
     return {
       ...dated,
       status: 'STALE',
+      ...(pending ? { pending: true } : {}),
       message: pending
         ? 'Refreshing recommendations. Earlier suggestions are shown until fresh analysis finishes.'
         : 'Recommendations have not been verified against the current incident and policy.',

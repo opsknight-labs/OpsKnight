@@ -25,8 +25,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return jsonError('Action result not found', 404, undefined, NO_STORE);
   if (!(await checkRateLimit(`squire:action-result:${actor.id}`, 60, 60_000)).allowed)
     return jsonError('Too many requests. Try again in a minute.', 429, undefined, NO_STORE);
+  // "No result yet" is the normal state of every unconfirmed proposal, so it is not an error. Missing,
+  // unowned and unreadable results stay indistinguishable: all read as `outcome: null`.
   const outcome = await readSquireActionOutcome(actor, id);
-  return outcome
-    ? jsonOk({ outcome }, 200, NO_STORE)
-    : jsonError('Action result not found', 404, undefined, NO_STORE);
+  return jsonOk({ outcome: outcome ?? null }, 200, NO_STORE);
 }

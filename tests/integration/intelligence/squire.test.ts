@@ -180,7 +180,7 @@ describe('basic mode (no AI)', () => {
     const target = await createTestIncident('Database connection errors on db-1', service.id, {
       createdAt: at(5),
     });
-    await createTestIncident('Database connection errors on db-9', service.id, {
+    const precedent = await createTestIncident('Database connection errors on db-9', service.id, {
       createdAt: at(600),
       status: 'RESOLVED',
       resolvedAt: at(590),
@@ -200,9 +200,10 @@ describe('basic mode (no AI)', () => {
     });
     await analyzeResponse({ subjectKey: target.id, generation: 1 }, settings);
 
-    expect(
-      textOf(await turn(admin.id, 'any similar incidents?', { incidentId: target.id }))
-    ).toContain('db-9');
+    const similar = textOf(await turn(admin.id, 'any similar incidents?', { incidentId: target.id }));
+    expect(similar).toContain('db-9');
+    // Look-alikes carry their short id and opening date, so same-titled ones can be told apart.
+    expect(similar).toContain(`#${precedent.id.slice(-5).toUpperCase()}, opened `);
     const causes = textOf(await turn(admin.id, 'what caused this?', { incidentId: target.id }));
     expect(causes).toContain('api v7 rollout');
     expect(causes).toMatch(/verify/i);
@@ -414,9 +415,21 @@ it('prefetches recent timeline context only for providers allowed Personal data'
     'Responder Alice reviewed the rollback'
   );
   await db.aiProvider.updateMany({ data: { maxDataClass: 'INTERNAL' } });
-  model.script.push({ content: 'Read the incident.' });
-  await turn(admin.id, 'What happened?', { incidentId: incident.id });
+  invalidateGatewayCache();
+  const events = await turn(admin.id, 'What happened?', { incidentId: incident.id });
+  // An Internal-only provider never receives a conversation turn.
   expect(model.requests).toHaveLength(1);
+  expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
+});
+
+it('gives a basic answer and sends nothing when no provider may receive Personal data', async () => {
+  const admin = await setup({ ai: true, provider: true });
+  await db.aiProvider.updateMany({ data: { maxDataClass: 'INTERNAL' } });
+  invalidateGatewayCache();
+  // Free text can name people; redaction alone does not make it Internal.
+  const events = await turn(admin.id, 'Why did Alice Smith page customer Acme? Mail ops-lead@example.com');
+  expect(model.requests).toHaveLength(0);
+  expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
 });
 
 it('keeps browser conversation history away from an Internal-only provider', async () => {
@@ -428,7 +441,6 @@ it('keeps browser conversation history away from an Internal-only provider', asy
   });
   expect(model.requests).toHaveLength(0);
   expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
-  expect(events.some(event => event.type === 'notice' && /Personal/.test(event.text))).toBe(true);
 });
 
 it('keeps saved Personal history away from Internal-only fallback after a provider policy change', async () => {
@@ -484,7 +496,7 @@ it('never downgrades trusted Sensitive saved turns to a Personal-only provider',
   expect(model.requests).toHaveLength(0);
   expect(events).toContainEqual(expect.objectContaining({ type: 'meta', mode: 'basic' }));
   expect(events).toContainEqual(
-    expect.objectContaining({ type: 'notice', text: expect.stringContaining('Sensitive') })
+    expect.objectContaining({ type: 'meta', reason: expect.stringContaining('Sensitive') })
   );
 });
 
@@ -504,7 +516,7 @@ it('preserves trusted Sensitive browser context and omits unproved assistant his
   });
   expect(model.requests).toHaveLength(0);
   expect(events).toContainEqual(
-    expect.objectContaining({ type: 'notice', text: expect.stringContaining('Sensitive') })
+    expect.objectContaining({ type: 'meta', reason: expect.stringContaining('Sensitive') })
   );
   model.script.push({ content: 'Fresh answer' });
   await turn(admin.id, 'Check current facts', {

@@ -34,6 +34,7 @@ describe('CreateIncidentSuggestions', () => {
         status: 'OPEN',
         serviceName: 'Payments',
         similarity: 0.8,
+        createdAt: new Date(Date.now() - 20 * 60_000).toISOString(),
       },
     } as Awaited<ReturnType<typeof suggestForIncidentDraftAction>>);
   });
@@ -80,10 +81,11 @@ describe('CreateIncidentSuggestions', () => {
     expect(suggest).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'checkout returns 500' })
     );
-    expect(screen.getByRole('link', { name: 'Checkout 500s' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '#INC-1 Checkout 500s' })).toHaveAttribute(
       'href',
       '/incidents/inc-1'
     );
+    expect(screen.getByText(/Possible duplicate:/)).toHaveTextContent('opened 20m ago');
     fireEvent.click(screen.getByRole('button', { name: 'Use service Payments' }));
     expect(onPickService).toHaveBeenCalledWith('svc-pay');
     expect(screen.getByRole('button', { name: 'Set urgency to High' })).toBeInTheDocument();
@@ -103,7 +105,7 @@ describe('CreateIncidentSuggestions', () => {
       />
     );
     await act(() => vi.advanceTimersByTimeAsync(600));
-    expect(screen.getByRole('link', { name: 'Checkout 500s' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '#INC-1 Checkout 500s' })).toHaveAttribute(
       'href',
       '/m/incidents/inc-1'
     );

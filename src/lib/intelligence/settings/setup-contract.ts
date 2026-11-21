@@ -13,9 +13,13 @@ import { intelligenceSettingsHref } from './routes';
 export const RECOMMENDED_POLICY_MODES: readonly IntelligenceModeValue[] = ['OFF', 'SHADOW'];
 
 export interface SetupState {
-  settings: { enabled: boolean; revision: number } & Record<OpsInsightSwitch, boolean>;
+  settings: { enabled: boolean; revision: number; opsHelpersEnabled: boolean } & Record<
+    OpsInsightSwitch,
+    boolean
+  >;
   policy: { version: number; mode: IntelligenceModeValue; triageEnabled: boolean };
-  noise: { revision: number; mode: 'OFF' | 'SHADOW' | 'ON' };
+  /** `detectorsOn`: dedup, flapping and storm grouping are all enabled, as the Recommended preset sets them. */
+  noise: { revision: number; mode: 'OFF' | 'SHADOW' | 'ON'; detectorsOn: boolean };
   squireEnabled: boolean;
 }
 
@@ -26,7 +30,7 @@ export interface SetupRevisions {
 }
 
 export interface SetupChecklistItem {
-  id: 'engine' | 'triage' | 'insights' | 'noise' | 'assistant';
+  id: 'engine' | 'triage' | 'insights' | 'helpers' | 'noise' | 'assistant';
   label: string;
   /** What turning it on gives, in one sentence. */
   benefit: string;
@@ -77,10 +81,21 @@ export function setupChecklist(state: SetupState): SetupChecklistItem[] {
       inPreset: true,
     },
     {
+      id: 'helpers',
+      label: 'Small helpers',
+      benefit:
+        'Suggests a service, urgency and a likely duplicate while someone creates an incident, and similar deterministic hints.',
+      on: state.settings.opsHelpersEnabled,
+      href: intelligenceSettingsHref('engine', 'general'),
+      inPreset: true,
+    },
+    {
       id: 'noise',
       label: 'Noise controls in shadow',
-      benefit: 'Records what suppression and grouping would hold back, without changing any page.',
-      on: state.noise.mode !== 'OFF',
+      benefit:
+        'Records what dedup, flapping and storm grouping would hold back, without changing any page.',
+      // Shadow with every detector off records nothing, so it is not on yet.
+      on: state.noise.mode === 'ON' || (state.noise.mode === 'SHADOW' && state.noise.detectorsOn),
       href: intelligenceSettingsHref('noise', 'policy'),
       inPreset: true,
     },

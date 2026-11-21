@@ -19,6 +19,7 @@ import {
 import { loadSection } from '@/lib/intelligence/overview';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { requirePageAccess } from '@/lib/access/server';
+import { getUserTimeZone } from '@/lib/timezone';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -122,7 +123,7 @@ export default async function ChangesPage({
         />
       ) : (
         <>
-          <ChangesTable rows={result.data.rows} />
+          <ChangesTable rows={result.data.rows} timeZone={getUserTimeZone(user)} />
           {result.data.linksTruncated && (
             <p className="text-xs text-muted-foreground">
               Linked incidents are taken from the 500 most recent incidents in this page&apos;s time

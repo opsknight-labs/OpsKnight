@@ -70,6 +70,8 @@ export interface SimulationOutcome {
   held: number;
   transformed: number;
   failOpen: number;
+  /** HIGH urgency incidents dedup, flapping and storm grouping left alone (`allowHighUrgency` off). */
+  highUrgencyExempt: number;
   byControl: Record<string, number>;
   byAction: Record<string, number>;
   /** Decisive hits per rule or window id (`sourceId`). */
@@ -263,6 +265,7 @@ export async function simulatePrePagingControls(
       held: 0,
       transformed: 0,
       failOpen: 0,
+      highUrgencyExempt: 0,
       byControl: {},
       byAction: {},
       bySource: {},
@@ -290,6 +293,12 @@ export async function simulatePrePagingControls(
           deadlineMs: 250,
         });
         outcome.incidentsEvaluated += 1;
+        if (
+          decision.action === 'NONE' &&
+          input.urgency === 'HIGH' &&
+          !resolvePolicy(snapshot, input.serviceId)?.definition.allowHighUrgency
+        )
+          outcome.highUrgencyExempt += 1;
         if (decision.action === 'GROUP_CHILD') stormChildren.add(row.incidentId);
         if (decision.failOpen && decision.failOpen.reason !== 'off') outcome.failOpen += 1;
         // Orchestration rules run in order and stop at the first DROP or SUPPRESS, as in the hook.

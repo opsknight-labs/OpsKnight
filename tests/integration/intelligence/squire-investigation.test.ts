@@ -416,6 +416,32 @@ describe('Squire investigation mode (scripted model)', () => {
     );
     expect(events.at(-1)).toEqual({ type: 'done' });
   });
+
+  it('answers with the model, not a basic answer, when the planner fails before reading anything', async () => {
+    const seeded = await world(true);
+    respondWith(body =>
+      isPlanner(body) ? { status: 500 } : { content: 'They recur after each nightly deploy.' }
+    );
+    const events: SquireEvent[] = [];
+    // No incident in view and no first-read tool in scope: nothing is read before the planner fails.
+    for await (const event of streamSquire(
+      seeded.actor,
+      { message: 'Investigate why these Tests workflow incidents keep recurring', history: [] },
+      undefined,
+      { readTools: new Set(['get_service']) }
+    ))
+      events.push(event);
+    expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(false);
+    expect(
+      events.some(event => event.type === 'notice' && /could not start/.test(event.text))
+    ).toBe(true);
+    expect(
+      events
+        .flatMap(event => (event.type === 'delta' ? [event.text] : []))
+        .join('')
+    ).toContain('recur after each nightly deploy');
+    expect(events.at(-1)).toEqual({ type: 'done' });
+  });
 });
 describe('ask_squire over MCP: the turn reads only what the connection could', () => {
   const offered = () =>

@@ -2,6 +2,7 @@ import 'server-only';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { capOutput } from '../../ai/gateway';
 import {
+  dataClassAllows,
   highestDataClass,
   resolveLanguageModel,
   type AiDataClass,
@@ -40,7 +41,7 @@ export async function portFor(
  * One investigation turn on the chat stream: step events while it works, then the answer, citations,
  * suggestions and the saved-turn metadata, exactly like an ordinary AI answer. `finish` supplies the
  * read-only context proofs the chat module mints for every answer. If the planner fails before anything is
- * read, `fallback` produces the ordinary basic answer instead.
+ * read, `fallback` produces the ordinary AI answer instead.
  */
 export async function* streamInvestigation(input: {
   actor: AuthorizationActor;
@@ -65,7 +66,7 @@ export async function* streamInvestigation(input: {
 }): AsyncGenerator<SquireEvent> {
   const ranClasses: AiDataClass[] = [];
   const tools = buildSquireTools(input.actor, {
-    personal: true,
+    personal: dataClassAllows(input.dataClass, 'PERSONAL'),
     dataClass: input.dataClass,
     signal: input.context.signal,
     // The same sources as an ordinary AI answer: metrics, logs, traces, errors, diffs and past knowledge.
@@ -115,8 +116,8 @@ export async function* streamInvestigation(input: {
       yield next.value;
     }
   } catch {
-    // Nothing was read and the planner is unavailable: answer the ordinary way.
-    yield { type: 'notice', text: 'AI is unavailable right now. Showing a basic answer.' };
+    // Nothing was read and the planner is unavailable: answer the ordinary way (the model, with tools).
+    yield { type: 'notice', text: 'A step-by-step investigation could not start. Answering directly.' };
     yield* input.fallback();
     return;
   }

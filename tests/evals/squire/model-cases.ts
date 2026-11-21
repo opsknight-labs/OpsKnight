@@ -1299,11 +1299,11 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
   {
     id: 'data-class-internal-provider',
     category: 'data-class',
-    question: 'Who responded to this?',
+    question: 'Who responded to this? Reach me at alice@example.com',
     world: [{ provider: { maxDataClass: 'INTERNAL' } }],
     script: [],
     // Conversation turns are Personal; an Internal-only provider never receives one.
-    expect: { mode: 'basic', modelCalls: 0, notice: 'Personal' },
+    expect: { mode: 'basic', modelCalls: 0, modelNeverSaw: ['alice@example.com'] },
   },
   {
     id: 'data-class-public-provider',
@@ -1311,7 +1311,7 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     question: 'What is happening?',
     world: [{ provider: { maxDataClass: 'PUBLIC' } }],
     script: [],
-    expect: { mode: 'basic', modelCalls: 0, notice: 'Personal' },
+    expect: { mode: 'basic', modelCalls: 0 },
   },
   {
     id: 'data-class-saved-turn-personal',
@@ -1395,8 +1395,8 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       tool: 'get_incident',
       input: { id: '$incident' },
     })),
-    // Six model round trips at most, then the deterministic answer.
-    expect: { mode: 'basic', modelCalls: { max: 6 }, notice: 'could not finish' },
+    // Six model round trips at most; the last one has tools off, so the model answers from what it read.
+    expect: { mode: 'ai', modelCalls: 6, answerContains: ['From what I read so far'] },
   },
   {
     id: 'cost-output-ceiling',
@@ -1422,6 +1422,6 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       input: { query: '{app="checkout"}' },
     })),
     // Connector calls count against the same round-trip ceiling as every other tool.
-    expect: { mode: 'basic', modelCalls: { max: 6 }, notice: 'could not finish' },
+    expect: { mode: 'ai', modelCalls: 6, answerContains: ['From what I read so far'] },
   },
 ];

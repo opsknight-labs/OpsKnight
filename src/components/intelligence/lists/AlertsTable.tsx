@@ -18,6 +18,13 @@ const SEVERITY_TONE: ReadonlyMap<string, ChipTone> = new Map([
   ['info', 'info'],
 ]);
 
+const EMPTY_CELL = (
+  <span className="text-muted-foreground">
+    <span aria-hidden="true">—</span>
+    <span className="sr-only">None</span>
+  </span>
+);
+
 export function SeverityChip({ severity }: { severity: string | null }) {
   if (!severity) return null;
   const key = severity.toLowerCase();
@@ -45,21 +52,25 @@ export function DecisionChip({ decision }: { decision: AlertListDecision | null 
   );
 }
 
+/** Labels shown inline before the rest are counted, so a row stays one or two lines tall. */
+const SHOWN_LABELS = 2;
+
 function Labels({ row }: { row: AlertListRow }) {
-  if (row.labels.length === 0) return null;
+  if (row.labels.length === 0) return EMPTY_CELL;
+  const more = Math.max(0, row.labels.length - SHOWN_LABELS) + row.moreLabels;
   return (
-    <ul aria-label="Labels" className="flex flex-wrap gap-1">
-      {row.labels.map(label => (
-        <li key={label.key} className="max-w-full">
+    <ul aria-label="Labels" className="flex flex-wrap items-center gap-1">
+      {row.labels.slice(0, SHOWN_LABELS).map(label => (
+        <li key={label.key} className="min-w-0 max-w-full" title={`${label.key}=${label.value}`}>
           <ListChip>
-            <span className="break-all">
+            <span className="truncate">
               {label.key}={label.value}
             </span>
           </ListChip>
         </li>
       ))}
-      {row.moreLabels > 0 && (
-        <li className="text-xs text-muted-foreground">+{row.moreLabels} more</li>
+      {more > 0 && (
+        <li className="whitespace-nowrap text-xs text-muted-foreground">+{more} more</li>
       )}
     </ul>
   );
@@ -69,7 +80,13 @@ function Labels({ row }: { row: AlertListRow }) {
  * The alerts list. One table at every width: on a phone the service, labels and decision fold under the
  * summary so each row stays a single 44 px-tall target, and the extra columns appear from `md` up.
  */
-export default function AlertsTable({ rows }: { rows: readonly AlertListRow[] }) {
+export default function AlertsTable({
+  rows,
+  timeZone,
+}: {
+  rows: readonly AlertListRow[];
+  timeZone: string;
+}) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <table className="w-full table-fixed border-collapse" data-testid="alerts-table">
@@ -106,7 +123,7 @@ export default function AlertsTable({ rows }: { rows: readonly AlertListRow[] })
                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground md:hidden">
                   <span className="break-words">{row.serviceName}</span>
                   <SeverityChip severity={row.severity} />
-                  <ListWhen value={row.receivedAt} />
+                  <ListWhen value={row.receivedAt} timeZone={timeZone} />
                 </div>
                 <div className="mt-1 space-y-1 md:hidden">
                   <DecisionChip decision={row.decision} />
@@ -114,7 +131,7 @@ export default function AlertsTable({ rows }: { rows: readonly AlertListRow[] })
                 {row.incidentId && (
                   <Link
                     href={`/incidents/${encodeURIComponent(row.incidentId)}`}
-                    className="mt-1 inline-flex min-h-11 items-center text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
+                    className="mt-1 flex min-h-11 w-fit items-center text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
                   >
                     Open incident
                   </Link>
@@ -129,16 +146,16 @@ export default function AlertsTable({ rows }: { rows: readonly AlertListRow[] })
                 </Link>
               </td>
               <td className={`${listCellClass} hidden md:table-cell`}>
-                <SeverityChip severity={row.severity} />
+                {row.severity ? <SeverityChip severity={row.severity} /> : EMPTY_CELL}
               </td>
               <td className={`${listCellClass} hidden lg:table-cell`}>
                 <Labels row={row} />
               </td>
               <td className={`${listCellClass} hidden md:table-cell`}>
-                <DecisionChip decision={row.decision} />
+                {row.decision ? <DecisionChip decision={row.decision} /> : EMPTY_CELL}
               </td>
               <td className={`${listCellClass} hidden text-muted-foreground md:table-cell`}>
-                <ListWhen value={row.receivedAt} />
+                <ListWhen value={row.receivedAt} timeZone={timeZone} />
               </td>
             </tr>
           ))}

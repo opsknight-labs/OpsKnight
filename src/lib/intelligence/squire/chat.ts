@@ -5,6 +5,7 @@ import type { SourceReference } from '../conversations/contract';
 import { readAlertReference, readChangeReference } from './references';
 import 'server-only';
 import prisma from '@/lib/prisma';
+import { getUserTimeZone } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, runbookReadWhere } from '@/lib/authorization-filters';
@@ -13,11 +14,12 @@ import { registerAiGateway } from '../ai/gateway';
 import {
   resolveLanguageModel,
   highestDataClass,
+  dataClassAllows,
   type AiMessage,
   type LanguageModelPort,
   type AiDataClass,
 } from '../ai/port';
-import { redactSecrets } from '../ai/redact';
+import { redactPersonalData, redactSecrets } from '../ai/redact';
 import { AI_LEAN_NOTICE } from '../ai/contract';
 import { getAiSettings } from '../ai/settings';
 import { getGuidance } from '../ai/prompts';
@@ -166,15 +168,17 @@ export async function* streamSquire(
           incident ? brief(actor, incident) : Promise.resolve(null),
           getGuidance('squire.system').catch(() => null),
           priorTurns(actor, request, savedConversation, incident?.id ?? null),
+          // Answers state times in the person's zone, as basic answers do.
+          prisma.user
+            .findUnique({ where: { id: actor.id }, select: { timeZone: true } })
+            .catch(() => null),
         ])
       : Promise.resolve(null);
-    // Free-text questions and history may identify people, even without personal-data tools.
-    // Legacy and browser messages have no trusted classification: require Personal clearance
-    // for the entire turn rather than silently downgrading their classification on fallback.
-    const [briefing, guidance, context] = (await preparation) ?? [
+    const [briefing, guidance, context, viewer] = (await preparation) ?? [
       null,
       null,
       { messages: [] as AiMessage[], omitted: false },
+      null,
     ];
     const history = context.messages;
     if (context.omitted)
@@ -182,11 +186,15 @@ export async function* streamSquire(
         type: 'notice',
         text: 'Some earlier answers were omitted because their context could not be verified. Ask about the current evidence again if needed.',
       };
-    const dataClass = highestDataClass(['PERSONAL', ...history.map(message => message.dataClass)]);
-    let port: LanguageModelPort | null = null;
-    if (settings.enabled) {
-      port = await resolveLanguageModel('SQUIRE_CHAT', dataClass);
-    }
+    // A conversation turn is Personal: free text can name people and customers, and redaction only removes
+    // emails, phones and IPs. Without a provider cleared for Personal data the turn gets a basic answer.
+    const historyClass = highestDataClass(['INTERNAL', ...history.map(message => message.dataClass)]);
+    const dataClass: AiDataClass = highestDataClass(['PERSONAL', historyClass]);
+    const port: LanguageModelPort | null = settings.enabled
+      ? await resolveLanguageModel('SQUIRE_CHAT', dataClass)
+      : null;
+    const personal = dataClassAllows(dataClass, 'PERSONAL');
+    const question = personal ? request.message : redactPersonalData(request.message);
 
     if (port) {
       yield {
@@ -196,17 +204,184 @@ export async function* streamSquire(
         ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
       };
       const evidence = new SquireEvidenceRegistry(actor, dataClass);
-      const prepared = briefing ? await evidence.briefing(briefing) : null;
+      const prepared = briefing
+        ? await evidence.briefing(
+            personal ? briefing : { ...briefing, summary: undefined, timeline: undefined }
+          )
+        : null;
       // Observability connectors are optional: a lookup failure only means their tools are not offered.
       const observability = !mayRead(scope, ...OBSERVABILITY_TOOL_NAMES)
         ? []
         : await listEligibleConnections(actor).catch(() => []);
-      const prompt = buildSystemPrompt(settings.squireName, prepared, guidance);
-      const system: AiMessage = { role: 'system', content: prompt.system, dataClass: 'PERSONAL' };
+      const prompt = buildSystemPrompt(
+        settings.squireName,
+        prepared,
+        guidance,
+        getUserTimeZone(viewer ?? undefined)
+      );
+      const system: AiMessage = { role: 'system', content: prompt.system, dataClass };
       // The parts of the briefing that change between turns, sent after the cached prefix.
       const volatile: AiMessage[] = prompt.volatile
-        ? [{ role: 'user', content: prompt.volatile, dataClass: 'PERSONAL' }]
+        ? [{ role: 'user', content: prompt.volatile, dataClass }]
         : [];
+
+      const chatPort = port;
+      // The ordinary AI answer: the model with tools. Also what an investigation falls back to when its
+      // planner fails before reading anything, so a basic answer never replaces an available model.
+      const ordinary = async function* (): AsyncGenerator<SquireEvent> {
+        const messages: AiMessage[] = [
+          system,
+          ...(personal
+            ? history
+            : history
+                .filter(message => message.role === 'user')
+                .map(message => ({
+                  ...message,
+                  content: redactPersonalData(message.content),
+                  dataClass: 'INTERNAL' as const,
+                }))),
+          ...volatile,
+          { role: 'user', content: question, dataClass },
+        ];
+        let answer = '';
+        let proposals = 0;
+        let failed = false;
+        // The classes of the tools that actually ran decide what the saved turn is classified as, and
+        // whether a proposal was made after reading third-party text (alerts, notes, payloads).
+        const ranClasses: AiDataClass[] = [];
+        let readUntrusted = false;
+        const emittedCoverage = new Set<string>();
+        for await (const event of chatPort.stream({
+          context: {
+            actorId: actor.id,
+            capability: 'SQUIRE_CHAT',
+            callSite: 'interactive' as const,
+            dataClass,
+            incidentId: incident?.id,
+            signal,
+            prompt: prompt.meta,
+          },
+          messages,
+          tools: toolsForMessage(
+            buildSquireTools(actor, {
+              personal,
+              extendedActions: settings.squireExtendedActions,
+              // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
+              knowledge: await squireKnowledgeEnabled(),
+              dataClass,
+              signal,
+              observability,
+              observe: (name, input, result) => {
+                // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
+                ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
+                readUntrusted = true;
+                return evidence.observe(name, input, result);
+              },
+            }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
+            request.message,
+            Boolean(incident)
+          ),
+          maxSteps: SQUIRE_LIMITS.maxSteps,
+        })) {
+          for (const text of evidence.notices()) {
+            if (!emittedCoverage.has(text)) {
+              emittedCoverage.add(text);
+              yield { type: 'notice', text };
+            }
+          }
+          if (event.type === 'text-delta') {
+            answer += event.delta;
+            yield { type: 'delta', text: event.delta };
+          } else if (event.type === 'finish') {
+            if (event.result.degraded) yield { type: 'notice', text: AI_LEAN_NOTICE };
+          } else if (event.type === 'tool-start') {
+            const label = TOOL_LABELS[event.name];
+            if (label) yield { type: 'tool', label };
+          } else if (event.type === 'tool-call') {
+            const action = actionForTool(event.call.name);
+            if (!action || proposals >= MAX_PROPOSALS) continue;
+            const proposal = await buildProposal(actor, action, event.call.input).catch(() => null);
+            if (proposal) {
+              proposals += 1;
+              yield {
+                type: 'proposal',
+                proposal: { ...proposal, ...(readUntrusted ? { untrustedContext: true } : {}) },
+              };
+            }
+          } else if (event.type === 'error') {
+            const limit = aiLimitFrom(event.message);
+            if (answer || proposals > 0) {
+              yield {
+                type: 'error',
+                message: event.message,
+                availability: limit ? 'quota' : 'unavailable',
+                ...(limit ? { limit } : {}),
+              };
+              failed = true;
+              break;
+            }
+            // Nothing shown yet: answer from the intelligence data instead.
+            yield {
+              type: 'notice',
+              text:
+                event.retryable && /Too many|budget/i.test(event.message)
+                  ? `${event.message}. Showing a basic answer.`
+                  : 'AI is unavailable right now. Showing a basic answer.',
+            };
+            yield* basicAnswer(
+              actor,
+              request,
+              incident,
+              settings.squireName,
+              dataClass,
+              savedConversation,
+              limit ? 'quota' : 'unavailable',
+              page,
+              limit
+            );
+            return;
+          }
+        }
+        if (failed) return;
+        // The model can spend its whole step budget on tools and end without a word; never answer with nothing.
+        if (!answer.trim() && proposals === 0) {
+          yield { type: 'notice', text: 'I could not finish that answer. Here is what I know.' };
+          yield* basicAnswer(
+            actor,
+            request,
+            incident,
+            settings.squireName,
+            dataClass,
+            savedConversation,
+            'ready',
+            page
+          );
+          return;
+        }
+        const citations = evidence.citations(answer);
+        if (citations.length > 0) yield { type: 'citations', items: citations };
+        yield { type: 'suggestions', items: followUps(incident, true) };
+        yield {
+          type: 'memory',
+          turn: {
+            mode: 'ai',
+            dataClass: highestDataClass([dataClass, ...ranClasses]),
+            completion: 'COMPLETED',
+            sources: evidence.sources(),
+            verified: evidence.verified,
+            authorizationHash: authorizationContextHash(actor),
+          },
+        };
+        yield await contextProofs(
+          actor,
+          { ...request, incidentId: incident?.id },
+          answer,
+          dataClass,
+          evidence.sources(),
+          evidence.verified
+        );
+        yield { type: 'done' };
+      };
 
       // ---- Investigation mode (off unless an administrator enables it) ----
       const investigationContext = {
@@ -219,7 +394,7 @@ export async function* streamSquire(
       };
       if (
         settings.squireInvestigationEnabled &&
-        (await wantsInvestigation(request.message, {
+        (await wantsInvestigation(question, {
           onIncident: Boolean(incident),
           classifier: () => portFor('CLASSIFY', dataClass, port!),
           context: investigationContext,
@@ -228,7 +403,7 @@ export async function* streamSquire(
       ) {
         yield* streamInvestigation({
           actor,
-          question: request.message,
+          question,
           // Only the final diagnosis reads this (the planner has its own prompt): the system prompt and
           // the current briefing, without the chat history.
           preamble: [system, ...volatile],
@@ -252,174 +427,16 @@ export async function* streamSquire(
               evidence.sources(),
               evidence.verified
             ),
-          fallback: () =>
-            basicAnswer(
-              actor,
-              request,
-              incident,
-              settings.squireName,
-              dataClass,
-              savedConversation,
-              'unavailable',
-              page
-            ),
+          fallback: ordinary,
         });
         return;
       }
 
-      const messages: AiMessage[] = [
-        system,
-        ...history,
-        ...volatile,
-        { role: 'user', content: request.message, dataClass: 'PERSONAL' },
-      ];
-      let answer = '';
-      let proposals = 0;
-      let failed = false;
-      // The classes of the tools that actually ran decide what the saved turn is classified as, and
-      // whether a proposal was made after reading third-party text (alerts, notes, payloads).
-      const ranClasses: AiDataClass[] = [];
-      let readUntrusted = false;
-      const emittedCoverage = new Set<string>();
-      for await (const event of port.stream({
-        context: {
-          actorId: actor.id,
-          capability: 'SQUIRE_CHAT',
-          callSite: 'interactive' as const,
-          dataClass,
-          incidentId: incident?.id,
-          signal,
-          prompt: prompt.meta,
-        },
-        messages,
-        tools: toolsForMessage(
-          buildSquireTools(actor, {
-            personal: true,
-            extendedActions: settings.squireExtendedActions,
-            // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
-            knowledge: await squireKnowledgeEnabled(),
-            dataClass,
-            signal,
-            observability,
-            observe: (name, input, result) => {
-              // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
-              ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
-              readUntrusted = true;
-              return evidence.observe(name, input, result);
-            },
-          }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
-          request.message,
-          Boolean(incident)
-        ),
-        maxSteps: SQUIRE_LIMITS.maxSteps,
-      })) {
-        for (const text of evidence.notices()) {
-          if (!emittedCoverage.has(text)) {
-            emittedCoverage.add(text);
-            yield { type: 'notice', text };
-          }
-        }
-        if (event.type === 'text-delta') {
-          answer += event.delta;
-          yield { type: 'delta', text: event.delta };
-        } else if (event.type === 'finish') {
-          if (event.result.degraded) yield { type: 'notice', text: AI_LEAN_NOTICE };
-        } else if (event.type === 'tool-start') {
-          const label = TOOL_LABELS[event.name];
-          if (label) yield { type: 'tool', label };
-        } else if (event.type === 'tool-call') {
-          const action = actionForTool(event.call.name);
-          if (!action || proposals >= MAX_PROPOSALS) continue;
-          const proposal = await buildProposal(actor, action, event.call.input).catch(() => null);
-          if (proposal) {
-            proposals += 1;
-            yield {
-              type: 'proposal',
-              proposal: { ...proposal, ...(readUntrusted ? { untrustedContext: true } : {}) },
-            };
-          }
-        } else if (event.type === 'error') {
-          const limit = aiLimitFrom(event.message);
-          if (answer || proposals > 0) {
-            yield {
-              type: 'error',
-              message: event.message,
-              availability: limit ? 'quota' : 'unavailable',
-              ...(limit ? { limit } : {}),
-            };
-            failed = true;
-            break;
-          }
-          // Nothing shown yet: answer from the intelligence data instead.
-          yield {
-            type: 'notice',
-            text:
-              event.retryable && /Too many|budget/i.test(event.message)
-                ? `${event.message}. Showing a basic answer.`
-                : 'AI is unavailable right now. Showing a basic answer.',
-          };
-          yield* basicAnswer(
-            actor,
-            request,
-            incident,
-            settings.squireName,
-            dataClass,
-            savedConversation,
-            limit ? 'quota' : 'unavailable',
-            page,
-            limit
-          );
-          return;
-        }
-      }
-      if (failed) return;
-      // The model can spend its whole step budget on tools and end without a word; never answer with nothing.
-      if (!answer.trim() && proposals === 0) {
-        yield { type: 'notice', text: 'I could not finish that answer. Here is what I know.' };
-        yield* basicAnswer(
-          actor,
-          request,
-          incident,
-          settings.squireName,
-          dataClass,
-          savedConversation,
-          'ready',
-          page
-        );
-        return;
-      }
-      const citations = evidence.citations(answer);
-      if (citations.length > 0) yield { type: 'citations', items: citations };
-      yield { type: 'suggestions', items: followUps(incident, true) };
-      yield {
-        type: 'memory',
-        turn: {
-          mode: 'ai',
-          dataClass: highestDataClass([dataClass, ...ranClasses]),
-          completion: 'COMPLETED',
-          sources: evidence.sources(),
-          verified: evidence.verified,
-          authorizationHash: authorizationContextHash(actor),
-        },
-      };
-      yield await contextProofs(
-        actor,
-        { ...request, incidentId: incident?.id },
-        answer,
-        dataClass,
-        evidence.sources(),
-        evidence.verified
-      );
-      yield { type: 'done' };
+      yield* ordinary();
       return;
     }
 
-    if (settings.enabled) {
-      yield {
-        type: 'notice',
-        text: `AI conversation requires a provider permitted to receive ${dataClass === 'SENSITIVE' ? 'Sensitive' : 'Personal'} data. Showing a basic answer.`,
-      };
-    }
+    // Provider policy, not a passing failure: the reason rides on the meta event (shown once, in the banner).
     yield* basicAnswer(
       actor,
       request,
@@ -428,7 +445,13 @@ export async function* streamSquire(
       dataClass,
       savedConversation,
       settings.enabled ? 'unavailable' : 'disabled',
-      page
+      page,
+      undefined,
+      settings.enabled
+        ? dataClass === 'SENSITIVE'
+          ? 'No AI provider is allowed to receive Sensitive data, which this conversation holds'
+          : 'No enabled AI provider is allowed to receive Internal data'
+        : undefined
     );
   } catch (error) {
     if (signal?.aborted) return;
@@ -448,7 +471,8 @@ async function* basicAnswer(
   savedConversation: ConversationDetail | null = null,
   availability: 'ready' | 'disabled' | 'quota' | 'unavailable' = 'disabled',
   page: ResolvedPageContext | null = null,
-  limit?: SquireAiLimit
+  limit?: SquireAiLimit,
+  reason?: string
 ): AsyncGenerator<SquireEvent> {
   const scope = {
     userId: actor.id,
@@ -480,6 +504,7 @@ async function* basicAnswer(
     name,
     availability,
     ...(limit ? { limit } : {}),
+    ...(reason ? { reason } : {}),
     intent: plan.intent,
     ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
   };
