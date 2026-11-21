@@ -196,11 +196,14 @@ it('is one dot with a short label until opened, and announces its state without 
 
 it.each([
   ['FAILED', 'Needs review', 'bg-status-critical'],
-  ['STALE', 'Refreshing', 'bg-status-elevated'],
+  ['STALE', 'Out of date', 'bg-status-elevated'],
   ['PAUSED', 'Paused', 'bg-status-elevated'],
-] as const)('labels %s as "%s" with a status token colour', (status, label, colour) => {
+  ['STALE-pending', 'Refreshing', 'bg-status-elevated'],
+] as const)('labels %s as "%s" with a status token colour', (key, label, colour) => {
+  // Stale is "Refreshing" only while analysis is actually queued.
+  const [status, pending] = key === 'STALE-pending' ? (['STALE', true] as const) : [key, false];
   const { container } = render(
-    <FreshnessDot incidentId="incident-1" initial={{ ...waiting, status }} />
+    <FreshnessDot incidentId="incident-1" initial={{ ...waiting, status, pending }} />
   );
   expect(screen.getByRole('button', { name: name => name.startsWith(label) })).toBeInTheDocument();
   expect(container.querySelector(`.${colour}`)).not.toBeNull();
