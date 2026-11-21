@@ -3,7 +3,7 @@
   "name": "io.github.opsknight-labs/opsknight",
   "title": "OpsKnight",
   "description": "Self-hosted incident management: incidents, on-call, services, runbooks, reviewed changes.",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "websiteUrl": "https://opsknight.com/docs",
   "repository": {
     "url": "https://github.com/opsknight-labs/opsknight",
