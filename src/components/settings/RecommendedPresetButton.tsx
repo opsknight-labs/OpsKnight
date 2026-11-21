@@ -5,6 +5,7 @@ import type { IntelligenceActionState } from '@/app/(app)/settings/intelligence/
 import { applyRecommendedSetup } from '@/app/(app)/settings/intelligence/setup-actions';
 import { Button } from '@/components/ui/shadcn/button';
 import type { SetupRevisions } from '@/lib/intelligence/settings/setup-contract';
+import { ActionMessage } from '@/components/settings/form-kit';
 
 const initialState: IntelligenceActionState = { message: '', ok: true };
 
@@ -16,21 +17,10 @@ export default function RecommendedPresetButton({ revisions }: { revisions: Setu
       {Object.entries(revisions).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
-      <Button type="submit" disabled={pending} className="min-h-11 sm:min-h-9">
+      <Button type="submit" disabled={pending} className="min-h-11 sm:min-h-10">
         {pending ? 'Turning on…' : 'Turn on recommended'}
       </Button>
-      {state.message && (
-        <p
-          role={state.ok ? 'status' : 'alert'}
-          className={
-            state.ok
-              ? 'text-sm text-status-ok-deep dark:text-status-ok-soft'
-              : 'text-sm text-destructive'
-          }
-        >
-          {state.message}
-        </p>
-      )}
+      <ActionMessage state={state} />
     </form>
   );
 }

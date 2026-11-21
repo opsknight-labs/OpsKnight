@@ -9,20 +9,9 @@ import {
   type SquireMemoryActionState,
 } from '@/app/(app)/settings/intelligence/ai/memory/actions';
 import { Button } from '@/components/ui/shadcn/button';
+import { ActionMessage as Status } from '@/components/settings/form-kit';
 
 const initial: SquireMemoryActionState = { message: '', ok: false };
-
-function Status({ state }: { state: SquireMemoryActionState }) {
-  if (!state.message) return null;
-  return (
-    <p
-      role={state.ok ? 'status' : 'alert'}
-      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
-    >
-      {state.message}
-    </p>
-  );
-}
 
 export function KnowledgeSwitchForm({
   enabled,

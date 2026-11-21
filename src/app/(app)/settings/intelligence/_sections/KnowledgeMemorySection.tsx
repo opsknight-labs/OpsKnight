@@ -1,5 +1,7 @@
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { KnowledgeSwitchForm } from '@/components/settings/SquireMemoryForms';
+import EmptyState from '@/components/patterns/EmptyState';
+import { LearnMore } from '@/components/settings/layout/LearnMore';
 import { logger } from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import { getSquireMemorySettings } from '@/lib/intelligence/memory/settings';
@@ -35,10 +37,19 @@ export default async function KnowledgeMemorySection({ canManage }: { canManage:
     <SettingsSection
       id="knowledge-memory"
       title="Knowledge memory"
-      description="Let Squire search what your organisation already learned: postmortems, resolution and incident notes, runbook steps and confirmed service facts. Off by default. Built in the intelligence lane, never on the paging path."
+      description="Let Squire search what your organisation already learned. Off by default."
     >
+      <LearnMore className="pt-3">
+        The index covers postmortems, resolution and incident notes, runbook steps and confirmed
+        service facts. It is built in the intelligence lane, never on the paging path.
+      </LearnMore>
       {data === null ? (
-        <p className="py-3 text-sm text-muted-foreground">Unavailable.</p>
+        <EmptyState
+          size="sm"
+          variant="simple"
+          title="Knowledge memory unavailable"
+          description="It could not be loaded. Refresh to try again."
+        />
       ) : (
         <>
           <KnowledgeSwitchForm
@@ -46,12 +57,17 @@ export default async function KnowledgeMemorySection({ canManage }: { canManage:
             revision={data.settings.revision}
             canManage={canManage}
           />
-          <ul className="divide-y divide-border text-sm">
+          <ul
+            aria-label="Indexed knowledge"
+            className="mb-4 divide-y divide-border rounded-lg border border-border text-sm"
+          >
             {data.counts.length === 0 ? (
-              <li className="py-2 text-muted-foreground">The index is empty.</li>
+              <li className="px-3 py-2.5 text-muted-foreground">
+                The index is empty. It fills once knowledge memory is on.
+              </li>
             ) : (
               data.counts.map(row => (
-                <li key={row.sourceKind} className="flex justify-between py-2">
+                <li key={row.sourceKind} className="flex justify-between gap-3 px-3 py-2.5">
                   <span>{KIND_LABEL[row.sourceKind] ?? row.sourceKind}</span>
                   <span className="tabular-nums text-muted-foreground">{row._count._all}</span>
                 </li>

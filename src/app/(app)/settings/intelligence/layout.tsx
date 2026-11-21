@@ -1,11 +1,9 @@
 import React from 'react';
-import IntelligenceSubNav from '@/components/settings/layout/IntelligenceSubNav';
 
+/**
+ * Each page renders its own header band with the group tabs under it (`IntelligenceGroupHeader`), so
+ * the tabs follow DESIGN.md "in-page tabs stay under the header".
+ */
 export default function IntelligenceLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="space-y-4">
-      <IntelligenceSubNav />
-      <div>{children}</div>
-    </div>
-  );
+  return <>{children}</>;
 }

@@ -13,6 +13,10 @@ import HeartbeatPanel from '@/components/settings/noise-controls/HeartbeatPanel'
 import MaintenanceWindowsPanel from '@/components/settings/noise-controls/MaintenanceWindowsPanel';
 import SuppressionRuleBuilder from '@/components/settings/noise-controls/SuppressionRuleBuilder';
 import EmptyState from '@/components/ui/EmptyState';
+import { LearnMore } from '@/components/settings/layout/LearnMore';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { cn } from '@/lib/utils';
 import { getAppUrl } from '@/lib/app-url';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -131,10 +135,33 @@ export default async function NoiseControlsPage({
 
   return (
     <div className="space-y-6">
-      <IntelligenceGroupHeader group="noise">
-        Decide before paging: maintenance windows, suppression rules, orchestration, content dedup,
-        flapping, storm grouping and heartbeat monitors. Everything starts OFF, runs in SHADOW
-        first, and every decision is recorded and reversible. Highest urgency is never held.
+      <IntelligenceGroupHeader
+        group="noise"
+        badges={
+          policy ? (
+            <span className={pageHeaderBadgeClass}>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  toneClasses(
+                    policy.mode === 'ON' ? 'ok' : policy.mode === 'SHADOW' ? 'info' : 'neutral'
+                  ).solid
+                )}
+              />
+              {`Mode ${policy.mode}`}
+            </span>
+          ) : undefined
+        }
+        about={
+          <p>
+            Maintenance windows, suppression rules, orchestration, content dedup, flapping, storm
+            grouping and heartbeat monitors. Everything starts OFF, runs in SHADOW first, and every
+            decision is recorded and reversible. Highest urgency is never held.
+          </p>
+        }
+      >
+        Decide what happens to an alert before anyone is paged.
       </IntelligenceGroupHeader>
 
       {kpis && <KpiTiles kpis={kpis} />}
@@ -142,8 +169,11 @@ export default async function NoiseControlsPage({
       <SettingsSection
         id="policy"
         title="Policy"
-        description="OFF ignores everything below. SHADOW records what would have happened. ON applies it. Turning ON needs a week of shadow evidence, or an explicit acknowledgement."
+        description="OFF ignores everything below, SHADOW records what would have happened, ON applies it."
       >
+        <LearnMore className="pt-3">
+          Turning ON needs a week of shadow evidence, or an explicit acknowledgement.
+        </LearnMore>
         {policy && readiness ? (
           <NoisePolicyForm
             policy={policy}
@@ -167,8 +197,11 @@ export default async function NoiseControlsPage({
       <SettingsSection
         id="suppression-rules"
         title="Suppression rules"
-        description="Match on source, summary, severity, resource or labels. Rules expire, have an owner, and are audited. Suggestions come from services whose incidents mostly clear within minutes."
+        description="Match on source, summary, severity, resource or labels. Rules expire, have an owner and are audited."
       >
+        <LearnMore className="pt-3">
+          Suggestions come from services whose incidents mostly clear within minutes.
+        </LearnMore>
         {canManage && (
           <div className="py-4">
             <SuppressionRuleBuilder
@@ -186,8 +219,12 @@ export default async function NoiseControlsPage({
       <SettingsSection
         id="maintenance-windows"
         title="Noise maintenance rules"
-        description="Alerts in a window are stored and visible but never page (or page at a lower urgency). Windows can repeat (weekly, weekdays, weekends, monthly or a custom RRULE) and can be ended early. Test a window against the last 7 days before saving it."
+        description="Alerts in a window are stored and visible but never page, or page at a lower urgency."
       >
+        <LearnMore className="pt-3">
+          Windows can repeat (weekly, weekdays, weekends, monthly or a custom RRULE) and can be
+          ended early. Test a window against the last 7 days before saving it.
+        </LearnMore>
         <MaintenanceWindowsPanel
           windows={windows ?? []}
           services={services ?? []}
@@ -200,8 +237,13 @@ export default async function NoiseControlsPage({
       <SettingsSection
         id="policy-history"
         title="Orchestration and policy versions"
-        description="Compare versions, see what changed and roll back. Every publish is an immutable version (orchestration rules included). Decisions record the version they were made under. Rolling back publishes a copy of the chosen version as the newest one, so history is never rewritten."
+        description="Compare versions, see what changed and roll back. Every publish is an immutable version."
       >
+        <LearnMore className="pt-3">
+          Orchestration rules are versioned too, and decisions record the version they were made
+          under. Rolling back publishes a copy of the chosen version as the newest one, so history
+          is never rewritten.
+        </LearnMore>
         {policy ? (
           <PolicyVersionHistory
             versions={versions ?? []}
@@ -211,14 +253,19 @@ export default async function NoiseControlsPage({
             canManage={canManage}
           />
         ) : (
-          <p className="py-4 text-sm text-muted-foreground">Unavailable.</p>
+          <EmptyState
+            size="sm"
+            variant="simple"
+            title="Version history unavailable"
+            description="The noise-control policy could not be loaded. Refresh to try again."
+          />
         )}
       </SettingsSection>
 
       <SettingsSection
         id="heartbeats"
         title="Heartbeat monitors"
-        description="A job that stops pinging raises an incident on its service through the normal ingestion path, and resolves it when the pings return."
+        description="A job that stops pinging raises an incident on its service, and resolves it when the pings return."
       >
         <HeartbeatPanel
           monitors={heartbeats ?? []}
@@ -231,7 +278,7 @@ export default async function NoiseControlsPage({
       <SettingsSection
         id="simulation"
         title="Test against history"
-        description="Replays the saved controls over recent incidents, read-only, and says what would have been suppressed, grouped, downgraded or held."
+        description="Replay the saved controls over recent incidents, read-only, to see what would have been held back."
       >
         {canManage ? (
           <SimulationForm services={services ?? []} />
@@ -248,8 +295,12 @@ export default async function NoiseControlsPage({
       <SettingsSection
         id="decisions"
         title="Recent decisions"
-        description="Shadow and applied decisions. Reversing an applied decision re-ingests the alert so it pages; reversing a shadow decision marks it wrong and counts against readiness."
+        description="Shadow and applied decisions, newest first. Every one can be reversed."
       >
+        <LearnMore className="pt-3">
+          Reversing an applied decision re-ingests the alert so it pages; reversing a shadow
+          decision marks it wrong and counts against readiness.
+        </LearnMore>
         <DecisionList decisions={decisions ?? []} canManage={canManage} />
       </SettingsSection>
     </div>

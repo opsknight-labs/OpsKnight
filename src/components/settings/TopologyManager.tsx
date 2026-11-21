@@ -9,21 +9,9 @@ import {
   type DependencyActionState,
 } from '@/app/(app)/settings/intelligence/response/actions';
 import { Button } from '@/components/ui/shadcn/button';
+import { ActionMessage as Status, fieldClass } from '@/components/settings/form-kit';
 
 const initial: DependencyActionState = { message: '', ok: false };
-const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
-
-function Status({ state }: { state: DependencyActionState }) {
-  if (!state.message) return null;
-  return (
-    <p
-      role={state.ok ? 'status' : 'alert'}
-      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
-    >
-      {state.message}
-    </p>
-  );
-}
 
 export function CatalogImportForm() {
   const [state, action, pending] = useActionState(importCatalogAction, initial);

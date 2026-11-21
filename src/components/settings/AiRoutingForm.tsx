@@ -12,9 +12,9 @@ import {
   ROUTABLE_CAPABILITIES,
   type CapabilityRouting,
 } from '@/lib/intelligence/ai/routing';
+import { ActionMessage, fieldClass } from '@/components/settings/form-kit';
 
 const initial: AiRoutingActionState = { message: '', ok: false };
-const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
 
 export interface RoutingProviderOption {
   id: string;
@@ -57,7 +57,7 @@ export default function AiRoutingForm({
           type="checkbox"
           defaultChecked={investigationEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <label htmlFor={switchId} className="space-y-0.5">
           <span className="block text-sm font-medium">Investigation mode</span>
@@ -127,14 +127,7 @@ export default function AiRoutingForm({
           {pending ? 'Saving…' : 'Save investigation and routing'}
         </Button>
       )}
-      {state.message && (
-        <p
-          role={state.ok ? 'status' : 'alert'}
-          className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
-        >
-          {state.message}
-        </p>
-      )}
+      <ActionMessage state={state} />
     </form>
   );
 }

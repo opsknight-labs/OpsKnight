@@ -18,21 +18,9 @@ import {
 } from '@/lib/intelligence/ai/contract';
 import SquireAvatarIcon from '@/components/squire/SquireAvatar';
 import SquireAppearancePreview from '@/components/squire/SquireAppearancePreview';
+import { ActionMessage as Status, fieldClass } from '@/components/settings/form-kit';
 
 const initial: AiActionState = { message: '', ok: false };
-const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
-
-function Status({ state }: { state: AiActionState }) {
-  if (!state.message) return null;
-  return (
-    <p
-      role={state.ok ? 'status' : 'alert'}
-      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
-    >
-      {state.message}
-    </p>
-  );
-}
 
 function Check({
   name,
@@ -56,7 +44,7 @@ function Check({
         type="checkbox"
         defaultChecked={defaultChecked}
         disabled={disabled}
-        className="mt-1 h-4 w-4"
+        className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
       />
       <label htmlFor={id} className="text-sm font-medium">
         {label}

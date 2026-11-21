@@ -14,25 +14,9 @@ import {
   INTELLIGENCE_SETTINGS_BOUNDS,
   type IntelligenceModeValue,
 } from '@/lib/intelligence/contract';
+import { ActionMessage as Status, fieldClass } from '@/components/settings/form-kit';
 
 const initialState: IntelligenceActionState = { message: '', ok: false };
-const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
-
-function Status({ state }: { state: IntelligenceActionState }) {
-  if (!state.message) return null;
-  return (
-    <p
-      role={state.ok ? 'status' : 'alert'}
-      className={
-        state.ok
-          ? 'text-sm text-status-ok-deep dark:text-status-ok-soft'
-          : 'text-sm text-destructive'
-      }
-    >
-      {state.message}
-    </p>
-  );
-}
 
 type SettingsValues = {
   enabled: boolean;
@@ -118,7 +102,7 @@ export function IntelligenceSettingsForm({
           type="checkbox"
           defaultChecked={settings.enabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <div>
           <label htmlFor={enabledId} className="text-sm font-medium">
@@ -137,7 +121,7 @@ export function IntelligenceSettingsForm({
           type="checkbox"
           defaultChecked={settings.handoffSummaryEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <div>
           <label htmlFor={`${enabledId}-handoff`} className="text-sm font-medium">
@@ -157,7 +141,7 @@ export function IntelligenceSettingsForm({
           type="checkbox"
           defaultChecked={settings.opsHelpersEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <div>
           <label htmlFor={`${enabledId}-helpers`} className="text-sm font-medium">
@@ -180,7 +164,7 @@ export function IntelligenceSettingsForm({
           type="checkbox"
           defaultChecked={settings.automationIntelligenceFieldsEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <div>
           <label htmlFor={`${enabledId}-automation-fields`} className="text-sm font-medium">
@@ -200,7 +184,7 @@ export function IntelligenceSettingsForm({
           type="checkbox"
           defaultChecked={settings.pageContextEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <div>
           <label htmlFor={`${enabledId}-page-context`} className="text-sm font-medium">
@@ -221,7 +205,7 @@ export function IntelligenceSettingsForm({
           type="checkbox"
           defaultChecked={settings.peopleInsightsEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <div>
           <label htmlFor={`${enabledId}-people`} className="text-sm font-medium">
@@ -241,7 +225,7 @@ export function IntelligenceSettingsForm({
           type="checkbox"
           defaultChecked={settings.warRoomKickoffEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <div>
           <label htmlFor={`${enabledId}-war-room-kickoff`} className="text-sm font-medium">
@@ -261,7 +245,7 @@ export function IntelligenceSettingsForm({
           type="checkbox"
           defaultChecked={settings.warRoomCaptureEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <div>
           <label htmlFor={`${enabledId}-war-room-capture`} className="text-sm font-medium">
@@ -444,7 +428,7 @@ export function IntelligencePolicyForm({
           type="checkbox"
           defaultChecked={similarityEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <label htmlFor={`${id}-sim`} className="text-sm font-medium">
           Find similar past incidents
@@ -457,7 +441,7 @@ export function IntelligencePolicyForm({
           type="checkbox"
           defaultChecked={responseEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <label htmlFor={`${id}-resp`} className="text-sm font-medium">
           Suggest probable causes and runbooks

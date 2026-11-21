@@ -6,49 +6,15 @@ import { Button } from '@/components/ui/shadcn/button';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import type { SimulationOutcome } from '@/lib/intelligence/noise-controls/simulation';
-import { cn } from '@/lib/utils';
 
-/** Inputs share one look; 44 px tall on touch screens, compact from `sm` up. */
-export const fieldClass =
-  'min-h-11 w-full rounded-md border border-border bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9 aria-[invalid=true]:border-destructive';
-export const labelClass = 'text-sm font-medium';
+export { ActionMessage, fieldClass, labelClass } from '@/components/settings/form-kit';
+
 /** Buttons: 44 px on touch screens. */
-export const touchButton = 'h-11 sm:h-9';
+export const touchButton = 'h-11 sm:h-10';
 
 export const initialActionState: NoiseActionState = { message: '', ok: false };
 
 export type Option = { id: string; name: string };
-
-/**
- * Success and failure messages from a server action. Success goes into a polite status region that is
- * always mounted (empty, and visually hidden, until there is a message): screen readers do not reliably
- * announce a polite region that is inserted already holding its text. Failures use role="alert", which
- * is announced when it is inserted.
- */
-export function ActionMessage({ state }: { state: { message: string; ok: boolean } }) {
-  const success = state.ok && state.message ? state.message : '';
-  const failure = !state.ok && state.message ? state.message : '';
-  return (
-    <>
-      <p
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className={cn(
-          'text-sm text-status-ok-deep dark:text-status-ok-soft',
-          !success && 'sr-only'
-        )}
-      >
-        {success}
-      </p>
-      {failure && (
-        <p role="alert" className="text-sm text-destructive">
-          {failure}
-        </p>
-      )}
-    </>
-  );
-}
 
 export function FieldError({ id, message }: { id: string; message?: string | null }) {
   if (!message) return null;

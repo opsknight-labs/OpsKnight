@@ -8,6 +8,7 @@ import {
   ScoringWeightsForm,
 } from '@/components/settings/InsightsForms';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { NO_VALUE, StatGrid, StatTile } from '@/components/intelligence/overview/primitives';
 import { logger } from '@/lib/logger';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
@@ -83,8 +84,12 @@ export default async function InsightsSections({ canManage }: { canManage: boole
         <>
           <SectionAnchor id="insights">
             {insights.weekly && (
-              <SettingsSection title="Last 7 days" description="Counts across all services.">
-                <div className="grid gap-4 py-3 sm:grid-cols-2 lg:grid-cols-4">
+              <SettingsSection
+                title="Last 7 days"
+                description="Counts across all services."
+                contentClassName="py-4"
+              >
+                <StatGrid label="Intelligence activity, last 7 days">
                   {[
                     ['Incidents analyzed', insights.weekly.incidentsAnalyzed],
                     [
@@ -104,20 +109,15 @@ export default async function InsightsSections({ canManage }: { canManage: boole
                     [
                       'Rated helpful',
                       insights.weekly.ratings === 0
-                        ? '–'
+                        ? NO_VALUE
                         : `${Math.round((insights.weekly.helpfulRatings / insights.weekly.ratings) * 100)}%`,
                     ],
                     ['Changes recorded', insights.weekly.changesRecorded],
                     ['Stuck work items', insights.weekly.deadLetters],
                   ].map(([label, value]) => (
-                    <div key={label}>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        {label}
-                      </p>
-                      <p className="text-lg font-semibold">{value}</p>
-                    </div>
+                    <StatTile key={label} label={String(label)} value={String(value)} />
                   ))}
-                </div>
+                </StatGrid>
               </SettingsSection>
             )}
 
