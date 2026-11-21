@@ -84,7 +84,11 @@ export default function StatusPageBusinessLayout({
                 {option.title}
                 {active && <Check className="h-4 w-4 text-primary" aria-hidden />}
               </span>
-              <span className="text-xs text-muted-foreground">{option.body}</span>
+              <span
+                className={cn('text-xs', active ? 'text-foreground/80' : 'text-muted-foreground')}
+              >
+                {option.body}
+              </span>
             </button>
           );
         })}
@@ -154,7 +158,9 @@ export default function StatusPageBusinessLayout({
                       </button>
                       <button
                         type="button"
-                        onClick={() => onSelectedIdsChange(selectedIds.filter(id => id !== item.id))}
+                        onClick={() =>
+                          onSelectedIdsChange(selectedIds.filter(id => id !== item.id))
+                        }
                         className="rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                       >
                         Remove

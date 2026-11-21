@@ -169,7 +169,7 @@ function RoleSlot({
           {body}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-0">
+      <PopoverContent align="start" className="w-72 p-0" aria-label={`${role.label} role`}>
         <div className="border-b border-border px-3 py-2.5">
           <p className="text-xs font-semibold text-foreground">{role.label}</p>
           <p className="mt-0.5 text-2xs leading-snug text-muted-foreground">{role.description}</p>

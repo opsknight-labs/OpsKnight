@@ -58,7 +58,7 @@ export default function IncidentUserPicker({
               />
               <div className="flex flex-col min-w-0">
                 <span className="font-semibold truncate text-xs">{user.name}</span>
-                <span className="text-[10px] text-ink-400 truncate">{user.email}</span>
+                <span className="text-2xs text-muted-foreground truncate">{user.email}</span>
               </div>
               <Check
                 className={cn(
