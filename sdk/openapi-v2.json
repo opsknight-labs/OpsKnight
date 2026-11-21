@@ -3381,6 +3381,219 @@
           }
         ]
       },
+      "ServiceObjectiveAlertPolicy": {
+        "type": "object",
+        "properties": {
+          "objectiveId": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "connectionId": {
+            "type": ["string", "null"]
+          },
+          "connectionName": {
+            "type": ["string", "null"]
+          },
+          "goodQuery": {
+            "type": "string"
+          },
+          "totalQuery": {
+            "type": "string"
+          },
+          "stepSeconds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "ticketsEnabled": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["OK", "TICKET", "PAGE"]
+          },
+          "stateSince": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastEvaluatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "lastStatus": {
+            "type": ["string", "null"]
+          },
+          "lastIncidentId": {
+            "type": ["string", "null"]
+          },
+          "coverageFrom": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "objectiveId",
+          "serviceId",
+          "connectionId",
+          "connectionName",
+          "goodQuery",
+          "totalQuery",
+          "stepSeconds",
+          "enabled",
+          "ticketsEnabled",
+          "state",
+          "stateSince",
+          "lastEvaluatedAt",
+          "lastStatus",
+          "lastIncidentId",
+          "coverageFrom",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ServiceObjectiveBurnHistory": {
+        "type": "object",
+        "properties": {
+          "objectiveId": {
+            "type": "string"
+          },
+          "targetPercent": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["OK", "TICKET", "PAGE"]
+          },
+          "hours": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "good": {
+                  "type": "number"
+                },
+                "total": {
+                  "type": "number"
+                },
+                "sli": {
+                  "type": ["number", "null"]
+                },
+                "burn1h": {
+                  "type": ["number", "null"]
+                }
+              },
+              "required": ["at", "good", "total", "sli", "burn1h"],
+              "additionalProperties": false
+            }
+          },
+          "transitions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "enum": ["OK", "TICKET", "PAGE"]
+                },
+                "to": {
+                  "type": "string",
+                  "enum": ["OK", "TICKET", "PAGE"]
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "incidentId": {
+                  "type": ["string", "null"]
+                },
+                "burnByWindow": {
+                  "type": "object",
+                  "properties": {
+                    "5m": {
+                      "type": ["number", "null"]
+                    },
+                    "30m": {
+                      "type": ["number", "null"]
+                    },
+                    "1h": {
+                      "type": ["number", "null"]
+                    },
+                    "2h": {
+                      "type": ["number", "null"]
+                    },
+                    "6h": {
+                      "type": ["number", "null"]
+                    },
+                    "1d": {
+                      "type": ["number", "null"]
+                    },
+                    "3d": {
+                      "type": ["number", "null"]
+                    }
+                  },
+                  "required": ["5m", "30m", "1h", "2h", "6h", "1d", "3d"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["from", "to", "at", "incidentId", "burnByWindow"],
+              "additionalProperties": false
+            }
+          },
+          "tiers": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "properties": {
+                "tier": {
+                  "type": "string",
+                  "enum": ["PAGE", "TICKET"]
+                },
+                "long": {
+                  "type": "string",
+                  "enum": ["5m", "30m", "1h", "2h", "6h", "1d", "3d"]
+                },
+                "short": {
+                  "type": "string",
+                  "enum": ["5m", "30m", "1h", "2h", "6h", "1d", "3d"]
+                },
+                "threshold": {
+                  "type": "number"
+                }
+              },
+              "required": ["tier", "long", "short", "threshold"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "objectiveId",
+          "targetPercent",
+          "state",
+          "hours",
+          "points",
+          "transitions",
+          "tiers"
+        ],
+        "additionalProperties": false
+      },
       "ServiceObjectiveEvaluation": {
         "type": "object",
         "properties": {
@@ -32566,6 +32779,326 @@
         "operationId": "getServiceObjectiveEvaluation",
         "x-required-scope": "service-objectives:read",
         "description": "Requires API scope `service-objectives:read` (Service objectives read)."
+      }
+    },
+    "/service-objectives/{id}/alert-policy": {
+      "get": {
+        "tags": ["Service Objectives"],
+        "summary": "Read the burn-rate alert policy and current alert state of an objective",
+        "description": "Returns 404 when the objective has no policy. state is OK, TICKET or PAGE; lastStatus explains the latest evaluation (OK, NO_DATA, CONNECTOR_ERROR:<code> or a connection scope problem).\n\nRequires API scope `service-objectives:read` (Service objectives read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceObjectiveAlertPolicy"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getServiceObjectiveAlertPolicy",
+        "x-required-scope": "service-objectives:read"
+      },
+      "put": {
+        "tags": ["Service Objectives"],
+        "summary": "Create or replace the multi-window burn-rate alert policy of an objective",
+        "description": "Availability and uptime objectives of a service only. goodQuery and totalQuery return event counts per 5-minute step through an enabled metrics connection the service team may use. enabled defaults to false. Changing the connection or a query discards stored measurements; tiers re-arm as coverage builds. Required idempotency key; saving does no network I/O.\n\nRequires API scope `service-objectives:write` (Service objectives configure).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "connectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "goodQuery": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "totalQuery": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "enabled": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "ticketsEnabled": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                },
+                "required": ["connectionId", "goodQuery", "totalQuery"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceObjectiveAlertPolicy"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateServiceObjectiveAlertPolicy",
+        "x-required-scope": "service-objectives:write",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
+      }
+    },
+    "/service-objectives/{id}/burn-history": {
+      "get": {
+        "tags": ["Service Objectives"],
+        "summary": "Read stored SLI steps, hourly burn, alert transitions and tier thresholds",
+        "description": "hours (1-168, default 24) bounds the steps returned; at most 50 transitions.\n\nRequires API scope `service-objectives:read` (Service objectives read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 168,
+              "default": 24
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceObjectiveBurnHistory"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getServiceObjectiveBurnHistory",
+        "x-required-scope": "service-objectives:read"
       }
     },
     "/maintenance-windows": {

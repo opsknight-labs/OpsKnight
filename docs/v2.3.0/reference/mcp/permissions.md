@@ -98,8 +98,8 @@ Operation columns count catalog operations that need the permission: plain reads
 | `schedules:read` | View on-call schedules | Schedules and escalation | View | ✓ | ✓ | ✓ | ✓ | 13 | 0 | 0 | 4 |
 | `schedules:write` | Change on-call schedules (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ | ✓ |  |  | 1 | 2 | 0 | 12 |
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 1 |
-| `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 7 | 0 | 0 |
-| `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
+| `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ | 3 | 7 | 0 | 0 |
+| `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 4 |
 | `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | 7 | 2 | 0 | 3 |
 | `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 11 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  | 0 | 1 | 0 | 0 |
@@ -139,13 +139,13 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | runbooks | 59 | 14 | 13 | 32 |
 | schedules | 25 | 13 | 12 | 0 |
 | service-accounts | 6 | 0 | 0 | 6 |
-| service-objectives | 11 | 7 | 4 | 0 |
+| service-objectives | 14 | 9 | 5 | 0 |
 | services | 45 | 21 | 21 | 3 |
 | settings | 8 | 3 | 4 | 1 |
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 340 | 153 | 113 | 74 |
+| **All** | 343 | 155 | 114 | 74 |
 
 <details>
 <summary>Operations by area</summary>
@@ -467,6 +467,8 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `createServiceObjective` | `operation_prepare`, then approval |
 | `evaluateServiceObjective` | `operation_prepare`, then approval |
 | `getServiceObjective` | `read_operation` (sensitive reads on) |
+| `getServiceObjectiveAlertPolicy` | `slo_alert_policy_get` |
+| `getServiceObjectiveBurnHistory` | `read_operation` |
 | `getServiceObjectiveCatalog` | `read_operation` (sensitive reads on) |
 | `getServiceObjectiveEvaluation` | `read_operation` (sensitive reads on) |
 | `getServiceObjectiveHistory` | `read_operation` (sensitive reads on) |
@@ -474,6 +476,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `listServiceObjectiveVersions` | `read_operation` (sensitive reads on) |
 | `listServiceObjectives` | `read_operation` (sensitive reads on) |
 | `updateServiceObjective` | `operation_prepare`, then approval |
+| `updateServiceObjectiveAlertPolicy` | `operation_prepare`, then approval |
 
 ### services
 

@@ -930,6 +930,41 @@
     "contractSha256": "dc216ff2d11ed4c83b8950f94ea0aa72918dcc785371dad09506880a3ca19815",
     "actions": ["service_objective.read"]
   },
+  "getServiceObjectiveAlertPolicy": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": "slo_alert_policy_get",
+    "routeSha256": "5b271c0215f264e7462de92a0c8a799723524ee44b1a581b54f0a50eeba81dfe",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-slo-alert-policy.test.ts",
+    "contractSha256": "1c10283ae1945680784601ec19343bc1dcde78c649279da4f59b24187e464fb4",
+    "actions": ["service_objective.read"],
+    "title": "Get objective burn-rate alert policy",
+    "agentDescription": "Read the burn-rate alert policy of one service objective: its metric connection, good and total queries, whether it is enabled, and the current alert state (OK, TICKET or PAGE) with the latest evaluation status. Use when asked whether an objective is paging on burn rate or why a burn alert fired."
+  },
+  "updateServiceObjectiveAlertPolicy": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic. Enabling a policy can page people.",
+    "tool": null,
+    "routeSha256": "5b271c0215f264e7462de92a0c8a799723524ee44b1a581b54f0a50eeba81dfe",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-slo-alert-policy.test.ts",
+    "contractSha256": "1c146ba3302153e79ce9180971065add365a0daa35cd495c53a5b46b1692a493",
+    "actions": ["service_objective.manage"]
+  },
+  "getServiceObjectiveBurnHistory": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Read-only numeric burn history of one objective; current role, scopes and the same objective visibility as the REST route.",
+    "tool": null,
+    "routeSha256": "dc3d68da9cd64a1ce0e639655b4b6ad14070a6ecb80e03edc6a4c7912713acc3",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-slo-alert-policy.test.ts",
+    "contractSha256": "23858e17b83d17583b0a03830e7ca77d4d312695c0e0d187a393b7d3b1644922",
+    "actions": ["service_objective.read"]
+  },
   "getStatusPagePublication": {
     "status": "SENSITIVE_READ",
     "risk": "R2",
