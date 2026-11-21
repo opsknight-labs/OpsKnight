@@ -756,6 +756,62 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/business-services',
+    'listBusinessServices',
+    'services:read',
+    'list',
+    'BusinessService'
+  ),
+  op(
+    'post',
+    '/business-services',
+    'createBusinessService',
+    'services:write',
+    'item',
+    'BusinessService'
+  ),
+  op(
+    'get',
+    '/business-services/{id}',
+    'getBusinessService',
+    'services:read',
+    'item',
+    'BusinessService'
+  ),
+  op(
+    'patch',
+    '/business-services/{id}',
+    'updateBusinessService',
+    'services:write',
+    'item',
+    'BusinessService'
+  ),
+  op(
+    'delete',
+    '/business-services/{id}',
+    'deleteBusinessService',
+    'services:write',
+    'item',
+    'BusinessServiceDeletion'
+  ),
+  op(
+    'get',
+    '/status-pages/{id}/business-services',
+    'getStatusPageBusinessServices',
+    'status-pages:read',
+    'item',
+    'StatusPageBusinessServices'
+  ),
+  op(
+    'put',
+    '/status-pages/{id}/business-services',
+    'setStatusPageBusinessServices',
+    'status-pages:write',
+    'item',
+    'StatusPageConfigurationResult'
+  ),
+  op(
+    'get',
     '/status-pages/{id}/services',
     'listStatusPageServices',
     'status-pages:read',

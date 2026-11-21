@@ -306,3 +306,26 @@ export async function businessServicesForServices(serviceIds: readonly string[])
     orderBy: { name: 'asc' },
   });
 }
+
+type BusinessServiceRow = Prisma.BusinessServiceGetPayload<{
+  select: typeof BUSINESS_SERVICE_SELECT;
+}>;
+
+/** Public API shape: member status for at-a-glance health, follower names without emails. */
+export function businessServiceDto(row: BusinessServiceRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    tier: row.tier,
+    ownerTeam: row.ownerTeam,
+    members: row.members.map(({ service }) => ({
+      id: service.id,
+      name: service.name,
+      status: service.status,
+    })),
+    followers: row.followers.map(({ user }) => ({ id: user.id, name: user.name })),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}

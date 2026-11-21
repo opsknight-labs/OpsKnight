@@ -100,10 +100,10 @@ Operation columns count catalog operations that need the permission: plain reads
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 1 |
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 7 | 0 | 0 |
 | `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | 7 | 2 | 0 | 3 |
+| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | 9 | 2 | 0 | 3 |
 | `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 11 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  | 0 | 1 | 0 | 0 |
-| `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  | 4 | 9 | 0 | 2 |
+| `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  | 5 | 9 | 0 | 2 |
 | `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  | 0 | 0 | 0 | 10 |
 | `teams:read` | View teams | Teams and people | View | ✓ | ✓ | ✓ | ✓ | 6 | 1 | 0 | 2 |
 | `teams:write` | Change teams (higher-risk changes wait for approval) | Teams and people | Change | ✓ | ✓ |  | ✓ | 0 | 0 | 0 | 7 |
@@ -124,6 +124,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | action-items | 1 | 1 | 0 | 0 |
 | audit-exports | 3 | 0 | 0 | 3 |
 | audit-logs | 1 | 1 | 0 | 0 |
+| business-services | 5 | 2 | 0 | 3 |
 | custom-fields | 5 | 2 | 3 | 0 |
 | dashboards | 10 | 4 | 5 | 1 |
 | escalation-policies | 8 | 5 | 3 | 0 |
@@ -142,10 +143,10 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | service-objectives | 11 | 7 | 4 | 0 |
 | services | 45 | 21 | 21 | 3 |
 | settings | 8 | 3 | 4 | 1 |
-| status-pages | 30 | 14 | 10 | 6 |
+| status-pages | 32 | 15 | 10 | 7 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 343 | 156 | 113 | 74 |
+| **All** | 350 | 159 | 113 | 78 |
 
 <details>
 <summary>Operations by area</summary>
@@ -169,6 +170,16 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | Operation | How an assistant reaches it |
 | --- | --- |
 | `listAuditLogs` | `read_operation` (sensitive reads on) |
+
+### business-services
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createBusinessService` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `deleteBusinessService` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `getBusinessService` | `read_operation` |
+| `listBusinessServices` | `business_services_list` |
+| `updateBusinessService` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 
 ### custom-fields
 
@@ -551,6 +562,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `getStatusPage` | `status_page_get` |
 | `getStatusPageAppearance` | `read_operation` (sensitive reads on) |
 | `getStatusPageAsset` | `read_operation` (sensitive reads on) |
+| `getStatusPageBusinessServices` | `read_operation` |
 | `getStatusPageContent` | `read_operation` (sensitive reads on) |
 | `getStatusPagePrivacy` | not available: restricted to native administration (exclusion review pending) |
 | `getStatusPagePublication` | `read_operation` (sensitive reads on) |
@@ -567,6 +579,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `previewStatusPage` | `read_operation` (sensitive reads on) |
 | `removeStatusPageSubscriber` | not available: restricted to native administration (exclusion review pending) |
 | `retryStatusPagePublication` | `operation_prepare`, then approval |
+| `setStatusPageBusinessServices` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `setStatusPageServices` | `operation_prepare`, then approval |
 | `updateStatusPage` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `updateStatusPageAppearance` | `operation_prepare`, then approval |

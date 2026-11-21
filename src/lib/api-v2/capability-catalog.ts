@@ -68,6 +68,23 @@ const decisions: readonly ApiCapability[] = [
     ],
   },
   {
+    id: 'business-services',
+    area: 'Services',
+    title: 'Business services and grouped status pages',
+    status: 'available',
+    explanation:
+      'Customer-facing groupings of technical services with followers, plus the status page layout and business-service mapping published through the shared publication command.',
+    operationIds: [
+      'listBusinessServices',
+      'createBusinessService',
+      'getBusinessService',
+      'updateBusinessService',
+      'deleteBusinessService',
+      'getStatusPageBusinessServices',
+      'setStatusPageBusinessServices',
+    ],
+  },
+  {
     id: 'incident-lifecycle',
     area: 'Incidents',
     title: 'Incident lifecycle, watchers and roles',

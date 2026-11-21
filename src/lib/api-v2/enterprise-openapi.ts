@@ -33,6 +33,10 @@ import {
   incidentTemplateDefaultRoles,
   incidentRoleKeySchema,
 } from './incident-roles-openapi';
+import {
+  BUSINESS_SERVICE_SCHEMAS,
+  BUSINESS_SERVICE_OPERATIONS,
+} from './business-services-openapi';
 import { statusPageSectionFields } from '@/lib/status-pages/settings-sections';
 import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
 import {
@@ -368,6 +372,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   ...SERVICE_OBJECTIVE_SCHEMAS,
   ...MAINTENANCE_WINDOW_SCHEMAS,
   ...INCIDENT_ROLE_SCHEMAS,
+  ...BUSINESS_SERVICE_SCHEMAS,
   StatusPagePublicationState: object(
     {
       status: { type: 'string', enum: ['LIVE', 'PUBLISHING', 'FAILED', 'DISABLED'] },
@@ -1907,6 +1912,7 @@ const operations: Operation[] = [
   ...SERVICE_OBJECTIVE_OPERATIONS,
   ...MAINTENANCE_WINDOW_OPERATIONS,
   ...INCIDENT_ROLE_OPERATIONS,
+  ...BUSINESS_SERVICE_OPERATIONS,
   {
     method: 'get',
     path: '/status-pages/{id}/preview',
@@ -3117,7 +3123,8 @@ export function enterpriseOpenApiPaths() {
                 : operation.path.startsWith('/runbooks')
                   ? 'Runbooks'
                   : operation.path.startsWith('/services') ||
-                      operation.path.startsWith('/maintenance-')
+                      operation.path.startsWith('/maintenance-') ||
+                      operation.path.startsWith('/business-services')
                     ? 'Services'
                     : operation.path.startsWith('/schedules')
                       ? 'Schedules'

@@ -3960,5 +3960,84 @@
     "actions": ["incident.acknowledge"],
     "routeSha256": "a3349e77f331048b2b2a0970d52b50c9f95549f488c5a3d6a798043338136d9e",
     "contractSha256": "a02a08215398b761d7cc595e835bf5805a8f4fa51794546f49302076ceb7adee"
+  },
+  "listBusinessServices": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only catalog of business services through the existing REST route authorization and scoped projection.",
+    "tool": "business_services_list",
+    "title": "List business services",
+    "agentDescription": "List business services (Checkout, Payments) with their technical services and current member status. Use to answer what customers are affected when a service is down.",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "6eaa4c76739c169eb564e123377409147d830430fc5275d4be158f950eca4196",
+    "contractSha256": "c653dc9baf0ab8e4dbcdaf80fa1b6ad66d7fe707c7969101aaa5d292dd5c503b"
+  },
+  "getBusinessService": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "047a184d8ae8cfa2dc26d4adae8124a79b9dc9bcd257f7788345229675e420a3",
+    "contractSha256": "2ae60b7b4864b3940bab4110802ea328f5e463f00a926d5a5f48f2988ac72321"
+  },
+  "getStatusPageBusinessServices": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["status_page.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "09b79607e6fc4cf713a3c5969e124dc3979763a33eb37e39669e33c78cf8dbe7",
+    "contractSha256": "374b7b104eb907adf8ca0b7c6045ab20ba1d0b96dee422168575b74e44c2a9c9"
+  },
+  "createBusinessService": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.create"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "6eaa4c76739c169eb564e123377409147d830430fc5275d4be158f950eca4196",
+    "contractSha256": "d4fdc284e943cb14ce410094889754891c5074c9fb56e2e123e434b850880310"
+  },
+  "updateBusinessService": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.create"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "047a184d8ae8cfa2dc26d4adae8124a79b9dc9bcd257f7788345229675e420a3",
+    "contractSha256": "3a272350240cde70725fafef6cfff39fe115b3ee42cfa63883d79d15ca18dfb4"
+  },
+  "deleteBusinessService": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.delete"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "047a184d8ae8cfa2dc26d4adae8124a79b9dc9bcd257f7788345229675e420a3",
+    "contractSha256": "521132ecea66e6bc2cadad5795265d1a43dbbe9efefe9b0124de6a598bf9f541"
+  },
+  "setStatusPageBusinessServices": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["status_page.manage"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "09b79607e6fc4cf713a3c5969e124dc3979763a33eb37e39669e33c78cf8dbe7",
+    "contractSha256": "6a269931bbab2b10e7ecbcc0bd76acafd4149fd05d5ac6451dc8b513ddacc39f"
   }
 }

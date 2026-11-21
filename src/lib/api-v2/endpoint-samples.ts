@@ -80,6 +80,16 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'PATCH /settings/automation': { automationEnabled: false, automationTraceRetentionDays: 90 },
   'POST /incidents/{id}/watchers': { userId: 'usr_789012', role: 'FOLLOWER' },
   'PUT /incidents/{id}/roles/{roleKey}': { userId: 'usr_789012' },
+  'POST /business-services': {
+    name: 'Checkout',
+    description: 'Paying for an order on web and mobile.',
+    memberServiceIds: ['svc_123456'],
+  },
+  'PATCH /business-services/{id}': { memberServiceIds: ['svc_123456', 'svc_234567'] },
+  'PUT /status-pages/{id}/business-services': {
+    serviceLayout: 'BUSINESS_EXPANDABLE',
+    businessServiceIds: ['bsv_123456'],
+  },
   'POST /runbooks/{id}/executions/preview': { parameters: {} },
   'POST /runbooks/executions/{id}/cancel': {
     reason: 'Operator requested stop after investigation.',

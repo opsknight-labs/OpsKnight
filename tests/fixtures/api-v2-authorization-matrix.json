@@ -29,6 +29,36 @@
     "AUDITOR": "allow:global",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /business-services/{id} [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "PATCH /business-services/{id} [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /business-services/{id} [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /business-services [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "POST /business-services [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /custom-fields/{id} [custom-fields:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
@@ -1758,6 +1788,18 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "POST /status-pages/{id}/assets [status-pages:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "GET /status-pages/{id}/business-services [status-pages:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PUT /status-pages/{id}/business-services [status-pages:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",

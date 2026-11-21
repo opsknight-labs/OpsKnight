@@ -1,5 +1,17 @@
 [
   {
+    "name": "business_services_list",
+    "title": "List business services",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "d7d42ff6bbed082fd54be4105d92961257d32d69941f22fd6d6d7e05700615e4",
+    "descriptionSha256": "5da7beb67e99ebff4660ddbea0a716f3a01056ff63c693b42b1e64d18a32d81a"
+  },
+  {
     "name": "describe_operation",
     "title": "Describe an operation",
     "annotations": {
@@ -172,7 +184,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "a65915294ae663544a4753a54497c3fb2b52f269826fc51c1bf6a5ca13964b45",
+    "inputSchemaSha256": "9e1cf387b05e3a0027ce20ebe68721e59b1ce1874c8bd06ce9c9c8ee61802fb3",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {

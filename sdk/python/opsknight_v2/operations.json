@@ -791,6 +791,62 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listBusinessServices": {
+    "method": "GET",
+    "path": "/business-services",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createBusinessService": {
+    "method": "POST",
+    "path": "/business-services",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": true
+  },
+  "getBusinessService": {
+    "method": "GET",
+    "path": "/business-services/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateBusinessService": {
+    "method": "PATCH",
+    "path": "/business-services/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": true
+  },
+  "deleteBusinessService": {
+    "method": "DELETE",
+    "path": "/business-services/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": false
+  },
+  "getStatusPageBusinessServices": {
+    "method": "GET",
+    "path": "/status-pages/{id}/business-services",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setStatusPageBusinessServices": {
+    "method": "PUT",
+    "path": "/status-pages/{id}/business-services",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key", "If-Match"],
+    "bodyRequired": true
+  },
   "listStatusPageServices": {
     "method": "GET",
     "path": "/status-pages/{id}/services",

@@ -824,6 +824,28 @@ export type IncidentRoleChange = {
   previousUserId: string | null;
   changed: boolean;
 };
+export type BusinessService = {
+  id: string;
+  name: string;
+  description: string | null;
+  tier: string | null;
+  ownerTeam: { id: string; name: string } | null;
+  members: Array<{ id: string; name: string; status: string }>;
+  followers: Array<{ id: string; name: string }>;
+  createdAt: string;
+  updatedAt: string;
+};
+export type BusinessServiceDeletion = { id: string; deleted: true };
+export type StatusPageBusinessServices = {
+  statusPageId: string;
+  serviceLayout: 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
+  businessServices: Array<{
+    businessServiceId: string;
+    name: string;
+    order: number;
+    showOnPage: boolean;
+  }>;
+};
 export type StatusPagePublicationState = {
   status: 'LIVE' | 'PUBLISHING' | 'FAILED' | 'DISABLED';
   revision: string;
@@ -2995,6 +3017,41 @@ export interface OperationRequests {
     body: Record<string, never>;
   };
   getStatusPagePublicationJob: { params: { id: string; jobId: string } };
+  listBusinessServices: { query?: { limit?: number; cursor?: string } };
+  createBusinessService: {
+    headers: { 'Idempotency-Key': string };
+    body: {
+      name: string;
+      description?: string | null;
+      tier?: string | null;
+      ownerTeamId?: string | null;
+      memberServiceIds?: Array<string>;
+      followerUserIds?: Array<string>;
+    };
+  };
+  getBusinessService: { params: { id: string } };
+  updateBusinessService: {
+    params: { id: string };
+    headers: { 'Idempotency-Key': string };
+    body: {
+      name?: string;
+      description?: string | null;
+      tier?: string | null;
+      ownerTeamId?: string | null;
+      memberServiceIds?: Array<string>;
+      followerUserIds?: Array<string>;
+    };
+  };
+  deleteBusinessService: { params: { id: string }; headers: { 'Idempotency-Key': string } };
+  getStatusPageBusinessServices: { params: { id: string } };
+  setStatusPageBusinessServices: {
+    params: { id: string };
+    headers: { 'Idempotency-Key': string; 'If-Match': string };
+    body: {
+      serviceLayout: 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
+      businessServiceIds: Array<string>;
+    };
+  };
   listStatusPageServices: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   setStatusPageServices: {
     params: { id: string };
@@ -4640,6 +4697,39 @@ export interface OperationResponses {
   } & Record<string, unknown>;
   getStatusPagePublicationJob: {
     data: StatusPagePublicationJob;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  listBusinessServices: {
+    data: Array<BusinessService>;
+    pagination?: Pagination;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  createBusinessService: { data: BusinessService; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  getBusinessService: { data: BusinessService; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  updateBusinessService: { data: BusinessService; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  deleteBusinessService: {
+    data: BusinessServiceDeletion;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getStatusPageBusinessServices: {
+    data: StatusPageBusinessServices;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  setStatusPageBusinessServices: {
+    data: StatusPageConfigurationResult;
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
@@ -6506,6 +6596,62 @@ export const OPERATIONS = {
     idempotency: null,
     requiredHeaders: [],
     bodyRequired: false,
+  },
+  listBusinessServices: {
+    method: 'GET',
+    path: '/business-services',
+    kind: 'list',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  createBusinessService: {
+    method: 'POST',
+    path: '/business-services',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: true,
+  },
+  getBusinessService: {
+    method: 'GET',
+    path: '/business-services/{id}',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  updateBusinessService: {
+    method: 'PATCH',
+    path: '/business-services/{id}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: true,
+  },
+  deleteBusinessService: {
+    method: 'DELETE',
+    path: '/business-services/{id}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: false,
+  },
+  getStatusPageBusinessServices: {
+    method: 'GET',
+    path: '/status-pages/{id}/business-services',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  setStatusPageBusinessServices: {
+    method: 'PUT',
+    path: '/status-pages/{id}/business-services',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key', 'If-Match'],
+    bodyRequired: true,
   },
   listStatusPageServices: {
     method: 'GET',
