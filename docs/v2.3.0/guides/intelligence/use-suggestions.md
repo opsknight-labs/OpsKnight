@@ -132,8 +132,11 @@ have caused this?" or "which runbook fits?".
   the suggestion expires. If the result is unknown, inspect the incident before requesting another
   action. Result lookup is available for one day and still requires access to the incident.
 - "Basic answer from your incident data" means AI is off or unavailable, and the answer comes straight from the
-  suggestions above. AI chat also requires a provider approved for Personal data; when none is available,
-  the assistant explains the restriction and keeps your conversation out of the model.
+  suggestions above. AI chat works with a provider approved for Internal data: your question is sent with
+  email addresses, phone numbers and IP addresses removed, earlier answers, notes and timelines stay out,
+  and tools that read people, on-call or timelines are not offered. A provider approved for Personal data
+  can also use those. When no provider may receive the conversation's data, the assistant says why once,
+  at the top of the panel, and administrators get a link to the provider settings.
 - Select **Stop response** to stop a long answer. Text already received stays available for a follow-up.
   If a response is interrupted, the assistant keeps the partial answer and tells you it is incomplete.
 - Treat AI answers as a starting point and check them.
