@@ -51,6 +51,8 @@ appear. Sections without data are left out; if none has data the tab says "Nothi
   last hour and the last six hours, against the paging limits (14.4× and 6×). **Burning fast** means a
   paging rate, **Burning** means faster than planned, **Within budget** means neither. Downtime is the
   time incidents were open on the service. The section is absent when the service has no such objective.
+  An objective with a [burn-rate alert](../slo-burn-alerts) also shows its alert state and, while
+  alerting is enabled, a chart of the last day measured from your metrics.
 - **Dependencies**: the service in the middle, what it depends on to the left and what depends on it to
   the right. A service with open incidents shows how many. The list under the diagram has the same
   links and is the only form on a phone.
