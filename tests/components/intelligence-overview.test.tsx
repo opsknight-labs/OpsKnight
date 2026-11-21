@@ -156,8 +156,12 @@ describe('ImpactSummary', () => {
     impact();
     const card = screen.getByRole('region', { name: /Impact/ });
     expect(card).toHaveTextContent(
-      'Intelligence found insights for 30 of 40 incidents, a median of 45 s after they opened. Noise controls held back 120 pages.'
+      'Intelligence found insights for 30 of 40 incidents, a median of 45 s after they opened.'
     );
+    // Coverage, then the noise controls as a status with what they did.
+    expect(card).toHaveTextContent('75% of incidents got an insight');
+    expect(within(card).getByText('Noise controls on')).toBeInTheDocument();
+    expect(within(card).getByText('Held back 120 pages')).toBeInTheDocument();
     const tiles = within(card).getAllByRole('listitem');
     expect(tiles).toHaveLength(4);
     // The same tile as Analytics, so both pages' headline numbers match in size and type.

@@ -132,7 +132,7 @@ export async function NoiseSection({ scope, range, canManage }: SectionProps) {
 }
 
 /** The answer card: a plain-language summary and the four headline numbers. */
-export async function ImpactSection({ scope, range, status }: SectionProps) {
+export async function ImpactSection({ scope, range, status, canManage }: SectionProps) {
   const [noise, speed, outcomes] = await Promise.all([
     loadNoise(scope, range),
     loadSpeed(scope, range),
@@ -145,6 +145,7 @@ export async function ImpactSection({ scope, range, status }: SectionProps) {
       outcomes={outcomes}
       enabled={status.enabled}
       windowLabel={range.label}
+      canManage={canManage}
     />
   );
 }

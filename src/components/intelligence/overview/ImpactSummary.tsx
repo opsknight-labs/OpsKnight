@@ -1,4 +1,8 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowRight, Sparkles } from 'lucide-react';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { cn } from '@/lib/utils';
 import DeltaBadge from '@/components/analytics/DeltaBadge';
 import MetricInfo from '@/components/analytics/MetricInfo';
 import { describeDelta } from '@/components/analytics/format';
@@ -79,6 +83,115 @@ export function impactSentences({
   return out;
 }
 
+/** The insight sentence with its numbers emphasised; other states read as plain sentences. */
+function InsightLine({
+  enabled,
+  speed,
+  fallback,
+}: {
+  enabled: boolean;
+  speed: SectionResult<OverviewSpeed>;
+  fallback: string | undefined;
+}) {
+  const s = enabled && speed.ok ? speed.data : null;
+  if (!s || s.incidents === 0 || s.incidentsWithInsight === 0)
+    return fallback ? <p className="text-base text-foreground">{fallback}</p> : null;
+  return (
+    <p className="text-base text-muted-foreground">
+      Intelligence found insights for{' '}
+      <strong className="font-semibold text-foreground tabular-nums">
+        {formatCount(s.incidentsWithInsight)} of {count(s.incidents, 'incident')}
+      </strong>
+      {s.firstInsightP50Seconds === null ? (
+        '.'
+      ) : (
+        <>
+          , a median of{' '}
+          <strong className="font-semibold text-foreground tabular-nums">
+            {formatDuration(s.firstInsightP50Seconds)}
+          </strong>{' '}
+          after they opened.
+        </>
+      )}
+    </p>
+  );
+}
+
+/** How much of the window Intelligence covered, as a quiet bar under the sentence. */
+function Coverage({ speed, enabled }: { speed: SectionResult<OverviewSpeed>; enabled: boolean }) {
+  if (!enabled || !speed.ok || speed.data.incidents === 0) return null;
+  const pct = Math.round((speed.data.incidentsWithInsight / speed.data.incidents) * 100);
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted"
+        aria-hidden="true"
+      >
+        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+        {pct}% of incidents got an insight
+      </span>
+    </div>
+  );
+}
+
+/** Noise controls' mode as a status pill, with what they did in one short line. */
+function NoiseStatus({
+  noise,
+  canManage,
+}: {
+  noise: SectionResult<OverviewNoise>;
+  canManage: boolean;
+}) {
+  if (!noise.ok) return null;
+  const n = noise.data;
+  const state =
+    n.modes.on > 0
+      ? {
+          tone: 'ok' as const,
+          label: 'Noise controls on',
+          detail:
+            n.pagesAvoided > 0
+              ? `Held back ${count(n.pagesAvoided, 'page')}`
+              : 'Nothing held back yet',
+        }
+      : n.modes.shadow > 0
+        ? {
+            tone: 'info' as const,
+            label: 'Shadow mode',
+            detail:
+              n.shadowWouldAvoid > 0
+                ? `Would have held back ${count(n.shadowWouldAvoid, 'page')}`
+                : 'Recording only: nothing held back',
+          }
+        : { tone: 'neutral' as const, label: 'Noise controls off', detail: 'Not reducing pages' };
+  const tone = toneClasses(state.tone);
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-1.5 border-t pt-3 sm:items-end sm:border-0 sm:pt-0">
+      <span
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
+          tone.soft
+        )}
+      >
+        <span aria-hidden="true" className={cn('h-1.5 w-1.5 rounded-full', tone.solid)} />
+        {state.label}
+      </span>
+      <span className="text-xs text-muted-foreground">{state.detail}</span>
+      {canManage && (
+        <Link
+          href="/settings/intelligence/noise-controls"
+          className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
+        >
+          Review noise controls
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function responseTime(
   outcomes: SectionResult<OverviewOutcomes>,
   key: 'mttaSeconds' | 'mttrSeconds'
@@ -108,15 +221,19 @@ export default function ImpactSummary({
   outcomes,
   enabled,
   windowLabel,
+  canManage = false,
 }: {
   noise: SectionResult<OverviewNoise>;
   speed: SectionResult<OverviewSpeed>;
   outcomes: SectionResult<OverviewOutcomes>;
   enabled: boolean;
   windowLabel: string;
+  canManage?: boolean;
 }) {
   const n = noise.ok ? noise.data : null;
   const s = speed.ok ? speed.data : null;
+  // Only the insight/off/empty sentence is shown as text; noise controls get their own status block.
+  const sentences = impactSentences({ enabled, speed, noise: { ok: false, error: '' } });
 
   const headlines: Headline[] = [
     {
@@ -170,9 +287,26 @@ export default function ImpactSummary({
       <h2 id="overview-impact" className="sr-only">
         Impact, {windowLabel.toLowerCase()}
       </h2>
-      <p className="max-w-prose text-base text-foreground">
-        {impactSentences({ enabled, speed, noise }).join(' ')}
-      </p>
+      <div
+        className={cn(
+          KPI_CARD,
+          'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6'
+        )}
+      >
+        <div className="flex min-w-0 items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground"
+          >
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 space-y-2">
+            <InsightLine enabled={enabled} speed={speed} fallback={sentences[0]} />
+            <Coverage speed={speed} enabled={enabled} />
+          </div>
+        </div>
+        <NoiseStatus noise={noise} canManage={canManage} />
+      </div>
       <ul className={KPI_GRID}>
         {headlines.map(item => (
           <li key={item.label} className={KPI_CARD}>
