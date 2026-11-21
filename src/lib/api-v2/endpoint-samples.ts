@@ -79,6 +79,7 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'PUT /services/{id}/automation/draft': { snapshot: { schemaVersion: 1, fields: [], rules: [] } },
   'PATCH /settings/automation': { automationEnabled: false, automationTraceRetentionDays: 90 },
   'POST /incidents/{id}/watchers': { userId: 'usr_789012', role: 'FOLLOWER' },
+  'PUT /incidents/{id}/roles/{roleKey}': { userId: 'usr_789012' },
   'POST /runbooks/{id}/executions/preview': { parameters: {} },
   'POST /runbooks/executions/{id}/cancel': {
     reason: 'Operator requested stop after investigation.',

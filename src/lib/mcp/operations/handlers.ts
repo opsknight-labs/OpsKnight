@@ -151,6 +151,15 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/incidents/[id]/escalate/route')).POST,
   ],
   ['listIncidentNotes', async () => (await import('@/app/api/v2/incidents/[id]/notes/route')).GET],
+  ['listIncidentRoles', async () => (await import('@/app/api/v2/incidents/[id]/roles/route')).GET],
+  [
+    'setIncidentRole',
+    async () => (await import('@/app/api/v2/incidents/[id]/roles/[roleKey]/route')).PUT,
+  ],
+  [
+    'clearIncidentRole',
+    async () => (await import('@/app/api/v2/incidents/[id]/roles/[roleKey]/route')).DELETE,
+  ],
   [
     'getIncidentIntelligence',
     async () => (await import('@/app/api/v2/incidents/[id]/intelligence/route')).GET,

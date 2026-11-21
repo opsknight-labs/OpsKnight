@@ -707,6 +707,17 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Parent-scoped idempotent removal emits a timeline event only when an association existed.',
   },
+  'PUT /api/v2/incidents/[id]/roles/[roleKey]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Shared role command: assignment, follower watcher, timeline, audit and war-room outbox commit with the replay record.',
+  },
+  'DELETE /api/v2/incidents/[id]/roles/[roleKey]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Clearing a role and its timeline event commit atomically; clearing an empty role is a no-op.',
+  },
   'DELETE /api/v2/incidents/[id]/watchers/[watcherId]': {
     idempotency: 'required',
     concurrency: 'none',

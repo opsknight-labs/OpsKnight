@@ -809,6 +809,21 @@ export type MaintenanceSchedule = {
   createdAt: string;
   updatedAt: string;
 };
+export type IncidentRole = {
+  incidentId: string;
+  roleKey: 'COMMANDER' | 'OPS_LEAD' | 'COMMS_LEAD' | 'SCRIBE';
+  label: string;
+  rights: 'operator' | 'contributor';
+  holder: { id: string; name: string; email: string; assignedAt: string } | null;
+};
+export type IncidentRoleChange = {
+  incidentId: string;
+  roleKey: 'COMMANDER' | 'OPS_LEAD' | 'COMMS_LEAD' | 'SCRIBE';
+  userId: string | null;
+  userName: string | null;
+  previousUserId: string | null;
+  changed: boolean;
+};
 export type StatusPagePublicationState = {
   status: 'LIVE' | 'PUBLISHING' | 'FAILED' | 'DISABLED';
   revision: string;
@@ -1243,6 +1258,12 @@ export type IncidentTemplate = {
   defaultUrgency: 'HIGH' | 'MEDIUM' | 'LOW';
   defaultPriority: string | null;
   defaultServiceId: string | null;
+  defaultRoles?: {
+    COMMANDER?: string;
+    OPS_LEAD?: string;
+    COMMS_LEAD?: string;
+    SCRIBE?: string;
+  } | null;
   createdById: string | null;
   isPublic: boolean;
   createdAt: string;
@@ -3322,6 +3343,16 @@ export interface OperationRequests {
   };
   listIncidentWatchers: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   getIncidentWatcher: { params: { id: string; watcherId: string } };
+  listIncidentRoles: { params: { id: string } };
+  setIncidentRole: {
+    params: { id: string; roleKey: 'COMMANDER' | 'OPS_LEAD' | 'COMMS_LEAD' | 'SCRIBE' };
+    headers: { 'Idempotency-Key': string };
+    body: { userId: string };
+  };
+  clearIncidentRole: {
+    params: { id: string; roleKey: 'COMMANDER' | 'OPS_LEAD' | 'COMMS_LEAD' | 'SCRIBE' };
+    headers: { 'Idempotency-Key': string };
+  };
   listIncidentTags: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   listIncidentCustomFields: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   listIncidentTemplates: { query?: { limit?: number; cursor?: string } };
@@ -3336,6 +3367,12 @@ export interface OperationRequests {
       defaultPriority?: string | null;
       defaultServiceId?: string | null;
       isPublic?: boolean;
+      defaultRoles?: {
+        COMMANDER?: string;
+        OPS_LEAD?: string;
+        COMMS_LEAD?: string;
+        SCRIBE?: string;
+      };
     };
   };
   getIncidentTemplate: { params: { templateId: string } };
@@ -3351,6 +3388,12 @@ export interface OperationRequests {
       defaultPriority?: string | null;
       defaultServiceId?: string | null;
       isPublic?: boolean;
+      defaultRoles?: {
+        COMMANDER?: string;
+        OPS_LEAD?: string;
+        COMMS_LEAD?: string;
+        SCRIBE?: string;
+      };
     };
   };
   deleteIncidentTemplate: {
@@ -4878,6 +4921,18 @@ export interface OperationResponses {
     timestamp: string;
   } & Record<string, unknown>;
   getIncidentWatcher: { data: IncidentWatcher; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  listIncidentRoles: { data: Array<IncidentRole>; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  setIncidentRole: { data: IncidentRoleChange; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  clearIncidentRole: { data: IncidentRoleChange; requestId: string; timestamp: string } & Record<
     string,
     unknown
   >;
@@ -6938,6 +6993,30 @@ export const OPERATIONS = {
     kind: 'item',
     idempotency: null,
     requiredHeaders: [],
+    bodyRequired: false,
+  },
+  listIncidentRoles: {
+    method: 'GET',
+    path: '/incidents/{id}/roles',
+    kind: 'list',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  setIncidentRole: {
+    method: 'PUT',
+    path: '/incidents/{id}/roles/{roleKey}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: true,
+  },
+  clearIncidentRole: {
+    method: 'DELETE',
+    path: '/incidents/{id}/roles/{roleKey}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
     bodyRequired: false,
   },
   listIncidentTags: {

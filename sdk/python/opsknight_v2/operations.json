@@ -1279,6 +1279,30 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listIncidentRoles": {
+    "method": "GET",
+    "path": "/incidents/{id}/roles",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "setIncidentRole": {
+    "method": "PUT",
+    "path": "/incidents/{id}/roles/{roleKey}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": true
+  },
+  "clearIncidentRole": {
+    "method": "DELETE",
+    "path": "/incidents/{id}/roles/{roleKey}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": false
+  },
   "listIncidentTags": {
     "method": "GET",
     "path": "/incidents/{id}/tags",

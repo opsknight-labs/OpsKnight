@@ -106,6 +106,18 @@
     "descriptionSha256": "5a3cdba3e1757b0817373a8f6e0deb431212427364c901a5a336f848fe756b53"
   },
   {
+    "name": "incident_roles_list",
+    "title": "List incident roles",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "ba90a5e437ec76d5ab725982363c3f00f084c6f35086fe44ecfdc57f3f624ae7",
+    "descriptionSha256": "b65992d0703dd6d07083ab7605962b87b46de0c403312f3c203041eced771165"
+  },
+  {
     "name": "incident_search",
     "title": "Search incidents",
     "annotations": {
@@ -160,7 +172,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "963a9bc00099f8eb7b7f700dd15196287ea326ce333dde2901634cf06ab985d3",
+    "inputSchemaSha256": "a65915294ae663544a4753a54497c3fb2b52f269826fc51c1bf6a5ca13964b45",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {

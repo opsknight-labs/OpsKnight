@@ -1238,6 +1238,23 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'IncidentWatcher'
   ),
+  op('get', '/incidents/{id}/roles', 'listIncidentRoles', 'incidents:read', 'list', 'IncidentRole'),
+  op(
+    'put',
+    '/incidents/{id}/roles/{roleKey}',
+    'setIncidentRole',
+    'incidents:write',
+    'item',
+    'IncidentRoleChange'
+  ),
+  op(
+    'delete',
+    '/incidents/{id}/roles/{roleKey}',
+    'clearIncidentRole',
+    'incidents:write',
+    'item',
+    'IncidentRoleChange'
+  ),
   op('get', '/incidents/{id}/tags', 'listIncidentTags', 'incidents:read', 'list', 'IncidentTag'),
   op(
     'get',

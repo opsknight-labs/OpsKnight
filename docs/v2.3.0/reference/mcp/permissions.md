@@ -71,8 +71,8 @@ Operation columns count catalog operations that need the permission: plain reads
 | `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
 | `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 5 | 1 | 0 | 1 |
 | `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 25 | 12 | 2 | 16 |
-| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  | ✓ | 0 | 0 | 11 | 10 |
+| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 26 | 12 | 2 | 16 |
+| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  | ✓ | 0 | 0 | 13 | 10 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
 | `integrations:test` | Send test messages through integrations | Services | Change | ✓ |  |  |  | 0 | 2 | 0 | 0 |
@@ -127,7 +127,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | custom-fields | 5 | 2 | 3 | 0 |
 | dashboards | 10 | 4 | 5 | 1 |
 | escalation-policies | 8 | 5 | 3 | 0 |
-| incidents | 42 | 32 | 10 | 0 |
+| incidents | 45 | 35 | 10 | 0 |
 | integrations | 11 | 6 | 2 | 3 |
 | maintenance-schedules | 5 | 2 | 3 | 0 |
 | maintenance-windows | 6 | 2 | 4 | 0 |
@@ -145,7 +145,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 340 | 153 | 113 | 74 |
+| **All** | 343 | 156 | 113 | 74 |
 
 <details>
 <summary>Operations by area</summary>
@@ -216,6 +216,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `addIncidentNote` | `incident_add_note` |
 | `addIncidentTag` | `call_operation` |
 | `assignIncident` | `incident_assign` |
+| `clearIncidentRole` | `call_operation` |
 | `createIncident` | `incident_create` |
 | `createIncidentTemplate` | `operation_prepare`, then approval |
 | `deleteIncidentTemplate` | `operation_prepare`, then approval |
@@ -233,6 +234,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `listIncidentCustomFields` | `read_operation` |
 | `listIncidentNotes` | `incident_list_notes` |
 | `listIncidentNotificationAttempts` | `read_operation` (sensitive reads on) |
+| `listIncidentRoles` | `incident_roles_list` |
 | `listIncidentRunbookExecutions` | `read_operation` |
 | `listIncidentTags` | `read_operation` |
 | `listIncidentTemplates` | `read_operation` (sensitive reads on) |
@@ -246,6 +248,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `reopenIncident` | `incident_reopen` |
 | `resolveIncident` | `incident_resolve` |
 | `setIncidentCustomField` | `operation_prepare`, then approval |
+| `setIncidentRole` | `incident_role_assign` |
 | `setIncidentWatcher` | `incident_watch` |
 | `snoozeIncident` | `operation_prepare`, then approval |
 | `suppressIncident` | `operation_prepare`, then approval |

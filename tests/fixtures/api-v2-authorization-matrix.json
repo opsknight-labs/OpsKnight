@@ -263,6 +263,24 @@
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
   },
+  "PUT /incidents/{id}/roles/{roleKey} [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "allow:resource"
+  },
+  "DELETE /incidents/{id}/roles/{roleKey} [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "allow:resource"
+  },
+  "GET /incidents/{id}/roles [incidents:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /incidents/{id} [incidents:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",

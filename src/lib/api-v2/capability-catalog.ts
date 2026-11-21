@@ -70,10 +70,10 @@ const decisions: readonly ApiCapability[] = [
   {
     id: 'incident-lifecycle',
     area: 'Incidents',
-    title: 'Incident lifecycle and watchers',
+    title: 'Incident lifecycle, watchers and roles',
     status: 'available',
     explanation:
-      'Canonical lifecycle and watcher commands, transactional timeline/audit and durable replay. Watcher mutations require operational privileges.',
+      'Canonical lifecycle, watcher and incident-role commands, transactional timeline/audit and durable replay. Watcher mutations require operational privileges; roles follow the incident relationship (take, delegate as commander, or manage).',
     operationIds: [
       'reopenIncident',
       'escalateIncident',
@@ -86,6 +86,9 @@ const decisions: readonly ApiCapability[] = [
       'getIncidentWatcher',
       'setIncidentWatcher',
       'removeIncidentWatcher',
+      'listIncidentRoles',
+      'setIncidentRole',
+      'clearIncidentRole',
     ],
   },
   {

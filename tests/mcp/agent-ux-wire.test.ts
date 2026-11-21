@@ -246,13 +246,14 @@ describe('TQ-11: tools/list stays small', () => {
     // incident_find_similar (hours/limit and id/limit inputs): about 1 KB more. Round 5 curates ten
     // high-frequency tools (oncall_now, the schedule/service/team lookups, notes, postmortems,
     // overrides, available actions, watch) and widens catch-up: about 3.4 KB more. The long tail
-    // stays discoverable through search_capabilities on purpose.
+    // stays discoverable through search_capabilities on purpose. Incident roles add
+    // incident_roles_list and incident_role_assign (id, roleKey enum, userId): about 0.4 KB.
     const named = tools.filter(tool => MCP_CATALOG.some(operation => operation.tool === tool.name));
     const namedBytes = named.reduce(
       (total, tool) => total + Buffer.byteLength(JSON.stringify(tool.inputSchema)),
       0
     );
-    expect(namedBytes).toBeLessThanOrEqual(17408);
+    expect(namedBytes).toBeLessThanOrEqual(17920);
     expect(bytes).toBeGreaterThan(namedBytes);
   });
 });
