@@ -44,7 +44,7 @@ describe('Slack war-room participants resolve by email when no identity link exi
       id: 'room-1',
       provider: 'SLACK',
       providerTenantId: 'T1',
-      incident: { serviceId: 'svc-1', assigneeId: 'u1', watchers: [] },
+      incident: { serviceId: 'svc-1', assigneeId: 'u1', roleAssignments: [], watchers: [] },
     });
 
     await projectIncidentWarRoomParticipants('room-1');
@@ -83,7 +83,7 @@ describe('Slack war-room participants resolve by email when no identity link exi
       id: 'room-1',
       provider: 'SLACK',
       providerTenantId: 'T1',
-      incident: { serviceId: 'svc-1', assigneeId: 'u1', watchers: [] },
+      incident: { serviceId: 'svc-1', assigneeId: 'u1', roleAssignments: [], watchers: [] },
     });
 
     await projectIncidentWarRoomParticipants('room-1');

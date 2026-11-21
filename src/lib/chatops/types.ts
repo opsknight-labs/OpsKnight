@@ -7,6 +7,7 @@
  */
 import type { ChatProvider } from '@/lib/chatops/provider';
 import type { IdempotencyContext } from '@/lib/idempotency';
+import type { IncidentRoleKey } from '@/lib/incidents/roles';
 
 export type ChatOpsProvider = ChatProvider;
 export type ChatOpsSource = ChatProvider;
@@ -16,8 +17,10 @@ export type ChatOpsActor = {
   name: string;
 };
 
-export type ChatOpsLifecycleKind = 'ACKNOWLEDGE' | 'RESOLVE' | 'SNOOZE' | 'REOPEN' | 'UNACKNOWLEDGE' | 'UNSNOOZE';
-export type ChatOpsKind = ChatOpsLifecycleKind | 'ASSIGN' | 'NOTE' | 'ESCALATE' | 'POSTMORTEM' | 'READ';
+export type ChatOpsLifecycleKind =
+  'ACKNOWLEDGE' | 'RESOLVE' | 'SNOOZE' | 'REOPEN' | 'UNACKNOWLEDGE' | 'UNSNOOZE';
+export type ChatOpsKind =
+  ChatOpsLifecycleKind | 'ASSIGN' | 'NOTE' | 'ESCALATE' | 'POSTMORTEM' | 'READ';
 
 export type ChatOpsCommand =
   | { kind: 'ACKNOWLEDGE'; incidentId: string }
@@ -30,6 +33,8 @@ export type ChatOpsCommand =
   | { kind: 'NOTE'; incidentId: string; content: string }
   | { kind: 'SET_PRIORITY'; incidentId: string; priority: string }
   | { kind: 'JOIN_RESPONDER'; incidentId: string }
+  /** `targetUserId: null` clears the role. */
+  | { kind: 'SET_ROLE'; incidentId: string; roleKey: IncidentRoleKey; targetUserId: string | null }
   | { kind: 'ESCALATE'; incidentId: string }
   | { kind: 'POSTMORTEM'; incidentId: string; channelName: string }
   | { kind: 'READ'; incidentId: string };
@@ -70,5 +75,7 @@ export const CHATOPS_PROVIDER_LABEL: Record<ChatProvider, string> = {
 } as const;
 
 export function chatOpsSourceLabel(provider: ChatProvider): string {
-  return provider === 'SLACK' ? CHATOPS_PROVIDER_LABEL.SLACK : CHATOPS_PROVIDER_LABEL.MICROSOFT_TEAMS;
+  return provider === 'SLACK'
+    ? CHATOPS_PROVIDER_LABEL.SLACK
+    : CHATOPS_PROVIDER_LABEL.MICROSOFT_TEAMS;
 }

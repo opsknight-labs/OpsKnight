@@ -43,6 +43,7 @@ export function renderMicrosoftTeamsWarRoomProjection(
       priority: model.incident.priority,
       serviceName: model.incident.serviceName,
       assigneeName: model.incident.assigneeName,
+      roles: model.incident.roles,
       incidentUrl: model.incident.url,
       createdAt: model.incident.createdAt,
       acknowledgedAt: model.incident.acknowledgedAt,
@@ -138,6 +139,7 @@ export function renderMicrosoftTeamsWarRoomProjection(
           ...(model.incident.assigneeName
             ? [{ title: 'Assignee', value: model.incident.assigneeName }]
             : []),
+          ...model.incident.roles.map(role => ({ title: role.shortLabel, value: role.name })),
         ],
       },
     ],

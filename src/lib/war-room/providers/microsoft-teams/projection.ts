@@ -10,6 +10,7 @@ import { getBaseUrl } from '@/lib/env-validation';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { WarRoomRetryableError } from '../../errors';
 import { buildWarRoomProjection } from '../../projection-model';
+import { INCIDENT_ROLE_SUMMARY_SELECT, summarizeIncidentRoles } from '@/lib/incidents/roles';
 
 const PROJECTION_LEASE_MS = 2 * 60_000;
 
@@ -244,7 +245,11 @@ export async function projectMicrosoftTeamsWarRoomCard(
 
   const incidentRecord = await prisma.incident.findUnique({
     where: { id: room.incidentId },
-    include: { service: { select: { name: true } }, assignee: { select: { name: true } } },
+    include: {
+      service: { select: { name: true } },
+      assignee: { select: { name: true } },
+      roleAssignments: INCIDENT_ROLE_SUMMARY_SELECT,
+    },
   });
   if (!incidentRecord) {
     await prisma.incidentWarRoom.updateMany({
@@ -271,6 +276,7 @@ export async function projectMicrosoftTeamsWarRoomCard(
     canSnooze: false,
     canEscalate: false,
     canJoinResponder: false,
+    canTakeCommand: false,
     canRead: false,
   } as const;
   const { getIncidentMeeting } = await import('@/lib/incident-collaboration/meeting-store');
@@ -296,6 +302,7 @@ export async function projectMicrosoftTeamsWarRoomCard(
       priority: incidentRecord.priority,
       serviceName: incidentRecord.service.name,
       assigneeName: incidentRecord.assignee?.name ?? null,
+      roles: summarizeIncidentRoles(incidentRecord.roleAssignments),
       url: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${incidentRecord.id}`,
       createdAt: incidentRecord.createdAt,
       acknowledgedAt: incidentRecord.acknowledgedAt,

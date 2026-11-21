@@ -20,6 +20,7 @@ export const CHATOPS_ACTION_KINDS = [
   'SNOOZE',
   'ESCALATE',
   'JOIN_RESPONDER',
+  'TAKE_COMMAND',
   'VIEW_RESPONDERS',
   'REFRESH',
 ] as const;
@@ -35,6 +36,7 @@ export type ChatOpsCapabilityKey =
   | 'canSnooze'
   | 'canEscalate'
   | 'canJoinResponder'
+  | 'canTakeCommand'
   | 'canRead';
 
 export type ChatOpsActionMeta = {
@@ -128,6 +130,14 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
     title: 'Join as responder',
     mode: 'secondary',
   },
+  TAKE_COMMAND: {
+    kind: 'TAKE_COMMAND',
+    capability: 'canTakeCommand',
+    phases: ['TRIGGERED', 'ACKNOWLEDGED'],
+    mutates: true,
+    title: 'Take command',
+    mode: 'secondary',
+  },
   VIEW_RESPONDERS: {
     kind: 'VIEW_RESPONDERS',
     capability: 'canRead',
@@ -155,8 +165,19 @@ export function isChatOpsActionKind(value: string): value is ChatOpsActionKind {
  * VIEW_RESPONDERS and REFRESH map to READ (non-mutating).
  */
 export function chatOpsCommandKindForActionKind(
-  kind: ChatOpsActionKind,
-): 'ACKNOWLEDGE' | 'ASSIGN' | 'RESOLVE' | 'NOTE' | 'SET_PRIORITY' | 'SNOOZE' | 'ESCALATE' | 'JOIN_RESPONDER' | 'READ' | null {
+  kind: ChatOpsActionKind
+):
+  | 'ACKNOWLEDGE'
+  | 'ASSIGN'
+  | 'RESOLVE'
+  | 'NOTE'
+  | 'SET_PRIORITY'
+  | 'SNOOZE'
+  | 'ESCALATE'
+  | 'JOIN_RESPONDER'
+  | 'SET_ROLE'
+  | 'READ'
+  | null {
   switch (kind) {
     case 'ACKNOWLEDGE':
       return 'ACKNOWLEDGE';
@@ -174,6 +195,8 @@ export function chatOpsCommandKindForActionKind(
       return 'ESCALATE';
     case 'JOIN_RESPONDER':
       return 'JOIN_RESPONDER';
+    case 'TAKE_COMMAND':
+      return 'SET_ROLE';
     case 'VIEW_RESPONDERS':
       return 'READ';
     case 'REFRESH':

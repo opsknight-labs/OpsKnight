@@ -10,6 +10,7 @@ export const TEAMS_CHATOPS_VERBS = {
   SNOOZE: 'opsknight.incident.snooze',
   ESCALATE: 'opsknight.incident.escalate',
   JOIN_RESPONDER: 'opsknight.incident.join-responder',
+  TAKE_COMMAND: 'opsknight.incident.take-command',
   WHO: 'opsknight.incident.who',
 } as const;
 
@@ -63,6 +64,7 @@ const schemas = {
     .passthrough(),
   [TEAMS_CHATOPS_VERBS.ESCALATE]: context,
   [TEAMS_CHATOPS_VERBS.JOIN_RESPONDER]: context,
+  [TEAMS_CHATOPS_VERBS.TAKE_COMMAND]: context,
   [TEAMS_CHATOPS_VERBS.WHO]: context,
 } satisfies Record<TeamsChatOpsVerb, z.ZodType>;
 

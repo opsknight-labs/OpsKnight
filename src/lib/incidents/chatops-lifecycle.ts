@@ -24,6 +24,13 @@ import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import { effectiveAccessSelect } from '@/lib/access/effective';
 import { isPagedForIncident } from '@/lib/access/incident-relations';
 import { getAccessControlSettings } from '@/lib/access/settings';
+import { assignIncidentRoleCommand } from '@/lib/incidents/roles-command';
+import { canChangeIncidentRole } from '@/lib/incidents/role-authorization';
+import {
+  INCIDENT_ROLE_RELATION_SELECT,
+  incidentRoleRelations,
+  type IncidentRoleKey,
+} from '@/lib/incidents/roles';
 
 export type ChatOpsLifecycleCommand = Extract<
   IncidentLifecycleCommand,
@@ -105,6 +112,7 @@ export async function authorizeChatOpsIncidentInTransaction(
         teamId: true,
         visibility: true,
         watchers: { select: { userId: true } },
+        roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
         service: { select: { teamId: true, escalationPolicyId: true } },
       },
     }),
@@ -250,6 +258,99 @@ export async function executeChatOpsAssignment(input: {
   });
 }
 
+/** `/incident role …` and "Take command": set or clear one role, authorized like the web UI. */
+export async function executeChatOpsRole(input: {
+  incidentId: string;
+  actor: ChatOpsLifecycleActor;
+  roleKey: IncidentRoleKey;
+  targetUserId: string | null;
+  provider?: 'SLACK' | 'MICROSOFT_TEAMS';
+  idempotency?: IdempotencyContext;
+}): Promise<{ changed: boolean; userName: string | null }> {
+  return runSerializableTransaction(async tx => {
+    const [user, incident] = await Promise.all([
+      tx.user.findUnique({
+        where: { id: input.actor.id },
+        select: {
+          id: true,
+          role: true,
+          status: true,
+          teamMemberships: { select: { teamId: true } },
+          ...effectiveAccessSelect(),
+        },
+      }),
+      tx.incident.findUnique({
+        where: { id: input.incidentId },
+        select: {
+          id: true,
+          assigneeId: true,
+          teamId: true,
+          visibility: true,
+          watchers: { select: { userId: true } },
+          roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
+          service: { select: { teamId: true, escalationPolicyId: true } },
+        },
+      }),
+    ]);
+    const actor = user && isAppRole(user.role) ? authorizationActorFromUser(user) : null;
+    if (!actor || !incident) {
+      throw new AppError({
+        code: 'AUTHORIZATION_DENIED',
+        userMessage: 'You are not allowed to access this incident.',
+      });
+    }
+    const resource = await withOnCallRelation(
+      actor,
+      AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE,
+      incidentResource(incident),
+      incident.service.escalationPolicyId
+    );
+    const holderOf = (key: string) =>
+      incident.roleAssignments.find(a => a.roleKey === key)?.userId ?? null;
+    if (
+      !canChangeIncidentRole({
+        actor,
+        resource,
+        targetUserId: input.targetUserId,
+        currentHolderId: holderOf(input.roleKey),
+        commanderId: holderOf('COMMANDER'),
+      })
+    ) {
+      throw new AppError({
+        code: 'INCIDENT_ACCESS_DENIED',
+        userMessage: `You cannot change roles on this incident. ${CHATOPS_ACCESS_HINT}`,
+        details: { incidentId: input.incidentId, roleKey: input.roleKey },
+      });
+    }
+    const execution = await executeIdempotentOperation(tx, {
+      scope: 'chatops-role',
+      context: input.idempotency,
+      payload: {
+        incidentId: input.incidentId,
+        roleKey: input.roleKey,
+        targetUserId: input.targetUserId,
+      },
+      execute: async () => {
+        const result = await assignIncidentRoleCommand(
+          {
+            incidentId: input.incidentId,
+            roleKey: input.roleKey,
+            userId: input.targetUserId,
+            actor: {
+              id: input.actor.id,
+              name: `${input.actor.name} via ${chatOpsProviderDisplayLabel(input.provider)}`,
+            },
+            source: 'INTEGRATION',
+          },
+          tx
+        );
+        return { changed: result.changed, userName: result.userName };
+      },
+    });
+    return execution.value;
+  });
+}
+
 export async function executeChatOpsPriority(input: {
   incidentId: string;
   actor: ChatOpsLifecycleActor;
@@ -365,6 +466,7 @@ function incidentResource(incident: {
   teamId: string | null;
   visibility: 'PUBLIC' | 'PRIVATE';
   watchers: Array<{ userId: string }>;
+  roleAssignments?: Array<{ roleKey: string; userId: string }>;
   service: { teamId: string | null };
 }): Extract<AuthorizationResource, { type: 'incident' }> {
   return {
@@ -374,6 +476,7 @@ function incidentResource(incident: {
     assignedTeamId: incident.teamId,
     visibility: incident.visibility,
     watcherIds: incident.watchers.map(watcher => watcher.userId),
+    ...incidentRoleRelations(incident.roleAssignments),
     serviceTeamId: incident.service.teamId,
   };
 }
@@ -409,6 +512,7 @@ export async function executeChatOpsLifecycleCommand(
           teamId: true,
           visibility: true,
           watchers: { select: { userId: true } },
+          roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
           service: { select: { teamId: true, escalationPolicyId: true } },
         },
       }),

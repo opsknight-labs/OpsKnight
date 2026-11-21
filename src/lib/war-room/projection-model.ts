@@ -1,3 +1,4 @@
+import type { IncidentRoleSummary } from '@/lib/incidents/roles';
 import {
   CHATOPS_ACTIONS,
   type ChatOpsActionKind,
@@ -28,6 +29,8 @@ export interface WarRoomProjectionModel {
     priority: string | null;
     serviceName: string;
     assigneeName: string | null;
+    /** Role holders in catalog order (commander first). */
+    roles: IncidentRoleSummary[];
     url: string;
     createdAt: Date;
     acknowledgedAt: Date | null;
@@ -73,6 +76,8 @@ function isAllowed(
       return caps.canJoinResponder === true;
     case 'canRead':
       return caps.canRead === true;
+    case 'canTakeCommand':
+      return caps.canTakeCommand === true;
     default:
       return false;
   }
@@ -110,6 +115,7 @@ export function buildWarRoomProjection(
     priority?: string | null;
     serviceName: string;
     assigneeName?: string | null;
+    roles?: IncidentRoleSummary[];
     url: string;
     createdAt: Date;
     acknowledgedAt?: Date | null;
@@ -121,18 +127,24 @@ export function buildWarRoomProjection(
   }
 ): WarRoomProjectionModel {
   const phase = derivePhase(input);
+  const roles = input.roles ?? [];
+  const hasCommander = roles.some(role => role.roleKey === 'COMMANDER');
   // Capability-gated path (Teams war-room) → full 10-action contract filtered by phase+cap.
   // Legacy fallback (no capabilities, e.g. Slack or old tests) → phase-correct 3-action set:
   //  TRIGGERED    → ACK + Assign (no Resolve until acknowledged)
   //  ACKNOWLEDGED → Assign + Resolve (ACK already done)
-  const actions: readonly WarRoomProjectionAction[] =
+  //  …plus Take command while nobody holds the commander role.
+  const baseActions: readonly WarRoomProjectionAction[] =
     opts?.capabilities !== undefined
       ? filterActionsByPhaseAndCapability(phase, opts.capabilities)
       : phase === 'RESOLVED'
         ? []
         : phase === 'ACKNOWLEDGED'
-          ? (['ASSIGN_SELF', 'RESOLVE'] as const)
-          : (['ACKNOWLEDGE', 'ASSIGN_SELF'] as const);
+          ? (['ASSIGN_SELF', 'RESOLVE', 'TAKE_COMMAND'] as const)
+          : (['ACKNOWLEDGE', 'ASSIGN_SELF', 'TAKE_COMMAND'] as const);
+  const actions = hasCommander
+    ? baseActions.filter(action => action !== 'TAKE_COMMAND')
+    : baseActions;
 
   return {
     version: 1,
@@ -145,6 +157,7 @@ export function buildWarRoomProjection(
       priority: input.priority ?? null,
       serviceName: input.serviceName,
       assigneeName: input.assigneeName ?? null,
+      roles,
       url: input.url,
       createdAt: input.createdAt,
       acknowledgedAt: input.acknowledgedAt ?? null,
