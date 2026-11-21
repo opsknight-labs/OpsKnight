@@ -1,6 +1,7 @@
 ARG OPSKNIGHT_VERSION=2.0.0
 
-FROM node:24.21.0-alpine AS build
+# The bundle is plain JavaScript, so build it natively; only the runtime stage is per-architecture.
+FROM --platform=$BUILDPLATFORM node:24.21.0-alpine AS build
 ARG OPSKNIGHT_VERSION
 WORKDIR /src
 RUN npm install --global esbuild@0.28.2

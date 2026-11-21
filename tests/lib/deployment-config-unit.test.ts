@@ -608,25 +608,38 @@ describe('deployment configuration invariants', () => {
       workflow.indexOf('- name: Build + push (test channel - main)'),
       workflow.indexOf('- name: Build + push (release channel - version tag)')
     );
+    const releaseImage = workflow.slice(
+      workflow.indexOf('  release-image:'),
+      workflow.indexOf('  build:')
+    );
     const releaseBuild = workflow.slice(
       workflow.indexOf('- name: Build + push (release channel - version tag)')
-    );
-    expect(workflow).toContain(
-      "if: startsWith(github.ref, 'refs/tags/v')\n        uses: docker/setup-qemu-action@v4"
     );
     expect(mainBuild).toContain('platforms: linux/amd64');
     expect(mainBuild).toContain('provenance: false');
     expect(mainBuild).toContain('sbom: false');
-    expect(releaseBuild).toContain('platforms: linux/amd64,linux/arm64');
-    expect(releaseBuild).toContain('provenance: mode=max');
-    expect(releaseBuild).toContain('sbom: true');
+    // Each architecture builds on a native runner (no QEMU), with its own SBOM and provenance,
+    // and the build job merges both digests into the release index.
+    expect(releaseImage).toContain('runner: ubuntu-24.04-arm');
+    expect(releaseImage).toContain('platform: linux/arm64');
+    expect(releaseImage).toContain('platform: linux/amd64');
+    expect(releaseImage).toContain('push-by-digest=true');
+    expect(releaseImage).toContain('provenance: mode=max');
+    expect(releaseImage).toContain('sbom: true');
+    expect(releaseImage).not.toContain('setup-qemu-action');
+    expect(releaseBuild).toContain('docker buildx imagetools create');
     expect(workflow).toContain('scripts/validate-release-tag.cjs');
     expect(workflow).toContain('make_latest="$make_latest"');
     expect(workflow).toContain('releases/latest" --jq .tag_name');
     expect(workflow).toContain('release-quality:');
     expect(needsFor('release-quality')).toEqual(['validate-release-tag']);
     expect(needsFor('integration-certification')).toEqual(['validate-release-tag']);
-    expect(needsFor('build')).toEqual(['release-quality', 'integration-certification']);
+    expect(needsFor('release-image')).toEqual(['release-quality', 'integration-certification']);
+    expect(needsFor('build')).toEqual([
+      'release-quality',
+      'integration-certification',
+      'release-image',
+    ]);
     expect(Reflect.has(workflowConfig.jobs, 'release-documentation')).toBe(false);
     expect(needsFor('sbom-provenance')).toEqual(['build']);
     // Publishing to users waits for one production-environment approval.
