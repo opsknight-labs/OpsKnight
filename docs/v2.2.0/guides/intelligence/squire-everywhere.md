@@ -35,7 +35,7 @@ An administrator opens **Settings → Intelligence → Assistant**. The assistan
 
 | Switch                                  | What it adds                                                                |
 | --------------------------------------- | --------------------------------------------------------------------------- |
-| **Slack and Microsoft Teams**           | `@squire` in incident channels and war rooms, and `/incident ask` in Slack. |
+| **Slack and Microsoft Teams**           | `@OpsKnight` in incident channels and war rooms, and `/incident ask` in Slack. |
 | **AI assistants over MCP (ask_squire)** | The read-only `ask_squire` tool for connected assistants.                   |
 | **Mobile incident pages**               | The assistant, full screen, on `/m/incidents/…`.                            |
 
@@ -45,12 +45,12 @@ Turning a switch off stops new questions at once. Suggestions already shown in c
 
 In an OpsKnight incident channel:
 
-- **`@squire what changed before this started?`** Squire replies in the thread, visible to the channel.
+- **`@OpsKnight what changed before this started?`** Squire replies in the thread, visible to the channel.
 - **`/incident ask is this related to yesterday's outage?`** Squire replies only to you.
 
 Your Slack account must match an active OpsKnight account by its verified email address, as for the other `/incident` commands. Otherwise Squire tells you it cannot answer for you. Squire answers only in incident channels; elsewhere it points you to OpsKnight.
 
-The Slack app needs the `app_mentions:read` event subscription for `@squire`. The existing interactivity URL handles the buttons.
+Mention the OpsKnight app you already installed (`@OpsKnight`); Squire is its assistant, not a separate app. The Slack app needs the `app_mentions:read` event subscription, which may ask you to re-approve the app once. The existing interactivity URL handles the buttons.
 
 ## Microsoft Teams
 

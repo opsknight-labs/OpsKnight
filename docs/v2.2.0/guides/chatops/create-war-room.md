@@ -80,7 +80,7 @@ rooms. Both are off by default.
   messages of up to 4 KB each. Public and private war-room channels are both
   captured; incident visibility only controls the status page. A change to this switch can take up to 30 seconds to apply.
 
-When Squire in chat is turned on, people can mention `@squire` in incident
+When Squire in chat is turned on, people can mention `@OpsKnight` in incident
 channels and war rooms, or use `/incident ask <question>` in Slack, which
 answers privately. Squire answers under the asker's own linked account and
 permissions, at most 6 questions per person per minute. See
