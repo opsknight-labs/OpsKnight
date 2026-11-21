@@ -39,7 +39,8 @@ block the page behind it, and can be resized by dragging its left edge or with t
 resize handle; the width is remembered in this browser. On a phone it opens as a sheet from the bottom.
 
 A small dot at the end of the strip appears only while analysis is waiting, out of date, paused or
-failed. Select it to read why; intelligence managers can refresh the analysis from there.
+failed. It reads **Refreshing** only while new analysis is queued; **Out of date** means nothing is
+queued yet. Select it to read why; intelligence managers can refresh the analysis from there.
 
 Insights has up to eight sections, always in this order, and a section with nothing to show is left
 out: Briefing, Triage, Similar, Related and group, Why, Runbooks, Impact, Summary. When enabled for the
@@ -132,8 +133,11 @@ have caused this?" or "which runbook fits?".
   the suggestion expires. If the result is unknown, inspect the incident before requesting another
   action. Result lookup is available for one day and still requires access to the incident.
 - "Basic answer from your incident data" means AI is off or unavailable, and the answer comes straight from the
-  suggestions above. AI chat also requires a provider approved for Personal data; when none is available,
-  the assistant explains the restriction and keeps your conversation out of the model.
+  suggestions above. AI chat works with a provider approved for Internal data: your question is sent with
+  email addresses, phone numbers and IP addresses removed, earlier answers, notes and timelines stay out,
+  and tools that read people, on-call or timelines are not offered. A provider approved for Personal data
+  can also use those. When no provider may receive the conversation's data, the assistant says why once,
+  at the top of the panel, and administrators get a link to the provider settings.
 - Select **Stop response** to stop a long answer. Text already received stays available for a follow-up.
   If a response is interrupted, the assistant keeps the partial answer and tells you it is incomplete.
 - Treat AI answers as a starting point and check them.

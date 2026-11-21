@@ -47,7 +47,12 @@ export default async function AiUsageSpendSections({
     );
   }
   const cost = await safely('spend and budgets', () =>
-    loadAiCostView(spendDays, settings.dailyTokenBudget, providers ?? [])
+    loadAiCostView(
+      spendDays,
+      settings.dailyTokenBudget,
+      providers ?? [],
+      settings.capabilityRouting ?? {}
+    )
   );
   const used = usage ? usage.inputTokens + usage.outputTokens : 0;
 

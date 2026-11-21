@@ -342,8 +342,9 @@ test.describe('mobile PWA browser contract', () => {
       .first();
     await expect(serviceQuickLink).toBeVisible();
 
-    // Back link navigates cleanly back to /m/incidents
-    const backLink = page.locator('a', { hasText: 'Back to Incidents' });
+    // The header's back arrow is the only back control and navigates cleanly back to /m/incidents
+    await expect(page.locator('a', { hasText: 'Back to Incidents' })).toHaveCount(0);
+    const backLink = page.getByRole('link', { name: 'Back to incidents' });
     await expect(backLink).toBeVisible();
     await backLink.click();
     await expect(page).toHaveURL(/\/m\/incidents/);

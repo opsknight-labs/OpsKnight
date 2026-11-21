@@ -88,4 +88,15 @@ describe('buildSystemPrompt', () => {
   it('has no volatile part off an incident', () => {
     expect(buildSystemPrompt('Squire', null).volatile).toBeUndefined();
   });
+
+  it("tells the model the person's time zone so it never states bare UTC clock times", () => {
+    const now = new Date('2026-11-21T08:10:00Z');
+    const prompt = buildSystemPrompt('Squire', null, null, 'Asia/Kolkata', now);
+    expect(prompt.system).toContain("The person's time zone is Asia/Kolkata (GMT+05:30 now)");
+    expect(prompt.system).toContain('label it with the zone');
+    // An unknown zone falls back to labelled UTC rather than failing the turn.
+    expect(buildSystemPrompt('Squire', null, null, 'Not/AZone', now).system).toContain(
+      'Timestamps are UTC'
+    );
+  });
 });

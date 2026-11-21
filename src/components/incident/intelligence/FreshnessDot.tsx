@@ -22,7 +22,7 @@ const SHORT_LABEL: Record<string, string> = {
   CURRENT: 'Up to date',
   FAILED: 'Needs review',
   WAITING: 'Analysing',
-  STALE: 'Refreshing',
+  STALE: 'Out of date',
   PAUSED: 'Paused',
   UNAVAILABLE: 'Unavailable',
 };
@@ -263,7 +263,11 @@ export default function FreshnessDot({
         className={touch ? DOT_BASE : `${DOT_BASE} sm:min-h-8`}
       >
         {dot}
-        <span>{SHORT_LABEL[state.status] ?? 'Analysis'}</span>
+        <span>
+          {state.status === 'STALE' && state.pending
+            ? 'Refreshing'
+            : (SHORT_LABEL[state.status] ?? 'Analysis')}
+        </span>
         <span className="sr-only">: recommendation freshness details</span>
       </button>
       {/* Always in the accessibility tree, so the state is announced without opening the disclosure. */}

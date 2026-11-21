@@ -76,6 +76,33 @@ describe('suggestions for an incident being typed', () => {
     expect(result.duplicate).toMatchObject({ incidentId: open.id, serviceName: checkout.name });
   });
 
+  it('finds an open duplicate with the same title even when past incidents carry long alert bodies', async () => {
+    await switches(true);
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const github = await createTestService('Github Alert');
+    const body =
+      'Run 4812 of the Tests workflow on branch main failed at step unit-tests after 14 minutes; ' +
+      'see the job log for the failing assertions, runner ubuntu-latest, triggered by a push commit';
+    for (const minutes of [90, 60])
+      await indexed('Workflow failed: Tests', github.id, {
+        status: 'RESOLVED',
+        resolvedAt: new Date(),
+        description: body,
+        createdAt: new Date(Date.now() - minutes * 60_000),
+      });
+    const open = await indexed('Workflow failed: Tests', github.id, {
+      description: body,
+      createdAt: new Date(Date.now() - 20 * 60_000),
+    });
+    // The draft is only the title, as typed into the create dialog.
+    const result = await suggestForIncidentDraft(await actorFor(admin.id), {
+      title: 'Workflow failed: Tests',
+      urgency: 'LOW',
+    });
+    expect(result.duplicate).toMatchObject({ incidentId: open.id, createdAt: expect.any(String) });
+    expect(result.service).toMatchObject({ id: github.id });
+  });
+
   it('is silent while either switch is off, and for a title too short to compare', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     const service = await createTestService('Checkout');

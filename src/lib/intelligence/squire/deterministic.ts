@@ -21,7 +21,13 @@ import { getRelatedIncidentsForActor } from '../correlation/view';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
 import { routeIntent, incidentIntents, type SquireIntent } from './intents';
-import { answerBasicReadDetailed, BASIC_PAGE_SIZE, type BasicReadOptions } from './basic/reads';
+import {
+  answerBasicReadDetailed,
+  BASIC_PAGE_SIZE,
+  timeZoneFor,
+  type BasicReadOptions,
+} from './basic/reads';
+import { incidentRef } from '../incident-ux/explain';
 import { productGuidance } from './basic/guidance';
 import { keywords, mergeBasicQuestion } from './basic/query';
 import {
@@ -104,17 +110,21 @@ async function describeIncident(
   collect?.({ kind: 'incident', id: incident.id, label: incident.title, data: incident });
   const head = `${incident.title}\n${incident.serviceName} · ${incident.status.toLowerCase()} · ${incident.urgency.toLowerCase()} urgency`;
   if (intent === 'SIMILAR') {
-    const [similar, related] = await Promise.all([
+    const [similar, related, timeZone] = await Promise.all([
       getSimilarIncidentsForActor(incident.id, actor),
       getRelatedIncidentsForActor(incident.id, actor),
+      timeZoneFor(actor.id).catch(() => 'UTC'),
     ]);
+    // Look-alikes often share a title; the short id and opening date tell them apart.
+    const opened = (at: Date) =>
+      new Intl.DateTimeFormat('en-GB', { timeZone, dateStyle: 'medium' }).format(at);
     [...(similar ?? []), ...(related ?? [])].forEach(data =>
       collect?.({ kind: 'incident', id: data.incidentId, label: data.title, data })
     );
     const lines = [
       ...(similar ?? []).map(
         item =>
-          `• ${item.title} (${item.matchPercent}% match, ${item.status.toLowerCase()}; ${item.serviceName})${item.resolutionSummary ? `\n  Recorded resolution: ${short(item.resolutionSummary)}` : ''}\n  /incidents/${item.incidentId}`
+          `• ${item.title} ${incidentRef(item.incidentId)}, opened ${opened(item.createdAt)} (${item.matchPercent}% match, ${item.status.toLowerCase()}; ${item.serviceName})${item.resolutionSummary ? `\n  Recorded resolution: ${short(item.resolutionSummary)}` : ''}\n  /incidents/${item.incidentId}`
       ),
       ...(related ?? []).map(item => `• Related: ${item.title}\n  /incidents/${item.incidentId}`),
     ];

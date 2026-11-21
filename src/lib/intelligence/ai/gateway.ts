@@ -483,9 +483,12 @@ class GatewayPort implements LanguageModelPort {
   }
 
   /** Per-step options for a tool loop: the rolling cache breakpoint. */
-  private stepper(provider: GatewayProvider) {
-    return ({ messages }: { messages: ModelMessage[] }) => ({
+  private stepper(provider: GatewayProvider, request: AiGenerateRequest) {
+    const last = clampSteps(request.maxSteps) - 1;
+    return ({ messages, stepNumber }: { messages: ModelMessage[]; stepNumber: number }) => ({
       messages: withRollingCacheBreakpoint(messages, provider.kind),
+      // The last allowed step must answer from what was read: a long tool loop never ends without a word.
+      ...(last > 0 && stepNumber >= last ? { toolChoice: 'none' as const } : {}),
     });
   }
 
@@ -735,7 +738,7 @@ class GatewayPort implements LanguageModelPort {
               messages: toMessages(request, provider.kind),
               tools: toToolSet(request.tools),
               stopWhen: this.stopper(request, provider, reservation),
-              prepareStep: this.stepper(provider),
+              prepareStep: this.stepper(provider, request),
               maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
               abortSignal: this.signalFor(request),
               maxRetries: 1,
@@ -832,7 +835,7 @@ class GatewayPort implements LanguageModelPort {
           messages: toMessages(request, provider.kind),
           tools: toToolSet(request.tools),
           stopWhen: this.stopper(request, provider, reservation),
-          prepareStep: this.stepper(provider),
+          prepareStep: this.stepper(provider, request),
           maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
           abortSignal: this.signalFor(request),
           maxRetries: 0,

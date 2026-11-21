@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { IntelligenceGroupHeader } from '@/components/settings/layout/IntelligenceGroupHeader';
@@ -10,6 +11,8 @@ import {
   TestProviderButton,
 } from '@/components/settings/AiSettingsForms';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { InlineNotice } from '@/components/ui/InlineNotice';
+import { dataClassAllows } from '@/lib/intelligence/ai/port';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
@@ -68,6 +71,17 @@ export default async function IntelligenceAssistantPage({
     safely('suggested checks', () => listCheckTemplates()),
   ]);
 
+  // Summaries, stakeholder updates and postmortem drafts send Personal data; without a provider allowed it they never run.
+  const personalNotice =
+    settings.enabled &&
+    providers &&
+    !providers.some(p => p.enabled && dataClassAllows(p.maxDataClass, 'PERSONAL')) ? (
+      <InlineNotice tone="warning" title="No provider can receive Personal data" className="my-3">
+        Summaries, stakeholder updates and postmortem drafts need a provider allowed to receive
+        Personal data. Raise an enabled provider&apos;s data limit to Personal, or add one.
+      </InlineNotice>
+    ) : null;
+
   return (
     <div className="space-y-6">
       <IntelligenceGroupHeader group="assistant" title="Assistant and AI">
@@ -91,6 +105,7 @@ export default async function IntelligenceAssistantPage({
           </Badge>
         }
       >
+        {personalNotice}
         <AiSettingsForm settings={settings} canManage={canManage} />
       </SettingsSection>
 
@@ -99,13 +114,19 @@ export default async function IntelligenceAssistantPage({
         title="Providers"
         description="Tried in priority order. Each provider has its own limit on the data it may receive."
       >
+        {personalNotice}
         {providers && providers.length > 0 ? (
           <ul className="divide-y divide-border">
             {providers.map(provider => (
               <li key={provider.id} className="py-3">
-                <details>
-                  <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm font-medium">
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+                    <span className="inline-flex items-center gap-1.5 text-sm font-medium">
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
+                      />
+                      <span className="sr-only">Edit </span>
                       {provider.name}{' '}
                       <span className="text-muted-foreground">· {provider.model}</span>
                     </span>

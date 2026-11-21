@@ -91,7 +91,10 @@ describe('read-only Squire action recovery', () => {
   });
   it('keeps missing, unowned and no-longer-readable results indistinguishable', async () => {
     mocks.outcome.mockResolvedValue(null);
-    expect((await GET(getRequest(), context())).status).toBe(404);
+    // "No result yet" is not an error: an unconfirmed proposal's lookup must not log a failed request.
+    const response = await GET(getRequest(), context());
+    expect(response.status).toBe(200);
+    expect((await response.json()).data).toEqual({ outcome: null });
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 });

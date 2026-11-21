@@ -51,7 +51,8 @@ export default function IntelligenceStrip({
       {chips.length > 0 && (
         <nav
           aria-label="Incident insights"
-          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5 scrollbar-none"
+          // Chips scroll sideways: the trailing edge fades so a cut-off chip reads as "more this way".
+          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5 pr-6 scrollbar-none [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]"
         >
           {firstSection && (
             <a

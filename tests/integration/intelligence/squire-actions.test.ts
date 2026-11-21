@@ -281,7 +281,7 @@ describe('proposed actions', () => {
 });
 
 describe('answers', () => {
-  it('uses basic mode without sending any tools to an Internal-only provider', async () => {
+  it('answers at Internal without any Personal tool for an Internal-only provider', async () => {
     await setup('INTERNAL');
     const { responder, mine } = await world();
     model.script.push({ content: 'ok' });
@@ -289,7 +289,8 @@ describe('answers', () => {
     expect(toolNamesSent()).not.toEqual(expect.arrayContaining(['get_timeline']));
     expect(toolNamesSent()).not.toContain('who_is_on_call');
     expect(toolNamesSent()).not.toContain('propose_reassign_incident');
-    expect(model.requests).toHaveLength(0);
+    expect(toolNamesSent()).toContain('get_incident');
+    expect(model.requests).toHaveLength(1);
   });
 
   it('includes them for a Personal-data provider, and briefs the model on the incident up front', async () => {
@@ -335,12 +336,13 @@ describe('answers', () => {
         toolCall: { name: 'get_incident', args: JSON.stringify({ id: mine.id }) },
       });
     const events = await turn(responder.id, 'tell me everything', mine.id);
-    expect(events.some(e => e.type === 'notice')).toBe(true);
     const text = events
       .filter((e): e is Extract<SquireEvent, { type: 'delta' }> => e.type === 'delta')
       .map(e => e.text)
       .join('');
-    expect(text).toContain('Checkout latency high');
+    // The last allowed step runs without tools, so the model answers from what it read.
+    expect(text).toContain('From what I read so far');
+    expect(events.some(e => e.type === 'meta' && e.mode === 'basic')).toBe(false);
     expect(events.some(e => e.type === 'tool')).toBe(true);
   });
 });

@@ -81,7 +81,20 @@ export default function SquireProposalCard({
           }
         );
         if (signal?.aborted) return;
-        if (response.status === 404) {
+        const body = response.ok
+          ? ((await response.json()) as {
+              data?: {
+                outcome?: {
+                  status: string;
+                  message: string;
+                  result?: { followUp?: SquireProposalView };
+                } | null;
+              };
+            })
+          : null;
+        if (signal?.aborted) return;
+        // No result yet (200 with a null outcome; 404 for an id the server will not look up).
+        if (response.status === 404 || (body && !body.data?.outcome)) {
           setState(
             !attempted.current
               ? { phase: 'idle' }
@@ -93,18 +106,8 @@ export default function SquireProposalCard({
           );
           return;
         }
-        const body = (await response.json()) as {
-          data?: {
-            outcome?: {
-              status: string;
-              message: string;
-              result?: { followUp?: SquireProposalView };
-            };
-          };
-        };
-        if (signal?.aborted) return;
-        const outcome = body.data?.outcome;
-        if (!response.ok || !outcome) throw new Error('Outcome unavailable');
+        const outcome = body?.data?.outcome;
+        if (!outcome) throw new Error('Outcome unavailable');
         attempted.current = true;
         setState({
           phase:

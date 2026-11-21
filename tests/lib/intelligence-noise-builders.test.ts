@@ -256,7 +256,7 @@ describe('matcher and rule validation', () => {
     expect(result.matchers).toBeNull();
     expect(result.errors[0]).toBeNull();
     expect(result.errors[1]).toMatch(/key/);
-    expect(result.errors[2]).toMatch(/quantifier/i);
+    expect(result.errors[2]).toMatch(/backtrack catastrophically/i);
     expect(
       validateMatcherDrafts([{ field: 'source', key: '', op: 'exists', value: '' }]).matchers
     ).toEqual([{ field: 'source', op: 'exists' }]);

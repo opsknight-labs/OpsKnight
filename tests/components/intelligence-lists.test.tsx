@@ -55,7 +55,7 @@ const change = (overrides: Partial<ChangeListRow> = {}): ChangeListRow => ({
 
 describe('AlertsTable', () => {
   it('links each row to the alert, its service and its incident', () => {
-    render(<AlertsTable rows={[alert()]} />);
+    render(<AlertsTable rows={[alert()]} timeZone="UTC" />);
     const table = screen.getByRole('table', { name: 'Alerts, newest first' });
     expect(within(table).getByRole('link', { name: 'Disk usage above 90%' })).toHaveAttribute(
       'href',
@@ -72,11 +72,26 @@ describe('AlertsTable', () => {
     expect(within(table).getAllByText('critical').length).toBeGreaterThan(0);
     expect(within(table).getByText('env=prod')).toBeInTheDocument();
     expect(within(table).getByText('+2 more')).toBeInTheDocument();
-    expect(within(table).getAllByText('2026-11-10 08:15 UTC').length).toBeGreaterThan(0);
+    expect(within(table).getAllByText('Nov 10, 2026, 8:15 AM UTC').length).toBeGreaterThan(0);
+  });
+
+  it("shows times in the viewer's time zone, labelled", () => {
+    render(<AlertsTable rows={[alert()]} timeZone="Asia/Kolkata" />);
+    expect(screen.getAllByText('Nov 10, 2026, 1:45 PM GMT+5:30').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the incident link apart from the title and labels to two plus a count', () => {
+    const labels = ['env', 'region', 'team', 'tier'].map(key => ({ key, value: 'x' }));
+    render(<AlertsTable rows={[alert({ labels, moreLabels: 1 })]} timeZone="UTC" />);
+    expect(screen.getByRole('link', { name: 'Open incident' }).className).toMatch(/(^| )flex /);
+    const list = screen.getByRole('list', { name: 'Labels' });
+    expect(within(list).getByText('env=x')).toBeInTheDocument();
+    expect(within(list).queryByText('team=x')).toBeNull();
+    expect(within(list).getByText('+3 more')).toBeInTheDocument();
   });
 
   it('gives the alert link a 44 px target on phone widths', () => {
-    render(<AlertsTable rows={[alert()]} />);
+    render(<AlertsTable rows={[alert()]} timeZone="UTC" />);
     expect(screen.getByRole('link', { name: 'Disk usage above 90%' }).className).toContain(
       'min-h-11'
     );
@@ -86,12 +101,15 @@ describe('AlertsTable', () => {
     render(
       <AlertsTable
         rows={[alert({ severity: null, labels: [], moreLabels: 0, incidentId: null })]}
+        timeZone="UTC"
       />
     );
     expect(screen.queryByText(/Suppressed|Shadow|maintenance|Grouped|Deduplicated/)).toBeNull();
     expect(screen.queryByRole('list', { name: 'Labels' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Open incident' })).toBeNull();
     expect(screen.queryByText('Severity:')).toBeNull();
+    // Empty cells say so instead of staying blank.
+    expect(screen.getAllByText('None').length).toBeGreaterThanOrEqual(3);
   });
 
   it('names an applied decision and marks a shadow one as not applied', () => {
@@ -118,7 +136,7 @@ describe('AlertsTable', () => {
 
 describe('ChangesTable', () => {
   it('shows source, kind, service, risk band and linked incidents', () => {
-    render(<ChangesTable rows={[change()]} />);
+    render(<ChangesTable rows={[change()]} timeZone="UTC" />);
     const table = screen.getByRole('table', { name: 'Changes, newest first' });
     expect(within(table).getByRole('link', { name: 'checkout v43 rollout' })).toHaveAttribute(
       'href',
@@ -136,6 +154,7 @@ describe('ChangesTable', () => {
   it('says a change is not scored instead of showing a zero, and omits absent links', () => {
     render(
       <ChangesTable
+        timeZone="UTC"
         rows={[
           change({
             riskScore: null,

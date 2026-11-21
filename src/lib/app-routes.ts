@@ -103,12 +103,21 @@ export function toMobilePath(pathname: string): string | null {
   if (
     SUPPORTED_MOBILE_ROUTE_PREFIXES.some(
       prefix => pathname === prefix || pathname.startsWith(`${prefix}/`)
-    )
+    ) &&
+    !DESKTOP_ONLY_ROUTES.some(route => pathname === route || pathname.startsWith(`${route}/`)) &&
+    // The mobile twin is the list and one record; deeper pages exist only where listed.
+    (pathname.split('/').length <= 3 || MOBILE_DEEP_ROUTES.some(route => route.test(pathname)))
   ) {
     return `/m${pathname}`;
   }
   return null;
 }
+
+/** Desktop pages one level deep that would otherwise land on a mobile record page (`/m/incidents/[id]`). */
+const DESKTOP_ONLY_ROUTES = ['/incidents/templates', '/policies/create', '/postmortems/create'];
+
+/** Mobile pages below a record (`/m/services/[id]/automation`); e.g. a service's integrations stay desktop. */
+const MOBILE_DEEP_ROUTES = [/^\/services\/[^/]+\/automation$/];
 
 export type ResponderRouteTarget =
   | { kind: 'home' }

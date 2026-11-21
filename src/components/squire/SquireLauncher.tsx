@@ -177,6 +177,8 @@ export default function SquireLauncher({
     aiEnabled ? 'ready' : 'disabled'
   );
   const [rateLimit, setRateLimit] = useState<SquireRateLimit | null>(null);
+  // Why a setting keeps AI out; shown once in the banner instead of on every answer.
+  const [policyReason, setPolicyReason] = useState<string | null>(null);
   const [attention, setAttention] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [historySearch, setHistorySearch] = useState('');
@@ -480,6 +482,7 @@ export default function SquireLauncher({
             mode?: 'ai' | 'basic';
             intent?: string;
             availability?: AiAvailability;
+            reason?: string;
             limit?: 'rate' | 'budget';
             attention?: boolean;
             id?: string;
@@ -500,6 +503,7 @@ export default function SquireLauncher({
             ['ready', 'disabled', 'quota', 'unavailable'].includes(event.availability)
           ) {
             setAvailability(event.availability);
+            setPolicyReason(typeof event.reason === 'string' ? event.reason.slice(0, 200) : null);
             if (event.availability === 'quota' && event.limit === 'rate')
               setRateLimit({ until: null });
           } else if (event.type === 'meta' && event.mode === 'ai') setAvailability('ready');
@@ -860,7 +864,8 @@ export default function SquireLauncher({
           onClick={() => setOpen(true)}
           aria-expanded={false}
           aria-controls={panelId}
-          className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-lg transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          // An open right-side sheet (Insights inspector) owns that corner; the launcher steps aside until it closes.
+          className={`flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-lg transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${side === 'left' ? '' : '[body:has([data-sheet-side=right][data-state=open])_&]:hidden'}`}
         >
           <SquireAvatar
             kind={avatar}
@@ -965,6 +970,7 @@ export default function SquireLauncher({
             <SquireAvailabilityNotice
               state={availabilityState}
               rateLimit={rateLimit}
+              reason={policyReason}
               canManageAi={canManageAi}
               canRetry={canRetry}
               onRetry={retryLatest}

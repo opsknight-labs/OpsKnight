@@ -1,18 +1,20 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { formatDateTime } from '@/lib/timezone';
 
 /**
  * Pieces shared by the alerts and changes lists. Server-renderable: no client JavaScript.
  */
 
-export const formatListWhen = (date: Date) =>
-  `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+/** In the viewer's time zone, labelled, as the other lists show times. */
+export const formatListWhen = (date: Date, timeZone: string) =>
+  formatDateTime(date, timeZone, { includeTimeZone: true });
 
-export function ListWhen({ value }: { value: Date }) {
+export function ListWhen({ value, timeZone }: { value: Date; timeZone: string }) {
   return (
     <time dateTime={value.toISOString()} className="whitespace-nowrap">
-      {formatListWhen(value)}
+      {formatListWhen(value, timeZone)}
     </time>
   );
 }

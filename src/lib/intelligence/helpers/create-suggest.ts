@@ -22,6 +22,8 @@ export interface DraftSuggestions {
     status: string;
     serviceName: string;
     similarity: number;
+    /** ISO time the incident opened, for "opened 20m ago". */
+    createdAt: string;
   } | null;
 }
 
@@ -94,6 +96,7 @@ export function suggestForDraft(
           status: duplicate.status,
           serviceName: duplicate.serviceName,
           similarity: Math.round(duplicate.similarity * 100) / 100,
+          createdAt: duplicate.createdAt.toISOString(),
         }
       : null,
   };

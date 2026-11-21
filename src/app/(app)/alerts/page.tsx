@@ -19,6 +19,7 @@ import {
 import { loadSection } from '@/lib/intelligence/overview';
 import { assertCapability, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { requirePageAccess } from '@/lib/access/server';
+import { getUserTimeZone } from '@/lib/timezone';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -35,7 +36,7 @@ export default async function AlertsPage({
   searchParams?: Promise<Record<string, ListParam>>;
 }) {
   await requirePageAccess('/alerts');
-  await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
+  const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const actor = await getCurrentAuthorizationActor();
   const filters = parseAlertListFilters((await searchParams) ?? {});
   const result = await loadSection('alerts', () => listAlertsForActor(actor, filters));
@@ -121,7 +122,9 @@ export default async function AlertsPage({
         />
       ) : (
         <>
-          {result.data.rows.length > 0 && <AlertsTable rows={result.data.rows} />}
+          {result.data.rows.length > 0 && (
+            <AlertsTable rows={result.data.rows} timeZone={getUserTimeZone(user)} />
+          )}
           {result.data.servicesTruncated && (
             <p className="text-xs text-muted-foreground">
               The service filter lists the first 200 services by name.

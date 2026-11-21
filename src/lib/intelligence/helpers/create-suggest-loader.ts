@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { withDbBudget } from '../jobs/db-budget';
-import { buildIncidentFingerprint } from '../normalization';
+import { buildIncidentFingerprint, extractTokens } from '../normalization';
 import { getIntelligenceSettings } from '../settings/service';
 import { detectCapabilities } from '../similarity/capabilities';
 import {
@@ -101,10 +101,20 @@ export async function suggestForIncidentDraft(
 
   const query = { ...fingerprint, serviceId: '', incidentCreatedAt: now, resolvedAt: null };
   const idf = (token: string) => inverseDocumentFrequency(token, frequencies);
+  // A draft is often just a title. Past incidents' words include their (alert) descriptions, so an
+  // identical title would score far below the duplicate bar; compare like with like.
+  const titleOnly = !draft.description?.trim();
   const similarity = new Map(
     stored
       .map(row => {
-        const { components } = scoreSimilarity(query, toFingerprint(row), now, undefined, idf);
+        const candidate = toFingerprint(row);
+        const { components } = scoreSimilarity(
+          query,
+          titleOnly ? { ...candidate, tokens: extractTokens(row.template) } : candidate,
+          now,
+          undefined,
+          idf
+        );
         return [row.incidentId, combinedContent(components)] as const;
       })
       .filter(([, value]) => value >= SUGGEST_MIN_SIMILARITY)

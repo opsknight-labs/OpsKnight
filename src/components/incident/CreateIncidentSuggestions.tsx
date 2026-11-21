@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { suggestForIncidentDraftAction } from '@/app/(app)/incidents/helper-actions';
 import { Button } from '@/components/ui/shadcn/button';
 import type { DraftSuggestions } from '@/lib/intelligence/helpers/create-suggest';
+import { incidentRef } from '@/lib/intelligence/incident-ux/explain';
+import { formatRelativeShort } from '@/lib/mobile-time';
 
 const DEBOUNCE_MS = 500;
 const MIN_TITLE_CHARS = 8;
@@ -12,6 +14,11 @@ const URGENCY_LABEL: Record<string, string> = { HIGH: 'High', MEDIUM: 'Medium', 
 const CHIP_CLASS = 'min-h-11 rounded-xl px-3 text-xs';
 
 type Urgency = 'HIGH' | 'MEDIUM' | 'LOW';
+
+const openedAgo = (iso: string) => {
+  const age = formatRelativeShort(iso);
+  return age === 'Just now' ? 'just now' : age;
+};
 
 /**
  * Suggestions under the title while an incident is typed: a likely service and urgency from past
@@ -89,16 +96,18 @@ export default function CreateIncidentSuggestions({
     >
       {duplicate && (
         <p>
-          Possibly already open:{' '}
+          Possible duplicate:{' '}
           <Link
             href={`${incidentHrefBase}/${duplicate.incidentId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-2 hover:text-primary"
           >
-            {duplicate.title}
+            {incidentRef(duplicate.incidentId)} {duplicate.title}
           </Link>{' '}
-          <span>in {duplicate.serviceName}</span>
+          <span>
+            in {duplicate.serviceName}, opened {openedAgo(duplicate.createdAt)}
+          </span>
         </p>
       )}
       {(service || suggestedUrgency) && (

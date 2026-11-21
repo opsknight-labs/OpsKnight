@@ -13,9 +13,9 @@ const allInsights = (on: boolean) =>
   >;
 
 const state = (overrides: Partial<SetupState> = {}): SetupState => ({
-  settings: { enabled: false, revision: 1, ...allInsights(false) },
+  settings: { enabled: false, revision: 1, opsHelpersEnabled: false, ...allInsights(false) },
   policy: { version: 1, mode: 'OFF', triageEnabled: false },
-  noise: { revision: 1, mode: 'OFF' },
+  noise: { revision: 1, mode: 'OFF', detectorsOn: false },
   squireEnabled: false,
   ...overrides,
 });
@@ -27,6 +27,7 @@ describe('setupChecklist', () => {
       ['engine', false, true],
       ['triage', false, true],
       ['insights', false, true],
+      ['helpers', false, true],
       ['noise', false, true],
       ['assistant', false, false],
     ]);
@@ -40,15 +41,23 @@ describe('setupChecklist', () => {
     expect(shadow.find(item => item.id === 'triage')!.on).toBe(false);
     const on = setupChecklist(
       state({
-        settings: { enabled: true, revision: 3, ...allInsights(true) },
+        settings: { enabled: true, revision: 3, opsHelpersEnabled: true, ...allInsights(true) },
         policy: { version: 2, mode: 'SUGGEST', triageEnabled: true },
-        noise: { revision: 2, mode: 'SHADOW' },
+        noise: { revision: 2, mode: 'SHADOW', detectorsOn: true },
       })
     );
     expect(on.filter(item => !item.on).map(item => item.id)).toEqual(['assistant']);
+    // Shadow with every detector off records nothing, so the preset still offers it.
+    expect(
+      setupChecklist(state({ noise: { revision: 2, mode: 'SHADOW', detectorsOn: false } })).find(
+        item => item.id === 'noise'
+      )!.on
+    ).toBe(false);
     const partial = { ...allInsights(true), [OPS_INSIGHT_SWITCHES[0]]: false };
     expect(
-      setupChecklist(state({ settings: { enabled: true, revision: 1, ...partial } })).find(
+      setupChecklist(
+        state({ settings: { enabled: true, revision: 1, opsHelpersEnabled: true, ...partial } })
+      ).find(
         item => item.id === 'insights'
       )!.on
     ).toBe(false);

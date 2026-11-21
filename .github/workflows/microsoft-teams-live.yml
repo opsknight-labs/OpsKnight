@@ -14,7 +14,6 @@ jobs:
   live-tenant-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment: microsoft-teams-e2e
     env:
       TEAMS_E2E_TENANT_ID: ${{ secrets.TEAMS_E2E_TENANT_ID }}
       TEAMS_E2E_CLIENT_ID: ${{ secrets.TEAMS_E2E_CLIENT_ID }}
