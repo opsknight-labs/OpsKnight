@@ -5,6 +5,8 @@ import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getSloBurn, type ServiceBurn } from '@/lib/slo/burn';
+import { getSloBurnHistory, listServiceSloAlerts } from '@/lib/slo/burn-alerts/service';
+import type { SloAlertPolicyView, SloBurnHistory } from '@/lib/slo/burn-alerts/contract';
 import {
   MIN_INCIDENTS_FOR_QUALITY,
   NOISY_THRESHOLD,
@@ -261,6 +263,31 @@ export function getServiceSloBurn(
   client: typeof prisma = prisma
 ): Promise<ServiceBurn | null> {
   return getSloBurn(access.service.id, now, client);
+}
+
+export interface ServiceSloAlert {
+  policy: SloAlertPolicyView;
+  /** The last day of measurements; only for enabled policies (at most three). */
+  history: SloBurnHistory | null;
+}
+
+/** Burn-rate alert policies of the service, with recent history for the enabled ones. */
+export async function getServiceSloAlerts(
+  access: ServiceIntelligenceAccess,
+  now: Date = new Date(),
+  client: typeof prisma = prisma
+): Promise<ServiceSloAlert[]> {
+  const policies = await listServiceSloAlerts(access.service.id, client);
+  let charted = 0;
+  return Promise.all(
+    policies.map(async policy => ({
+      policy,
+      history:
+        policy.enabled && charted++ < 3
+          ? await getSloBurnHistory(policy.objectiveId, 24, now, client)
+          : null,
+    }))
+  );
 }
 
 export interface ServiceAlertQuality {
