@@ -823,7 +823,9 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
   await login(page);
   await noOverflow(page);
   await page.getByRole('searchbox', { name: 'Search runbooks' }).first().fill('UI Service');
-  await expect(page.getByRole('link', { name: 'UI Service Recovery', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'UI Service Recovery', exact: true }).first()
+  ).toBeVisible();
   for (const route of [
     '/runbooks/agents',
     '/runbooks/health',
@@ -884,7 +886,7 @@ test('large workflows retain keyboard navigation, theme layout and zoom-equivale
   browserName,
 }) => {
   await login(page);
-  await page.locator(`a[href="/runbooks/${runbookId}"]`).first().click();
+  await page.locator(`a[href="/runbooks/${runbookId}"]`).filter({ visible: true }).first().click();
   await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
   // Preserve a real forward entry before making the draft dirty.
   await page.evaluate(() => history.pushState(null, '', `${location.pathname}?history=forward`));
