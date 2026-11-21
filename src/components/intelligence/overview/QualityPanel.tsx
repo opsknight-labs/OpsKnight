@@ -75,6 +75,7 @@ function ServiceList({
               <span className="break-words">{row.serviceName}</span>
               {row.teamName && (
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  <span className="sr-only">, team </span>
                   {row.teamName}
                 </span>
               )}

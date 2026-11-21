@@ -159,7 +159,8 @@ export default function IncidentInsightsInspector({
               'flex max-h-[85dvh] flex-col gap-0 rounded-t-2xl p-0 motion-reduce:!animate-none motion-reduce:!transition-none [&>button]:h-11 [&>button]:w-11'
             : // Above the page chrome (sidebar 30), below the assistant (40), which it must never cover.
               // A docked assistant owns the right edge (--squire-dock-width); the panel sits beside it.
-              'z-[35] flex w-full flex-col gap-0 p-0 sm:max-w-xl lg:right-[var(--squire-dock-width,0px)] motion-reduce:!animate-none motion-reduce:!transition-none'
+              // Starts under the fixed app header (top-14, as the sidebar and dock) so its title and close stay visible.
+              'top-14 h-auto z-[35] flex w-full flex-col gap-0 p-0 sm:max-w-xl lg:right-[var(--squire-dock-width,0px)] motion-reduce:!animate-none motion-reduce:!transition-none'
         }
       >
         {!bottom && (

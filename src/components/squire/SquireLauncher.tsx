@@ -860,7 +860,8 @@ export default function SquireLauncher({
           onClick={() => setOpen(true)}
           aria-expanded={false}
           aria-controls={panelId}
-          className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-lg transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          // An open right-side sheet (Insights inspector) owns that corner; the launcher steps aside until it closes.
+          className={`flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-lg transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${side === 'left' ? '' : '[body:has([data-sheet-side=right][data-state=open])_&]:hidden'}`}
         >
           <SquireAvatar
             kind={avatar}
