@@ -60,6 +60,8 @@ export async function getIncidentChatOpsCapabilities(input: {
     canSnooze: canManage,
     canEscalate,
     canJoinResponder: canRead,
-    canTakeCommand: canAcknowledge && commander?.userId !== input.userId,
+    // Same rule as the role command: operators may only take a vacant commander role.
+    canTakeCommand:
+      canAcknowledge && commander?.userId !== input.userId && (!commander || canManage),
   };
 }

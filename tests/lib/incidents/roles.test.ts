@@ -7,7 +7,11 @@ import {
   roleOperatorIds,
   summarizeIncidentRoles,
 } from '@/lib/incidents/roles';
-import { canChangeIncidentRole } from '@/lib/incidents/role-authorization';
+import {
+  canChangeIncidentRole,
+  decideIncidentRoleChange,
+  incidentRoleDenialMessage,
+} from '@/lib/incidents/role-authorization';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/prisma', () => ({ default: { $transaction: vi.fn() } }));
@@ -127,6 +131,59 @@ describe('canChangeIncidentRole', () => {
         targetUserId: 'u-1',
       })
     ).toBe(false);
+  });
+});
+
+describe('occupied versus vacant roles', () => {
+  const operatorResource = resource({ assigneeId: 'u-1', visibility: 'PRIVATE' });
+  const take = (overrides: Partial<Parameters<typeof decideIncidentRoleChange>[0]>) =>
+    decideIncidentRoleChange({
+      actor: actor('USER'),
+      resource: operatorResource,
+      targetUserId: 'u-1',
+      currentHolderId: null,
+      commanderId: null,
+      ...overrides,
+    });
+
+  it('lets an operator take a vacant role or keep their own', () => {
+    expect(take({})).toEqual({ allowed: true });
+    expect(take({ currentHolderId: 'u-1' })).toEqual({ allowed: true });
+  });
+
+  it('never lets an operator evict another holder, the commander included', () => {
+    expect(take({ currentHolderId: 'u-9', commanderId: 'u-9' })).toEqual({
+      allowed: false,
+      reason: 'OCCUPIED',
+    });
+    expect(take({ currentHolderId: 'u-9' })).toEqual({ allowed: false, reason: 'OCCUPIED' });
+    expect(take({ currentHolderId: 'u-9', targetUserId: null })).toEqual({
+      allowed: false,
+      reason: 'NOT_PERMITTED',
+    });
+  });
+
+  it('lets responders, admins and the commander reassign an occupied role', () => {
+    expect(take({ actor: actor('RESPONDER'), currentHolderId: 'u-9' }).allowed).toBe(true);
+    expect(take({ actor: actor('ADMIN'), currentHolderId: 'u-9' }).allowed).toBe(true);
+    expect(
+      take({
+        resource: resource({ roleOperatorIds: ['u-1'], visibility: 'PRIVATE' }),
+        commanderId: 'u-1',
+        currentHolderId: 'u-9',
+        targetUserId: 'u-2',
+      }).allowed
+    ).toBe(true);
+  });
+
+  it('names the holder and the way out when a role is taken', () => {
+    expect(
+      incidentRoleDenialMessage(
+        { allowed: false, reason: 'OCCUPIED' },
+        'Incident commander',
+        'Grace'
+      )
+    ).toBe('Incident commander is held by Grace; ask the commander or a responder to reassign it.');
   });
 });
 

@@ -4,8 +4,12 @@ import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resolveIncidentResourceForActor } from '@/lib/access/incident-relations';
-import { canChangeIncidentRole } from '@/lib/incidents/role-authorization';
-import { INCIDENT_ROLE_KEYS, type IncidentRoleKey } from '@/lib/incidents/roles';
+import {
+  canChangeIncidentRole,
+  decideIncidentRoleChange,
+  incidentRoleDenialMessage,
+} from '@/lib/incidents/role-authorization';
+import { INCIDENT_ROLE_KEYS, getIncidentRole, type IncidentRoleKey } from '@/lib/incidents/roles';
 
 export type IncidentRoleAccess = {
   /** May set this role to anyone (manager, or the commander handing out roles). */
@@ -65,24 +69,27 @@ export async function assertCanChangeIncidentRole(
     resolveIncidentResourceForActor(actor, incidentId),
     prisma.incidentRoleAssignment.findMany({
       where: { incidentId },
-      select: { roleKey: true, userId: true },
+      select: { roleKey: true, userId: true, user: { select: { name: true } } },
     }),
   ]);
   if (!resource) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
-  const holderOf = (key: string) => assignments.find(a => a.roleKey === key)?.userId ?? null;
-  const allowed = canChangeIncidentRole({
+  const holder = (key: string) => assignments.find(a => a.roleKey === key) ?? null;
+  const decision = decideIncidentRoleChange({
     actor,
     resource,
     targetUserId,
-    currentHolderId: holderOf(roleKey),
-    commanderId: holderOf('COMMANDER'),
+    currentHolderId: holder(roleKey)?.userId ?? null,
+    commanderId: holder('COMMANDER')?.userId ?? null,
   });
-  if (!allowed) {
+  if (!decision.allowed) {
     throw new AppError({
       code: 'INCIDENT_MODIFY_DENIED',
-      userMessage:
-        'You cannot change this role. Operators can take a role themselves, the commander can hand roles out, and Responders and Admins can set any role.',
-      details: { incidentId, roleKey },
+      userMessage: incidentRoleDenialMessage(
+        decision,
+        getIncidentRole(roleKey).label,
+        holder(roleKey)?.user.name ?? null
+      ),
+      details: { incidentId, roleKey, reason: decision.reason },
     });
   }
 }

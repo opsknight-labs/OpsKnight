@@ -25,9 +25,13 @@ import { effectiveAccessSelect } from '@/lib/access/effective';
 import { isPagedForIncident } from '@/lib/access/incident-relations';
 import { getAccessControlSettings } from '@/lib/access/settings';
 import { assignIncidentRoleCommand } from '@/lib/incidents/roles-command';
-import { canChangeIncidentRole } from '@/lib/incidents/role-authorization';
+import {
+  decideIncidentRoleChange,
+  incidentRoleDenialMessage,
+} from '@/lib/incidents/role-authorization';
 import {
   INCIDENT_ROLE_RELATION_SELECT,
+  getIncidentRole,
   incidentRoleRelations,
   type IncidentRoleKey,
 } from '@/lib/incidents/roles';
@@ -307,19 +311,29 @@ export async function executeChatOpsRole(input: {
     );
     const holderOf = (key: string) =>
       incident.roleAssignments.find(a => a.roleKey === key)?.userId ?? null;
-    if (
-      !canChangeIncidentRole({
-        actor,
-        resource,
-        targetUserId: input.targetUserId,
-        currentHolderId: holderOf(input.roleKey),
-        commanderId: holderOf('COMMANDER'),
-      })
-    ) {
+    const decision = decideIncidentRoleChange({
+      actor,
+      resource,
+      targetUserId: input.targetUserId,
+      currentHolderId: holderOf(input.roleKey),
+      commanderId: holderOf('COMMANDER'),
+    });
+    if (!decision.allowed) {
+      const holderId = holderOf(input.roleKey);
+      const holder = holderId
+        ? await tx.user.findUnique({ where: { id: holderId }, select: { name: true } })
+        : null;
       throw new AppError({
         code: 'INCIDENT_ACCESS_DENIED',
-        userMessage: `You cannot change roles on this incident. ${CHATOPS_ACCESS_HINT}`,
-        details: { incidentId: input.incidentId, roleKey: input.roleKey },
+        userMessage:
+          decision.reason === 'OCCUPIED'
+            ? incidentRoleDenialMessage(
+                decision,
+                getIncidentRole(input.roleKey).label,
+                holder?.name ?? null
+              )
+            : `You cannot change roles on this incident. ${CHATOPS_ACCESS_HINT}`,
+        details: { incidentId: input.incidentId, roleKey: input.roleKey, reason: decision.reason },
       });
     }
     const execution = await executeIdempotentOperation(tx, {
