@@ -2,9 +2,9 @@ name: Security Suite
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   schedule:
     - cron: '0 0 * * *' # Run daily to catch new vulnerabilities
   workflow_dispatch:

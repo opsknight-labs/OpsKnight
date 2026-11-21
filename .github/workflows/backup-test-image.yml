@@ -40,6 +40,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/opsknightlabs/opsknight-test:latest
+            ghcr.io/opsknightlabs/opsknight-test:develop
             ghcr.io/opsknightlabs/opsknight-test:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/OpsKnightLabs/OpsKnight-backup

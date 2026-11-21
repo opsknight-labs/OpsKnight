@@ -18,37 +18,39 @@ This document establishes the machine-readable inventory and classification of O
 
 ## 2. CI Workflow & Job Inventory
 
-Pull requests run a light required gate. Heavy suites run on `main` in 6-hourly batches (`main-heavy.yml` starts each suite whose paths changed since the last batch), on tags or `workflow_dispatch`, and on a pull request only when the **`ci:full`** label is added. "main batch" below means the suite runs from `main-heavy.yml`, not on every merge. "PR (`ci:full`)" below means the job is skipped on unlabelled pull requests. Path filters still apply when the label is present. The label is one-shot: the suites run on the `labeled` event only, not on later pushes, so remove and re-add it to run them again.
+Branching (Git Flow), image channels and the release/hotfix procedure are in [`RELEASING.md`](RELEASING.md).
+
+Pull requests run a light required gate. Heavy suites run on `develop` in 6-hourly batches (`main-heavy.yml` starts each suite whose paths changed since the last batch), on tags or `workflow_dispatch`, and on a pull request only when the **`ci:full`** label is added. "batch" below means the suite runs from `main-heavy.yml` on `develop`, not on every merge. "PR (`ci:full`)" below means the job is skipped on unlabelled pull requests. Path filters still apply when the label is present. The label is one-shot: the suites run on the `labeled` event only, not on later pushes, so remove and re-add it to run them again.
 
 ```
 +------------------------------------------------------------------------------------------------------------------------------------------+
 | Workflow                         | Job                        | Layer | DB? | Build?  | Docker? | Trigger                               |
 +------------------------------------------------------------------------------------------------------------------------------------------+
-| tests.yml                        | static-validation          | L0    | No  | No      | No      | PR, push main                         |
-| tests.yml                        | unit-tests                 | L1    | No  | No      | No      | PR, push main                         |
-| tests.yml                        | db-integration (4 shards)  | L2    | Yes | No      | No      | PR, push main                         |
-| tests.yml                        | ingestion-durability       | L2    | Yes | No      | No      | PR, push main                         |
-| tests.yml                        | database-secret-scripts    | L2    | Yes | No      | No      | PR, push main                         |
-| tests.yml                        | build                      | Gate  | No  | Yes     | No      | PR, push main                         |
-| tests.yml                        | test (aggregate, required) | Gate  | No  | No      | No      | PR, push main                         |
-| security.yml                     | Security Summary (req.)    | Sec   | No  | No      | No      | PR, push main, daily                  |
-| e2e.yml                          | auth / mobile / dashboard  | L3    | Yes | Once    | No      | main batch, PR (ci:full), dispatch    |
+| tests.yml                        | static-validation          | L0    | No  | No      | No      | PR, push develop/main                 |
+| tests.yml                        | unit-tests                 | L1    | No  | No      | No      | PR, push develop/main                 |
+| tests.yml                        | db-integration (4 shards)  | L2    | Yes | No      | No      | PR, push develop/main                 |
+| tests.yml                        | ingestion-durability       | L2    | Yes | No      | No      | PR, push develop/main                 |
+| tests.yml                        | database-secret-scripts    | L2    | Yes | No      | No      | PR, push develop/main                 |
+| tests.yml                        | build                      | Gate  | No  | Yes     | No      | PR, push develop/main                 |
+| tests.yml                        | test (aggregate, required) | Gate  | No  | No      | No      | PR, push develop/main                 |
+| security.yml                     | Security Summary (req.)    | Sec   | No  | No      | No      | PR, push develop/main, daily          |
+| e2e.yml                          | auth / mobile / dashboard  | L3    | Yes | Once    | No      | batch, PR (ci:full), dispatch         |
 | docker-image.yml                 | build + image checks       | Cert  | Yes | Docker  | Yes     | push main, tags, PR (ci:full)         |
 | docker-image.yml                 | release-quality            | Cert  | Yes | Docker  | Yes     | Tags (v*)                             |
-| runbook-validation.yml           | runbook / agent suites     | L3/Cert | Yes | Yes   | Yes     | main batch, tags, PR (ci:full)        |
-| swarm-validation.yml             | L0, L1-L5                  | Cert  | Yes | Docker  | Yes     | main batch, via runbook               |
-| deployment-validation.yml        | validate                   | L0/L2 | No  | No      | No      | main batch, via runbook               |
-| mcp-certification.yml            | MCP PR validation          | L2    | Yes | Yes     | No      | main batch, PR (ci:full), dispatch    |
-| automation-validation.yml        | automation                 | L3    | Yes | Yes     | No      | main batch, PR (ci:full, paths)       |
-| enterprise-sso-certification.yml | authentication / browser   | Cert  | Yes | Yes     | No      | main batch, PR (ci:full, paths)       |
-| scim-certification.yml           | certify                    | Cert  | Yes | Yes     | No      | main batch, PR (ci:full, paths)       |
-| microsoft-teams-e2e.yml          | teams-e2e                  | L3    | Yes | Yes     | No      | main batch, PR (ci:full, paths)       |
-| integration-certification.yml    | failover-load              | Cert  | Yes | Docker  | Yes     | main batch, weekly, tags, PR (ci:full) |
-| sbom-validation.yml              | validate                   | Sec   | No  | No      | No      | main batch, tags, dispatch            |
+| runbook-validation.yml           | runbook / agent suites     | L3/Cert | Yes | Yes   | Yes     | batch, tags, PR (ci:full)             |
+| swarm-validation.yml             | L0, L1-L5                  | Cert  | Yes | Docker  | Yes     | batch, via runbook                    |
+| deployment-validation.yml        | validate                   | L0/L2 | No  | No      | No      | batch, via runbook                    |
+| mcp-certification.yml            | MCP PR validation          | L2    | Yes | Yes     | No      | batch, PR (ci:full), dispatch         |
+| automation-validation.yml        | automation                 | L3    | Yes | Yes     | No      | batch, PR (ci:full, paths)            |
+| enterprise-sso-certification.yml | authentication / browser   | Cert  | Yes | Yes     | No      | batch, PR (ci:full, paths)            |
+| scim-certification.yml           | certify                    | Cert  | Yes | Yes     | No      | batch, PR (ci:full, paths)            |
+| microsoft-teams-e2e.yml          | teams-e2e                  | L3    | Yes | Yes     | No      | batch, PR (ci:full, paths)            |
+| integration-certification.yml    | failover-load              | Cert  | Yes | Docker  | Yes     | batch, weekly, tags, PR (ci:full)      |
+| sbom-validation.yml              | validate                   | Sec   | No  | No      | No      | batch, tags, dispatch                 |
 | main-heavy.yml                   | batch dispatcher           | CI    | No  | No      | No      | every 6h, dispatch (force)            |
 | actions-budget.yml               | minutes budget alarm       | CI    | No  | No      | No      | every 6h, dispatch                    |
-| backup-mirror.yml                | mirror to OpsKnightLabs    | CI    | No  | No      | No      | push main, tags, dispatch             |
-| backup-test-image.yml            | test image (backup only)   | Img   | No  | Docker  | No      | push main in backup repo              |
+| backup-mirror.yml                | mirror to OpsKnightLabs    | CI    | No  | No      | No      | push develop, tags, dispatch          |
+| backup-test-image.yml            | test image (backup only)   | Img   | No  | Docker  | No      | push main in backup (= develop)       |
 | auth-e2e.yml / mobile-pwa-e2e.yml| standalone browser suites  | L3    | Yes | Yes     | No      | workflow_dispatch (debugging)         |
 +------------------------------------------------------------------------------------------------------------------------------------------+
 ```
