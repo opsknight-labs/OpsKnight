@@ -153,7 +153,7 @@ Docker Swarm lacks Compose's `depends_on: { condition: service_completed_success
 export OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight@sha256:<tested-manifest-digest>"
 ./deploy/swarm/scripts/deploy.sh
 
-# Or deploy the integrated runtime stack (defaults to the stable 2.2.1 image):
+# Or deploy the integrated runtime stack (defaults to the stable 2.2.2 image):
 SWARM_RUNTIME_MODE=integrated ./deploy/swarm/scripts/deploy.sh
 ```
 
@@ -233,7 +233,7 @@ docker stack ps opsknight --no-trunc
 ```bash
 # Update web tier image with automated rollback on failure
 docker service update \
-  --image ghcr.io/opsknight-labs/opsknight:2.2.1 \
+  --image ghcr.io/opsknight-labs/opsknight:2.2.2 \
   --update-parallelism 1 \
   --update-delay 10s \
   --update-failure-action rollback \
