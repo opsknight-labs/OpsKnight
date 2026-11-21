@@ -38,7 +38,13 @@ function LinkedIncidents({ row }: { row: ChangeListRow }) {
  * fold under the summary, and the extra columns appear from `md` up. Risk is a ranking signal, so its
  * band label always accompanies the colour.
  */
-export default function ChangesTable({ rows }: { rows: readonly ChangeListRow[] }) {
+export default function ChangesTable({
+  rows,
+  timeZone,
+}: {
+  rows: readonly ChangeListRow[];
+  timeZone: string;
+}) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <table className="w-full table-fixed border-collapse" data-testid="changes-table">
@@ -78,7 +84,7 @@ export default function ChangesTable({ rows }: { rows: readonly ChangeListRow[] 
                   <span className="md:hidden">{row.source}</span>
                   <span className="break-words md:hidden">{row.serviceName ?? 'No service'}</span>
                   <span className="md:hidden">
-                    <ListWhen value={row.occurredAt} />
+                    <ListWhen value={row.occurredAt} timeZone={timeZone} />
                   </span>
                 </div>
                 <div className="mt-1 space-y-1 md:hidden">
@@ -108,7 +114,7 @@ export default function ChangesTable({ rows }: { rows: readonly ChangeListRow[] 
                 <LinkedIncidents row={row} />
               </td>
               <td className={`${listCellClass} hidden text-muted-foreground md:table-cell`}>
-                <ListWhen value={row.occurredAt} />
+                <ListWhen value={row.occurredAt} timeZone={timeZone} />
               </td>
             </tr>
           ))}
