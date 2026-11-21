@@ -822,7 +822,7 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await noOverflow(page);
-  await page.getByRole('textbox', { name: 'Search runbooks' }).fill('UI Service');
+  await page.getByLabel('Search runbooks').fill('UI Service');
   await expect(page.getByRole('heading', { name: 'UI Service Recovery' }).first()).toBeVisible();
   for (const route of [
     '/runbooks/agents',
