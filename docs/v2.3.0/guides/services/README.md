@@ -27,3 +27,6 @@ To attach remediation workflows and configure incident-created triggers, follow
 
 Pause paging during planned work with
 [maintenance windows](./maintenance-windows), one-off or recurring.
+
+Group services into what customers rely on with
+[business services](./business-services).
