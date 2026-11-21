@@ -455,6 +455,12 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Concrete revision fences retirement; archived state changes the strong ETag. Immutable history and snapshots remain readable. Canonical audit and replay commit with retirement.',
   },
+  'PUT /api/v2/service-objectives/[id]/alert-policy': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Full replacement of the burn-rate alert policy of one objective lineage; repeating the same body leaves the same policy. Validation, audit and replay commit together. Saving does no network I/O.',
+  },
   'POST /api/v2/service-objectives/[id]/evaluate': {
     idempotency: 'required',
     concurrency: 'none',

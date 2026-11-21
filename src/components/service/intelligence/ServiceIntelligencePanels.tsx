@@ -7,7 +7,10 @@ import {
   type ServiceBurn,
 } from '@/lib/slo/burn';
 import type { RecurringProblem } from '@/lib/intelligence/insights/service';
+import { SloAlertStateBadge } from './SloAlertStateBadge';
+import SloBurnChart from './SloBurnChart';
 import type {
+  ServiceSloAlert,
   ServiceAlertQuality,
   ServiceAutoGate,
   ServiceChangeRow,
@@ -185,7 +188,13 @@ function BurnMeter({ label, rate, threshold }: { label: string; rate: number; th
   );
 }
 
-export function SloBurnPanel({ burn }: { burn: ServiceBurn | null }) {
+export function SloBurnPanel({
+  burn,
+  alerts = [],
+}: {
+  burn: ServiceBurn | null;
+  alerts?: readonly ServiceSloAlert[];
+}) {
   if (!burn || burn.objectives.length === 0) return null;
   return (
     <OverviewSection
@@ -198,34 +207,43 @@ export function SloBurnPanel({ burn }: { burn: ServiceBurn | null }) {
         <StatTile label="Downtime, last 6 hours" value={`${burn.downtimeMinutes.slow} min`} />
       </StatGrid>
       <ul aria-label="Objectives" className={cn('divide-y divide-border', OVERVIEW_CHART_VARS)}>
-        {burn.objectives.map(objective => (
-          <li key={objective.objectiveId} className="space-y-2 py-3 first:pt-0">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <p className="min-w-0 break-words text-sm font-medium">
-                {objective.name}
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  target {objective.targetPercent}%
-                  {objective.budgetMinutes !== null
-                    ? ` · ${objective.budgetMinutes} min budget`
-                    : ''}
+        {burn.objectives.map(objective => {
+          const alert = alerts.find(item => item.policy.objectiveId === objective.objectiveId);
+          return (
+            <li key={objective.objectiveId} className="space-y-2 py-3 first:pt-0">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p className="min-w-0 break-words text-sm font-medium">
+                  {objective.name}
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    target {objective.targetPercent}%
+                    {objective.budgetMinutes !== null
+                      ? ` · ${objective.budgetMinutes} min budget`
+                      : ''}
+                  </span>
+                </p>
+                <span className="flex flex-wrap items-center gap-2">
+                  {alert && (
+                    <SloAlertStateBadge state={alert.policy.state} enabled={alert.policy.enabled} />
+                  )}
+                  <BurnStatus severity={objective.severity} />
                 </span>
-              </p>
-              <BurnStatus severity={objective.severity} />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <BurnMeter
-                label="Last hour"
-                rate={objective.fastBurn}
-                threshold={FAST_BURN_CRITICAL}
-              />
-              <BurnMeter
-                label="Last 6 hours"
-                rate={objective.slowBurn}
-                threshold={SLOW_BURN_CRITICAL}
-              />
-            </div>
-          </li>
-        ))}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <BurnMeter
+                  label="Last hour"
+                  rate={objective.fastBurn}
+                  threshold={FAST_BURN_CRITICAL}
+                />
+                <BurnMeter
+                  label="Last 6 hours"
+                  rate={objective.slowBurn}
+                  threshold={SLOW_BURN_CRITICAL}
+                />
+              </div>
+              {alert?.history && <SloBurnChart history={alert.history} name={objective.name} />}
+            </li>
+          );
+        })}
       </ul>
     </OverviewSection>
   );

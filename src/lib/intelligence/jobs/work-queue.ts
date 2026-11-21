@@ -52,6 +52,8 @@ export const WORK_KINDS = {
   FIT_RUNBOOK_WEIGHTS: 'FIT_RUNBOOK_WEIGHTS',
   /** Noise-control follow-ups (subject `unsuppress` or `storm-cascade`); see noise-controls/sweep.ts. */
   NOISE_SWEEP: 'NOISE_SWEEP',
+  /** Evaluates one SLO burn-rate alert policy (subject = policy id); see slo/burn-alerts/evaluate.ts. Opt-in. */
+  EVALUATE_SLO_POLICY: 'EVALUATE_SLO_POLICY',
 } as const;
 export type WorkKind = (typeof WORK_KINDS)[keyof typeof WORK_KINDS];
 
@@ -78,6 +80,8 @@ export const WORK_PRIORITY: Record<WorkKind, number> = {
   FIT_RUNBOOK_WEIGHTS: 65,
   // Pages incidents a noise decision held back once the reason ended: ahead of analysis backlogs.
   NOISE_SWEEP: 8,
+  // A burn alert can page: ahead of evidence and analysis backlogs, behind live-incident work.
+  EVALUATE_SLO_POLICY: 20,
 };
 
 export const MAX_WORK_ATTEMPTS = 8;

@@ -12,6 +12,7 @@ export const MCP_SEARCH_KEYWORDS = new Map<string, readonly string[]>([
   ['addIncidentNote', ['comment', 'update']],
   ['createIncident', ['raise', 'declare', 'trigger', 'new']],
   ['listServiceObjectives', ['slo', 'sla', 'error budget', 'reliability', 'breach', 'at risk']],
+  ['getServiceObjectiveAlertPolicy', ['burn rate', 'burn alert']],
   ['getServiceSlaPolicy', ['sla', 'target', 'response time', 'resolve time']],
   [
     'listServiceChangeEvents',

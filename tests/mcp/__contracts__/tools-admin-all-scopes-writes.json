@@ -377,7 +377,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "8fbbcc1ce9f1cd503252a89b006720457c769b89cb9b8ea9c054f940dec9f73e",
+    "inputSchemaSha256": "a3b66549eb8fe0bb74d8f2a9a0c989902ebed91468d983402d0018e627199f9f",
     "descriptionSha256": "57c12cb6a7474e26672530e10249aebe03b8f5c436fafd66a4ba26e8e7ebf8bd"
   },
   {
@@ -567,7 +567,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "963a9bc00099f8eb7b7f700dd15196287ea326ce333dde2901634cf06ab985d3",
+    "inputSchemaSha256": "a65915294ae663544a4753a54497c3fb2b52f269826fc51c1bf6a5ca13964b45",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {
@@ -605,6 +605,18 @@
     },
     "inputSchemaSha256": "47bdcd5243e8a0ce84a9a190f85c5b89962d7a04b615598eb02f9f70994193cc",
     "descriptionSha256": "2a8c979512a94a92b4546ab37aea50fd830d48fbbd885818e11f3f08779220dc"
+  },
+  {
+    "name": "slo_alert_policy_get",
+    "title": "Get objective burn-rate alert policy",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "ba90a5e437ec76d5ab725982363c3f00f084c6f35086fe44ecfdc57f3f624ae7",
+    "descriptionSha256": "c9a9bcca84b086286c8ae13f9a6576cedfcc3259a78e8dd04de76049572c46bb"
   },
   {
     "name": "status_page_get",

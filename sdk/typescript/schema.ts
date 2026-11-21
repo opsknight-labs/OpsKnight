@@ -737,6 +737,58 @@ export type ServiceObjectiveHistoryItem =
       periodEnd: string;
       record: ServiceObjectiveLegacySnapshot;
     };
+export type ServiceObjectiveAlertPolicy = {
+  objectiveId: string;
+  serviceId: string;
+  connectionId: string | null;
+  connectionName: string | null;
+  goodQuery: string;
+  totalQuery: string;
+  stepSeconds: number;
+  enabled: boolean;
+  ticketsEnabled: boolean;
+  state: 'OK' | 'TICKET' | 'PAGE';
+  stateSince: string;
+  lastEvaluatedAt: string | null;
+  lastStatus: string | null;
+  lastIncidentId: string | null;
+  coverageFrom: string | null;
+  updatedAt: string;
+};
+export type ServiceObjectiveBurnHistory = {
+  objectiveId: string;
+  targetPercent: number;
+  state: 'OK' | 'TICKET' | 'PAGE';
+  hours: number;
+  points: Array<{
+    at: string;
+    good: number;
+    total: number;
+    sli: number | null;
+    burn1h: number | null;
+  }>;
+  transitions: Array<{
+    from: 'OK' | 'TICKET' | 'PAGE';
+    to: 'OK' | 'TICKET' | 'PAGE';
+    at: string;
+    incidentId: string | null;
+    burnByWindow: {
+      '5m': number | null;
+      '30m': number | null;
+      '1h': number | null;
+      '2h': number | null;
+      '6h': number | null;
+      '1d': number | null;
+      '3d': number | null;
+    };
+  }>;
+  tiers: Array<{
+    tier: 'PAGE' | 'TICKET';
+    long: '5m' | '30m' | '1h' | '2h' | '6h' | '1d' | '3d';
+    short: '5m' | '30m' | '1h' | '2h' | '6h' | '1d' | '3d';
+    threshold: number;
+  }>;
+};
 export type ServiceObjectiveEvaluation = {
   objectiveId: string;
   metric: 'UPTIME' | 'AVAILABILITY' | 'MTTA' | 'MTTR' | 'LATENCY_P99' | 'ERROR_RATE';
@@ -2967,6 +3019,19 @@ export interface OperationRequests {
     body: { expectedVersionId: string; start?: string; end?: string };
   };
   getServiceObjectiveEvaluation: { params: { id: string; evaluationId: string } };
+  getServiceObjectiveAlertPolicy: { params: { id: string } };
+  updateServiceObjectiveAlertPolicy: {
+    params: { id: string };
+    headers: { 'Idempotency-Key': string };
+    body: {
+      connectionId: string;
+      goodQuery: string;
+      totalQuery: string;
+      enabled?: boolean;
+      ticketsEnabled?: boolean;
+    };
+  };
+  getServiceObjectiveBurnHistory: { params: { id: string }; query?: { hours?: number } };
   getStatusPagePublication: { params: { id: string } };
   retryStatusPagePublication: {
     params: { id: string };
@@ -4582,6 +4647,21 @@ export interface OperationResponses {
   } & Record<string, unknown>;
   getServiceObjectiveEvaluation: {
     data: ServiceObjectiveEvaluationJob;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getServiceObjectiveAlertPolicy: {
+    data: ServiceObjectiveAlertPolicy;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  updateServiceObjectiveAlertPolicy: {
+    data: ServiceObjectiveAlertPolicy;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getServiceObjectiveBurnHistory: {
+    data: ServiceObjectiveBurnHistory;
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
@@ -6423,6 +6503,30 @@ export const OPERATIONS = {
   getServiceObjectiveEvaluation: {
     method: 'GET',
     path: '/service-objectives/{id}/evaluations/{evaluationId}',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  getServiceObjectiveAlertPolicy: {
+    method: 'GET',
+    path: '/service-objectives/{id}/alert-policy',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  updateServiceObjectiveAlertPolicy: {
+    method: 'PUT',
+    path: '/service-objectives/{id}/alert-policy',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: true,
+  },
+  getServiceObjectiveBurnHistory: {
+    method: 'GET',
+    path: '/service-objectives/{id}/burn-history',
     kind: 'item',
     idempotency: null,
     requiredHeaders: [],
