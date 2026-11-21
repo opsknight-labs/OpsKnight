@@ -71,7 +71,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
 | `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 5 | 1 | 0 | 1 |
 | `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 25 | 12 | 2 | 16 |
+| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 24 | 12 | 2 | 16 |
 | `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  | ✓ | 0 | 0 | 11 | 10 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
 | `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
@@ -127,7 +127,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | custom-fields | 5 | 2 | 3 | 0 |
 | dashboards | 10 | 4 | 5 | 1 |
 | escalation-policies | 8 | 5 | 3 | 0 |
-| incidents | 42 | 32 | 10 | 0 |
+| incidents | 41 | 31 | 10 | 0 |
 | integrations | 11 | 6 | 2 | 3 |
 | maintenance-schedules | 5 | 2 | 3 | 0 |
 | maintenance-windows | 6 | 2 | 4 | 0 |
@@ -140,12 +140,12 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | schedules | 25 | 13 | 12 | 0 |
 | service-accounts | 6 | 0 | 0 | 6 |
 | service-objectives | 11 | 7 | 4 | 0 |
-| services | 45 | 21 | 21 | 3 |
+| services | 43 | 21 | 21 | 1 |
 | settings | 8 | 3 | 4 | 1 |
 | status-pages | 30 | 14 | 10 | 6 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 340 | 153 | 113 | 74 |
+| **All** | 337 | 152 | 113 | 72 |
 
 <details>
 <summary>Operations by area</summary>
@@ -223,7 +223,6 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `getIncident` | `incident_get` |
 | `getIncidentAvailableActions` | `incident_available_actions` |
 | `getIncidentCustomField` | `read_operation` (sensitive reads on) |
-| `getIncidentIntelligence` | `read_operation` |
 | `getIncidentResponseActivity` | `read_operation` |
 | `getIncidentRoutingDecision` | `read_operation` |
 | `getIncidentTemplate` | `read_operation` (sensitive reads on) |
@@ -490,7 +489,6 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `duplicateServiceRunbookRule` | `operation_prepare`, then approval |
 | `getAutomationCandidate` | `read_operation` (sensitive reads on) |
 | `getAutomationDraft` | `read_operation` |
-| `getAutomationReplay` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `getAutomationVersion` | `read_operation` |
 | `getService` | `read_operation` |
 | `getServiceAutomation` | `automation_get_effective` |
@@ -514,7 +512,6 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `restoreAutomationDraft` | `operation_prepare`, then approval |
 | `saveAutomationDraft` | `operation_prepare`, then approval |
 | `simulateAutomation` | `call_operation` |
-| `startAutomationReplay` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `updateService` | `operation_prepare`, then approval |
 | `updateServiceAutomationMode` | `operation_prepare`, then approval |
 | `updateServiceClassificationPolicy` | `operation_prepare`, then approval |

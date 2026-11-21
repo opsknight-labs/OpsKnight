@@ -1,0 +1,339 @@
+---
+title: MCP setup for any self-hosted OpsKnight
+order: 1
+description: Turn on AI assistant access, connect assistants, manage connections and review the changes assistants propose.
+type: how-to
+product_area: mcp
+audience: [administrator, responder]
+verification:
+  level: source
+  verified_at: 2026-11-09
+  evidence:
+    - src/app/(app)/settings/integrations/mcp/page.tsx
+    - src/app/(app)/settings/integrations/mcp/actions.ts
+    - src/lib/mcp/auth/effective-access.ts
+    - src/lib/mcp/approvals/operation.ts
+    - src/lib/runbooks/preview-review.ts
+    - src/lib/mcp/approvals/notify.ts
+    - src/components/settings/mcp/setup-commands.ts
+    - src/lib/mcp/auth/device-flow.ts
+    - src/app/oauth/mcp/device_authorization/route.ts
+    - src/lib/mcp/auth/discovery-policy.ts
+    - src/lib/api-v2/rate-limit.ts
+    - tests/integration/mcp-device-flow.test.ts
+    - docs/v2.3.0/operate/mcp/certification.md
+    - tests/mcp/docs-reference.test.ts
+---
+
+# MCP setup for any self-hosted OpsKnight
+
+The same setup applies to Docker, Compose, Swarm, Kubernetes and virtual machines. There is no OpsKnight-hosted registration service, special test domain or separate MCP secret. Your installation publishes its own endpoint and OAuth discovery from its configured App URL.
+
+Everything below lives on one page: **Settings → Integrations & ChatOps → MCP (AI Assistants)**. Its tabs are **Overview**, **Connect**, **Connections** (people other than administrators see **Your connections**), **Assistants**, **Approvals** (runbook approvers who are not administrators see **Runbook approvals**), **Access policy**, **Exposed capabilities** and **Usage**. Assistants, Access policy, Exposed capabilities and Usage are for administrators only.
+
+## Before you begin
+
+- Turning MCP on and changing the access policy needs an OpsKnight administrator who signed in within the last two hours.
+- Users need their own OpsKnight account and an MCP-capable assistant; each signs in as themselves.
+- OpsKnight must be served from an HTTPS origin that users (and any cloud-hosted assistant) can reach. That origin becomes the **App URL**.
+
+## Administrator: turn it on (about two minutes)
+
+1. Deploy the application and its packaged database migrations through your normal upgrade process. Update every replica before turning MCP on.
+2. Open **Settings → System** and set **App URL** to the HTTPS origin users open, such as `https://ops.your-company.com` (an origin without a path). Keep the authentication and encryption secrets the same across replicas and restarts.
+3. On the **Overview** tab click **Turn on AI assistant access** (it needs a sign-in within the last two hours; if the page asks, choose **Sign in again** and repeat). On first use this applies read-only defaults (`incidents:read`, `services:read`, `schedules:read`) with **Automatic connections** on. If something blocks it, the page lists what to fix first.
+4. Click **Test connection** on the same tab. It checks the App URL, migrations, sign-in discovery, automatic connections and that anonymous access is refused.
+5. Share the **MCP server URL** from the **Connect** tab. Each person adds it to their assistant, signs in with their own OpsKnight account and approves once. You never create a client ID, secret or callback for anyone.
+
+Keep the existing scheduler and worker roles running in a split deployment; MCP needs no new queue or worker and no required MCP environment variable. The optional `MCP_PUBLIC_ORIGIN` override must be identical across replicas, or removed. The other optional variables are `MCP_FORCE_DISABLED` (emergency stop), `MCP_DATABASE_URL`, `MCP_DATABASE_POOL_SIZE` (1 to 4, default 2) and `MCP_LOG_SAMPLE_SERVED`; see [architecture](../../operate/mcp/architecture.md) and [monitoring](../../operate/mcp/monitoring.md).
+
+### Turning it off and back on
+
+Unchecking **Enable MCP** on the **Access policy** tab is an immediate, MCP-only shutdown: every assistant request is refused and the rest of OpsKnight is unaffected. It does **not** revoke connections. When MCP is turned back on, existing connections resume.
+
+While MCP is off the Overview button reads **Turn AI assistant access back on**. It restores your previous policy unchanged: the permission ceiling, Automatic connections, reviewed actions, sensitive reads, trusted hosts and workload limits. The card lists what will come back. For a clean restart, use **Revoke all active connections** (below) before turning MCP back on, and review **Access policy** first.
+
+## Access policy
+
+The **Access policy** tab holds:
+
+- **Assistant access**: **Enable MCP** and **Automatic connections**.
+- **What assistants may do**: the permission ceiling. People can approve less on the consent page, and their own OpsKnight permissions always apply on top.
+- **Reviewed actions**: changes, the review window and commit window, and sensitive configuration reads.
+- **Sign-in sessions**: how long an unused connection stays signed in (1 to 90 days, default 30).
+- **Per-person request limit**: an optional cap (1 to 6000 requests a minute, blank for none) shared by all of one person's connections, on top of each connection's own limit.
+- **Request log**: how long the per-request log behind the **Usage** tab is kept (7 to 365 days, default 30). It records the tool, outcome, duration and who made the request, never what was asked or returned. Shortening it deletes older entries.
+- **Who may approve**: **Require a different reviewer** (see [Reviewed changes](#reviewed-changes)).
+- **View-only connections**: **Require view-only connections** caps every connection, OAuth and personal, to view permissions until it is turned off.
+- **Personal access tokens**: off by default. When on, people can create a token for agents without a browser, up to the longest allowed expiry (default 30, at most 90 days) and with only the listed permissions (default: view incidents, services and schedules). Tokens never carry `runbooks:execute`, and changes they prepare always need a second person. Turning this off revokes every token. See [API-hosted and headless agents](api-agents.md).
+- **Device sign-in**: off by default. Lets command-line tools, SSH sessions and headless servers sign in with a short code entered in any browser (OAuth 2.0 device authorization grant, RFC 8628). Turning it on needs a recent sign-in. See [Sign in from a CLI or server (device code)](#sign-in-from-a-cli-or-server-device-code).
+- **Advanced**: **Trusted assistant hosts**, **Browser clients** (allowed browser origins and in-place permission step-up) and **Workload limits**.
+
+**Automatic connections** is one switch for both ways an assistant can identify itself: assistants that register themselves (dynamic client registration, DCR) and assistants that publish a client metadata document (CIMD). Both use the same ceiling. The trusted-hosts list is optional: leave it empty to allow any public HTTPS metadata host, or list hosts to allow only those (other metadata-document assistants are then refused). Documents are fetched without redirects, only from public addresses, with a pinned DNS lookup.
+
+A save that gives assistants more access (turning something on, adding a permission, host or origin, raising a limit, allowing personal tokens or lifting view-only connections) needs a sign-in within the last two hours; the form offers **Sign in again**. Saves that only reduce access never need it.
+
+If two administrators edit the policy at once, the second save is refused with a notice and a **Reload policy** button, so nobody overwrites a change they never saw.
+
+See the [permissions reference](../../reference/mcp/permissions.md) for what each permission unlocks and which roles can use it.
+
+## Limits an assistant can meet
+
+Three separate limits apply, and they are not the same number:
+
+- **Weighted operations per minute per grant** (**Advanced**, **Workload limits**; 60 by default; a connection is a grant). It is weighted, so a tool that makes several reads in one call counts as several. The optional **Requests per minute for one person** cap applies across all of that person's connections. Over the limit, the answer is HTTP 429 `MCP_RATE_LIMITED` with a `Retry-After` header.
+- **Concurrent requests per process** (**Workload limits**; 4 by default; one person may hold at most half the slots across all their connections). When all slots are busy, a request waits briefly and is then refused with HTTP 503 `MCP_BUSY` and a `Retry-After` header. A well-behaved client waits that long before trying again.
+- **Heavier read routes: about 30 a minute per connection, shared.** A few reads are classed as search or export in the API underneath and share one allowance that is lower than the connection limit and is not an MCP setting. They include `oncall_now`, `incident_find_similar`, the related-incidents read inside `incident_get_context`, schedule coverage and changes reads, and audit-log reads. Ordinary list and detail reads such as `incident_search` and `service_list` are not limited this way. Over the allowance, the tool returns `MCP_DOMAIN_REJECTED (RATE_LIMIT_EXCEEDED)` with "Retryable after Ns". An assistant that calls these one after another meets it first.
+
+**Operations per request** (**Workload limits**; 8 by default and at most 8) caps how many operations one call may use. Composite tools use several (`incident_get_context` 3 to 4, `postmortem_get_context` 4), so a value below 4 can stop them working and the form warns you; over the cap the call returns `MCP_OPERATION_BUDGET_EXCEEDED`.
+
+A change in the access policy reaches tool calls on the next request, but the public discovery documents (the advertised scopes, the registration and device endpoints) are cached for up to 30 seconds, so a client that has just been told something is switched on may need to look again after half a minute.
+
+## Users: connect and sign in
+
+Copy the **MCP server URL** from the **Connect** tab; it also shows step-by-step instructions per assistant.
+
+Each assistant has a full guide with its documented limits and troubleshooting, including the personal-token alternative where the client can send a header: [client setup guides](clients/README.md).
+
+- **Claude Code:** run `claude mcp add --scope user --transport http opsknight 'https://ops.your-company.com/mcp'`, then `/mcp` to sign in.
+- **Claude apps:** in **Settings → Connectors** choose **Add custom connector**, paste the URL and connect. Menu names vary by version, and Team and Enterprise plans need an owner to allow custom connectors.
+- **ChatGPT:** open ChatGPT Plugins (`chatgpt.com/plugins`), select **+**, then **Add custom MCP server** and name it OpsKnight. Under Connection paste the URL for a public server, or choose **Tunnel** for a private installation (see [OpenAI Secure MCP Tunnel](#private-installation-openai-secure-mcp-tunnel)). Choose OAuth; ChatGPT registers itself. Accept the warning, select **Create** as a plugin, then sign in to OpsKnight and approve. Developer mode or a workspace administrator's permission may be required, and some plans allow only read and fetch tools. OpenAI's [custom MCP server guide](https://developers.openai.com/api/docs/guides/custom-mcp-server) has the current menus.
+- **ChatGPT company knowledge and deep research:** these call only a `search` and a `fetch` tool. OpsKnight serves both (on by default): they find and read the incidents, postmortems, runbooks and services the person can see, with a link back to OpsKnight for each answer. An administrator can turn them off under exposed capabilities.
+- **Cursor:** use **Add to Cursor** on the Connect tab, or add the `opsknight` entry under `mcpServers` in `~/.cursor/mcp.json`, merging it into the file if it already exists so your other servers are kept.
+- **VS Code:** use **Add to VS Code**, or on macOS and Linux run `code --add-mcp '{"name":"opsknight","type":"http","url":"https://ops.your-company.com/mcp"}'`. On Windows use the link or **MCP: Add Server** in the Command Palette.
+- **Codex CLI:** run `codex mcp add opsknight --url 'https://ops.your-company.com/mcp'`, then `codex mcp login opsknight`.
+- **Gemini CLI:** run `gemini mcp add --transport http opsknight 'https://ops.your-company.com/mcp'` (or set `httpUrl`, not `url`, under `mcpServers.opsknight` in `~/.gemini/settings.json`; `url` selects the older SSE transport), then `/mcp auth opsknight` inside Gemini CLI.
+- **Windsurf:** add `{"mcpServers":{"opsknight":{"serverUrl":"https://ops.your-company.com/mcp"}}}` to `~/.codeium/windsurf/mcp_config.json` and sign in when prompted.
+- **Hosts that only run local (stdio) servers:** a third-party bridge such as `npx -y mcp-remote 'https://ops.your-company.com/mcp'` can relay to OpsKnight. It is not part of OpsKnight, and it stores tokens on disk in `~/.mcp-auth`.
+
+After approving, select **Check connection** on the Connect tab: it shows the connection you just made, or what to do next.
+
+### What you see when you approve
+
+Your browser opens one OpsKnight page. Sign in if needed (including your SSO), then review what the assistant may do:
+
+- The page says where it returns to ("Returns to _host_") and how the assistant is identified: "Identified by _host_" for a metadata-document assistant, "Name not verified" for one that registered itself, or "Registered by an administrator". Only continue if you just started the connection yourself. A self-registered assistant that returns to a web address that is not on your computer shows a warning.
+- Permissions are checkboxes grouped by area. View permissions are pre-selected. Change permissions are pre-selected only when the assistant asked for them by name, or when the connection you are replacing had them.
+- You can untick anything; **Allow** needs at least one permission.
+- **View only** (off by default) leaves every change permission out of the connection, whatever is ticked.
+- Permissions your role can never use are hidden and noted on the page. `admin:manage` is never offered.
+- When changes are turned off, a banner says so and change permissions show **Changes off**.
+- The page expires after five minutes.
+
+What the assistant can then do is your selection, capped by the administrator ceiling as it is now and by your current role and teams. Connecting the same assistant again starts with your earlier permissions selected and cleans up any earlier sign-in that was never completed; a connection already in use, such as the same assistant on another device, stays signed in. Never enter the encryption key or a password in client-ID or client-secret fields.
+
+### How long a connection lasts
+
+Connections stay signed in while they are used. A connection ends after the idle period without use (default 30 days) and always after 90 days in total.
+
+Changes to your role or teams do **not** sign you out: what the assistant can do narrows or widens on the next request. These security events end the connection immediately, and you reconnect from your assistant (`MCP_ACCESS_CHANGED`):
+
+- your password is changed or reset, or your email is changed by an administrator or SCIM;
+- you are demoted from Administrator;
+- your account is deactivated (reactivating it does not bring old connections back);
+- you sign out everywhere, or an administrator revokes your sessions.
+
+An administrator revoking your connection or its assistant, or policy no longer trusting the assistant (Automatic connections off, or its host removed from the trusted list), also stops it. Assistants that send generic scopes such as `openid` or `offline_access`, or omit the optional `resource` or `state` parameters, still connect and receive only what policy allows.
+
+Desktop loopback callback addresses belong to the user's computer. The assistant chooses its callback and port; do not open a callback port on the OpsKnight server.
+
+Callback addresses must be HTTPS, http on a loopback host (any port), or a native app's own scheme (RFC 8252): a reverse-DNS scheme such as `com.example.app:/callback`, or one of `cursor`, `vscode`, `vscode-insiders` and `windsurf`. App-scheme and HTTPS callbacks match exactly. For a manually registered Cursor client, the IDE uses `cursor://anysphere.cursor-mcp/oauth/callback`, the CLI `http://localhost:8787/callback` and Cloud Agents `https://www.cursor.com/agents/mcp/oauth/callback`. Assistants may send registration metadata this server does not use (for example OIDC logout addresses); it is ignored and never stored. Client secrets and key material are refused.
+
+### Sign in from a CLI or server (device code)
+
+Use this when the tool runs where no browser can open: over SSH, in a container, on a headless server. The tool shows a code; you approve it in a browser on any other device.
+
+An administrator first turns on **Device sign-in** under **Access policy**. Only assistants registered for it can use it:
+
+- an assistant that registers itself (Automatic connections) and lists `urn:ietf:params:oauth:grant-type:device_code` in its `grant_types`. A device-only client may leave out `redirect_uris`;
+- an assistant an administrator registers on the **Assistants** tab with **Allow device sign-in with a code** ticked.
+
+Assistants identified by a client metadata document cannot use device sign-in: OpsKnight never fetches a URL on behalf of an anonymous device request.
+
+Then:
+
+1. The tool calls `POST <App URL>/oauth/mcp/device_authorization` and shows you a code such as `BCDF-GHJK` and the address `<App URL>/oauth/mcp/device` (or a link with the code filled in).
+2. Open that address in any browser and sign in. Type the code (case and the dash do not matter), or check that the filled-in code matches the one on your device, and choose **Continue**. The page never continues by itself.
+3. You see the same permissions page as a browser sign-in, with a warning: **Only continue if you started this sign-in yourself on a device you control.** Someone who sends you a code or a link is trying to get access as you; choose **Cancel**.
+4. Approve. The tool finishes signing in on its next poll, within a few seconds.
+
+Codes last ten minutes and work once. The connection is the same as any other: same permissions (your choice, within the ceiling and your role), same five-minute access tokens with refresh, same session lifetime, and it is listed and revoked under **Connections**. After five wrong codes, code entry pauses for 15 minutes for you and for your network address.
+
+### Access granted by your identity provider (Enterprise-Managed Authorization)
+
+Optional, off by default, and only available with single sign-on. It lets your organization's identity provider (IdP) give its people's assistants access to OpsKnight without each person approving a permissions screen, following the [MCP Enterprise-Managed Authorization extension](https://modelcontextprotocol.io/extensions/auth/enterprise-managed-authorization).
+
+How it works: the assistant signs the person in to the IdP, asks the IdP for an Identity Assertion JWT Authorization Grant (ID-JAG) for OpsKnight, and exchanges it at `<App URL>/oauth/mcp/token` with `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`. OpsKnight checks the grant and returns a five-minute access token. There is no refresh token: when it expires the assistant asks the IdP again, so the IdP stays in control.
+
+To set it up:
+
+1. Configure and enable single sign-on (OIDC) in OpsKnight. The IdP that issues grants is the SSO provider; nothing else is trusted.
+2. In the IdP, register OpsKnight as a resource application that accepts ID-JAGs, with:
+   - audience: `<App URL>/oauth/mcp` (OpsKnight's authorization server issuer);
+   - resource: `<App URL>/mcp`;
+   - signing algorithm RS256 with the same keys as SSO sign-in;
+   - client id: the assistant's OpsKnight client id (from **Assistants**, or its metadata-document URL);
+   - scopes: the OpsKnight scopes each group may get, for example `incidents:read services:read`.
+3. Make sure the assistant is known to OpsKnight: register it on the **Assistants** tab, or let it connect through Automatic connections.
+4. In **Settings → Integrations → MCP → Access policy → Advanced**, tick **Allow access granted by your identity provider** and save. This needs a recent sign-in. Without single sign-on the box is disabled with "Requires single sign-on".
+
+What a grant can do is the IdP's scopes, limited by the assistant's ceiling and by the person's role, exactly like a consented connection. Only people who already signed in to OpsKnight with single sign-on are recognised: the grant's subject must match an existing SSO link, and no account is created. The connection appears under **Connections** as **Granted by your identity provider**.
+
+With single sign-on off or the switch off, nothing changes: the grant type is not advertised in `/.well-known/oauth-authorization-server/oauth/mcp` and the token endpoint answers `unsupported_grant_type`. Turning it off stops new tokens at once; tokens already issued end within five minutes. To remove one person's access, remove it at the IdP or disable the person in OpsKnight; revoking the connection alone is undone by the next grant the IdP issues.
+
+Refusals return `invalid_grant`, `invalid_client` or `invalid_scope` without detail; the server log entry `mcp.token.id_jag_refused` names the check that failed (for example `client_mismatch`, `replayed`, `subject_not_active`, `verification_failed`). See the [threat model](../../../security/mcp-threat-model.md#enterprise-managed-authorization-identity-provider-grants) for every check.
+
+## Manage connections
+
+- **Your connections** (everyone): each assistant you connected and each personal access token you created, with an **OAuth** or **Personal token** badge, its usable permissions, when it last made a call and with which tool, when it expires, and **Revoke**. When the policy allows personal tokens, **Personal access tokens** here creates one: it needs a recent sign-in and is shown once.
+- **Connections** (administrators): every person's connections, filterable by status and assistant. The **Scopes** column shows "N of M usable": scopes no longer allowed are struck through. The **Status** column says **Blocked by policy** (MCP is off or policy no longer trusts the assistant) or **No longer allowed** (revoked assistant, inactive person, security event), with the reason on hover.
+- **Revoke all active connections**, under **Credential security** on the Connections tab, revokes every connection, personal tokens included, regardless of the current filter. The dialog shows how many will be revoked and needs a ticked confirmation.
+- **Assistants** (administrators): every registered assistant with its type, effective scope ceiling, connections and last call. Revoking an assistant revokes all its connections; **Restore** allows it again, and people then sign in again.
+
+Every change is recorded in the general Audit log.
+
+**Usage** (administrators): calls, failures and the slowest 5% of calls over the last 24 hours, 7 days or 30 days, grouped by tool, assistant or person, built from the request log. It can be exported as CSV or JSON; each export is audited.
+
+## Exposed capabilities
+
+The **Exposed capabilities** tab is a hard deny-list across all roles and consents. Turn off individual tools, prompts, catalog operations or whole domains (a disabled domain also covers operations added to it later).
+
+- It applies on the next request; nobody needs to reconnect.
+- Disabled tools disappear from `tools/list`, `search_capabilities` and `describe_operation`, and any attempt to call them returns `MCP_CAPABILITY_DISABLED`, which is not retryable.
+- Turning everything off asks for confirmation. Concurrent edits are detected and refused. Each save is audited with what was added and removed.
+
+## Browsing and discovery
+
+- `resources/list` lets an assistant browse what the signed-in person can already read: up to 20 each of open incidents, services, schedules, runbooks, saved reports and postmortems (the first page of each list). Each entry is read through the same list operation as the tools, so scopes, disabled capabilities and team visibility apply; a domain the connection cannot read is left out. The list is not paged, and it counts as six requests against the per-minute limit. Open a full record with `resources/read` on its `opsknight://` URI.
+- A public [MCP Server Card](https://modelcontextprotocol.io/seps/2127-mcp-server-cards) at `/mcp/server-card` describes this installation (name, version, the `/mcp` URL, supported protocol revisions, icon, and the OAuth protected-resource metadata URL under `_meta`), and `/.well-known/ai-catalog.json` links to it, so a client pointed at your domain can find the server before signing in. Both hold no secrets, and both answer 404 while MCP is turned off or the App URL is not usable.
+
+## Reviewed changes
+
+Changes are off by default. Turn them on with **Allow reviewed routine mutations and approved runbook executions** under **Access policy → Reviewed actions**. Then:
+
+- **Routine incident changes** (acknowledge, assign, add a note, resolve, create, tags and watchers) run directly, each with an `idempotencyKey`, within the person's own permissions.
+- **Configuration changes** go through `operation_prepare` and are approved by an **administrator** who holds every permission the change needs.
+- **Runbook runs** go through `runbook_prepare_execution` and are approved by **anyone with runbook approve permission** (Responders and Administrators by default) who can also read runbooks and see the target incident or service.
+
+Normally a second person with approval rights reviews the exact, frozen request on the review page. An administrator may approve their own request only after ticking an explicit confirmation; the decision is recorded as self-approved in the approval history and the audit entry. Anyone else needs a second person. Regulated teams can turn on **Require a different reviewer** under Access policy → Who may approve: then nobody, administrators included, can approve a change or runbook run that they or their own assistant requested, even after confirming, and a second administrator must review it. Turning it on takes effect for requests already waiting; turning it off needs a recent sign-in. The assistant can never approve: no MCP, REST or tool path approves.
+
+**Who is told.** Reviewers get an in-app notification (the bell) when a request is prepared, linking to the review page: administrators for configuration changes; runbook approvers for runbook runs (for runbooks that target an incident or service, only approvers who can see every incident or service). At most 50 people are notified; the requester is never notified of their own request. The requester gets an in-app notification when someone else decides. There is no email. Reviewers can also watch the **Approvals** tab, and the assistant is told to share the `reviewUrl`.
+
+**Timing.** A request waits for review for **Time to review** (default 240 minutes, 15 to 1440). Approval opens a fresh **Time to apply after approval** window (default 30 minutes), never later than 24 hours after the request, so an approval near the end of the review window can still be applied. A request not decided or not applied in time expires (`MCP_APPROVAL_EXPIRED`); the assistant prepares it again with a new `idempotencyKey`.
+
+**Deciding.** The review page shows who requested it, through which assistant and when, the catalog summary, the frozen request, and the target. Reject takes an optional reason (up to 500 characters) that the assistant can read through `operation_get_approval` or `runbook_get_approval`; it is labelled as untrusted text. Approving a destructive change needs a sign-in within the last two hours; otherwise the page offers **Confirm it's you**. The requester sees a read-only status view of their own request.
+
+Approvals and rejections are audited. See the [catalog](../../reference/mcp/catalog.md) for the full prepare, review, poll and commit flow.
+
+## Client compatibility
+
+The server serves MCP revision **2026-07-28** natively and also accepts clients on revisions **2025-06-18** and **2025-11-25** (stateless; no sessions), and **2025-03-26** on a best-effort basis (tool results as text only). Clients that only speak the 2024-11-05 HTTP+SSE transport are not supported: `GET /mcp` returns 405. Tasks and resource subscriptions need 2026-07-28. All clients need OAuth with PKCE (S256).
+
+A client that only starts local (stdio) MCP servers, or cannot sign in with remote OAuth, such as Claude Desktop without custom connectors, can connect through the [stdio bridge](stdio-bridge.md) `opsknight-mcp`, with a personal access token or a device sign-in.
+
+| Client                        | Status                              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code                   | Tested (v2.1.2, 2026-11-03)         | Registration, consent, tools, scoped reads, role changes and deactivation checked against a live deployment ([checkpoint](../../operate/mcp/certification.md#live-client-checkpoint)). The version in the status is the OpsKnight server version, not the client's. Refresh and grant revocation for that run are not recorded; a later [client matrix run](../../operate/mcp/certification.md#client-matrix-run-8-november-2026) used Claude Code CLI 2.1.316, which passed. [Guide](clients/claude-code.md). |
+| Claude (web and desktop apps) | Expected (2025 revisions supported) | Team and Enterprise plans need an owner to allow custom connectors. Cloud-hosted: your server must be reachable from the internet with a publicly trusted certificate. [Guide](clients/claude-apps.md).                                                                                                                                                                                                                                                                                                        |
+| ChatGPT                       | Expected (2025 revisions supported) | Needs a publicly reachable host with a trusted certificate, or OpenAI Secure MCP Tunnel for a private install. Identifies itself with a metadata document or registers itself. [Guide](clients/chatgpt.md).                                                                                                                                                                                                                                                                                                    |
+| Cursor                        | Expected (2025 revisions supported) | Use **Add to Cursor** or merge the entry into `~/.cursor/mcp.json`. [Guide](clients/cursor.md).                                                                                                                                                                                                                                                                                                                                                                                                                |
+| VS Code                       | Expected (2025 revisions supported) | Use **Add to VS Code**, `code --add-mcp`, or **MCP: Add Server**. [Guide](clients/vscode.md).                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Codex CLI                     | Expected (not verified)             | `codex mcp add opsknight --url <url>`, then `codex mcp login opsknight`. [Guide](clients/codex-cli.md).                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Gemini CLI                    | Expected (not verified)             | `gemini mcp add --transport http opsknight <url>` (or `httpUrl` in `~/.gemini/settings.json`), then `/mcp auth opsknight`. [Guide](clients/gemini-cli.md).                                                                                                                                                                                                                                                                                                                                                     |
+| Windsurf                      | Expected (not verified)             | `serverUrl` in `~/.codeium/windsurf/mcp_config.json` (Devin Desktop: `~/.config/devin/mcp_config.json`). [Guide](clients/windsurf.md).                                                                                                                                                                                                                                                                                                                                                                         |
+| API-hosted agents             | Not verified                        | Anthropic and OpenAI API agents, CI and workflow tools: an OAuth refresh loop or a personal access token. See [API-hosted and headless agents](api-agents.md).                                                                                                                                                                                                                                                                                                                                                 |
+
+"Expected" means the client's protocol revision and OAuth flow are supported, but it has not been verified end to end. "Tested" names the version and date of a recorded live run; "Verified" is used only when a [live client checkpoint](../../operate/mcp/certification.md#live-client-checkpoint) for that version records every check (registration, consent, tools, a scoped read, refresh, a role change and revocation) against a named commit. Verify sign-in, scoped calls, refresh and revocation against your own deployment before relying on it. A client that supports only private-key (`private_key_jwt`) authentication is refused, and a published JWKS URL is never fetched.
+
+## Reverse proxies and private installations
+
+Route `/mcp`, `/mcp/server-card`, `/oauth/mcp/*`, `/.well-known/oauth-protected-resource/mcp`, `/.well-known/oauth-authorization-server/oauth/mcp` and `/.well-known/ai-catalog.json` to the application. Native `/login`, `/api/auth/*` and the MCP settings, consent and review pages must stay available too.
+
+Preserve the public Host, including a non-default port. Preserve Authorization, WWW-Authenticate and MCP protocol headers. Do not cache OAuth or consent responses or rewrite their issuer or resource URLs. Support streaming POST responses without proxy buffering; subscription streams last at most ten minutes. Trust forwarded client IPs only when your ingress removes spoofed forwarding headers. Unless `TRUST_PROXY_HEADERS` or `TRUSTED_PROXIES` is set, the application cannot tell clients apart by address, so the per-client limits on the sign-in endpoints (registration, device authorization, token and revoke) do not apply and one noisy client can exhaust the shared limits for everyone. Set one of them to match your ingress.
+
+If your proxy cannot preserve the public Host (for example it always sends an internal service name), set `MCP_ALLOWED_HOSTS` to the exact value it sends, such as `MCP_ALLOWED_HOSTS=opsknight.internal:3000`. Several values are comma separated. Tokens, discovery documents and the browser-origin check stay tied to the public App URL, and `X-Forwarded-Host` is never trusted. Without this setting such a proxy gets `MCP_INVALID_HOST`.
+
+Examples, for an application listening on `opsknight:3000` and published as `https://ops.example.com`:
+
+```nginx
+# nginx
+location ~ ^/(mcp|oauth/mcp/|\.well-known/oauth-|\.well-known/ai-catalog\.json) {
+  proxy_pass http://opsknight:3000;
+  proxy_set_header Host $host;          # keep the public Host
+  proxy_http_version 1.1;
+  proxy_buffering off;                  # streamed responses
+  proxy_read_timeout 660s;              # subscription streams last up to ten minutes
+}
+```
+
+```caddyfile
+# Caddy: the public Host is preserved by default
+ops.example.com {
+  reverse_proxy opsknight:3000 {
+    flush_interval -1
+  }
+}
+```
+
+```yaml
+# Traefik (Docker labels): the public Host is preserved by default
+labels:
+  - traefik.http.routers.opsknight.rule=Host(`ops.example.com`)
+  - traefik.http.services.opsknight.loadbalancer.server.port=3000
+```
+
+```yaml
+# Kubernetes ingress-nginx annotations
+nginx.ingress.kubernetes.io/proxy-buffering: 'off'
+nginx.ingress.kubernetes.io/proxy-read-timeout: '660'
+```
+
+With more than one replica, the per-minute request limit is shared through the database, while the concurrency limit (**Workload limits**) and the bad-token limit apply per process, so the effective ceiling is the configured value times the number of replicas.
+
+On a production installation, also list the hosts you trust under **Trusted assistant hosts** (Access policy, Advanced). An empty list allows any public HTTPS host to identify an assistant with a client metadata document.
+
+A private installation serves clients that can reach its network. Cloud-hosted assistants need their own network path to it; browser access from your laptop does not prove that. Keep TLS verification on; for a private CA configure the client's CA trust instead of disabling checks.
+
+Rotating the active application encryption key invalidates MCP credentials; users reconnect. Keep the key across ordinary restarts and upgrades.
+
+### Private installation: OpenAI Secure MCP Tunnel
+
+ChatGPT normally reaches your server over the internet. For a private installation, OpenAI's Secure MCP Tunnel carries ChatGPT's MCP requests through an outbound connection from inside your network:
+
+- Run OpenAI's `tunnel-client` on a host inside the network that has outbound HTTPS to `api.openai.com:443`.
+- Set its MCP server URL to the exact App URL plus `/mcp` (the public hostname, resolvable internally, with a trusted or configured-CA certificate). Never an internal IP or service name: OpsKnight rejects any other Host with `MCP_INVALID_HOST`.
+- The authorization server is not tunnelled. Each user's browser must reach `/oauth/mcp/authorize` and the consent page, and the tunnel-client host must reach the OpsKnight OAuth endpoints. OpsKnight must also be able to fetch ChatGPT's client metadata document over outbound HTTPS; otherwise ChatGPT registers itself instead.
+- Prerequisites: OpenAI Platform tunnel permissions (Read and Manage to create a tunnel, Read and Use to run one) and the tunnel linked to your ChatGPT workspace. Tunnels are not usable for publicly distributed plugins. OpenAI documents limits of 10 MiB and 120 seconds per request and 600 requests a minute per tunnel.
+- The same tunnel works for Codex and the Responses API.
+
+Follow OpenAI's Secure MCP Tunnel documentation, linked from its [custom MCP server guide](https://developers.openai.com/api/docs/guides/custom-mcp-server), for the current `tunnel-client` commands; they change between versions.
+
+## Check and troubleshoot
+
+**Test connection** on the Overview tab runs the checks from the server. To check from outside, for example from a laptop on the public internet, download the doctor published with your release (Node.js 20; replace `2.2.0` with your version) and run it. No checkout is needed:
+
+```sh
+curl -fsSLo opsknight-mcp-doctor.cjs https://raw.githubusercontent.com/opsknight-labs/OpsKnight/v2.2.0/scripts/mcp/doctor.cjs && node opsknight-mcp-doctor.cjs 'https://ops.your-company.com/mcp'
+```
+
+The doctor is not served by OpsKnight itself: a misrouted or unhealthy instance is exactly what it diagnoses. From an OpsKnight source checkout:
+
+```sh
+node scripts/mcp/doctor.cjs 'https://ops.your-company.com/mcp'
+```
+
+or inside the application container on the server (this does not test reachability from outside):
+
+```sh
+docker exec <opsknight-container> node scripts/mcp/doctor.cjs 'https://ops.your-company.com/mcp'
+```
+
+On Kubernetes:
+
+```sh
+kubectl exec deploy/<opsknight> -- node scripts/mcp/doctor.cjs 'https://ops.your-company.com/mcp'
+```
+
+The doctor makes bounded, anonymous requests and follows no redirects. It checks discovery and resource binding, PKCE metadata, automatic registration and the protected endpoint's 401 challenge, and explains a 503 (MCP turned off, busy, or unavailable). It creates no credentials or settings and cannot certify real sign-in, load or every replica.
+
+Every error code and server log event is listed with its fix in [MCP troubleshooting](troubleshooting.md). Before production rollout use the [local certification workflow](../../operate/mcp/certification.md) and read the [architecture and rollout limits](../../operate/mcp/architecture.md).

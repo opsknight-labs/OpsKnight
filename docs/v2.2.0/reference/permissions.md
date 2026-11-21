@@ -25,13 +25,8 @@ resource scope remain authoritative.
 
 ## Capabilities
 
-- `access.review.manage`
 - `admin.manage`
-- `audit.export`
 - `audit.read`
-- `automation.edit`
-- `automation.publish`
-- `automation.read`
 - `compliance.drift.manage`
 - `compliance.evaluate`
 - `compliance.evidence.read`
@@ -47,12 +42,7 @@ resource scope remain authoritative.
 - `incident.note.scoped`
 - `incident.read.all`
 - `incident.read.scoped`
-- `incident.resolve.scoped`
 - `incident.sensitive.read`
-- `intelligence.feedback`
-- `intelligence.manage`
-- `intelligence.read`
-- `intelligence.suggestions.read`
 - `metrics.read.all`
 - `metrics.read.scoped`
 - `operations.manage`
@@ -80,18 +70,7 @@ resource scope remain authoritative.
 - `schedule.read.scoped`
 - `service.read.all`
 - `service.read.scoped`
-- `team.administer.scoped`
-- `user.notification_preferences`
 - `user.read.all`
-
-Intelligence (AIOps) capabilities by role: `ADMIN` has all four, including
-`intelligence.manage` for policy changes. `RESPONDER` has `intelligence.read`,
-`intelligence.suggestions.read` and `intelligence.feedback`. `AUDITOR` has
-`intelligence.read` and `intelligence.suggestions.read` and can never change
-decisions. `USER` has `intelligence.suggestions.read` and
-`intelligence.feedback`, and sees suggestions only for incidents it can already
-read. Feedback is visibility-checked, rate-limited and kept to one live verdict
-per person.
 
 ## Authorization actions
 

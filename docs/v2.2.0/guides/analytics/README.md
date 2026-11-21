@@ -30,16 +30,16 @@ there is no separate mobile Analytics screen any more; `/m` links open `/analyti
 
 ## Sections
 
-| Section                               | What it shows                                                                                                                                           |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Key metrics                           | Eight tiles: Incidents, Open now, MTTA, MTTR, Ack SLA met, Resolve SLA met, Escalated, After hours. MTTA and MTTR show the median with the p90 beneath. |
-| Incident volume                       | Incidents created per hour, day, week or month, split by urgency.                                                                                       |
-| Time to acknowledge / Time to resolve | Median and p90 per bucket.                                                                                                                              |
-| Services                              | Reliability per service. Select a service to filter the whole page.                                                                                     |
-| Responder load                        | Assigned incidents by time of day in each responder's own timezone, plus scheduled on-call hours.                                                       |
-| When incidents happen                 | Day-of-week by hour heatmap in your timezone.                                                                                                           |
-| Noise                                 | Alerts per incident, auto-resolved share, the loudest services and recurring incident titles.                                                           |
-| Follow-through                        | Postmortems published for resolved high-urgency incidents, and open and overdue action items.                                                           |
+| Section | What it shows |
+| --- | --- |
+| Key metrics | Eight tiles: Incidents, Open now, MTTA, MTTR, Ack SLA met, Resolve SLA met, Escalated, After hours. MTTA and MTTR show the median with the p90 beneath. |
+| Incident volume | Incidents created per hour, day, week or month, split by urgency. |
+| Time to acknowledge / Time to resolve | Median and p90 per bucket. |
+| Services | Reliability per service. Select a service to filter the whole page. |
+| Responder load | Assigned incidents by time of day in each responder's own timezone, plus scheduled on-call hours. |
+| When incidents happen | Day-of-week by hour heatmap in your timezone. |
+| Noise | Alerts per incident, auto-resolved share, the loudest services and recurring incident titles. |
+| Follow-through | Postmortems published for resolved high-urgency incidents, and open and overdue action items. |
 
 A section that fails shows its own error with a retry; the rest of the page keeps working.
 

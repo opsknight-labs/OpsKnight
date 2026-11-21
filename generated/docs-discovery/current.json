@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-21T10:40:53+05:30",
-  "sourceRevision": "1a07ab350c84458a207f4bd15feafadb1ba4161b",
+  "generatedAt": "2026-11-21T10:49:42+05:30",
+  "sourceRevision": "f6812cdaec6015925d8068c2f03d976be5cb6b0c",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -69208,6 +69208,33 @@
       "confidence": "incomplete"
     },
     {
+      "name": "ADVISORY_SCHEMA_KEYS",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "AFTER_ONSET_FACTOR",
       "sources": [
         "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
@@ -69488,11 +69515,14 @@
     {
       "name": "ALERT_PARTITION_MAINTENANCE",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/alerts/partition-maintenance.ts"
       ],
       "required": false,
       "secret": false,
       "scopes": [
+        "operation",
         "runtime"
       ],
       "defaults": [],
@@ -69516,11 +69546,14 @@
     {
       "name": "ALERT_PARTITION_MONTHS_AHEAD",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/alerts/partition-maintenance.ts"
       ],
       "required": false,
       "secret": false,
       "scopes": [
+        "operation",
         "runtime"
       ],
       "defaults": [],
@@ -69542,11 +69575,14 @@
     {
       "name": "ALERT_PARTITION_RETENTION_MONTHS",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/alerts/partition-maintenance.ts"
       ],
       "required": false,
       "secret": false,
       "scopes": [
+        "operation",
         "runtime"
       ],
       "defaults": [],
@@ -70179,6 +70215,33 @@
       "confidence": "incomplete"
     },
     {
+      "name": "API_VERSION",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "APP_BASE_URL",
       "sources": [
         "scripts/certification/certify-all-routes-browsers.ts",
@@ -70387,6 +70450,33 @@
       "confidence": "incomplete"
     },
     {
+      "name": "APPS",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "ARCH",
       "sources": [
         "scripts/build-agent-artifacts.sh"
@@ -70545,6 +70635,33 @@
       ],
       "deploymentSupport": [
         "runtime"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "ATTRIBUTE",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
       ],
       "restartRequired": true,
       "deprecated": false,
@@ -72294,11 +72411,14 @@
     {
       "name": "CASCADE_CURSOR",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/intelligence/noise-controls/sweep.ts"
       ],
       "required": false,
       "secret": false,
       "scopes": [
+        "operation",
         "runtime"
       ],
       "defaults": [],
@@ -75488,11 +75608,14 @@
     {
       "name": "DISCOVERY",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/intelligence/connectors/adapters/base14.ts"
       ],
       "required": false,
       "secret": false,
       "scopes": [
+        "operation",
         "runtime"
       ],
       "defaults": [],
@@ -75797,6 +75920,33 @@
       "name": "DURATION_SECONDS",
       "sources": [
         "scripts/soak-test-2h.sh"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "EDGES",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
       ],
       "required": false,
       "secret": false,
@@ -76856,10 +77006,91 @@
       "confidence": "incomplete"
     },
     {
+      "name": "FAILED",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "FAILED_RECORDS",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "FIELD",
       "sources": [
         "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
         "scripts/dist/intelligence-lane-thread-integration.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "FILES",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
         "scripts/dist/intelligence-lane-thread.cjs"
       ],
       "required": false,
@@ -77615,6 +77846,33 @@
       "confidence": "incomplete"
     },
     {
+      "name": "HISTORY",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "HOME",
       "sources": [
         "src/app/(app)/settings/intelligence/_sections/GroupingQualitySection.tsx"
@@ -77747,11 +78005,14 @@
     {
       "name": "IDENTITY",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/intelligence/connectors/adapters/base14.ts"
       ],
       "required": false,
       "secret": false,
       "scopes": [
+        "operation",
         "runtime"
       ],
       "defaults": [],
@@ -80963,6 +81224,33 @@
       "confidence": "incomplete"
     },
     {
+      "name": "ITEMS",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "JIRA_REQUEST_TIMEOUT_MS",
       "sources": [
         "src/lib/jira.ts"
@@ -81868,6 +82156,33 @@
       "confidence": "derived"
     },
     {
+      "name": "LOG_CHUNKS",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "LOG_DIR",
       "sources": [
         "scripts/soak-test-2h.sh"
@@ -81947,6 +82262,33 @@
       ],
       "deploymentSupport": [
         "runtime"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "LOG_LINES",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
       ],
       "restartRequired": true,
       "deprecated": false,
@@ -83172,6 +83514,33 @@
       ],
       "deploymentSupport": [
         "runtime"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "MAX_LOOKBACK_MS",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
       ],
       "restartRequired": true,
       "deprecated": false,
@@ -86300,6 +86669,33 @@
       "confidence": "incomplete"
     },
     {
+      "name": "MINUTE",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "MINUTE_MS",
       "sources": [
         "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
@@ -87140,6 +87536,33 @@
       "deprecated": false,
       "replacement": null,
       "confidence": "derived"
+    },
+    {
+      "name": "NOISE",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
     },
     {
       "name": "NOISE_ACTIONS",
@@ -92204,6 +92627,33 @@
       "confidence": "incomplete"
     },
     {
+      "name": "PIPELINE_LIMITS",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "PKCE_CODE_VERIFIER_COOKIE_NAME",
       "sources": [
         "src/lib/auth.ts"
@@ -95807,6 +96257,33 @@
       "confidence": "incomplete"
     },
     {
+      "name": "RUNS",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "RUNTIME_TTL_MS",
       "sources": [
         "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
@@ -96391,6 +96868,33 @@
       "confidence": "incomplete"
     },
     {
+      "name": "SCOUT_MAX_WINDOW_MS",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "SCRIPT_DIR",
       "sources": [
         "scripts/build-agent-artifacts.sh"
@@ -96663,6 +97167,33 @@
       "deprecated": false,
       "replacement": null,
       "confidence": "derived"
+    },
+    {
+      "name": "SERVICE",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
     },
     {
       "name": "SERVICE_ACCOUNT_DOMAIN",
@@ -99001,11 +99532,14 @@
     {
       "name": "STORM_PARENT_ELIGIBLE",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/intelligence/noise-controls/cache.ts"
       ],
       "required": false,
       "secret": false,
       "scopes": [
+        "operation",
         "runtime"
       ],
       "defaults": [],
@@ -100250,6 +100784,33 @@
       "confidence": "incomplete"
     },
     {
+      "name": "TOKEN",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "TOKEN_CACHE_MAX",
       "sources": [
         "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
@@ -100282,6 +100843,33 @@
       "sources": [
         "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
         "scripts/dist/intelligence-lane-thread-integration.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "TOKEN_SKEW_MS",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
         "scripts/dist/intelligence-lane-thread.cjs"
       ],
       "required": false,
@@ -100527,6 +101115,33 @@
       "sources": [
         "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
         "scripts/dist/intelligence-lane-thread-integration.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "TRACE_LIMIT",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
         "scripts/dist/intelligence-lane-thread.cjs"
       ],
       "required": false,
@@ -101017,6 +101632,33 @@
       "sources": [
         "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
         "scripts/dist/intelligence-lane-thread-integration.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "UNHEALTHY",
+      "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
         "scripts/dist/intelligence-lane-thread.cjs"
       ],
       "required": false,
@@ -265189,6 +265831,68 @@
         ]
       },
       {
+        "id": "configuration:ADVISORY_SCHEMA_KEYS",
+        "kind": "configuration",
+        "name": "ADVISORY_SCHEMA_KEYS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "ADVISORY_SCHEMA_KEYS",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:ADVISORY_SCHEMA_KEYS:classification",
+            "text": "ADVISORY_SCHEMA_KEYS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:AFTER_ONSET_FACTOR",
         "kind": "configuration",
         "name": "AFTER_ONSET_FACTOR",
@@ -265874,16 +266578,21 @@
         "owner": "incident",
         "classification": "OPERATOR_FEATURE",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/alerts/partition-maintenance.ts"
         ],
         "contract": {
           "name": "ALERT_PARTITION_MAINTENANCE",
           "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/alerts/partition-maintenance.ts"
           ],
           "required": false,
           "secret": false,
           "scopes": [
+            "operation",
             "runtime"
           ],
           "defaults": [],
@@ -265924,6 +266633,8 @@
             "id": "configuration:ALERT_PARTITION_MAINTENANCE:classification",
             "text": "ALERT_PARTITION_MAINTENANCE is classified as OPERATOR_FEATURE and owned by incident.",
             "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs",
               "src/lib/alerts/partition-maintenance.ts"
             ],
             "verification": "source"
@@ -265951,16 +266662,21 @@
         "owner": "incident",
         "classification": "OPERATOR_FEATURE",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/alerts/partition-maintenance.ts"
         ],
         "contract": {
           "name": "ALERT_PARTITION_MONTHS_AHEAD",
           "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/alerts/partition-maintenance.ts"
           ],
           "required": false,
           "secret": false,
           "scopes": [
+            "operation",
             "runtime"
           ],
           "defaults": [],
@@ -265999,6 +266715,8 @@
             "id": "configuration:ALERT_PARTITION_MONTHS_AHEAD:classification",
             "text": "ALERT_PARTITION_MONTHS_AHEAD is classified as OPERATOR_FEATURE and owned by incident.",
             "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs",
               "src/lib/alerts/partition-maintenance.ts"
             ],
             "verification": "source"
@@ -266026,16 +266744,21 @@
         "owner": "incident",
         "classification": "OPERATOR_FEATURE",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/alerts/partition-maintenance.ts"
         ],
         "contract": {
           "name": "ALERT_PARTITION_RETENTION_MONTHS",
           "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/alerts/partition-maintenance.ts"
           ],
           "required": false,
           "secret": false,
           "scopes": [
+            "operation",
             "runtime"
           ],
           "defaults": [],
@@ -266074,6 +266797,8 @@
             "id": "configuration:ALERT_PARTITION_RETENTION_MONTHS:classification",
             "text": "ALERT_PARTITION_RETENTION_MONTHS is classified as OPERATOR_FEATURE and owned by incident.",
             "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs",
               "src/lib/alerts/partition-maintenance.ts"
             ],
             "verification": "source"
@@ -267738,6 +268463,68 @@
         ]
       },
       {
+        "id": "configuration:API_VERSION",
+        "kind": "configuration",
+        "name": "API_VERSION",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "API_VERSION",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:API_VERSION:classification",
+            "text": "API_VERSION is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:APP_BASE_URL",
         "kind": "configuration",
         "name": "APP_BASE_URL",
@@ -268307,6 +269094,68 @@
         ]
       },
       {
+        "id": "configuration:APPS",
+        "kind": "configuration",
+        "name": "APPS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "APPS",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:APPS:classification",
+            "text": "APPS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:ARCH",
         "kind": "configuration",
         "name": "ARCH",
@@ -268778,6 +269627,68 @@
           "api:/api/status/subscriptions/unsubscribe",
           "api:/api/status/subscriptions/verify",
           "ui:/action-items"
+        ]
+      },
+      {
+        "id": "configuration:ATTRIBUTE",
+        "kind": "configuration",
+        "name": "ATTRIBUTE",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "ATTRIBUTE",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:ATTRIBUTE:classification",
+            "text": "ATTRIBUTE is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
         ]
       },
       {
@@ -273410,16 +274321,21 @@
         "owner": "platform",
         "classification": "OPERATOR_FEATURE",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/intelligence/noise-controls/sweep.ts"
         ],
         "contract": {
           "name": "CASCADE_CURSOR",
           "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/intelligence/noise-controls/sweep.ts"
           ],
           "required": false,
           "secret": false,
           "scopes": [
+            "operation",
             "runtime"
           ],
           "defaults": [],
@@ -273456,6 +274372,8 @@
             "id": "configuration:CASCADE_CURSOR:classification",
             "text": "CASCADE_CURSOR is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs",
               "src/lib/intelligence/noise-controls/sweep.ts"
             ],
             "verification": "source"
@@ -282112,16 +283030,21 @@
         "owner": "platform",
         "classification": "OPERATOR_FEATURE",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/intelligence/connectors/adapters/base14.ts"
         ],
         "contract": {
           "name": "DISCOVERY",
           "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/intelligence/connectors/adapters/base14.ts"
           ],
           "required": false,
           "secret": false,
           "scopes": [
+            "operation",
             "runtime"
           ],
           "defaults": [],
@@ -282158,6 +283081,8 @@
             "id": "configuration:DISCOVERY:classification",
             "text": "DISCOVERY is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs",
               "src/lib/intelligence/connectors/adapters/base14.ts"
             ],
             "verification": "source"
@@ -282985,6 +283910,68 @@
             "text": "DURATION_SECONDS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
             "evidence": [
               "scripts/soak-test-2h.sh"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "configuration:EDGES",
+        "kind": "configuration",
+        "name": "EDGES",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "EDGES",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:EDGES:classification",
+            "text": "EDGES is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
             ],
             "verification": "source"
           }
@@ -285874,6 +286861,130 @@
         ]
       },
       {
+        "id": "configuration:FAILED",
+        "kind": "configuration",
+        "name": "FAILED",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "FAILED",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:FAILED:classification",
+            "text": "FAILED is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "configuration:FAILED_RECORDS",
+        "kind": "configuration",
+        "name": "FAILED_RECORDS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "FAILED_RECORDS",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:FAILED_RECORDS:classification",
+            "text": "FAILED_RECORDS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:FIELD",
         "kind": "configuration",
         "name": "FIELD",
@@ -285932,6 +287043,68 @@
             "evidence": [
               "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
               "scripts/dist/intelligence-lane-thread-integration.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "configuration:FILES",
+        "kind": "configuration",
+        "name": "FILES",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "FILES",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:FILES:classification",
+            "text": "FILES is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
               "scripts/dist/intelligence-lane-thread.cjs"
             ],
             "verification": "source"
@@ -287899,6 +289072,68 @@
         ]
       },
       {
+        "id": "configuration:HISTORY",
+        "kind": "configuration",
+        "name": "HISTORY",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "HISTORY",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:HISTORY:classification",
+            "text": "HISTORY is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:HOME",
         "kind": "configuration",
         "name": "HOME",
@@ -288273,16 +289508,21 @@
         "owner": "platform",
         "classification": "OPERATOR_FEATURE",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/intelligence/connectors/adapters/base14.ts"
         ],
         "contract": {
           "name": "IDENTITY",
           "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/intelligence/connectors/adapters/base14.ts"
           ],
           "required": false,
           "secret": false,
           "scopes": [
+            "operation",
             "runtime"
           ],
           "defaults": [],
@@ -288319,6 +289559,8 @@
             "id": "configuration:IDENTITY:classification",
             "text": "IDENTITY is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs",
               "src/lib/intelligence/connectors/adapters/base14.ts"
             ],
             "verification": "source"
@@ -295941,6 +297183,68 @@
         ]
       },
       {
+        "id": "configuration:ITEMS",
+        "kind": "configuration",
+        "name": "ITEMS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "ITEMS",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:ITEMS:classification",
+            "text": "ITEMS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:JIRA_REQUEST_TIMEOUT_MS",
         "kind": "configuration",
         "name": "JIRA_REQUEST_TIMEOUT_MS",
@@ -298277,6 +299581,68 @@
         ]
       },
       {
+        "id": "configuration:LOG_CHUNKS",
+        "kind": "configuration",
+        "name": "LOG_CHUNKS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "LOG_CHUNKS",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:LOG_CHUNKS:classification",
+            "text": "LOG_CHUNKS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:LOG_DIR",
         "kind": "configuration",
         "name": "LOG_DIR",
@@ -298499,6 +299865,68 @@
           "api:/api/status/subscriptions/unsubscribe",
           "api:/api/status/subscriptions/verify",
           "ui:/action-items"
+        ]
+      },
+      {
+        "id": "configuration:LOG_LINES",
+        "kind": "configuration",
+        "name": "LOG_LINES",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "LOG_LINES",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:LOG_LINES:classification",
+            "text": "LOG_LINES is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
         ]
       },
       {
@@ -301855,6 +303283,68 @@
           "api:/api/status/subscriptions/unsubscribe",
           "api:/api/status/subscriptions/verify",
           "ui:/action-items"
+        ]
+      },
+      {
+        "id": "configuration:MAX_LOOKBACK_MS",
+        "kind": "configuration",
+        "name": "MAX_LOOKBACK_MS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "MAX_LOOKBACK_MS",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:MAX_LOOKBACK_MS:classification",
+            "text": "MAX_LOOKBACK_MS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
         ]
       },
       {
@@ -310352,6 +311842,68 @@
         ]
       },
       {
+        "id": "configuration:MINUTE",
+        "kind": "configuration",
+        "name": "MINUTE",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "MINUTE",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:MINUTE:classification",
+            "text": "MINUTE is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:MINUTE_MS",
         "kind": "configuration",
         "name": "MINUTE_MS",
@@ -312710,6 +314262,68 @@
             "text": "NODE_VERSION is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
             "evidence": [
               "scripts/build-agent-artifacts.sh"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "configuration:NOISE",
+        "kind": "configuration",
+        "name": "NOISE",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "NOISE",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:NOISE:classification",
+            "text": "NOISE is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
             ],
             "verification": "source"
           }
@@ -328254,6 +329868,68 @@
         ]
       },
       {
+        "id": "configuration:PIPELINE_LIMITS",
+        "kind": "configuration",
+        "name": "PIPELINE_LIMITS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "PIPELINE_LIMITS",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:PIPELINE_LIMITS:classification",
+            "text": "PIPELINE_LIMITS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:PKCE_CODE_VERIFIER_COOKIE_NAME",
         "kind": "configuration",
         "name": "PKCE_CODE_VERIFIER_COOKIE_NAME",
@@ -337653,6 +339329,68 @@
         ]
       },
       {
+        "id": "configuration:RUNS",
+        "kind": "configuration",
+        "name": "RUNS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "RUNS",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:RUNS:classification",
+            "text": "RUNS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:RUNTIME_TTL_MS",
         "kind": "configuration",
         "name": "RUNTIME_TTL_MS",
@@ -339198,6 +340936,68 @@
         ]
       },
       {
+        "id": "configuration:SCOUT_MAX_WINDOW_MS",
+        "kind": "configuration",
+        "name": "SCOUT_MAX_WINDOW_MS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "SCOUT_MAX_WINDOW_MS",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:SCOUT_MAX_WINDOW_MS:classification",
+            "text": "SCOUT_MAX_WINDOW_MS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:SCRIPT_DIR",
         "kind": "configuration",
         "name": "SCRIPT_DIR",
@@ -339865,6 +341665,68 @@
           "api:/api/status/subscriptions/unsubscribe",
           "api:/api/status/subscriptions/verify",
           "ui:/action-items"
+        ]
+      },
+      {
+        "id": "configuration:SERVICE",
+        "kind": "configuration",
+        "name": "SERVICE",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "SERVICE",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:SERVICE:classification",
+            "text": "SERVICE is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
         ]
       },
       {
@@ -346024,16 +347886,21 @@
         "owner": "platform",
         "classification": "OPERATOR_FEATURE",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/intelligence/noise-controls/cache.ts"
         ],
         "contract": {
           "name": "STORM_PARENT_ELIGIBLE",
           "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/intelligence/noise-controls/cache.ts"
           ],
           "required": false,
           "secret": false,
           "scopes": [
+            "operation",
             "runtime"
           ],
           "defaults": [],
@@ -346070,6 +347937,8 @@
             "id": "configuration:STORM_PARENT_ELIGIBLE:classification",
             "text": "STORM_PARENT_ELIGIBLE is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs",
               "src/lib/intelligence/noise-controls/cache.ts"
             ],
             "verification": "source"
@@ -349484,6 +351353,68 @@
         ]
       },
       {
+        "id": "configuration:TOKEN",
+        "kind": "configuration",
+        "name": "TOKEN",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "TOKEN",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": true,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:TOKEN:classification",
+            "text": "TOKEN is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "configuration:TOKEN_CACHE_MAX",
         "kind": "configuration",
         "name": "TOKEN_CACHE_MAX",
@@ -349607,6 +351538,68 @@
             "evidence": [
               "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
               "scripts/dist/intelligence-lane-thread-integration.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "configuration:TOKEN_SKEW_MS",
+        "kind": "configuration",
+        "name": "TOKEN_SKEW_MS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "TOKEN_SKEW_MS",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": true,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:TOKEN_SKEW_MS:classification",
+            "text": "TOKEN_SKEW_MS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
               "scripts/dist/intelligence-lane-thread.cjs"
             ],
             "verification": "source"
@@ -350199,6 +352192,68 @@
             "evidence": [
               "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
               "scripts/dist/intelligence-lane-thread-integration.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "configuration:TRACE_LIMIT",
+        "kind": "configuration",
+        "name": "TRACE_LIMIT",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "TRACE_LIMIT",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:TRACE_LIMIT:classification",
+            "text": "TRACE_LIMIT is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
               "scripts/dist/intelligence-lane-thread.cjs"
             ],
             "verification": "source"
@@ -351573,6 +353628,77 @@
             "evidence": [
               "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
               "scripts/dist/intelligence-lane-thread-integration.cjs",
+              "scripts/dist/intelligence-lane-thread.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "configuration:UNHEALTHY",
+        "kind": "configuration",
+        "name": "UNHEALTHY",
+        "owner": "deployment",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs"
+        ],
+        "contract": {
+          "name": "UNHEALTHY",
+          "sources": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": [
+            "operate/deploy/docker-compose/troubleshooting.md",
+            "operate/deploy/helm/troubleshooting.md",
+            "operate/deploy/kubernetes/troubleshooting.md",
+            "operate/deploy/kustomize/troubleshooting.md",
+            "operate/deploy/swarm/troubleshooting.md",
+            "troubleshooting/installation/misdirected-request.md",
+            "troubleshooting/installation/startup-fails.md",
+            "troubleshooting/kubernetes/pods-not-ready.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:UNHEALTHY:classification",
+            "text": "UNHEALTHY is classified as INTERNAL_IMPLEMENTATION and owned by deployment.",
+            "evidence": [
+              "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
               "scripts/dist/intelligence-lane-thread.cjs"
             ],
             "verification": "source"
@@ -416054,8 +418180,8 @@
       }
     ],
     "summary": {
-      "total": 3303,
-      "claims": 4582,
+      "total": 3326,
+      "claims": 4605,
       "unsupportedClaims": 0,
       "supported": 1172,
       "documentedSupported": 1141,
@@ -416066,7 +418192,7 @@
         "api": 516,
         "api-scope": 73,
         "authorization-action": 85,
-        "configuration": 1207,
+        "configuration": 1230,
         "deployment-topology": 4,
         "enum": 130,
         "integration": 28,
@@ -416080,7 +418206,7 @@
       },
       "byClassification": {
         "ADMIN_FEATURE": 201,
-        "INTERNAL_IMPLEMENTATION": 2131,
+        "INTERNAL_IMPLEMENTATION": 2154,
         "OPERATOR_FEATURE": 616,
         "PUBLIC_API": 130,
         "PUBLIC_FEATURE": 225

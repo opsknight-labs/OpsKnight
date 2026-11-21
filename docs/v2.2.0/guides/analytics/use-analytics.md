@@ -39,7 +39,7 @@ Pick **24 hours**, **7 days**, **30 days** (default), **90 days**, **6 months**,
 ## Filter
 
 Filter by **Teams**, **Services**, **Urgency**, **Status**, **Priority** and **Assignee**
-(including _Unassigned_). Teams, services and priorities accept several values. Filters apply to
+(including *Unassigned*). Teams, services and priorities accept several values. Filters apply to
 every section and are kept in the URL, so you can bookmark or share a view; unknown or invalid
 values in a link are ignored. Selecting a row in **Services** filters the whole page to that
 service — the incident page's **Service analytics** link opens exactly that view.
@@ -68,24 +68,24 @@ value is missing or zero. The Services table adds the change in incident count p
 These are the same definitions shown in each tile's info popover and used as the CSV headers.
 A metric with no qualifying incidents shows **No data**, never 0.
 
-| Metric                | Definition                                                                                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Incidents             | Incidents created in the selected period that match the filters.                                                                                   |
-| Open now              | Incidents matching the filters that are open, acknowledged or snoozed right now, whenever they were created.                                       |
-| MTTA (median)         | Median time from creation to first acknowledgement, excluding SLA pauses. Unacknowledged incidents are excluded.                                   |
-| MTTA (p90)            | 90th percentile time to acknowledge: nine in ten incidents were acknowledged faster.                                                               |
-| MTTR (median)         | Median time from creation to resolution, excluding SLA pauses. Only resolved incidents count.                                                      |
-| MTTR (p90)            | 90th percentile time to resolve: nine in ten resolved incidents closed faster.                                                                     |
-| Ack SLA met           | Share of incidents acknowledged within the SLA target frozen on the incident at creation. Incidents still inside their target are not counted yet. |
-| Resolve SLA met       | Share of incidents resolved within the SLA target frozen on the incident at creation. Open incidents count once they pass their target.            |
-| Escalated             | Share of incidents with at least one escalation to a further responder or level.                                                                   |
-| After hours           | Share of incidents created outside business hours (Mon–Fri 08:00–18:00 in the workspace business-hours timezone).                                  |
-| Alerts per incident   | Alerts grouped into each incident on average. High values point at noisy, duplicated signals.                                                      |
-| Auto-resolved         | Share of resolved incidents closed by the source recovering, an automation or a timeout rather than a person.                                      |
-| Postmortems published | Share of resolved high-urgency incidents that have a published postmortem.                                                                         |
-| Open action items     | Postmortem action items not yet completed for incidents in the period.                                                                             |
-| Overdue action items  | Open action items whose due date has passed.                                                                                                       |
-| On-call hours         | Scheduled on-call time in the period, from schedule layers and overrides.                                                                          |
+| Metric | Definition |
+| --- | --- |
+| Incidents | Incidents created in the selected period that match the filters. |
+| Open now | Incidents matching the filters that are open, acknowledged or snoozed right now, whenever they were created. |
+| MTTA (median) | Median time from creation to first acknowledgement, excluding SLA pauses. Unacknowledged incidents are excluded. |
+| MTTA (p90) | 90th percentile time to acknowledge: nine in ten incidents were acknowledged faster. |
+| MTTR (median) | Median time from creation to resolution, excluding SLA pauses. Only resolved incidents count. |
+| MTTR (p90) | 90th percentile time to resolve: nine in ten resolved incidents closed faster. |
+| Ack SLA met | Share of incidents acknowledged within the SLA target frozen on the incident at creation. Incidents still inside their target are not counted yet. |
+| Resolve SLA met | Share of incidents resolved within the SLA target frozen on the incident at creation. Open incidents count once they pass their target. |
+| Escalated | Share of incidents with at least one escalation to a further responder or level. |
+| After hours | Share of incidents created outside business hours (Mon–Fri 08:00–18:00 in the workspace business-hours timezone). |
+| Alerts per incident | Alerts grouped into each incident on average. High values point at noisy, duplicated signals. |
+| Auto-resolved | Share of resolved incidents closed by the source recovering, an automation or a timeout rather than a person. |
+| Postmortems published | Share of resolved high-urgency incidents that have a published postmortem. |
+| Open action items | Postmortem action items not yet completed for incidents in the period. |
+| Overdue action items | Open action items whose due date has passed. |
+| On-call hours | Scheduled on-call time in the period, from schedule layers and overrides. |
 
 ## Export CSV
 
@@ -109,7 +109,7 @@ them as formulas.
 
 - **"No data" on a tile:** nothing in the range qualifies (for example no resolved incidents for
   MTTR). Widen the range or clear filters.
-- **Totals differ from the incident list:** Analytics counts incidents _created_ in the range; the
+- **Totals differ from the incident list:** Analytics counts incidents *created* in the range; the
   incident list may filter by status or activity instead.
 - **A section shows an error:** use the retry button on that section; other sections are unaffected.
 - **Export returns 403:** ask an administrator for a role with `REPORT_EXPORT`.

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "1a07ab350c84458a207f4bd15feafadb1ba4161b",
+  "sourceRevision": "f6812cdaec6015925d8068c2f03d976be5cb6b0c",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -22740,16 +22740,21 @@
       "owner": "incident",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/alerts/partition-maintenance.ts"
       ],
       "contract": {
         "name": "ALERT_PARTITION_MAINTENANCE",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/alerts/partition-maintenance.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
+          "operation",
           "runtime"
         ],
         "defaults": [],
@@ -22790,6 +22795,8 @@
           "id": "configuration:ALERT_PARTITION_MAINTENANCE:classification",
           "text": "ALERT_PARTITION_MAINTENANCE is classified as OPERATOR_FEATURE and owned by incident.",
           "evidence": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/alerts/partition-maintenance.ts"
           ],
           "verification": "source"
@@ -22817,16 +22824,21 @@
       "owner": "incident",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/alerts/partition-maintenance.ts"
       ],
       "contract": {
         "name": "ALERT_PARTITION_MONTHS_AHEAD",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/alerts/partition-maintenance.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
+          "operation",
           "runtime"
         ],
         "defaults": [],
@@ -22865,6 +22877,8 @@
           "id": "configuration:ALERT_PARTITION_MONTHS_AHEAD:classification",
           "text": "ALERT_PARTITION_MONTHS_AHEAD is classified as OPERATOR_FEATURE and owned by incident.",
           "evidence": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/alerts/partition-maintenance.ts"
           ],
           "verification": "source"
@@ -22892,16 +22906,21 @@
       "owner": "incident",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/alerts/partition-maintenance.ts"
       ],
       "contract": {
         "name": "ALERT_PARTITION_RETENTION_MONTHS",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/alerts/partition-maintenance.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
+          "operation",
           "runtime"
         ],
         "defaults": [],
@@ -22940,6 +22959,8 @@
           "id": "configuration:ALERT_PARTITION_RETENTION_MONTHS:classification",
           "text": "ALERT_PARTITION_RETENTION_MONTHS is classified as OPERATOR_FEATURE and owned by incident.",
           "evidence": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/alerts/partition-maintenance.ts"
           ],
           "verification": "source"
@@ -27332,16 +27353,21 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/intelligence/noise-controls/sweep.ts"
       ],
       "contract": {
         "name": "CASCADE_CURSOR",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/intelligence/noise-controls/sweep.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
+          "operation",
           "runtime"
         ],
         "defaults": [],
@@ -27378,6 +27404,8 @@
           "id": "configuration:CASCADE_CURSOR:classification",
           "text": "CASCADE_CURSOR is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/intelligence/noise-controls/sweep.ts"
           ],
           "verification": "source"
@@ -32308,16 +32336,21 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/intelligence/connectors/adapters/base14.ts"
       ],
       "contract": {
         "name": "DISCOVERY",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/intelligence/connectors/adapters/base14.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
+          "operation",
           "runtime"
         ],
         "defaults": [],
@@ -32354,6 +32387,8 @@
           "id": "configuration:DISCOVERY:classification",
           "text": "DISCOVERY is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/intelligence/connectors/adapters/base14.ts"
           ],
           "verification": "source"
@@ -36012,16 +36047,21 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/intelligence/connectors/adapters/base14.ts"
       ],
       "contract": {
         "name": "IDENTITY",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/intelligence/connectors/adapters/base14.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
+          "operation",
           "runtime"
         ],
         "defaults": [],
@@ -36058,6 +36098,8 @@
           "id": "configuration:IDENTITY:classification",
           "text": "IDENTITY is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/intelligence/connectors/adapters/base14.ts"
           ],
           "verification": "source"
@@ -68745,16 +68787,21 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+        "scripts/dist/intelligence-lane-thread.cjs",
         "src/lib/intelligence/noise-controls/cache.ts"
       ],
       "contract": {
         "name": "STORM_PARENT_ELIGIBLE",
         "sources": [
+          "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+          "scripts/dist/intelligence-lane-thread.cjs",
           "src/lib/intelligence/noise-controls/cache.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
+          "operation",
           "runtime"
         ],
         "defaults": [],
@@ -68791,6 +68838,8 @@
           "id": "configuration:STORM_PARENT_ELIGIBLE:classification",
           "text": "STORM_PARENT_ELIGIBLE is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
+            "scripts/dist/intelligence-lane-thread-bundle-test.cjs",
+            "scripts/dist/intelligence-lane-thread.cjs",
             "src/lib/intelligence/noise-controls/cache.ts"
           ],
           "verification": "source"

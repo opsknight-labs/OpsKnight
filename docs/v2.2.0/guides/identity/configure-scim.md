@@ -57,6 +57,7 @@ verification:
 > rosters label members added by a directory group **Directory**. For group-based team
 > membership without SCIM, see [team rules](./map-roles-and-teams/#teams).
 
+
 SCIM manages directory identities independently from SSO. OIDC controls sign-in and
 its explicit role mapping; SCIM profile changes never change system roles or role
 ownership. Dedicated emergency accounts and credentials are separate database

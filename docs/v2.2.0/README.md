@@ -58,14 +58,6 @@ snooze, known limitations, and rollback.
 An organisation-wide workflow builder and alert correlation (AIOps) are not part of 2.2.0. Workflow
 automation in this release is [per-service automation](./guides/services/service-automation).
 
-## Intelligence (AIOps)
-
-- [Use suggestions](./guides/intelligence/use-suggestions.md) and [basic-mode questions](./guides/intelligence/basic-mode.md)
-- [AIOps overview](./guides/intelligence/aiops-overview.md), [alerts and changes lists](./guides/intelligence/alerts-and-changes-lists.md), [intelligence on incidents and lists](./guides/intelligence/incidents-and-lists.md)
-  and [noise-control builders](./guides/intelligence/noise-control-builders.md)
-- [Intelligence on services, teams and dashboards](./guides/intelligence/services-teams-and-dashboards.md)
-- Operating: [production guide](./operate/intelligence/production.md)
-
 ## Start here
 
 - [Evaluate with Docker Compose](./start/quickstart)

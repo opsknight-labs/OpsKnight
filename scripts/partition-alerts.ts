@@ -8,7 +8,7 @@
  *   tsx scripts/partition-alerts.ts --apply --step=finalize # stop mirroring to the old table
  *   tsx scripts/partition-alerts.ts --apply --step=rollback # after swap, before finalize
  *
- * See docs/v2.2.0/operate/data/alert-partitioning.md.
+ * See docs/v2.3.0/operate/data/alert-partitioning.md.
  */
 import prisma from '../src/lib/prisma';
 import { getPrismaPoolWaitCount } from '../src/lib/prisma-pool-pressure';

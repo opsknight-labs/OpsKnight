@@ -469,7 +469,7 @@
       "all_intelligence_database": "435 passed across 38 suites after Docker restart"
     },
     "blocker": null,
-    "guide": "docs/v2.2.0/guides/intelligence/basic-mode.md",
+    "guide": "docs/v2.3.0/guides/intelligence/basic-mode.md",
     "v2": {
       "status": "implemented_verified_locally",
       "branch": "feat/intelligence-engine",
@@ -556,7 +556,7 @@
         "13 read-tool families (observability x8, automation x2) offered only when the message or intent asks for that evidence; also applied to action messages; UNKNOWN non-action messages keep the full set",
         "14 scripted model median 11851.5 -> 7857 (-33.7%); investigation median 6545 -> 5943 (-9.2%); all 106 model + 14 investigation evals green",
         "15 offline cache estimator (src/lib/intelligence/ai/cache-estimate.ts) + eval gate asserting a stable tool/message prefix across steps; estimated cache-read share 0.514 recorded as baseline.json modelCacheReadShare; with reads weighted 0.1 the effective input is ~54% of raw (~-64% vs the uncached old median)",
-        "16 live cache measurement: SQUIRE_EVAL_PROVIDER_KIND=ANTHROPIC|BEDROCK npm run test:squire:eval writes cache.cacheReadShare to reports/squire-eval.json (documented in docs/v2.2.0/operate/intelligence/production.md)"
+        "16 live cache measurement: SQUIRE_EVAL_PROVIDER_KIND=ANTHROPIC|BEDROCK npm run test:squire:eval writes cache.cacheReadShare to reports/squire-eval.json (documented in docs/v2.3.0/operate/intelligence/production.md)"
       ],
       "gaps": [
         "Raw (uncached) input-token cut is -33.7% scripted / -9.2% investigation, below the -50-70% target; reaching it cache-adjusted relies on the offline estimate",
@@ -597,7 +597,7 @@
         "SHADOW defaults: new services get one CONTENT_TEMPLATE correlation rule in SHADOW while intelligence is on",
         "Changes: versioned label->service mapping with Backstage alias and exact-name fallback, unmapped list and one-click mapping on /changes",
         "Changes: GitHub/GitLab deployment and Kubernetes rollout mappers with signature verification and startedAt",
-        "Alert time partitioning (opt-in): scripts/partition-alerts.ts prepare/copy/swap/finalize/rollback with mirror triggers, dry-run default and pool/paging pause; lane partition maintenance behind ALERT_PARTITION_MAINTENANCE (default off); docs/v2.2.0/operate/data/alert-partitioning.md"
+        "Alert time partitioning (opt-in): scripts/partition-alerts.ts prepare/copy/swap/finalize/rollback with mirror triggers, dry-run default and pool/paging pause; lane partition maintenance behind ALERT_PARTITION_MAINTENANCE (default off); docs/v2.3.0/operate/data/alert-partitioning.md"
       ],
       "gaps": [
         "Noise-under-storm, pre-page grouping, HIGH storms, event model, service tier and scale items tracked by earlier waves"

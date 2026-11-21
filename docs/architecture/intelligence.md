@@ -332,7 +332,7 @@ Off by default: there are no templates after upgrade and a new one is created di
 `ObservabilityConnection` the service's team may use, and bounded tuning (threshold 2 to 50 MAD, 2 to 8
 baseline weeks, 15 to 360 minute window, 5 minute to 1 day interval; 10 templates per service, 500 in
 total). Code lives in `src/lib/intelligence/metric-anomaly/`; operators read
-[the how-to](../v2.2.0/operate/intelligence/metric-anomaly-evidence.md).
+[the how-to](../v2.3.0/operate/intelligence/metric-anomaly-evidence.md).
 
 - **Scheduling.** Once a minute the lane runs one index-backed probe for enabled templates whose interval
   has elapsed (at most 100 per check, oldest first) and enqueues one coalesced
@@ -735,7 +735,7 @@ port, so moving to a newer SDK later is a one-adapter change.
   utilisation and counts of budgets at 80% and 100% (no identifiers), alerted by `OpsKnightAiBudgetNearLimit`
   and `OpsKnightAiBudgetExhausted`. Only `scoped-budget.ts` writes the breakdown and only `cost.ts` writes
   prices and budgets (architecture test). The settings page shows 7/30-day spend by team, capability and model
-  with dependency-free bars backed by tables. Operator guide: `docs/v2.2.0/operate/intelligence/ai-cost.md`.
+  with dependency-free bars backed by tables. Operator guide: `docs/v2.3.0/operate/intelligence/ai-cost.md`.
 - **Token efficiency** (`ai/result-cache.ts`, `ai/call-site.ts`, `ai/brief.ts`, `ai/output-limits.ts`).
   - _Result cache (opt-in, `AiSettings.resultCacheEnabled`)._ `cachedGenerate` and `cachedGenerateStructured`
     wrap a resolved port. An entry in `AiResultCache` is keyed by capability, prompt id and
@@ -834,7 +834,7 @@ only their own table.
 ### Knowledge memory and proactive Squire (opt-in)
 
 Everything below is off by default and lives in `src/lib/intelligence/memory/`. Operator guide:
-`docs/v2.2.0/operate/intelligence/squire-memory.md`.
+`docs/v2.3.0/operate/intelligence/squire-memory.md`.
 
 **Knowledge index.** `KnowledgeChunk` holds bounded (800 characters, at most 6 per source), secret-redacted
 passages from postmortems (narrative plus, after it, a timeline summary of at most 12 entries, up to 5
