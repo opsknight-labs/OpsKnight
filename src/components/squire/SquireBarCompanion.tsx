@@ -37,7 +37,6 @@ const writeRounds = (value: number) => {
   }
 };
 
-const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 export default function SquireBarCompanion({
   name,
@@ -71,6 +70,22 @@ export default function SquireBarCompanion({
   const busy = useRef(false);
   const cancelled = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
+  // Pending waits of the current round; cancelling the round resolves them all at once.
+  const waiters = useRef(new Set<() => void>());
+  const wait = useCallback(
+    (ms: number) =>
+      new Promise<void>(resolve => {
+        if (cancelled.current) return resolve();
+        const done = () => {
+          clearTimeout(timer);
+          waiters.current.delete(done);
+          resolve();
+        };
+        const timer = setTimeout(done, ms);
+        waiters.current.add(done);
+      }),
+    []
+  );
 
   // Track the status bar: it exists only on desktop layouts and moves with the sidebar.
   useEffect(() => {
@@ -91,6 +106,14 @@ export default function SquireBarCompanion({
 
   // Home is the bar's right-hand corner.
   const home = bar ? bar.right - 56 : null;
+  /** Snap to the post without walking (used when a round is cut short). */
+  const snapHome = useCallback(() => {
+    if (home === null) return;
+    stageRef.current?.classList.remove('crouch', 'hurry', 'settle');
+    xRef.current = home;
+    setWalkMs(0);
+    setX(home);
+  }, [home]);
   useEffect(() => {
     if (home === null || busy.current) return;
     xRef.current = home;
@@ -122,7 +145,7 @@ export default function SquireBarCompanion({
     stageRef.current?.classList.add('settle');
     await wait(480);
     stageRef.current?.classList.remove('settle');
-  }, []);
+  }, [wait]);
 
   const round = useCallback(async () => {
     if (busy.current || !bar || home === null) return;
@@ -169,14 +192,16 @@ export default function SquireBarCompanion({
       setLantern(false);
       setScrollOpen(false);
       setMood('idle');
-      if (home !== null) await walkTo(home);
+      // Cut short (the chat opened): straight back to the post, no walk while the chat is open.
+      if (cancelled.current) snapHome();
+      else if (home !== null) await walkTo(home);
       setFacing('right');
       setShield(true);
       setPose('rest');
       setMood('offline');
       busy.current = false;
     }
-  }, [bar, home, open, motionAllowed, walkTo]);
+  }, [bar, home, open, motionAllowed, walkTo, wait, snapHome]);
 
   // Rounds start only when the person is idle, and never more often than ROUND_GAP_MS.
   useEffect(() => {
@@ -199,10 +224,15 @@ export default function SquireBarCompanion({
     };
   }, [bar, round]);
 
-  // Opening the chat cuts the round short: he stays awake at his post.
+  // Opening the chat cuts the round short at once: props away, scroll closed, back at his post.
   useEffect(() => {
-    if (open) cancelled.current = true;
-  }, [open]);
+    if (!open || !busy.current) return;
+    cancelled.current = true;
+    for (const done of [...waiters.current]) done();
+    setScrollOpen(false);
+    setLantern(false);
+    snapHome();
+  }, [open, snapHome]);
 
   if (!bar || x === null) return null;
 
