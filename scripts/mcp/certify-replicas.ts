@@ -21,7 +21,7 @@
  */
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { chromium, type Browser } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import { MCP_CATALOG } from '@/lib/mcp/catalog';
 
 const PASSWORD = 'Local-only MCP browser fixture passphrase 2026';
@@ -211,7 +211,7 @@ async function until(predicate: () => boolean | Promise<boolean>, timeoutMs: num
 async function main() {
   assertLocalDatabase();
   const { a, b } = parseArgs(process.argv.slice(2));
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const browser = await chromium.launch();
   const tag = randomBytes(3).toString('hex');
   try {

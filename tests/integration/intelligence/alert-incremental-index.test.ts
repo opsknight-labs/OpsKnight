@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 import { beforeEach, expect, it } from 'vitest';
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
 import {
@@ -27,7 +27,7 @@ it('reads only new/edited payloads in a 5k-alert incident and repairs labels, or
       payload: { summary: 'Pool exhausted', custom_details: { env: 'prod' } },
     })),
   });
-  const client = new PrismaClient();
+  const client = createPrismaClient();
   let payloadRowsRead = 0;
   client.$use(async (params, next) => {
     const rows: unknown = await next(params);

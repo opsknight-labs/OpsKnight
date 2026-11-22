@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import bcrypt from 'bcryptjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,7 +12,7 @@ import path from 'node:path';
  * replay. Each surface is checked at 1280 and 390 px in light and dark with axe. With INTEL_SHOTS_DIR
  * set, the last test also writes screenshots of each surface next to the screen it must match.
  */
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const prefix = 'e2e-ops-';
 const tag = `${prefix}${Date.now()}`;
 const email = 'e2e-intel-ops@example.com';

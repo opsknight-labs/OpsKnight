@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 import { beforeEach, expect, it } from 'vitest';
 import { backfillAlertShapes } from '@/lib/alerts/backfill';
 import {
@@ -64,7 +64,7 @@ it('skips a concurrently edited source and safely normalizes it on the next pass
   const alert = await db.alert.create({
     data: { serviceId: service.id, payload: { summary: 'Old warning', severity: 'warning' } },
   });
-  const client = new PrismaClient();
+  const client = createPrismaClient();
   let edited = false;
   client.$use(async (params, next) => {
     const result: unknown = await next(params);

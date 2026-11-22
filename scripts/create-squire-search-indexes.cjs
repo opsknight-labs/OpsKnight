@@ -6,7 +6,7 @@
  *
  *   node scripts/create-squire-search-indexes.cjs
  */
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('./lib/db-runtime.cjs');
 const { resolveDatabaseUrl } = require('./db-connection-resolver.cjs');
 
 const rawDatabaseUrl = resolveDatabaseUrl({ preferDirect: true });
@@ -16,7 +16,7 @@ if (!rawDatabaseUrl) {
 }
 const databaseUrl = new URL(rawDatabaseUrl);
 databaseUrl.searchParams.set('connection_limit', '1');
-const prisma = new PrismaClient({ datasourceUrl: databaseUrl.toString() });
+const prisma = createPrismaClient({ url: databaseUrl.toString() });
 
 const INDEXES = [
   {

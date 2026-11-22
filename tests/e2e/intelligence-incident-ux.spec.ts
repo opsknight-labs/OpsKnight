@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import bcrypt from 'bcryptjs';
 import { enableSuggestMode } from '../lib/intelligence-e2e-fixture';
 
@@ -11,7 +11,7 @@ import { enableSuggestMode } from '../lib/intelligence-e2e-fixture';
  * directly and removed afterwards. The group respects the service's intelligence mode, so the spec switches
  * the engine to SUGGEST for its run and restores what it found.
  */
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const email = 'e2e-intelligence-h2@example.com';
 const password = 'Intelligence-H2-E2E-Pass-5521!';
 const tag = `e2e-intel-h2-${Date.now()}`;

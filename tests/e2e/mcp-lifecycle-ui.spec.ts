@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import { randomBytes } from 'node:crypto';
 import { clearSignInThrottle } from './mcp-login-limits';
 
@@ -13,7 +13,7 @@ test.beforeEach(clearSignInThrottle);
 
 test.describe.configure({ mode: 'serial' });
 
-const db = new PrismaClient();
+const db = createPrismaClient();
 const tag = randomBytes(4).toString('hex');
 // A metadata-document client: its id is a URL, so the detail link must encode it into one segment.
 const clientId = `https://claude.ai/oauth/e2e-${tag}.json`;

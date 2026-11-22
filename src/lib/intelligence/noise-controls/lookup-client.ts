@@ -1,5 +1,6 @@
 import 'server-only';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '@/lib/db/create-client';
 import { logger } from '@/lib/logger';
 import {
   configurePrismaDatasource,
@@ -106,7 +107,7 @@ export function getNoiseLookupClient(timeoutMs: number): PrismaClient | null {
     return null;
   }
   const previous = current?.client;
-  const client = new PrismaClient({ datasourceUrl: url });
+  const client = createPrismaClient({ url: url });
   current = { client, timeoutMs, poolSize };
   void previous?.$disconnect().catch(() => undefined);
   // Connect in the background; lookups made before it is ready fail open on the deadline.
