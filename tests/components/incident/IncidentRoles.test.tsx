@@ -31,12 +31,51 @@ describe('IncidentRoles', () => {
         users={[]}
         currentUserId="viewer"
         onSetRole={vi.fn()}
+        showAllRoles
       />
     );
     expect(screen.getByRole('region', { name: 'Incident roles' })).toBeInTheDocument();
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
     expect(screen.getByText('Unassigned')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('folds empty non-commander roles behind one chip and opens them on click', () => {
+    render(
+      <IncidentRoles
+        roles={[
+          slot({ canTakeSelf: true }),
+          slot({ roleKey: 'OPS_LEAD', label: 'Operations lead', shortLabel: 'Ops lead', canAssignOthers: true }),
+          slot({ roleKey: 'SCRIBE', label: 'Scribe', shortLabel: 'Scribe', canAssignOthers: true }),
+        ]}
+        users={[]}
+        currentUserId="u-me"
+        onSetRole={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Commander')).toBeInTheDocument();
+    expect(screen.queryByText('Ops lead')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Show more roles: Operations lead, Scribe/ }));
+    expect(screen.getByText('Ops lead')).toBeInTheDocument();
+    expect(screen.getByText('Scribe')).toBeInTheDocument();
+  });
+
+  it('keeps a held role visible and hides the fold chip from read-only viewers', () => {
+    render(
+      <IncidentRoles
+        roles={[
+          slot({}),
+          slot({ roleKey: 'SCRIBE', label: 'Scribe', shortLabel: 'Scribe', holder: ada }),
+          slot({ roleKey: 'OPS_LEAD', label: 'Operations lead', shortLabel: 'Ops lead' }),
+        ]}
+        users={[]}
+        currentUserId="viewer"
+        onSetRole={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.queryByText('Ops lead')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Show more roles/ })).not.toBeInTheDocument();
   });
 
   it('lets an operator take command from the empty slot', async () => {

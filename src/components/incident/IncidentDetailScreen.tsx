@@ -513,6 +513,7 @@ export default async function IncidentDetailScreen({
       currentUserId={user.id}
       onSetRole={handleSetRole}
       presentation={presentation}
+      showAllRoles={incident.priority === 'P1' || incident.priority === 'P2'}
     />
   );
 

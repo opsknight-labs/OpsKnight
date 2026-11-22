@@ -29,6 +29,8 @@ type IncidentRolesProps = {
   currentUserId: string;
   onSetRole: (roleKey: IncidentRoleKey, userId: string | null) => Promise<unknown>;
   presentation?: 'desktop' | 'mobile';
+  /** Major incidents (P1/P2) show every role up front; others start with the commander only. */
+  showAllRoles?: boolean;
 };
 
 /** Roles strip in the incident hero: one slot per catalog role, assign/take/clear in place. */
@@ -38,7 +40,17 @@ export default function IncidentRoles({
   currentUserId,
   onSetRole,
   presentation = 'desktop',
+  showAllRoles = false,
 }: IncidentRolesProps) {
+  const [expanded, setExpanded] = useState(showAllRoles);
+  // Commander always; any role someone holds; the rest fold into one "+ N roles" chip.
+  const visible = expanded
+    ? roles
+    : roles.filter(role => role.roleKey === 'COMMANDER' || role.holder);
+  const folded = roles.filter(role => !visible.includes(role));
+  const canFill = folded.some(role => role.canAssignOthers || role.canTakeSelf);
+  const stacked = presentation === 'mobile';
+
   return (
     <section aria-label="Incident roles">
       <ul
@@ -47,17 +59,41 @@ export default function IncidentRoles({
           presentation !== 'mobile' && 'lg:grid-cols-4 xl:grid-cols-2'
         )}
       >
-        {roles.map(role => (
+        {visible.map(role => (
           <li key={role.roleKey} className="min-w-0">
             <RoleSlot
               role={role}
               users={users}
               currentUserId={currentUserId}
               onSetRole={onSetRole}
-              stacked={presentation === 'mobile'}
+              stacked={stacked}
             />
           </li>
         ))}
+        {folded.length > 0 && canFill && (
+          <li className="min-w-0">
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              title={folded.map(role => role.label).join(', ')}
+              aria-label={`Show more roles: ${folded.map(role => role.label).join(', ')}`}
+              className={cn(
+                'flex w-full min-w-0 items-center gap-2 rounded-lg border border-dashed border-border/80 pl-1.5 pr-2.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+                stacked ? 'h-11' : 'h-9'
+              )}
+            >
+              <span
+                aria-hidden
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border"
+              >
+                <Plus className="h-3 w-3" />
+              </span>
+              <span className="truncate">
+                {folded.length} more {folded.length === 1 ? 'role' : 'roles'}
+              </span>
+            </button>
+          </li>
+        )}
       </ul>
     </section>
   );
