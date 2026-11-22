@@ -48,6 +48,7 @@ async function impact(
       endedAt: endHoursAgo === null ? null : new Date(now.getTime() - endHoursAgo * HOUR),
     },
   });
+  return incident;
 }
 
 describe('business impact report', () => {
@@ -79,7 +80,28 @@ describe('business impact report', () => {
       },
     });
     // web: 4 h; api: 2 h overlapping web's last hour; hidden: 10 h but invisible to the reader.
-    await impact(checkout.id, web.id, 10, 6, now);
+    const webIncident = await impact(checkout.id, web.id, 10, 6, now);
+    // The web incident reopened for an hour (a second interval), and one later interval of it
+    // was unmarked: the hour counts once, the unmarked interval not at all, the incident once.
+    await db.incidentBusinessServiceImpact.createMany({
+      data: [
+        {
+          incidentId: webIncident.id,
+          businessServiceId: checkout.id,
+          source: 'DIRECT',
+          startedAt: new Date(now.getTime() - 4 * HOUR),
+          endedAt: new Date(now.getTime() - 3 * HOUR),
+        },
+        {
+          incidentId: webIncident.id,
+          businessServiceId: checkout.id,
+          source: 'MANUAL',
+          excluded: true,
+          startedAt: new Date(now.getTime() - 2 * HOUR),
+          endedAt: new Date(now.getTime() - 1 * HOUR),
+        },
+      ],
+    });
     await impact(checkout.id, api.id, 7, 5, now);
     await impact(checkout.id, hidden.id, 30, 20, now);
     await impact(secret.id, hidden.id, 30, 20, now);
@@ -94,13 +116,13 @@ describe('business impact report', () => {
     );
     expect(report.rows.map(row => row.id)).toEqual([checkout.id, quiet.id]);
     const [first, second] = report.rows;
-    // Union: 30→20 h, and 10→5 h = 15 h impacted; counted once though web and api overlap.
-    expect(first.stats.impactMinutes).toBeCloseTo(15 * 60, 0);
+    // Union: 30→20 h, 10→5 h and 4→3 h = 16 h; overlaps and repeat intervals count once.
+    expect(first.stats.impactMinutes).toBeCloseTo(16 * 60, 0);
     expect(first.stats.incidentCount).toBe(3);
     expect(first.stats.mttaMinutes).toBeCloseTo(10, 5);
     // The hidden member impacted longest but is never named to this reader.
     expect(first.worstMember).toMatchObject({ id: web.id });
-    expect(first.worstMember!.impactMinutes).toBeCloseTo(240, 0);
+    expect(first.worstMember!.impactMinutes).toBeCloseTo(300, 0);
     expect(second.stats).toMatchObject({ impactMinutes: 0, incidentCount: 0, uptimePercent: 100 });
 
     const tiered = await getBusinessImpactReport(
@@ -113,7 +135,7 @@ describe('business impact report', () => {
     const csv = impactReportCsv(report).trim().split('\n');
     expect(csv[0]).toContain('Business service,Tier,Owner team,Uptime %');
     expect(csv[1]).toContain(`Checkout-${tag},TIER_0`);
-    expect(csv[1]).toContain(`,15,`);
+    expect(csv[1]).toContain(`,16,`);
     expect(csv).toHaveLength(3);
   });
 

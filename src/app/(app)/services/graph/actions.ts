@@ -11,6 +11,7 @@ import {
   serviceReadWhere,
 } from '@/lib/authorization-filters';
 import { businessServiceReadWhere } from '@/lib/business-services/commands';
+import { getBusinessServiceHealth } from '@/lib/business-services/contract';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import {
   declareDependency,
@@ -163,35 +164,25 @@ export async function getGraphNodeDetailsAction(input: unknown): Promise<GraphNo
         select: { ownerTeam: { select: { id: true, name: true } } },
       });
       if (!bs) return null;
-      const incidents = incidentScope
-        ? await prisma.incident.findMany({
-            where: {
-              AND: [
-                open,
-                incidentScope,
-                {
-                  OR: [
-                    {
-                      service: {
-                        businessServiceMemberships: {
-                          some: { businessServiceId: parsed.data.id },
-                        },
-                      },
-                    },
-                    {
-                      businessServiceImpacts: {
-                        some: { businessServiceId: parsed.data.id, excluded: false },
-                      },
-                    },
-                  ],
-                },
-              ],
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 3,
-            select: incidentSelect,
-          })
-        : [];
+      // The engine's reasons are the incidents impacting it now (unmarked ones already dropped,
+      // one entry per incident however many impact intervals it has had).
+      const health = (await getBusinessServiceHealth([parsed.data.id], actor)).get(parsed.data.id);
+      const impacting = [
+        ...new Set(
+          (health?.reasons ?? []).flatMap(reason =>
+            'incidentId' in reason ? [reason.incidentId] : []
+          )
+        ),
+      ];
+      const incidents =
+        incidentScope && impacting.length
+          ? await prisma.incident.findMany({
+              where: { AND: [{ id: { in: impacting } }, open, incidentScope] },
+              orderBy: { createdAt: 'desc' },
+              take: 3,
+              select: incidentSelect,
+            })
+          : [];
       return { owner: bs.ownerTeam, onCall: null, incidents: incidents.map(serialize) };
     }
     const service = await prisma.service.findFirst({
