@@ -4,6 +4,7 @@ import { useOptimistic, useTransition } from 'react';
 import { Bell, BellOff } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { notify } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 import { followBusinessServiceAction } from '@/app/(app)/services/business/actions';
 
 /** Follow toggle: plain-language in-app updates when the business service is affected. */
@@ -11,10 +12,13 @@ export default function BusinessServiceFollowButton({
   id,
   name,
   following,
+  className,
 }: {
   id: string;
   name: string;
   following: boolean;
+  /** Extra classes, e.g. `pageHeaderActionClass` on the dark header band. */
+  className?: string;
 }) {
   const [optimistic, setOptimistic] = useOptimistic(following);
   const [isPending, startTransition] = useTransition();
@@ -26,7 +30,7 @@ export default function BusinessServiceFollowButton({
       aria-pressed={optimistic}
       aria-label={optimistic ? `Stop following ${name}` : `Follow ${name}`}
       disabled={isPending}
-      className="h-8 gap-1.5 text-xs"
+      className={cn('h-8 gap-1.5 text-xs', className)}
       onClick={() =>
         startTransition(async () => {
           setOptimistic(!optimistic);
