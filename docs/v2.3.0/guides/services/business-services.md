@@ -11,6 +11,9 @@ verification:
     - src/lib/business-services/commands.ts
     - src/lib/business-services/follower-notifications.ts
     - src/app/(app)/services/business/page.tsx
+    - src/app/(app)/services/business/[id]/page.tsx
+    - src/components/business-service/CatalogDirectory.tsx
+    - src/components/business-service/OverviewPanels.tsx
     - src/components/service/BusinessServiceForm.tsx
     - src/components/incident/detail/IncidentImpacts.tsx
     - src/app/api/v2/business-services/route.ts
@@ -24,6 +27,37 @@ services**, so one major outage in Payments API makes Checkout a major outage.
 
 Nothing changes until you create one. Technical services, alerts and paging behave exactly as
 before.
+
+## Browse the catalog
+
+Open **Services** and select **Business services**, or press <kbd>⌘K</kbd> and type "business
+services". Everyone who can see services can open it, including stakeholders.
+
+- The header counts business services, how many are **impacted now** (degraded or worse) and how
+  many sit in each tier. Select a count to filter by it.
+- Filter by name, health (**Impacted**, a single status, or **Operational**), tier and owner team.
+  Filters live in the URL, so a filtered view can be shared.
+- Each row shows the health and **since when**, the tier, the owner team, how many technical
+  services it has and how many of them are impacted, open incidents and followers. Switch to cards
+  with the view toggle; the choice is remembered.
+
+## Read a business service overview
+
+Select a business service to open its overview. The header shows its health and since when, a
+plain-language list of **why** it has that status (for example "Payments API has an open
+high-urgency incident"), its owner, tier and links, and **Follow**. Responders and Admins also see
+**Edit**, which opens the edit form at `/services/business/<id>/edit`.
+
+| Tab              | What it shows                                                                                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**     | Uptime for 30 and 90 days, incidents, MTTA and MTTR for 30 days, a 30-day impact strip, and active then recent incidents. Stakeholders see incident counts, not titles. |
+| **Members**      | Each technical service with its own status and whether it is critical (drives health) or informational, plus supporting business services.                              |
+| **Dependencies** | Business services this one depends on and those that rely on it, and confirmed upstream technical services of its members.                                              |
+| **Status pages** | The status pages that show it, under which name, in which layout, and any manual override.                                                                              |
+| **Followers**    | Followers, subscribed teams, and the [status dashboards](../stakeholders/status-dashboard) it appears on.                                                               |
+
+While live health is being prepared on a new installation the overview says **Health is being
+prepared**; membership, owners and followers are shown already.
 
 ## Create a business service
 
@@ -40,7 +74,7 @@ follower updates; its technical services are not changed.
 
 ## Follow a business service
 
-Anyone who can see a business service can **Follow** it from the list. Followers get a short,
+Anyone who can see a business service can **Follow** it from the catalog or its overview. Followers get a short,
 plain-language in-app notification when a **public** incident starts on one of its technical
 services, when responders pick it up, and when it is resolved, for example "Checkout is
 affected" and "Checkout is back to normal".
