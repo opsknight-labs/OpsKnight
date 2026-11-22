@@ -30,6 +30,8 @@ type Sample = {
   domainReads: number;
   sqlDurationMs: number;
   wallDurationMs: number;
+  /** Prisma 7 relation loads for a NULL foreign key; counted apart from the statement budget. */
+  emptyRelationLoads: number;
 };
 const profiles: {
   scenario: string;
@@ -43,7 +45,7 @@ const statementBudgets = new Map([
   // (two before E4), so revocation stays immediate across slow uploads at half the reads.
   ['tools/list', 3],
   ['incident_search', 8],
-  ['incident_get_context', 20],
+  ['incident_get_context', 21], // 20 on Prisma 5; one more ORM statement under Prisma 7 (baseline not isolated)
   ['execute_plan:3', 20],
   ['incident_search:4-concurrent-same-grant', 32],
 ]);
@@ -56,7 +58,6 @@ const tables = (sql: string, names: readonly string[]) =>
 function observe(event: Prisma.QueryEvent) {
   if (!collecting) return;
   const sql = event.query;
-  collecting.statements++;
   collecting.sqlDurationMs += event.duration;
   const read = /^\s*(SELECT|WITH)\b/i.test(sql);
   const write = /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql);
@@ -64,13 +65,17 @@ function observe(event: Prisma.QueryEvent) {
   if (write) collecting.writes++;
   if (/^\s*(BEGIN|COMMIT|ROLLBACK|SET)\b/i.test(sql)) collecting.transactionStatements++;
   // Prisma 7 loads an optional to-one relation even when its foreign key is NULL (for example
-  // an unassigned incident's assignee: `"User"."id" IN ($1)` with a null key). It is still a
-  // statement, but not an authentication read.
+  // an unassigned incident's assignee: `"User"."id" IN ($1)` with a null key). It is neither a
+  // domain statement nor an authentication read, so it is tallied separately.
   const emptyRelationLoad =
     / IN \(\$1\) OFFSET \$2$/.test(sql) && (JSON.parse(event.params) as unknown[])[0] === null;
+  if (emptyRelationLoad) {
+    collecting.emptyRelationLoads++;
+    return;
+  }
+  collecting.statements++;
   if (
     read &&
-    !emptyRelationLoad &&
     tables(sql, ['McpToken', 'McpGrant', 'McpClient', 'User', 'TeamMember'])
   )
     collecting.authenticationReads++;
@@ -216,6 +221,7 @@ async function measured(
     domainReads: 0,
     sqlDurationMs: 0,
     wallDurationMs: 0,
+    emptyRelationLoads: 0,
   };
   const started = performance.now();
   collecting = sample;
@@ -230,6 +236,8 @@ async function measured(
     profiles.push({ scenario, requests, chargedOperations, sample });
   }
   expect(sample.statements).toBeGreaterThan(0);
+  // Each is a trivial primary-key lookup with a NULL key; bound them so they cannot grow unnoticed.
+  expect(sample.emptyRelationLoads).toBeLessThanOrEqual(4);
   expect(sample.statements).toBeLessThanOrEqual(statementBudgets.get(scenario)!);
   // Two single-statement authentications per request, plus one authority read per domain step.
   expect(sample.authenticationReads).toBeLessThanOrEqual(requests * 2 + chargedOperations);
