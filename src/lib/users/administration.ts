@@ -1,3 +1,4 @@
+import { assertCanBecomeStakeholder } from '@/lib/users/stakeholder-role-guard';
 import 'server-only';
 import { z } from 'zod/v3';
 import { ASSIGNABLE_ROLES } from '@/lib/authorization';
@@ -82,6 +83,7 @@ export async function administerUser(
       (input.operation === 'deactivate' && target.status === 'DISABLED')
     )
       return tx.user.findUniqueOrThrow({ where: { id: userId }, select: userAdministrationSelect });
+    if (input.operation === 'set-role') await assertCanBecomeStakeholder([userId], input.role, tx);
     if (input.operation === 'reactivate' && target.status !== 'DISABLED')
       throw new AppError({
         code: 'VALIDATION_FAILED',

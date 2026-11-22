@@ -462,6 +462,17 @@ function routeFor(root: string, file: string, prefix = ''): string {
   return `${prefix}/${segments.join('/')}`.replace(/\/$/, '') || '/';
 }
 
+describe('stakeholder navigation', () => {
+  it('hides links a stakeholder would only be redirected from and keeps their own views', () => {
+    const hrefs = getAuthorizedNavItems('STAKEHOLDER').map(item => item.href);
+    for (const hidden of ['/', '/services', '/teams', '/action-items', '/incidents'])
+      expect(hrefs).not.toContain(hidden);
+    expect(hrefs).toContain('/services/business');
+    const responder = getAuthorizedNavItems('RESPONDER').map(item => item.href);
+    for (const shown of ['/', '/services', '/teams']) expect(responder).toContain(shown);
+  });
+});
+
 describe('page access contract', () => {
   const pages = [
     ...pageFiles(APP_ROOT).map(file => ({ file, route: routeFor(APP_ROOT, file) })),
