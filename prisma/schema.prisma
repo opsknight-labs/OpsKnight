@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  previewFeatures = ["metrics"]
 }
 
 // Connection URLs live in prisma.config.ts (CLI) and src/lib/db/create-client.ts (runtime).
