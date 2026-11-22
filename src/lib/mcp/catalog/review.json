@@ -4006,7 +4006,7 @@
     "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.read"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "0d0feffcc8db343f87d2a066151a3fef6dff90fc6c5a0ed4bafc3114872ca257",
+    "routeSha256": "9e40021138b603ce4f324a9996fbc5997fa6f103d4da14bfeb5b8150afd10c9e",
     "contractSha256": "4b01ef2221cd3abd5f7bd780f27f78e177a43945ec4521a1f1176e73041046ce"
   },
   "getBusinessService": {
@@ -4019,7 +4019,7 @@
     "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.read"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "ef8aa37daa351c08c6c648142b49f6201730b9064870387411555bb8f6a412bf",
+    "routeSha256": "5eac70acaf47d887f15db82bbb2fa3f51a1475432ade8de7a0e0af470eb9400f",
     "contractSha256": "2ae60b7b4864b3940bab4110802ea328f5e463f00a926d5a5f48f2988ac72321"
   },
   "getStatusPageBusinessServices": {
@@ -4041,7 +4041,7 @@
     "evidence": "pending final-SHA parity certification",
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "0d0feffcc8db343f87d2a066151a3fef6dff90fc6c5a0ed4bafc3114872ca257",
+    "routeSha256": "9e40021138b603ce4f324a9996fbc5997fa6f103d4da14bfeb5b8150afd10c9e",
     "contractSha256": "bda5296525f33dfac580b23a0a7f982907b26abad28a94850ae5dfcc10ea3971"
   },
   "updateBusinessService": {
@@ -4052,7 +4052,7 @@
     "evidence": "pending final-SHA parity certification",
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "ef8aa37daa351c08c6c648142b49f6201730b9064870387411555bb8f6a412bf",
+    "routeSha256": "5eac70acaf47d887f15db82bbb2fa3f51a1475432ade8de7a0e0af470eb9400f",
     "contractSha256": "bd39456a2c37db0f396dd4dd78552e6dab7a96b79000cfaf6cfa5eefa307dea5"
   },
   "deleteBusinessService": {
@@ -4063,7 +4063,7 @@
     "evidence": "pending final-SHA parity certification",
     "actions": ["service.delete"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "ef8aa37daa351c08c6c648142b49f6201730b9064870387411555bb8f6a412bf",
+    "routeSha256": "5eac70acaf47d887f15db82bbb2fa3f51a1475432ade8de7a0e0af470eb9400f",
     "contractSha256": "521132ecea66e6bc2cadad5795265d1a43dbbe9efefe9b0124de6a598bf9f541"
   },
   "setStatusPageBusinessServices": {
@@ -4087,7 +4087,7 @@
     "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.read"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "deaba7acbc4bdefed99de396ad0c00e16a23530ab838ea13d7e0baa219af5229",
+    "routeSha256": "0163be58753b233746e77334e4e1706fd78b7f4d83fd043c7d96bb25790e3004",
     "contractSha256": "6ea55d368e2371acc9cfea6dd195e1d0b949735f8bb4658096f0173974494e2c"
   },
   "getBusinessServiceImpactTimeline": {

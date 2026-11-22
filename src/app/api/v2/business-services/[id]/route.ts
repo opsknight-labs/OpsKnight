@@ -10,8 +10,10 @@ import {
   businessServiceDto,
   businessServiceReadWhere,
   deleteBusinessService,
+  healthIncidentIds,
   updateBusinessService,
 } from '@/lib/business-services/commands';
+import { readableIncidentIds } from '@/lib/business-services/stats';
 import { getBusinessServiceHealth } from '@/lib/business-services/contract';
 
 const paramsSchema = z.object({ id: z.string().trim().min(1).max(100) }).strict();
@@ -28,9 +30,10 @@ export const GET = defineV2Route({
       select: BUSINESS_SERVICE_SELECT,
     });
     if (!row) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
-    const health = await getBusinessServiceHealth([row.id], actor);
+    const health = (await getBusinessServiceHealth([row.id], actor)).get(row.id);
+    const readable = await readableIncidentIds(actor, healthIncidentIds([health]));
     return {
-      data: businessServiceDto(row, health.get(row.id)),
+      data: businessServiceDto(row, health, readable),
       headers: { 'Cache-Control': 'no-store' },
     };
   },

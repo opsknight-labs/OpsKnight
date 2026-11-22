@@ -111,9 +111,12 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     entries: {
       type: 'array',
       items: object({
-        incidentId: id,
-        incidentTitle: string,
-        urgency,
+        incidentId: {
+          ...nullableString,
+          description: 'Null when the caller cannot read the incident.',
+        },
+        incidentTitle: nullableString,
+        urgency: { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] },
         source,
         excluded: { type: 'boolean' },
         startedAt: date,
@@ -238,7 +241,7 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     path: '/business-services/{id}/incidents',
     summary: 'List incidents that impacted a business service',
     description:
-      'Newest first, from the impact history (direct, dependency, nested and manual). Unmarked impacts are left out. At most 500.',
+      'Newest first, from the impact history (direct, dependency, nested and manual). Only incidents the caller can read; unmarked impacts are left out. A reopened incident appears once per impact interval. At most 500.',
     query: windowQuery,
   },
   {
@@ -246,7 +249,7 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     path: '/business-services/{id}/impact-timeline',
     summary: 'Read the impact timeline and uptime of a business service',
     description:
-      'Uptime is over the union of impact intervals, so overlapping incidents count once. Unmarked impacts are listed but excluded from the numbers.',
+      'Uptime is over the union of impact intervals, so overlapping incidents count once, and covers every interval in the window; the listed entries are the newest 500. Unmarked impacts are listed but excluded from the numbers. Incident id, title and urgency are null for incidents the caller cannot read.',
     query: windowQuery,
   },
   {
