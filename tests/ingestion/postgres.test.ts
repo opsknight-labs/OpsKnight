@@ -306,7 +306,11 @@ describe('PostgreSQL ingestion durability', () => {
       const final = await prisma.backgroundJob.findMany({
         where: { payload: { path: ['incidentId'], equals: result.incident!.id } },
       });
-      expect(final).toHaveLength(3);
+      // The ordinary dispatch also queues business-service impact tracking on its own lane.
+      expect(final).toHaveLength(4);
+      expect(
+        final.filter(job => (job.payload as Prisma.JsonObject).effect === 'BUSINESS_SERVICE_IMPACT')
+      ).toHaveLength(1);
       expect(final.find(job => job.id === parent.id)?.status).toBe('COMPLETED');
     } finally {
       if (config)
