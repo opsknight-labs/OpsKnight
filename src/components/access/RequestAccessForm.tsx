@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/shadcn/select';
 import { cn } from '@/lib/utils';
 import { requestAccessAction } from '@/app/(app)/settings/access/actions';
-import { roleCovers, roleLabel, type AppRole } from '@/lib/authorization';
+import { roleCovers, roleLabel, type AppRole, type AssignableRole } from '@/lib/authorization';
 
 export const DURATION_OPTIONS: { value: string; label: string }[] = [
   { value: '60', label: '1 hour' },
@@ -27,7 +27,7 @@ export const DURATION_OPTIONS: { value: string; label: string }[] = [
   { value: 'permanent', label: 'Permanently' },
 ];
 
-const ROLE_ORDER: AppRole[] = ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN'];
+const ROLE_ORDER: AssignableRole[] = ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN'];
 
 type Props = {
   originPath?: string;
@@ -108,9 +108,9 @@ export default function RequestAccessForm({
   const [kind, setKind] = useState<'ORG_ROLE' | 'TEAM_MEMBERSHIP'>(
     team ? 'TEAM_MEMBERSHIP' : 'ORG_ROLE'
   );
-  const [role, setRole] = useState<AppRole>(
-    suggestedRole && roleChoices.includes(suggestedRole)
-      ? suggestedRole
+  const [role, setRole] = useState<AssignableRole>(
+    suggestedRole && roleChoices.some(choice => choice === suggestedRole)
+      ? (suggestedRole as AssignableRole)
       : (roleChoices[0] ?? 'RESPONDER')
   );
   const [duration, setDuration] = useState('480');
@@ -230,7 +230,7 @@ export default function RequestAccessForm({
         {kind === 'ORG_ROLE' && roleChoices.length > 0 && (
           <div className="space-y-1.5">
             <Label htmlFor="access-role">Role</Label>
-            <Select value={role} onValueChange={value => setRole(value as AppRole)}>
+            <Select value={role} onValueChange={value => setRole(value as AssignableRole)}>
               <SelectTrigger id="access-role">
                 <SelectValue />
               </SelectTrigger>

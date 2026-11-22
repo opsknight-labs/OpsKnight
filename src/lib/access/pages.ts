@@ -82,10 +82,24 @@ export const PAGE_ACCESS: readonly PageAccessRule[] = [
     anyOf: [C.OPERATIONS_MANAGE],
   },
   {
+    // Still the edit form; becomes a SERVICE_READ overview when that page replaces it (P2).
     pattern: '/services/business/[id]',
     label: 'Business service',
     anyOf: [C.OPERATIONS_MANAGE],
   },
+  {
+    pattern: '/services/business/[id]/edit',
+    label: 'Edit business service',
+    anyOf: [C.OPERATIONS_MANAGE],
+  },
+  {
+    pattern: '/services/business/setup',
+    label: 'Business service setup',
+    anyOf: [C.OPERATIONS_MANAGE],
+  },
+  { pattern: '/services/graph', label: 'Service graph', anyOf: SERVICE_READ },
+  // Every signed-in person, stakeholders included; the page filters to what they may see.
+  { pattern: '/status-dashboard', label: 'Status dashboard' },
   { pattern: '/services/[id]', label: 'Service', anyOf: SERVICE_READ, resource: 'service' },
   {
     pattern: '/services/[id]/webhooks',

@@ -56,6 +56,13 @@ async function infrastructureGuarded<T>(what: string, load: () => Promise<T>): P
   }
 }
 
+/** Stakeholders follow status but are never paged, whatever target they appear in. */
+function pageable(
+  user: { status?: string | null; role?: string | null } | null | undefined
+): boolean {
+  return user?.status === 'ACTIVE' && user.role !== 'STAKEHOLDER';
+}
+
 /** Deterministic ordering so repeated resolutions of one target agree. */
 function stableUserIds(userIds: Iterable<string>): string[] {
   return [...new Set(userIds)].sort();
@@ -65,7 +72,7 @@ async function resolveUserTarget(targetId: string): Promise<EscalationTargetReso
   const user = await infrastructureGuarded('user target', () =>
     prisma.user.findUnique({
       where: { id: targetId },
-      select: { id: true, name: true, status: true },
+      select: { id: true, name: true, status: true, role: true },
     })
   );
 
@@ -83,6 +90,13 @@ async function resolveUserTarget(targetId: string): Promise<EscalationTargetReso
       code: 'TARGET_INACTIVE',
     };
   }
+  if (!pageable(user)) {
+    return {
+      outcome: 'INVALID_TARGET',
+      reason: 'Target user is a stakeholder, who is never paged',
+      code: 'TARGET_INVALID',
+    };
+  }
   return { outcome: 'RESOLVED', userIds: [user.id], targetName: user.name || 'Unknown User' };
 }
 
@@ -98,7 +112,7 @@ async function resolveTeamTarget(
         teamLeadId: true,
         members: {
           where: { receiveTeamNotifications: true },
-          select: { userId: true, user: { select: { status: true } } },
+          select: { userId: true, user: { select: { status: true, role: true } } },
         },
       },
     })
@@ -114,7 +128,7 @@ async function resolveTeamTarget(
 
   const targetName = team.name || 'Unknown Team';
   const eligible = stableUserIds(
-    team.members.filter(member => member.user?.status === 'ACTIVE').map(member => member.userId)
+    team.members.filter(member => pageable(member.user)).map(member => member.userId)
   );
 
   if (notifyOnlyTeamLead) {
@@ -153,7 +167,7 @@ async function resolveScheduleTarget(
           where: {
             start: { lte: atTime },
             end: { gt: atTime },
-            user: { status: 'ACTIVE' },
+            user: { status: 'ACTIVE', role: { not: 'STAKEHOLDER' } },
           },
           include: { user: true },
         },
@@ -204,6 +218,7 @@ type ScheduleLayerRow = {
       avatarUrl?: string | null;
       gender?: string | null;
       status?: string | null;
+      role?: string | null;
     } | null;
   }>;
 };
@@ -260,7 +275,7 @@ function effectiveOnCallUserIds(schedule: ScheduleForCoverage, atTime: Date): st
       restrictions: (layer.restrictions ?? null) as LayerRestrictions | null,
       priority: layerPriorityOf(layer),
       users: layer.users
-        .filter(entry => entry.user?.status === 'ACTIVE')
+        .filter(entry => pageable(entry.user))
         .map((entry, index) => ({
           userId: entry.userId,
           position: entry.position ?? index,

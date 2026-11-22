@@ -58,56 +58,56 @@ Each change is reviewed once and given a risk tier. The tier, not the tool, deci
 
 Operation columns count catalog operations that need the permission: plain reads, sensitive reads (only while an administrator allows sensitive reads), routine changes (run directly when changes are allowed) and reviewed changes (need human approval first). Curated tools reuse these operations. A ✓ means the role can use at least one action the permission gates. The consent label is the text the consent page shows; the operation columns are authoritative for whether a change runs directly or waits for review.
 
-| Permission | Consent label | Area | Kind | Admin | Responder | Auditor | User | Reads | Sensitive reads | Routine changes | Reviewed changes |
-| --- | --- | --- | --- | :-: | :-: | :-: | :-: | --: | --: | --: | --: |
-| `audit:read` | View the audit log | Reports and audit | View | ✓ |  | ✓ |  | 0 | 2 | 0 | 0 |
-| `automation-settings:read` | View automation settings | Automation | View | ✓ |  |  |  | 0 | 1 | 0 | 0 |
-| `automation-settings:write` | Change automation settings (higher-risk changes wait for approval) | Automation | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
-| `automation:publish` | Publish automation | Automation | Change | ✓ |  |  |  | 0 | 0 | 0 | 4 |
-| `automation:read` | View automation | Automation | View | ✓ | ✓ | ✓ |  | 8 | 2 | 0 | 1 |
-| `automation:write` | Change automation (higher-risk changes wait for approval) | Automation | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 2 |
-| `chatops:write` | Change ChatOps settings (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
-| `custom-fields:read` | View custom fields | Settings | View | ✓ |  |  |  | 0 | 2 | 0 | 1 |
-| `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 5 | 1 | 0 | 1 |
-| `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  | 0 | 0 | 0 | 3 |
-| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ | 26 | 12 | 2 | 16 |
-| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  | ✓ | 0 | 0 | 13 | 10 |
-| `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
-| `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
-| `integrations:test` | Send test messages through integrations | Services | Change | ✓ |  |  |  | 0 | 2 | 0 | 0 |
-| `integrations:write` | Change integrations (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
-| `notifications:read` | View notifications | Schedules and escalation | View | ✓ | ✓ | ✓ |  | 2 | 4 | 0 | 0 |
-| `notifications:write` | Change notifications (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 1 |
-| `postmortems:read` | View postmortems | Incidents | View | ✓ | ✓ | ✓ | ✓ | 7 | 0 | 0 | 2 |
-| `postmortems:write` | Change postmortems (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 8 |
-| `reports:read` | View reports and analytics | Reports and audit | View | ✓ | ✓ | ✓ | ✓ | 3 | 6 | 0 | 2 |
-| `reports:write` | Change reports and analytics (higher-risk changes wait for approval) | Reports and audit | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 8 |
-| `response-policy:read` | View the response policy | Settings | View | ✓ |  |  |  | 3 | 1 | 0 | 0 |
-| `response-policy:write` | Change the response policy (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  | 0 | 0 | 0 | 4 |
-| `runbook-rules:activate` | Turn runbook trigger rules on or off | Runbooks | Change | ✓ |  |  |  | 0 | 0 | 0 | 2 |
-| `runbook-rules:read` | View runbook trigger rules | Runbooks | View | ✓ |  |  |  | 2 | 2 | 0 | 1 |
-| `runbook-rules:write` | Change runbook trigger rules (higher-risk changes wait for approval) | Runbooks | Change | ✓ |  |  |  | 0 | 0 | 0 | 6 |
-| `runbook-settings:read` | View runbook settings | Runbooks | View | ✓ |  |  |  | 0 | 1 | 0 | 0 |
-| `runbook-settings:write` | Change runbook settings (higher-risk changes wait for approval) | Runbooks | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
-| `runbooks:approve` | Approve runbooks waiting for review | Runbooks | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 2 |
-| `runbooks:execute` | Run runbooks after approval | Runbooks | Change | ✓ | ✓ |  |  | 1 | 0 | 0 | 2 |
-| `runbooks:publish` | Publish runbooks | Runbooks | Change | ✓ |  |  |  | 0 | 0 | 0 | 1 |
-| `runbooks:read` | View runbooks | Runbooks | View | ✓ | ✓ | ✓ |  | 6 | 3 | 0 | 3 |
-| `runbooks:write` | Change runbooks (higher-risk changes wait for approval) | Runbooks | Change | ✓ |  |  |  | 3 | 3 | 0 | 7 |
-| `schedules:read` | View on-call schedules | Schedules and escalation | View | ✓ | ✓ | ✓ | ✓ | 13 | 0 | 0 | 4 |
-| `schedules:write` | Change on-call schedules (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ | ✓ |  |  | 1 | 2 | 0 | 12 |
-| `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ | 0 | 0 | 0 | 1 |
-| `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ | 3 | 7 | 0 | 0 |
-| `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  | 0 | 0 | 0 | 4 |
-| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | 9 | 2 | 0 | 3 |
-| `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  | 0 | 0 | 0 | 11 |
-| `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  | 0 | 1 | 0 | 0 |
-| `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  | 5 | 9 | 0 | 2 |
-| `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  | 0 | 0 | 0 | 10 |
-| `teams:read` | View teams | Teams and people | View | ✓ | ✓ | ✓ | ✓ | 6 | 1 | 0 | 2 |
-| `teams:write` | Change teams (higher-risk changes wait for approval) | Teams and people | Change | ✓ | ✓ |  | ✓ | 0 | 0 | 0 | 7 |
-| `users:read` | View people | Teams and people | View | ✓ | ✓ | ✓ |  | 3 | 0 | 0 | 0 |
+| Permission | Consent label | Area | Kind | Admin | Responder | Auditor | User | Stakeholder | Reads | Sensitive reads | Routine changes | Reviewed changes |
+| --- | --- | --- | --- | :-: | :-: | :-: | :-: | :-: | --: | --: | --: | --: |
+| `audit:read` | View the audit log | Reports and audit | View | ✓ |  | ✓ |  |  | 0 | 2 | 0 | 0 |
+| `automation-settings:read` | View automation settings | Automation | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |
+| `automation-settings:write` | Change automation settings (higher-risk changes wait for approval) | Automation | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 1 |
+| `automation:publish` | Publish automation | Automation | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 4 |
+| `automation:read` | View automation | Automation | View | ✓ | ✓ | ✓ |  |  | 8 | 2 | 0 | 1 |
+| `automation:write` | Change automation (higher-risk changes wait for approval) | Automation | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 2 |
+| `chatops:write` | Change ChatOps settings (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 1 |
+| `custom-fields:read` | View custom fields | Settings | View | ✓ |  |  |  |  | 0 | 2 | 0 | 1 |
+| `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 3 |
+| `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  |  | 5 | 1 | 0 | 1 |
+| `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 3 |
+| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ |  | 26 | 12 | 2 | 16 |
+| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 13 | 10 |
+| `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 1 |
+| `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
+| `integrations:test` | Send test messages through integrations | Services | Change | ✓ |  |  |  |  | 0 | 2 | 0 | 0 |
+| `integrations:write` | Change integrations (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 1 |
+| `notifications:read` | View notifications | Schedules and escalation | View | ✓ | ✓ | ✓ |  |  | 2 | 4 | 0 | 0 |
+| `notifications:write` | Change notifications (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 1 |
+| `postmortems:read` | View postmortems | Incidents | View | ✓ | ✓ | ✓ | ✓ |  | 7 | 0 | 0 | 2 |
+| `postmortems:write` | Change postmortems (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 8 |
+| `reports:read` | View reports and analytics | Reports and audit | View | ✓ | ✓ | ✓ | ✓ |  | 3 | 6 | 0 | 2 |
+| `reports:write` | Change reports and analytics (higher-risk changes wait for approval) | Reports and audit | Change | ✓ | ✓ | ✓ | ✓ |  | 0 | 0 | 0 | 8 |
+| `response-policy:read` | View the response policy | Settings | View | ✓ |  |  |  |  | 3 | 1 | 0 | 0 |
+| `response-policy:write` | Change the response policy (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 4 |
+| `runbook-rules:activate` | Turn runbook trigger rules on or off | Runbooks | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 2 |
+| `runbook-rules:read` | View runbook trigger rules | Runbooks | View | ✓ |  |  |  |  | 2 | 2 | 0 | 1 |
+| `runbook-rules:write` | Change runbook trigger rules (higher-risk changes wait for approval) | Runbooks | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 6 |
+| `runbook-settings:read` | View runbook settings | Runbooks | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |
+| `runbook-settings:write` | Change runbook settings (higher-risk changes wait for approval) | Runbooks | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 1 |
+| `runbooks:approve` | Approve runbooks waiting for review | Runbooks | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 2 |
+| `runbooks:execute` | Run runbooks after approval | Runbooks | Change | ✓ | ✓ |  |  |  | 1 | 0 | 0 | 2 |
+| `runbooks:publish` | Publish runbooks | Runbooks | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 1 |
+| `runbooks:read` | View runbooks | Runbooks | View | ✓ | ✓ | ✓ |  |  | 6 | 3 | 0 | 3 |
+| `runbooks:write` | Change runbooks (higher-risk changes wait for approval) | Runbooks | Change | ✓ |  |  |  |  | 3 | 3 | 0 | 7 |
+| `schedules:read` | View on-call schedules | Schedules and escalation | View | ✓ | ✓ | ✓ | ✓ |  | 13 | 0 | 0 | 4 |
+| `schedules:write` | Change on-call schedules (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ | ✓ |  |  |  | 1 | 2 | 0 | 12 |
+| `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ |  | 0 | 0 | 0 | 1 |
+| `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ |  | 3 | 7 | 0 | 0 |
+| `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 4 |
+| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 9 | 2 | 0 | 3 |
+| `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 11 |
+| `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |
+| `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  |  | 5 | 9 | 0 | 2 |
+| `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 10 |
+| `teams:read` | View teams | Teams and people | View | ✓ | ✓ | ✓ | ✓ | ✓ | 6 | 1 | 0 | 2 |
+| `teams:write` | Change teams (higher-risk changes wait for approval) | Teams and people | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 0 | 7 |
+| `users:read` | View people | Teams and people | View | ✓ | ✓ | ✓ |  |  | 3 | 0 | 0 | 0 |
 
 ## Who approves reviewed changes
 

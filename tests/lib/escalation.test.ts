@@ -165,7 +165,7 @@ describe('resolveEscalationTarget', () => {
             where: { receiveTeamNotifications: true },
             select: {
               userId: true,
-              user: { select: { status: true } },
+              user: { select: { status: true, role: true } },
             },
           },
         },

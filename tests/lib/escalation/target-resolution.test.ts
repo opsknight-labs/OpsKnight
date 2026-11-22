@@ -103,6 +103,53 @@ describe('USER targets', () => {
   });
 });
 
+describe('stakeholders are never paged', () => {
+  it('rejects a stakeholder as a direct user target', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: 'exec-1',
+      name: 'Exec',
+      status: 'ACTIVE',
+      role: 'STAKEHOLDER',
+    } as never);
+
+    await expect(
+      resolveEscalationTargetDetailed({ targetType: 'USER', targetId: 'exec-1' })
+    ).resolves.toMatchObject({ outcome: 'INVALID_TARGET', code: 'TARGET_INVALID' });
+  });
+
+  it('leaves stakeholders out of team recipients', async () => {
+    vi.mocked(prisma.team.findUnique).mockResolvedValueOnce({
+      name: 'Payments',
+      teamLeadId: null,
+      members: [
+        { userId: 'member-1', user: { status: 'ACTIVE', role: 'RESPONDER' } },
+        { userId: 'exec-1', user: { status: 'ACTIVE', role: 'STAKEHOLDER' } },
+      ],
+    } as never);
+
+    await expect(
+      resolveEscalationTargetDetailed({ targetType: 'TEAM', targetId: 'team-1' })
+    ).resolves.toMatchObject({ outcome: 'RESOLVED', userIds: ['member-1'] });
+  });
+});
+
+describe('stakeholders in schedule layers', () => {
+  it('never puts a stakeholder on call from a rotation layer', async () => {
+    const schedule = scheduleWithOverride();
+    schedule.overrides = [];
+    schedule.layers[0].users[0].user = {
+      name: 'Exec',
+      status: 'ACTIVE',
+      role: 'STAKEHOLDER',
+    } as never;
+    vi.mocked(prisma.onCallSchedule.findUnique).mockResolvedValueOnce(schedule as never);
+
+    await expect(
+      resolveEscalationTargetDetailed({ targetType: 'SCHEDULE', targetId: 'sch-1', at: AT })
+    ).resolves.toMatchObject({ outcome: 'NO_ELIGIBLE_RESPONDERS' });
+  });
+});
+
 describe('TEAM targets', () => {
   it('resolves only active members that receive team notifications', async () => {
     vi.mocked(prisma.team.findUnique).mockResolvedValueOnce({
@@ -266,7 +313,7 @@ describe('SCHEDULE targets', () => {
     expect(query.select.overrides.where).toEqual({
       start: { lte: AT },
       end: { gt: AT },
-      user: { status: 'ACTIVE' },
+      user: { status: 'ACTIVE', role: { not: 'STAKEHOLDER' } },
     });
   });
 

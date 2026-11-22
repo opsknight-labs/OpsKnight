@@ -16,6 +16,7 @@ export const AUDIT_ENTITY_TYPES = [
   'REPORT_EXPORT',
   'AUDIT_EXPORT',
   'SYSTEM_CONFIG',
+  'BUSINESS_SERVICE',
 ] as const satisfies readonly AuditEntityType[];
 
 function isAuditEntityType(value: string): value is AuditEntityType {

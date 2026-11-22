@@ -40,6 +40,7 @@ export const DEFAULT_ACCESS_POLICY_SETTINGS: AccessPolicySettings = {
 
 /** Rank used only to pick a single display/legacy role; permissions are always the union. */
 const ROLE_RANK = new Map<AppRole, number>([
+  ['STAKEHOLDER', -1],
   ['USER', 0],
   ['AUDITOR', 1],
   ['RESPONDER', 2],
