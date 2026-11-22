@@ -127,7 +127,12 @@ export async function projectIncidentWarRoomParticipants(warRoomId: string): Pro
     where: { id: warRoomId },
     include: {
       incident: {
-        select: { serviceId: true, assigneeId: true, watchers: { select: { userId: true } } },
+        select: {
+          serviceId: true,
+          assigneeId: true,
+          roleAssignments: { select: { userId: true } },
+          watchers: { select: { userId: true } },
+        },
       },
     },
   });
@@ -135,6 +140,9 @@ export async function projectIncidentWarRoomParticipants(warRoomId: string): Pro
 
   const responders = new Map<string, WarRoomParticipantSource>();
   if (room.incident.assigneeId) responders.set(room.incident.assigneeId, 'ASSIGNEE');
+  for (const holder of room.incident.roleAssignments) {
+    if (!responders.has(holder.userId)) responders.set(holder.userId, 'ROLE');
+  }
   for (const watcher of room.incident.watchers) {
     if (!responders.has(watcher.userId)) responders.set(watcher.userId, 'WATCHER');
   }

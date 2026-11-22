@@ -94,6 +94,8 @@ export async function POST(req: NextRequest) {
       contactUrl,
       branding,
       serviceIds,
+      businessServiceIds,
+      serviceLayout,
       serviceConfigs = {},
       privacyMode,
       showIncidentDetails,
@@ -144,6 +146,20 @@ export async function POST(req: NextRequest) {
 
     const statusPage = await prisma.statusPage.findUnique({ where: { id } });
     if (!statusPage) return jsonError('Status page not found.', 404);
+
+    if (businessServiceIds?.length) {
+      const found = await prisma.businessService.count({
+        where: { id: { in: businessServiceIds } },
+      });
+      if (found !== businessServiceIds.length)
+        return jsonError(
+          new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: 'A selected business service no longer exists.',
+            fields: [{ field: 'businessServiceIds', code: 'invalid', message: 'Not found.' }],
+          })
+        );
+    }
 
     const effectiveExcellent = uptimeExcellentThreshold ?? statusPage.uptimeExcellentThreshold;
     const effectiveGood = uptimeGoodThreshold ?? statusPage.uptimeGoodThreshold;
@@ -244,6 +260,7 @@ export async function POST(req: NextRequest) {
       updateData.showServiceDescriptions = showServiceDescriptions;
     if (showServiceRegions !== undefined) updateData.showServiceRegions = showServiceRegions;
     if (showServicesByRegion !== undefined) updateData.showServicesByRegion = showServicesByRegion;
+    if (serviceLayout !== undefined) updateData.serviceLayout = serviceLayout;
     if (showServiceOwners !== undefined) updateData.showServiceOwners = showServiceOwners;
     if (showServiceSlaTier !== undefined) updateData.showServiceSlaTier = showServiceSlaTier;
     if (showTeamInformation !== undefined) updateData.showTeamInformation = showTeamInformation;
@@ -294,6 +311,7 @@ export async function POST(req: NextRequest) {
       patch: updateData as Record<string, unknown>,
       serviceIds,
       serviceConfigs,
+      businessServiceIds,
       expectedUpdatedAt,
       section: req.headers.get(STATUS_PAGE_SECTION_HEADER) ?? undefined,
       // Logo externalization must commit atomically with the settings row that references it.

@@ -112,6 +112,19 @@ export async function POST(req: NextRequest) {
           });
         }
       }
+      await tx.statusPageSubscriptionBusinessService.deleteMany({
+        where: { subscriptionId: subscription.id },
+      });
+      const businessIds = (newPrefs as { selectedBusinessServiceIds?: unknown } | null)
+        ?.selectedBusinessServiceIds;
+      if (Array.isArray(businessIds) && businessIds.length > 0) {
+        await tx.statusPageSubscriptionBusinessService.createMany({
+          data: businessIds
+            .filter((id): id is string => typeof id === 'string')
+            .map(businessServiceId => ({ subscriptionId: subscription.id, businessServiceId })),
+          skipDuplicates: true,
+        });
+      }
     });
   } else {
     await prisma.statusPageSubscription.updateMany({

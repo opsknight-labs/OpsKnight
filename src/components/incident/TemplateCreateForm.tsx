@@ -28,6 +28,9 @@ import {
 } from '@/components/ui/shadcn/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { cn } from '@/lib/utils';
+import TemplateDefaultRoles, {
+  type TemplateDefaultRolesValue,
+} from '@/components/incident/TemplateDefaultRoles';
 import {
   Check,
   ChevronsUpDown,
@@ -54,6 +57,8 @@ type Service = {
 
 type TemplateCreateFormProps = {
   services: Service[];
+  /** Active users offered as default role holders. */
+  users?: Array<{ id: string; name: string }>;
   action: (prevState: null, formData: FormData) => Promise<null>;
 };
 
@@ -235,8 +240,13 @@ function renderMarkdown(content: string): React.ReactNode {
   );
 }
 
-export default function TemplateCreateForm({ services, action }: TemplateCreateFormProps) {
+export default function TemplateCreateForm({
+  services,
+  users = [],
+  action,
+}: TemplateCreateFormProps) {
   const [descTab, setDescTab] = useState<'write' | 'preview'>('write');
+  const [defaultRoles, setDefaultRoles] = useState<TemplateDefaultRolesValue>({});
   const [serviceOpen, setServiceOpen] = useState(false);
 
   // Form definition
@@ -278,6 +288,9 @@ export default function TemplateCreateForm({ services, action }: TemplateCreateF
     if (data.defaultPriority) formData.append('defaultPriority', data.defaultPriority);
     if (data.defaultServiceId) formData.append('defaultServiceId', data.defaultServiceId);
     if (data.isPublic) formData.append('isPublic', 'on');
+    for (const [roleKey, userId] of Object.entries(defaultRoles)) {
+      if (userId) formData.append(`defaultRole_${roleKey}`, userId);
+    }
 
     React.startTransition(() => {
       formAction(formData);
@@ -738,6 +751,8 @@ export default function TemplateCreateForm({ services, action }: TemplateCreateF
                 )}
               />
             </div>
+
+            <TemplateDefaultRoles users={users} value={defaultRoles} onChange={setDefaultRoles} />
 
             {/* Bottom Actions Card */}
             <div className="rounded-2xl border border-border/80 bg-card p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-2xs">

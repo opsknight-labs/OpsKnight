@@ -889,6 +889,29 @@
         "contract-sdk"
       ],
       "blockers": []
+    },
+    {
+      "capabilityId": "business-services",
+      "delivery": "API-24",
+      "workflow": "Business services, followers and grouped status page layouts",
+      "sources": [
+        {
+          "path": "src/lib/business-services",
+          "branch": "baseline"
+        },
+        {
+          "path": "src/app/api/v2/business-services",
+          "branch": "baseline"
+        }
+      ],
+      "reviewStatus": "pending-domain-review",
+      "requiredEvidence": [
+        "authorization-negative",
+        "business-parity",
+        "postgres-concurrency",
+        "contract-sdk"
+      ],
+      "blockers": []
     }
   ],
   "releaseGates": [

@@ -21,6 +21,7 @@ import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/inci
 import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 import { applyIncidentUrgencyChange } from '@/lib/incidents/urgency-command';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
+import { loadTemplateDefaultRoles } from '@/lib/incidents/roles-command';
 import { setIncidentWatcher, deleteIncidentWatcher } from '@/lib/incidents/watchers';
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
 
@@ -148,7 +149,18 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
   const rawVisibility = formData.get('visibility');
   const visibility =
     rawVisibility === 'PRIVATE' ? 'PRIVATE' : rawVisibility === 'PUBLIC' ? 'PUBLIC' : undefined;
+  const templateId = String(formData.get('templateId') ?? '').trim();
+  const defaultRoles = templateId
+    ? await loadTemplateDefaultRoles({
+        templateId,
+        actor: {
+          id: currentUser.id,
+          isAdmin: hasCapability(currentUser.role as AppRole, CAPABILITIES.ADMIN_MANAGE),
+        },
+      })
+    : [];
   const result = await executeIncidentCreation({
+    ...(defaultRoles.length ? { defaultRoles } : {}),
     title,
     description,
     urgency,
@@ -162,7 +174,6 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
     source,
     actor: { id: currentUser.id, name: currentUser.name ?? undefined },
   });
-
   revalidatePath('/incidents');
   revalidatePath(`/incidents/${result.id}`);
   revalidatePath('/');

@@ -33,6 +33,7 @@ import {
 import { projectPublicBranding, projectPublicPresentation } from './branding';
 import { publicUptimeGrade } from './presentation';
 import { deriveOverallPublicHealth, getWorstPublicStatus } from './status-presentation';
+import { buildPublicBusinessServices } from './business-services';
 import { parsePublicStatusPageSnapshot } from './public-contract-schema';
 import {
   changelogDisplayWhere,
@@ -110,6 +111,21 @@ export async function buildStatusPageSnapshot(
               region: true,
               slaTier: true,
               team: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
+      businessServices: {
+        where: { showOnPage: true },
+        orderBy: { order: 'asc' },
+        select: {
+          displayName: true,
+          businessService: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              members: { select: { serviceId: true } },
             },
           },
         },
@@ -495,6 +511,24 @@ export async function buildStatusPageSnapshot(
     : undefined;
 
   const visibleServices = visibility.showServices ? services : [];
+  const groupedLayout = page.serviceLayout !== 'FLAT';
+  const servicePosition = new Map(visibleServices.map((service, index) => [service.id, index]));
+  const businessServices =
+    groupedLayout && visibility.showServices
+      ? buildPublicBusinessServices(
+          page.businessServices.map(mapping => ({
+            id: mapping.businessService.id,
+            name: mapping.displayName || mapping.businessService.name,
+            description: page.showServiceDescriptions
+              ? mapping.businessService.description
+              : null,
+            memberServiceIds: mapping.businessService.members
+              .map(member => member.serviceId)
+              .sort((a, b) => (servicePosition.get(a) ?? 0) - (servicePosition.get(b) ?? 0)),
+          })),
+          visibleServices
+        )
+      : undefined;
   const overallBase = deriveOverallPublicHealth(visibleServices);
   const impactedServiceCount = visibleServices.filter(
     service => service.status !== 'OPERATIONAL' && service.status !== 'UNKNOWN'
@@ -576,6 +610,7 @@ export async function buildStatusPageSnapshot(
       },
       showSubscribe: page.showSubscribe,
       showServicesByRegion: page.showServicesByRegion,
+      ...(groupedLayout ? { serviceLayout: page.serviceLayout } : {}),
       showRegionHeatmap: page.showRegionHeatmap,
       showPostIncidentReview: page.showPostIncidentReview,
       showChangelog: page.showChangelog,
@@ -621,6 +656,7 @@ export async function buildStatusPageSnapshot(
       uptimeGood: page.uptimeGoodThreshold,
     },
     services: visibleServices,
+    ...(businessServices ? { businessServices } : {}),
     regions: visibility.showServices ? aggregatePublicRegions(services) : [],
     incidents: (() => {
       // Perf: precompute once — avoids Date + clamp per incident in the hot loop.

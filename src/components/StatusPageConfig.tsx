@@ -18,6 +18,10 @@ import StatusPageWebhooksSettings from '@/components/status-page/StatusPageWebho
 import StatusPageSubscribers from '@/components/status-page/StatusPageSubscribers';
 import StatusPageEmailConfig from '@/components/status-page/StatusPageEmailConfig';
 import StatusPageServicesManager from '@/components/status-page/StatusPageServicesManager';
+import StatusPageBusinessLayout, {
+  type BusinessServiceOption,
+  type StatusPageServiceLayout,
+} from '@/components/status-page/StatusPageBusinessLayout';
 import StatusPageAnnouncementManager from '@/components/status-page/StatusPageAnnouncementManager';
 import { Badge } from '@/components/ui/shadcn/badge';
 import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
@@ -103,6 +107,8 @@ type StatusPageConfigProps = {
     showMetrics: boolean;
     showSubscribe?: boolean;
     showServicesByRegion?: boolean;
+    serviceLayout?: StatusPageServiceLayout;
+    businessServices?: Array<{ businessServiceId: string; order: number }>;
     showServiceOwners?: boolean;
     showServiceSlaTier?: boolean;
     showChangelog?: boolean;
@@ -181,6 +187,8 @@ type StatusPageConfigProps = {
     name: string;
     region?: string | null;
   }>;
+  /** Business services the page can group by. */
+  allBusinessServices?: BusinessServiceOption[];
   liveSnapshot?: any;
   /** From an incident's "Post status update": open Announcements with that incident's draft. */
   draftIncidentId?: string;
@@ -196,6 +204,7 @@ const normalizeAnnouncementServiceIds = (value?: string[] | null) => {
 export default function StatusPageConfig({
   statusPage,
   allServices,
+  allBusinessServices = [],
   liveSnapshot,
   draftIncidentId,
 }: StatusPageConfigProps) {
@@ -330,6 +339,16 @@ export default function StatusPageConfig({
     );
 
   const [selectedServices, setSelectedServices] = useState<Set<string>>(getInitialSelectedServices);
+  const getInitialBusinessServiceIds = () =>
+    [...(statusPage.businessServices ?? [])]
+      .sort((a, b) => a.order - b.order)
+      .map(mapping => mapping.businessServiceId);
+  const [serviceLayout, setServiceLayout] = useState<StatusPageServiceLayout>(
+    statusPage.serviceLayout ?? 'FLAT'
+  );
+  const [businessServiceIds, setBusinessServiceIds] = useState<string[]>(
+    getInitialBusinessServiceIds
+  );
 
   const [serviceConfigs, setServiceConfigs] =
     useState<Record<string, { displayName: string; order: number; showOnPage: boolean }>>(
@@ -385,6 +404,8 @@ export default function StatusPageConfig({
     setPrivacySettings(getInitialPrivacySettings());
     setSelectedServices(getInitialSelectedServices());
     setServiceConfigs(getInitialServiceConfigs());
+    setServiceLayout(statusPage.serviceLayout ?? 'FLAT');
+    setBusinessServiceIds(getInitialBusinessServiceIds());
     setError(null);
     router.refresh();
   };
@@ -551,6 +572,8 @@ export default function StatusPageConfig({
                 branding: brandingData,
                 serviceIds: Array.from(selectedServices),
                 serviceConfigs: serviceConfigs,
+                serviceLayout,
+                businessServiceIds,
                 // Privacy settings
                 privacyMode: privacySettings.privacyMode,
                 showIncidentDetails: privacySettings.showIncidentDetails,
@@ -1487,6 +1510,23 @@ export default function StatusPageConfig({
                       )}
 
                       {/* Services Configuration */}
+                      {activeSection === 'services' && (
+                        <StatusPageBusinessLayout
+                          layout={serviceLayout}
+                          onLayoutChange={setServiceLayout}
+                          businessServices={allBusinessServices}
+                          selectedIds={businessServiceIds}
+                          onSelectedIdsChange={ids => {
+                            setBusinessServiceIds(ids);
+                            // Members are published with their business service; mirror that here.
+                            const added = allBusinessServices
+                              .filter(item => ids.includes(item.id))
+                              .flatMap(item => item.memberServiceIds);
+                            if (added.some(id => !selectedServices.has(id)))
+                              setSelectedServices(prev => new Set([...prev, ...added]));
+                          }}
+                        />
+                      )}
                       {activeSection === 'services' && (
                         <StatusPageServicesManager
                           allServices={allServices}

@@ -17,6 +17,7 @@ import type {
 } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from './observability';
+import { withActorIncidentRoles } from '@/lib/incidents/role-relations';
 import type { Prisma } from '@prisma/client';
 
 export interface V2RouteContext<TParams = any, TQuery = any, TBody = any> {
@@ -169,6 +170,8 @@ export function defineV2Route<TParams = any, TQuery = any, TBody = any, TResult 
               apiKey,
             });
           }
+          // Role holders count only when nothing else authorizes the actor (one indexed read).
+          resource = await withActorIncidentRoles(actor, config.action, resource);
           if (config.scopedFilter) {
             enforceV2Authorization(actor, config.action, resource);
           } else {

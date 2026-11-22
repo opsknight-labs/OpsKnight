@@ -519,6 +519,22 @@ export async function sendIncidentNotifications(
       message: eventMessage,
     });
 
+    if (intent === 'INCIDENT_UPDATED' && eventType !== 'updated') {
+      // Best effort: stakeholder updates must never fail or delay responder notifications.
+      try {
+        const { notifyBusinessServiceFollowers } = await import(
+          '@/lib/business-services/follower-notifications'
+        );
+        await notifyBusinessServiceFollowers({
+          incident: incidentRecord,
+          eventType,
+          excludeUserIds: [...uniqueInAppRecipients, ...excludeUserIds],
+        });
+      } catch (error) {
+        logger.error('user_notifications.business_service_followers_failed', { incidentId, error });
+      }
+    }
+
     if (uniqueInAppRecipients.length > 0) {
       await createInAppNotifications({
         userIds: uniqueInAppRecipients,

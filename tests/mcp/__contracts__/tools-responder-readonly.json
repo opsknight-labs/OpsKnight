@@ -24,6 +24,18 @@
     "descriptionSha256": "39acdb8bdd74359b41cf5f256b8b0f1773096edcb6ab3de27dc71de6446af993"
   },
   {
+    "name": "business_services_list",
+    "title": "List business services",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "d7d42ff6bbed082fd54be4105d92961257d32d69941f22fd6d6d7e05700615e4",
+    "descriptionSha256": "5da7beb67e99ebff4660ddbea0a716f3a01056ff63c693b42b1e64d18a32d81a"
+  },
+  {
     "name": "describe_operation",
     "title": "Describe an operation",
     "annotations": {
@@ -140,6 +152,18 @@
     },
     "inputSchemaSha256": "07d60a9e65584f1566dd56ab3a439a00e6e5c0753bd03c628fab88afa90a19fd",
     "descriptionSha256": "5a3cdba3e1757b0817373a8f6e0deb431212427364c901a5a336f848fe756b53"
+  },
+  {
+    "name": "incident_roles_list",
+    "title": "List incident roles",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "ba90a5e437ec76d5ab725982363c3f00f084c6f35086fe44ecfdc57f3f624ae7",
+    "descriptionSha256": "b65992d0703dd6d07083ab7605962b87b46de0c403312f3c203041eced771165"
   },
   {
     "name": "incident_search",
@@ -364,7 +388,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "a65915294ae663544a4753a54497c3fb2b52f269826fc51c1bf6a5ca13964b45",
+    "inputSchemaSha256": "adcb15b43424da56999329d2d4ecf64c1e1829da8cefe374567109f3d8e984b0",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {

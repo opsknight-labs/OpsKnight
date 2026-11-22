@@ -6,7 +6,7 @@ import StatusPageSubscribe from './StatusPageSubscribe';
 interface StatusPageSubscribeModalProps {
   open: boolean;
   statusPageId: string;
-  services: Array<{ id: string; name: string }>;
+  services: Array<{ id: string; name: string; kind?: 'service' | 'business' }>;
   rssHref?: string | null;
   apiHref?: string | null;
   onClose: () => void;

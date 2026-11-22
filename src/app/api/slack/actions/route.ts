@@ -289,6 +289,28 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             text: '⚠️ Could not identify your Slack user, so the incident was left unchanged.',
           });
         }
+      } else if (actionType === 'take_command') {
+        try {
+          const { executeChatOpsCommand } = await import('@/lib/chatops/commands');
+          const role = (await executeChatOpsCommand({
+            provider: 'SLACK',
+            actor: { id: actorUser.id, name: actorName },
+            command: {
+              kind: 'SET_ROLE',
+              incidentId,
+              roleKey: 'COMMANDER',
+              targetUserId: actorUser.id,
+            },
+            ...(idempotency ? { idempotency } : {}),
+          })) as { changed: boolean };
+          responseMessage = role.changed
+            ? `🎖️ <@${slackUserId || 'responder'}> took command of this incident`
+            : `ℹ️ <@${slackUserId || 'responder'}> is already the incident commander`;
+        } catch (err) {
+          logger.warn('[Slack] Take command failed', { error: err, incidentId });
+          rethrowIfTransient(err, payload);
+          return lifecycleFailureResponse(err);
+        }
       } else if (actionType === 'snooze' || actionType === 'snooze_incident') {
         const snoozeMinutes =
           actionValue.minutes === undefined ? 60 : Number.parseInt(String(actionValue.minutes), 10);

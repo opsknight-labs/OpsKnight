@@ -36,6 +36,10 @@ vi.mock('@/lib/prisma', () => ({
     incident: {
       findUnique: vi.fn(),
     },
+    // Lazy role lookup on the denial path; no role rows unless a test sets them.
+    incidentRoleAssignment: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     service: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),

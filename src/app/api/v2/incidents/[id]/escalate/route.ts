@@ -35,6 +35,7 @@ export const POST = defineV2Route({
       serviceTeamId: incident.service.teamId,
       visibility: incident.visibility,
       watcherIds: incident.watchers.map(watcher => watcher.userId),
+      id: params.id,
     };
   },
   handler: async ({ req, params, actor, apiKey }) => {

@@ -57,6 +57,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
         preferences: z
           .object({
             selectedServiceIds: z.array(z.string().min(1).max(200)).max(100).optional(),
+            selectedBusinessServiceIds: z.array(z.string().min(1).max(200)).max(50).optional(),
             timezone: z.string().max(100).optional(),
           })
           .optional(),
@@ -142,12 +143,18 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
 
     // Industry-standard service picker: optional preferences.selectedServiceIds, validated against page's services
     const preferencesProvided = rawPreferences !== undefined;
-    let normalizedPreferences: { selectedServiceIds?: string[] } | null = null;
+    let normalizedPreferences: {
+      selectedServiceIds?: string[];
+      selectedBusinessServiceIds?: string[];
+    } | null = null;
     let normalizedServiceIds: string[] | null = null;
+    let normalizedBusinessServiceIds: string[] = [];
     if (preferencesProvided) {
-      if (rawPreferences?.selectedServiceIds !== undefined) {
+      const pickedServices = rawPreferences?.selectedServiceIds;
+      const pickedBusiness = rawPreferences?.selectedBusinessServiceIds;
+      if (pickedServices !== undefined || pickedBusiness !== undefined) {
         // Explicit Selected mode — empty or all-invalid must not widen to "all".
-        if (rawPreferences.selectedServiceIds.length === 0) {
+        if ((pickedServices?.length ?? 0) + (pickedBusiness?.length ?? 0) === 0) {
           return jsonError(
             new AppError({
               code: 'VALIDATION_FAILED',
@@ -163,13 +170,28 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             })
           );
         }
-        const allowed = await prisma.statusPageService.findMany({
-          where: { statusPageId, showOnPage: true },
-          select: { serviceId: true },
-        });
+        const [allowed, allowedBusiness] = await Promise.all([
+          pickedServices?.length
+            ? prisma.statusPageService.findMany({
+                where: { statusPageId, showOnPage: true },
+                select: { serviceId: true },
+              })
+            : [],
+          // Business services are offered only while the page groups by them.
+          pickedBusiness?.length && statusPage.serviceLayout !== 'FLAT'
+            ? prisma.statusPageBusinessService.findMany({
+                where: { statusPageId, showOnPage: true },
+                select: { businessServiceId: true },
+              })
+            : [],
+        ]);
         const allowedSet = new Set(allowed.map(r => r.serviceId));
-        const filtered = rawPreferences.selectedServiceIds.filter(id => allowedSet.has(id));
-        if (filtered.length === 0) {
+        const allowedBusinessSet = new Set(allowedBusiness.map(r => r.businessServiceId));
+        const filtered = [...new Set((pickedServices ?? []).filter(id => allowedSet.has(id)))];
+        const filteredBusiness = [
+          ...new Set((pickedBusiness ?? []).filter(id => allowedBusinessSet.has(id))),
+        ];
+        if (filtered.length + filteredBusiness.length === 0) {
           return jsonError(
             new AppError({
               code: 'VALIDATION_FAILED',
@@ -184,9 +206,12 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             })
           );
         }
-        const unique = [...new Set(filtered)];
-        normalizedPreferences = { selectedServiceIds: unique };
-        normalizedServiceIds = unique;
+        normalizedPreferences = {
+          selectedServiceIds: filtered,
+          ...(filteredBusiness.length ? { selectedBusinessServiceIds: filteredBusiness } : {}),
+        };
+        normalizedServiceIds = filtered;
+        normalizedBusinessServiceIds = filteredBusiness;
       } else {
         // preferences: {} with no selectedServiceIds — treat as "all" (null) but still considered provided
         normalizedPreferences = null;
@@ -196,19 +221,25 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
 
     async function syncSubscriptionServices(subscriptionId: string) {
       if (!preferencesProvided) return;
-      if (normalizedServiceIds === null) {
-        await prisma.statusPageSubscriptionService.deleteMany({ where: { subscriptionId } });
-      } else {
-        await prisma.$transaction(async tx => {
-          await tx.statusPageSubscriptionService.deleteMany({ where: { subscriptionId } });
-          if (normalizedServiceIds!.length > 0) {
-            await tx.statusPageSubscriptionService.createMany({
-              data: normalizedServiceIds!.map(serviceId => ({ subscriptionId, serviceId })),
-              skipDuplicates: true,
-            });
-          }
-        });
-      }
+      await prisma.$transaction(async tx => {
+        await tx.statusPageSubscriptionService.deleteMany({ where: { subscriptionId } });
+        await tx.statusPageSubscriptionBusinessService.deleteMany({ where: { subscriptionId } });
+        if (normalizedServiceIds?.length) {
+          await tx.statusPageSubscriptionService.createMany({
+            data: normalizedServiceIds.map(serviceId => ({ subscriptionId, serviceId })),
+            skipDuplicates: true,
+          });
+        }
+        if (normalizedBusinessServiceIds.length) {
+          await tx.statusPageSubscriptionBusinessService.createMany({
+            data: normalizedBusinessServiceIds.map(businessServiceId => ({
+              subscriptionId,
+              businessServiceId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      });
     }
 
     const token = randomBytes(32).toString('hex');

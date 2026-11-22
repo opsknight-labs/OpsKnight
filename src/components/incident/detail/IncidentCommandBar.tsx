@@ -54,7 +54,9 @@ import {
   AlertCircle,
   Trash2,
   RefreshCw,
+  Flag,
 } from 'lucide-react';
+import { notify } from '@/lib/toast';
 
 function jiraStatusBadgeStyle(status: string | null): string {
   if (!status)
@@ -89,6 +91,9 @@ type IncidentCommandBarProps = {
   canAcknowledge: boolean;
   /** Defaults to `canManage`. People paged for the incident may resolve without full manage. */
   canResolve?: boolean;
+  /** Offered while the viewer may take the commander role and does not hold it. */
+  canTakeCommand?: boolean;
+  onTakeCommand?: () => Promise<unknown>;
   snoozedUntil: Date | null;
   onAcknowledge: () => void;
   onUnacknowledge: () => void;
@@ -129,6 +134,8 @@ export default function IncidentCommandBar({
   canManage,
   canAcknowledge,
   canResolve = canManage,
+  canTakeCommand = false,
+  onTakeCommand,
   snoozedUntil,
   onAcknowledge,
   onUnacknowledge,
@@ -154,6 +161,19 @@ export default function IncidentCommandBar({
   const [jiraError, setJiraError] = useState<string | null>(null);
   const [syncingLinkId, setSyncingLinkId] = useState<string | null>(null);
   const [unlinkingLinkId, setUnlinkingLinkId] = useState<string | null>(null);
+  const [isTakingCommand, startTakeCommand] = useTransition();
+  const showTakeCommand = canTakeCommand && Boolean(onTakeCommand);
+  const handleTakeCommand = () => {
+    if (!onTakeCommand) return;
+    startTakeCommand(async () => {
+      try {
+        await onTakeCommand();
+        router.refresh();
+      } catch (error) {
+        notify.error(error instanceof Error ? error.message : 'Could not take command');
+      }
+    });
+  };
 
   const isResolved = currentStatus === 'RESOLVED';
   const isSnoozed = currentStatus === 'SNOOZED';
@@ -490,6 +510,23 @@ export default function IncidentCommandBar({
                     <span>Resolve Incident</span>
                   </Button>
                 )}
+                {showTakeCommand && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isTakingCommand}
+                    className="h-8 gap-1.5 px-3 font-medium shadow-2xs border-border/80 bg-background hover:bg-muted/40 text-foreground text-xs"
+                    onClick={handleTakeCommand}
+                  >
+                    {isTakingCommand ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <Flag className="h-3.5 w-3.5" aria-hidden />
+                    )}
+                    <span>Take command</span>
+                  </Button>
+                )}
                 {overflowMenu}
               </>
             )}
@@ -592,6 +629,21 @@ export default function IncidentCommandBar({
               presentation="mobile"
               onNavigate={() => setShowMobileMore(false)}
             />
+            {showTakeCommand && !isResolved && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isTakingCommand}
+                className="w-full h-11 justify-start gap-2 text-sm font-medium"
+                onClick={() => {
+                  setShowMobileMore(false);
+                  handleTakeCommand();
+                }}
+              >
+                <Flag className="h-4 w-4" aria-hidden />
+                <span>Take command</span>
+              </Button>
+            )}
             {showUnsnooze && (
               <form action={onUnsnooze}>
                 <Button

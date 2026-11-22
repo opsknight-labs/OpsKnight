@@ -5,6 +5,8 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 interface ServiceOption {
   id: string;
   name: string;
+  /** Business services are sent as `selectedBusinessServiceIds`. */
+  kind?: 'service' | 'business';
 }
 
 interface StatusPageSubscribeProps {
@@ -273,7 +275,16 @@ export default function StatusPageSubscribe({
       timezone: userTz,
     };
     if (hasPicker && mode === 'selected') {
-      payload.preferences = { selectedServiceIds: [...selectedIds], timezone: userTz };
+      const businessIds = new Set(
+        services.filter(option => option.kind === 'business').map(option => option.id)
+      );
+      const picked = [...selectedIds];
+      const pickedBusiness = picked.filter(id => businessIds.has(id));
+      payload.preferences = {
+        selectedServiceIds: picked.filter(id => !businessIds.has(id)),
+        ...(pickedBusiness.length ? { selectedBusinessServiceIds: pickedBusiness } : {}),
+        timezone: userTz,
+      };
     }
 
     startTransition(async () => {

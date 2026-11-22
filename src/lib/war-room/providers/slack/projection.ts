@@ -8,6 +8,7 @@ import { WarRoomRetryableError } from '../../errors';
 import { buildWarRoomProjection } from '../../projection-model';
 import { renderSlackWarRoomProjection } from './render';
 import { slackApiCall } from './client';
+import { INCIDENT_ROLE_SUMMARY_SELECT, summarizeIncidentRoles } from '@/lib/incidents/roles';
 
 const PROJECTION_LEASE_MS = 2 * 60_000;
 
@@ -210,7 +211,11 @@ export async function projectSlackWarRoomCard(
 
   const incidentRecord = await prisma.incident.findUnique({
     where: { id: room.incidentId },
-    include: { service: { select: { name: true } }, assignee: { select: { name: true } } },
+    include: {
+      service: { select: { name: true } },
+      assignee: { select: { name: true } },
+      roleAssignments: INCIDENT_ROLE_SUMMARY_SELECT,
+    },
   });
   if (!incidentRecord) {
     await prisma.incidentWarRoom.updateMany({
@@ -266,6 +271,7 @@ export async function projectSlackWarRoomCard(
       priority: incidentRecord.priority,
       serviceName: incidentRecord.service.name,
       assigneeName: incidentRecord.assignee?.name ?? null,
+      roles: summarizeIncidentRoles(incidentRecord.roleAssignments),
       url: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${incidentRecord.id}`,
       createdAt: incidentRecord.createdAt,
       acknowledgedAt: incidentRecord.acknowledgedAt,

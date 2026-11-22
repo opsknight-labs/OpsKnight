@@ -9,10 +9,19 @@
  */
 import 'server-only';
 
-import { chatOpsSourceLabel, type ChatOpsCommandInput, type ChatOpsActor } from '@/lib/chatops/types';
+import {
+  chatOpsSourceLabel,
+  type ChatOpsCommandInput,
+  type ChatOpsActor,
+} from '@/lib/chatops/types';
 import type { IdempotencyContext } from '@/lib/idempotency';
 
-function providerEventMessage(provider: string, actorName: string, verb: string, extra?: string): string {
+function providerEventMessage(
+  provider: string,
+  actorName: string,
+  verb: string,
+  extra?: string
+): string {
   const src = chatOpsSourceLabel(provider as never);
   const base = `${verb} via ${src} by ${actorName}`;
   return extra ? `${base}: ${extra}` : base;
@@ -24,9 +33,24 @@ export async function executeChatOpsCommand(input: ChatOpsCommandInput): Promise
     case 'ACKNOWLEDGE':
       return executeAck(provider, actor, command.incidentId, idempotency, input.eventMessage);
     case 'RESOLVE':
-      return executeResolve(provider, actor, command.incidentId, command.resolutionNote, idempotency, input.eventMessage);
+      return executeResolve(
+        provider,
+        actor,
+        command.incidentId,
+        command.resolutionNote,
+        idempotency,
+        input.eventMessage
+      );
     case 'SNOOZE':
-      return executeSnooze(provider, actor, command.incidentId, command.snoozedUntil, command.snoozeReason ?? null, idempotency, input.eventMessage);
+      return executeSnooze(
+        provider,
+        actor,
+        command.incidentId,
+        command.snoozedUntil,
+        command.snoozeReason ?? null,
+        idempotency,
+        input.eventMessage
+      );
     case 'ASSIGN':
       return executeAssign(provider, actor, command.incidentId, command.targetUserId, idempotency);
     case 'NOTE':
@@ -35,10 +59,27 @@ export async function executeChatOpsCommand(input: ChatOpsCommandInput): Promise
       return executePriority(provider, actor, command.incidentId, command.priority, idempotency);
     case 'JOIN_RESPONDER':
       return executeJoinResponder(provider, actor, command.incidentId, idempotency);
+    case 'SET_ROLE': {
+      const { executeChatOpsRole } = await import('@/lib/incidents/chatops-lifecycle');
+      return executeChatOpsRole({
+        incidentId: command.incidentId,
+        actor,
+        roleKey: command.roleKey,
+        targetUserId: command.targetUserId,
+        provider: provider === 'MICROSOFT_TEAMS' ? 'MICROSOFT_TEAMS' : 'SLACK',
+        ...(idempotency ? { idempotency } : {}),
+      });
+    }
     case 'ESCALATE':
       return executeEscalate(provider, actor, command.incidentId, idempotency);
     case 'POSTMORTEM':
-      return executePostmortem(provider, actor, command.incidentId, command.channelName, idempotency);
+      return executePostmortem(
+        provider,
+        actor,
+        command.incidentId,
+        command.channelName,
+        idempotency
+      );
     case 'READ':
       return executeRead(actor, command.incidentId);
     default:
@@ -101,7 +142,8 @@ async function executeSnooze(
     ...(idempotency ? { idempotency } : {}),
     snoozedUntil,
     ...(snoozeReason ? { snoozeReason } : {}),
-    eventMessage: eventMessage ?? providerEventMessage(provider, actor.name, `Snoozed for ${minutes}m`),
+    eventMessage:
+      eventMessage ?? providerEventMessage(provider, actor.name, `Snoozed for ${minutes}m`),
   });
 }
 
@@ -114,7 +156,13 @@ async function executeAssign(
 ) {
   const { executeChatOpsAssignment } = await import('@/lib/incidents/chatops-lifecycle');
   const p = provider === 'MICROSOFT_TEAMS' ? ('MICROSOFT_TEAMS' as const) : ('SLACK' as const);
-  return executeChatOpsAssignment({ incidentId, actor, targetUserId, provider: p, ...(idempotency ? { idempotency } : {}) });
+  return executeChatOpsAssignment({
+    incidentId,
+    actor,
+    targetUserId,
+    provider: p,
+    ...(idempotency ? { idempotency } : {}),
+  });
 }
 
 async function executeNote(
@@ -126,23 +174,61 @@ async function executeNote(
 ) {
   const { executeChatOpsNote } = await import('@/lib/incidents/chatops-lifecycle');
   const p = provider === 'MICROSOFT_TEAMS' ? ('MICROSOFT_TEAMS' as const) : ('SLACK' as const);
-  return executeChatOpsNote({ incidentId, actor, content, provider: p, ...(idempotency ? { idempotency } : {}) });
+  return executeChatOpsNote({
+    incidentId,
+    actor,
+    content,
+    provider: p,
+    ...(idempotency ? { idempotency } : {}),
+  });
 }
 
-async function executeEscalate(provider: string, actor: ChatOpsActor, incidentId: string, idempotency: IdempotencyContext | undefined) {
+async function executeEscalate(
+  provider: string,
+  actor: ChatOpsActor,
+  incidentId: string,
+  idempotency: IdempotencyContext | undefined
+) {
   const { requestIncidentEscalation } = await import('@/lib/escalation/authorization');
-  const source = provider === 'MICROSOFT_TEAMS' ? 'MICROSOFT_TEAMS' as const : 'SLACK' as const;
-  return requestIncidentEscalation({ incidentId, actor: { userId: actor.id, name: actor.name }, source, ...(idempotency ? { idempotency } : {}) });
+  const source = provider === 'MICROSOFT_TEAMS' ? ('MICROSOFT_TEAMS' as const) : ('SLACK' as const);
+  return requestIncidentEscalation({
+    incidentId,
+    actor: { userId: actor.id, name: actor.name },
+    source,
+    ...(idempotency ? { idempotency } : {}),
+  });
 }
 
-async function executePriority(provider: string, actor: ChatOpsActor, incidentId: string, priority: string, idempotency: IdempotencyContext | undefined) {
+async function executePriority(
+  provider: string,
+  actor: ChatOpsActor,
+  incidentId: string,
+  priority: string,
+  idempotency: IdempotencyContext | undefined
+) {
   const { executeChatOpsPriority } = await import('@/lib/incidents/chatops-lifecycle');
-  return executeChatOpsPriority({ incidentId, actor, priority, provider: provider as 'SLACK' | 'MICROSOFT_TEAMS', ...(idempotency ? { idempotency } : {}) });
+  return executeChatOpsPriority({
+    incidentId,
+    actor,
+    priority,
+    provider: provider as 'SLACK' | 'MICROSOFT_TEAMS',
+    ...(idempotency ? { idempotency } : {}),
+  });
 }
 
-async function executeJoinResponder(provider: string, actor: ChatOpsActor, incidentId: string, idempotency: IdempotencyContext | undefined) {
+async function executeJoinResponder(
+  provider: string,
+  actor: ChatOpsActor,
+  incidentId: string,
+  idempotency: IdempotencyContext | undefined
+) {
   const { executeChatOpsJoinResponder } = await import('@/lib/incidents/chatops-lifecycle');
-  return executeChatOpsJoinResponder({ incidentId, actor, provider: provider as 'SLACK' | 'MICROSOFT_TEAMS', ...(idempotency ? { idempotency } : {}) });
+  return executeChatOpsJoinResponder({
+    incidentId,
+    actor,
+    provider: provider as 'SLACK' | 'MICROSOFT_TEAMS',
+    ...(idempotency ? { idempotency } : {}),
+  });
 }
 
 async function executePostmortem(
@@ -154,7 +240,12 @@ async function executePostmortem(
 ) {
   const { executeChatOpsPostmortemCommand } = await import('@/lib/incidents/chatops-postmortem');
   void provider;
-  return executeChatOpsPostmortemCommand({ incidentId, actor, channelName, ...(idempotency ? { idempotency } : {}) });
+  return executeChatOpsPostmortemCommand({
+    incidentId,
+    actor,
+    channelName,
+    ...(idempotency ? { idempotency } : {}),
+  });
 }
 
 async function executeRead(actor: ChatOpsActor, incidentId: string) {

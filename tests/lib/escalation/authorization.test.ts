@@ -10,6 +10,7 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     incident: { findUnique: vi.fn() },
+    incidentRoleAssignment: { findMany: vi.fn().mockResolvedValue([]) },
     incidentEvent: { create: vi.fn() },
     backgroundJob: { create: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
   },
