@@ -1,7 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import OpsKnightSquire, { type SquireState } from './OpsKnightSquire';
+import { isDelivered, markDelivered, type SquireNote } from './squire-messages';
+import { shortcutLabel } from './squire-voice';
 import './squire-bar.css';
 
 /**
@@ -10,6 +13,10 @@ import './squire-bar.css';
  * lantern, tends the shield, and once per session brings a message offering help) before going back to
  * sleep. A round never starts while the chat is open, the tab is hidden, someone is typing or working,
  * or reduced motion is requested; at most a few rounds play per session. Hovering wakes him up.
+ *
+ * He is also the messenger: notes (a one-time introduction, on-call heads-ups, "your answer is ready")
+ * arrive on his scroll even with motion off; with motion he steps out to deliver them. He rests awake and
+ * only dozes after a few quiet minutes, so a sleeping knight never reads as "switched off".
  */
 
 type Duty = 'watch' | 'polish' | 'scout' | 'message' | 'rest';
@@ -21,6 +28,11 @@ const IDLE_BEFORE_ROUND_MS = 30_000;
 const ROUND_GAP_MS = 6 * 60_000;
 const MAX_ROUNDS_PER_SESSION = 3;
 const SESSION_KEY = 'opsknight.squire-bar.rounds';
+/** He dozes off after this long without activity, and wakes on the next pointer, key or scroll. */
+const DOZE_AFTER_MS = 2 * 60_000;
+/** How long a note stays up before he rolls the scroll away by himself. */
+const NOTE_MS = 15_000;
+const INTRO_MS = 20_000;
 
 const readRounds = () => {
   try {
@@ -37,13 +49,15 @@ const writeRounds = (value: number) => {
   }
 };
 
-
 export default function SquireBarCompanion({
   name,
   open,
   onOpen,
   launcherState,
   animated,
+  notes = [],
+  unread = false,
+  statusLabel,
 }: {
   name: string;
   /** The chat panel is open: stay at the post, awake. */
@@ -53,13 +67,23 @@ export default function SquireBarCompanion({
   launcherState: SquireState;
   /** The administrator's "animate the assistant" setting. */
   animated: boolean;
+  /** Notes to deliver, most important first; each is shown once (see squire-messages). */
+  notes?: readonly SquireNote[];
+  /** An answer finished while the chat was closed. */
+  unread?: boolean;
+  /** What the assistant is doing, for the hover title. */
+  statusLabel?: string;
 }) {
   const [bar, setBar] = useState<DOMRect | null>(null);
   const [x, setX] = useState<number | null>(null);
   const [walkMs, setWalkMs] = useState(0);
   const [facing, setFacing] = useState<'left' | 'right'>('right');
   const [pose, setPose] = useState<Pose>('rest');
-  const [mood, setMood] = useState<SquireState>('offline');
+  const [mood, setMood] = useState<SquireState>('idle');
+  const [dozing, setDozing] = useState(false);
+  const [note, setNote] = useState<SquireNote | null>(null);
+  // Bumped after a delivery (or a failed attempt) so the next waiting note gets its turn.
+  const [noteTick, setNoteTick] = useState(0);
   const [scrollOpen, setScrollOpen] = useState(false);
   const [lantern, setLantern] = useState(false);
   const [shield, setShield] = useState(true);
@@ -126,30 +150,35 @@ export default function SquireBarCompanion({
     [animated]
   );
 
-  const walkTo = useCallback(async (target: number, hurry = false) => {
-    const from = xRef.current ?? target;
-    const distance = Math.abs(target - from);
-    if (distance < 2) return;
-    setFacing(target < from ? 'left' : 'right');
-    stageRef.current?.classList.add('crouch');
-    await wait(150);
-    stageRef.current?.classList.remove('crouch');
-    const ms = Math.max(700, distance * (hurry ? 5 : 9));
-    setWalkMs(ms);
-    setPose('walk');
-    if (hurry) stageRef.current?.classList.add('hurry');
-    xRef.current = target;
-    setX(target);
-    await wait(ms);
-    stageRef.current?.classList.remove('hurry');
-    stageRef.current?.classList.add('settle');
-    await wait(480);
-    stageRef.current?.classList.remove('settle');
-  }, [wait]);
+  const walkTo = useCallback(
+    async (target: number, hurry = false) => {
+      const from = xRef.current ?? target;
+      const distance = Math.abs(target - from);
+      if (distance < 2) return;
+      setFacing(target < from ? 'left' : 'right');
+      stageRef.current?.classList.add('crouch');
+      await wait(150);
+      stageRef.current?.classList.remove('crouch');
+      const ms = Math.max(700, distance * (hurry ? 5 : 9));
+      setWalkMs(ms);
+      setPose('walk');
+      if (hurry) stageRef.current?.classList.add('hurry');
+      xRef.current = target;
+      setX(target);
+      await wait(ms);
+      stageRef.current?.classList.remove('hurry');
+      stageRef.current?.classList.add('settle');
+      await wait(480);
+      stageRef.current?.classList.remove('settle');
+    },
+    [wait]
+  );
 
   const round = useCallback(async () => {
     if (busy.current || !bar || home === null) return;
-    const typing = document.activeElement?.matches('input, textarea, select, [contenteditable="true"]');
+    const typing = document.activeElement?.matches(
+      'input, textarea, select, [contenteditable="true"]'
+    );
     if (open || document.hidden || typing || !motionAllowed()) return;
     const rounds = readRounds();
     if (rounds >= MAX_ROUNDS_PER_SESSION) return;
@@ -182,6 +211,7 @@ export default function SquireBarCompanion({
       if (stop()) return;
       // The first round of a session also brings a message offering help.
       if (rounds === 0) {
+        setNote(null);
         setPose('message');
         setMood('greeting');
         setScrollOpen(true);
@@ -198,10 +228,70 @@ export default function SquireBarCompanion({
       setFacing('right');
       setShield(true);
       setPose('rest');
-      setMood('offline');
+      setMood('idle');
       busy.current = false;
     }
   }, [bar, home, open, motionAllowed, walkTo, wait, snapHome]);
+
+  /** Carry one note: step out (with motion), unroll the scroll, wait for a reply or the timeout, return. */
+  const deliver = useCallback(
+    async (next: SquireNote) => {
+      if (busy.current || home === null || open) return false;
+      busy.current = true;
+      cancelled.current = false;
+      markDelivered(next);
+      setDozing(false);
+      try {
+        setMood('greeting');
+        if (motionAllowed()) {
+          await walkTo(home - 64, true);
+          if (cancelled.current) return true;
+          setFacing('right');
+        }
+        setNote(next);
+        setPose('message');
+        setScrollOpen(true);
+        await wait(next.id === 'intro' ? INTRO_MS : NOTE_MS);
+      } finally {
+        setScrollOpen(false);
+        setMood('idle');
+        if (cancelled.current) snapHome();
+        else if (motionAllowed()) await walkTo(home);
+        setFacing('right');
+        setPose('rest');
+        busy.current = false;
+        setNoteTick(tick => tick + 1);
+      }
+      return true;
+    },
+    [home, open, motionAllowed, walkTo, wait, snapHome]
+  );
+
+  /** Roll the scroll away now: ends the current wait, so he walks back as after a timeout. */
+  const dismiss = useCallback(() => {
+    for (const done of [...waiters.current]) done();
+  }, []);
+
+  // The first note still waiting is delivered after a short pause; hidden tabs and running rounds retry.
+  useEffect(() => {
+    if (!bar || home === null || open) return;
+    const next = notes.find(item => !isDelivered(item));
+    if (!next) return;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const timer = setTimeout(
+      () => {
+        void (async () => {
+          if (!document.hidden && (await deliver(next))) return;
+          retry = setTimeout(() => setNoteTick(tick => tick + 1), 5_000);
+        })();
+      },
+      next.id === 'intro' ? 2_500 : 1_500
+    );
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(retry);
+    };
+  }, [bar, home, open, notes, deliver, noteTick]);
 
   // Rounds start only when the person is idle, and never more often than ROUND_GAP_MS.
   useEffect(() => {
@@ -209,11 +299,14 @@ export default function SquireBarCompanion({
     lastActivity.current = Date.now();
     const touch = () => {
       lastActivity.current = Date.now();
+      setDozing(false);
     };
     const events = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'scroll'] as const;
-    for (const event of events) window.addEventListener(event, touch, { passive: true, capture: true });
+    for (const event of events)
+      window.addEventListener(event, touch, { passive: true, capture: true });
     const check = setInterval(() => {
       const now = Date.now();
+      if (!busy.current && now - lastActivity.current >= DOZE_AFTER_MS) setDozing(true);
       if (now - lastActivity.current < IDLE_BEFORE_ROUND_MS) return;
       if (lastRound.current && now - lastRound.current < ROUND_GAP_MS) return;
       void round();
@@ -243,8 +336,10 @@ export default function SquireBarCompanion({
       ? launcherState === 'idle'
         ? 'listening'
         : launcherState
-      : resting && awake
-        ? 'idle'
+      : resting
+        ? dozing && !awake
+          ? 'offline'
+          : 'idle'
         : mood;
   const shownPose: Pose = open || launcherState !== 'idle' ? 'idle' : pose;
 
@@ -257,7 +352,7 @@ export default function SquireBarCompanion({
       />
       <div
         ref={stageRef}
-        className={`sqbar-stage pose-${shownPose} face-${facing}${lantern ? ' lit' : ''}${resting && awake ? ' awake' : ''}`}
+        className={`sqbar-stage pose-${shownPose} face-${facing}${lantern ? ' lit' : ''}${resting && awake ? ' awake' : ''}${resting && dozing && !awake ? ' dozing' : ''}`}
         style={{ transform: `translateX(${x}px)`, transitionDuration: `${walkMs}ms` }}
       >
         <button
@@ -268,9 +363,10 @@ export default function SquireBarCompanion({
           onPointerLeave={() => setAwake(false)}
           onFocus={() => setAwake(true)}
           onBlur={() => setAwake(false)}
-          aria-label={`Ask ${name}`}
-          title={`Ask ${name}`}
+          aria-label={unread ? `Ask ${name}, an answer is ready` : `Ask ${name}`}
+          title={`${statusLabel ? `${name}: ${statusLabel}` : `Ask ${name}`} · ${shortcutLabel()}`}
         >
+          {unread && <span className="sqbar-dot" aria-hidden="true" />}
           <span className="sqbar-contact" aria-hidden="true" />
           <OpsKnightSquire
             state={shownState}
@@ -280,7 +376,11 @@ export default function SquireBarCompanion({
             label=""
             aria-hidden="true"
           />
-          <svg className={`sqbar-prop sqbar-lantern${lantern ? ' on' : ''}`} viewBox="0 0 16 24" aria-hidden="true">
+          <svg
+            className={`sqbar-prop sqbar-lantern${lantern ? ' on' : ''}`}
+            viewBox="0 0 16 24"
+            aria-hidden="true"
+          >
             <defs>
               <radialGradient id="sqbar-lg" cx="50%" cy="60%" r="60%">
                 <stop offset="0" stopColor="#fff7d6" />
@@ -295,11 +395,28 @@ export default function SquireBarCompanion({
             </defs>
             <path d="M5 4 Q8 0 11 4" fill="none" stroke="#71717a" strokeWidth="1.3" />
             <rect x="3" y="4" width="10" height="3" rx="1" fill="url(#sqbar-lm)" />
-            <rect x="3.5" y="7" width="9" height="12" rx="2" fill="url(#sqbar-lg)" stroke="#a16207" strokeWidth=".6" />
-            <path className="sqbar-flame" d="M8 9 C10 12 10 15 8 17 C6 15 6 12 8 9Z" fill="#fff4c2" />
+            <rect
+              x="3.5"
+              y="7"
+              width="9"
+              height="12"
+              rx="2"
+              fill="url(#sqbar-lg)"
+              stroke="#a16207"
+              strokeWidth=".6"
+            />
+            <path
+              className="sqbar-flame"
+              d="M8 9 C10 12 10 15 8 17 C6 15 6 12 8 9Z"
+              fill="#fff4c2"
+            />
             <rect x="3" y="19" width="10" height="3" rx="1" fill="url(#sqbar-lm)" />
           </svg>
-          <svg className={`sqbar-prop sqbar-shield${shield ? ' on' : ''}`} viewBox="0 0 24 28" aria-hidden="true">
+          <svg
+            className={`sqbar-prop sqbar-shield${shield ? ' on' : ''}`}
+            viewBox="0 0 24 28"
+            aria-hidden="true"
+          >
             <defs>
               <linearGradient id="sqbar-sm" x1="0" x2="1" y1="0" y2="1">
                 <stop offset="0" stopColor="#fb7185" />
@@ -315,11 +432,31 @@ export default function SquireBarCompanion({
                 <path d="M12 1 L22 4 V13 C22 20 17 24.5 12 27 C7 24.5 2 20 2 13 V4 Z" />
               </clipPath>
             </defs>
-            <path d="M12 1 L22 4 V13 C22 20 17 24.5 12 27 C7 24.5 2 20 2 13 V4 Z" fill="url(#sqbar-rim)" />
-            <path d="M12 3 L20 5.5 V13 C20 18.8 16 22.6 12 24.8 C8 22.6 4 18.8 4 13 V5.5 Z" fill="url(#sqbar-sm)" />
-            <path d="M12 7 V20 M7 12 H17" stroke="#fff1f2" strokeWidth="2" strokeLinecap="round" opacity=".9" />
+            <path
+              d="M12 1 L22 4 V13 C22 20 17 24.5 12 27 C7 24.5 2 20 2 13 V4 Z"
+              fill="url(#sqbar-rim)"
+            />
+            <path
+              d="M12 3 L20 5.5 V13 C20 18.8 16 22.6 12 24.8 C8 22.6 4 18.8 4 13 V5.5 Z"
+              fill="url(#sqbar-sm)"
+            />
+            <path
+              d="M12 7 V20 M7 12 H17"
+              stroke="#fff1f2"
+              strokeWidth="2"
+              strokeLinecap="round"
+              opacity=".9"
+            />
             <g clipPath="url(#sqbar-sc)">
-              <rect className="sqbar-shine" x="2" y="-4" width="5" height="36" fill="#fff" opacity=".55" />
+              <rect
+                className="sqbar-shine"
+                x="2"
+                y="-4"
+                width="5"
+                height="36"
+                fill="#fff"
+                opacity=".55"
+              />
             </g>
           </svg>
           <span className="sqbar-cloth" aria-hidden="true" />
@@ -330,11 +467,54 @@ export default function SquireBarCompanion({
       </div>
       <div
         className={`sqbar-scroll${scrollOpen ? ' open' : ''}`}
-        style={{ transform: `translateX(${x + 22}px) translateX(-50%)` }}
+        aria-hidden={!scrollOpen}
+        style={{
+          // A note's card ends at his right edge, so it never runs off the end of the bar.
+          transform: note
+            ? `translateX(${x + 50}px) translateX(-100%)`
+            : `translateX(${x + 22}px) translateX(-50%)`,
+        }}
       >
-        <button type="button" className="sqbar-paper" onClick={onOpen} tabIndex={scrollOpen ? 0 : -1}>
-          Need a hand, my knight? Click me and ask anything
-        </button>
+        {note ? (
+          <div className="sqbar-paper sqbar-letter" role="status">
+            <p>{note.text}</p>
+            <div className="sqbar-letter-actions">
+              <button type="button" onClick={dismiss} tabIndex={scrollOpen ? 0 : -1}>
+                {note.dismissLabel}
+              </button>
+              {note.action &&
+                ('open' in note.action ? (
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={onOpen}
+                    tabIndex={scrollOpen ? 0 : -1}
+                  >
+                    {note.action.label}
+                  </button>
+                ) : (
+                  <Link
+                    href={note.action.href}
+                    prefetch={false}
+                    className="primary"
+                    onClick={dismiss}
+                    tabIndex={scrollOpen ? 0 : -1}
+                  >
+                    {note.action.label}
+                  </Link>
+                ))}
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="sqbar-paper"
+            onClick={onOpen}
+            tabIndex={scrollOpen ? 0 : -1}
+          >
+            Need a hand, my knight? Click me and ask anything
+          </button>
+        )}
       </div>
     </>
   );

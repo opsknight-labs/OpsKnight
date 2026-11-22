@@ -8,8 +8,6 @@ import { assertSafeOutboundUrl } from '@/lib/network-security';
 import { parseOrThrow, type IntelligenceActor } from '../settings/service';
 import {
   AI_SETTINGS_DEFAULTS,
-  SQUIRE_AVATARS,
-  type SquireAvatar,
   type SquireLauncherStyle,
   aiProviderInputSchema,
   aiSettingsInputSchema,
@@ -27,7 +25,6 @@ export interface AiSettingsView {
   enabled: boolean;
   squireEnabled: boolean;
   squireName: string;
-  squireAvatar: SquireAvatar;
   squireLauncher: SquireLauncherStyle;
   squireAnimations: boolean;
   allowedDataRegions: string[];
@@ -71,7 +68,6 @@ const SETTINGS_SELECT = {
   enabled: true,
   squireEnabled: true,
   squireName: true,
-  squireAvatar: true,
   squireLauncher: true,
   squireAnimations: true,
   allowedDataRegions: true,
@@ -104,9 +100,6 @@ type SettingsRow = Prisma.AiSettingsGetPayload<{ select: typeof SETTINGS_SELECT 
 function toSettingsView(row: SettingsRow): AiSettingsView {
   return {
     ...row,
-    squireAvatar: (SQUIRE_AVATARS as readonly string[]).includes(row.squireAvatar)
-      ? (row.squireAvatar as SquireAvatar)
-      : 'SQUIRE',
     squireLauncher: row.squireLauncher === 'SEARCH_ONLY' ? 'SEARCH_ONLY' : 'FLOATING',
     capabilityRouting: readCapabilityRouting(row.capabilityRouting),
   };
@@ -578,7 +571,6 @@ export async function getAiPublicStatus(client: Client = prisma) {
   return {
     squireEnabled: settings.squireEnabled,
     squireName: settings.squireName,
-    squireAvatar: settings.squireAvatar,
     squireLauncher: settings.squireLauncher,
     squireAnimations: settings.squireAnimations,
     aiEnabled: settings.enabled,

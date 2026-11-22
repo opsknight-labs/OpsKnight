@@ -29,15 +29,15 @@ export function squirePresence(input: SquirePresenceInput): { state: SquireState
     return { state: 'error', label: 'Something needs another try' };
   if (input.greeting) return { state: 'greeting', label: 'Here to help you investigate' };
   if (input.attention) return { state: 'alert', label: 'High urgency incident · needs attention' };
+  // AI off is the normal, default way to run Squire: he stays awake and answers in basic mode.
+  if (input.availability === 'disabled') return { state: 'idle', label: 'Basic mode · ready' };
   if (input.availability !== 'ready')
     return {
       state: 'offline',
       label:
         input.availability === 'quota'
           ? 'AI limit reached · basic mode available'
-          : input.availability === 'unavailable'
-            ? 'AI unavailable · basic mode available'
-            : 'AI disabled · basic mode available',
+          : 'AI unavailable · basic mode available',
     };
   return { state: 'idle', label: 'Ready when you are' };
 }

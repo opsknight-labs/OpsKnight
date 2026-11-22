@@ -6175,12 +6175,11 @@ enum AiDataClass {
 model AiSettings {
   id                      String   @id @default("default")
   enabled                 Boolean  @default(false)
-  squireEnabled           Boolean  @default(false)
+  squireEnabled           Boolean  @default(true)
   squireName              String   @default("Squire")
-  // Personalisation is opt-in: the default is a plain icon, a floating button and no motion.
-  squireAvatar            String   @default("SQUIRE")
+  // On by default with the Squire mascot; basic answers work without AI. Motion honours reduced-motion.
   squireLauncher          String   @default("FLOATING")
-  squireAnimations        Boolean  @default(false)
+  squireAnimations        Boolean  @default(true)
   // Residency: when non-empty, only providers tagged with one of these regions are ever used.
   allowedDataRegions      String[] @default([])
   embeddingsEnabled       Boolean  @default(false)

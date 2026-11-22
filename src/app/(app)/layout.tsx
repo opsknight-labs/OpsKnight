@@ -204,7 +204,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                       </div>
                       <CreateIncidentModal />
                       <Suspense fallback={null}>
-                        <SquireMount />
+                        <SquireMount shifts={statusBar.shifts} userName={userName} />
                       </Suspense>
                     </IncidentAlertProvider>
                   </RouteAwareRealtimeProvider>

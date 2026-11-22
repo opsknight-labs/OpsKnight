@@ -1,8 +1,6 @@
 import { z } from 'zod/v4';
 import { AI_DATA_CLASSES } from './port';
 
-export const SQUIRE_AVATARS = ['SQUIRE', 'ICON', 'KNIGHT', 'OWL', 'ROBOT'] as const;
-export type SquireAvatar = (typeof SQUIRE_AVATARS)[number];
 export const SQUIRE_LAUNCHERS = ['FLOATING', 'SEARCH_ONLY'] as const;
 export type SquireLauncherStyle = (typeof SQUIRE_LAUNCHERS)[number];
 
@@ -43,11 +41,11 @@ export const AI_SETTINGS_BOUNDS = {
 
 export const AI_SETTINGS_DEFAULTS = {
   enabled: false,
-  squireEnabled: false,
+  // On by default: without AI the assistant answers from incident data (basic mode).
+  squireEnabled: true,
   squireName: 'Squire',
-  squireAvatar: 'SQUIRE' as SquireAvatar,
   squireLauncher: 'FLOATING' as SquireLauncherStyle,
-  squireAnimations: false,
+  squireAnimations: true,
   allowExternalFallback: false,
   requestsPerMinutePerUser: 20,
   dailyTokenBudget: 500_000,
@@ -127,9 +125,8 @@ export const aiSettingsInputSchema = z
     enabled: z.boolean(),
     squireEnabled: z.boolean(),
     squireName,
-    squireAvatar: z.enum(SQUIRE_AVATARS).default('SQUIRE'),
     squireLauncher: z.enum(SQUIRE_LAUNCHERS).default('FLOATING'),
-    squireAnimations: z.boolean().default(false),
+    squireAnimations: z.boolean().default(true),
     allowExternalFallback: z.boolean(),
     requestsPerMinutePerUser: intIn(AI_SETTINGS_BOUNDS.requestsPerMinute),
     dailyTokenBudget: intIn(AI_SETTINGS_BOUNDS.dailyTokenBudget),

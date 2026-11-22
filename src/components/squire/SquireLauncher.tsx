@@ -19,7 +19,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { ArrowDown, Search, Trash2 } from 'lucide-react';
-import SquireAvatar, { type SquireAvatarKind } from '@/components/squire/SquireAvatar';
+import SquireAvatar from '@/components/squire/SquireAvatar';
 import SquireMessage from './SquireMessage';
 import { squirePresence, type AiAvailability } from './presence';
 import { Button } from '@/components/ui/shadcn/button';
@@ -27,7 +27,12 @@ import type { StoredTurnEnvelope } from '@/lib/intelligence/conversations/contra
 import type { SquireProposalView } from './SquireProposalCard';
 
 import { mergeInvestigationStep, type Turn, type Citation } from './chat-types';
-import { describeSquireContext, incidentIdFromPath, pageContextFromPath } from './page-context';
+import {
+  describeSquireContext,
+  incidentIdFromPath,
+  pageContextFromPath,
+  type SquirePageKind,
+} from './page-context';
 import { createDeltaBatcher, type DeltaBatcher } from './delta-batcher';
 import { trapTabKey } from './focus-trap';
 import SquireAvailabilityNotice, {
@@ -43,6 +48,17 @@ import { SquireEvidenceChip } from './SquireSurfaceControls';
 import SquireHeader from './SquireHeader';
 import SquireEmptyState from './SquireEmptyState';
 import SquireComposer from './SquireComposer';
+import { buildNotes, nextNoteAt } from './squire-messages';
+import {
+  emptyHeadline,
+  emptyTip,
+  pendingLine,
+  presenceLabel,
+  shortcutLabel,
+  type Tone,
+} from './squire-voice';
+import { matchSlashCommands, type SlashCommand } from './slash-commands';
+import type { StatusBarShift } from '@/lib/status-bar';
 import { toneClasses } from '@/components/patterns/status-tone';
 import { incidentRef } from '@/lib/intelligence/incident-ux/explain';
 type SavedConversation = {
@@ -71,6 +87,22 @@ const INCIDENT_SUGGESTIONS = [
   'Which runbook fits?',
   'Who is assigned to this incident?',
 ];
+/** Questions about the page the person is on; each one is a follow-up basic mode already answers. */
+const PAGE_SUGGESTIONS: Partial<Record<SquirePageKind, { title: string; items: string[] }>> = {
+  service: {
+    title: 'For this service',
+    items: [
+      'Who is on call for it?',
+      'Open incidents for this service',
+      'Recent changes for this service',
+      'Runbooks for this service',
+    ],
+  },
+  schedule: { title: 'For this schedule', items: ['Who is on call?', 'Who is on call tomorrow?'] },
+};
+const NO_SHIFTS: StatusBarShift[] = [];
+/** setTimeout's ceiling; a later on-call note re-arms the timer when it fires. */
+const MAX_TIMEOUT_MS = 2_147_483_647;
 const SIDE_KEY = 'opsknight.squire.side';
 
 type Side = 'right' | 'left';
@@ -123,7 +155,6 @@ function progressAnnouncement(busy: boolean, turn: Turn | undefined, hasTurns: b
 
 export default function SquireLauncher({
   name,
-  avatar = 'SQUIRE',
   launcher = 'FLOATING',
   animated = false,
   aiEnabled = false,
@@ -131,9 +162,10 @@ export default function SquireLauncher({
   fullscreen = false,
   canManageAi = false,
   pinBriefing = false,
+  shifts = NO_SHIFTS,
+  userName = null,
 }: {
   name: string;
-  avatar?: SquireAvatarKind;
   launcher?: 'FLOATING' | 'SEARCH_ONLY';
   animated?: boolean;
   aiEnabled?: boolean;
@@ -145,6 +177,10 @@ export default function SquireLauncher({
   canManageAi?: boolean;
   /** Pin the incident briefing above a conversation about an incident (loaded from the briefing API). */
   pinBriefing?: boolean;
+  /** The person's upcoming on-call shifts (from the status bar), for heads-ups on Squire's scroll. */
+  shifts?: StatusBarShift[];
+  /** For a friendlier greeting; only the first name is used. */
+  userName?: string | null;
 }) {
   const pathname = usePathname();
   const realtime = useOptionalRealtime();
@@ -205,6 +241,15 @@ export default function SquireLauncher({
     const timer = window.setTimeout(() => setActionOutcome(null), 2400);
     return () => window.clearTimeout(timer);
   }, [actionOutcome]);
+  // A helpful rating: a short salute, without the "action completed" line a real action gets.
+  const [cheer, setCheer] = useState(false);
+  useEffect(() => {
+    if (!cheer) return;
+    const timer = window.setTimeout(() => setCheer(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [cheer]);
+  // Picks the playful lines once per mount, so they do not change on every render.
+  const [seed] = useState(() => Math.floor(Math.random() * 1000));
   const lastTurn = turns.at(-1);
   const [activeScope, setActiveScope] = useState<string | null | undefined>(undefined);
   const contextMismatch = activeScope !== undefined && activeScope !== (incidentId ?? null);
@@ -221,6 +266,8 @@ export default function SquireLauncher({
         : Boolean(
             realtime?.recentIncidents.some(row => row.status === 'OPEN' && row.urgency === 'HIGH')
           );
+  // Playful when calm; plain words while a high-urgency incident needs attention.
+  const tone: Tone = incidentAttention ? 'crisp' : 'calm';
   const presence = squirePresence({
     online,
     greeting: greeting && turns.length === 0,
@@ -228,21 +275,25 @@ export default function SquireLauncher({
     speaking: Boolean(lastTurn?.content && !lastTurn.activity),
     typing: Boolean(input.trim()),
     failed: Boolean(lastTurn?.failed),
-    outcome: actionOutcome,
+    outcome: actionOutcome ?? (cheer ? 'success' : null),
     attention: incidentAttention,
     availability,
   });
   const mascotState = presence.state;
+  const basicModeLabel =
+    rateLimit && availability === 'quota'
+      ? 'Basic mode · AI rate limited'
+      : availability === 'quota'
+        ? 'Basic mode · AI limit reached'
+        : availability === 'unavailable'
+          ? 'Basic mode · AI unavailable'
+          : availability === 'disabled'
+            ? 'Basic mode · AI disabled'
+            : null;
   const statusLabel =
-    mascotState === 'offline' && online
-      ? rateLimit && availability === 'quota'
-        ? 'Basic mode · AI rate limited'
-        : availability === 'quota'
-          ? 'Basic mode · AI limit reached'
-          : availability === 'unavailable'
-            ? 'Basic mode · AI unavailable'
-            : 'Basic mode · AI disabled'
-      : presence.label;
+    online && basicModeLabel && (mascotState === 'offline' || mascotState === 'idle')
+      ? basicModeLabel
+      : presenceLabel(mascotState, presence.label, tone);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [showHistory, setShowHistory] = useState(false);
   const [saved, setSaved] = useState<SavedConversation[] | null>(null);
@@ -268,6 +319,22 @@ export default function SquireLauncher({
 
   // Closing only hides the panel: an answer in progress keeps arriving and is there when it is reopened.
   const close = useCallback(() => setOpen(false), []);
+  // An answer that finished while the panel was closed; Squire carries the news on his scroll.
+  const [answerReady, setAnswerReady] = useState<number | null>(null);
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+  if (open && answerReady !== null) setAnswerReady(null);
+  // Re-evaluate on-call notes exactly when one becomes due, never by polling.
+  const [clock, setClock] = useState(() => Date.now());
+  const noteDueAt = nextNoteAt(shifts, clock);
+  useEffect(() => {
+    if (noteDueAt === null) return;
+    const delay = Math.min(Math.max(noteDueAt - Date.now(), 0) + 250, MAX_TIMEOUT_MS);
+    const timer = window.setTimeout(() => setClock(Date.now()), delay);
+    return () => window.clearTimeout(timer);
+  }, [noteDueAt]);
   const openPanel = useCallback(() => setOpen(true), []);
   // Docked display, hand-off evidence and the ?squire=open deep link live in their own hook.
   const surfaces = useSquireSurfaces({
@@ -619,7 +686,10 @@ export default function SquireLauncher({
         }
       } finally {
         patch(turn => ({ ...turn, activity: undefined }));
-        if (seq === requestSeq.current) setBusy(false);
+        if (seq === requestSeq.current) {
+          setBusy(false);
+          if (!openRef.current) setAnswerReady(seq);
+        }
       }
     },
     [busy, conversationId, incidentId, pageContext, aiEnabled, turns, activeScope, online]
@@ -823,6 +893,18 @@ export default function SquireLauncher({
     sendRef.current = send;
   }, [send]);
 
+  const cheerUp = useCallback(() => {
+    if (tone === 'calm') setCheer(true);
+  }, [tone]);
+  const runCommand = (command: SlashCommand) => {
+    if (command.prompt) void send(command.prompt);
+    else newChat();
+  };
+  const notes = useMemo(
+    () => buildNotes({ name, shortcut: shortcutLabel(), tone, shifts, now: clock, answerReady }),
+    [name, tone, shifts, clock, answerReady]
+  );
+
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     void send(input, editIndex ?? undefined);
@@ -854,6 +936,8 @@ export default function SquireLauncher({
         urgent: false,
       };
   const showContext = !showHistory && !contextMismatch;
+  const pageSuggestions =
+    !scopeId && pageContext ? (PAGE_SUGGESTIONS[pageContext.kind] ?? null) : null;
   const composerChips =
     (scopeId && !showHistory) || (showContext && surfaces.evidence) ? (
       <>
@@ -895,13 +979,16 @@ export default function SquireLauncher({
       data-side={side}
       data-presentation={fullscreen ? 'fullscreen' : dock.docked && open ? 'docked' : 'panel'}
     >
-      {launcher === 'FLOATING' && avatar === 'SQUIRE' && !fullscreen && (
+      {launcher === 'FLOATING' && !fullscreen && (
         <SquireBarCompanion
           name={name}
           open={open}
           onOpen={() => setOpen(true)}
           launcherState={busy || !online ? mascotState : 'idle'}
           animated={animated}
+          notes={notes}
+          unread={answerReady !== null}
+          statusLabel={statusLabel}
         />
       )}
       {!open && launcher === 'FLOATING' && (
@@ -915,11 +1002,16 @@ export default function SquireLauncher({
           className={`flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-lg transition hover:bg-accent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 lg:[html[data-squire-bar=on]_&]:hidden ${side === 'left' ? '' : '[body:has([data-sheet-side=right][data-state=open])_&]:hidden'}`}
         >
           <SquireAvatar
-            kind={avatar}
             animated={animated}
             state={busy || !online ? mascotState : incidentAttention ? 'alert' : 'idle'}
           />
           <span>Ask {name}</span>
+          {answerReady !== null && (
+            <>
+              <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
+              <span className="sr-only">, an answer is ready</span>
+            </>
+          )}
         </button>
       )}
       {open && (
@@ -948,7 +1040,6 @@ export default function SquireLauncher({
         >
           <SquireHeader
             name={name}
-            avatar={avatar}
             animated={animated}
             mascotState={mascotState}
             statusLabel={statusLabel}
@@ -957,9 +1048,7 @@ export default function SquireLauncher({
             dock={dock}
             side={side}
             expanded={expanded}
-            onToggleExpanded={
-              fullscreen || dock.docked ? null : () => setExpanded(value => !value)
-            }
+            onToggleExpanded={fullscreen || dock.docked ? null : () => setExpanded(value => !value)}
             onSwitchSide={fullscreen || dock.docked ? null : switchSide}
             hasHistory={Boolean(history)}
             showHistory={showHistory}
@@ -1160,16 +1249,24 @@ export default function SquireLauncher({
               >
                 {turns.length === 0 && (
                   <SquireEmptyState
-                    showMascot={avatar === 'SQUIRE'}
                     mascotState={mascotState}
                     animated={animated}
+                    headline={emptyHeadline(
+                      tone,
+                      new Date().getHours(),
+                      userName?.trim().split(/\s+/)[0]
+                    )}
+                    tip={tone === 'calm' ? emptyTip(seed, shortcutLabel()) : null}
+                    pageSuggestions={pageSuggestions}
                     description={
                       scopeId
                         ? 'I can read this incident, its alerts, recent changes, on-call and runbooks.'
                         : 'I can check incidents, service ownership, on-call coverage and runbooks.'
                     }
                     incidentSuggestions={scopeId ? INCIDENT_SUGGESTIONS : []}
-                    workspaceSuggestions={scopeId ? SUGGESTIONS.slice(0, 2) : SUGGESTIONS}
+                    workspaceSuggestions={
+                      scopeId || pageSuggestions ? SUGGESTIONS.slice(0, 2) : SUGGESTIONS
+                    }
                     onAsk={suggestion => void send(suggestion)}
                   />
                 )}
@@ -1179,7 +1276,6 @@ export default function SquireLauncher({
                     turn={turn}
                     index={index}
                     name={name}
-                    avatar={avatar}
                     busy={busy && index === turns.length - 1}
                     last={index === turns.length - 1}
                     animated={animated}
@@ -1189,6 +1285,8 @@ export default function SquireLauncher({
                     onEdit={editQuestion}
                     question={index > 0 ? turns[index - 1]?.content : undefined}
                     conversationId={conversationId}
+                    pendingLabel={pendingLine(tone, seed + index)}
+                    onCheer={cheerUp}
                   />
                 ))}
                 {!busy && (turns.at(-1)?.suggestions?.length ?? 0) > 0 && (
@@ -1227,7 +1325,10 @@ export default function SquireLauncher({
             {progressAnnouncement(busy, lastTurn, turns.length > 0)}
           </div>
           {!online && (
-            <p role="status" className="shrink-0 border-t border-border bg-muted/40 px-3 py-2 text-xs">
+            <p
+              role="status"
+              className="shrink-0 border-t border-border bg-muted/40 px-3 py-2 text-xs"
+            >
               You are offline. Your draft is kept here. Reconnect to send a message.
             </p>
           )}
@@ -1258,6 +1359,8 @@ export default function SquireLauncher({
             chips={composerChips}
             retentionDays={history?.retentionDays ?? null}
             fullscreen={fullscreen}
+            commands={contextMismatch ? [] : matchSlashCommands(input, Boolean(scopeId))}
+            onCommand={runCommand}
           />
         </section>
       )}

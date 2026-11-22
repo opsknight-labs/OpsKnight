@@ -7,7 +7,7 @@ import { Copy, Loader2, Pencil, RefreshCw, ThumbsDown, ThumbsUp } from 'lucide-r
 import { Button } from '@/components/ui/shadcn/button';
 import SquireProposalCard from './SquireProposalCard';
 import SquireSavedAction from './SquireSavedAction';
-import SquireAvatar, { type SquireAvatarKind } from './SquireAvatar';
+import SquireAvatar from './SquireAvatar';
 import SquireInvestigationSteps from './SquireInvestigationSteps';
 import type { Citation, Turn } from './chat-types';
 import { incidentRef } from '@/lib/intelligence/incident-ux/explain';
@@ -33,7 +33,8 @@ export function distinctCitations(citations: readonly Citation[]) {
 }
 
 // Phones get 44 px targets; the desktop panel uses compact icon buttons.
-const ACTION_BUTTON = 'min-h-11 min-w-11 px-1.5 text-xs text-muted-foreground sm:min-h-7 sm:min-w-7';
+const ACTION_BUTTON =
+  'min-h-11 min-w-11 px-1.5 text-xs text-muted-foreground sm:min-h-7 sm:min-w-7';
 // Message actions show on hover or keyboard focus where hovering exists; touch screens always show them.
 const REVEAL =
   'motion-safe:transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100';
@@ -42,7 +43,6 @@ export default memo(function SquireMessage({
   turn,
   index,
   name,
-  avatar = 'SQUIRE',
   busy,
   last,
   animated,
@@ -52,11 +52,12 @@ export default memo(function SquireMessage({
   onEdit,
   question,
   conversationId,
+  pendingLabel = 'Thinking…',
+  onCheer,
 }: {
   turn: Turn;
   index: number;
   name: string;
-  avatar?: SquireAvatarKind;
   busy: boolean;
   last: boolean;
   animated: boolean;
@@ -67,6 +68,10 @@ export default memo(function SquireMessage({
   /** The question this answer replied to; sent as a digest with feedback, never stored as text. */
   question?: string;
   conversationId?: string;
+  /** Shown while the answer has no activity of its own to report yet. */
+  pendingLabel?: string;
+  /** A helpful rating: the mascot gives a little salute. */
+  onCheer?: () => void;
 }) {
   const [copyNotice, setCopyNotice] = useState('');
   const [feedback, setFeedback] = useState<'UP' | 'DOWN' | 'sent' | 'failed' | null>(null);
@@ -122,7 +127,6 @@ export default memo(function SquireMessage({
     <article aria-label={`${name} response`} className="group flex min-w-0 gap-3">
       <span className="mt-0.5 shrink-0">
         <SquireAvatar
-          kind={avatar}
           size="xs"
           animated={animated && streaming}
           state={streaming ? 'thinking' : turn.failed ? 'error' : 'idle'}
@@ -138,7 +142,7 @@ export default memo(function SquireMessage({
         ) : streaming && (!turn.investigation?.length || turn.activity) ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 shrink-0 motion-safe:animate-spin" aria-hidden="true" />
-            {turn.activity ? `${turn.activity}…` : 'Thinking…'}
+            {turn.activity ? `${turn.activity}…` : pendingLabel}
           </p>
         ) : null}
         {turn.content && turn.activity && streaming && (
@@ -164,7 +168,10 @@ export default memo(function SquireMessage({
                   className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs transition-colors hover:bg-accent sm:min-h-6"
                   title={[citation.label, citation.why].filter(Boolean).join(' · ')}
                 >
-                  <span aria-hidden="true" className="font-semibold tabular-nums text-muted-foreground">
+                  <span
+                    aria-hidden="true"
+                    className="font-semibold tabular-nums text-muted-foreground"
+                  >
                     {position + 1}
                   </span>
                   <span className="truncate">
@@ -234,6 +241,7 @@ export default memo(function SquireMessage({
                   disabled={feedback === 'UP'}
                   onClick={() => {
                     setFeedback('UP');
+                    onCheer?.();
                     void sendFeedback('UP');
                   }}
                 >
@@ -284,7 +292,12 @@ export default memo(function SquireMessage({
               <option value="unsafe">Unsafe or risky</option>
               <option value="other">Other</option>
             </select>
-            <Button size="sm" variant="outline" type="submit" className="min-h-11 text-xs sm:min-h-8">
+            <Button
+              size="sm"
+              variant="outline"
+              type="submit"
+              className="min-h-11 text-xs sm:min-h-8"
+            >
               Send
             </Button>
           </form>

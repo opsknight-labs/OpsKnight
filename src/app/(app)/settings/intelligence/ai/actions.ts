@@ -48,7 +48,6 @@ export async function saveAiSettingsAction(
         enabled: checked(form, 'enabled'),
         squireEnabled: checked(form, 'squireEnabled'),
         squireName: text(form, 'squireName'),
-        squireAvatar: text(form, 'squireAvatar') || 'SQUIRE',
         squireLauncher: text(form, 'squireLauncher') || 'FLOATING',
         squireAnimations: checked(form, 'squireAnimations'),
         allowExternalFallback: checked(form, 'allowExternalFallback'),
