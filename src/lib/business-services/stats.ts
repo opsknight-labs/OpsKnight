@@ -30,7 +30,10 @@ export function unionDurationMs(
   window: { from: number; to: number }
 ): number {
   const clipped = intervals
-    .map(({ start, end }) => ({ start: Math.max(start, window.from), end: Math.min(end, window.to) }))
+    .map(({ start, end }) => ({
+      start: Math.max(start, window.from),
+      end: Math.min(end, window.to),
+    }))
     .filter(({ start, end }) => end > start)
     .sort((a, b) => a.start - b.start);
   let total = 0;
@@ -121,12 +124,16 @@ export async function getBusinessServiceStats(
   const now = Date.now();
   const bounds = { from: window.from.getTime(), to: Math.min(window.to.getTime(), now) };
   const impactMs = unionDurationMs(
-    rows.map(row => ({ start: row.startedAt.getTime(), end: (row.endedAt ?? new Date(now)).getTime() })),
+    rows.map(row => ({
+      start: row.startedAt.getTime(),
+      end: (row.endedAt ?? new Date(now)).getTime(),
+    })),
     bounds
   );
   const total = Math.max(bounds.to - bounds.from, 0);
   const incidents = [...new Map(rows.map(row => [row.incidentId, row.incident])).values()];
-  const minutes = (from: Date, to: Date | null) => (to ? (to.getTime() - from.getTime()) / MINUTE : null);
+  const minutes = (from: Date, to: Date | null) =>
+    to ? (to.getTime() - from.getTime()) / MINUTE : null;
   return {
     window,
     impactMinutes: impactMs / MINUTE,
@@ -189,7 +196,10 @@ export async function listBusinessServices(
         matching ? { id: { in: matching } } : {},
       ],
     },
-    orderBy: sort === 'newest' ? [{ createdAt: 'desc' }, { id: 'desc' }] : [{ name: 'asc' }, { id: 'asc' }],
+    orderBy:
+      sort === 'newest'
+        ? [{ createdAt: 'desc' }, { id: 'desc' }]
+        : [{ name: 'asc' }, { id: 'asc' }],
     take: limit + 1,
     select: {
       id: true,

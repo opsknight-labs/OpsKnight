@@ -3,7 +3,10 @@ import { Boxes, Plus } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccess } from '@/lib/access/server';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
-import { BUSINESS_SERVICE_SELECT, businessServiceReadWhere } from '@/lib/business-services/commands';
+import {
+  BUSINESS_SERVICE_SELECT,
+  businessServiceReadWhere,
+} from '@/lib/business-services/commands';
 import { PageHeader, EmptyState } from '@/components/patterns';
 import { Button } from '@/components/ui/shadcn/button';
 import BusinessServiceFollowButton from '@/components/service/BusinessServiceFollowButton';
@@ -130,7 +133,11 @@ export default async function BusinessServicesPage() {
                   )}
                 </ul>
                 <div className="flex items-center gap-2 lg:justify-end">
-                  <BusinessServiceFollowButton id={item.id} name={item.name} following={following} />
+                  <BusinessServiceFollowButton
+                    id={item.id}
+                    name={item.name}
+                    following={following}
+                  />
                   {canManage && (
                     <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                       <Link href={`/services/business/${item.id}`}>Edit</Link>

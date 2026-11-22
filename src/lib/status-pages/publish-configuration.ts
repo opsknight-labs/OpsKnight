@@ -280,8 +280,7 @@ export async function applyStatusPageConfigurationChange(
         });
         for (const [order, businessServiceId] of businessServiceIds.entries()) {
           const config = Reflect.get(businessServiceConfigs ?? {}, businessServiceId) as
-            | { displayName?: string | null; showOnPage?: boolean }
-            | undefined;
+            { displayName?: string | null; showOnPage?: boolean } | undefined;
           const presentation = {
             ...(config?.displayName !== undefined
               ? { displayName: config.displayName?.trim() || null }

@@ -90,7 +90,9 @@ describe('buildPublicBusinessServices', () => {
       statusSince: '2026-11-21T10:00:00.000Z',
       activeIncidentCount: 2,
       uptime: { days30: window(98.5, { grade: 'BELOW_TARGET' }), days90: window(99.2) },
-      history: history([['2026-11-21T00:00:00.000Z', '2026-11-21T12:00:00.000Z', 'PARTIAL_OUTAGE']]),
+      history: history([
+        ['2026-11-21T00:00:00.000Z', '2026-11-21T12:00:00.000Z', 'PARTIAL_OUTAGE'],
+      ]),
     }),
     service('db', { statusSince: '2026-11-20T00:00:00.000Z' }),
     service('cdn', {

@@ -97,15 +97,15 @@ export default async function MobileStatusPage() {
   const OverallIcon = overall.Icon;
   const impactedServices = snapshot.services.filter(service => service.status !== 'OPERATIONAL');
   // shortcut: the first 100 by name; the full catalog lives on /services/business.
-  const businessServices = (
-    await listBusinessServices({ limit: 100 }, context.actor)
-  ).items.map(item => ({
-    id: item.id,
-    name: item.name,
-    status: item.health.status,
-    affected: item.health.impactedMemberCount,
-    total: item.memberCount,
-  }));
+  const businessServices = (await listBusinessServices({ limit: 100 }, context.actor)).items.map(
+    item => ({
+      id: item.id,
+      name: item.name,
+      status: item.health.status,
+      affected: item.health.impactedMemberCount,
+      total: item.memberCount,
+    })
+  );
 
   return (
     <div className="responsive-page space-y-5">

@@ -550,14 +550,16 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
   [
     'markIncidentBusinessServiceImpact',
     async () =>
-      (await import('@/app/api/v2/incidents/[id]/business-service-impacts/[businessServiceId]/route'))
-        .PUT,
+      (
+        await import('@/app/api/v2/incidents/[id]/business-service-impacts/[businessServiceId]/route')
+      ).PUT,
   ],
   [
     'unmarkIncidentBusinessServiceImpact',
     async () =>
-      (await import('@/app/api/v2/incidents/[id]/business-service-impacts/[businessServiceId]/route'))
-        .DELETE,
+      (
+        await import('@/app/api/v2/incidents/[id]/business-service-impacts/[businessServiceId]/route')
+      ).DELETE,
   ],
   [
     'removeTeamMember',

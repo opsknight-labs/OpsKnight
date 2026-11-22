@@ -421,8 +421,7 @@ export function classifyStatusPageChange(input: {
     let renamed = false;
     for (const mapping of current.businessServiceMappings ?? []) {
       const config = Reflect.get(businessServiceConfigs, mapping.businessServiceId) as
-        | { displayName?: string | null; showOnPage?: boolean }
-        | undefined;
+        { displayName?: string | null; showOnPage?: boolean } | undefined;
       if (!config) continue;
       if (config.showOnPage === false && mapping.showOnPage) tightened = true;
       if (config.showOnPage === true && !mapping.showOnPage) relaxed = true;

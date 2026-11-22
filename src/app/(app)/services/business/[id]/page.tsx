@@ -3,7 +3,10 @@ import { Boxes } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccess } from '@/lib/access/server';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
-import { BUSINESS_SERVICE_SELECT, businessServiceReadWhere } from '@/lib/business-services/commands';
+import {
+  BUSINESS_SERVICE_SELECT,
+  businessServiceReadWhere,
+} from '@/lib/business-services/commands';
 import { PageHeader } from '@/components/patterns';
 import BusinessServiceForm from '@/components/service/BusinessServiceForm';
 import BusinessServiceStatusPill from '@/components/service/BusinessServiceStatusPill';
@@ -39,9 +42,7 @@ export default async function EditBusinessServicePage({
         eyebrow="Service catalog"
         title={item.name}
         icon={Boxes}
-        badges={
-          <BusinessServiceStatusPill status={health.get(item.id)?.status ?? 'OPERATIONAL'} />
-        }
+        badges={<BusinessServiceStatusPill status={health.get(item.id)?.status ?? 'OPERATIONAL'} />}
         breadcrumbs={[
           { label: 'Services', href: '/services' },
           { label: 'Business services', href: '/services/business' },

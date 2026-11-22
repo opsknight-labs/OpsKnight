@@ -14,7 +14,10 @@ const ids = (maxItems: number): Schema => ({
 });
 const layout: Schema = { type: 'string', enum: ['FLAT', 'BUSINESS', 'BUSINESS_EXPANDABLE'] };
 
-const tier: Schema = { type: ['string', 'null'], enum: ['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3', null] };
+const tier: Schema = {
+  type: ['string', 'null'],
+  enum: ['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3', null],
+};
 const urgency: Schema = { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] };
 const status: Schema = {
   type: 'string',
@@ -159,8 +162,14 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     paginated: true,
     query: {
       q: { type: 'string', maxLength: 120, description: 'Matches name or description.' },
-      tier: { type: 'string', description: 'Comma-separated criticality tiers, e.g. TIER_0,TIER_1.' },
-      status: { type: 'string', description: 'Comma-separated health statuses, e.g. MAJOR_OUTAGE.' },
+      tier: {
+        type: 'string',
+        description: 'Comma-separated criticality tiers, e.g. TIER_0,TIER_1.',
+      },
+      status: {
+        type: 'string',
+        description: 'Comma-separated health statuses, e.g. MAJOR_OUTAGE.',
+      },
       ownerTeamId: { type: 'string' },
       impactedOnly: { type: 'string', enum: ['true', 'false'] },
       sort: { type: 'string', enum: ['newest', 'name'], default: 'newest' },
@@ -213,7 +222,10 @@ export const BUSINESS_SERVICE_OPERATIONS: {
           description:
             'Optional, keyed by business service id: displayName (null clears) and showOnPage. Absent fields stay as they are.',
           additionalProperties: object(
-            { displayName: { type: ['string', 'null'], maxLength: 200 }, showOnPage: { type: 'boolean' } },
+            {
+              displayName: { type: ['string', 'null'], maxLength: 200 },
+              showOnPage: { type: 'boolean' },
+            },
             []
           ),
         },

@@ -99,7 +99,9 @@ export function businessServiceReadScope(
   if (!decision.allowed) {
     throw new AppError({ code: 'AUTHORIZATION_DENIED', userMessage: 'Service access denied.' });
   }
-  return decision.scope === 'global' ? { global: true } : { global: false, teamIds: new Set(actor.teamIds) };
+  return decision.scope === 'global'
+    ? { global: true }
+    : { global: false, teamIds: new Set(actor.teamIds) };
 }
 
 /**
@@ -177,7 +179,10 @@ async function assertReferencesExist(
       : 0,
   ]);
   if (services !== new Set(input.memberServiceIds).size || visibleAdded !== new Set(added).size)
-    throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'A member service was not found.' });
+    throw new AppError({
+      code: 'RESOURCE_NOT_FOUND',
+      userMessage: 'A member service was not found.',
+    });
   if (users !== new Set(input.followerUserIds).size)
     throw new AppError({
       code: 'RESOURCE_NOT_FOUND',
@@ -379,7 +384,9 @@ function columns(input: ParsedInput) {
     ownerTeamId: input.ownerTeamId,
     ...(input.criticality !== undefined ? { criticality: input.criticality } : {}),
     ...(input.impactMinUrgency !== undefined ? { impactMinUrgency: input.impactMinUrgency } : {}),
-    ...(input.impactMaxPriority !== undefined ? { impactMaxPriority: input.impactMaxPriority } : {}),
+    ...(input.impactMaxPriority !== undefined
+      ? { impactMaxPriority: input.impactMaxPriority }
+      : {}),
   };
 }
 

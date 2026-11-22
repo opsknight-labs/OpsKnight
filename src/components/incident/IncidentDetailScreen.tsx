@@ -607,7 +607,11 @@ export default async function IncidentDetailScreen({
 
           {impactedBusinessServices.some(impact => !impact.excluded) && (
             <div className="mt-3">
-              <IncidentImpacts incidentId={id} impacts={impactedBusinessServices} linkable={false} />
+              <IncidentImpacts
+                incidentId={id}
+                impacts={impactedBusinessServices}
+                linkable={false}
+              />
             </div>
           )}
 

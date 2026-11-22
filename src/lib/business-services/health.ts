@@ -3,7 +3,11 @@
  * dependency graph, business-service nesting, maintenance and remembered manual marks, plus a
  * process-wide snapshot cached per realtime change generation and filtered per actor.
  */
-import type { BusinessServiceImpactSource, BusinessServiceTier, IncidentUrgency } from '@prisma/client';
+import type {
+  BusinessServiceImpactSource,
+  BusinessServiceTier,
+  IncidentUrgency,
+} from '@prisma/client';
 import { downstreamDistances, type DependencyEdge } from '@/lib/intelligence/dependencies/graph';
 import { publicStatusForIncidentUrgency } from '@/lib/status-pages/status-presentation';
 import type { BsStatus, BusinessServiceHealth, ImpactReason } from './contract';
@@ -69,7 +73,8 @@ const KIND_ORDER: Record<ImpactReason['kind'], number> = {
 };
 const URGENCY_RANK: Record<IncidentUrgency, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
 
-const cap = (status: BsStatus, max: BsStatus): BsStatus => (rank(status) > rank(max) ? max : status);
+const cap = (status: BsStatus, max: BsStatus): BsStatus =>
+  rank(status) > rank(max) ? max : status;
 
 export type ImpactThreshold = { minUrgency: IncidentUrgency | null; maxPriority: number | null };
 
@@ -170,7 +175,11 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
   const add = (bsId: string, incidentId: string, reason: ImpactReason) => {
     if (excluded.has(`${incidentId}:${bsId}`)) return;
     const member =
-      reason.kind === 'DIRECT' ? reason.serviceId : reason.kind === 'DEPENDENCY' ? reason.viaServiceId : null;
+      reason.kind === 'DIRECT'
+        ? reason.serviceId
+        : reason.kind === 'DEPENDENCY'
+          ? reason.viaServiceId
+          : null;
     if (member) {
       const set = impactedMembers.get(bsId);
       if (set) set.add(member);
@@ -191,11 +200,7 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
   }
   const dependentsOf = (serviceId: string) =>
     byUpstream.has(serviceId)
-      ? downstreamDistances(
-          walkEdges(byUpstream, serviceId),
-          serviceId,
-          MAX_DEPTH
-        ).distances
+      ? downstreamDistances(walkEdges(byUpstream, serviceId), serviceId, MAX_DEPTH).distances
       : new Map<string, number>();
   const dependents = new Map<string, Map<string, number>>();
   for (const incident of inputs.incidents) {
@@ -368,13 +373,17 @@ let epoch = 0;
 
 /** Structural inputs plus open incidents and open impact rows, in six queries. */
 export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> {
-  const [{ default: prisma }, { loadActiveEdges }, { findServicesInMaintenance }, { activeIncidentStatuses }] =
-    await Promise.all([
-      import('@/lib/prisma'),
-      import('@/lib/intelligence/dependencies/service'),
-      import('@/lib/service-maintenance/windows'),
-      import('@/lib/incident-status'),
-    ]);
+  const [
+    { default: prisma },
+    { loadActiveEdges },
+    { findServicesInMaintenance },
+    { activeIncidentStatuses },
+  ] = await Promise.all([
+    import('@/lib/prisma'),
+    import('@/lib/intelligence/dependencies/service'),
+    import('@/lib/service-maintenance/windows'),
+    import('@/lib/incident-status'),
+  ]);
   const [businessServices, supports, edges, incidents, impactRows] = await Promise.all([
     prisma.businessService.findMany({
       select: {
@@ -383,7 +392,9 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
         impactMinUrgency: true,
         impactMaxPriority: true,
         ownerTeamId: true,
-        members: { select: { serviceId: true, critical: true, service: { select: { teamId: true } } } },
+        members: {
+          select: { serviceId: true, critical: true, service: { select: { teamId: true } } },
+        },
       },
     }),
     prisma.businessServiceSupport.findMany({ select: { parentId: true, childId: true } }),

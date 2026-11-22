@@ -39,8 +39,9 @@ export function mergeHistorySegments(
       segment => Date.parse(segment.startAt) <= start && Date.parse(segment.endAt) >= end
     );
     if (!active.length) continue;
-    const status = getWorstPublicStatus(active.map(segment => segment.status)) as
-      PublicStatusHistorySegment['status'];
+    const status = getWorstPublicStatus(
+      active.map(segment => segment.status)
+    ) as PublicStatusHistorySegment['status'];
     const previous = merged.at(-1);
     if (previous && previous.status === status && Date.parse(previous.endAt) === start) {
       previous.endAt = new Date(end).toISOString();
@@ -60,7 +61,10 @@ function mergeHistory(members: readonly PublicStatusService[]): PublicStatusHist
   if (!histories.length) return undefined;
   return {
     rangeStart: histories.map(h => h.rangeStart).sort()[0],
-    rangeEnd: histories.map(h => h.rangeEnd).sort().at(-1)!,
+    rangeEnd: histories
+      .map(h => h.rangeEnd)
+      .sort()
+      .at(-1)!,
     coverage: histories.every(h => h.coverage === 'COMPLETE') ? 'COMPLETE' : 'PARTIAL',
     segments: mergeHistorySegments(histories.map(h => h.segments)),
   };
@@ -93,7 +97,8 @@ function mergeUptimeWindow(
       end: Date.parse(segment.endAt),
       status: segment.status,
     }));
-    percentage = serviceAvailability(segments, new Date(start), new Date(end)).percentage ?? percentage;
+    percentage =
+      serviceAvailability(segments, new Date(start), new Date(end)).percentage ?? percentage;
   }
   return {
     percentage,

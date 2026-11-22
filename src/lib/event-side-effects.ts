@@ -408,11 +408,14 @@ export async function processEventSideEffect(
     case 'TRIGGER_WAR_ROOM': {
       const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
       const plan = await planIncidentEffects(parentAttempt);
-      await handleIncidentWarRoomEvent({
-        kind: 'TRIGGER',
-        incidentId: payload.incidentId,
-        incidentEventId: payload.sourceEventId,
-      }, plan);
+      await handleIncidentWarRoomEvent(
+        {
+          kind: 'TRIGGER',
+          incidentId: payload.incidentId,
+          incidentEventId: payload.sourceEventId,
+        },
+        plan
+      );
       if (plan.collaboration === 'DISABLED') return;
       try {
         const { maybeAutoProvisionIncidentMeeting } =

@@ -68,7 +68,9 @@ export async function updateBusinessServiceAction(
   }
 }
 
-export async function deleteBusinessServiceAction(id: string): Promise<BusinessServiceActionResult> {
+export async function deleteBusinessServiceAction(
+  id: string
+): Promise<BusinessServiceActionResult> {
   try {
     const permissions = await getUserPermissions();
     if (!permissions.isAdmin) {
@@ -105,7 +107,10 @@ export async function followBusinessServiceAction(
 }
 
 /** Server-side search for the form pickers; bounded to one page of matches. */
-export async function searchBusinessServiceOptionsAction(kind: 'services' | 'users', query: string) {
+export async function searchBusinessServiceOptionsAction(
+  kind: 'services' | 'users',
+  query: string
+) {
   const actor = await managerActor();
   return searchBusinessServiceFormOptions(
     actor,

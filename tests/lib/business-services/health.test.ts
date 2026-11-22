@@ -92,7 +92,10 @@ describe('computeHealth', () => {
   const cases: Array<{
     name: string;
     input: Partial<HealthInputs>;
-    expect: Record<string, { status: string; reasons?: string[]; open?: number; impacted?: number }>;
+    expect: Record<
+      string,
+      { status: string; reasons?: string[]; open?: number; impacted?: number }
+    >;
   }> = [
     {
       name: 'no incidents is operational',
@@ -191,8 +194,20 @@ describe('computeHealth', () => {
         ],
         incidents: [incident('i1', 'other', 'MEDIUM'), incident('i2', 'auth', 'HIGH')],
         impactRows: [
-          { incidentId: 'i1', businessServiceId: 'checkout', source: 'MANUAL', excluded: false, createdById: 'u1' },
-          { incidentId: 'i2', businessServiceId: 'login', source: 'DIRECT', excluded: true, createdById: 'u1' },
+          {
+            incidentId: 'i1',
+            businessServiceId: 'checkout',
+            source: 'MANUAL',
+            excluded: false,
+            createdById: 'u1',
+          },
+          {
+            incidentId: 'i2',
+            businessServiceId: 'login',
+            source: 'DIRECT',
+            excluded: true,
+            createdById: 'u1',
+          },
         ],
       },
       expect: {
@@ -205,7 +220,13 @@ describe('computeHealth', () => {
       input: {
         businessServices: [bs('checkout', ['api'])],
         impactRows: [
-          { incidentId: 'gone', businessServiceId: 'checkout', source: 'MANUAL', excluded: false, createdById: null },
+          {
+            incidentId: 'gone',
+            businessServiceId: 'checkout',
+            source: 'MANUAL',
+            excluded: false,
+            createdById: null,
+          },
         ],
       },
       expect: { checkout: { status: 'OPERATIONAL' } },
@@ -236,7 +257,11 @@ describe('computeHealth', () => {
       input: {
         businessServices: [bs('checkout', ['api', 'web', 'd1'])],
         edges: [edge('api', 'd1'), edge('api', 'web')],
-        incidents: [incident('i1', 'api', 'LOW'), incident('i2', 'web', 'HIGH'), incident('i3', 'web', 'LOW')],
+        incidents: [
+          incident('i1', 'api', 'LOW'),
+          incident('i2', 'web', 'HIGH'),
+          incident('i3', 'web', 'LOW'),
+        ],
       },
       expect: {
         checkout: {
@@ -254,7 +279,11 @@ describe('computeHealth', () => {
     for (const [id, want] of Object.entries(expected)) {
       const item = health.get(id)!;
       expect(item.status, id).toBe(want.status);
-      if (want.reasons) expect(item.reasons.map(reason => reason.kind), id).toEqual(want.reasons);
+      if (want.reasons)
+        expect(
+          item.reasons.map(reason => reason.kind),
+          id
+        ).toEqual(want.reasons);
       if (want.open !== undefined) expect(item.openIncidentCount, id).toBe(want.open);
       if (want.impacted !== undefined) expect(item.impactedMemberCount, id).toBe(want.impacted);
     }
@@ -325,9 +354,37 @@ describe('support cycle prevention', () => {
     ['self edge', 'a', 'a', [], true],
     ['unrelated', 'a', 'b', [['c', 'd']], false],
     ['direct back edge', 'a', 'b', [['b', 'a']], true],
-    ['transitive back edge', 'a', 'b', [['b', 'c'], ['c', 'a']], true],
-    ['diamond without cycle', 'a', 'b', [['b', 'c'], ['b', 'd'], ['d', 'c']], false],
-    ['existing cycle elsewhere terminates', 'a', 'b', [['b', 'c'], ['c', 'b']], false],
+    [
+      'transitive back edge',
+      'a',
+      'b',
+      [
+        ['b', 'c'],
+        ['c', 'a'],
+      ],
+      true,
+    ],
+    [
+      'diamond without cycle',
+      'a',
+      'b',
+      [
+        ['b', 'c'],
+        ['b', 'd'],
+        ['d', 'c'],
+      ],
+      false,
+    ],
+    [
+      'existing cycle elsewhere terminates',
+      'a',
+      'b',
+      [
+        ['b', 'c'],
+        ['c', 'b'],
+      ],
+      false,
+    ],
   ] as const)('%s', async (_name, parent, child, edges, expected) => {
     await expect(
       wouldCreateSupportCycle(parent, child, client(edges as unknown as Array<[string, string]>))
@@ -349,17 +406,27 @@ describe('computeHealth performance', () => {
     const businessServices = Array.from({ length: 1000 }, (_, index) =>
       bs(
         `bs${index}`,
-        Array.from({ length: 20 }, () => [service(random(10_000)), random(5) > 0] as [string, boolean]),
+        Array.from(
+          { length: 20 },
+          () => [service(random(10_000)), random(5) > 0] as [string, boolean]
+        ),
         { criticality: (['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3', null] as const)[index % 5] }
       )
     );
-    const edges = Array.from({ length: 5000 }, () => edge(service(random(10_000)), service(random(10_000))));
+    const edges = Array.from({ length: 5000 }, () =>
+      edge(service(random(10_000)), service(random(10_000)))
+    );
     const supports = Array.from({ length: 500 }, (_, index) => ({
       parentId: `bs${index}`,
       childId: `bs${random(1000)}`,
     }));
     const incidents = Array.from({ length: 500 }, (_, index) =>
-      incident(`i${index}`, service(random(10_000)), (['LOW', 'MEDIUM', 'HIGH'] as const)[index % 3], `P${(index % 5) + 1}`)
+      incident(
+        `i${index}`,
+        service(random(10_000)),
+        (['LOW', 'MEDIUM', 'HIGH'] as const)[index % 3],
+        `P${(index % 5) + 1}`
+      )
     );
     const input = inputs({ businessServices, edges, supports, incidents });
     computeHealth(input); // warm up the JIT

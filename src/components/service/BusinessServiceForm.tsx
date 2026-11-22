@@ -194,8 +194,10 @@ export default function BusinessServiceForm({
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const set = <K extends keyof BusinessServiceFormValue>(key: K, next: BusinessServiceFormValue[K]) =>
-    setValue(current => ({ ...current, [key]: next }));
+  const set = <K extends keyof BusinessServiceFormValue>(
+    key: K,
+    next: BusinessServiceFormValue[K]
+  ) => setValue(current => ({ ...current, [key]: next }));
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -274,7 +276,10 @@ export default function BusinessServiceForm({
               <label htmlFor="bs-tier" className="text-sm font-semibold">
                 Tier
               </label>
-              <Select value={value.tier || 'none'} onValueChange={next => set('tier', next === 'none' ? '' : next)}>
+              <Select
+                value={value.tier || 'none'}
+                onValueChange={next => set('tier', next === 'none' ? '' : next)}
+              >
                 <SelectTrigger id="bs-tier">
                   <SelectValue placeholder="No tier" />
                 </SelectTrigger>
@@ -335,7 +340,10 @@ export default function BusinessServiceForm({
       </section>
 
       {error && (
-        <p role="alert" className="rounded-lg border border-status-critical-border/30 bg-status-critical-soft px-3 py-2 text-sm text-status-critical-deep dark:bg-status-critical/15 dark:text-rose-300">
+        <p
+          role="alert"
+          className="rounded-lg border border-status-critical-border/30 bg-status-critical-soft px-3 py-2 text-sm text-status-critical-deep dark:bg-status-critical/15 dark:text-rose-300"
+        >
           {error}
         </p>
       )}
