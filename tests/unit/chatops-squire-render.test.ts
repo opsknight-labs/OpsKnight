@@ -44,6 +44,12 @@ describe('Squire chat rendering: links', () => {
     expect(appLink('https://evil.example/incidents/x', BASE)).toBeNull();
     expect(appLink('//evil.example/x', BASE)).toBeNull();
     expect(appLink('javascript:alert(1)', BASE)).toBeNull();
+    // The public product docs are the one outside destination an answer may link to.
+    expect(appLink('https://opsknight.com/docs/latest/guides/on-call/overrides/', BASE)).toBe(
+      'https://opsknight.com/docs/latest/guides/on-call/overrides/'
+    );
+    expect(appLink('https://opsknight.com.evil.example/docs/x', BASE)).toBeNull();
+    expect(appLink('https://opsknight.com/docs/x?redirect=https://evil.example', BASE)).toBeNull();
   });
 
   it('converts markdown to Slack mrkdwn, escaping control characters and foreign links', () => {

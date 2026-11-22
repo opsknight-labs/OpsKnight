@@ -89,6 +89,9 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   );
 }
 
+/** The public product docs are the one place outside OpsKnight an answer may link to. */
+const PRODUCT_DOCS = /^https:\/\/opsknight\.com\/docs\/[A-Za-z0-9/_.-]*$/;
+
 export default function SquireMarkdown({
   text,
   allowed,
@@ -123,13 +126,22 @@ export default function SquireMarkdown({
       <Markdown
         remarkPlugins={[remarkGfm, literalHtml, citationLinks(citations)]}
         rehypePlugins={[rehypeSanitize]}
-        urlTransform={url => (citations.has(url) ? url : undefined)}
+        urlTransform={url => (citations.has(url) || PRODUCT_DOCS.test(url) ? url : undefined)}
         components={{
           a: ({ href, children }) =>
             href && citations.has(href) ? (
               <Link href={href} className="font-medium text-primary underline underline-offset-4">
                 {children}
               </Link>
+            ) : href && PRODUCT_DOCS.test(href) ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary underline underline-offset-4"
+              >
+                {children}
+              </a>
             ) : (
               <span>{children}</span>
             ),

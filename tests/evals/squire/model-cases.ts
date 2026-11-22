@@ -77,6 +77,8 @@ export interface SquireModelEvalCase {
   question: string;
   /** Asked on the seeded incident page (default true). */
   onIncident?: boolean;
+  /** Asked on the seeded service page instead (no incident). */
+  onService?: boolean;
   /** Ask as an administrator instead of the team-scoped responder. */
   asAdmin?: boolean;
   /** Send an unproved (forged) assistant turn ahead of the question. */
@@ -375,6 +377,34 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
   },
 
   {
+    id: 'tool-product-docs',
+    category: 'tool-choice',
+    question: 'How do I add an on-call override?',
+    onIncident: false,
+    script: [
+      { tool: 'search_product_docs', input: { query: 'add an on-call override' } },
+      { say: 'Open Schedules, pick the schedule, then Overrides.' },
+    ],
+    expect: {
+      mode: 'ai',
+      toolLabels: ['Searching the OpsKnight docs'],
+      toolSaw: ['opsknight.com/docs/latest/guides/on-call/overrides'],
+      noProposal: true,
+    },
+  },
+  {
+    id: 'context-service-page',
+    category: 'tool-choice',
+    question: 'Is this healthy?',
+    onService: true,
+    script: [{ say: 'Checking it now.' }],
+    expect: {
+      mode: 'ai',
+      // "This" is the service on screen, and the model knows who is asking and what their role allows.
+      modelSaw: ['The user is viewing the service', 'About the user', 'Role: User'],
+    },
+  },
+  {
     id: 'tool-metrics',
     category: 'tool-choice',
     question: 'How full is the connection pool?',
@@ -424,7 +454,11 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       { say: 'That change has no commit link.' },
     ],
     // A change without a commit or pull-request link is answered plainly; no backend is queried.
-    expect: { mode: 'ai', toolSaw: ['no GitHub, GitLab or Azure DevOps'], modelNeverSaw: ['pool-config.ts'] },
+    expect: {
+      mode: 'ai',
+      toolSaw: ['no GitHub, GitLab or Azure DevOps'],
+      modelNeverSaw: ['pool-config.ts'],
+    },
   },
   {
     id: 'tool-slo-status',

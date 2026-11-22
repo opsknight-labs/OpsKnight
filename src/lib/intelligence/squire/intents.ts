@@ -40,13 +40,26 @@ export function incidentIntents(message: string): SquireIntent[] {
   return summary ? ['INCIDENT_SUMMARY', ...matched] : matched;
 }
 
+const GREETING_WORDS =
+  "hi|hey|hello|hiya|howdy|yo|morning|evening|good (?:morning|evening|afternoon|day)|what(?:'?s| is) up|sup|how are you(?: doing)?|how(?:'?s| is) it going";
+/** A whole message that only greets, optionally naming the assistant ("hey squire!"). */
+const GREETING = new RegExp(`^(?:${GREETING_WORDS})(?: (?:there|all|team|\\w+))?[\\s!.,?]*$`);
+/** A greeting in front of a real question: "hey, any open incidents?". */
+export const GREETING_PREFIX = new RegExp(`^(?:${GREETING_WORDS})(?: there)?[\\s!.,]+`);
+const THANKS =
+  /^(?:thanks|thank you|thankyou|thx|ty|cheers|got it|okay|ok|great|perfect|awesome|nice|cool|bye|goodbye|see you)(?: (?:so much|a lot|very much|again|mate|everyone))?[\s!.,?]*$/;
+
 /** Small, bounded intent rules select fresh actor-scoped reads; user text never supplies facts. */
 export function routeIntent(message: string, onIncident: boolean): SquireIntent {
   const text = message.toLowerCase().trim();
-  if (/^(hi|hey|hello|hello there|good morning|good evening|good afternoon)[\s!.,?]*$/.test(text))
-    return 'GREETING';
-  if (/^(thanks|thank you|thankyou|cheers|got it|okay|ok)[\s!.,?]*$/.test(text)) return 'THANKS';
-  if (/^help[\s!.,?]*$|\b(what can you do|how do you work|commands?)\b/.test(text)) return 'HELP';
+  if (GREETING.test(text)) return 'GREETING';
+  if (THANKS.test(text)) return 'THANKS';
+  if (
+    /^help[\s!.,?]*$|\b(what can you do|how do you work|commands?|who are you|what are you)\b/.test(
+      text
+    )
+  )
+    return 'HELP';
   if (
     /\b(how (do|can|to|does|should|long)|what (is|are|does)|explain|where (do|can)|difference between|help|guide|instructions|configure|set up|enable|disable|understand|^does)\b/.test(
       text

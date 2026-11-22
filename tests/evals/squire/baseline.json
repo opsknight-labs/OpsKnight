@@ -11,7 +11,7 @@
   "maxTokensPerCase": 60000,
   "maxMedianTokenRise": 0.15,
   "medianTokensPerCase": null,
-  "modelMedianPromptTokens": 7857,
+  "modelMedianPromptTokens": 9206,
   "modelCacheReadShare": 0.514,
   "investigationMedianPromptTokens": 5943,
   "judge": {

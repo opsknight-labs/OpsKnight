@@ -71,6 +71,8 @@ const trimSlash = (value: string) => value.replace(/\/+$/, '');
 export function appLink(href: string, baseUrl: string): string | null {
   const base = trimSlash(baseUrl);
   if (/^\/(?!\/)[^\s]*$/.test(href)) return `${base}${href}`;
+  // The public product docs, which Squire cites for how-to answers.
+  if (/^https:\/\/opsknight\.com\/docs\/[A-Za-z0-9/_.-]*$/.test(href)) return href;
   try {
     const url = new URL(href);
     const origin = new URL(base).origin;

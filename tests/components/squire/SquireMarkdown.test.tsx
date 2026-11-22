@@ -20,6 +20,22 @@ describe('Squire answer formatting', () => {
     expect(container).toHaveTextContent('<img src=x onerror=alert(1)>');
     expect(container.querySelector('pre')).toHaveTextContent('echo "<safe>"');
   });
+  it('links the public product docs in a new tab, and nothing else outside OpsKnight', () => {
+    render(
+      <SquireMarkdown
+        allowed={[]}
+        text="[Read the guide](https://opsknight.com/docs/latest/guides/on-call/overrides/) [Spoof](https://opsknight.com.evil.example/docs/x)"
+      />
+    );
+    const link = screen.getByRole('link', { name: 'Read the guide' });
+    expect(link).toHaveAttribute(
+      'href',
+      'https://opsknight.com/docs/latest/guides/on-call/overrides/'
+    );
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+  });
   it('copies the exact code as text and renders only server-cited bare paths as links', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });

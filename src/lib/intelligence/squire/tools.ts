@@ -43,6 +43,7 @@ import type { EligibleConnection } from '../connectors/service';
 import { buildObservabilityTools, OBSERVABILITY_TOOL_DATA_CLASS } from './tools-observability';
 import { buildIncidentTools, INCIDENT_TOOL_DATA_CLASS } from './tools-incident';
 import { buildKnowledgeTools, KNOWLEDGE_TOOL_DATA_CLASS } from './tools-knowledge';
+import { buildDocsTool } from './docs';
 import { AUTOMATION_TOOL_DATA_CLASS, buildAutomationTools } from './tools-automation';
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
@@ -67,6 +68,7 @@ export const SQUIRE_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = {
   semantic_search_incidents: 'INTERNAL',
   get_status_page: 'PUBLIC',
   get_problem_outcomes: 'INTERNAL',
+  search_product_docs: 'PUBLIC',
   // Observability connector tools (logs are Personal; the rest Internal).
   ...OBSERVABILITY_TOOL_DATA_CLASS,
   // Incident-response tools (tools-incident.ts) declare their own classes.
@@ -811,6 +813,8 @@ export function buildSquireTools(
   if (options.knowledge) tools.push(...buildKnowledgeTools(actor, options));
   // Automation (J1.6): read tools for people who may read automation.
   tools.push(...buildAutomationTools(actor));
+  // Product documentation for how-to questions.
+  tools.push(buildDocsTool());
 
   for (const name of SQUIRE_ACTION_NAMES) {
     if (!options.personal && name === 'reassign_incident') continue;
@@ -836,18 +840,18 @@ export function buildSquireTools(
         (tool.dataClass ?? SQUIRE_TOOL_DATA_CLASS[tool.name] ?? 'INTERNAL') !== 'PERSONAL'
     )
     .map(tool => ({
-    ...tool,
-    dataClass: highestDataClass([
-      options.dataClass ?? 'INTERNAL',
-      tool.dataClass ?? SQUIRE_TOOL_DATA_CLASS[tool.name] ?? 'INTERNAL',
-    ]),
-    ...(options.observe && tool.kind === 'READ'
-      ? {
-          execute: async (input: unknown) =>
-            options.observe!(tool.name, input, await tool.execute!(input)),
-        }
-      : {}),
-  }));
+      ...tool,
+      dataClass: highestDataClass([
+        options.dataClass ?? 'INTERNAL',
+        tool.dataClass ?? SQUIRE_TOOL_DATA_CLASS[tool.name] ?? 'INTERNAL',
+      ]),
+      ...(options.observe && tool.kind === 'READ'
+        ? {
+            execute: async (input: unknown) =>
+              options.observe!(tool.name, input, await tool.execute!(input)),
+          }
+        : {}),
+    }));
 }
 
 /**

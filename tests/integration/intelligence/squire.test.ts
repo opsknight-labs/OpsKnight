@@ -272,6 +272,7 @@ describe('AI mode', () => {
       'list_alerts',
       'search_incidents',
       'search_postmortems',
+      'search_product_docs',
       'semantic_search_incidents',
       'who_is_on_call',
     ]);

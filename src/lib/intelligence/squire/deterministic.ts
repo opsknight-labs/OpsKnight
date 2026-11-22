@@ -20,7 +20,7 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { getRelatedIncidentsForActor } from '../correlation/view';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
-import { routeIntent, incidentIntents, type SquireIntent } from './intents';
+import { GREETING_PREFIX, routeIntent, incidentIntents, type SquireIntent } from './intents';
 import {
   answerBasicReadDetailed,
   BASIC_PAGE_SIZE,
@@ -29,6 +29,7 @@ import {
 } from './basic/reads';
 import { incidentRef } from '../incident-ux/explain';
 import { productGuidance } from './basic/guidance';
+import { docsTerms, searchProductDocs } from './docs';
 import { keywords, mergeBasicQuestion } from './basic/query';
 import {
   classifyIntent,
@@ -229,6 +230,20 @@ async function describeIncident(
       : 'No reviewed runbook recommendation is recorded yet.',
     '',
     await suggestedChecksFor(incident),
+  ].join('\n');
+}
+
+/** The best product-docs sections for a how-to question, as linked bullets; null when none match. */
+async function docsAnswer(question: string): Promise<string | null> {
+  if (docsTerms(question).length < 2) return null;
+  const hits = await searchProductDocs(question, 2).catch(() => []);
+  if (!hits.length) return null;
+  return [
+    'From the OpsKnight docs:',
+    ...hits.map(
+      hit =>
+        `- **${hit.title}${hit.heading ? ` · ${hit.heading}` : ''}**: ${hit.text.length > 240 ? `${hit.text.slice(0, 239)}…` : hit.text} [Read the guide](${hit.url})`
+    ),
   ].join('\n');
 }
 
@@ -541,6 +556,19 @@ export async function planBasicTurn(
   input: BasicTurnInput,
   collect?: Collect
 ): Promise<BasicTurnResult> {
+  // "Hey, any open incidents?": greet, then answer the question itself.
+  const greeted = input.message.toLowerCase().match(GREETING_PREFIX);
+  if (
+    greeted &&
+    input.message.trim().length > greeted[0].length + 1 &&
+    routeIntent(normalizeMessage(input.message), false) !== 'GREETING'
+  ) {
+    const answer = await planBasicTurn(
+      { ...input, message: input.message.slice(greeted[0].length) },
+      collect
+    );
+    return answer.intent === 'GREETING' ? answer : { ...answer, text: `Hi! ${answer.text}` };
+  }
   const { actor, name = 'Squire' } = input;
   const now = input.now ?? new Date();
   const incident = input.incident;
@@ -647,7 +675,15 @@ export async function planBasicTurn(
       'THANKS'
     );
   if (intent === 'HELP') return result(HELP, 'HELP');
-  if (intent === 'GUIDANCE') return result(productGuidance(text), 'GUIDANCE');
+  if (intent === 'GUIDANCE') {
+    const guide = productGuidance(text);
+    const docs = await docsAnswer(text);
+    // A curated guide leads; the docs add the detailed steps. Without a guide, the docs answer alone.
+    return result(
+      guide.startsWith('## ') ? [guide, docs].filter(Boolean).join('\n\n') : (docs ?? guide),
+      'GUIDANCE'
+    );
+  }
 
   // Explicit action requests become proposal cards; the person confirms, the server executes.
   if (slots.action && (incident || slots.incidentRef)) {
@@ -749,6 +785,10 @@ export async function planBasicTurn(
     }
   }
 
+  if (intent === 'UNKNOWN') {
+    const docs = await docsAnswer(text);
+    if (docs) return result(docs, 'GUIDANCE');
+  }
   if (!incident)
     return result(
       'I can look up OpsKnight data without an AI provider. Try “My open incidents”, “How many incidents this week by team?”, “Who owns Checkout?”, “Who is on call?”, or “Find checkout incidents since Monday”. Open an incident for a briefing, likely change leads, recorded fixes, runbooks and confirmable actions.',

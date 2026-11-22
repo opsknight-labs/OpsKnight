@@ -509,7 +509,11 @@ describe('Squire scripted-model evaluation', () => {
     for await (const event of streamSquire(c.asAdmin ? admin : responder, {
       message: fill(question),
       history,
-      ...(c.onIncident === false ? {} : { incidentId: ids.incident }),
+      ...(c.onService
+        ? { pageContext: { kind: 'service' as const, id: ids.service } }
+        : c.onIncident === false
+          ? {}
+          : { incidentId: ids.incident }),
     }))
       events.push(event);
     const of = <K extends SquireEvent['type']>(type: K) =>

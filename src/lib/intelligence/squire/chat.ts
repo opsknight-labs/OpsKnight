@@ -42,6 +42,7 @@ import {
   type ReadableIncident,
   type ResolvedPageContext,
 } from './deterministic';
+import { aboutUserLines, viewingLine } from './about';
 import { readDialogueState, writeDialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
@@ -82,6 +83,7 @@ const TOOL_LABELS: Record<string, string> = {
   semantic_search_incidents: 'Searching incidents by meaning',
   get_status_page: 'Reading the status page',
   get_problem_outcomes: 'Checking past outcomes for this problem',
+  search_product_docs: 'Searching the OpsKnight docs',
   ...OBSERVABILITY_TOOL_LABELS,
   ...INCIDENT_TOOL_LABELS,
   get_automation_decision: 'Checking why automation routed it',
@@ -162,15 +164,24 @@ export async function* streamSquire(
           priorTurns(actor, request, savedConversation, incident?.id ?? null),
           // Answers state times in the person's zone, as basic answers do.
           prisma.user
-            .findUnique({ where: { id: actor.id }, select: { timeZone: true } })
+            .findUnique({ where: { id: actor.id }, select: { timeZone: true, name: true } })
             .catch(() => null),
+          prisma.team
+            .findMany({
+              where: { id: { in: [...actor.teamIds] } },
+              select: { name: true },
+              orderBy: { name: 'asc' },
+              take: 20,
+            })
+            .catch(() => []),
         ])
       : Promise.resolve(null);
-    const [briefing, guidance, context, viewer] = (await preparation) ?? [
+    const [briefing, guidance, context, viewer, teams] = (await preparation) ?? [
       null,
       null,
       { messages: [] as AiMessage[], omitted: false },
       null,
+      [],
     ];
     const history = context.messages;
     if (context.omitted)
@@ -212,7 +223,17 @@ export async function* streamSquire(
         settings.squireName,
         prepared,
         guidance,
-        getUserTimeZone(viewer ?? undefined)
+        getUserTimeZone(viewer ?? undefined),
+        new Date(),
+        {
+          user: aboutUserLines({
+            role: actor.role,
+            // A name is personal data: only sent to a provider cleared for it.
+            firstName: personal ? viewer?.name?.trim().split(/\s+/)[0] : null,
+            teams: teams.map(team => team.name),
+          }),
+          ...(page && !incident ? { viewing: viewingLine(page) } : {}),
+        }
       );
       const system: AiMessage = { role: 'system', content: prompt.system, dataClass };
       // The parts of the briefing that change between turns, sent after the cached prefix.

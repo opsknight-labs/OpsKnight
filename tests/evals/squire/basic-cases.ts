@@ -220,6 +220,29 @@ export const BASIC_CASES: readonly SquireBasicEvalCase[] = [
     forbidProposal: true,
   },
   { id: 'greeting', question: 'hi', expectIntent: 'GREETING', forbidProposal: true },
+  { id: 'greeting-named', question: 'hey squire!', expectIntent: 'GREETING', forbidProposal: true },
+  { id: 'greeting-whats-up', question: "what's up?", expectIntent: 'GREETING' },
+  { id: 'thanks-variant', question: 'thx a lot', expectIntent: 'THANKS' },
+  { id: 'who-are-you', question: 'who are you?', expectIntent: 'HELP' },
+  {
+    id: 'greeting-then-question',
+    question: 'hey, my open incidents',
+    expectIntent: 'WORK_QUEUE',
+    mustContain: ['Hi!'],
+  },
+  {
+    id: 'docs-how-to',
+    question: 'How do I add an on-call override?',
+    expectIntent: 'GUIDANCE',
+    mustContain: ['opsknight.com/docs/latest/guides/on-call/overrides'],
+    forbidProposal: true,
+  },
+  {
+    id: 'docs-unknown-feature',
+    question: 'connect slack with oauth',
+    expectIntent: 'GUIDANCE',
+    mustContain: ['opsknight.com/docs/latest/integrations/communication/slack'],
+  },
   { id: 'ambiguous', question: 'recent', expectIntent: 'UNKNOWN', expectClarification: true },
   // Incident page
   {

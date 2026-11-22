@@ -37,6 +37,8 @@ export const ASK_SQUIRE_CORE_TOOLS = [
   'get_runbook',
   'get_runbook_steps',
   'search_postmortems',
+  // Public product documentation: no workspace data, so no scope is needed.
+  'search_product_docs',
 ] as const;
 
 /** Read tools for an area outside ASK_SQUIRE_SCOPES, with the scope that unlocks each. */

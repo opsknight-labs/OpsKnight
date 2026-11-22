@@ -334,6 +334,9 @@ export class SquireEvidenceRegistry {
           else this.complete = false;
         });
         break;
+      // Public product documentation: no workspace record to verify or cite.
+      case 'search_product_docs':
+        return { data: result };
       default:
         this.complete = false;
         return unavailable;
