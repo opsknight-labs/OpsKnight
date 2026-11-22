@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import '@/styles/index.css';
-import './layers.css';
 import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
 import ServiceWorkerBootstrap from '@/components/pwa/ServiceWorkerBootstrap';

@@ -3,6 +3,11 @@
    Single import for all core styles
    ======================================== */
 
+/* Cascade layer order. It must precede the first `layer(base)` import, or `base` is
+   created first and Tailwind's `theme` variables (--color-neutral-*, --shadow-*)
+   would outrank the legacy palette. Utilities stay last so they beat legacy CSS. */
+@layer properties, theme, base, components, utilities;
+
 /* Design tokens: the single source for every scale and semantic colour role.
    Must stay the first import (DESIGN.md, design-tokens-contract test). */
 @import './foundation/tokens.css' layer(base);
