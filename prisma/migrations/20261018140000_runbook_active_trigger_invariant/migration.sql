@@ -1,6 +1,6 @@
 -- Multiple disabled triggers may retain historical suggestion/execution references.
 -- Ambiguous active groups are paused in full; never choose a winning condition set on upgrade.
-CREATE TEMP TABLE ambiguous_runbook_trigger_groups ON COMMIT DROP AS
+CREATE TEMP TABLE ambiguous_runbook_trigger_groups AS
 SELECT "bindingId", event, jsonb_agg(jsonb_build_object('id', id, 'enabled', enabled) ORDER BY id) AS triggers
 FROM "RunbookTrigger" WHERE enabled GROUP BY "bindingId", event HAVING count(*) > 1;
 
@@ -17,6 +17,9 @@ WHERE id IN (SELECT "bindingId" FROM ambiguous_runbook_trigger_groups);
 UPDATE "RunbookTrigger" trigger SET enabled = false
 FROM ambiguous_runbook_trigger_groups groups
 WHERE trigger."bindingId" = groups."bindingId" AND trigger.event = groups.event AND trigger.enabled;
+
+-- Prisma CLI 7.4+ runs statements one by one, so ON COMMIT DROP cannot be used; drop explicitly.
+DROP TABLE IF EXISTS ambiguous_runbook_trigger_groups;
 
 CREATE UNIQUE INDEX "RunbookTrigger_one_enabled_event_per_binding"
 ON "RunbookTrigger" ("bindingId", event) WHERE enabled;

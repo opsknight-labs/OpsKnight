@@ -29,14 +29,20 @@ it('reads only new/edited payloads in a 5k-alert incident and repairs labels, or
   });
   const client = createPrismaClient();
   let payloadRowsRead = 0;
-  client.$use(async (params, next) => {
-    const rows: unknown = await next(params);
-    if (params.model === 'Alert' && params.action === 'findMany' && Array.isArray(rows))
-      payloadRowsRead += rows.length;
-    return rows;
+  // Prisma 7 has no $use middleware; count rows through a query extension on a view of the client.
+  const counted = client.$extends({
+    query: {
+      alert: {
+        async findMany({ args, query }) {
+          const rows = await query(args);
+          payloadRowsRead += rows.length;
+          return rows;
+        },
+      },
+    },
   });
   const index = (force = false) =>
-    client.$transaction(tx => indexIncident(incident.id, tx, { force }), { timeout: 30000 });
+    counted.$transaction(tx => indexIncident(incident.id, tx as never, { force }), { timeout: 30000 });
   try {
     await index();
     expect(payloadRowsRead).toBe(5000);
