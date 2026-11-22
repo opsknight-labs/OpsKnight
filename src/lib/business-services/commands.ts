@@ -170,7 +170,7 @@ async function audit(
     {
       action,
       source: context.source ?? 'UI',
-      target: { type: 'SERVICE', id },
+      target: { type: 'BUSINESS_SERVICE', id },
       actor: { type: 'USER', id: context.actor.id },
       ...(newValue ? { newValue } : {}),
     },

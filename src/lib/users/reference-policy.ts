@@ -19,6 +19,7 @@ export const USER_REFERENCE_POLICY = {
   incidentRoles: { deactivate: 'REPORT', delete: 'CASCADE' },
   incidentRolesAssigned: { deactivate: 'KEEP', delete: 'SET_NULL' },
   businessServiceFollows: { deactivate: 'SUPPRESS', delete: 'CASCADE' },
+  businessServiceImpactsMarked: { deactivate: 'KEEP', delete: 'SET_NULL' },
   auditLogs: { deactivate: 'KEEP', delete: 'SET_NULL' },
   overrides: { deactivate: 'REPORT', delete: 'BLOCK' },
   overrideReplacements: { deactivate: 'REPORT', delete: 'BLOCK' },
