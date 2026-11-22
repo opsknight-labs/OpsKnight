@@ -281,16 +281,28 @@ describe('proposed actions', () => {
 });
 
 describe('answers', () => {
-  it('answers at Internal without any Personal tool for an Internal-only provider', async () => {
+  it('gives a basic answer and never calls an Internal-only provider with a conversation turn', async () => {
     await setup('INTERNAL');
     const { responder, mine } = await world();
-    model.script.push({ content: 'ok' });
-    await turn(responder.id, 'who is on call?', mine.id);
-    expect(toolNamesSent()).not.toEqual(expect.arrayContaining(['get_timeline']));
-    expect(toolNamesSent()).not.toContain('who_is_on_call');
-    expect(toolNamesSent()).not.toContain('propose_reassign_incident');
-    expect(toolNamesSent()).toContain('get_incident');
-    expect(model.requests).toHaveLength(1);
+    model.script.push({ content: 'should never be used' });
+    // A turn is Personal (free text can name people and customers), so an Internal-only
+    // provider must not receive it: Squire answers in basic mode and says why.
+    const events = await turn(
+      responder.id,
+      'Did Alice Smith from Acme Corp ask about this outage?',
+      mine.id
+    );
+    expect(model.requests).toHaveLength(0);
+    expect(toolNamesSent()).toEqual([]);
+    const meta = events.find(
+      (event): event is Extract<SquireEvent, { type: 'meta' }> => event.type === 'meta'
+    );
+    expect(meta).toMatchObject({ mode: 'basic' });
+    expect((meta as { reason?: string }).reason).toBe(
+      'No enabled AI provider is allowed to receive Internal data'
+    );
+    expect(JSON.stringify(events)).not.toContain('should never be used');
+    expect(events.at(-1)).toEqual({ type: 'done' });
   });
 
   it('includes them for a Personal-data provider, and briefs the model on the incident up front', async () => {
