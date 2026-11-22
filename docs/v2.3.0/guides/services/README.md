@@ -31,5 +31,8 @@ Pause paging during planned work with
 Group services into what customers rely on with
 [business services](./business-services).
 
+See how business services and technical services depend on each other, with live health, in the
+[service graph](./service-graph).
+
 Page on fast error-budget spend for an availability objective with
 [SLO burn-rate alerts](../slo-burn-alerts).

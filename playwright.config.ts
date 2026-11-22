@@ -41,6 +41,12 @@ export default defineConfig({
       },
     },
     {
+      // Local / opt-in only (seeds its own rows in a _test database); no CI workflow selects it.
+      name: 'service-graph',
+      testMatch: /service-graph\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
       name: 'mobile-chromium',
       testMatch: /mobile-(pwa|responsive-matrix)\.spec\.ts/,
       use: { ...devices['Pixel 5'] },
