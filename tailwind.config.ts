@@ -108,6 +108,8 @@ const config: Config = {
         lg: 'var(--ui-radius)',
         md: 'calc(var(--ui-radius) - 2px)',
         sm: 'calc(var(--ui-radius) - 4px)',
+        // Tailwind 4 reads --radius-xl at runtime, which the legacy CSS sets to 20px; pin v3's value.
+        xl: '0.75rem',
       },
       keyframes: {
         // Assistant mascot; only used when an administrator enables animations, and gated by motion-safe.

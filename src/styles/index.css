@@ -5,49 +5,67 @@
 
 /* Design tokens: the single source for every scale and semantic colour role.
    Must stay the first import (DESIGN.md, design-tokens-contract test). */
-@import './foundation/tokens.css';
+@import './foundation/tokens.css' layer(base);
 
 /* Legacy global styles */
-@import '../app/globals.css';
+@import '../app/globals.css' layer(base);
 
 /* Micro-interactions & Animations */
-@import './animations.css';
+@import './animations.css' layer(base);
 
 /* Foundation Layer */
-@import './foundation/variables.css';
-@import './foundation/variables-dark.css';
-@import './foundation/reset.css';
-@import './foundation/base.css';
+@import './foundation/variables.css' layer(base);
+@import './foundation/variables-dark.css' layer(base);
+@import './foundation/reset.css' layer(base);
+@import './foundation/base.css' layer(base);
 
 /* Utilities Layer */
-@import './utilities/animations.css';
-@import './utilities/effects.css';
-@import './utilities/typography.css';
-@import './utilities/layout.css';
-@import './utilities/spacing.css';
-@import './utilities/colors.css';
+@import './utilities/animations.css' layer(base);
+@import './utilities/effects.css' layer(base);
+@import './utilities/typography.css' layer(base);
+@import './utilities/layout.css' layer(base);
+@import './utilities/spacing.css' layer(base);
+@import './utilities/colors.css' layer(base);
 
 /* Layouts Layer */
-@import './layouts/sidebar.css';
-@import './layouts/topbar.css';
-@import './layouts/main-layout.css';
-@import './layouts/responsive.css';
+@import './layouts/sidebar.css' layer(base);
+@import './layouts/topbar.css' layer(base);
+@import './layouts/main-layout.css' layer(base);
+@import './layouts/responsive.css' layer(base);
 
 /* Components Layer */
-@import './components/buttons.css';
-@import './components/forms.css';
-@import './components/tables.css';
-@import './components/badges.css';
-@import './components/cards.css';
-@import './components/charts.css';
-@import './components/modals.css';
-@import './components/dropdowns.css';
-@import './components/toasts.css';
+@import './components/buttons.css' layer(base);
+@import './components/forms.css' layer(base);
+@import './components/tables.css' layer(base);
+@import './components/badges.css' layer(base);
+@import './components/cards.css' layer(base);
+@import './components/charts.css' layer(base);
+@import './components/modals.css' layer(base);
+@import './components/dropdowns.css' layer(base);
+@import './components/toasts.css' layer(base);
 
 /* Tailwind CSS Directives */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Theme, plugins and content stay in tailwind.config.ts: it imports the status
+   palette and type scale from TypeScript so CSS and JS cannot drift. */
+@config '../../tailwind.config.ts';
+
+/* Tailwind 4 preflight changes we keep at their v3 behaviour. */
+@layer base {
+   /* v3 preflight reset this after the legacy `body { line-height: 1.6 }`. */
+   body {
+      line-height: inherit;
+   }
+   button:not(:disabled),
+   [role='button']:not(:disabled) {
+      cursor: pointer;
+   }
+   input::placeholder,
+   textarea::placeholder {
+      color: hsl(var(--ui-muted-foreground));
+   }
+}
 
 /*
  * Tailwind/shadcn semantic colour roles (--ui-*) are defined in
