@@ -54,13 +54,16 @@ export async function getAppShellContext(
 
   // Run shell dependencies independently with graceful degradation
   const [urgencyResult, statusPagesResult, accessContextResult] = await Promise.allSettled([
-    prisma.incident.groupBy({
-      by: ['urgency'],
-      where: {
-        AND: [incidentReadWhere(context.actor), { status: { in: activeIncidentStatuses() } }],
-      },
-      _count: { _all: true },
-    }),
+    // Async so a viewer without incident access (STAKEHOLDER) degrades to "unavailable" counts
+    // instead of incidentReadWhere throwing synchronously and taking the whole shell down.
+    (async () =>
+      prisma.incident.groupBy({
+        by: ['urgency'],
+        where: {
+          AND: [incidentReadWhere(context.actor), { status: { in: activeIncidentStatuses() } }],
+        },
+        _count: { _all: true },
+      }))(),
     prisma.statusPage.findMany({
       where: { enabled: true },
       select: { id: true, name: true, slug: true, isDefault: true },
