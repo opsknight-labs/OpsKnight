@@ -230,7 +230,7 @@ suite('independent emergency authentication with signed WebAuthn responses and P
     });
     expect(stored.status).toBe('ENROLLING');
     expect(stored.verifiedAt).toBeNull();
-    expect(stored.credentials[0].publicKey).toEqual(Buffer.from(cose));
+    expect(Buffer.from(stored.credentials[0].publicKey)).toEqual(Buffer.from(cose));
     await expect(
       verifyRegistration(
         actor,

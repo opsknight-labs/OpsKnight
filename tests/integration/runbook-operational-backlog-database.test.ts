@@ -1,3 +1,4 @@
+// @vitest-environment node
 /* eslint-disable security/detect-non-literal-fs-filename -- Evidence names are fixed literals at all fixture call sites. */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, writeFile } from 'node:fs/promises';

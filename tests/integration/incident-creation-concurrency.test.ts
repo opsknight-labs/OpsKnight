@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { executeIncidentCreation } from '@/lib/incidents/creation';
 import { createTestUser, resetDatabase, testPrisma } from '../helpers/test-db';

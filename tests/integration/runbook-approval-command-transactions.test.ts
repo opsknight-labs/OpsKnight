@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, expect, it } from 'vitest';
 import { createRunbook, publishDraftVersion } from '@/lib/runbooks/versioning';
 import { approveExecutionStep } from '@/lib/runbooks/orchestrator';

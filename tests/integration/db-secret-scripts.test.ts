@@ -1,3 +1,4 @@
+// @vitest-environment node
 /* eslint-disable security/detect-non-literal-fs-filename -- All file operations use paths beneath a private mkdtemp fixture. */
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';

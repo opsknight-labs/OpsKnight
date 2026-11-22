@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
 import { processEvent, EventPayload } from '@/lib/events';
 import {

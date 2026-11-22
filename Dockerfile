@@ -92,8 +92,8 @@ ENV RAYON_NUM_THREADS=$BUILD_RAYON_THREADS
 ENV NODE_OPTIONS="--max-old-space-size=${BUILD_NODE_MAX_OLD_SPACE_SIZE}"
 ARG SKIP_BUILD_TYPECHECK=false
 # Type-check as its own step, then compile with Next's in-build check disabled. Running both
-# in one process tree doubled peak memory (the Prisma 7 model types need ~5 GB of heap).
-ARG BUILD_TYPECHECK_MAX_OLD_SPACE_SIZE=6144
+# in one process tree doubled peak memory (the Prisma 7 model types need more than 6 GB of heap).
+ARG BUILD_TYPECHECK_MAX_OLD_SPACE_SIZE=10240
 RUN if [ "$SKIP_BUILD_TYPECHECK" != "true" ]; then \
       NODE_OPTIONS="--max-old-space-size=${BUILD_TYPECHECK_MAX_OLD_SPACE_SIZE}" \
         node node_modules/typescript/lib/tsc.js --noEmit --incremental false; \

@@ -73,6 +73,19 @@ function legacyPrisma(root, tag) {
       runner.run(['generate', '--schema', copy], env);
       return client;
     },
+    /** `migrate diff --from-empty` DDL for a tagged schema, as text (the legacy CLI reads its `url`). */
+    emptyToSchemaScript(schemaPath) {
+      return execFileSync(
+        process.execPath,
+        [binary, 'migrate', 'diff', '--from-empty', '--to-schema-datamodel', schemaPath, '--script'],
+        {
+          cwd: home,
+          encoding: 'utf8',
+          maxBuffer: 64 * 1024 * 1024,
+          env: { ...process.env, PRISMA_HIDE_UPDATE_MESSAGE: '1' },
+        }
+      );
+    },
     /** Run the pinned CLI from its own directory so prisma.config.ts and .env are not read. */
     run(args, env = process.env) {
       const result = spawnSync(process.execPath, [binary, ...args], {
