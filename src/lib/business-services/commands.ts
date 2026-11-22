@@ -11,13 +11,8 @@ import {
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
 import { serviceReadWhere } from '@/lib/authorization-filters';
-import { isActiveIncidentStatus } from '@/lib/incident-status';
 import type { BusinessServiceHealth, ImpactSource } from './contract';
-import {
-  getHealthSnapshot,
-  incidentImpactSources,
-  invalidateBusinessServiceHealth,
-} from './health';
+import { invalidateBusinessServiceHealth } from './health';
 import { wouldCreateSupportCycle } from './stats';
 
 const id = z.string().trim().min(1).max(100);
@@ -527,48 +522,8 @@ export async function impactedBusinessServicesForIncident(
   incidentId: string
 ): Promise<IncidentBusinessServiceImpactView[]> {
   if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_READ }).allowed) return [];
-  const [incident, rows] = await Promise.all([
-    prisma.incident.findUnique({
-      where: { id: incidentId },
-      select: {
-        id: true,
-        serviceId: true,
-        urgency: true,
-        priority: true,
-        status: true,
-        createdAt: true,
-      },
-    }),
-    prisma.incidentBusinessServiceImpact.findMany({
-      where: { incidentId },
-      select: {
-        incidentId: true,
-        businessServiceId: true,
-        source: true,
-        excluded: true,
-        createdById: true,
-        endedAt: true,
-      },
-    }),
-  ]);
-  if (!incident) return [];
-  const open = isActiveIncidentStatus(incident.status);
-  const views = new Map<string, Omit<IncidentBusinessServiceImpactView, 'id' | 'name'>>(
-    rows.map(row => [
-      row.businessServiceId,
-      { source: row.source, excluded: row.excluded, active: open && !row.excluded && !row.endedAt },
-    ])
-  );
-  if (open) {
-    const snapshot = await getHealthSnapshot();
-    for (const [businessServiceId, source] of incidentImpactSources(
-      { ...snapshot.inputs, impactRows: rows },
-      incident
-    )) {
-      if (!views.has(businessServiceId))
-        views.set(businessServiceId, { source, excluded: false, active: true });
-    }
-  }
+  const { incidentImpactViews } = await import('./impacts');
+  const views = await incidentImpactViews(incidentId);
   if (!views.size) return [];
   const visible = await prisma.businessService.findMany({
     where: { AND: [{ id: { in: [...views.keys()] } }, businessServiceReadWhere(actor)] },

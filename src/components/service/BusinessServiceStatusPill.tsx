@@ -1,16 +1,6 @@
 import { cn } from '@/lib/utils';
 import { toneClasses, type ToneKey } from '@/components/patterns/status-tone';
 
-const RANK = ['OPERATIONAL', 'MAINTENANCE', 'DEGRADED', 'PARTIAL_OUTAGE', 'MAJOR_OUTAGE'];
-
-/** The worst technical-service status; a business service with no members reads operational. */
-export function worstServiceStatus(statuses: readonly string[]): string {
-  return statuses.reduce(
-    (worst, status) => (RANK.indexOf(status) > RANK.indexOf(worst) ? status : worst),
-    'OPERATIONAL'
-  );
-}
-
 function presentation(status: string): { label: string; tone: ToneKey } {
   switch (status) {
     case 'MAJOR_OUTAGE':

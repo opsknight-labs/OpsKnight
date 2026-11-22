@@ -122,6 +122,50 @@ export async function syncIncidentImpacts(
   return { created, updated };
 }
 
+/**
+ * Business services an incident impacts, unscoped: its recorded rows plus what the engine
+ * computes now for an open incident (the outbox effect may not have written them yet).
+ */
+export async function incidentImpactViews(incidentId: string) {
+  const [incident, rows] = await Promise.all([
+    prisma.incident.findUnique({
+      where: { id: incidentId },
+      select: { id: true, serviceId: true, urgency: true, priority: true, status: true, createdAt: true },
+    }),
+    prisma.incidentBusinessServiceImpact.findMany({
+      where: { incidentId },
+      select: {
+        incidentId: true,
+        businessServiceId: true,
+        source: true,
+        excluded: true,
+        createdById: true,
+        endedAt: true,
+      },
+    }),
+  ]);
+  const views = new Map<
+    string,
+    { source: BusinessServiceImpactSource; excluded: boolean; active: boolean }
+  >();
+  if (!incident) return views;
+  const open = isActiveIncidentStatus(incident.status);
+  for (const row of rows) {
+    views.set(row.businessServiceId, {
+      source: row.source,
+      excluded: row.excluded,
+      active: open && !row.excluded && !row.endedAt,
+    });
+  }
+  if (open) {
+    const snapshot = await getHealthSnapshot();
+    for (const [id, source] of incidentImpactSources({ ...snapshot.inputs, impactRows: rows }, incident)) {
+      if (!views.has(id)) views.set(id, { source, excluded: false, active: true });
+    }
+  }
+  return views;
+}
+
 /** Every open incident plus every incident that still has an open impact row, in batches. */
 export async function reconcileBusinessServiceImpacts(now = new Date()) {
   const [active, open] = await Promise.all([

@@ -6,9 +6,8 @@ import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { BUSINESS_SERVICE_SELECT, businessServiceReadWhere } from '@/lib/business-services/commands';
 import { PageHeader } from '@/components/patterns';
 import BusinessServiceForm from '@/components/service/BusinessServiceForm';
-import BusinessServiceStatusPill, {
-  worstServiceStatus,
-} from '@/components/service/BusinessServiceStatusPill';
+import BusinessServiceStatusPill from '@/components/service/BusinessServiceStatusPill';
+import { getBusinessServiceHealth } from '@/lib/business-services/contract';
 import { loadBusinessServiceFormOptions } from '../form-options';
 
 export default async function EditBusinessServicePage({
@@ -27,15 +26,13 @@ export default async function EditBusinessServicePage({
     select: BUSINESS_SERVICE_SELECT,
   });
   if (!item) notFound();
-  const options = await loadBusinessServiceFormOptions(actor);
-  // Keep current members and followers visible even when they are outside the actor's scope.
-  const known = new Set(options.services.map(service => service.id));
-  const services = [
-    ...options.services,
-    ...item.members
-      .filter(member => !known.has(member.service.id))
-      .map(member => ({ id: member.service.id, name: member.service.name, hint: null })),
-  ];
+  const [options, health] = await Promise.all([
+    loadBusinessServiceFormOptions(actor, {
+      serviceIds: item.members.map(member => member.service.id),
+      userIds: item.followers.map(follower => follower.user.id),
+    }),
+    getBusinessServiceHealth([item.id], actor),
+  ]);
   return (
     <div className="mx-auto w-full max-w-[1200px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <PageHeader
@@ -43,9 +40,7 @@ export default async function EditBusinessServicePage({
         title={item.name}
         icon={Boxes}
         badges={
-          <BusinessServiceStatusPill
-            status={worstServiceStatus(item.members.map(member => member.service.status))}
-          />
+          <BusinessServiceStatusPill status={health.get(item.id)?.status ?? 'OPERATIONAL'} />
         }
         breadcrumbs={[
           { label: 'Services', href: '/services' },
@@ -55,7 +50,7 @@ export default async function EditBusinessServicePage({
         description="Changes apply to status pages that show this business service on their next publish."
       />
       <BusinessServiceForm
-        services={services}
+        services={options.services}
         teams={options.teams}
         users={options.users}
         canDelete={permissions.isAdmin}
