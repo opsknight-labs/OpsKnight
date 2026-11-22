@@ -4,9 +4,7 @@ import { processEvent, EventPayload } from '@/lib/events';
 import {
   testPrisma,
   resetDatabase,
-  createTestUser,
   createTestService,
-  createTestIncident,
   createTestNotificationProvider,
 } from '../helpers/test-db';
 

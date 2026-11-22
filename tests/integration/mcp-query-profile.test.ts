@@ -77,10 +77,7 @@ function observe(event: Prisma.QueryEvent) {
     return;
   }
   collecting.statements++;
-  if (
-    read &&
-    tables(sql, ['McpToken', 'McpGrant', 'McpClient', 'User', 'TeamMember'])
-  )
+  if (read && tables(sql, ['McpToken', 'McpGrant', 'McpClient', 'User', 'TeamMember']))
     collecting.authenticationReads++;
   else if (read && tables(sql, ['McpPolicy'])) collecting.policyReads++;
   else if (read) collecting.domainReads++;
@@ -234,7 +231,17 @@ async function measured(
     sample.wallDurationMs = Number((performance.now() - started).toFixed(2));
     // Prisma query events arrive from the engine asynchronously. Drain their
     // delivery after all awaited request work before switching sample buckets.
-    await new Promise(resolve => setTimeout(resolve, 25));
+    // Under CI load events lag the awaited work, so wait until none arrive for a full interval; a
+    // late write from this scenario must not land in the next one's bucket.
+    let seen = -1;
+    for (
+      let waited = 0;
+      waited < 2000 && seen !== sample.statements + sample.emptyRelationLoads;
+      waited += 50
+    ) {
+      seen = sample.statements + sample.emptyRelationLoads;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
     collecting = undefined;
     profiles.push({ scenario, requests, chargedOperations, sample });
   }

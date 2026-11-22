@@ -108,16 +108,21 @@ export async function resetDatabase() {
 
     const tables = tablenames.map(({ tablename }) => `"${tablename}"`).join(', ');
 
-    try {
-      await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${tables} CASCADE;`);
-    } catch (error: unknown) {
-      if ((error as { code?: string }).code === '40P01') {
-        // Deadlock
-        console.log('Deadlock detected during reset, retrying...');
-        await new Promise(resolve => setTimeout(resolve, 100));
+    // A background job from an earlier test can hold a lock in the opposite order; retry the
+    // deadlock victim instead of failing every following test's hook.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
         await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${tables} CASCADE;`);
-      } else {
-        throw error;
+        break;
+      } catch (error: unknown) {
+        const code = (error as { code?: string; meta?: { code?: string } }).meta?.code;
+        const deadlock =
+          (error as { code?: string }).code === '40P01' ||
+          code === '40P01' ||
+          String((error as Error).message).includes('deadlock detected');
+        if (!deadlock || attempt >= 5) throw error;
+        console.log('Deadlock detected during reset, retrying...');
+        await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
       }
     }
     await seedRequiredReferenceData();
