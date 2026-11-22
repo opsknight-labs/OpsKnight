@@ -22,12 +22,14 @@ beforeAll(() => {
   const url = new URL(process.env.DATABASE_URL!);
   expect(url.hostname).toBe('127.0.0.1');
   expect(url.pathname).toMatch(/^\/ingestion_test_/);
-  setPrePagingDeadlineMs(null);
+  // These assertions are about dedup, not the 5 ms budget: a loaded host must not fail the lookup open.
+  setPrePagingDeadlineMs(50);
 });
 
 afterEach(() => resetPrePagingSnapshot());
 
 afterAll(async () => {
+  setPrePagingDeadlineMs(null);
   const owned = { serviceId: { in: services } };
   await prisma.alert.deleteMany({ where: owned });
   await prisma.incident.deleteMany({ where: owned });

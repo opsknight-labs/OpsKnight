@@ -136,10 +136,20 @@ export async function warmNoiseLookupClient(
   pool.warm ??= client
     .$connect()
     .then(async () => {
-      for (let attempt = 0; attempt < 3; attempt += 1)
-        await Promise.all(
-          Array.from({ length: pool.poolSize }, () => probe(client).catch(() => undefined))
-        );
+      // node-postgres connections are cold until their first statement finishes (a cancelled first
+      // probe still warms the backend), so each probe retries until one completes inside the timeout.
+      await Promise.all(
+        Array.from({ length: pool.poolSize }, async () => {
+          for (let attempt = 0; attempt < 5; attempt += 1) {
+            try {
+              await probe(client);
+              return;
+            } catch {
+              // timed out cold: the next attempt runs on a warmed backend
+            }
+          }
+        })
+      );
     })
     .then(
       () => undefined,
