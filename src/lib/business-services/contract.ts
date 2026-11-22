@@ -41,6 +41,8 @@ export type ImpactReason =
       status: BsStatus;
       childBusinessServiceId: string;
       depth: number;
+      /** The child's worst incident that is not unmarked for this (parent) business service. */
+      incidentId: string;
     }
   | { kind: 'MANUAL'; status: BsStatus; incidentId: string; markedById: string | null }
   | { kind: 'MAINTENANCE'; status: 'MAINTENANCE'; maintenanceWindowId: string };

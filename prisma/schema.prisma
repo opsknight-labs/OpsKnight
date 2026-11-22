@@ -3013,11 +3013,15 @@ model BusinessServiceSupport {
 }
 
 /// History of which business services an incident impacted and why; open while endedAt is null.
+/// One impact interval of an incident on a business service. A pair can have several closed
+/// intervals (reopened incidents) but at most one open one (partial unique index in SQL).
 model IncidentBusinessServiceImpact {
+  id                String                      @id @default(cuid())
   incidentId        String
   businessServiceId String
   source            BusinessServiceImpactSource
-  /// A responder unmarked this impact; kept so reconcile does not re-add it.
+  /// A responder unmarked this incident for the business service: every interval of the pair is
+  /// flagged and left out of the numbers, and a latest excluded row stops it being re-added.
   excluded          Boolean                     @default(false)
   startedAt         DateTime                    @default(now())
   endedAt           DateTime?
@@ -3028,7 +3032,7 @@ model IncidentBusinessServiceImpact {
   businessService   BusinessService             @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
   createdBy         User?                       @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
-  @@id([incidentId, businessServiceId])
+  @@index([incidentId, businessServiceId, startedAt])
   @@index([businessServiceId, startedAt])
   @@index([endedAt])
 }
