@@ -439,6 +439,12 @@ export async function processEventSideEffect(
     case 'TRIGGER_JIRA':
       await createJiraIssueForIncident(payload.incidentId);
       return;
+    case 'BUSINESS_SERVICE_IMPACT': {
+      // Reads current incident state, so a late or replayed run still converges.
+      const { syncIncidentImpacts } = await import('./business-services/impacts');
+      await syncIncidentImpacts([payload.incidentId]);
+      return;
+    }
     case 'RESOLVE_WEBHOOK':
       await sendEventWebhook(payload, 'incident.resolved');
       return;
