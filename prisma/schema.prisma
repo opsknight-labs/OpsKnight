@@ -2788,15 +2788,18 @@ model StatusPageAsset {
 }
 
 model StatusPageService {
-  id           String     @id @default(cuid())
-  statusPageId String
-  serviceId    String
-  displayName  String?
-  showOnPage   Boolean    @default(true)
-  order        Int        @default(0)
-  createdAt    DateTime   @default(now())
-  statusPage   StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
-  service      Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  id                 String     @id @default(cuid())
+  statusPageId       String
+  serviceId          String
+  displayName        String?
+  showOnPage         Boolean    @default(true)
+  order              Int        @default(0)
+  /// Published only because a business service on the page contains it; removed with that
+  /// membership. Services an admin selected directly stay false and are never removed by sync.
+  viaBusinessService Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  statusPage         StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  service            Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@unique([statusPageId, serviceId])
   @@index([statusPageId, order])

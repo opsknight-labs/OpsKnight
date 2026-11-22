@@ -90,6 +90,42 @@ const SYNC_PUBLISH_BUDGET_MS = Number(process.env.STATUS_PAGE_SYNC_PUBLISH_BUDGE
 const MAX_LAST_ERROR_LENGTH = 500;
 
 /**
+ * Rows published only through business services (`viaBusinessService`) follow the page's
+ * business services: once none of them contains the service, the row goes, unless this same
+ * save lists the service directly, which makes it a direct selection. Direct rows never move.
+ */
+async function reconcileBusinessServiceRows(
+  tx: Prisma.TransactionClient,
+  pageId: string,
+  serviceIds: readonly string[] | undefined
+) {
+  const covered = new Set(
+    (
+      await tx.businessServiceMember.findMany({
+        where: { businessService: { statusPages: { some: { statusPageId: pageId } } } },
+        select: { serviceId: true },
+      })
+    ).map(member => member.serviceId)
+  );
+  const orphaned = (
+    await tx.statusPageService.findMany({
+      where: { statusPageId: pageId, viaBusinessService: true },
+      select: { id: true, serviceId: true },
+    })
+  ).filter(row => !covered.has(row.serviceId));
+  if (!orphaned.length) return;
+  const direct = new Set(serviceIds ?? []);
+  const keep = orphaned.filter(row => direct.has(row.serviceId)).map(row => row.id);
+  const drop = orphaned.filter(row => !direct.has(row.serviceId)).map(row => row.id);
+  if (keep.length)
+    await tx.statusPageService.updateMany({
+      where: { id: { in: keep } },
+      data: { viaBusinessService: false },
+    });
+  if (drop.length) await tx.statusPageService.deleteMany({ where: { id: { in: drop } } });
+}
+
+/**
  * Apply a settings change and republish the public page as one operation.
  *
  * The ordering is the entire point of this function:
@@ -306,9 +342,14 @@ export async function applyStatusPageConfigurationChange(
             data: [...new Set(members.map(member => member.serviceId))].map(serviceId => ({
               statusPageId: pageId,
               serviceId,
+              viaBusinessService: true,
             })),
             skipDuplicates: true,
           });
+      }
+
+      if (businessServiceIds !== undefined || serviceIds !== undefined) {
+        await reconcileBusinessServiceRows(tx, pageId, serviceIds);
       }
 
       if (classification.classes.includes('ROUTING')) {

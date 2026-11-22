@@ -212,13 +212,19 @@ async function syncStatusPageMembers(
   if (members.length) {
     await tx.statusPageService.createMany({
       data: pageIds.flatMap(statusPageId =>
-        members.map(member => ({ statusPageId, serviceId: member.serviceId }))
+        members.map(member => ({
+          statusPageId,
+          serviceId: member.serviceId,
+          viaBusinessService: true,
+        }))
       ),
+      // A service the admin already selected directly keeps its row and stays direct.
       skipDuplicates: true,
     });
   }
   if (!removedServiceIds.length) return;
-  // A dropped member leaves each page unless another business service on that page still has it.
+  // A dropped member leaves each page it was published on only through business services,
+  // unless another business service on that page still has it; direct selections stay.
   const stillShown = await tx.statusPageBusinessService.findMany({
     where: {
       statusPageId: { in: pageIds },
@@ -245,7 +251,9 @@ async function syncStatusPageMembers(
   for (const statusPageId of pageIds) {
     const remove = removedServiceIds.filter(serviceId => !keep.has(`${statusPageId}:${serviceId}`));
     if (remove.length)
-      await tx.statusPageService.deleteMany({ where: { statusPageId, serviceId: { in: remove } } });
+      await tx.statusPageService.deleteMany({
+        where: { statusPageId, serviceId: { in: remove }, viaBusinessService: true },
+      });
   }
 }
 
