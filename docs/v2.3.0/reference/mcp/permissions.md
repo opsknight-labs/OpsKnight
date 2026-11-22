@@ -72,7 +72,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  |  | 5 | 1 | 0 | 1 |
 | `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 3 |
 | `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ |  | 26 | 12 | 2 | 16 |
-| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 13 | 12 |
+| `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 13 | 13 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 1 |
 | `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
 | `integrations:test` | Send test messages through integrations | Services | Change | ✓ |  |  |  |  | 0 | 2 | 0 | 0 |
@@ -101,10 +101,10 @@ Operation columns count catalog operations that need the permission: plain reads
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ |  | 3 | 7 | 0 | 0 |
 | `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 4 |
 | `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 12 | 2 | 0 | 3 |
-| `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 11 |
+| `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 13 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |
 | `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  |  | 5 | 9 | 0 | 2 |
-| `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 10 |
+| `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 11 |
 | `teams:read` | View teams | Teams and people | View | ✓ | ✓ | ✓ | ✓ | ✓ | 6 | 1 | 0 | 2 |
 | `teams:write` | Change teams (higher-risk changes wait for approval) | Teams and people | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 0 | 7 |
 | `users:read` | View people | Teams and people | View | ✓ | ✓ | ✓ |  |  | 3 | 0 | 0 | 0 |
@@ -124,11 +124,11 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | action-items | 1 | 1 | 0 | 0 |
 | audit-exports | 3 | 0 | 0 | 3 |
 | audit-logs | 1 | 1 | 0 | 0 |
-| business-services | 8 | 5 | 0 | 3 |
+| business-services | 10 | 5 | 2 | 3 |
 | custom-fields | 5 | 2 | 3 | 0 |
 | dashboards | 10 | 4 | 5 | 1 |
 | escalation-policies | 8 | 5 | 3 | 0 |
-| incidents | 47 | 35 | 12 | 0 |
+| incidents | 48 | 35 | 13 | 0 |
 | integrations | 11 | 6 | 2 | 3 |
 | maintenance-schedules | 5 | 2 | 3 | 0 |
 | maintenance-windows | 6 | 2 | 4 | 0 |
@@ -143,10 +143,10 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | service-objectives | 14 | 9 | 5 | 0 |
 | services | 45 | 21 | 21 | 3 |
 | settings | 8 | 3 | 4 | 1 |
-| status-pages | 32 | 15 | 10 | 7 |
+| status-pages | 33 | 15 | 11 | 7 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 358 | 164 | 116 | 78 |
+| **All** | 362 | 164 | 120 | 78 |
 
 <details>
 <summary>Operations by area</summary>
@@ -180,8 +180,10 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `getBusinessService` | `business_service_get` |
 | `getBusinessServiceGraph` | `business_service_graph` |
 | `getBusinessServiceImpactTimeline` | `business_service_health` |
+| `importBusinessServices` | `operation_prepare`, then approval |
 | `listBusinessServiceIncidents` | `business_service_incidents` |
 | `listBusinessServices` | `business_services_list` |
+| `setSupportingBusinessServices` | `operation_prepare`, then approval |
 | `updateBusinessService` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 
 ### custom-fields
@@ -258,6 +260,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `listRelatedIncidents` | `read_operation` |
 | `listSimilarIncidents` | `incident_find_similar` |
 | `markIncidentBusinessServiceImpact` | `operation_prepare`, then approval |
+| `notifyIncidentStakeholders` | `operation_prepare`, then approval |
 | `removeIncidentTag` | `call_operation` |
 | `removeIncidentWatcher` | `operation_prepare`, then approval |
 | `reopenIncident` | `incident_reopen` |
@@ -587,6 +590,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `previewStatusPage` | `read_operation` (sensitive reads on) |
 | `removeStatusPageSubscriber` | not available: restricted to native administration (exclusion review pending) |
 | `retryStatusPagePublication` | `operation_prepare`, then approval |
+| `setStatusPageBusinessServiceOverride` | `operation_prepare`, then approval |
 | `setStatusPageBusinessServices` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `setStatusPageServices` | `operation_prepare`, then approval |
 | `updateStatusPage` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |

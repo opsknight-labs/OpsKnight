@@ -25,7 +25,7 @@ import { AlertTriangle, User, AlertCircle, CheckCircle2, Clock, ShieldOff } from
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
-import { CAPABILITIES } from '@/lib/authorization';
+import { CAPABILITIES, PAGEABLE_USER_WHERE } from '@/lib/authorization';
 import {
   getIncidentListBadges,
   noiseFilterWhere,
@@ -194,7 +194,9 @@ export default async function IncidentsPage({
     listQuery(requested.skip, requested.take),
     canCreateIncident
       ? prisma.user.findMany({
-          where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
+          where: {
+            AND: [{ status: 'ACTIVE' }, PAGEABLE_USER_WHERE, dashboardUserReadWhere(actor)],
+          },
           select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
           orderBy: { name: 'asc' },
         })

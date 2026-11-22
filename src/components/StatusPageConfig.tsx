@@ -20,8 +20,10 @@ import StatusPageEmailConfig from '@/components/status-page/StatusPageEmailConfi
 import StatusPageServicesManager from '@/components/status-page/StatusPageServicesManager';
 import StatusPageBusinessLayout, {
   type BusinessServiceOption,
+  type BusinessServicePageConfig,
   type StatusPageServiceLayout,
 } from '@/components/status-page/StatusPageBusinessLayout';
+import { setBusinessServiceOverrideAction } from '@/app/(app)/settings/status-pages/[pageId]/business-service-actions';
 import StatusPageAnnouncementManager from '@/components/status-page/StatusPageAnnouncementManager';
 import { Badge } from '@/components/ui/shadcn/badge';
 import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
@@ -108,7 +110,15 @@ type StatusPageConfigProps = {
     showSubscribe?: boolean;
     showServicesByRegion?: boolean;
     serviceLayout?: StatusPageServiceLayout;
-    businessServices?: Array<{ businessServiceId: string; order: number }>;
+    businessServices?: Array<{
+      businessServiceId: string;
+      order: number;
+      displayName?: string | null;
+      showOnPage?: boolean;
+      showMembers?: boolean;
+      statusOverride?: string | null;
+      statusOverrideUntil?: string | Date | null;
+    }>;
     showServiceOwners?: boolean;
     showServiceSlaTier?: boolean;
     showChangelog?: boolean;
@@ -349,6 +359,31 @@ export default function StatusPageConfig({
   const [businessServiceIds, setBusinessServiceIds] = useState<string[]>(
     getInitialBusinessServiceIds
   );
+  const getInitialBusinessServiceConfigs = () =>
+    Object.fromEntries(
+      (statusPage.businessServices ?? []).map(mapping => [
+        mapping.businessServiceId,
+        {
+          displayName: mapping.displayName ?? '',
+          showOnPage: mapping.showOnPage !== false,
+          showMembers: mapping.showMembers !== false,
+        },
+      ])
+    ) as Record<string, BusinessServicePageConfig>;
+  const [businessServiceConfigs, setBusinessServiceConfigs] = useState(
+    getInitialBusinessServiceConfigs
+  );
+  const businessServiceOverrides = Object.fromEntries(
+    (statusPage.businessServices ?? []).map(mapping => [
+      mapping.businessServiceId,
+      {
+        status: mapping.statusOverride ?? null,
+        until: mapping.statusOverrideUntil
+          ? new Date(mapping.statusOverrideUntil).toISOString()
+          : null,
+      },
+    ])
+  );
 
   const [serviceConfigs, setServiceConfigs] =
     useState<Record<string, { displayName: string; order: number; showOnPage: boolean }>>(
@@ -406,6 +441,7 @@ export default function StatusPageConfig({
     setServiceConfigs(getInitialServiceConfigs());
     setServiceLayout(statusPage.serviceLayout ?? 'FLAT');
     setBusinessServiceIds(getInitialBusinessServiceIds());
+    setBusinessServiceConfigs(getInitialBusinessServiceConfigs());
     setError(null);
     router.refresh();
   };
@@ -574,6 +610,12 @@ export default function StatusPageConfig({
                 serviceConfigs: serviceConfigs,
                 serviceLayout,
                 businessServiceIds,
+                // Only rows that will exist after the save; new rows take the defaults first.
+                businessServiceConfigs: Object.fromEntries(
+                  businessServiceIds.flatMap(id =>
+                    businessServiceConfigs[id] ? [[id, businessServiceConfigs[id]]] : []
+                  )
+                ),
                 // Privacy settings
                 privacyMode: privacySettings.privacyMode,
                 showIncidentDetails: privacySettings.showIncidentDetails,
@@ -1033,6 +1075,11 @@ export default function StatusPageConfig({
                         announcements={announcements ?? []}
                         setAnnouncements={setAnnouncements}
                         allServices={announcementServiceOptions ?? []}
+                        businessServices={allBusinessServices.filter(business =>
+                          (statusPage.businessServices ?? []).some(
+                            mapping => mapping.businessServiceId === business.id
+                          )
+                        )}
                         browserTimeZone={browserTimeZone}
                         draftIncidentId={draftIncidentId}
                         updateCadenceMinutes={statusPage.updateCadenceMinutes ?? null}
@@ -1516,6 +1563,30 @@ export default function StatusPageConfig({
                           onLayoutChange={setServiceLayout}
                           businessServices={allBusinessServices}
                           selectedIds={businessServiceIds}
+                          configs={businessServiceConfigs}
+                          onConfigChange={(id, patch) =>
+                            setBusinessServiceConfigs(current => ({
+                              ...current,
+                              [id]: {
+                                ...(current[id] ?? {
+                                  displayName: '',
+                                  showOnPage: true,
+                                  showMembers: true,
+                                }),
+                                ...patch,
+                              },
+                            }))
+                          }
+                          overrides={businessServiceOverrides}
+                          onOverride={async (id, next) => {
+                            const failure = await setBusinessServiceOverrideAction(
+                              statusPage.id,
+                              id,
+                              next
+                            );
+                            if (!failure) router.refresh();
+                            return failure;
+                          }}
                           onSelectedIdsChange={ids => {
                             setBusinessServiceIds(ids);
                             // Members are published with their business service; mirror that here.

@@ -517,6 +517,18 @@ async function runOnce() {
       : null;
     const { reconcileIntegrationControlPlane } = await import('./integrations/reconciliation');
     const integrationReconciliation = await reconcileIntegrationControlPlane();
+    if (ownership.statusProjection) {
+      // Lapsed business-service overrides mark their pages dirty, so this runs first.
+      await import('./status-pages/business-service-overrides')
+        .then(({ expireStatusPageBusinessServiceOverrides }) =>
+          expireStatusPageBusinessServiceOverrides()
+        )
+        .catch(error =>
+          logger.warn('[Cron] Status page override expiry failed', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        );
+    }
     const statusPageReconciliation = ownership.statusProjection
       ? await import('./status-pages/snapshot').then(({ reconcileStatusPageSnapshots }) =>
           reconcileStatusPageSnapshots()

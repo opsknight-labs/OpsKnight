@@ -87,6 +87,10 @@ const decisions: readonly ApiCapability[] = [
       'getBusinessServiceGraph',
       'markIncidentBusinessServiceImpact',
       'unmarkIncidentBusinessServiceImpact',
+      'setSupportingBusinessServices',
+      'importBusinessServices',
+      'setStatusPageBusinessServiceOverride',
+      'notifyIncidentStakeholders',
     ],
   },
   {

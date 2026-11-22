@@ -107,6 +107,21 @@ export const POST = withV2Observability(async function POST(
       });
     }
 
+    const affectedBusinessServiceIds = validated.businessServices?.length
+      ? Array.from(new Set(validated.businessServices))
+      : null;
+    if (
+      affectedBusinessServiceIds &&
+      (await prisma.statusPageBusinessService.count({
+        where: { statusPageId: id, businessServiceId: { in: affectedBusinessServiceIds } },
+      })) !== affectedBusinessServiceIds.length
+    ) {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'Affected business services must be on this status page.',
+      });
+    }
+
     const execution = await runV2IdempotentAuditedMutation(
       req,
       apiKey.id,
@@ -123,6 +138,7 @@ export const POST = withV2Observability(async function POST(
             endDate: validated.endDate ? new Date(validated.endDate) : null,
             isActive: validated.isActive,
             affectedServiceIds: affectedServiceIds ?? Prisma.JsonNull,
+            affectedBusinessServiceIds: affectedBusinessServiceIds ?? Prisma.JsonNull,
           },
           select: {
             id: true,
@@ -133,6 +149,7 @@ export const POST = withV2Observability(async function POST(
             startDate: true,
             endDate: true,
             affectedServiceIds: true,
+            affectedBusinessServiceIds: true,
             createdAt: true,
           },
         }),

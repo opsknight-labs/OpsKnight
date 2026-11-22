@@ -29,7 +29,9 @@ Pause paging during planned work with
 [maintenance windows](./maintenance-windows), one-off or recurring.
 
 Group services into what customers rely on with
-[business services](./business-services).
+[business services](./business-services). Set one up step by step or import many with
+[import and set up business services](./business-service-import), and keep business people
+informed with [stakeholder updates](../stakeholders).
 
 See how business services and technical services depend on each other, with live health, in the
 [service graph](./service-graph).

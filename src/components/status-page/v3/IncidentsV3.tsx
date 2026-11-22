@@ -201,6 +201,11 @@ const IncidentCard = memo(function IncidentCard({
             </>
           )}
           {hasService && <span className="status-v3-chip status-v3-chip--muted">{incident.service!.name}</span>}
+          {incident.businessServices?.map(business => (
+            <span key={business.id} className="status-v3-chip status-v3-chip--muted">
+              {business.name}
+            </span>
+          ))}
         </span>
         <span className="status-v3-incident-pill__summary-meta">
           {isRedacted && (

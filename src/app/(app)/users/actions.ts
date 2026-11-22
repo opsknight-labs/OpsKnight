@@ -23,6 +23,7 @@ import {
 import { isAssignableRole } from '@/lib/authorization';
 import type { Prisma, Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
+import { assertCanBecomeStakeholder } from '@/lib/users/stakeholder-role-guard';
 import {
   dependencySummary,
   discoverUserDependencies,
@@ -237,6 +238,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
   }
   try {
     await assertPermanentAdminForAdminTargets(currentUser, [userId], role);
+    await assertCanBecomeStakeholder([userId], role);
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unauthorized.' };
   }
@@ -628,6 +630,11 @@ export async function bulkUpdateUsers(
     if (admin && userIds.includes(admin.id)) {
       return { error: 'You cannot change your own role.' };
     }
+    try {
+      await assertCanBecomeStakeholder(userIds, role);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Cannot change the role.' };
+    }
     if (role !== 'ADMIN') {
       try {
         await assertBatchLeavesActiveAdmin(userIds);
@@ -779,6 +786,7 @@ export async function updateUserProfile(
 
   try {
     const roleChanged = targetRole !== existingUser.role;
+    if (roleChanged) await assertCanBecomeStakeholder([userId], targetRole);
     const profileData: Prisma.UserUpdateInput = {
       name: name.trim(),
       email: normalizedEmail,

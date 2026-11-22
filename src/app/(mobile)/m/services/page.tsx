@@ -5,7 +5,7 @@ import MobileServicesClient from '@/components/mobile/MobileServicesClient';
 import { appRoutes } from '@/lib/app-routes';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { getRequestActorContext } from '@/lib/request-actor-context';
-import { requirePageAccess } from '@/lib/access/server';
+import { requirePageAccess, redirectWithoutIncidentRead } from '@/lib/access/server';
 import { findServicesInMaintenance } from '@/lib/service-maintenance/windows';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +16,7 @@ export default async function MobileServicesPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   await requirePageAccess('/m/services');
+  await redirectWithoutIncidentRead();
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/services'));
 

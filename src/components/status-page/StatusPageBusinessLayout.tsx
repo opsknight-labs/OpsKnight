@@ -1,8 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, ArrowUpRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/shadcn/input';
+import { Button } from '@/components/ui/shadcn/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/shadcn/select';
+import { STATUS_OVERRIDE_VALUES } from '@/lib/status-pages/status-override';
+import { statusPresentation } from '@/lib/status-pages/status-presentation';
 
 export type StatusPageServiceLayout = 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
 
@@ -11,6 +23,96 @@ export type BusinessServiceOption = {
   name: string;
   memberServiceIds: string[];
 };
+
+/** Per-page presentation of a business service (saved with the page settings). */
+export type BusinessServicePageConfig = {
+  displayName: string;
+  showOnPage: boolean;
+  showMembers: boolean;
+};
+
+/** Manual component-group status; applied immediately, not with the settings save. */
+export type BusinessServiceOverride = { status: string | null; until: string | null };
+
+const DEFAULT_CONFIG: BusinessServicePageConfig = {
+  displayName: '',
+  showOnPage: true,
+  showMembers: true,
+};
+const COMPUTED = '__computed__';
+
+/** "YYYY-MM-DDTHH:mm" in local time, the value a datetime-local input expects. */
+function localInputValue(iso: string | null) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
+function OverrideControl({
+  name,
+  value,
+  onApply,
+}: {
+  name: string;
+  value: BusinessServiceOverride;
+  onApply: (next: BusinessServiceOverride) => Promise<string | null>;
+}) {
+  const [status, setStatus] = useState(value.status ?? COMPUTED);
+  const [until, setUntil] = useState(localInputValue(value.until));
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const dirty = status !== (value.status ?? COMPUTED) || until !== localInputValue(value.until);
+  const apply = async () => {
+    setPending(true);
+    setError(
+      await onApply({
+        status: status === COMPUTED ? null : status,
+        until: status === COMPUTED || !until ? null : new Date(until).toISOString(),
+      })
+    );
+    setPending(false);
+  };
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <label className="space-y-1 text-xs text-muted-foreground">
+        <span className="block">Public status</span>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="h-8 w-44 text-xs" aria-label={`Public status of ${name}`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={COMPUTED}>Automatic (from incidents)</SelectItem>
+            {STATUS_OVERRIDE_VALUES.map(option => (
+              <SelectItem key={option} value={option}>
+                {statusPresentation(option).label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </label>
+      {status !== COMPUTED && (
+        <label className="space-y-1 text-xs text-muted-foreground">
+          <span className="block">Until (blank = 30 days)</span>
+          <Input
+            type="datetime-local"
+            value={until}
+            onChange={event => setUntil(event.target.value)}
+            className="h-8 w-48 text-xs"
+            aria-label={`Override of ${name} ends`}
+          />
+        </label>
+      )}
+      <Button type="button" size="sm" variant="outline" disabled={!dirty || pending} onClick={apply}>
+        {pending ? 'Applying…' : 'Apply now'}
+      </Button>
+      {error && (
+        <p role="alert" className="basis-full text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const LAYOUTS: Array<{ value: StatusPageServiceLayout; title: string; body: string }> = [
   {
@@ -37,12 +139,21 @@ export default function StatusPageBusinessLayout({
   businessServices,
   selectedIds,
   onSelectedIdsChange,
+  configs = {},
+  onConfigChange,
+  overrides = {},
+  onOverride,
 }: {
   layout: StatusPageServiceLayout;
   onLayoutChange: (layout: StatusPageServiceLayout) => void;
   businessServices: BusinessServiceOption[];
   selectedIds: string[];
   onSelectedIdsChange: (ids: string[]) => void;
+  configs?: Record<string, BusinessServicePageConfig>;
+  onConfigChange?: (id: string, patch: Partial<BusinessServicePageConfig>) => void;
+  /** Saved overrides; only services already saved on the page can be overridden. */
+  overrides?: Record<string, BusinessServiceOverride>;
+  onOverride?: (id: string, next: BusinessServiceOverride) => Promise<string | null>;
 }) {
   const byId = new Map(businessServices.map(item => [item.id, item]));
   const selected = selectedIds.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []));
@@ -128,45 +239,106 @@ export default function StatusPageBusinessLayout({
             <>
               {selected.length > 0 && (
                 <ol className="divide-y divide-border rounded-lg border border-border">
-                  {selected.map((item, index) => (
-                    <li key={item.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                      <span className="w-5 text-xs text-muted-foreground tabular-nums">
-                        {index + 1}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
-                      <span className="hidden text-xs text-muted-foreground sm:inline tabular-nums">
-                        {item.memberServiceIds.length}{' '}
-                        {item.memberServiceIds.length === 1 ? 'service' : 'services'}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label={`Move ${item.name} up`}
-                        disabled={index === 0}
-                        onClick={() => move(index, -1)}
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-                      >
-                        <ArrowUp className="h-3.5 w-3.5" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Move ${item.name} down`}
-                        disabled={index === selected.length - 1}
-                        onClick={() => move(index, 1)}
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-                      >
-                        <ArrowDown className="h-3.5 w-3.5" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onSelectedIdsChange(selectedIds.filter(id => id !== item.id))
-                        }
-                        className="rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        Remove
-                      </button>
-                    </li>
-                  ))}
+                  {selected.map((item, index) => {
+                    const config = { ...DEFAULT_CONFIG, ...configs[item.id] };
+                    const override = overrides[item.id];
+                    return (
+                      <li key={item.id} className="space-y-2 px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 text-xs text-muted-foreground tabular-nums">
+                            {index + 1}
+                          </span>
+                          <span
+                            className={cn(
+                              'min-w-0 flex-1 truncate font-medium',
+                              !config.showOnPage && 'text-muted-foreground line-through'
+                            )}
+                          >
+                            {item.name}
+                          </span>
+                          <span className="hidden text-xs text-muted-foreground sm:inline tabular-nums">
+                            {item.memberServiceIds.length}{' '}
+                            {item.memberServiceIds.length === 1 ? 'service' : 'services'}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Move ${item.name} up`}
+                            disabled={index === 0}
+                            onClick={() => move(index, -1)}
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                          >
+                            <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Move ${item.name} down`}
+                            disabled={index === selected.length - 1}
+                            onClick={() => move(index, 1)}
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                          >
+                            <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onSelectedIdsChange(selectedIds.filter(id => id !== item.id))
+                            }
+                            className="rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        {onConfigChange && (
+                          <div className="flex flex-wrap items-end gap-3 pl-7">
+                            <label className="space-y-1 text-xs text-muted-foreground">
+                              <span className="block">Name on page</span>
+                              <Input
+                                value={config.displayName}
+                                placeholder={item.name}
+                                maxLength={200}
+                                onChange={event =>
+                                  onConfigChange(item.id, { displayName: event.target.value })
+                                }
+                                className="h-8 w-52 text-xs"
+                                aria-label={`Name of ${item.name} on this page`}
+                              />
+                            </label>
+                            <label className="flex h-8 items-center gap-1.5 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={config.showOnPage}
+                                onChange={event =>
+                                  onConfigChange(item.id, { showOnPage: event.target.checked })
+                                }
+                              />
+                              Show on page
+                            </label>
+                            {layout === 'BUSINESS_EXPANDABLE' && (
+                              <label className="flex h-8 items-center gap-1.5 text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={config.showMembers}
+                                  onChange={event =>
+                                    onConfigChange(item.id, { showMembers: event.target.checked })
+                                  }
+                                />
+                                List its services
+                              </label>
+                            )}
+                          </div>
+                        )}
+                        {onOverride && override && (
+                          <div className="pl-7">
+                            <OverrideControl
+                              name={item.name}
+                              value={override}
+                              onApply={next => onOverride(item.id, next)}
+                            />
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ol>
               )}
               {available.length > 0 && (

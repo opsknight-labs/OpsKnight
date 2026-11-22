@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
+import { assertPageableUser } from '@/lib/authorization';
 import {
   enqueueIncidentUpdateSideEffects,
   enqueueWarRoomSideEffects,
@@ -144,6 +145,7 @@ export async function assignIncidentDomainCommand(
         details: { resource: 'user', userId: assigneeId },
       });
     }
+    assertPageableUser(assigneeRecord);
 
     await tx.incident.update({
       where: { id: incidentId },

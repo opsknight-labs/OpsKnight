@@ -2,6 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { z } from 'zod/v3';
+import { ASSIGNABLE_ROLES } from '@/lib/authorization';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
@@ -22,7 +23,7 @@ const selection = z
   })
   .strict();
 const mapping = selection.extend({
-  role: z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']).nullable(),
+  role: z.enum(ASSIGNABLE_ROLES).nullable(),
 });
 type Mapping = z.infer<typeof mapping>;
 

@@ -547,7 +547,7 @@ export type IntegrationUsage = {
 export type UserAdministration = {
   id: string;
   name: string;
-  role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+  role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | 'STAKEHOLDER';
   roleSource: 'MANUAL' | 'OIDC' | 'SCIM';
   status: 'ACTIVE' | 'INVITED' | 'DISABLED';
   revision: number;
@@ -984,9 +984,43 @@ export type StatusPageBusinessServices = {
   businessServices: Array<{
     businessServiceId: string;
     name: string;
+    displayName: string | null;
     order: number;
     showOnPage: boolean;
+    showMembers: boolean;
+    statusOverride:
+      'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | null;
+    statusOverrideUntil: string | null;
   }>;
+};
+export type BusinessServiceSupporting = {
+  businessServiceId: string;
+  supportingBusinessServiceIds: Array<string>;
+};
+export type BusinessServiceImportResult = {
+  applied: boolean;
+  summary: { create: number; update: number; unchanged: number; invalid: number };
+  changes: Array<{
+    line: number;
+    name: string;
+    action: 'create' | 'update' | 'unchanged';
+    fields: Array<string>;
+    membersAdded: Array<string>;
+    membersRemoved: Array<string>;
+  }>;
+  issues: Array<{ line: number; name?: string; message: string }>;
+};
+export type StatusPageBusinessServiceOverride = {
+  statusPageId: string;
+  businessServiceId: string;
+  status: 'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | null;
+  until: string | null;
+};
+export type StakeholderNotification = {
+  incidentId: string;
+  businessServices: Array<{ id: string; name: string }>;
+  recipientCount: number;
+  emailCount: number;
 };
 export type StatusPagePublicationState = {
   status: 'LIVE' | 'PUBLISHING' | 'FAILED' | 'DISABLED';
@@ -2845,7 +2879,7 @@ export interface OperationRequests {
       expectedOidcConfigVersion: number | null;
       name: string;
       email: string;
-      role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+      role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | 'STAKEHOLDER';
     };
   };
   getUserInvitation: { params: { id: string } };
@@ -2866,7 +2900,7 @@ export interface OperationRequests {
     params: { id: string };
     headers: { 'Idempotency-Key': string; 'If-Match': string };
     body:
-      | { operation: 'set-role'; role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' }
+      | { operation: 'set-role'; role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | 'STAKEHOLDER' }
       | { operation: 'deactivate' }
       | { operation: 'reactivate' }
       | { operation: 'revoke-sessions' };
@@ -3242,8 +3276,34 @@ export interface OperationRequests {
       businessServiceIds: Array<string>;
       businessServiceConfigs?: Record<
         string,
-        { displayName?: string | null; showOnPage?: boolean }
+        { displayName?: string | null; showOnPage?: boolean; showMembers?: boolean }
       >;
+    };
+  };
+  setSupportingBusinessServices: {
+    params: { id: string };
+    headers?: { 'Idempotency-Key'?: string };
+    body: { businessServiceIds: Array<string> };
+  };
+  importBusinessServices: {
+    headers?: { 'Idempotency-Key'?: string };
+    body: { format: 'csv' | 'yaml' | 'backstage'; content: string };
+  };
+  setStatusPageBusinessServiceOverride: {
+    params: { id: string; businessServiceId: string };
+    headers?: { 'Idempotency-Key'?: string };
+    body: {
+      status: 'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | null;
+      until?: string | null;
+    };
+  };
+  notifyIncidentStakeholders: {
+    params: { id: string };
+    headers?: { 'Idempotency-Key'?: string };
+    body: {
+      phase: 'investigating' | 'identified' | 'monitoring' | 'resolved';
+      message: string;
+      businessServiceIds?: Array<string>;
     };
   };
   listStatusPageServices: { params: { id: string }; query?: { limit?: number; cursor?: string } };
@@ -4964,6 +5024,26 @@ export interface OperationResponses {
   } & Record<string, unknown>;
   setStatusPageBusinessServices: {
     data: StatusPageConfigurationResult;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  setSupportingBusinessServices: {
+    data: BusinessServiceSupporting;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  importBusinessServices: {
+    data: BusinessServiceImportResult;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  setStatusPageBusinessServiceOverride: {
+    data: StatusPageBusinessServiceOverride;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  notifyIncidentStakeholders: {
+    data: StakeholderNotification;
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
@@ -6949,6 +7029,38 @@ export const OPERATIONS = {
     kind: 'item',
     idempotency: 'required',
     requiredHeaders: ['Idempotency-Key', 'If-Match'],
+    bodyRequired: true,
+  },
+  setSupportingBusinessServices: {
+    method: 'PUT',
+    path: '/business-services/{id}/supporting',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  importBusinessServices: {
+    method: 'POST',
+    path: '/business-services/import',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  setStatusPageBusinessServiceOverride: {
+    method: 'PUT',
+    path: '/status-pages/{id}/business-services/{businessServiceId}/override',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  notifyIncidentStakeholders: {
+    method: 'POST',
+    path: '/incidents/{id}/stakeholder-notify',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
     bodyRequired: true,
   },
   listStatusPageServices: {

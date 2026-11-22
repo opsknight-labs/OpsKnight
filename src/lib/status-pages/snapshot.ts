@@ -33,7 +33,8 @@ import {
 import { projectPublicBranding, projectPublicPresentation } from './branding';
 import { publicUptimeGrade } from './presentation';
 import { deriveOverallPublicHealth, getWorstPublicStatus } from './status-presentation';
-import { buildPublicBusinessServices } from './business-services';
+import { buildPublicBusinessServices, expandAffectedServiceIds } from './business-services';
+import { activeStatusOverride } from './status-override';
 import { parsePublicStatusPageSnapshot } from './public-contract-schema';
 import {
   changelogDisplayWhere,
@@ -57,15 +58,28 @@ const MAX_ACTIVE_SNAPSHOT_INCIDENTS = 100;
 export type StatusPageSnapshot = PublicStatusPageSnapshot;
 
 function mapMaintenanceRows(
-  rows: Array<{ startDate: Date; endDate: Date | null; affectedServiceIds: unknown }>
+  rows: Array<{
+    startDate: Date;
+    endDate: Date | null;
+    affectedServiceIds: unknown;
+    affectedBusinessServiceIds?: unknown;
+  }>,
+  membersByBusinessService: ReadonlyMap<string, readonly string[]> = new Map()
 ) {
-  return rows.map(item => ({
-    startDate: item.startDate,
-    endDate: item.endDate,
-    affectedServiceIds: Array.isArray(item.affectedServiceIds)
-      ? item.affectedServiceIds.filter((value): value is string => typeof value === 'string')
-      : [],
-  }));
+  return rows.map(item => {
+    const ids = expandAffectedServiceIds(
+      item.affectedServiceIds,
+      item.affectedBusinessServiceIds,
+      membersByBusinessService
+    );
+    return {
+      startDate: item.startDate,
+      endDate: item.endDate,
+      affectedServiceIds: ids ?? [],
+      // Named only memberless business services: affects nothing rather than everything.
+      ...(ids && !ids.length ? { scope: { type: 'SERVICES' as const, serviceIds: [] } } : {}),
+    };
+  });
 }
 
 function currentHealthWindowStart(
@@ -116,10 +130,13 @@ export async function buildStatusPageSnapshot(
         },
       },
       businessServices: {
-        where: { showOnPage: true },
         orderBy: { order: 'asc' },
         select: {
           displayName: true,
+          showOnPage: true,
+          showMembers: true,
+          statusOverride: true,
+          statusOverrideUntil: true,
           businessService: {
             select: {
               id: true,
@@ -135,6 +152,14 @@ export async function buildStatusPageSnapshot(
   if (!page?.enabled) return null;
 
   const now = new Date();
+  // Hidden business services still scope updates that name them; only shown ones are listed.
+  const membersByBusinessService = new Map(
+    page.businessServices.map(mapping => [
+      mapping.businessService.id,
+      mapping.businessService.members.map(member => member.serviceId),
+    ])
+  );
+  const shownBusinessServices = page.businessServices.filter(mapping => mapping.showOnPage);
   const limits = statusPagePublicationLimits(page);
   const visibility = publicStatusVisibility(page);
   const ids = page.services.map(mapping => mapping.serviceId);
@@ -154,6 +179,7 @@ export async function buildStatusPageSnapshot(
     startDate: true,
     endDate: true,
     affectedServiceIds: true,
+    affectedBusinessServiceIds: true,
     allDay: true,
     timeMode: true,
     publishAt: true,
@@ -171,7 +197,12 @@ export async function buildStatusPageSnapshot(
       select: DISPLAY_FEED_SELECT,
     });
   const needsHistory = visibility.showUptimeHistory;
-  const maintenanceSelect = { startDate: true, endDate: true, affectedServiceIds: true } as const;
+  const maintenanceSelect = {
+    startDate: true,
+    endDate: true,
+    affectedServiceIds: true,
+    affectedBusinessServiceIds: true,
+  } as const;
   const currentMaintenanceWhere = {
     statusPageId: pageId,
     type: 'MAINTENANCE' as const,
@@ -321,9 +352,10 @@ export async function buildStatusPageSnapshot(
 
   const measuredDays30 = (now.getTime() - window30.start.getTime()) / 86_400_000;
   const measuredDays90 = (now.getTime() - window90.start.getTime()) / 86_400_000;
-  const currentMaintenance = mapMaintenanceRows(currentMaintenanceRows);
+  const currentMaintenance = mapMaintenanceRows(currentMaintenanceRows, membersByBusinessService);
   const maintenanceHistory = mapMaintenanceRows(
-    needsHistory ? historyMaintenanceRows : currentMaintenanceRows
+    needsHistory ? historyMaintenanceRows : currentMaintenanceRows,
+    membersByBusinessService
   );
   const uptimeWindowStarts = { days30: window30.start, days90: window90.start };
   const gradeThresholds = {
@@ -463,6 +495,32 @@ export async function buildStatusPageSnapshot(
     }
     return names.size ? [...names].sort() : undefined;
   };
+  const affectedIdsOf = (item: {
+    affectedServiceIds: unknown;
+    affectedBusinessServiceIds: unknown;
+  }) =>
+    expandAffectedServiceIds(
+      item.affectedServiceIds,
+      item.affectedBusinessServiceIds,
+      membersByBusinessService
+    ) ?? item.affectedServiceIds;
+  const businessNameById = new Map(
+    (page.serviceLayout !== 'FLAT' && page.showAffectedServices ? shownBusinessServices : []).map(
+      mapping => [mapping.businessService.id, mapping.displayName || mapping.businessService.name]
+    )
+  );
+  const businessRefs = (ids: unknown) => {
+    const refs = (Array.isArray(ids) ? ids : []).flatMap(id =>
+      typeof id === 'string' && businessNameById.has(id)
+        ? [{ id, name: businessNameById.get(id)! }]
+        : []
+    );
+    return refs.length ? refs : undefined;
+  };
+  const affectedBusinessField = (item: { affectedBusinessServiceIds: unknown }) => {
+    const refs = businessRefs(item.affectedBusinessServiceIds);
+    return refs ? { affectedBusinessServices: refs } : {};
+  };
   const maintenanceState = (
     start: Date,
     end: Date | null
@@ -471,9 +529,9 @@ export async function buildStatusPageSnapshot(
 
   const mapMaintenanceCard = (item: (typeof maintenanceInProgressRows)[number]) => {
     const affected = page.showAffectedServices
-      ? affectedServiceRefs(item.affectedServiceIds)
+      ? affectedServiceRefs(affectedIdsOf(item))
       : undefined;
-    const affectedRegions = affectedRegionsFromIds(item.affectedServiceIds);
+    const affectedRegions = affectedRegionsFromIds(affectedIdsOf(item));
     return {
       id: item.id,
       title: item.title,
@@ -486,6 +544,7 @@ export async function buildStatusPageSnapshot(
       publishAt: item.publishAt.toISOString(),
       ...(affected ? { affectedServices: affected } : {}),
       ...(affectedRegions ? { affectedRegions } : {}),
+      ...affectedBusinessField(item),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
     };
@@ -498,7 +557,7 @@ export async function buildStatusPageSnapshot(
   const changelog = page.showChangelog
     ? changelogRows.map(item => {
         const affected = page.showAffectedServices
-          ? affectedServiceRefs(item.affectedServiceIds)
+          ? affectedServiceRefs(affectedIdsOf(item))
           : undefined;
         return {
           id: item.id,
@@ -516,12 +575,12 @@ export async function buildStatusPageSnapshot(
   const businessServices =
     groupedLayout && visibility.showServices
       ? buildPublicBusinessServices(
-          page.businessServices.map(mapping => ({
+          shownBusinessServices.map(mapping => ({
             id: mapping.businessService.id,
             name: mapping.displayName || mapping.businessService.name,
-            description: page.showServiceDescriptions
-              ? mapping.businessService.description
-              : null,
+            statusOverride: activeStatusOverride(mapping, now),
+            showMembers: mapping.showMembers,
+            description: page.showServiceDescriptions ? mapping.businessService.description : null,
             memberServiceIds: mapping.businessService.members
               .map(member => member.serviceId)
               .sort((a, b) => (servicePosition.get(a) ?? 0) - (servicePosition.get(b) ?? 0)),
@@ -529,6 +588,37 @@ export async function buildStatusPageSnapshot(
           visibleServices
         )
       : undefined;
+  // Business services each listed incident affects: engine impact rows plus any linked update
+  // that names business services. Sequential: this may run inside an interactive transaction.
+  const incidentBusiness = new Map<string, Set<string>>();
+  if (incidents.length && businessNameById.size) {
+    const incidentIds = incidents.map(incident => incident.id);
+    const add = (incidentId: string | null, ids: unknown) => {
+      if (!incidentId) return;
+      const set = incidentBusiness.get(incidentId) ?? new Set<string>();
+      for (const ref of businessRefs(ids) ?? []) set.add(ref.id);
+      if (set.size) incidentBusiness.set(incidentId, set);
+    };
+    const impacts = await db.incidentBusinessServiceImpact.findMany({
+      where: {
+        incidentId: { in: incidentIds },
+        businessServiceId: { in: [...businessNameById.keys()] },
+      },
+      orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+      select: { incidentId: true, businessServiceId: true, excluded: true },
+    });
+    // Several intervals per pair: the latest one decides whether it is unmarked.
+    const latest = new Map(
+      impacts.map(impact => [`${impact.incidentId}:${impact.businessServiceId}`, impact])
+    );
+    for (const impact of latest.values())
+      if (!impact.excluded) add(impact.incidentId, [impact.businessServiceId]);
+    const linkedUpdates = await db.statusPageAnnouncement.findMany({
+      where: { statusPageId: pageId, isActive: true, incidentId: { in: incidentIds } },
+      select: { incidentId: true, affectedBusinessServiceIds: true },
+    });
+    for (const update of linkedUpdates) add(update.incidentId, update.affectedBusinessServiceIds);
+  }
   const overallBase = deriveOverallPublicHealth(visibleServices);
   const impactedServiceCount = visibleServices.filter(
     service => service.status !== 'OPERATIONAL' && service.status !== 'UNKNOWN'
@@ -664,20 +754,22 @@ export async function buildStatusPageSnapshot(
         page as unknown as Parameters<typeof incidentDetailCutoff>[0],
         now.getTime()
       );
-      return incidents.map(incident =>
-        serializePublicStatusIncident(
+      return incidents.map(incident => {
+        const serialized = serializePublicStatusIncident(
           incident,
           page as unknown as Parameters<typeof serializePublicStatusIncident>[1],
           { pageId, now, detailCutoffMs }
-        )
-      );
+        );
+        const business = businessRefs([...(incidentBusiness.get(incident.id) ?? [])]);
+        return business ? { ...serialized, businessServices: business } : serialized;
+      });
     })(),
     ...(maintenanceEntries.length ? { maintenance: maintenanceEntries } : {}),
     announcements: displayAnnouncements.map(item => {
       const affected = page.showAffectedServices
-        ? affectedServiceRefs(item.affectedServiceIds)
+        ? affectedServiceRefs(affectedIdsOf(item))
         : undefined;
-      const affectedRegions = affectedRegionsFromIds(item.affectedServiceIds);
+      const affectedRegions = affectedRegionsFromIds(affectedIdsOf(item));
       return {
         id: item.id,
         title: item.title,
@@ -690,6 +782,7 @@ export async function buildStatusPageSnapshot(
         publishAt: item.publishAt.toISOString(),
         ...(affected ? { affectedServices: affected } : {}),
         ...(affectedRegions ? { affectedRegions } : {}),
+        ...affectedBusinessField(item),
       };
     }),
     ...(changelog ? { changelog } : {}),

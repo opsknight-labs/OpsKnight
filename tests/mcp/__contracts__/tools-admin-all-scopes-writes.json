@@ -461,7 +461,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "0c8f70435be3eaf43b911bafb0b381865a3bc02e92f2ab8ae7df80160cdeca90",
+    "inputSchemaSha256": "180a69d5b2f78cedfa6c10886961a7ebfb7f35ea4074f7ee61af4825b9f493de",
     "descriptionSha256": "57c12cb6a7474e26672530e10249aebe03b8f5c436fafd66a4ba26e8e7ebf8bd"
   },
   {
@@ -651,7 +651,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "040ecf8f6b40f209b2d0069a82afc7bcae22a912c6d76bf28687ad0580c24024",
+    "inputSchemaSha256": "94da30515d8c6f475a2791a36e7f0e05ee8884f2bdb1e0c8b4a1d17b6f5e1b8e",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {

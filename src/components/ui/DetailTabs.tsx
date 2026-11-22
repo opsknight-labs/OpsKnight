@@ -84,7 +84,7 @@ function TabMeta({ tab }: { tab: DetailTabItem }) {
   return (
     <>
       {tab.count !== undefined && tab.count !== null && (
-        <span className="rounded-full bg-muted-foreground/15 px-1.5 text-xs font-medium tabular-nums text-muted-foreground group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary">
+        <span className="rounded-full bg-muted-foreground/15 px-1.5 text-xs font-medium tabular-nums text-ink-600 group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary">
           {tab.count}
         </span>
       )}
@@ -218,7 +218,7 @@ function ScrollableTabList({
               value={tab.id}
               disabled={tab.disabled}
               className={cn(
-                'group h-9 shrink-0 gap-2 rounded-md px-3 py-0 text-sm font-medium text-muted-foreground',
+                'group h-9 shrink-0 gap-2 rounded-md px-3 py-0 text-sm font-medium text-ink-600',
                 'hover:text-foreground data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:ring-1 data-[state=active]:ring-border',
                 layout === 'grid' && 'flex-1'
               )}

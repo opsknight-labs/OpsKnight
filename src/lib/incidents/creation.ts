@@ -3,6 +3,7 @@ import 'server-only';
 import type { IncidentUrgency, IncidentVisibility, Prisma } from '@prisma/client';
 import { runSerializableTransaction, TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors';
+import { assertPageableUser } from '@/lib/authorization';
 import { validateCustomFieldValue } from '@/lib/custom-fields';
 import { IncidentCreateSchema } from '@/lib/validation';
 import { enqueueIncidentCreationSideEffects } from '@/lib/event-outbox';
@@ -213,7 +214,7 @@ async function validateAssignmentReferences(
   if (input.assigneeId) {
     const assignee = await tx.user.findUnique({
       where: { id: input.assigneeId },
-      select: { name: true, status: true },
+      select: { name: true, status: true, role: true },
     });
     if (!assignee || assignee.status !== 'ACTIVE') {
       throw new AppError({
@@ -222,6 +223,7 @@ async function validateAssignmentReferences(
         details: { resource: 'user', userId: input.assigneeId },
       });
     }
+    assertPageableUser(assignee);
     assigneeName = assignee.name;
   }
 

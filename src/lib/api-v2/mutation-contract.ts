@@ -750,6 +750,18 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Layout and mapping go through the shared publication command: narrowing withdraws the page before the write, then republishes.',
   },
+  'PUT /api/v2/business-services/[id]/supporting': supported(
+    'Replaces the supporting set and audits in the replay transaction; a retry with the same key replays.'
+  ),
+  'POST /api/v2/business-services/import': supported(
+    'dryRun only reads; an apply writes every row, member set and audit with the replay record, or nothing.'
+  ),
+  'PUT /api/v2/status-pages/[id]/business-services/[businessServiceId]/override': supported(
+    'Override and audit commit with the replay record; the mapping trigger republishes the page.'
+  ),
+  'POST /api/v2/incidents/[id]/stakeholder-notify': supported(
+    'In-app rows, the email outbox and the audit commit with the replay record, so a retry never sends twice. At most 3 per incident every 10 minutes.'
+  ),
   'PUT /api/v2/incidents/[id]/roles/[roleKey]': {
     idempotency: 'required',
     concurrency: 'none',

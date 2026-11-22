@@ -5,10 +5,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   APP_ROLES,
+  ASSIGNABLE_ROLES,
   CAPABILITIES,
   NON_DELEGABLE_CAPABILITIES,
+  assertPageableUser,
   getRoleCapabilities,
   hasCapability,
+  isAssignableRole,
+  isPageableRole,
   type AppRole,
 } from '@/lib/authorization';
 import {
@@ -63,6 +67,41 @@ describe('role capability matrix', () => {
     for (const capability of getRoleCapabilities('STAKEHOLDER')) {
       expect(capability).not.toMatch(/incident|manage|edit|execute|approve|create|schedule/);
     }
+  });
+
+  it('lets a Stakeholder read business services in their teams but never incidents', () => {
+    const stakeholder = actor('STAKEHOLDER');
+    // Not even incidents they watch, are assigned to or are paged for.
+    for (const resource of [
+      incident({ serviceTeamId: 'team-a' }),
+      incident({ watcherIds: ['u-1'] }),
+      incident({ assigneeId: 'u-1', onCallUserIds: ['u-1'] }),
+    ]) {
+      expect(
+        authorize({ actor: stakeholder, action: AUTHORIZATION_ACTIONS.INCIDENT_READ, resource })
+          .allowed
+      ).toBe(false);
+    }
+    expect(
+      authorize({ actor: stakeholder, action: AUTHORIZATION_ACTIONS.SERVICE_READ })
+    ).toMatchObject({ allowed: true, scope: 'resource' });
+    expect(
+      authorize({ actor: stakeholder, action: AUTHORIZATION_ACTIONS.SERVICE_CREATE }).allowed
+    ).toBe(false);
+    expect(hasCapability('STAKEHOLDER', CAPABILITIES.USER_NOTIFICATION_PREFERENCES)).toBe(true);
+  });
+
+  it('makes every role except Stakeholder pageable', () => {
+    expect(APP_ROLES.filter(role => !isPageableRole(role))).toEqual(['STAKEHOLDER']);
+    expect(() => assertPageableUser({ role: 'USER', name: 'Uma' })).not.toThrow();
+    expect(() => assertPageableUser({ role: 'STAKEHOLDER', name: 'Sam' })).toThrow(
+      /Sam is a stakeholder/
+    );
+  });
+
+  it('lets administrators and identity providers assign Stakeholder', () => {
+    expect(ASSIGNABLE_ROLES).toContain('STAKEHOLDER');
+    expect(isAssignableRole('STAKEHOLDER')).toBe(true);
   });
 
   it('keeps Auditor strictly read-only', () => {
@@ -352,12 +391,17 @@ describe('page access registry', () => {
     ['/settings/integrations/slack', ['ADMIN']],
     ['/settings/integrations/mcp', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/incidents', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/incidents/abc', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/m/incidents/abc', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/postmortems', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/schedules', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/settings/profile', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/incidents/create', ['RESPONDER', 'ADMIN']],
     ['/system-logs', ['ADMIN']],
     ['/settings/access', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/settings/access/admin', ['ADMIN']],
     ['/services/business', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
-    ['/services/business/abc', ['RESPONDER', 'ADMIN']],
+    ['/services/business/abc', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/services/business/abc/edit', ['RESPONDER', 'ADMIN']],
     ['/services/business/new', ['RESPONDER', 'ADMIN']],
     ['/services/business/setup', ['RESPONDER', 'ADMIN']],
@@ -383,6 +427,9 @@ describe('page access registry', () => {
     expect(labels('USER')).toContain('/services/business');
     expect(labels('STAKEHOLDER')).toContain('/services/business');
     expect(labels('STAKEHOLDER')).not.toContain('/incidents');
+    for (const role of ['STAKEHOLDER', 'USER', 'ADMIN'] as AppRole[]) {
+      expect(labels(role)).toContain('/status-dashboard');
+    }
     expect(getAuthorizedNavItems(null)).toEqual([]);
     // Legacy role-string callers still work.
     expect(getAuthorizedNavItems('AUDITOR').map(item => item.href)).toContain('/audit');
@@ -417,6 +464,17 @@ function routeFor(root: string, file: string, prefix = ''): string {
   const segments = relative.filter(segment => !segment.startsWith('('));
   return `${prefix}/${segments.join('/')}`.replace(/\/$/, '') || '/';
 }
+
+describe('stakeholder navigation', () => {
+  it('hides links a stakeholder would only be redirected from and keeps their own views', () => {
+    const hrefs = getAuthorizedNavItems('STAKEHOLDER').map(item => item.href);
+    for (const hidden of ['/', '/services', '/teams', '/action-items', '/incidents'])
+      expect(hrefs).not.toContain(hidden);
+    expect(hrefs).toContain('/services/business');
+    const responder = getAuthorizedNavItems('RESPONDER').map(item => item.href);
+    for (const shown of ['/', '/services', '/teams']) expect(responder).toContain(shown);
+  });
+});
 
 describe('page access contract', () => {
   const pages = [

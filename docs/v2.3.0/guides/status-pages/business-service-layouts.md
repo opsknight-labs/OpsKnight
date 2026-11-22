@@ -14,6 +14,10 @@ verification:
     - src/lib/status-pages/business-services.ts
     - src/lib/status-pages/subscriptions.ts
     - src/app/api/v2/status-pages/[id]/business-services/route.ts
+    - src/app/api/v2/status-pages/[id]/business-services/[businessServiceId]/override/route.ts
+    - src/lib/status-pages/business-service-overrides.ts
+    - src/lib/status-pages/snapshot.ts
+    - src/components/status-page/StatusPageAnnouncementManager.tsx
 ---
 
 # Status page layouts
@@ -50,6 +54,47 @@ picker to keep it out of the business service's status.
 
 Changing only the layout never publishes a service that is not already on the page.
 
+## Rename, hide and order business services
+
+Each business service on the page has its own settings, saved with the page:
+
+- **Display name**: what visitors see, for example "Buying things" instead of "Checkout".
+- **Show on page**: off keeps it off the page. Updates that name it still count its services.
+- **Show services inside**: off keeps the row closed even on the expandable layout, so visitors
+  see the business service but not its parts.
+- **Order**: the arrows set the order on the page.
+
+Hiding a business service or its services withdraws the page before it republishes, like any
+change that shows less.
+
+## Pin a status (override)
+
+Sometimes the computed status is not what customers experience, for example during a partial
+rollback. Pick a **Public status** next to a saved business service and **Apply now**. The page
+shows that status instead of the computed one until the end time you choose (blank means 30 days,
+the maximum). **Automatic (from incidents)** removes the pin. Overrides apply at once, without
+saving the page, and every set, clear and expiry is in the audit log.
+
+When an override ends, the background sweep clears it on its next run and the page shows the
+computed status again. A pinned row shows no "since" time.
+
+## Status since
+
+An affected business service shows when the problem started, for example "Partial outage since
+22 Nov, 10:04", in the page's time zone. On a live page a row that becomes affected opens again
+even if the visitor closed it.
+
+## Updates that name business services
+
+When you write an incident update or an announcement, tick **Affected business services** to name
+them instead of each technical service. Every service inside counts as affected:
+
+- a maintenance that names a business service puts its services in maintenance on the page;
+- the update card lists the business services, and the services and regions inside them;
+- subscribers to those business services or their services get the update.
+
+Public incident cards also list the business services on the page the incident affects.
+
 ## Subscribers
 
 On a grouped page the subscribe form offers business services, plus any services outside them. A
@@ -66,6 +111,11 @@ keyboard and have 44px touch targets on phones.
 
 `GET /api/v2/status-pages/{id}/business-services` returns the layout and business services.
 `PUT` with `{ "serviceLayout": "BUSINESS_EXPANDABLE", "businessServiceIds": [...] }` sets them; it
-needs `If-Match` and an `Idempotency-Key`. The public snapshot (`schemaVersion` 3) adds
+needs `If-Match` and an `Idempotency-Key`. Add `businessServiceConfigs`, keyed by business service
+id, to set `displayName`, `showOnPage` and `showMembers`.
+
+`PUT /api/v2/status-pages/{id}/business-services/{businessServiceId}/override` with
+`{ "status": "MAINTENANCE", "until": "2026-11-23T06:00:00Z" }` pins a status; `{ "status": null }`
+clears it. Announcements accept `businessServices: [...]` to name affected business services. The public snapshot (`schemaVersion` 3) adds
 `page.serviceLayout` and `businessServices` only on grouped pages; a page on the default layout
 publishes the same snapshot as before.

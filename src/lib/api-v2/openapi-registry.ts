@@ -874,6 +874,39 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'StatusPageConfigurationResult'
   ),
+  // Business services P4: nesting, import, status-page overrides, stakeholder updates.
+  op(
+    'put',
+    '/business-services/{id}/supporting',
+    'setSupportingBusinessServices',
+    'services:write',
+    'item',
+    'BusinessServiceSupporting'
+  ),
+  op(
+    'post',
+    '/business-services/import',
+    'importBusinessServices',
+    'services:write',
+    'item',
+    'BusinessServiceImportResult'
+  ),
+  op(
+    'put',
+    '/status-pages/{id}/business-services/{businessServiceId}/override',
+    'setStatusPageBusinessServiceOverride',
+    'status-pages:write',
+    'item',
+    'StatusPageBusinessServiceOverride'
+  ),
+  op(
+    'post',
+    '/incidents/{id}/stakeholder-notify',
+    'notifyIncidentStakeholders',
+    'incidents:write',
+    'item',
+    'StakeholderNotification'
+  ),
   op(
     'get',
     '/status-pages/{id}/services',

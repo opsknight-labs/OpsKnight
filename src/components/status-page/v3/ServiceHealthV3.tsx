@@ -255,10 +255,22 @@ export default function ServiceHealthV3({
   const [groupRegions, setGroupRegions] = useState(groupByRegion);
   const businessMode = layout !== 'FLAT' && businessServices.length > 0;
   const expandable = layout === 'BUSINESS_EXPANDABLE';
-  // Affected business services start open so visitors see which part is down.
+  // Affected business services start open so visitors see which part is down, and one that
+  // becomes affected on a live refresh opens again even if the visitor closed it earlier.
+  const affectedKey = businessServices
+    .filter(item => item.status !== 'OPERATIONAL')
+    .map(item => item.id)
+    .join(',');
   const [openIds, setOpenIds] = useState<Set<string>>(
-    () => new Set(businessServices.filter(item => item.status !== 'OPERATIONAL').map(i => i.id))
+    () => new Set(affectedKey ? affectedKey.split(',') : [])
   );
+  const [seenAffectedKey, setSeenAffectedKey] = useState(affectedKey);
+  if (seenAffectedKey !== affectedKey) {
+    const before = new Set(seenAffectedKey ? seenAffectedKey.split(',') : []);
+    const newlyAffected = affectedKey ? affectedKey.split(',').filter(id => !before.has(id)) : [];
+    setSeenAffectedKey(affectedKey);
+    if (newlyAffected.length) setOpenIds(current => new Set([...current, ...newlyAffected]));
+  }
 
   // Follow the page setting when it changes (live preview) without an effect round-trip.
   const [groupSetting, setGroupSetting] = useState(groupByRegion);

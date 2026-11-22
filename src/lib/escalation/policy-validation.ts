@@ -12,6 +12,7 @@
  */
 import type { EscalationTargetType, Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
+import { assertPageableUser } from '@/lib/authorization';
 import { NOTIFICATION_CHANNELS, type NotificationDeliveryChannel } from '../notification-delivery';
 
 /** A week. Long enough for any real policy, short enough to catch a typo. */
@@ -247,7 +248,8 @@ export function escalationStepOrdersAreContiguous(orders: readonly number[]): bo
 }
 
 /**
- * Confirms a step's target still exists. Separate from `validateEscalationStep`
+ * Confirms a step's target still exists (and, for a person, that they may be paged: a
+ * stakeholder target throws a validation error). Separate from `validateEscalationStep`
  * so the pure rules stay testable without a database, and so this can run in
  * the same transaction as the write it guards.
  */
@@ -257,7 +259,12 @@ export async function escalationTargetExists(
   targetId: string
 ): Promise<boolean> {
   if (targetType === 'USER') {
-    return (await tx.user.count({ where: { id: targetId, status: 'ACTIVE' } })) > 0;
+    const user = await tx.user.findFirst({
+      where: { id: targetId, status: 'ACTIVE' },
+      select: { name: true, role: true },
+    });
+    if (user) assertPageableUser(user);
+    return Boolean(user);
   }
   if (targetType === 'TEAM') {
     return (await tx.team.count({ where: { id: targetId } })) > 0;

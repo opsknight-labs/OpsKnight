@@ -4,6 +4,7 @@ import { decrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
 import { z } from 'zod/v3';
+import { ASSIGNABLE_ROLES, type AssignableRole } from '@/lib/authorization';
 
 const OIDC_CONFIG_RECORD_CACHE_TTL_MS = Number.parseInt(
   process.env.OIDC_CONFIG_RECORD_CACHE_TTL_MS ?? '5000',
@@ -57,11 +58,11 @@ export type OidcConfig = {
   roleMapping?: Array<{
     claim: string;
     value: string;
-    role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+    role: AssignableRole;
     caseSensitive?: boolean;
   }>;
   // Optional in the type so older callers and fixtures stay valid; the loader always sets them.
-  defaultRole?: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+  defaultRole?: AssignableRole;
   unmatchedPolicy?: 'DEFAULT_ROLE' | 'DENY';
   rolePrecedence?: 'FIRST_MATCH' | 'HIGHEST_ROLE';
   domainTrustedLinking?: boolean;
@@ -95,7 +96,7 @@ function normalizeDomains(domains: string[]) {
 const RoleMappingRuleSchema = z.object({
   claim: z.string().min(1),
   value: z.string(),
-  role: z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']),
+  role: z.enum(ASSIGNABLE_ROLES),
   caseSensitive: z.boolean().optional(),
 });
 
@@ -120,9 +121,8 @@ function parseTeamMapping(teamMapping: unknown) {
   return result.data;
 }
 
-const ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as const;
 function parseRole(value: unknown): OidcConfig['defaultRole'] {
-  return ROLES.find(role => role === value) ?? 'USER';
+  return ASSIGNABLE_ROLES.find(role => role === value) ?? 'USER';
 }
 
 const RoleMappingSchema = z.array(RoleMappingRuleSchema);

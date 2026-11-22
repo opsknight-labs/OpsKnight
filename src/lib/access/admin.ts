@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import {
+  APP_ROLES,
   CAPABILITIES,
   NON_DELEGABLE_CAPABILITIES,
   getRoleCapabilities,
@@ -226,9 +227,7 @@ export async function checkAccess(
 // ─── Who has access ─────────────────────────────────────────────────────────
 
 export async function whoHasCapability(capability: Capability) {
-  const roles = (['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as AppRole[]).filter(role =>
-    getRoleCapabilities(role).includes(capability)
-  );
+  const roles = APP_ROLES.filter(role => getRoleCapabilities(role).includes(capability));
   const now = new Date();
   const [byRole, byCustomRole, byGrant] = await Promise.all([
     prisma.user.findMany({

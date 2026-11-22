@@ -268,6 +268,22 @@ export async function requirePageAccessSnapshot(route: string): Promise<AccessSn
   return snapshot;
 }
 
+/**
+ * Pages built around incident data (the dashboard, team and service detail) send people without
+ * incident read, such as stakeholders, to the status dashboard instead. That includes the
+ * post-sign-in landing on `/`.
+ */
+export async function redirectWithoutIncidentRead(): Promise<void> {
+  const { getUserPermissions } = await import('@/lib/rbac');
+  const permissions = await getUserPermissions();
+  if (
+    permissions.authenticated &&
+    !ruleAllows(resolvePageAccess('/incidents'), permissions.capabilities)
+  ) {
+    redirect('/status-dashboard');
+  }
+}
+
 /** Resource-level denial (for example an incident outside your teams): 403 without details. */
 export async function denyResourceAccess(input: {
   resource: AccessResourceType;
@@ -306,7 +322,7 @@ export type AccessExplanation = {
   suggestedRole: AppRole | null;
 };
 
-const ROLE_ORDER: AppRole[] = ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN'];
+const ROLE_ORDER: AppRole[] = ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN'];
 
 /**
  * Owning team for a resource the person was denied. Only the team is revealed (so they know

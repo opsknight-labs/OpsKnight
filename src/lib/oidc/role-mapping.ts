@@ -1,6 +1,7 @@
+import type { AssignableRole } from '@/lib/authorization';
 import type { OidcClaims } from '@/lib/oidc/provider-policy';
 
-export type OidcRole = 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+export type OidcRole = AssignableRole;
 export type OidcRoleRule = {
   claim: string;
   value: string;
@@ -31,6 +32,7 @@ export type OidcRoleEvaluation = {
 };
 
 export const OIDC_ROLE_RANK: Record<OidcRole, number> = {
+  STAKEHOLDER: -1,
   USER: 0,
   AUDITOR: 1,
   RESPONDER: 2,
