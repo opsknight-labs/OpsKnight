@@ -51,7 +51,7 @@ export default function SidebarSearch() {
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-keyshortcuts="Meta+K Control+K"
-        className="flex h-9 w-full max-w-md cursor-pointer items-center gap-2 rounded-lg border border-border bg-secondary/60 px-3 text-sm text-muted-foreground shadow-xs transition-colors hover:border-input hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-9 w-full max-w-md cursor-pointer items-center gap-2 rounded-lg border border-border bg-secondary/60 px-3 text-sm text-muted-foreground shadow-2xs transition-colors hover:border-input hover:bg-secondary hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         <SearchIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="flex-1 truncate text-left">Search or jump to…</span>

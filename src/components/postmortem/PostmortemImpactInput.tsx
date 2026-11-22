@@ -34,7 +34,7 @@ export default function PostmortemImpactInput({ metrics, onChange }: PostmortemI
   };
 
   return (
-    <Card className="bg-gradient-to-br from-card to-ink-50">
+    <Card className="bg-linear-to-br from-card to-ink-50">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">Impact Assessment</CardTitle>
       </CardHeader>

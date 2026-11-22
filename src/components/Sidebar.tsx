@@ -185,11 +185,11 @@ export default function Sidebar({
         }
         className={cn(
           'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
+          'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
           // Hover and active states
           'text-ink-400 hover:text-white hover:bg-slate-800/60',
           active
-            ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
+            ? 'bg-slate-800/90 text-white font-semibold shadow-2xs ring-1 ring-white/10'
             : 'text-ink-400',
           // Sizing
           isDesktopCollapsed
@@ -199,7 +199,7 @@ export default function Sidebar({
       >
         {/* Active edge indicator line (expanded only) */}
         {active && !isDesktopCollapsed && (
-          <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+          <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-linear-to-b from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
         )}
 
         {/* Icon */}
@@ -241,7 +241,7 @@ export default function Sidebar({
               variant="sidebar-danger"
               size="xs"
               aria-label={`${stats!.count} active incidents`}
-              className="ml-auto h-4.5 min-w-4.5 px-1.5 rounded-full text-[10.5px] font-bold bg-rose-600 text-white border-0 shadow-xs"
+              className="ml-auto h-4.5 min-w-4.5 px-1.5 rounded-full text-[10.5px] font-bold bg-rose-600 text-white border-0 shadow-2xs"
             >
               {badgeText}
             </Badge>
@@ -360,7 +360,7 @@ export default function Sidebar({
                   'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
                   'h-10 w-10 justify-center p-0 mx-auto',
                   active
-                    ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
+                    ? 'bg-slate-800/90 text-white font-semibold shadow-2xs ring-1 ring-white/10'
                     : 'text-ink-400 hover:text-white hover:bg-slate-800/60'
                 )}
               >
@@ -385,16 +385,16 @@ export default function Sidebar({
             aria-current={active ? 'page' : undefined}
             className={cn(
               'relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
               'px-2.5 py-2 gap-2.5 text-[13px] w-full',
               showManageLink && 'pr-8',
               active
-                ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
+                ? 'bg-slate-800/90 text-white font-semibold shadow-2xs ring-1 ring-white/10'
                 : 'text-ink-400 hover:text-white hover:bg-slate-800/60'
             )}
           >
             {active && (
-              <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+              <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-linear-to-b from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
             )}
             <span
               className={cn(
@@ -435,7 +435,7 @@ export default function Sidebar({
                 'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
                 'h-10 w-10 justify-center p-0 mx-auto',
                 active
-                  ? 'bg-slate-800/90 text-white shadow-xs ring-1 ring-white/10'
+                  ? 'bg-slate-800/90 text-white shadow-2xs ring-1 ring-white/10'
                   : 'text-ink-400 hover:text-white hover:bg-slate-800/60'
               )}
             >
@@ -480,15 +480,15 @@ export default function Sidebar({
           aria-expanded={statusPagesExpanded}
           className={cn(
             'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none w-full',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
             'px-2.5 py-2 gap-2.5 text-[13px]',
             active
-              ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
+              ? 'bg-slate-800/90 text-white font-semibold shadow-2xs ring-1 ring-white/10'
               : 'text-ink-400 hover:text-white hover:bg-slate-800/60'
           )}
         >
           {active && (
-            <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+            <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-linear-to-b from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
           )}
           <span
             className={cn(
@@ -524,7 +524,7 @@ export default function Sidebar({
                   aria-current={pageActive ? 'page' : undefined}
                   className={cn(
                     'flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] font-medium transition-all duration-100 select-none',
-                    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-500/40',
+                    'focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-rose-500/40',
                     pageActive
                       ? 'bg-slate-800/70 text-white'
                       : 'text-ink-500 hover:text-slate-200 hover:bg-slate-800/40'
@@ -623,8 +623,8 @@ export default function Sidebar({
             'fixed top-14 left-0 bottom-0 z-30 transition-[width] duration-200 ease-in-out',
             'h-[calc(100vh-3.5rem)] h-[calc(100dvh-3.5rem)]',
             isDesktopCollapsed
-              ? 'sidebar-collapsed w-[var(--sidebar-width-collapsed,64px)]'
-              : 'w-[var(--sidebar-width,240px)]',
+              ? 'sidebar-collapsed w-(--sidebar-width-collapsed,64px)'
+              : 'w-(--sidebar-width,240px)',
           ],
           // Mobile positioning: Drawer slide-in
           isMobile && [
@@ -662,7 +662,7 @@ export default function Sidebar({
           tabIndex={-1}
           className={cn(
             'sidebar-nav flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain focus:outline-hidden',
-            '[scrollbar-width:thin] [scrollbar-color:rgba(100,116,139,0.45)_transparent]',
+            'scrollbar-thin [scrollbar-color:rgba(100,116,139,0.45)_transparent]',
             '[&::-webkit-scrollbar]:w-1.5',
             '[&::-webkit-scrollbar-track]:bg-transparent',
             '[&::-webkit-scrollbar-thumb]:bg-slate-600/50 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/80 active:[&::-webkit-scrollbar-thumb]:bg-rose-500/90 [&::-webkit-scrollbar-thumb]:rounded-full transition-colors',

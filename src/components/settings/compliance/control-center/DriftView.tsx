@@ -100,7 +100,7 @@ export function DriftView({
               placeholder="Search control ID or summary..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="px-3 pr-3 py-1.5 text-xs rounded-md border border-border bg-background w-64 focus:outline-none focus:ring-1 focus:ring-primary"
+              className="px-3 pr-3 py-1.5 text-xs rounded-md border border-border bg-background w-64 focus:outline-hidden focus:ring-1 focus:ring-primary"
             />
           </div>
 
@@ -110,7 +110,7 @@ export function DriftView({
               aria-label="Filter by status"
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as ComplianceDriftStatus | 'ALL')}
-              className="py-1.5 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-none"
+              className="py-1.5 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-hidden"
             >
               <option value="ALL">All Statuses</option>
               <option value="OPEN">Open</option>
@@ -122,7 +122,7 @@ export function DriftView({
               aria-label="Filter by drift kind"
               value={kindFilter}
               onChange={e => setKindFilter(e.target.value)}
-              className="py-1.5 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-none"
+              className="py-1.5 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-hidden"
             >
               <option value="ALL">All Drift Kinds</option>
               <option value="CONTROL_STATUS_REGRESSION">Status Regression</option>

@@ -235,7 +235,7 @@ export default function McpConnectionsSection({
                   status: status === 'active' ? null : status,
                 })}
                 aria-label={`Remove assistant filter ${client.name}`}
-                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
@@ -327,7 +327,7 @@ export default function McpConnectionsSection({
                         </div>
                         <div className="min-w-0">
                           <p
-                            className="break-words font-medium text-foreground md:truncate"
+                            className="wrap-break-word font-medium text-foreground md:truncate"
                             title={name}
                           >
                             {name}

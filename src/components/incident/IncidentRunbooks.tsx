@@ -159,7 +159,7 @@ export default async function IncidentRunbooks({
   const budgetExhausted = budgets.some(item => item.limit > 0 && item.used >= item.limit);
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs transition-colors">
+      <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-2xs transition-colors">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3.5 border-b border-border/60">
           <div className="flex items-start gap-3 min-w-0">
             <span
@@ -460,7 +460,7 @@ export default async function IncidentRunbooks({
                 id={`runbook-execution-${execution.id}`}
                 aria-label={execution.runbook.name}
                 className={cn(
-                  'scroll-mt-24 rounded-xl border bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs overflow-hidden transition-all',
+                  'scroll-mt-24 rounded-xl border bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs overflow-hidden transition-all',
                   waiting && 'border-amber-500/50 ring-1 ring-amber-500/20',
                   failed && 'border-rose-500/40 ring-1 ring-rose-500/20',
                   !waiting && !failed && terminal && 'border-border/80 hover:border-border',
@@ -557,7 +557,7 @@ export default async function IncidentRunbooks({
                     userTimeZone={userTimeZone}
                   />
                   <details open={!terminal} className="group">
-                    <summary className="flex w-fit cursor-pointer select-none list-none items-center gap-2 rounded-md py-1 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    <summary className="flex w-fit cursor-pointer select-none list-none items-center gap-2 rounded-md py-1 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                       <ChevronRight
                         className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90"
                         aria-hidden
@@ -749,7 +749,7 @@ export default async function IncidentRunbooks({
                                           return (
                                             <li
                                               key={change.field}
-                                              className="flex flex-col sm:flex-row sm:items-baseline gap-1 break-words rounded-lg bg-background/90 px-3 py-2 border border-border/50"
+                                              className="flex flex-col sm:flex-row sm:items-baseline gap-1 wrap-break-word rounded-lg bg-background/90 px-3 py-2 border border-border/50"
                                             >
                                               <span className="font-semibold text-foreground/90 shrink-0">
                                                 {formatted.label}:
@@ -785,7 +785,7 @@ export default async function IncidentRunbooks({
                                 )}
 
                               {step.status === 'WAITING_APPROVAL' && (
-                                <div className="mt-3.5 space-y-3.5 rounded-xl border border-amber-500/50 bg-amber-500/[0.08] p-4 shadow-xs">
+                                <div className="mt-3.5 space-y-3.5 rounded-xl border border-amber-500/50 bg-amber-500/8 p-4 shadow-2xs">
                                   <div className="flex items-center justify-between gap-2">
                                     <p className="flex items-center gap-2 text-sm font-bold text-amber-900 dark:text-amber-100">
                                       <span className="relative flex h-2.5 w-2.5">
@@ -963,7 +963,7 @@ function ExecutionResponseSummary({
       className="grid gap-x-4 gap-y-2 rounded-lg border bg-muted/20 p-3 text-xs sm:grid-cols-[9rem_1fr]"
     >
       <dt className="text-muted-foreground">Target</dt>
-      <dd className="min-w-0 break-words">
+      <dd className="min-w-0 wrap-break-word">
         {execution.resolvedTargetAgent
           ? `${execution.resolvedTargetAgent.name}${execution.resolvedTargetAgent.hostname ? ` (${execution.resolvedTargetAgent.hostname})` : ''}`
           : execution.resolvedTargetAgentPool
@@ -989,7 +989,7 @@ function ExecutionResponseSummary({
       {target.contextKeys.length > 0 && (
         <>
           <dt className="text-muted-foreground">Context keys</dt>
-          <dd className="break-words font-mono">{target.contextKeys.join(', ')}</dd>
+          <dd className="wrap-break-word font-mono">{target.contextKeys.join(', ')}</dd>
         </>
       )}
       {verification.writeActions.length > 0 && (

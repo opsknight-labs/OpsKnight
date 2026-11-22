@@ -133,8 +133,8 @@ export default function FiveWhysBuilder({
                 className={cn(
                   'p-3 rounded-lg border transition-all',
                   isLast
-                    ? 'bg-emerald-50/50 border-emerald-200/80 shadow-sm dark:bg-emerald-500/10 dark:border-emerald-500/30'
-                    : 'bg-card border-ink-200 shadow-xs'
+                    ? 'bg-emerald-50/50 border-emerald-200/80 shadow-xs dark:bg-emerald-500/10 dark:border-emerald-500/30'
+                    : 'bg-card border-ink-200 shadow-2xs'
                 )}
               >
                 {isEditable ? (

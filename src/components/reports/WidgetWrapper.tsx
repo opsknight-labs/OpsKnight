@@ -65,7 +65,7 @@ const WidgetWrapper = memo(function WidgetWrapper({
           <CardTitle className="text-sm font-medium truncate">{title}</CardTitle>
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0 relative z-20">
+        <div className="flex items-center gap-1 shrink-0 relative z-20">
           {onExpand && !isEditing && (
             <Button
               variant="ghost"

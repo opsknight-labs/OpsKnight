@@ -68,7 +68,7 @@ export default async function PolicyDependencies({
     `${mobile ? '/m' : ''}/policies/${policyId}?tab=dependencies&depPage=${value}`;
   const hasMore = Math.max(serviceCount, currentCount, historyCount) > skip + take;
   return (
-    <section className="min-w-0 break-words rounded-xl border p-4 space-y-4">
+    <section className="min-w-0 wrap-break-word rounded-xl border p-4 space-y-4">
       <h2 className="font-semibold">Policy Dependencies · {archived ? 'Archived' : 'Active'}</h2>
       <p>
         {serviceCount} service defaults · {currentCount} active versions · {historyCount} historical

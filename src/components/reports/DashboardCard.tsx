@@ -161,14 +161,14 @@ export default function DashboardCard({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-xs"
             onClick={() => !isDeleting && setShowDeleteModal(false)}
           />
 
           {/* Modal */}
           <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-6 mx-4">
             <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+              <div className="shrink-0 w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
                 <AlertTriangle className="h-6 w-6 text-destructive" />
               </div>
               <div className="flex-1">

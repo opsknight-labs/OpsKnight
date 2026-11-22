@@ -120,7 +120,7 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
               px-2.5 py-1 text-[11px] font-medium rounded-md transition-all
               ${
                 selectedCategory === category
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-slate-900 text-white shadow-2xs'
                   : 'bg-ink-100/80 text-ink-600 hover:bg-ink-200/80 hover:text-ink-900'
               }
             `}
@@ -168,10 +168,10 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
                   handleTypeClick(type.value);
                 }
               }}
-              className="group relative flex items-start gap-2.5 p-2.5 rounded-lg border border-ink-200/90 bg-card hover:bg-ink-50/80 hover:border-primary/40 hover:shadow-xs cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="group relative flex items-start gap-2.5 p-2.5 rounded-lg border border-ink-200/90 bg-card hover:bg-ink-50/80 hover:border-primary/40 hover:shadow-2xs cursor-pointer transition-all focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <div
-                className="w-8 h-8 rounded-md shrink-0 flex items-center justify-center shadow-xs ring-1 ring-black/5 group-hover:scale-105 transition-transform [&_svg]:h-4 [&_svg]:w-4"
+                className="w-8 h-8 rounded-md shrink-0 flex items-center justify-center shadow-2xs ring-1 ring-black/5 group-hover:scale-105 transition-transform [&_svg]:h-4 [&_svg]:w-4"
                 style={{ backgroundColor: type.iconBg }}
               >
                 {type.icon}
@@ -205,7 +205,7 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
           <DialogHeader className="space-y-1">
             <DialogTitle className="flex items-center gap-2.5 text-base font-semibold">
               <span
-                className="h-7 w-7 rounded-md shadow-xs flex items-center justify-center ring-1 ring-black/5 shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5"
+                className="h-7 w-7 rounded-md shadow-2xs flex items-center justify-center ring-1 ring-black/5 shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5"
                 style={{ backgroundColor: selectedTypeInfo?.iconBg || '#0f172a' }}
               >
                 {selectedTypeInfo?.icon}

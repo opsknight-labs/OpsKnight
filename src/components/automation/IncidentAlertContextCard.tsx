@@ -26,7 +26,7 @@ const TYPE_LABEL: Record<Field['type'], string> = {
 };
 
 const summaryClass =
-  'inline-flex min-h-8 cursor-pointer items-center rounded-md text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex min-h-8 cursor-pointer items-center rounded-md text-xs font-medium text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 function stateOf(value: CapturedValue | undefined): ValueState {
   if (!value || value.state === 'MISSING') return 'MISSING';
@@ -66,7 +66,7 @@ function ValueText({
   summaryLabel: string;
 }) {
   const characters = [...text];
-  const className = cn('break-words', muted ? 'italic text-muted-foreground' : 'text-foreground');
+  const className = cn('wrap-break-word', muted ? 'italic text-muted-foreground' : 'text-foreground');
   if (characters.length <= MAX_INLINE_CHARACTERS) return <span className={className}>{text}</span>;
   return (
     <>
@@ -75,7 +75,7 @@ function ValueText({
         <summary className={summaryClass} aria-label={summaryLabel}>
           {summary}
         </summary>
-        <p className="break-words text-foreground">{text}</p>
+        <p className="wrap-break-word text-foreground">{text}</p>
       </details>
     </>
   );
@@ -124,7 +124,7 @@ export default function IncidentAlertContextCard({
         data-testid={`alert-context-field-${field.key}`}
       >
         <dt className="flex flex-wrap items-center justify-between gap-1">
-          <span className="min-w-0 break-words text-xs font-semibold text-foreground">
+          <span className="min-w-0 wrap-break-word text-xs font-semibold text-foreground">
             {field.label}
           </span>
           <span className="flex flex-wrap items-center gap-1">

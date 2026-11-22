@@ -96,7 +96,7 @@ export default function OverrideList({
             <Card
               key={override.id}
               className={cn(
-                'border-l-4 p-4 shadow-sm transition-colors hover:bg-muted/20',
+                'border-l-4 p-4 shadow-xs transition-colors hover:bg-muted/20',
                 status === 'ACTIVE' && 'border-l-emerald-500',
                 status === 'UPCOMING' && 'border-l-amber-500',
                 status === 'COMPLETED' && 'border-l-muted-foreground/30'

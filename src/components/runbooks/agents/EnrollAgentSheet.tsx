@@ -29,7 +29,7 @@ export function EnrollAgentSheet({
         <Button
           variant={variant}
           className={cn(
-            !variant && 'gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs',
+            !variant && 'gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-2xs',
             className
           )}
         >

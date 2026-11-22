@@ -50,7 +50,7 @@ export default function FreshnessControl({
         type="button"
         onClick={refresh}
         disabled={pending}
-        className="inline-flex min-h-11 items-center gap-1 rounded-sm px-1 font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 sm:min-h-0"
+        className="inline-flex min-h-11 items-center gap-1 rounded-sm px-1 font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 sm:min-h-0"
       >
         <RotateCw
           className={cn('h-3.5 w-3.5', pending && 'motion-safe:animate-spin')}

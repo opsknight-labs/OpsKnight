@@ -188,7 +188,7 @@ export default function StatusPageWebhooksSettings({
           )}
 
           {showForm && (
-            <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-muted/20 p-5 shadow-xs">
+            <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-muted/20 p-5 shadow-2xs">
               <h3 className="text-base font-semibold text-foreground mb-4">Create Webhook</h3>
               <div className="flex flex-col gap-4">
                 <FormField
@@ -253,7 +253,7 @@ export default function StatusPageWebhooksSettings({
               {webhooks.map(webhook => (
                 <div
                   key={webhook.id}
-                  className="rounded-xl border border-border bg-card p-4 sm:p-5 transition-all shadow-xs hover:border-border/80"
+                  className="rounded-xl border border-border bg-card p-4 sm:p-5 transition-all shadow-2xs hover:border-border/80"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">

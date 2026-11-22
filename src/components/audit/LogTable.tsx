@@ -36,7 +36,7 @@ export function LogTableCard({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm',
+        'overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-xs',
         className
       )}
     >
@@ -53,7 +53,7 @@ export function LogTableScroll({ label, children }: { label: string; children: R
       role="region"
       aria-label={label}
       tabIndex={0}
-      className="overflow-x-auto [-webkit-overflow-scrolling:touch] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="overflow-x-auto [-webkit-overflow-scrolling:touch] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       {children}
     </div>
@@ -131,7 +131,7 @@ export function MonoId({
           data-icon-button
           onClick={copy}
           aria-label={copied ? `${label} copied` : `Copy ${label} ${value}`}
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           {copied ? (
             <Check

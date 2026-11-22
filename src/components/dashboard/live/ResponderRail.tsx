@@ -28,10 +28,10 @@ type RailAction = { label: string; href?: string; onClick?: () => void };
 
 /** One quiet text action for every rail/section header ("Show all", "Schedules →"…). */
 const railActionClass =
-  'shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring';
+  'shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring';
 /** Shared row chrome for incident/attention/service lines inside the rail. */
 const railRowClass =
-  'group rounded-md border border-border bg-card outline-none transition-colors duration-150 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring';
+  'group rounded-md border border-border bg-card outline-hidden transition-colors duration-150 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring';
 
 /** Compact, consistent card used across the rail, the cockpit and the wallboard. */
 function RailCard({
@@ -57,8 +57,8 @@ function RailCard({
     <section
       data-testid={testId}
       className={cn(
-        'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm',
-        grow ? 'xl:min-h-[9rem] xl:flex-1' : 'shrink-0'
+        'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xs',
+        grow ? 'xl:min-h-36 xl:flex-1' : 'shrink-0'
       )}
     >
       <header className="flex shrink-0 items-center gap-2.5 border-b border-border px-3 py-2">
@@ -213,7 +213,7 @@ export function OnCallCard() {
             <li key={shift.id}>
               <Link
                 href="/schedules"
-                className="flex items-center gap-2.5 rounded-md px-1.5 py-1 outline-none transition-colors duration-150 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex items-center gap-2.5 rounded-md px-1.5 py-1 outline-hidden transition-colors duration-150 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span className="relative shrink-0">
                   <UserAvatar
@@ -279,7 +279,7 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
     <section
       aria-labelledby="ops-pulse-heading"
       data-testid="ops-pulse"
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xs"
     >
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -340,7 +340,7 @@ export function OpsPulsePanel({ aiops }: { aiops?: ReactNode } = {}) {
               </div>
               <Link
                 href={queueHref}
-                className="shrink-0 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                className="shrink-0 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Queue →
               </Link>

@@ -95,7 +95,7 @@ export default function DeleteScheduleCard({
   };
 
   return (
-    <Card className="overflow-hidden border-destructive/30 bg-destructive/5 shadow-xs">
+    <Card className="overflow-hidden border-destructive/30 bg-destructive/5 shadow-2xs">
       <CardHeader className="border-b border-destructive/20 bg-destructive/10 px-4 py-3 sm:px-5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-destructive">

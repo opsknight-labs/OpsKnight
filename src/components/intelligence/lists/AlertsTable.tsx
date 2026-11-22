@@ -48,7 +48,7 @@ export function DecisionChip({ decision }: { decision: AlertListDecision | null 
         {decision.applied ? label : `Shadow: ${label.toLowerCase()}`}
       </ListChip>
       {decision.sourceName && (
-        <span className="break-words text-xs text-muted-foreground">{decision.sourceName}</span>
+        <span className="wrap-break-word text-xs text-muted-foreground">{decision.sourceName}</span>
       )}
     </span>
   );
@@ -111,7 +111,7 @@ const buildColumns = (timeZone: string): readonly DirectoryColumn<AlertListRow>[
       <div className="min-w-0 py-0.5">
         <Link
           href={`/alerts/${encodeURIComponent(row.id)}`}
-          className="line-clamp-2 break-words font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="line-clamp-2 wrap-break-word font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           {row.summary}
         </Link>
@@ -174,7 +174,7 @@ function mobileRow(row: AlertListRow, timeZone: string) {
         {row.summary}
       </Link>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-        <span className="break-words">{row.serviceName}</span>
+        <span className="wrap-break-word">{row.serviceName}</span>
         <SeverityChip severity={row.severity} />
         <ListWhen value={row.receivedAt} timeZone={timeZone} />
       </div>
@@ -211,7 +211,7 @@ export default function AlertsTable({
   return (
     <section
       aria-label="Alert list"
-      className="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
     >
       <DirectoryHeader title="Alert list" summary={summary} columns={columns} density />
       {notice}

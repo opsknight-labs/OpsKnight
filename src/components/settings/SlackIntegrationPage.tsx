@@ -518,7 +518,7 @@ export default function SlackIntegrationPage({
           )}
 
           {/* Card 2: Channel Discovery & Notifications */}
-          <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs space-y-4">
             {loadingChannels && channels.length === 0 ? (
               <>
                 <SlackChannelToolbarSkeleton />
@@ -650,7 +650,7 @@ export default function SlackIntegrationPage({
               <SlackSigningSecretCard isConfigured={isSigningSecretConfigured} />
 
               {/* App Manifest & Live Webhook URLs */}
-              <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+              <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg border border-border bg-muted text-muted-foreground shrink-0">
@@ -750,7 +750,7 @@ export default function SlackIntegrationPage({
           )}
 
           {/* Card 5: Danger Zone */}
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -800,7 +800,7 @@ export default function SlackIntegrationPage({
           )}
 
           {/* Connect Workspace Hero Card */}
-          <div className="rounded-lg border border-border bg-card p-8 sm:p-12 text-center space-y-5 shadow-sm">
+          <div className="rounded-lg border border-border bg-card p-8 sm:p-12 text-center space-y-5 shadow-xs">
             <div className="flex justify-center">
               <div className="h-16 w-16 rounded-lg border border-border bg-muted flex items-center justify-center">
                 <SlackLogo className="h-8 w-8" />

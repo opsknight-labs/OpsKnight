@@ -110,7 +110,7 @@ export default function LayerCreateForm({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button className="h-10 w-full gap-2 text-sm font-medium shadow-sm sm:w-auto">
+        <Button className="h-10 w-full gap-2 text-sm font-medium shadow-xs sm:w-auto">
           <Plus className="h-4 w-4" />
           Add Rotation
         </Button>
@@ -186,7 +186,7 @@ export default function LayerCreateForm({
                   {selectedResponders.map((responder, index) => (
                     <div
                       key={responder.id}
-                      className="flex items-center justify-between rounded-lg bg-muted/[0.45] px-3 py-2"
+                      className="flex items-center justify-between rounded-lg bg-muted/45 px-3 py-2"
                     >
                       <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
                         <span className="text-xs text-muted-foreground">{index + 1}.</span>
@@ -282,7 +282,7 @@ export default function LayerCreateForm({
             </Button>
             <Button
               type="submit"
-              className="h-10 flex-1 shadow-sm"
+              className="h-10 flex-1 shadow-xs"
               disabled={isPending || !canSubmit}
             >
               {isPending ? (

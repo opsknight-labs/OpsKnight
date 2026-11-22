@@ -89,7 +89,7 @@ export default async function MobileDashboard() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Responder workspace
           </p>
-          <h1 className="mt-1 break-words text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+          <h1 className="mt-1 wrap-break-word text-xl font-bold tracking-tight text-foreground sm:text-2xl">
             {greeting}, {firstName}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">What needs your attention right now.</p>
@@ -247,7 +247,7 @@ export default async function MobileDashboard() {
                         {formatDurationShort(incident.createdAt)}
                       </span>
                     </div>
-                    <h3 className="mt-1.5 line-clamp-2 break-words text-[13px] font-semibold leading-snug text-foreground">
+                    <h3 className="mt-1.5 line-clamp-2 wrap-break-word text-[13px] font-semibold leading-snug text-foreground">
                       {incident.title}
                     </h3>
                     <p className="mt-1 truncate text-[11px] text-muted-foreground">

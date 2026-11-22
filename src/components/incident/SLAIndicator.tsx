@@ -101,7 +101,7 @@ export default function SLAIndicator({ sla, showDetails = false, className }: SL
             return (
               <div
                 key={name}
-                className="flex flex-col justify-between rounded-xl border border-border/70 bg-card p-3.5 text-card-foreground shadow-xs transition-colors"
+                className="flex flex-col justify-between rounded-xl border border-border/70 bg-card p-3.5 text-card-foreground shadow-2xs transition-colors"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-foreground">{name} SLA</span>

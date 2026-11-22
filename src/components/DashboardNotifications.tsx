@@ -69,7 +69,7 @@ export default function DashboardNotifications({
 
   if (permission === 'denied') {
     return (
-      <div className="mt-2 text-xs text-[color:var(--text-muted)]" role="status">
+      <div className="mt-2 text-xs text-(--text-muted)" role="status">
         Browser notifications are blocked. Enable them from your browser or site settings if you
         want in-app alert notices.
       </div>
@@ -77,7 +77,7 @@ export default function DashboardNotifications({
   }
 
   return (
-    <div className="mt-2 flex items-center gap-2 text-xs text-[color:var(--text-muted)]" aria-live="polite">
+    <div className="mt-2 flex items-center gap-2 text-xs text-(--text-muted)" aria-live="polite">
       {permission === 'default' && (
         <>
           <span>Enable browser notifications for incident alerts.</span>
@@ -85,7 +85,7 @@ export default function DashboardNotifications({
             type="button"
             onClick={() => void requestPermission()}
             disabled={requestingPermission}
-            className="min-h-11 rounded-lg border border-[color:var(--border)] px-3 font-semibold text-[color:var(--text-primary)] transition hover:bg-[color:var(--bg-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 rounded-lg border border-(--border) px-3 font-semibold text-(--text-primary) transition hover:bg-(--bg-secondary) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {requestingPermission ? 'Requesting…' : 'Enable'}
           </button>

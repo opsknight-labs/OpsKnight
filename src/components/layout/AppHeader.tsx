@@ -13,10 +13,10 @@ export default function AppHeader({ children, className }: AppHeaderProps) {
     <header
       id="app-header"
       className={cn(
-        // `[transform:translateZ(0)]` promotes to GPU layer in Safari without
+        // `transform-[translateZ(0)]` promotes to GPU layer in Safari without
         // creating a new stacking context that would break position:fixed.
         // Do NOT add will-change:transform here — it breaks fixed in Safari.
-        'app-header ok-inverse-surface fixed top-0 left-0 right-0 z-40 flex h-14 w-full items-center justify-between gap-2 sm:gap-4 border-b border-zinc-800/80 bg-[#09090b] px-3 sm:px-4 select-none text-slate-100 [transform:translateZ(0)]',
+        'app-header ok-inverse-surface fixed top-0 left-0 right-0 z-40 flex h-14 w-full items-center justify-between gap-2 sm:gap-4 border-b border-zinc-800/80 bg-[#09090b] px-3 sm:px-4 select-none text-slate-100 transform-[translateZ(0)]',
         className
       )}
     >

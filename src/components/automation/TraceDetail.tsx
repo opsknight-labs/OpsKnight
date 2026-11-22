@@ -77,7 +77,7 @@ function StepList({
             index === selected ? 'border-primary/40 bg-primary/5' : 'border-border/70'
           )}
         >
-          <span className="min-w-0 break-words">
+          <span className="min-w-0 wrap-break-word">
             <span className="mr-1.5 tabular-nums text-muted-foreground">{index + 1}.</span>
             {step.ruleName}
             {index === selected && (
@@ -189,7 +189,7 @@ export function TraceDetail({ detail }: { detail: unknown }) {
             {trace.normalization?.map(n => (
               <div key={`n-${n.fieldKey}`} className="flex flex-wrap gap-x-2 px-2.5 py-1.5">
                 <dt className="font-mono text-xs leading-5">{n.fieldKey}</dt>
-                <dd className="min-w-0 break-words">
+                <dd className="min-w-0 wrap-break-word">
                   {String(n.raw ?? 'Missing')} → {formatState(n.canonical)}
                 </dd>
               </div>
@@ -197,7 +197,7 @@ export function TraceDetail({ detail }: { detail: unknown }) {
             {inputContext.map(([key, value]) => (
               <div key={`c-${key}`} className="flex flex-wrap gap-x-2 px-2.5 py-1.5">
                 <dt className="font-mono text-xs leading-5">{key}</dt>
-                <dd className="min-w-0 break-words">{formatState(value)}</dd>
+                <dd className="min-w-0 wrap-break-word">{formatState(value)}</dd>
               </div>
             ))}
           </dl>
@@ -211,7 +211,7 @@ export function TraceDetail({ detail }: { detail: unknown }) {
         {!!result?.writes?.length && (
           <ul className="space-y-0.5 pl-1">
             {result.writes.map((w, i) => (
-              <li key={i} className="break-words">
+              <li key={i} className="wrap-break-word">
                 <span className="font-mono text-xs">{w.fieldKey}</span> → {String(w.value)}
               </li>
             ))}
@@ -234,7 +234,7 @@ export function TraceDetail({ detail }: { detail: unknown }) {
         ))}
       </Section>
       <details className="group">
-        <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 rounded-md text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 rounded-md text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
           <ChevronDown
             className="h-4 w-4 transition-transform group-open:rotate-180"
             aria-hidden="true"

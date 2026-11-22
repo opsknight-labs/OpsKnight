@@ -34,7 +34,7 @@ export default async function MobileServiceAutomationPage({
         >
           ← Back to service
         </Link>
-        <h1 className="text-lg font-semibold break-words">{service.name}</h1>
+        <h1 className="text-lg font-semibold wrap-break-word">{service.name}</h1>
         <p className="text-sm text-muted-foreground">Automation workspace</p>
       </header>
       <AutomationShell serviceId={service.id} mobile />

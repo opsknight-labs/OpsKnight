@@ -33,12 +33,12 @@ export function RunbookRouteError({
     <div className="flex w-full justify-center px-4 py-16">
       <div
         role="alert"
-        className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xs"
+        className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-2xs"
       >
         <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-destructive/10 ring-1 ring-inset ring-destructive/20">
           <AlertCircle className="h-5 w-5 text-destructive" aria-hidden />
         </span>
-        <h2 className="mt-4 !text-base !leading-snug font-semibold tracking-tight text-foreground">
+        <h2 className="mt-4 text-base! leading-snug! font-semibold tracking-tight text-foreground">
           {title}
         </h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">

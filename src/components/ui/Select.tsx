@@ -79,7 +79,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
         {leftIcon && (
           <span
             className={cn(
-              'ui-select-icon-left pointer-events-none absolute z-[1] flex items-center text-muted-foreground',
+              'ui-select-icon-left pointer-events-none absolute z-1 flex items-center text-muted-foreground',
               legacyIconInsetClass(size, 'left')
             )}
           >
@@ -91,7 +91,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
           id={selectId}
           className={cn(
             'ui-select flex w-full cursor-pointer appearance-none rounded-md border border-input bg-card text-foreground ring-offset-background transition-colors duration-150',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             'disabled:cursor-not-allowed disabled:opacity-50',
             `ui-select-${size} ui-select-${variant}`,
             legacyFieldSizeClass(size),
@@ -119,7 +119,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
         </select>
         <span
           className={cn(
-            'ui-select-icon-right pointer-events-none absolute z-[1] flex items-center text-muted-foreground',
+            'ui-select-icon-right pointer-events-none absolute z-1 flex items-center text-muted-foreground',
             rightIcon ? legacyIconInsetClass(size, 'right') : 'right-3'
           )}
         >

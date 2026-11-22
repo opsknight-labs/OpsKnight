@@ -130,14 +130,14 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
   };
 
   return (
-    <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs transition-colors">
+    <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs transition-colors">
       <form onSubmit={handleSearchSubmit} className="flex flex-wrap items-center gap-2 p-3 sm:p-4">
         <SearchField
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
           placeholder="Search by runbook name or execution ID"
           aria-label="Search executions"
-          className="min-w-[14rem] flex-1 rounded-xl"
+          className="min-w-56 flex-1 rounded-xl"
         />
 
         {/* Time Range Dropdown */}
@@ -171,7 +171,7 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
               type="date"
               value={fromDate}
               onChange={e => setFromDate(e.target.value)}
-              className="h-9 w-[9.5rem] rounded-xl text-xs"
+              className="h-9 w-38 rounded-xl text-xs"
               aria-label="From date"
             />
             <span className="text-xs text-muted-foreground">to</span>
@@ -179,7 +179,7 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
               type="date"
               value={toDate}
               onChange={e => setToDate(e.target.value)}
-              className="h-9 w-[9.5rem] rounded-xl text-xs"
+              className="h-9 w-38 rounded-xl text-xs"
               aria-label="To date"
             />
             <Button
@@ -285,7 +285,7 @@ export function ExecutionFilterBar({ query, children }: ExecutionFilterBarProps)
               <CollapsibleTrigger asChild>
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex w-full items-center justify-between rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Filter by exact ID
                   <ChevronDown

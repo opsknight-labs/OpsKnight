@@ -97,7 +97,7 @@ function AttemptDetails({
 }) {
   return (
     <details className="group rounded-xl border border-border/70 dark:border-border/60 bg-card/60 text-xs">
-      <summary className="flex min-h-9 cursor-pointer list-none flex-wrap items-center gap-2 rounded-xl px-3.5 py-2 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-9 cursor-pointer list-none flex-wrap items-center gap-2 rounded-xl px-3.5 py-2 hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
         <ChevronRight
           className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90"
           aria-hidden
@@ -112,7 +112,7 @@ function AttemptDetails({
       <div className="space-y-3 border-t border-border/60 p-3.5 text-muted-foreground">
         <ExecutionTroubleshooting status={attempt.status} code={attempt.errorCode} />
         {(attempt.errorCode || attempt.errorMessage) && (
-          <p className="break-words font-medium text-destructive">
+          <p className="wrap-break-word font-medium text-destructive">
             {attempt.errorCode}
             {attempt.errorCode && attempt.errorMessage ? ': ' : ''}
             {attempt.errorMessage}
@@ -150,7 +150,7 @@ function AttemptDetails({
         )}
         <details>
           <summary className="cursor-pointer">Verification evidence: before / after</summary>
-          <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 font-mono">
+          <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word rounded-md border bg-muted/40 p-3 font-mono">
             {attempt.evidence}
           </pre>
         </details>
@@ -219,7 +219,7 @@ export function ExecutionStepTimeline({
               <span
                 aria-hidden="true"
                 className={cn(
-                  'absolute left-[17px] top-[50px] -bottom-0 w-0.5 rounded-full',
+                  'absolute left-[17px] top-[50px] bottom-0 w-0.5 rounded-full',
                   tone === 'success' ? 'bg-emerald-500/50' : 'bg-border/70 dark:bg-border/50'
                 )}
               />
@@ -227,7 +227,7 @@ export function ExecutionStepTimeline({
             <span
               aria-hidden="true"
               className={cn(
-                'absolute left-0 top-3.5 flex h-9 w-9 items-center justify-center rounded-full ring-4 ring-background shadow-xs z-10 transition-colors',
+                'absolute left-0 top-3.5 flex h-9 w-9 items-center justify-center rounded-full ring-4 ring-background shadow-2xs z-10 transition-colors',
                 // eslint-disable-next-line security/detect-object-injection -- tone is a finite value from stepTone(), not a request key.
                 TONE_SURFACE[tone],
                 // eslint-disable-next-line security/detect-object-injection -- tone is a finite value from stepTone(), not a request key.
@@ -239,9 +239,9 @@ export function ExecutionStepTimeline({
             <article
               aria-label={`Step ${index + 1}: ${step.name}`}
               className={cn(
-                'ml-12 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200 overflow-hidden',
-                failed && 'border-rose-500/40 bg-rose-500/[0.02]',
-                step.pendingApproval && 'border-amber-500/50 bg-amber-500/[0.02]'
+                'ml-12 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs hover:border-border hover:shadow-md transition-all duration-200 overflow-hidden',
+                failed && 'border-rose-500/40 bg-rose-500/2',
+                step.pendingApproval && 'border-amber-500/50 bg-amber-500/2'
               )}
             >
               <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border/50 px-5 py-3.5 bg-muted/20">
@@ -290,7 +290,7 @@ export function ExecutionStepTimeline({
                       className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-600 dark:text-rose-400"
                       aria-hidden
                     />
-                    <p className="min-w-0 break-words text-rose-700 dark:text-rose-300">
+                    <p className="min-w-0 wrap-break-word text-rose-700 dark:text-rose-300">
                       {step.errorCode && (
                         <span className="font-mono font-semibold">{step.errorCode}</span>
                       )}
@@ -316,7 +316,7 @@ export function ExecutionStepTimeline({
                 {step.pendingApproval && (
                   <section
                     aria-label={`Approval needed for ${step.name}`}
-                    className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/[0.06] p-4"
+                    className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/6 p-4"
                   >
                     <div className="flex items-start gap-2.5">
                       <ShieldAlert
@@ -374,7 +374,7 @@ export function ExecutionStepTimeline({
                   </section>
                 )}
                 <details className="group/details" open={failed || Boolean(step.pendingApproval)}>
-                  <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                  <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                     <ChevronRight
                       className="h-3.5 w-3.5 transition-transform group-open/details:rotate-90"
                       aria-hidden
@@ -404,7 +404,7 @@ export function ExecutionStepTimeline({
                     )}
                     <div className="space-y-1.5 text-xs">
                       <p className="font-medium text-muted-foreground">Verification result</p>
-                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 font-mono">
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word rounded-md border bg-muted/40 p-3 font-mono">
                         {step.verification}
                       </pre>
                     </div>

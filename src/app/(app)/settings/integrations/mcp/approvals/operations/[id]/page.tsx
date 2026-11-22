@@ -85,10 +85,10 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
     <div className="min-w-0 max-w-3xl space-y-6 rounded-lg border p-4 sm:p-6">
       <BackToApprovals />
       <div className="space-y-1">
-        <h1 className="font-display text-xl font-bold tracking-tight break-words sm:text-2xl">
+        <h1 className="font-display text-xl font-bold tracking-tight wrap-break-word sm:text-2xl">
           {heading}
         </h1>
-        <p className="text-base [overflow-wrap:anywhere]">{summary.description}</p>
+        <p className="text-base wrap-anywhere">{summary.description}</p>
         <RequestedBy
           person={requester.person}
           assistant={requester.assistant}
@@ -97,7 +97,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
         />
       </div>
       <ReviewIntro />
-      <dl className="grid gap-x-4 gap-y-3 break-words sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+      <dl className="grid gap-x-4 gap-y-3 wrap-break-word sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
         <dt className={DT_CLASS}>Change</dt>
         <dd className={DD_CLASS}>{summary.description}</dd>
         {Object.entries(summary.targets).map(([name, value]) => (
@@ -126,11 +126,11 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
       {summary.query.length > 0 && (
         <>
           <h2 className="font-display text-lg font-semibold">Query parameters</h2>
-          <dl className="space-y-2 break-words">
+          <dl className="space-y-2 wrap-break-word">
             {summary.query.map(([name, value]) => (
               <div key={name} className="rounded-lg border border-border p-3">
-                <dt className="font-medium [overflow-wrap:anywhere]">{name}</dt>
-                <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</dd>
+                <dt className="font-medium wrap-anywhere">{name}</dt>
+                <dd className="whitespace-pre-wrap wrap-anywhere">{value}</dd>
               </div>
             ))}
           </dl>
@@ -159,11 +159,11 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
         <>
           <h2 className="font-display text-lg font-semibold">Frozen changes</h2>
           {summary.changes.length ? (
-            <dl className="space-y-2 break-words">
+            <dl className="space-y-2 wrap-break-word">
               {summary.changes.map(([field, value]) => (
                 <div key={field} className="rounded-lg border border-border p-3">
-                  <dt className="font-medium [overflow-wrap:anywhere]">{field}</dt>
-                  <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</dd>
+                  <dt className="font-medium wrap-anywhere">{field}</dt>
+                  <dd className="whitespace-pre-wrap wrap-anywhere">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -183,7 +183,7 @@ export default async function OperationApproval({ params }: { params: Promise<{ 
             <summary className="-my-3 min-h-11 cursor-pointer py-3 text-sm font-medium">
               Full current state
             </summary>
-            <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">
+            <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-sm wrap-anywhere">
               {summary.preview}
             </pre>
           </details>
@@ -262,16 +262,16 @@ function DiffTable({ rows, caption }: { rows: OperationDiffRow[]; caption: strin
         <tbody>
           {rows.map(row => (
             <tr key={row.field} className="border-b align-top last:border-0">
-              <th scope="row" className="break-words py-2 pr-3 text-left font-medium">
+              <th scope="row" className="wrap-break-word py-2 pr-3 text-left font-medium">
                 {row.field}
                 <span className="block text-xs font-normal text-muted-foreground">
                   {DIFF_STATUS.get(row.status)}
                 </span>
               </th>
-              <td className="whitespace-pre-wrap break-words py-2 pr-3 text-muted-foreground">
+              <td className="whitespace-pre-wrap wrap-break-word py-2 pr-3 text-muted-foreground">
                 {row.before ?? '—'}
               </td>
-              <td className="whitespace-pre-wrap break-words py-2">{row.after ?? '—'}</td>
+              <td className="whitespace-pre-wrap wrap-break-word py-2">{row.after ?? '—'}</td>
             </tr>
           ))}
         </tbody>

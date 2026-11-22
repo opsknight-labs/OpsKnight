@@ -292,7 +292,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
         <div className="relative flex items-center flex-1 max-w-md">
           <input
             type="text"
-            className="status-page-subscribers-search-input w-full text-sm bg-background border border-border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+            className="status-page-subscribers-search-input w-full text-sm bg-background border border-border rounded-lg placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
             placeholder="Search subscribers by email..."
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
@@ -316,7 +316,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
               type="button"
               className={`px-3 py-1 rounded-md transition-all ${
                 filter === 'all'
-                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  ? 'bg-background text-foreground shadow-2xs font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => {
@@ -330,7 +330,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
               type="button"
               className={`px-3 py-1 rounded-md transition-all ${
                 filter === 'verified'
-                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  ? 'bg-background text-foreground shadow-2xs font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => {
@@ -345,7 +345,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
               type="button"
               className={`px-3 py-1 rounded-md transition-all ${
                 filter === 'unverified'
-                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  ? 'bg-background text-foreground shadow-2xs font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => {
@@ -359,7 +359,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
               type="button"
               className={`px-3 py-1 rounded-md transition-all ${
                 filter === 'unsubscribed'
-                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  ? 'bg-background text-foreground shadow-2xs font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => {
@@ -545,7 +545,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
                             type="button"
                             onClick={() => setSingleCandidateId(subscriber.id)}
                             aria-label={`Unsubscribe ${subscriber.email}`}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <Trash2 className="h-3 w-3" aria-hidden="true" />
                             Unsubscribe
@@ -594,7 +594,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
                     setLimit(Number(e.target.value));
                     setPage(1);
                   }}
-                  className="bg-background border border-border/80 rounded px-1.5 py-0.5 text-xs text-foreground font-medium focus:outline-none"
+                  className="bg-background border border-border/80 rounded px-1.5 py-0.5 text-xs text-foreground font-medium focus:outline-hidden"
                 >
                   <option value={10}>10</option>
                   <option value={20}>20</option>

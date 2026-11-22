@@ -45,7 +45,7 @@ function Fact({ term, children }: { term: string; children: React.ReactNode }) {
       <dt className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         {term}
       </dt>
-      <dd className="break-words text-sm text-foreground">{children}</dd>
+      <dd className="wrap-break-word text-sm text-foreground">{children}</dd>
     </div>
   );
 }

@@ -13,9 +13,9 @@ const TONE_DOT: Record<StripChipTone, string> = {
 };
 
 const CHIP_CLASS =
-  'inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 const OPENER_CLASS =
-  'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
  * One row of intelligence under the command bar: a chip per fact that has content, and one freshness dot while
@@ -52,7 +52,7 @@ export default function IntelligenceStrip({
         <nav
           aria-label="Incident insights"
           // Chips scroll sideways: the trailing edge fades so a cut-off chip reads as "more this way".
-          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5 pr-6 scrollbar-none [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]"
+          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5 pr-6 scrollbar-none mask-[linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]"
         >
           {firstSection && (
             <a

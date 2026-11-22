@@ -565,7 +565,7 @@ export default async function IncidentDetailScreen({
                   </Badge>
                 )}
               </div>
-              <h1 className="mt-2 break-words text-base font-bold leading-snug tracking-tight text-foreground">
+              <h1 className="mt-2 wrap-break-word text-base font-bold leading-snug tracking-tight text-foreground">
                 {incident.title}
               </h1>
               {showIntelligence && (
@@ -619,12 +619,12 @@ export default async function IncidentDetailScreen({
         </section>
       ) : (
         <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xs">
-          <div className={`h-1 w-full bg-gradient-to-r ${statusGradient}`} />
+          <div className={`h-1 w-full bg-linear-to-r ${statusGradient}`} />
           <div className="p-3.5 sm:p-4.5">
             <div className="mb-2.5 flex min-w-0 items-center justify-between gap-3">
               <ListReturnLink
                 href={backHref}
-                className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>{backLabel}</span>
@@ -648,7 +648,7 @@ export default async function IncidentDetailScreen({
 
             <div className="flex min-w-0 items-start gap-3 sm:gap-3.5">
               <div
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm sm:h-10 sm:w-10 ${statusGradient}`}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-xs sm:h-10 sm:w-10 ${statusGradient}`}
               >
                 {incident.status === 'RESOLVED' ? (
                   <CheckCircle2 className="h-4.5 w-4.5" />
@@ -662,7 +662,7 @@ export default async function IncidentDetailScreen({
               </div>
               <div className="min-w-0 flex-1 space-y-1.5">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <h1 className="min-w-0 break-words text-base font-bold leading-snug tracking-tight text-foreground sm:text-xl">
+                  <h1 className="min-w-0 wrap-break-word text-base font-bold leading-snug tracking-tight text-foreground sm:text-xl">
                     {incident.title}
                   </h1>
                   <StatusBadge status={incident.status} live={incident.status === 'OPEN'} />
@@ -776,7 +776,7 @@ export default async function IncidentDetailScreen({
 
       {presentation === 'mobile' ? (
         <details className="group overflow-hidden rounded-xl border border-border bg-card">
-          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
             <span>Incident details &amp; assignment</span>
             <ChevronDown
               className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
@@ -884,7 +884,7 @@ export default async function IncidentDetailScreen({
           <>
             {hasContextCard && (
               <details className="group overflow-hidden rounded-xl border border-border bg-card">
-                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
                   <span>Incident context</span>
                   <ChevronDown
                     className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
@@ -895,7 +895,7 @@ export default async function IncidentDetailScreen({
               </details>
             )}
             <details className="group overflow-hidden rounded-xl border border-border bg-card lg:hidden">
-              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
                 <span>People, fields &amp; links</span>
                 <ChevronDown
                   className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"

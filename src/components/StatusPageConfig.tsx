@@ -939,7 +939,7 @@ export default function StatusPageConfig({
                   className={cn(
                     'status-page-config-tab inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer select-none whitespace-nowrap border',
                     isActive
-                      ? 'is-active bg-primary text-primary-foreground border-primary shadow-xs font-semibold'
+                      ? 'is-active bg-primary text-primary-foreground border-primary shadow-2xs font-semibold'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/70 border-transparent'
                   )}
                 >
@@ -974,8 +974,8 @@ export default function StatusPageConfig({
               className={cn(
                 'status-page-config-preview-toggle inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 border cursor-pointer select-none',
                 showPreview
-                  ? 'bg-primary text-primary-foreground border-primary shadow-xs hover:bg-primary/90'
-                  : 'bg-background hover:bg-muted text-foreground border-border shadow-xs'
+                  ? 'bg-primary text-primary-foreground border-primary shadow-2xs hover:bg-primary/90'
+                  : 'bg-background hover:bg-muted text-foreground border-border shadow-2xs'
               )}
               aria-pressed={showPreview}
               title={
@@ -2341,7 +2341,7 @@ export default function StatusPageConfig({
                         variant="danger"
                         size="sm"
                         disabled={isPending}
-                        className="text-xs font-semibold gap-1.5 shadow-xs"
+                        className="text-xs font-semibold gap-1.5 shadow-2xs"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Delete status page</span>
@@ -2359,7 +2359,7 @@ export default function StatusPageConfig({
                     size="sm"
                     onClick={handleDiscardChanges}
                     disabled={isPending}
-                    className="text-xs font-semibold shadow-xs"
+                    className="text-xs font-semibold shadow-2xs"
                   >
                     Cancel
                   </Button>
@@ -2369,7 +2369,7 @@ export default function StatusPageConfig({
                     variant="primary"
                     size="sm"
                     isLoading={isPending}
-                    className="text-xs font-semibold gap-1.5 shadow-sm"
+                    className="text-xs font-semibold gap-1.5 shadow-xs"
                   >
                     <Save className="w-3.5 h-3.5" />
                     <span>Save Settings</span>

@@ -199,7 +199,7 @@ export function EvidenceView({
             value={typeFilter}
             onChange={e => setTypeFilter(e.target.value)}
             aria-label="Filter evidence by type"
-            className="h-9 px-3 py-1 rounded-lg border bg-background/80 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 px-3 py-1 rounded-lg border bg-background/80 text-xs font-medium text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
           >
             <option value="ALL">All Types</option>
             <option value="VERIFICATION_RESULT">Verification Result</option>
@@ -215,7 +215,7 @@ export function EvidenceView({
             value={integrityFilter}
             onChange={e => setIntegrityFilter(e.target.value as 'ALL' | 'VALID' | 'MISMATCH')}
             aria-label="Filter evidence by cryptographic integrity"
-            className="h-9 px-3 py-1 rounded-lg border bg-background/80 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 px-3 py-1 rounded-lg border bg-background/80 text-xs font-medium text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
           >
             <option value="ALL">All Integrity</option>
             <option value="VALID">Verified Only</option>

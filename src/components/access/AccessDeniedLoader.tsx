@@ -40,7 +40,7 @@ export default function AccessDeniedLoader({ variant = 'page' }: { variant?: 'pa
       <section
         aria-labelledby="access-denied-title"
         aria-busy={!failed}
-        className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-sm sm:p-8"
+        className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-xs sm:p-8"
       >
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">

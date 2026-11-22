@@ -74,7 +74,7 @@ export default function UserProfileHeaderActions({
           onClick={() => setIsEditOpen(true)}
           variant="outline"
           size="sm"
-          className="bg-white/10 hover:bg-white/20 text-white border-white/30 text-xs font-semibold h-9 gap-1.5 shadow-xs flex-1 lg:flex-none cursor-pointer"
+          className="bg-white/10 hover:bg-white/20 text-white border-white/30 text-xs font-semibold h-9 gap-1.5 shadow-2xs flex-1 lg:flex-none cursor-pointer"
         >
           <Edit2 className="h-3.5 w-3.5" />
           Edit Profile
@@ -85,7 +85,7 @@ export default function UserProfileHeaderActions({
             onClick={() => setIsDeleteOpen(true)}
             variant="outline"
             size="sm"
-            className="bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border-rose-400/30 hover:border-rose-400/50 text-xs font-semibold h-9 gap-1.5 shadow-xs flex-1 lg:flex-none cursor-pointer"
+            className="bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border-rose-400/30 hover:border-rose-400/50 text-xs font-semibold h-9 gap-1.5 shadow-2xs flex-1 lg:flex-none cursor-pointer"
           >
             <Trash2 className="h-3.5 w-3.5 text-rose-300" />
             {isInvited ? 'Delete Invitation' : 'Delete User'}

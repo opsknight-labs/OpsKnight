@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
  * `<KpiBody>`, and may add their own overlay or footer inside the `li`.
  */
 export const KPI_GRID = 'grid grid-cols-2 gap-3 md:grid-cols-4';
-export const KPI_CARD = 'min-w-0 rounded-lg border bg-card p-3 shadow-sm sm:p-4';
+export const KPI_CARD = 'min-w-0 rounded-lg border bg-card p-3 shadow-xs sm:p-4';
 
 /** Label and info button, the display numeral, then the delta / secondary line. */
 export function KpiBody({
@@ -55,7 +55,7 @@ export function KpiGridSkeleton({ count }: { count: number }) {
   return (
     <ul role="status" aria-label="Loading key metrics" className={KPI_GRID}>
       {Array.from({ length: count }, (_, index) => (
-        <li key={index} className="h-[6.5rem] animate-pulse rounded-lg border bg-card shadow-sm" />
+        <li key={index} className="h-26 animate-pulse rounded-lg border bg-card shadow-xs" />
       ))}
     </ul>
   );

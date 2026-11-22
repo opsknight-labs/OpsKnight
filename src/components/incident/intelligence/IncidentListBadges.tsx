@@ -5,7 +5,7 @@ import type { IncidentListBadge } from '@/lib/intelligence/incident-ux/list-badg
 const chip =
   'inline-flex max-w-[16rem] items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-semibold';
 // On touch screens the link's hit area is extended to 44 px without changing the row layout.
-const linkChip = `${chip} relative hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring after:absolute after:-inset-3 after:content-[''] sm:after:hidden`;
+const linkChip = `${chip} relative hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring after:absolute after:-inset-3 after:content-[''] sm:after:hidden`;
 
 /**
  * Intelligence badges on one incident list row. Pure and presentational (works in the client list):

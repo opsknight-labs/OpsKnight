@@ -196,7 +196,7 @@ export default function McpAssistantsSection({
                       <div className="min-w-0">
                         <Link
                           href={`/settings/integrations/mcp/assistants/${encodeURIComponent(row.id)}`}
-                          className="block truncate font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                          className="block truncate font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
                         >
                           {row.name}
                         </Link>
@@ -330,7 +330,7 @@ export default function McpAssistantsSection({
       </SettingsSection>
 
       <details className="group rounded-lg border border-border bg-card shadow-2xs">
-        <summary className="cursor-pointer list-none rounded-lg px-4 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:px-6 [&::-webkit-details-marker]:hidden">
+        <summary className="cursor-pointer list-none rounded-lg px-4 py-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:px-6 [&::-webkit-details-marker]:hidden">
           <span className="flex items-center justify-between gap-3">
             <span>
               <span className="block text-sm font-semibold text-foreground">

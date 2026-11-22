@@ -93,7 +93,7 @@ export default function RuleConfigurationCheck({
                 return (
                   <li key={check.code} className="flex items-start gap-2">
                     <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', className)} aria-hidden />
-                    <span className="min-w-0 break-words">
+                    <span className="min-w-0 wrap-break-word">
                       <span className="sr-only">{check.state}: </span>
                       {check.message}
                     </span>

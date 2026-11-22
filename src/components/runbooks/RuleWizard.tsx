@@ -129,7 +129,7 @@ export default function RuleWizard({
                   onClick={() => move(index)}
                   aria-label={`Step ${index + 1}: ${item.title}${done ? ' · completed, go back' : ''}`}
                   className={cn(
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ring-4 ring-background shadow-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default',
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ring-4 ring-background shadow-2xs transition-all focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default',
                     done && 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs',
                     active && 'bg-primary/10 text-primary border border-primary/30',
                     !done && !active && 'bg-muted/60 text-muted-foreground border border-border/70'
@@ -171,7 +171,7 @@ export default function RuleWizard({
           ref={heading}
           tabIndex={-1}
           id={id}
-          className="!text-base !leading-snug font-semibold tracking-tight outline-none"
+          className="text-base! leading-snug! font-semibold tracking-tight outline-hidden"
         >
           {step?.title}
         </h3>
@@ -190,7 +190,7 @@ export default function RuleWizard({
               key={`${name}-${index}`}
               className="grid gap-1 px-4 py-2.5 sm:grid-cols-[minmax(0,10rem)_1fr] sm:gap-4"
             >
-              <dt className="break-words text-xs font-medium text-muted-foreground">{name}</dt>
+              <dt className="wrap-break-word text-xs font-medium text-muted-foreground">{name}</dt>
               <dd className="break-all text-foreground">{value || 'Not configured'}</dd>
             </div>
           ))}
@@ -209,7 +209,7 @@ export default function RuleWizard({
         </div>
       ))}
 
-      <div className="sticky bottom-0 z-10 -mx-6 mt-auto flex flex-wrap items-center justify-between gap-2 border-t bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+      <div className="sticky bottom-0 z-10 -mx-6 mt-auto flex flex-wrap items-center justify-between gap-2 border-t bg-background/95 px-6 py-4 backdrop-blur-sm supports-backdrop-filter:bg-background/85">
         {current > 0 ? (
           <Button
             type="button"

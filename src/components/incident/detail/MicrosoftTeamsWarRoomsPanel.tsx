@@ -91,7 +91,7 @@ export default function MicrosoftTeamsWarRoomsPanel({
 
   return (
     <section
-      className="rounded-xl border bg-card p-5 shadow-sm space-y-4"
+      className="rounded-xl border bg-card p-5 shadow-xs space-y-4"
       aria-label="Microsoft Teams war rooms"
     >
       <div className="flex items-start justify-between gap-3">

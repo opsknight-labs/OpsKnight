@@ -39,7 +39,7 @@ function toneClassName(tone: MobileHeaderActionTone): string {
 export default forwardRef<HTMLButtonElement | HTMLAnchorElement, MobileHeaderActionProps>(
   function MobileHeaderAction({ icon, label, href, onClick, tone = 'default', title }, ref) {
     const classes = cn(
-      'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-transparent bg-transparent transition-[color,background-color,border-color,transform] duration-150 active:scale-95 motion-reduce:active:scale-100 hover:border-border hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+      'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-transparent bg-transparent transition-[color,background-color,border-color,transform] duration-150 active:scale-95 motion-reduce:active:scale-100 hover:border-border hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
       toneClassName(tone)
     );
 

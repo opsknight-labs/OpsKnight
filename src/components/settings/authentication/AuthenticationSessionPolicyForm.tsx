@@ -65,7 +65,7 @@ function DurationField({
 
       <select
         id={id}
-        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         value={
           custom
             ? 'custom'
@@ -104,7 +104,7 @@ function DurationField({
               aria-label={`${label} custom value`}
               aria-invalid={Boolean(error)}
               aria-describedby={`${id}-help`}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               type="number"
               step="any"
               min={min / unit}
@@ -120,7 +120,7 @@ function DurationField({
             <select
               aria-label={`${label} unit`}
               value={unit}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-2xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               onChange={event => setUnit(Number(event.target.value))}
             >
               <option value={60}>Minutes</option>
@@ -154,7 +154,7 @@ export default function AuthenticationSessionPolicyForm() {
 
   return (
     <section
-      className="space-y-4 rounded-xl border border-border/70 bg-card/60 p-4 sm:p-5 shadow-xs"
+      className="space-y-4 rounded-xl border border-border/70 bg-card/60 p-4 sm:p-5 shadow-2xs"
       aria-labelledby="auth-session-duration-title"
     >
       <div className="flex items-start gap-3">

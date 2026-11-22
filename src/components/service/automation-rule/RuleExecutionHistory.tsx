@@ -53,7 +53,7 @@ export function RuleExecutionHistory({ executions }: { executions: RuleExecution
                   <Link
                     href={`/runbooks/executions/${execution.id}`}
                     aria-label={`Open execution started ${execution.absolute}`}
-                    className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <RunbookStatusBadge status={execution.status} context="execution" />
                   </Link>

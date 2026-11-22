@@ -61,7 +61,7 @@ function Node({
         rx={8}
         className={cn(
           'fill-card',
-          focus ? 'stroke-[var(--overview-accent)]' : 'stroke-[var(--overview-context)]'
+          focus ? 'stroke-(--overview-accent)' : 'stroke-(--overview-context)'
         )}
         strokeWidth={focus ? 2 : 1}
       />
@@ -146,7 +146,7 @@ export default function ServiceDependencyGraph({ data }: { data: ServiceDependen
                 y1={y + NODE_H / 2}
                 x2={focusEdgeX}
                 y2={focusY + NODE_H / 2}
-                className="stroke-[var(--overview-context)]"
+                className="stroke-(--overview-context)"
                 strokeWidth={suggested ? 1.5 : 2}
                 strokeDasharray={suggested ? '5 4' : undefined}
               />

@@ -292,7 +292,7 @@ export default async function NotificationProviderSettingsPage() {
       />
 
       {/* 2. Runtime Overview Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl border border-border/80 bg-card shadow-xs text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl border border-border/80 bg-card shadow-2xs text-xs">
         <div>
           <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider block">
             Email Route

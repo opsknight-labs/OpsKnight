@@ -96,7 +96,7 @@ export default function AuthenticationRevisionWorkflow() {
   ];
   return (
     <div
-      className="rounded-xl border bg-card p-5 space-y-5 shadow-xs"
+      className="rounded-xl border bg-card p-5 space-y-5 shadow-2xs"
       aria-labelledby="auth-test-title"
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">

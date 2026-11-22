@@ -139,7 +139,7 @@ export default function PostmortemsFilters({
           size="sm"
           onClick={handleExportCsv}
           disabled={postmortemsData.length === 0}
-          className="h-9 gap-1.5 text-xs shadow-sm hover:bg-ink-100"
+          className="h-9 gap-1.5 text-xs shadow-xs hover:bg-ink-100"
         >
           <Download className="h-3.5 w-3.5 text-muted-foreground" />
           <span>Export CSV</span>

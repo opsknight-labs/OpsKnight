@@ -61,7 +61,7 @@ function useSecondsUntil(until: number | null): number {
 const AI_SETTINGS_HREF = '/settings/intelligence/ai';
 // 44 px tall on phones; a text-sized link in the desktop panel's slim line.
 const actionClass =
-  'inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:no-underline disabled:opacity-60 sm:min-h-7';
+  'inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:no-underline disabled:opacity-60 sm:min-h-7';
 
 /**
  * The one slim status line under the chat header: a pill naming the mode, one sentence on why and what

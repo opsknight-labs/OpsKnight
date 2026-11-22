@@ -136,7 +136,7 @@ const WidgetLibrary = memo(function WidgetLibrary({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-xs" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
@@ -167,7 +167,7 @@ const WidgetLibrary = memo(function WidgetLibrary({
                 placeholder="Search widgets..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-4 py-2 bg-background border border-input rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
               />
             </div>
 

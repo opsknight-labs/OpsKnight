@@ -119,7 +119,7 @@ export function InputSummary({
       {definitions.map(input => (
         <div key={input.key} className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
           <dt className="font-medium text-foreground">{input.label}</dt>
-          <dd className="mt-0.5 break-words text-muted-foreground">
+          <dd className="mt-0.5 wrap-break-word text-muted-foreground">
             {input.type === 'SECRET_REF' && (values[input.key] ?? input.defaultValue)
               ? 'Configured secret reference'
               : String(values[input.key] ?? input.defaultValue ?? 'Not set')}

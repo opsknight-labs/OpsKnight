@@ -226,9 +226,9 @@ function SegmentedToggle<V extends string>({
           className={cn(
             'inline-flex h-7 w-8 items-center justify-center rounded-[5px]',
             motion,
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
             value === option
-              ? 'bg-background text-foreground shadow-sm'
+              ? 'bg-background text-foreground shadow-xs'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
@@ -350,7 +350,7 @@ export function DirectoryHeader({
 export type DirectoryGuideStep = { title: string; description: string };
 export type DirectoryGuideLink = { label: string; href: string; icon?: ReactNode };
 
-const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+const focusRing = 'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 /** Numbered how-it-works steps, with optional links underneath. Shared by the header popover and empty states. */
 export function DirectoryGuideSteps({
@@ -694,9 +694,9 @@ export function DirectoryTable<T>({
                 onFocus={() => setActiveId(id)}
                 className={cn(
                   motion,
-                  compact ? 'h-10' : 'h-[3.25rem]',
+                  compact ? 'h-10' : 'h-13',
                   'hover:bg-muted/50 focus-within:bg-muted/40 data-[state=selected]:bg-primary/5',
-                  'focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring'
+                  'focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring'
                 )}
               >
                 {selection && (
@@ -742,7 +742,7 @@ export function DirectoryPrimaryCell({
           {href ? (
             <Link
               href={href}
-              className="truncate font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="truncate font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               {title}
             </Link>

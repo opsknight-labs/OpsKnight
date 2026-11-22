@@ -126,7 +126,7 @@ function WidgetConfigForm({ widget, onClose, onSave }: WidgetConfigFormProps) {
             type="text"
             value={title}
             onChange={e => setTitle(e.target.value)}
-            className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+            className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/40 focus:border-primary"
             placeholder={defaultTitle}
           />
         </div>
@@ -215,7 +215,7 @@ function WidgetConfigForm({ widget, onClose, onSave }: WidgetConfigFormProps) {
               value={targetSla}
               onChange={e => setTargetSla(e.target.value)}
               placeholder="e.g. 99.0"
-              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+              className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/40 focus:border-primary"
             />
             <p className="text-[11px] text-muted-foreground">
               Optional threshold to compare current performance against organizational SLA goals.

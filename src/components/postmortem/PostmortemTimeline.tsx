@@ -23,7 +23,7 @@ export default function PostmortemTimeline({
 
   if (!events || events.length === 0) {
     return (
-      <Card className="bg-gradient-to-br from-card to-ink-50">
+      <Card className="bg-linear-to-br from-card to-ink-50">
         <CardContent className="py-8 text-center">
           <p className="text-muted-foreground">No timeline events recorded</p>
         </CardContent>
@@ -47,7 +47,7 @@ export default function PostmortemTimeline({
   };
 
   return (
-    <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
+    <Card className="bg-linear-to-br from-card to-ink-50 shadow-md">
       <CardHeader>
         <CardTitle className="text-xl">Incident Timeline</CardTitle>
         <p className="text-sm text-muted-foreground">
@@ -57,7 +57,7 @@ export default function PostmortemTimeline({
       <CardContent>
         <div className="relative pl-6">
           {/* Timeline line */}
-          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500 to-emerald-500 rounded" />
+          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-linear-to-b from-blue-500 to-emerald-500 rounded" />
 
           {sortedEvents.map((event, index) => {
             const eventTime = new Date(event.timestamp);
@@ -74,7 +74,7 @@ export default function PostmortemTimeline({
                 {/* Event marker */}
                 <div
                   className={cn(
-                    'absolute -left-[1.75rem] top-2 w-8 h-8 rounded-full flex items-center justify-center z-10',
+                    'absolute -left-7 top-2 w-8 h-8 rounded-full flex items-center justify-center z-10',
                     'border-[3px] border-white shadow-md',
                     config.solidBg
                   )}
@@ -84,7 +84,7 @@ export default function PostmortemTimeline({
 
                 {/* Event card */}
                 <div
-                  className={cn('ml-4 p-4 bg-card rounded-md shadow-sm', 'border-2', config.border)}
+                  className={cn('ml-4 p-4 bg-card rounded-md shadow-xs', 'border-2', config.border)}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">

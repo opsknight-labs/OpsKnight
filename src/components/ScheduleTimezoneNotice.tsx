@@ -86,10 +86,10 @@ export default function ScheduleTimezoneNotice({
       role="region"
       aria-label="Timezone Alignment Banner"
       className={cn(
-        'relative overflow-hidden rounded-xl border p-3 sm:p-3.5 shadow-sm transition-all',
+        'relative overflow-hidden rounded-xl border p-3 sm:p-3.5 shadow-xs transition-all',
         hasProfileMismatch
-          ? 'border-amber-500/30 bg-gradient-to-r from-amber-500/[0.12] via-amber-500/[0.04] to-card'
-          : 'border-sky-500/30 bg-gradient-to-r from-sky-500/[0.10] via-indigo-500/[0.04] to-card',
+          ? 'border-amber-500/30 bg-linear-to-r from-amber-500/12 via-amber-500/4 to-card'
+          : 'border-sky-500/30 bg-linear-to-r from-sky-500/10 via-indigo-500/4 to-card',
         className
       )}
     >
@@ -130,7 +130,7 @@ export default function ScheduleTimezoneNotice({
 
         {/* Right: Live Clocks & Dismiss */}
         <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
-          <div className="flex items-center gap-1.5 rounded-lg border bg-background/80 px-2.5 py-1.5 text-xs shadow-2xs backdrop-blur-sm">
+          <div className="flex items-center gap-1.5 rounded-lg border bg-background/80 px-2.5 py-1.5 text-xs shadow-2xs backdrop-blur-xs">
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
             <div className="flex items-center gap-1.5 font-medium tabular-nums">
               <span className="text-foreground font-semibold">{scheduleTimeStr}</span>

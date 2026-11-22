@@ -25,7 +25,7 @@ export default function HelpHint({
         // Opts out of the page-wide compact button padding that would squash the icon.
         data-icon-button
         aria-label={label}
-        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
       </PopoverTrigger>

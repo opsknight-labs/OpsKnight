@@ -786,7 +786,7 @@ export default function IncidentTimeline({
             aria-pressed={activeFilter === filter.id}
             aria-label={filter.label}
             className={cn(
-              'h-6.5 px-2.5 rounded-md text-xs font-medium transition-all select-none border focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring flex items-center gap-1.5',
+              'h-6.5 px-2.5 rounded-md text-xs font-medium transition-all select-none border focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring flex items-center gap-1.5',
               activeFilter === filter.id
                 ? 'bg-foreground text-background border-foreground shadow-2xs font-semibold'
                 : 'bg-background text-muted-foreground border-border/80 hover:text-foreground hover:bg-muted/40'
@@ -851,7 +851,7 @@ export default function IncidentTimeline({
                 className="relative flex scroll-mt-24 gap-4 group target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
               >
                 <div
-                  className={`relative z-10 rounded-full border-4 border-background shrink-0 h-10 w-10 flex items-center justify-center shadow-xs ${config.avatarBg} ${config.avatarText}`}
+                  className={`relative z-10 rounded-full border-4 border-background shrink-0 h-10 w-10 flex items-center justify-center shadow-2xs ${config.avatarBg} ${config.avatarText}`}
                 >
                   {config.icon}
                 </div>
@@ -908,7 +908,7 @@ export default function IncidentTimeline({
                       </p>
                       {intel.why && intel.why.length > 0 && (
                         <details className="text-xs">
-                          <summary className="inline-flex min-h-11 cursor-pointer items-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8">
+                          <summary className="inline-flex min-h-11 cursor-pointer items-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8">
                             Why?
                           </summary>
                           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-foreground/80">
@@ -953,7 +953,7 @@ export default function IncidentTimeline({
             >
               {/* Node Icon */}
               <div
-                className={`relative z-10 rounded-full border-4 border-background shrink-0 h-10 w-10 flex items-center justify-center shadow-xs ${config.avatarBg} ${config.avatarText}`}
+                className={`relative z-10 rounded-full border-4 border-background shrink-0 h-10 w-10 flex items-center justify-center shadow-2xs ${config.avatarBg} ${config.avatarText}`}
               >
                 {config.icon}
               </div>

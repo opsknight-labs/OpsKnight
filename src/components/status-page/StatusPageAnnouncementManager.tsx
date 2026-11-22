@@ -580,7 +580,7 @@ export default function StatusPageAnnouncementManager({
             type="button"
             variant="primary"
             onClick={handleOpenCreateModal}
-            className="flex items-center gap-1.5 shadow-sm"
+            className="flex items-center gap-1.5 shadow-xs"
           >
             <Plus className="w-4 h-4" />
             <span>New Announcement</span>
@@ -600,7 +600,7 @@ export default function StatusPageAnnouncementManager({
             className={cn(
               'p-3 rounded-xl border text-left transition-all cursor-pointer select-none w-full',
               activeTab === 'all'
-                ? 'bg-primary/10 border-primary shadow-xs'
+                ? 'bg-primary/10 border-primary shadow-2xs'
                 : 'bg-card border-border/80 hover:bg-muted/30'
             )}
           >
@@ -621,7 +621,7 @@ export default function StatusPageAnnouncementManager({
             className={cn(
               'p-3 rounded-xl border text-left transition-all cursor-pointer select-none w-full',
               activeTab === 'active'
-                ? 'bg-emerald-500/10 border-emerald-500 shadow-xs'
+                ? 'bg-emerald-500/10 border-emerald-500 shadow-2xs'
                 : 'bg-card border-border/80 hover:bg-muted/30'
             )}
           >
@@ -649,7 +649,7 @@ export default function StatusPageAnnouncementManager({
             className={cn(
               'p-3 rounded-xl border text-left transition-all cursor-pointer select-none w-full',
               activeTab === 'scheduled'
-                ? 'bg-indigo-500/10 border-indigo-500 shadow-xs'
+                ? 'bg-indigo-500/10 border-indigo-500 shadow-2xs'
                 : 'bg-card border-border/80 hover:bg-muted/30'
             )}
           >
@@ -672,7 +672,7 @@ export default function StatusPageAnnouncementManager({
             className={cn(
               'p-3 rounded-xl border text-left transition-all cursor-pointer select-none w-full',
               activeTab === 'concluded'
-                ? 'bg-muted border-border shadow-xs'
+                ? 'bg-muted border-border shadow-2xs'
                 : 'bg-card border-border/80 hover:bg-muted/30'
             )}
           >
@@ -760,7 +760,7 @@ export default function StatusPageAnnouncementManager({
               placeholder="Search announcements..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-lg placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             />
             {searchQuery && (
               <button
@@ -1035,7 +1035,7 @@ export default function StatusPageAnnouncementManager({
                     <select
                       value={type}
                       onChange={e => setType(e.target.value)}
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground font-medium focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     >
                       {ANNOUNCEMENT_TYPES.map(t => (
                         <option key={t.value} value={t.value}>
@@ -1148,7 +1148,7 @@ export default function StatusPageAnnouncementManager({
                             setEndDate(nextD);
                           }
                         }}
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary"
                         required
                       />
                     </div>
@@ -1164,7 +1164,7 @@ export default function StatusPageAnnouncementManager({
                               setEndTime('');
                             }
                           }}
-                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-hidden focus:ring-1 focus:ring-primary"
                           required
                         />
                       </div>
@@ -1197,7 +1197,7 @@ export default function StatusPageAnnouncementManager({
                         min={startDate}
                         onChange={e => setEndDate(e.target.value)}
                         placeholder="Open-ended"
-                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary"
                       />
                     </div>
                     {specifyTime && (
@@ -1208,7 +1208,7 @@ export default function StatusPageAnnouncementManager({
                           min={endDate === startDate && specifyTime ? startTime : undefined}
                           onChange={e => setEndTime(e.target.value)}
                           disabled={!endDate}
-                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-hidden focus:ring-1 focus:ring-primary disabled:opacity-50"
                         />
                       </div>
                     )}

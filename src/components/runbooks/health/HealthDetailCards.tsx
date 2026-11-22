@@ -134,7 +134,7 @@ export function HealthDetailCards({
       {/* 3 Diagnostic Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {/* Card 1: Execution Plane */}
-        <div className="flex flex-col justify-between rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs hover:border-border transition-colors">
+        <div className="flex flex-col justify-between rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-2xs hover:border-border transition-colors">
           <div className="space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between gap-3">
@@ -231,7 +231,7 @@ export function HealthDetailCards({
         </div>
 
         {/* Card 2: Queue & Storage */}
-        <div className="flex flex-col justify-between rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs hover:border-border transition-colors">
+        <div className="flex flex-col justify-between rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-2xs hover:border-border transition-colors">
           <div className="space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between gap-3">
@@ -290,7 +290,7 @@ export function HealthDetailCards({
         </div>
 
         {/* Card 3: Safety & Circuit Controls */}
-        <div className="flex flex-col justify-between rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs hover:border-border transition-colors">
+        <div className="flex flex-col justify-between rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-2xs hover:border-border transition-colors">
           <div className="space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between gap-3">
@@ -354,7 +354,7 @@ export function HealthDetailCards({
       {/* Agents Requiring Operator Attention Section */}
       <section
         aria-label="Agents requiring operator attention"
-        className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs space-y-4"
+        className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-2xs space-y-4"
       >
         {/* Section Header with Filter Tabs and Search */}
         <div className="flex flex-col gap-3.5 border-b border-border/60 pb-4 md:flex-row md:items-center md:justify-between">
@@ -390,7 +390,7 @@ export function HealthDetailCards({
                 placeholder="Filter agent..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="h-8 w-full rounded-lg border border-border/80 bg-background/80 pl-8 pr-7 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring transition-colors shadow-2xs"
+                className="h-8 w-full rounded-lg border border-border/80 bg-background/80 pl-8 pr-7 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-hidden focus:ring-1 focus:ring-ring transition-colors shadow-2xs"
               />
               {searchQuery && (
                 <button
@@ -489,7 +489,7 @@ export function HealthDetailCards({
                 <Link
                   key={agent.id}
                   href={`/runbooks/agents?attention=1&q=${encodeURIComponent(agent.name)}`}
-                  className="group relative flex flex-col justify-between gap-3 rounded-xl border border-border/70 bg-card/60 p-4 transition-all hover:border-primary/40 hover:bg-muted/20 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="group relative flex flex-col justify-between gap-3 rounded-xl border border-border/70 bg-card/60 p-4 transition-all hover:border-primary/40 hover:bg-muted/20 hover:shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {/* Top row: Agent Name + Status Badge */}
                   <div className="flex items-center justify-between gap-2 min-w-0">
@@ -629,7 +629,7 @@ function MetricTile({
       className={cn(
         'flex flex-col justify-between rounded-xl border p-3 transition-colors',
         alert
-          ? 'border-rose-500/35 bg-rose-500/[0.04]'
+          ? 'border-rose-500/35 bg-rose-500/4'
           : 'border-border/50 bg-muted/20 hover:bg-muted/30'
       )}
     >

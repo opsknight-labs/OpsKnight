@@ -52,7 +52,7 @@ export function PostmortemRecurrenceStrip({
         )}
       </p>
       <details>
-        <summary className="flex min-h-11 cursor-pointer items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <summary className="flex min-h-11 cursor-pointer items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
           Earlier occurrences{openActionItems.length > 0 && ' and open action items'}
         </summary>
         <ul className="pb-1">

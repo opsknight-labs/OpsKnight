@@ -13,7 +13,7 @@ interface PostmortemImpactMetricsProps {
 export default function PostmortemImpactMetrics({ metrics }: PostmortemImpactMetricsProps) {
   if (!metrics || Object.keys(metrics).length === 0) {
     return (
-      <Card className="bg-gradient-to-br from-card to-ink-50">
+      <Card className="bg-linear-to-br from-card to-ink-50">
         <CardContent className="py-8 text-center">
           <p className="text-muted-foreground">No impact metrics recorded</p>
         </CardContent>
@@ -73,7 +73,7 @@ export default function PostmortemImpactMetrics({ metrics }: PostmortemImpactMet
   ].filter(Boolean) as Array<{ label: string; value: number; color: string }>;
 
   return (
-    <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
+    <Card className="bg-linear-to-br from-card to-ink-50 shadow-md">
       <CardHeader>
         <CardTitle className="text-xl">Impact Metrics</CardTitle>
       </CardHeader>
@@ -83,7 +83,7 @@ export default function PostmortemImpactMetrics({ metrics }: PostmortemImpactMet
           {metricCards.map((card, index) => (
             <div
               key={index}
-              className={cn('p-4 bg-card rounded-md shadow-sm border-2', card.borderClass)}
+              className={cn('p-4 bg-card rounded-md shadow-xs border-2', card.borderClass)}
             >
               <div className="text-xs text-muted-foreground mb-1">{card.label}</div>
               <div className={cn('text-2xl font-bold', card.colorClass)}>{card.value}</div>

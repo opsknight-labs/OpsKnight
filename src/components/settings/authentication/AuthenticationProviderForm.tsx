@@ -146,7 +146,7 @@ export default function AuthenticationProviderForm() {
             <button
               type="button"
               onClick={() => setShowSecret(prev => !prev)}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={showSecret ? 'Hide secret' : 'Show secret'}
             >
               {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -173,7 +173,7 @@ export default function AuthenticationProviderForm() {
   return (
     <div className="min-w-0 space-y-6">
       {/* 1. Identity Provider Selector Card */}
-      <div className="rounded-xl border bg-card p-5 space-y-4 shadow-xs">
+      <div className="rounded-xl border bg-card p-5 space-y-4 shadow-2xs">
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
@@ -210,7 +210,7 @@ export default function AuthenticationProviderForm() {
                 disabled={pending}
                 className={`group relative flex flex-col items-start p-3.5 rounded-xl border text-left transition-all duration-150 cursor-pointer ${
                   isSelected
-                    ? 'border-primary bg-primary/10 shadow-xs ring-1 ring-primary'
+                    ? 'border-primary bg-primary/10 shadow-2xs ring-1 ring-primary'
                     : 'border-border/80 bg-card hover:bg-muted/40 hover:border-border'
                 }`}
               >
@@ -254,7 +254,7 @@ export default function AuthenticationProviderForm() {
       {chosen && (
         <>
           {/* 2. Provider Credentials Card */}
-          <div className="rounded-xl border bg-card p-5 space-y-4 shadow-xs">
+          <div className="rounded-xl border bg-card p-5 space-y-4 shadow-2xs">
             <div className="flex items-center gap-2 pb-2 border-b">
               <Key className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-bold text-foreground">
@@ -347,7 +347,7 @@ export default function AuthenticationProviderForm() {
 
           {/* 3. Callback URLs Registration Card */}
           <section
-            className="rounded-xl border bg-muted/20 p-5 space-y-4 shadow-xs"
+            className="rounded-xl border bg-muted/20 p-5 space-y-4 shadow-2xs"
             aria-labelledby="authentication-callback-title"
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b">
@@ -453,7 +453,7 @@ export default function AuthenticationProviderForm() {
           </section>
 
           <section
-            className="rounded-xl border bg-card p-5 space-y-3 shadow-xs"
+            className="rounded-xl border bg-card p-5 space-y-3 shadow-2xs"
             aria-labelledby="authentication-checklist-title"
           >
             <h3 id="authentication-checklist-title" className="text-sm font-bold text-foreground">
@@ -478,7 +478,7 @@ export default function AuthenticationProviderForm() {
           <details
             key={String(requiresExactIssuer)}
             open={requiresExactIssuer || undefined}
-            className="group rounded-xl border bg-card p-4 space-y-4 shadow-xs transition-all duration-200"
+            className="group rounded-xl border bg-card p-4 space-y-4 shadow-2xs transition-all duration-200"
           >
             <summary className="flex items-center justify-between cursor-pointer text-sm font-semibold text-foreground select-none list-none">
               <div className="flex items-center gap-2">

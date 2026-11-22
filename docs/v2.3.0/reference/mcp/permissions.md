@@ -58,7 +58,7 @@ Each change is reviewed once and given a risk tier. The tier, not the tool, deci
 
 Operation columns count catalog operations that need the permission: plain reads, sensitive reads (only while an administrator allows sensitive reads), routine changes (run directly when changes are allowed) and reviewed changes (need human approval first). Curated tools reuse these operations. A ✓ means the role can use at least one action the permission gates. The consent label is the text the consent page shows; the operation columns are authoritative for whether a change runs directly or waits for review.
 
-| Permission | Consent label | Area | Kind | Admin | Responder | Auditor | User |  | Reads | Sensitive reads | Routine changes | Reviewed changes |
+| Permission | Consent label | Area | Kind | Admin | Responder | Auditor | User | Stakeholder | Reads | Sensitive reads | Routine changes | Reviewed changes |
 | --- | --- | --- | --- | :-: | :-: | :-: | :-: | :-: | --: | --: | --: | --: |
 | `audit:read` | View the audit log | Reports and audit | View | ✓ |  | ✓ |  |  | 0 | 2 | 0 | 0 |
 | `automation-settings:read` | View automation settings | Automation | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |

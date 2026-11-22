@@ -73,7 +73,7 @@ export function SettingsRow({
                   <button
                     type="button"
                     aria-label={`More information about ${label}`}
-                    className="inline-flex rounded-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="inline-flex rounded-sm text-muted-foreground outline-hidden transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <HelpCircle aria-hidden="true" className="h-4 w-4" />
                   </button>

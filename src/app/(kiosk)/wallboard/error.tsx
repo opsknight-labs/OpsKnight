@@ -23,7 +23,7 @@ export default function WallboardError({
   }, [error]);
 
   return (
-    <div className="dark fixed inset-0 z-[70] flex items-center justify-center bg-[#050507] p-6 text-foreground">
+    <div className="dark fixed inset-0 z-70 flex items-center justify-center bg-[#050507] p-6 text-foreground">
       <ErrorState
         title="The wallboard couldn't load"
         message={getUserFacingErrorMessage(error)}

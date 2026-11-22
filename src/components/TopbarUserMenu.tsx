@@ -52,25 +52,25 @@ export default function TopbarUserMenu({
           className="relative h-10 w-10 rounded-full p-0 transition-all duration-300 hover:scale-105 group ring-0 focus-visible:ring-2 focus-visible:ring-offset-2 overflow-hidden"
         >
           {/* 1. Outer Gradient Frame */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 via-muted to-primary/20 group-hover:from-primary/40 group-hover:via-primary/10 group-hover:to-primary/40 transition-all duration-500" />
+          <div className="absolute inset-0 bg-linear-to-tr from-primary/20 via-muted to-primary/20 group-hover:from-primary/40 group-hover:via-primary/10 group-hover:to-primary/40 transition-all duration-500" />
 
           {/* 2. Slate Gap */}
           <div className="absolute inset-[2px] rounded-full bg-zinc-900" />
 
           {/* 3. Avatar Image */}
-          <Avatar className="absolute inset-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full border border-black/5 dark:border-white/10 shadow-sm">
+          <Avatar className="absolute inset-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full border border-black/5 dark:border-white/10 shadow-xs">
             <AvatarImage
               src={finalAvatarUrl}
               alt={name || 'User'}
               className="object-cover h-full w-full"
             />
-            <AvatarFallback className="flex items-center justify-center h-full w-full bg-gradient-to-br from-primary/10 to-primary/20 text-primary font-bold text-[10px]">
+            <AvatarFallback className="flex items-center justify-center h-full w-full bg-linear-to-br from-primary/10 to-primary/20 text-primary font-bold text-[10px]">
               {initials}
             </AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="z-[1050] w-64" align="end">
+      <DropdownMenuContent className="z-1050 w-64" align="end">
         <div className="flex items-center gap-2.5 px-2 py-2">
           <UserAvatar
             userId={userId}

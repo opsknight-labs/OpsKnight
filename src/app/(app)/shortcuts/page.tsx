@@ -67,7 +67,7 @@ export default function ShortcutsPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card shadow-sm">
+        <div className="rounded-lg border border-border bg-card shadow-xs">
           <ShortcutsEmpty query={searchQuery.trim()} />
         </div>
       ) : (
@@ -79,7 +79,7 @@ export default function ShortcutsPage() {
               <section
                 key={category}
                 aria-labelledby={`shortcut-group-${category}`}
-                className="rounded-lg border border-border bg-card p-4 shadow-sm"
+                className="rounded-lg border border-border bg-card p-4 shadow-xs"
               >
                 <h2
                   id={`shortcut-group-${category}`}

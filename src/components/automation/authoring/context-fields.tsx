@@ -46,9 +46,9 @@ export const FieldCatalogRow = memo(function FieldCatalogRow({
         aria-pressed={selected}
         onClick={() => onSelect(field.key)}
         className={cn(
-          'grid min-h-11 w-full gap-x-3 gap-y-1 px-3.5 py-2.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary sm:grid-cols-[minmax(0,1.6fr)_6rem_minmax(0,1fr)_minmax(0,1.2fr)] sm:items-center border-l-2',
+          'grid min-h-11 w-full gap-x-3 gap-y-1 px-3.5 py-2.5 text-left text-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary sm:grid-cols-[minmax(0,1.6fr)_6rem_minmax(0,1fr)_minmax(0,1.2fr)] sm:items-center border-l-2',
           selected
-            ? 'bg-primary/5 ring-1 ring-primary/30 border-l-primary shadow-xs'
+            ? 'bg-primary/5 ring-1 ring-primary/30 border-l-primary shadow-2xs'
             : 'border-l-transparent hover:bg-muted/40'
         )}
       >
@@ -153,7 +153,7 @@ export const FieldDetail = memo(function FieldDetail({
   return (
     <section
       aria-label={`${field.label} details`}
-      className="min-w-0 space-y-3 rounded-xl border border-border/80 bg-card p-3 sm:p-3.5 shadow-xs"
+      className="min-w-0 space-y-3 rounded-xl border border-border/80 bg-card p-3 sm:p-3.5 shadow-2xs"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -174,7 +174,7 @@ export const FieldDetail = memo(function FieldDetail({
               <button
                 type="button"
                 aria-label={`Copy automation.${field.key}`}
-                className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/60 px-1.5 py-px text-[9.5px] font-sans font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/60 px-1.5 py-px text-[9.5px] font-sans font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary"
                 onClick={() => {
                   navigator.clipboard.writeText(`automation.${field.key}`).then(
                     () => notify.success(`Copied automation.${field.key} to clipboard`),

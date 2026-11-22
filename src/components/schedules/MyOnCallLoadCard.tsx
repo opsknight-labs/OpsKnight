@@ -24,7 +24,7 @@ export function MyOnCallLoadBody({ load }: { load: MyLoadView }) {
   ];
   return (
     <Card
-      className="overflow-hidden border-border/70 shadow-xs"
+      className="overflow-hidden border-border/70 shadow-2xs"
       aria-labelledby="my-oncall-load-title"
     >
       <CardHeader className="border-b bg-muted/20 px-4 py-2.5">

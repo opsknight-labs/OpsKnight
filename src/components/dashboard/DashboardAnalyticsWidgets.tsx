@@ -11,7 +11,7 @@ export function DashboardAnalyticsHeatmap() {
       <div
         role="status"
         aria-busy="true"
-        className="rounded-lg border border-border bg-card p-4 shadow-sm"
+        className="rounded-lg border border-border bg-card p-4 shadow-xs"
       >
         <span className="sr-only">Loading incident history…</span>
         <Skeleton aria-hidden className="mb-3 h-4 w-32" />

@@ -273,7 +273,7 @@ export default function ScheduleTimeline({
                   key={dayKey}
                   className={cn(
                     'flex-1 border-r px-2 py-3 text-center transition-colors last:border-r-0',
-                    isCurrentDay && 'bg-primary/[0.08]',
+                    isCurrentDay && 'bg-primary/8',
                     isWeekend && !isCurrentDay && 'bg-muted/30'
                   )}
                 >
@@ -361,7 +361,7 @@ export default function ScheduleTimeline({
                     <div className="px-3 py-2 z-20 relative">
                       <div
                         className={cn(
-                          'inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-xs',
+                          'inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-2xs',
                           color.light,
                           color.text
                         )}
@@ -382,7 +382,7 @@ export default function ScheduleTimeline({
                             key={dayKey}
                             className={cn(
                               'flex-1 border-r border-border/50 last:border-r-0',
-                              isCurrentDay && 'bg-primary/[0.03]',
+                              isCurrentDay && 'bg-primary/3',
                               isWeekend && !isCurrentDay && 'bg-muted/20'
                             )}
                           />
@@ -417,7 +417,7 @@ export default function ScheduleTimeline({
                                 <div
                                   className={cn(
                                     'absolute h-12 rounded-xl flex items-center gap-2 px-3 cursor-pointer transition-all duration-200',
-                                    'bg-gradient-to-r shadow-md hover:shadow-lg hover:scale-[1.02] hover:-translate-y-0.5',
+                                    'bg-linear-to-r shadow-md hover:shadow-lg hover:scale-[1.02] hover:-translate-y-0.5',
                                     color.bg,
                                     isOverride && 'ring-2 ring-orange-400 ring-offset-2'
                                   )}
@@ -433,7 +433,7 @@ export default function ScheduleTimeline({
                                     gender={shift.userGender}
                                     name={shift.userName}
                                     size="sm"
-                                    className="ring-2 ring-white/40 shadow-sm"
+                                    className="ring-2 ring-white/40 shadow-xs"
                                     fallbackClassName="bg-white/30 text-white"
                                   />
                                   {widthPercent > 8 && (
@@ -526,7 +526,7 @@ export default function ScheduleTimeline({
               <div className="relative">
                 {/* Final Schedule Label */}
                 <div className="px-3 py-2 z-20 relative">
-                  <div className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-background shadow-xs">
+                  <div className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-background shadow-2xs">
                     <Shield className="h-3 w-3" />
                     Effective On-Call
                   </div>
@@ -544,7 +544,7 @@ export default function ScheduleTimeline({
                         key={dayKey}
                         className={cn(
                           'flex-1 border-r border-border/50 last:border-r-0',
-                          isCurrentDay && 'bg-primary/[0.03]',
+                          isCurrentDay && 'bg-primary/3',
                           isWeekend && !isCurrentDay && 'bg-muted/20'
                         )}
                       />
@@ -574,7 +574,7 @@ export default function ScheduleTimeline({
                             <div
                               className={cn(
                                 'absolute h-12 rounded-xl flex items-center gap-2 px-3 cursor-pointer transition-all duration-200',
-                                'bg-gradient-to-r from-foreground/85 to-foreground shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5',
+                                'bg-linear-to-r from-foreground/85 to-foreground shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5',
                                 'ring-2 ring-foreground/25'
                               )}
                               style={{
@@ -589,7 +589,7 @@ export default function ScheduleTimeline({
                                 gender={block.userGender}
                                 name={block.userName}
                                 size="sm"
-                                className="ring-2 ring-white/40 shadow-sm"
+                                className="ring-2 ring-white/40 shadow-xs"
                                 fallbackClassName="bg-white/30 text-white"
                               />
                               {widthPercent > 8 && (
@@ -664,7 +664,7 @@ export default function ScheduleTimeline({
               </span>
               {[...layerColorMap.entries()].map(([layer, color]) => (
                 <div key={layer} className="flex items-center gap-2">
-                  <div className={cn('h-3 w-3 rounded-md bg-gradient-to-r shadow-xs', color.bg)} />
+                  <div className={cn('h-3 w-3 rounded-md bg-linear-to-r shadow-2xs', color.bg)} />
                   <span className="text-xs font-medium text-muted-foreground">{layer}</span>
                 </div>
               ))}

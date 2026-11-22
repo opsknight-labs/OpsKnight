@@ -144,13 +144,13 @@ export default async function IntelligenceAssistantPage({
             {providers.map(provider => (
               <li key={provider.id}>
                 <details className="group/provider">
-                  <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                  <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                     <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
                       <ChevronRight
                         className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 group-open/provider:rotate-90 motion-reduce:transition-none"
                         aria-hidden="true"
                       />
-                      <span className="min-w-0 break-words">
+                      <span className="min-w-0 wrap-break-word">
                         <span className="sr-only">Edit </span>
                         {provider.name}{' '}
                         <span className="font-normal text-muted-foreground">
@@ -197,7 +197,7 @@ export default async function IntelligenceAssistantPage({
         )}
         {canManage && (
           <details className="group/add -mx-4 border-t border-border px-4 md:-mx-6 md:px-6">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-3 text-sm font-medium text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
               <Plus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               Add a provider
             </summary>

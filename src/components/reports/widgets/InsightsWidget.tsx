@@ -77,7 +77,7 @@ const InsightsWidget = memo(function InsightsWidget({
             }`}
           >
             <div className="flex items-start gap-2">
-              <div className="flex-shrink-0 mt-0.5">
+              <div className="shrink-0 mt-0.5">
                 {insight.type === 'positive' ? (
                   <TrendingUp className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                 ) : insight.type === 'negative' ? (

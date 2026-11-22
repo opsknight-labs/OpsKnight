@@ -490,7 +490,7 @@ export default function ScopeSelectorGrouped({
       </div>
 
       {/* Categorized Permission Scope List */}
-      <div className="max-h-[30rem] overflow-y-auto pr-1.5 space-y-4">
+      <div className="max-h-120 overflow-y-auto pr-1.5 space-y-4">
         {groupedCategories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center rounded-xl border border-dashed border-border/80 bg-background/50">
             <Search className="h-8 w-8 text-muted-foreground/60 mb-2" />

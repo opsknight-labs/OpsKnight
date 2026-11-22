@@ -219,7 +219,7 @@ export default function EventsListTable({
                     <TableCell className={cn(logCellClass, 'max-w-[320px]')}>
                       <Link
                         href={`/incidents/${event.incident.id}`}
-                        className="block truncate rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="block truncate rounded-sm font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {event.incident.title}
                       </Link>

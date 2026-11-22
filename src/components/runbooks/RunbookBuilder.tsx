@@ -462,7 +462,7 @@ export default function RunbookBuilder({
               onAddStep={addStep}
             />
             <details className="group mt-3 hidden px-1 text-xs text-muted-foreground md:block">
-              <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm font-medium hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                 <ChevronRight
                   className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
                   aria-hidden="true"
@@ -495,7 +495,7 @@ export default function RunbookBuilder({
           </Button>
           {selectedStep && selectedCatalog && selectedRisk ? (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs">
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-2xs">
                 <div className="flex min-w-0 items-start gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
                     <selectedCatalog.icon className="h-5 w-5" aria-hidden="true" />
@@ -504,7 +504,7 @@ export default function RunbookBuilder({
                     <h2
                       id={`step-heading-${activeStepId}`}
                       tabIndex={-1}
-                      className="break-words !text-lg !leading-snug font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="wrap-break-word text-lg! leading-snug! font-semibold tracking-tight text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       Step {selectedStepIndex + 1}: {selectedStep.name || 'Untitled step'}
                     </h2>
@@ -654,7 +654,7 @@ export default function RunbookBuilder({
           <fieldset
             key={inputIdentities.at(index) ?? index}
             disabled={readOnly}
-            className="grid min-w-0 gap-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs sm:grid-cols-2"
+            className="grid min-w-0 gap-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-2xs sm:grid-cols-2"
           >
             <legend className="float-left mb-1 flex w-full flex-wrap items-center gap-2 text-sm font-semibold sm:col-span-2">
               <span>
@@ -1054,7 +1054,7 @@ export default function RunbookBuilder({
     <ActionForm
       action={action}
       successMessage="Draft saved"
-      className="space-y-6 max-sm:[&_input]:min-h-11 max-sm:[&_button]:min-h-11 max-sm:[&_[role=combobox]]:min-h-11"
+      className="space-y-6 max-sm:[&_input]:min-h-11 max-sm:[&_button]:min-h-11 max-sm:**:[[role=combobox]]:min-h-11"
       onSuccess={result => {
         setDirty(false);
         if (typeof result?.draftRevision === 'number') {

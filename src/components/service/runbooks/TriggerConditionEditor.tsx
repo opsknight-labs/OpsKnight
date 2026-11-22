@@ -131,7 +131,7 @@ export default function TriggerConditionEditor({
       {usesContext && !contextLive && (
         <Alert className="border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
           <AlertTriangle
-            className="h-4 w-4 !text-amber-600 dark:text-amber-400"
+            className="h-4 w-4 text-amber-600! dark:text-amber-400"
             aria-hidden="true"
           />
           <AlertTitle className="text-sm">

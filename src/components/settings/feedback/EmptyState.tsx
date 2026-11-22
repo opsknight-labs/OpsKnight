@@ -18,7 +18,7 @@ export function EmptyState({ icon: Icon, title, description, action, className }
         className
       )}
     >
-      <div className="flex bg-background h-12 w-12 items-center justify-center rounded-lg border shadow-sm mb-4">
+      <div className="flex bg-background h-12 w-12 items-center justify-center rounded-lg border shadow-xs mb-4">
         <Icon className="h-6 w-6 text-muted-foreground" />
       </div>
       <h3 className="text-lg font-semibold mb-2">{title}</h3>

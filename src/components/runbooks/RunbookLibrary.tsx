@@ -69,7 +69,7 @@ export function CreateRunbookDialog({ teams = [] }: { teams?: RunbookTeamOption[
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button className="gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs">
+        <Button className="gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-2xs">
           <Plus className="h-4 w-4" />
           <span>New Runbook</span>
         </Button>
@@ -265,7 +265,7 @@ function TagLinks({ tags, max }: { tags: string[]; max: number }) {
           <Link
             href={`/runbooks?tag=${encodeURIComponent(tag)}`}
             aria-label={`Filter by tag ${tag}`}
-            className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           >
             #{tag}
           </Link>
@@ -371,7 +371,7 @@ export default function RunbookLibrary({
     {
       id: 'runbook',
       header: 'Runbook',
-      className: 'max-w-[22rem]',
+      className: 'max-w-88',
       cell: r => (
         <DirectoryPrimaryCell
           href={`/runbooks/${r.id}`}
@@ -385,7 +385,7 @@ export default function RunbookLibrary({
       id: 'bindings',
       hideable: true,
       header: 'Service bindings',
-      className: 'hidden md:table-cell max-w-[14rem]',
+      className: 'hidden md:table-cell max-w-56',
       cell: r => <Bindings runbook={r} />,
     },
     {
@@ -468,7 +468,7 @@ export default function RunbookLibrary({
   return (
     <section
       aria-label="Runbook library"
-      className="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
     >
       <DirectoryHeader
         title="Runbook library"

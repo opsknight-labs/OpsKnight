@@ -172,7 +172,7 @@ export default function RunbookExecutionPreview({
       {preview && (
         <section
           aria-label="Execution preview"
-          className="overflow-hidden rounded-xl border border-border/80 dark:border-border/60 bg-background/80 dark:bg-background/40 backdrop-blur-xs text-sm shadow-xs mt-2"
+          className="overflow-hidden rounded-xl border border-border/80 dark:border-border/60 bg-background/80 dark:bg-background/40 backdrop-blur-xs text-sm shadow-2xs mt-2"
         >
           <header className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border/60 bg-muted/30 px-4 py-3 sm:px-5">
             <div className="min-w-0">
@@ -263,7 +263,7 @@ export default function RunbookExecutionPreview({
                         />
                         <span
                           className={cn(
-                            'min-w-0 break-words',
+                            'min-w-0 wrap-break-word',
                             check.state === 'blocked'
                               ? 'text-rose-700 dark:text-rose-300 font-medium'
                               : 'text-foreground'
@@ -318,7 +318,7 @@ export default function RunbookExecutionPreview({
                       </span>
                     </p>
                     <details className="group mt-1">
-                      <summary className="flex h-6 w-fit cursor-pointer list-none items-center gap-1 rounded text-[11px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                      <summary className="flex h-6 w-fit cursor-pointer list-none items-center gap-1 rounded text-[11px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                         <ChevronRight
                           className="h-3 w-3 transition-transform group-open:rotate-90"
                           aria-hidden
@@ -340,7 +340,7 @@ export default function RunbookExecutionPreview({
 
           <footer className="space-y-2.5 border-t border-border/60 bg-muted/20 px-4 py-3 sm:px-5">
             <details className="group text-xs text-muted-foreground">
-              <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md text-[11px] font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md text-[11px] font-medium hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 <Info className="h-3.5 w-3.5" aria-hidden />
                 How preview protects this run
                 <ChevronRight
@@ -395,7 +395,7 @@ export default function RunbookExecutionPreview({
               <SubmitButton
                 variant="default"
                 size="sm"
-                className="w-full h-8.5 rounded-lg text-xs font-semibold shadow-xs"
+                className="w-full h-8.5 rounded-lg text-xs font-semibold shadow-2xs"
                 pendingLabel="Starting…"
                 disabled={disabled || expired || blocked || (hasWrites && !confirmed)}
               >

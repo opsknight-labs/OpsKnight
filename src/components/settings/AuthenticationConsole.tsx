@@ -75,7 +75,7 @@ function AuthenticationWorkspace() {
   return (
     <div className="min-w-0 space-y-6">
       {/* Main SSO & Authentication Card Header */}
-      <div className="rounded-xl border bg-card p-4 sm:p-5 shadow-xs">
+      <div className="rounded-xl border bg-card p-4 sm:p-5 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3.5 min-w-0">
             <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0">
@@ -198,7 +198,7 @@ function AuthenticationWorkspace() {
               </Badge>
             )}
           </AlertTitle>
-          <AlertDescription className="break-words">{liveMessage}</AlertDescription>
+          <AlertDescription className="wrap-break-word">{liveMessage}</AlertDescription>
         </Alert>
       )}
       <AuthenticationNavigationGuard />

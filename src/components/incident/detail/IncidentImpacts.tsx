@@ -97,7 +97,7 @@ export default function IncidentImpacts({
                 <Link
                   href={`/services/business/${impact.id}`}
                   title={reason}
-                  className={`${chip} transition-colors hover:border-foreground/30 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                  className={`${chip} transition-colors hover:border-foreground/30 hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring`}
                 >
                   {impact.name}
                   <span className="sr-only">: {reason}</span>
@@ -114,7 +114,7 @@ export default function IncidentImpacts({
                   disabled={pending}
                   onClick={() => change(impact.id, false)}
                   aria-label={`Not impacting ${impact.name}`}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
                   <X className="h-3 w-3" aria-hidden />
                 </button>

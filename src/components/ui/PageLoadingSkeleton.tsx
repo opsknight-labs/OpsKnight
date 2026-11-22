@@ -26,9 +26,9 @@ export default function PageLoadingSkeleton({
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-4"
+              className="relative overflow-hidden rounded-xl border border-ink-200 bg-linear-to-br from-card to-ink-50 p-4"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+              <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
               <Skeleton className="h-4 w-16 mb-2" />
               <Skeleton className="h-8 w-20" />
             </div>
@@ -36,8 +36,8 @@ export default function PageLoadingSkeleton({
         </div>
 
         {/* Chart placeholder */}
-        <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-6">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+        <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-linear-to-br from-card to-ink-50 p-6">
+          <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
           <Skeleton className="h-6 w-40 mb-4" />
           <Skeleton className="h-64 w-full rounded-lg" />
         </div>
@@ -56,8 +56,8 @@ export default function PageLoadingSkeleton({
     return (
       <div className={cn('w-full px-4 md:px-6 lg:px-8 py-6 space-y-6', className)}>
         {/* Header */}
-        <div className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-6">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+        <div className="relative overflow-hidden rounded-xl border border-ink-200 bg-linear-to-br from-card to-ink-50 p-6">
+          <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
           <div className="flex items-start justify-between">
             <div className="space-y-3">
               <Skeleton className="h-8 w-64" />
@@ -80,9 +80,9 @@ export default function PageLoadingSkeleton({
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-5"
+                className="relative overflow-hidden rounded-xl border border-ink-200 bg-linear-to-br from-card to-ink-50 p-5"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+                <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
                 <Skeleton className="h-5 w-32 mb-3" />
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-full" />
@@ -96,9 +96,9 @@ export default function PageLoadingSkeleton({
             {Array.from({ length: 2 }).map((_, i) => (
               <div
                 key={i}
-                className="relative overflow-hidden rounded-xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-5"
+                className="relative overflow-hidden rounded-xl border border-ink-200 bg-linear-to-br from-card to-ink-50 p-5"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+                <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
                 <Skeleton className="h-5 w-24 mb-3" />
                 <Skeleton className="h-16 w-full rounded-lg" />
               </div>
@@ -119,8 +119,8 @@ export default function PageLoadingSkeleton({
         </div>
 
         {/* Form fields */}
-        <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-card to-ink-50 p-6 space-y-6">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+        <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-linear-to-br from-card to-ink-50 p-6 space-y-6">
+          <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="space-y-2">
               <Skeleton className="h-4 w-24" />
@@ -140,8 +140,8 @@ export default function PageLoadingSkeleton({
   return (
     <div className={cn('w-full px-4 md:px-6 lg:px-8 py-6 space-y-6', className)}>
       {/* Header section with gradient */}
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-6 shadow-xl ring-1 ring-white/5">
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer" />
+      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-linear-to-b from-[#121216] to-[#09090b] p-6 shadow-xl ring-1 ring-white/5">
+        <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent animate-shimmer" />
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="space-y-2">
             <Skeleton className="h-8 w-48 bg-zinc-800/80" />
@@ -151,7 +151,7 @@ export default function PageLoadingSkeleton({
             {Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-3 shadow-xs"
+                className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-3 shadow-2xs"
               >
                 <Skeleton className="h-6 w-12 bg-zinc-800/90 mb-1" />
                 <Skeleton className="h-3 w-10 bg-zinc-800/70" />
@@ -172,9 +172,9 @@ export default function PageLoadingSkeleton({
       </div>
 
       {/* List items */}
-      <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-gradient-to-br from-card to-ink-50">
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary/60" />
+      <div className="relative overflow-hidden rounded-2xl border border-ink-200 bg-linear-to-br from-card to-ink-50">
+        <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-primary to-primary/60" />
 
         {/* List header */}
         <div className="px-5 py-4 border-b border-ink-100">

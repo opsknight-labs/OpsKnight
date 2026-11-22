@@ -62,7 +62,7 @@ export default function TeamAvatarStack({
                     name={user.name}
                     gender={user.gender}
                     size="xs"
-                    className={cn(avatarSize, 'ring-2 ring-card shadow-xs')}
+                    className={cn(avatarSize, 'ring-2 ring-card shadow-2xs')}
                   />
                 </div>
               </TooltipTrigger>
@@ -82,7 +82,7 @@ export default function TeamAvatarStack({
               <div
                 className={cn(
                   avatarSize,
-                  'relative inline-flex items-center justify-center rounded-full bg-muted font-bold text-2xs text-muted-foreground ring-2 ring-card shadow-xs cursor-default shrink-0 z-10'
+                  'relative inline-flex items-center justify-center rounded-full bg-muted font-bold text-2xs text-muted-foreground ring-2 ring-card shadow-2xs cursor-default shrink-0 z-10'
                 )}
               >
                 +{remainingCount}

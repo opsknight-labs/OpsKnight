@@ -208,7 +208,7 @@ export default function RetentionHoldsPanel() {
   };
 
   return (
-    <div className="rounded-lg border border-border/70 bg-card p-6 shadow-xs space-y-6">
+    <div className="rounded-lg border border-border/70 bg-card p-6 shadow-2xs space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -407,7 +407,7 @@ export default function RetentionHoldsPanel() {
                   id="scopeType"
                   value={createScopeType}
                   onChange={e => setCreateScopeType(e.target.value as typeof createScopeType)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary"
                 >
                   <option value="USER">User</option>
                   <option value="INCIDENT">Incident</option>
@@ -441,7 +441,7 @@ export default function RetentionHoldsPanel() {
                   placeholder="e.g. Legal investigation or pending litigation..."
                   value={createReason}
                   onChange={e => setCreateReason(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary"
                   required
                 />
               </div>

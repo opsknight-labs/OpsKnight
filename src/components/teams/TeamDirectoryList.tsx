@@ -92,7 +92,7 @@ function ServicesSummary({ team }: { team: TeamItem }) {
       <span className="shrink-0">{plural(team._count.services, 'service')}:</span>
       <Link
         href={`/services/${first.id}`}
-        className="min-w-0 truncate font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="min-w-0 truncate font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         {first.name}
       </Link>
@@ -160,7 +160,7 @@ function mobileRow(team: TeamItem) {
       <div className="flex items-center gap-2">
         <Link
           href={`/teams/${team.id}`}
-          className="min-w-0 flex-1 truncate text-sm font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-w-0 flex-1 truncate text-sm font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           {team.name}
         </Link>
@@ -326,7 +326,7 @@ export default function TeamDirectoryList({
           )}
         >
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <p className="min-w-[14rem] flex-1">
+          <p className="min-w-56 flex-1">
             {needsLeadCount === 1 ? '1 team has' : `${needsLeadCount} teams have`} no lead, so
             {needsLeadCount === 1 ? ' its' : ' their'} escalations can&apos;t reach an owner.
           </p>
@@ -342,7 +342,7 @@ export default function TeamDirectoryList({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-xs">
         <DirectoryHeader
           title="Team directory"
           summary={`Showing ${from}–${to} of ${shownTotal}`}

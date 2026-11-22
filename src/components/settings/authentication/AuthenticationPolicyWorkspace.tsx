@@ -117,7 +117,7 @@ export default function AuthenticationPolicyWorkspace() {
       {!nothingSaved && (
         <>
           {/* Session limits rarely change; they no longer require a new sign-in test. */}
-          <details className="group rounded-xl border bg-card shadow-xs">
+          <details className="group rounded-xl border bg-card shadow-2xs">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 text-sm font-semibold text-foreground">
               <span>
                 Session limits{' '}
@@ -133,7 +133,7 @@ export default function AuthenticationPolicyWorkspace() {
           </details>
 
           {/* Clubbed: Validate Administrator Access & Sign-in Policy Activation Card */}
-          <div className="space-y-6 rounded-xl border border-border/80 bg-card p-4 sm:p-6 shadow-xs">
+          <div className="space-y-6 rounded-xl border border-border/80 bg-card p-4 sm:p-6 shadow-2xs">
             <div>
               <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
                 <Lock className="h-5 w-5 text-primary" />
@@ -516,7 +516,7 @@ export default function AuthenticationPolicyWorkspace() {
                   onResolve={setActiveTab}
                 >
                   <Button
-                    className="gap-2 shadow-xs"
+                    className="gap-2 shadow-2xs"
                     onClick={() =>
                       void perform(async () => {
                         const activated = await authenticationRequest<{
@@ -554,7 +554,7 @@ export default function AuthenticationPolicyWorkspace() {
           (data.actor.kind === 'emergency' && data.mode === 'SSO_REQUIRED')) && (
           <details
             id="auth-policy-mode-change"
-            className="group scroll-mt-24 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs transition-all open:ring-1 open:ring-border"
+            className="group scroll-mt-24 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-2xs transition-all open:ring-1 open:ring-border"
           >
             <summary className="flex cursor-pointer items-center justify-between font-semibold text-sm text-foreground list-none select-none">
               <span className="flex items-center gap-2">
@@ -607,7 +607,7 @@ export default function AuthenticationPolicyWorkspace() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(prev => !prev)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

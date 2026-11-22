@@ -100,8 +100,8 @@ export function ExecutionOutputViewer({
         tabIndex={0}
         aria-label={label}
         className={cn(
-          'max-h-80 overflow-auto p-3 font-mono text-xs leading-relaxed text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-          wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'
+          'max-h-80 overflow-auto p-3 font-mono text-xs leading-relaxed text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+          wrap ? 'whitespace-pre-wrap wrap-break-word' : 'whitespace-pre'
         )}
       >
         {lineNumbers

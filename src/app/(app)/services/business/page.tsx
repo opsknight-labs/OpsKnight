@@ -89,7 +89,7 @@ export default async function BusinessServicesPage() {
                     {canManage ? (
                       <Link
                         href={`/services/business/${item.id}`}
-                        className="truncate text-sm font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                        className="truncate text-sm font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
                       >
                         {item.name}
                       </Link>
@@ -119,7 +119,7 @@ export default async function BusinessServicesPage() {
                     <li key={service.id}>
                       <Link
                         href={`/services/${service.id}`}
-                        className="inline-flex h-6 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="inline-flex h-6 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 text-xs font-medium hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <BusinessServiceStatusPill status={service.status} dotOnly />
                         {service.name}

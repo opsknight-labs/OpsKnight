@@ -387,8 +387,8 @@ export default function NotificationHistory() {
           onClick={() => handleStatusFilterClick('all')}
           className={`text-left rounded-xl border p-4 transition-all ${
             filterStatus === 'all'
-              ? 'border-primary bg-primary/5 ring-1 ring-primary/30 shadow-xs'
-              : 'border-border/80 bg-card hover:bg-muted/40 shadow-xs'
+              ? 'border-primary bg-primary/5 ring-1 ring-primary/30 shadow-2xs'
+              : 'border-border/80 bg-card hover:bg-muted/40 shadow-2xs'
           }`}
         >
           <div className="flex items-center justify-between pb-1">
@@ -404,8 +404,8 @@ export default function NotificationHistory() {
           onClick={() => handleStatusFilterClick('SENT')}
           className={`text-left rounded-xl border p-4 transition-all ${
             filterStatus === 'SENT'
-              ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/30 shadow-xs'
-              : 'border-border/80 bg-card hover:bg-muted/40 shadow-xs'
+              ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/30 shadow-2xs'
+              : 'border-border/80 bg-card hover:bg-muted/40 shadow-2xs'
           }`}
         >
           <div className="flex items-center justify-between pb-1">
@@ -429,8 +429,8 @@ export default function NotificationHistory() {
           onClick={() => handleStatusFilterClick('PENDING')}
           className={`text-left rounded-xl border p-4 transition-all ${
             filterStatus === 'PENDING'
-              ? 'border-amber-500 bg-amber-500/5 ring-1 ring-amber-500/30 shadow-xs'
-              : 'border-border/80 bg-card hover:bg-muted/40 shadow-xs'
+              ? 'border-amber-500 bg-amber-500/5 ring-1 ring-amber-500/30 shadow-2xs'
+              : 'border-border/80 bg-card hover:bg-muted/40 shadow-2xs'
           }`}
         >
           <div className="flex items-center justify-between pb-1">
@@ -450,8 +450,8 @@ export default function NotificationHistory() {
           onClick={() => handleStatusFilterClick('FAILED')}
           className={`text-left rounded-xl border p-4 transition-all ${
             filterStatus === 'FAILED'
-              ? 'border-rose-500 bg-rose-500/5 ring-1 ring-rose-500/30 shadow-xs'
-              : 'border-border/80 bg-card hover:bg-muted/40 shadow-xs'
+              ? 'border-rose-500 bg-rose-500/5 ring-1 ring-rose-500/30 shadow-2xs'
+              : 'border-border/80 bg-card hover:bg-muted/40 shadow-2xs'
           }`}
         >
           <div className="flex items-center justify-between pb-1">
@@ -471,8 +471,8 @@ export default function NotificationHistory() {
           onClick={() => handleStatusFilterClick('SKIPPED')}
           className={`text-left rounded-xl border p-4 transition-all ${
             filterStatus === 'SKIPPED'
-              ? 'border-border bg-muted/60 ring-1 ring-border shadow-xs'
-              : 'border-border/80 bg-card hover:bg-muted/40 shadow-xs'
+              ? 'border-border bg-muted/60 ring-1 ring-border shadow-2xs'
+              : 'border-border/80 bg-card hover:bg-muted/40 shadow-2xs'
           }`}
         >
           <div className="flex items-center justify-between pb-1">
@@ -485,7 +485,7 @@ export default function NotificationHistory() {
       </div>
 
       {/* 2. Main History Card & Telemetry Table */}
-      <Card className="border-border/80 shadow-xs bg-card overflow-hidden">
+      <Card className="border-border/80 shadow-2xs bg-card overflow-hidden">
         <CardHeader className="p-4 sm:p-5 border-b border-border/60 bg-muted/20">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>

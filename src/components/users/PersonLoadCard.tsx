@@ -73,7 +73,7 @@ export default async function PersonLoadCard({
                 <li key={service.serviceId}>
                   <Link
                     href={`/services/${service.serviceId}`}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm transition hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm transition hover:border-primary/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
                   >
                     <span className="max-w-[16rem] truncate">{service.serviceName}</span>
                     <span className="tabular-nums text-muted-foreground">{service.resolved}</span>

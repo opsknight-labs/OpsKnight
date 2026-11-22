@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 
 const passwordFieldClass =
-  'h-11 min-h-11 2xl:h-12 pl-10 pr-10 rounded-xl bg-card text-sm shadow-xs hover:border-ring/50 transition-colors';
+  'h-11 min-h-11 2xl:h-12 pl-10 pr-10 rounded-xl bg-card text-sm shadow-2xs hover:border-ring/50 transition-colors';
 
 function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
   const { pending } = useFormStatus();
@@ -24,7 +24,7 @@ function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
       type="submit"
       disabled={pending || !canSubmit}
       aria-busy={pending || undefined}
-      className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       {pending ? (
         <>
@@ -88,7 +88,7 @@ export default function SetPasswordForm({ token }: { token: string }) {
         <button
           type="button"
           onClick={() => void handleProceedToLogin()}
-          className="flex w-full items-center justify-center rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex w-full items-center justify-center rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Continue to sign in
         </button>
@@ -142,7 +142,7 @@ export default function SetPasswordForm({ token }: { token: string }) {
             aria-label={showPassword ? 'Hide password' : 'Show password'}
             aria-pressed={showPassword}
             aria-controls="invite-password"
-            className="absolute right-2.5 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="absolute right-2.5 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           >
             {showPassword ? (
               <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -190,7 +190,7 @@ export default function SetPasswordForm({ token }: { token: string }) {
             }
             aria-pressed={showConfirmPassword}
             aria-controls="invite-confirm-password"
-            className="absolute right-2.5 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="absolute right-2.5 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           >
             {showConfirmPassword ? (
               <EyeOff className="h-4 w-4" aria-hidden="true" />

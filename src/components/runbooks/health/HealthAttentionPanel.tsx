@@ -33,7 +33,7 @@ export function HealthAttentionPanel({
     return (
       <section
         aria-label="Automation health status"
-        className="flex flex-col gap-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col gap-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="flex items-start gap-3.5">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground border border-border/60 shadow-2xs">
@@ -52,7 +52,7 @@ export function HealthAttentionPanel({
         <Button
           asChild
           size="sm"
-          className="shrink-0 self-start sm:self-center shadow-xs h-8 text-xs font-semibold"
+          className="shrink-0 self-start sm:self-center shadow-2xs h-8 text-xs font-semibold"
         >
           <Link href="/runbooks/agents">
             Enroll an Agent
@@ -74,9 +74,9 @@ export function HealthAttentionPanel({
       <section
         aria-label="Automation health status"
         className={cn(
-          'flex items-center gap-3.5 rounded-2xl border p-4.5 shadow-xs backdrop-blur-xs',
+          'flex items-center gap-3.5 rounded-2xl border p-4.5 shadow-2xs backdrop-blur-xs',
           isHealthy
-            ? 'border-emerald-500/30 bg-emerald-500/[0.04]'
+            ? 'border-emerald-500/30 bg-emerald-500/4'
             : 'border-border/80 bg-card/90 dark:bg-card/50'
         )}
       >
@@ -167,7 +167,7 @@ export function HealthAttentionPanel({
             <div
               key={issue.id}
               className={cn(
-                'group relative flex flex-col justify-between rounded-2xl border p-5 shadow-xs transition-all hover:shadow-sm backdrop-blur-xs',
+                'group relative flex flex-col justify-between rounded-2xl border p-5 shadow-2xs transition-all hover:shadow-xs backdrop-blur-xs',
                 isDanger
                   ? 'border-rose-500/35 bg-card/90 dark:bg-card/50 hover:border-rose-500/60'
                   : 'border-amber-500/35 bg-card/90 dark:bg-card/50 hover:border-amber-500/60'
