@@ -10,7 +10,7 @@ import {
   authorize,
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
-import { serviceReadWhere } from '@/lib/authorization-filters';
+import { serviceReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import type { BusinessServiceHealth, ImpactSource } from './contract';
 import { invalidateBusinessServiceHealth } from './health';
 import { wouldCreateSupportCycle } from './stats';
@@ -105,31 +105,10 @@ export function businessServiceReadScope(
 }
 
 /**
- * Business services the actor may change: all for org-wide managers, else those their teams own
- * (or, when unowned, that contain one of their teams' services).
+ * Business services the actor may change: the manage permission (checked by the caller) applied
+ * to what the actor can see, so a scoped manager never edits or deletes beyond their scope.
  */
-export function businessServiceWriteWhere(
-  actor: AuthorizationActor
-): Prisma.BusinessServiceWhereInput {
-  if (globalServiceScope(actor)) return {};
-  const teams = [...actor.teamIds];
-  return {
-    AND: [
-      businessServiceReadWhere(actor),
-      {
-        OR: [
-          { ownerTeamId: { in: teams } },
-          { ownerTeamId: null, members: { some: { service: { teamId: { in: teams } } } } },
-        ],
-      },
-    ],
-  };
-}
-
-function globalServiceScope(actor: AuthorizationActor) {
-  const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_UPDATE });
-  return decision.allowed && decision.scope === 'global';
-}
+export const businessServiceWriteWhere = businessServiceReadWhere;
 
 export function assertCanManageBusinessServices(actor: AuthorizationActor, deleting = false) {
   const action = deleting
@@ -171,7 +150,12 @@ async function assertReferencesExist(
     input.followerUserIds.length
       ? tx.user.count({ where: { id: { in: input.followerUserIds }, status: 'ACTIVE' } })
       : 0,
-    input.ownerTeamId ? tx.team.findUnique({ where: { id: input.ownerTeamId } }) : null,
+    input.ownerTeamId
+      ? tx.team.findFirst({
+          where: { AND: [{ id: input.ownerTeamId }, teamReadWhere(actor)] },
+          select: { id: true },
+        })
+      : null,
     dependsOn.length
       ? tx.businessService.count({
           where: { AND: [{ id: { in: dependsOn } }, businessServiceReadWhere(actor)] },
@@ -188,18 +172,9 @@ async function assertReferencesExist(
       code: 'RESOURCE_NOT_FOUND',
       userMessage: 'A follower is not an active user.',
     });
-  if (input.ownerTeamId && !team)
+  // An unchanged owner may stay even when the actor cannot see that team.
+  if (input.ownerTeamId && !team && input.ownerTeamId !== current?.ownerTeamId)
     throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Owner team not found.' });
-  if (
-    input.ownerTeamId &&
-    input.ownerTeamId !== current?.ownerTeamId &&
-    !globalServiceScope(actor) &&
-    !actor.teamIds.includes(input.ownerTeamId)
-  )
-    throw new AppError({
-      code: 'AUTHORIZATION_DENIED',
-      userMessage: 'You can only assign a team you belong to as owner.',
-    });
   if (dependencies !== new Set(dependsOn).size)
     throw new AppError({
       code: 'RESOURCE_NOT_FOUND',

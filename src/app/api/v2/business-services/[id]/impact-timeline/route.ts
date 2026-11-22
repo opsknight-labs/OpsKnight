@@ -7,6 +7,8 @@ import { ImpactWindowQuerySchema } from '@/lib/business-services/api';
 /** Impact intervals in the window (including unmarked ones, flagged) and the union-based stats. */
 export const GET = defineV2Route({
   action: AUTHORIZATION_ACTIONS.SERVICE_READ,
+  // The handler filters to the actor's business services (businessServiceReadWhere).
+  scopedFilter: true,
   paramsSchema: z.object({ id: z.string().trim().min(1).max(100) }).strict(),
   querySchema: ImpactWindowQuerySchema,
   handler: async ({ actor, params, query }) => {

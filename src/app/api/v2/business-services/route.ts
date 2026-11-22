@@ -47,6 +47,8 @@ const ListQuerySchema = PaginationQuerySchema.extend({
 
 export const GET = defineV2Route({
   action: AUTHORIZATION_ACTIONS.SERVICE_READ,
+  // The handler filters to the actor's business services (businessServiceReadWhere).
+  scopedFilter: true,
   paramsSchema: z.object({}).strict(),
   querySchema: ListQuerySchema,
   handler: async ({ actor, pagination, query }) => {
