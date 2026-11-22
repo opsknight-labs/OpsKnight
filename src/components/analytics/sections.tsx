@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import ChartFrame from './ChartFrame';
 import DeltaBadge from './DeltaBadge';
 import IncidentDrillSheet from './IncidentDrillSheet';
+import { KPI_CARD, KPI_GRID, KpiBody } from './KpiCard';
 import { describeDelta, formatBucket, formatDuration, formatMetric } from './format';
 import { DurationChart, InterruptionsChart, VolumeChart } from './LazyTrendCharts';
 import MetricInfo from './MetricInfo';
@@ -191,7 +192,7 @@ export async function KpiSection({ context }: { context: AnalyticsContext }) {
       <h2 id="analytics-kpis" className="sr-only">
         Key metrics
       </h2>
-      <ul className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <ul className={KPI_GRID}>
         {KPI_TILES.map(tile => {
           const definition = METRICS[tile.id];
           const value = values[tile.id] ?? null;
@@ -205,42 +206,35 @@ export async function KpiSection({ context }: { context: AnalyticsContext }) {
                 )
               : null;
           const body = (
-            <>
-              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                <span className="truncate">{definition.label}</span>
-                {/* Above the drill overlay so the info popover stays clickable. */}
+            <KpiBody
+              label={definition.label}
+              info={
+                // Above the drill overlay so the info popover stays clickable.
                 <span className="relative z-10 inline-flex">
                   <MetricInfo metrics={tile.secondary ? [tile.id, tile.secondary] : [tile.id]} />
                 </span>
-              </div>
-              <p
-                className={cn(
-                  'mt-1 font-display text-2xl font-semibold tabular-nums sm:text-3xl',
-                  value === null && 'text-muted-foreground',
-                  tile.drill && 'decoration-dotted underline-offset-4 group-hover:underline'
-                )}
-              >
-                {formatMetric(value, definition.unit)}
-              </p>
-              <div className="mt-1.5 flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <DeltaBadge delta={delta} />
-                {tile.secondary && values[tile.secondary] != null && (
-                  <span className="tabular-nums">
-                    p90 {formatMetric(values[tile.secondary] ?? null, METRICS[tile.secondary].unit)}
-                  </span>
-                )}
-                {value === null && <span>No data</span>}
-              </div>
-            </>
+              }
+              value={formatMetric(value, definition.unit)}
+              empty={value === null}
+              valueClassName={cn(
+                tile.drill && 'decoration-dotted underline-offset-4 group-hover:underline'
+              )}
+              meta={
+                <>
+                  <DeltaBadge delta={delta} />
+                  {tile.secondary && values[tile.secondary] != null && (
+                    <span className="tabular-nums">
+                      p90{' '}
+                      {formatMetric(values[tile.secondary] ?? null, METRICS[tile.secondary].unit)}
+                    </span>
+                  )}
+                  {value === null && <span>No data</span>}
+                </>
+              }
+            />
           );
           return (
-            <li
-              key={tile.id}
-              className={cn(
-                'min-w-0 rounded-lg border bg-card p-3 shadow-sm sm:p-4',
-                tile.drill && 'group relative'
-              )}
-            >
+            <li key={tile.id} className={cn(KPI_CARD, tile.drill && 'group relative')}>
               {tile.drill && (
                 <IncidentDrillSheet
                   drill={tile.drill.kind}

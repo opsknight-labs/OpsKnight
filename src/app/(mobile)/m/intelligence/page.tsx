@@ -54,7 +54,7 @@ export default async function MobileIntelligencePage({
   return (
     <div className="responsive-page space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
+        <p className="px-0.5 text-xs text-muted-foreground">
           {scope.global ? 'All services' : 'Your teams’ services'} · {range.label.toLowerCase()}
         </p>
         <WindowSelector current={range.key} basePath="/m/intelligence" />

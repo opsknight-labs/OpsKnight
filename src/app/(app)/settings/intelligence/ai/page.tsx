@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Plus, Server } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { IntelligenceGroupHeader } from '@/components/settings/layout/IntelligenceGroupHeader';
@@ -13,6 +13,13 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import { dataClassAllows } from '@/lib/intelligence/ai/port';
+import EmptyState from '@/components/patterns/EmptyState';
+import { Button } from '@/components/ui/shadcn/button';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { LearnMore } from '@/components/settings/layout/LearnMore';
+import { NO_VALUE, StatGrid, StatTile } from '@/components/intelligence/overview/primitives';
+import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
@@ -84,26 +91,43 @@ export default async function IntelligenceAssistantPage({
 
   return (
     <div className="space-y-6">
-      <IntelligenceGroupHeader group="assistant" title="Assistant and AI">
-        Configure {settings.squireName}, the in-app assistant, and the language models behind it.
-        Everything is set here: no environment variables. The assistant reads only what you can
-        open. Proposed changes require your confirmation and use the same permissions as the
-        application. Usage, spend and budgets are under{' '}
-        <Link href={intelligenceSettingsHref('evaluation', 'usage')} className="underline">
-          Evaluation &amp; spend
-        </Link>
-        .
+      <IntelligenceGroupHeader
+        group="assistant"
+        title="Assistant and AI"
+        badges={
+          <span className={pageHeaderBadgeClass}>
+            <span
+              aria-hidden="true"
+              className={cn(
+                'h-1.5 w-1.5 rounded-full',
+                toneClasses(settings.enabled ? 'ok' : 'neutral').solid
+              )}
+            />
+            {settings.enabled ? 'AI on' : 'AI off'}
+          </span>
+        }
+        about={
+          <p>
+            Everything is set here: no environment variables. The assistant reads only what you can
+            open. Proposed changes require your confirmation and use the same permissions as the
+            application. Usage, spend and budgets are under{' '}
+            <Link
+              href={intelligenceSettingsHref('evaluation', 'usage')}
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              Evaluation &amp; spend
+            </Link>
+            .
+          </p>
+        }
+      >
+        {`Configure ${settings.squireName}, the in-app assistant, and the models behind it.`}
       </IntelligenceGroupHeader>
 
       <SettingsSection
         id="assistant"
         title="General"
         description="Both switches are off by default."
-        action={
-          <Badge variant={settings.enabled ? 'default' : 'secondary'}>
-            {settings.enabled ? 'AI on' : 'AI off'}
-          </Badge>
-        }
       >
         {personalNotice}
         <AiSettingsForm settings={settings} canManage={canManage} />
@@ -116,19 +140,23 @@ export default async function IntelligenceAssistantPage({
       >
         {personalNotice}
         {providers && providers.length > 0 ? (
-          <ul className="divide-y divide-border">
+          <ul className="my-4 divide-y divide-border overflow-hidden rounded-lg border border-border">
             {providers.map(provider => (
-              <li key={provider.id} className="py-3">
-                <details className="group">
-                  <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
-                    <span className="inline-flex items-center gap-1.5 text-sm font-medium">
+              <li key={provider.id}>
+                <details className="group/provider">
+                  <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
                       <ChevronRight
+                        className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 group-open/provider:rotate-90 motion-reduce:transition-none"
                         aria-hidden="true"
-                        className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
                       />
-                      <span className="sr-only">Edit </span>
-                      {provider.name}{' '}
-                      <span className="text-muted-foreground">· {provider.model}</span>
+                      <span className="min-w-0 break-words">
+                        <span className="sr-only">Edit </span>
+                        {provider.name}{' '}
+                        <span className="font-normal text-muted-foreground">
+                          · {provider.model}
+                        </span>
+                      </span>
                     </span>
                     <span className="flex gap-2">
                       <Badge variant={provider.enabled ? 'default' : 'secondary'}>
@@ -139,25 +167,40 @@ export default async function IntelligenceAssistantPage({
                       </Badge>
                     </span>
                   </summary>
-                  <ProviderForm provider={provider} canManage={canManage} />
-                  {canManage && (
-                    <div className="flex flex-wrap items-center gap-3">
-                      <TestProviderButton id={provider.id} name={provider.name} />
-                      <DeleteProviderButton id={provider.id} name={provider.name} />
-                    </div>
-                  )}
+                  <div className="space-y-3 border-t border-border bg-muted/20 px-3 pb-4">
+                    <ProviderForm provider={provider} canManage={canManage} />
+                    {canManage && (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <TestProviderButton id={provider.id} name={provider.name} />
+                        <DeleteProviderButton id={provider.id} name={provider.name} />
+                      </div>
+                    )}
+                  </div>
                 </details>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="py-3 text-sm text-muted-foreground">
-            No providers yet. Add one to enable AI answers.
-          </p>
+          <EmptyState
+            size="sm"
+            variant="simple"
+            icon={<Server aria-hidden="true" />}
+            title={providers === null ? 'Providers unavailable' : 'No providers yet'}
+            description={
+              providers === null
+                ? 'The provider list could not be loaded. Refresh to try again.'
+                : canManage
+                  ? 'Add one below to enable AI answers.'
+                  : 'Ask someone with intelligence management access to add one.'
+            }
+          />
         )}
         {canManage && (
-          <details className="border-t border-border">
-            <summary className="cursor-pointer py-3 text-sm font-medium">Add a provider</summary>
+          <details className="group/add -mx-4 border-t border-border px-4 md:-mx-6 md:px-6">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              <Plus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              Add a provider
+            </summary>
             <ProviderForm canManage={canManage} />
           </details>
         )}
@@ -186,33 +229,27 @@ export default async function IntelligenceAssistantPage({
       {settings.embeddingsEnabled && (
         <SettingsSection
           title="Semantic search"
-          description="Similar incidents are found by meaning as well as wording. New incidents are indexed in the background; matching never waits for it. Changing the embedding provider, endpoint or model rebuilds recent vectors within your token budget."
+          description="Similar incidents are found by meaning as well as wording. Matching never waits for indexing."
+          contentClassName="space-y-3 py-4"
         >
+          <LearnMore>
+            New incidents are indexed in the background. Changing the embedding provider, endpoint
+            or model rebuilds recent vectors within your token budget.
+          </LearnMore>
           {semantic?.model ? (
-            <dl className="grid gap-4 py-3 sm:grid-cols-3">
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Model</dt>
-                <dd className="break-all text-sm font-medium">
-                  {semantic.modelLabel ?? semantic.model}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Indexed incidents
-                </dt>
-                <dd className="text-lg font-semibold">
-                  {semantic.indexed.toLocaleString('en-US')}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Waiting (last 30 days)
-                </dt>
-                <dd className="text-lg font-semibold">
-                  {semantic.pending >= 1000 ? '1,000+' : semantic.pending.toLocaleString('en-US')}
-                </dd>
-              </div>
-            </dl>
+            <StatGrid label="Semantic index">
+              <StatTile label="Model" value={semantic.modelLabel ?? semantic.model ?? NO_VALUE} />
+              <StatTile
+                label="Indexed incidents"
+                value={semantic.indexed.toLocaleString('en-US')}
+              />
+              <StatTile
+                label="Waiting (last 30 days)"
+                value={
+                  semantic.pending >= 1000 ? '1,000+' : semantic.pending.toLocaleString('en-US')
+                }
+              />
+            </StatGrid>
           ) : (
             <p className="py-3 text-sm text-muted-foreground">
               {semantic === null
@@ -226,7 +263,7 @@ export default async function IntelligenceAssistantPage({
       <SettingsSection
         id="prompts"
         title="Prompts"
-        description="Every instruction sent to a model is versioned. The version and fingerprint are recorded with each AI interaction in the audit log."
+        description="Every instruction sent to a model is versioned and recorded with each AI interaction in the audit log."
       >
         <ul className="divide-y divide-border">
           {BUILT_IN_PROMPTS.map(prompt => {
@@ -268,7 +305,7 @@ export default async function IntelligenceAssistantPage({
       <SettingsSection
         id="checks"
         title="Suggested checks"
-        description="Investigation prompts the assistant shows with incident answers, with or without AI, when the incident title matches a pattern. They are suggestions only; nothing is executed."
+        description="Investigation prompts shown with incident answers when the title matches a pattern. Suggestions only; nothing is executed."
       >
         <SquireChecksForm templates={checkTemplates ?? []} canManage={canManage} />
       </SettingsSection>
@@ -280,19 +317,20 @@ export default async function IntelligenceAssistantPage({
       <SettingsSection
         id="proactive"
         title="Proactive help"
-        description="Briefings when an incident opens, reminders to post an update and postmortem drafts. Each is off by default and is turned on per service, so a team opts in for the services it owns."
+        description="Briefings, update reminders and postmortem drafts. Off by default and turned on per service."
+        contentClassName="py-4"
       >
-        <p className="py-3 text-sm text-muted-foreground">
-          Open a service under{' '}
-          <Link
-            href={intelligenceSettingsHref('services', 'service-policies')}
-            className="underline"
-          >
-            Per-service policies
-          </Link>{' '}
-          and choose “Squire: proactive help and learned facts”. The same page lists the facts
-          people confirmed about that service.
-        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Open a service and choose “Squire: proactive help and learned facts”. The same page
+            lists the facts people confirmed about that service.
+          </p>
+          <Button asChild variant="outline" className="min-h-11 shrink-0 sm:min-h-10">
+            <Link href={intelligenceSettingsHref('services', 'service-policies')}>
+              Per-service policies
+            </Link>
+          </Button>
+        </div>
       </SettingsSection>
     </div>
   );

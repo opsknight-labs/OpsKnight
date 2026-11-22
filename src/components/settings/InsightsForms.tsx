@@ -16,6 +16,7 @@ import {
 } from '@/app/(app)/settings/intelligence/insights/actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { DIGEST_DAYS } from '@/lib/intelligence/digest/contract';
+import { ActionMessage as Message } from '@/components/settings/form-kit';
 
 const initial: InsightsActionState = { message: '', ok: false };
 
@@ -106,18 +107,6 @@ export function ApplySuggestionForm({
   );
 }
 
-function Message({ state }: { state: InsightsActionState }) {
-  if (!state.message) return null;
-  return (
-    <p
-      role={state.ok ? 'status' : 'alert'}
-      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
-    >
-      {state.message}
-    </p>
-  );
-}
-
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const selectClass =
   'h-9 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
@@ -140,7 +129,7 @@ export function DigestSettingsForm({
           name="enabled"
           defaultChecked={settings.enabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <span>
           <span className="font-medium">Email a weekly digest</span>

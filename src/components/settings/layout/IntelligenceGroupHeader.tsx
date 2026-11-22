@@ -1,25 +1,47 @@
 import type { ReactNode } from 'react';
+import { Activity, BarChart3, Bot, Layers, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import IntelligenceSubNav from '@/components/settings/layout/IntelligenceSubNav';
+import { LearnMore } from '@/components/settings/layout/LearnMore';
+import { SectionLinkTabs } from '@/components/settings/layout/LinkTabs';
 import {
   INTELLIGENCE_SETTINGS_GROUPS,
   type IntelligenceSettingsGroupId,
 } from '@/lib/intelligence/settings/routes';
 
+const ICONS = new Map<IntelligenceSettingsGroupId, LucideIcon>([
+  ['engine', Activity],
+  ['noise', ShieldCheck],
+  ['services', Layers],
+  ['assistant', Bot],
+  ['evaluation', BarChart3],
+]);
+
 /**
- * Title, lead paragraph and "on this page" links of one Intelligence settings group.
+ * Header of one Intelligence settings group: the settings page band (icon, title, one-line
+ * description, status badges), the group tabs, an optional "Learn more", and a sticky
+ * "On this page" bar linking each section by its anchor.
  *
- * `visible` lists the sections the page renders for this viewer; a section that is silent by
- * design (nothing failed, a manager-only card) gets no link.
+ * Render it as a direct child of the page's root element, so the sticky bar spans the whole page.
+ * `visible` lists the sections the page renders for this viewer; a section that is silent by design
+ * (nothing failed, a manager-only card) gets no link.
  */
 export function IntelligenceGroupHeader({
   group,
   title,
   children,
   visible,
+  badges,
+  about,
 }: {
   group: IntelligenceSettingsGroupId;
   title?: string;
+  /** One sentence on what the page is for. */
   children: ReactNode;
   visible?: readonly string[];
+  badges?: ReactNode;
+  /** The longer explanation, behind a closed "Learn more". */
+  about?: ReactNode;
 }) {
   const definition = INTELLIGENCE_SETTINGS_GROUPS.find(candidate => candidate.id === group);
   if (!definition) return null;
@@ -27,28 +49,18 @@ export function IntelligenceGroupHeader({
     section => visible === undefined || visible.includes(section.id)
   );
   return (
-    <header className="space-y-3">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">{title ?? definition.label}</h1>
-        <p className="text-sm text-muted-foreground">{children}</p>
-      </div>
-      {sections.length > 1 && (
-        <nav aria-label="On this page">
-          <ul className="flex flex-wrap gap-x-1 gap-y-0">
-            {sections.map(section => (
-              <li key={section.id}>
-                <a
-                  href={`#${section.id}`}
-                  className="inline-flex min-h-11 items-center rounded-md px-2 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {section.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      )}
-    </header>
+    <>
+      <SettingsPageHeader
+        eyebrow="AIOps Intelligence"
+        title={title ?? definition.label}
+        description={children}
+        icon={ICONS.get(group)}
+        badges={badges}
+      />
+      <IntelligenceSubNav />
+      {about && <LearnMore label="How this works">{about}</LearnMore>}
+      {sections.length > 1 && <SectionLinkTabs sections={sections} />}
+    </>
   );
 }
 

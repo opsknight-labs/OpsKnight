@@ -40,11 +40,19 @@ export default async function IntelligenceEvaluationPage({
   return (
     <div className="space-y-6">
       <MovedSectionRedirect group="evaluation" />
-      <IntelligenceGroupHeader group="evaluation" visible={visible}>
-        Measure before you trust: grouping decisions against human reviews, ratings on assistant
-        answers, what the incident history says about repeated problems, and what AI usage costs.
-        Nothing here changes behaviour on its own; a proposed weight or threshold is published only
-        when you choose to.
+      <IntelligenceGroupHeader
+        group="evaluation"
+        visible={visible}
+        about={
+          <p>
+            Grouping decisions are measured against human reviews, assistant answers against their
+            ratings, and the incident history for repeated problems, next to what AI usage costs.
+            Nothing here changes behaviour on its own; a proposed weight or threshold is published
+            only when you choose to.
+          </p>
+        }
+      >
+        Measure suggestions and answers before you trust them, and see what AI costs.
       </IntelligenceGroupHeader>
 
       <GroupingQualitySection

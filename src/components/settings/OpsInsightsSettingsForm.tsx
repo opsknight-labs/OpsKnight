@@ -11,6 +11,7 @@ import {
   OPS_INSIGHT_AREAS,
   type OpsInsightSwitches,
 } from '@/lib/intelligence/ops-insights/contract';
+import { ActionMessage } from '@/components/settings/form-kit';
 
 const initialState: IntelligenceActionState = { message: '', ok: false };
 
@@ -36,7 +37,7 @@ function Toggle({
         type="checkbox"
         defaultChecked={checked}
         disabled={disabled}
-        className="mt-1 h-4 w-4"
+        className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
       />
       <div>
         <label htmlFor={id} className="text-sm font-medium">
@@ -99,26 +100,15 @@ export default function OpsInsightsSettingsForm({
           className="h-11 w-full rounded-md border border-border bg-background px-2 text-sm"
         />
         <p className="text-xs text-muted-foreground">
-          A runbook run counts as having fixed its incident when the incident resolves within this long
-          after the run finishes. Used by runbook health and runbook recommendations.
+          A runbook run counts as having fixed its incident when the incident resolves within this
+          long after the run finishes. Used by runbook health and runbook recommendations.
         </p>
       </div>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={disabled}>
           {pending ? 'Saving…' : 'Save'}
         </Button>
-        {state.message && (
-          <p
-            role={state.ok ? 'status' : 'alert'}
-            className={
-              state.ok
-                ? 'text-sm text-status-ok-deep dark:text-status-ok-soft'
-                : 'text-sm text-destructive'
-            }
-          >
-            {state.message}
-          </p>
-        )}
+        <ActionMessage state={state} />
       </div>
     </form>
   );

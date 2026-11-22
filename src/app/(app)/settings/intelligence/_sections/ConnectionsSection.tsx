@@ -5,6 +5,9 @@ import {
   TestConnectionButton,
 } from '@/components/settings/ObservabilityConnectionForms';
 import { Badge } from '@/components/ui/shadcn/badge';
+import EmptyState from '@/components/patterns/EmptyState';
+import { LearnMore } from '@/components/settings/layout/LearnMore';
+import { ChevronRight, Plug, Plus } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { KIND_LABELS, capabilitySummary } from '@/lib/intelligence/connectors/contract';
@@ -39,20 +42,42 @@ export default async function ConnectionsSection({ canManage }: { canManage: boo
     <SettingsSection
       id="connections"
       title="Connections"
-      description="Read-only connections to your metrics, logs, traces, error tracking and code hosts. When AI is on, Squire can query an enabled connection while answering (for example “did errors rise after the deploy?”). It only reads, within a window of at most 24 hours, and only for people in the allowed teams. Credentials are stored encrypted and never shown again. All connections are off until enabled; use “Test connection” to run a harmless read."
+      description="Read-only connections to your metrics, logs, traces, error tracking and code hosts that Squire can query while answering."
     >
+      <LearnMore className="pt-3">
+        <p>
+          When AI is on, Squire can query an enabled connection while answering (for example “did
+          errors rise after the deploy?”). It only reads, within a window of at most 24 hours, and
+          only for people in the allowed teams.
+        </p>
+        <p>
+          Credentials are stored encrypted and never shown again. All connections are off until
+          enabled; use “Test connection” to run a harmless read.
+        </p>
+      </LearnMore>
       {connections === null ? (
-        <p className="py-3 text-sm text-muted-foreground">Connections are unavailable right now.</p>
+        <EmptyState
+          size="sm"
+          variant="simple"
+          title="Connections unavailable"
+          description="They could not be loaded. Refresh to try again."
+        />
       ) : connections.length > 0 ? (
-        <ul className="divide-y divide-border">
+        <ul className="my-3 divide-y divide-border overflow-hidden rounded-lg border border-border">
           {connections.map(connection => (
-            <li key={connection.id} className="py-3">
-              <details>
-                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-medium">
-                    {connection.name}{' '}
-                    <span className="text-muted-foreground">
-                      · {KIND_LABELS[connection.kind]} · {capabilitySummary(connection.kind)}
+            <li key={connection.id}>
+              <details className="group/connection">
+                <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                  <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                    <ChevronRight
+                      className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 group-open/connection:rotate-90 motion-reduce:transition-none"
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0 break-words">
+                      {connection.name}{' '}
+                      <span className="font-normal text-muted-foreground">
+                        · {KIND_LABELS[connection.kind]} · {capabilitySummary(connection.kind)}
+                      </span>
                     </span>
                   </span>
                   <span className="flex flex-wrap gap-2">
@@ -71,25 +96,42 @@ export default async function ConnectionsSection({ canManage }: { canManage: boo
                     )}
                   </span>
                 </summary>
-                <ConnectionForm connection={connection} teams={teams ?? []} canManage={canManage} />
-                {canManage && (
-                  <div className="flex flex-wrap items-center gap-3">
-                    <TestConnectionButton id={connection.id} name={connection.name} />
-                    <DeleteConnectionButton id={connection.id} name={connection.name} />
-                  </div>
-                )}
+                <div className="space-y-3 border-t border-border bg-muted/20 px-3 pb-4">
+                  <ConnectionForm
+                    connection={connection}
+                    teams={teams ?? []}
+                    canManage={canManage}
+                  />
+                  {canManage && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <TestConnectionButton id={connection.id} name={connection.name} />
+                      <DeleteConnectionButton id={connection.id} name={connection.name} />
+                    </div>
+                  )}
+                </div>
               </details>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="py-3 text-sm text-muted-foreground">
-          No connections yet. Squire answers from OpsKnight data until you add one.
-        </p>
+        <EmptyState
+          size="sm"
+          variant="simple"
+          icon={<Plug aria-hidden="true" />}
+          title="No connections yet"
+          description={
+            canManage
+              ? 'Squire answers from OpsKnight data until you add one below.'
+              : 'Squire answers from OpsKnight data until someone adds one.'
+          }
+        />
       )}
       {canManage && (
-        <details className="border-t border-border">
-          <summary className="cursor-pointer py-3 text-sm font-medium">Add a connection</summary>
+        <details className="-mx-4 border-t border-border px-4 md:-mx-6 md:px-6">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <Plus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            Add a connection
+          </summary>
           <ConnectionForm teams={teams ?? []} canManage={canManage} />
         </details>
       )}

@@ -7,7 +7,14 @@ import { refreshAnalytics } from '@/app/(app)/insights/actions';
 import { RelativeTime } from '@/components/patterns';
 import { cn } from '@/lib/utils';
 
-export default function FreshnessControl({ asOf }: { asOf: string | null }) {
+/** `invalidate` off: the page reads live data, so Refresh only re-renders it (no analytics cache to drop). */
+export default function FreshnessControl({
+  asOf,
+  invalidate = true,
+}: {
+  asOf: string | null;
+  invalidate?: boolean;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
@@ -16,7 +23,7 @@ export default function FreshnessControl({ asOf }: { asOf: string | null }) {
   const refresh = () =>
     startTransition(async () => {
       try {
-        await refreshAnalytics(searchParams.toString());
+        if (invalidate) await refreshAnalytics(searchParams.toString());
         setFailed(false);
         router.refresh();
       } catch {

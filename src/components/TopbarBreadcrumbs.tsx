@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/shadcn/dropdown-menu';
 import { cn } from '@/lib/utils';
 
+const ACRONYMS = new Set(['ai', 'api', 'sso', 'mcp', 'scim', 'sla', 'slo']);
+
 export default function TopbarBreadcrumbs() {
   const pathname = usePathname();
 
@@ -43,7 +45,9 @@ export default function TopbarBreadcrumbs() {
       ? segment
       : segment
           .split('-')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .map(word =>
+            ACRONYMS.has(word) ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1)
+          )
           .join(' ');
 
     return {

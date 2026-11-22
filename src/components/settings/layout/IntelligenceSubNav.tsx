@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Activity, BarChart3, Bot, Layers, ShieldCheck, type LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { LinkTabs } from '@/components/settings/layout/LinkTabs';
 import {
   INTELLIGENCE_SETTINGS_GROUPS,
   INTELLIGENCE_SETTINGS_ROOT,
@@ -45,34 +44,18 @@ export function activeGroupFor(pathname: string): IntelligenceSettingsGroupId | 
   return INTELLIGENCE_SECTIONS.find(item => isSectionActive(pathname, item.href))?.id ?? null;
 }
 
+/** The five group pages as one tab row (a "Section" picker on phones), under the page header. */
 export default function IntelligenceSubNav() {
   const pathname = usePathname() ?? '';
   const activeId = activeGroupFor(pathname);
   return (
-    <nav
-      aria-label="Intelligence sections"
-      className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none"
-    >
-      {INTELLIGENCE_SECTIONS.map(item => {
-        const active = item.id === activeId;
+    <LinkTabs
+      label="Intelligence sections"
+      activeHref={INTELLIGENCE_SECTIONS.find(item => item.id === activeId)?.href ?? null}
+      items={INTELLIGENCE_SECTIONS.map(item => {
         const Icon = item.icon;
-        return (
-          <Link
-            key={item.id}
-            href={item.href}
-            aria-current={active ? 'page' : undefined}
-            className={cn(
-              'flex min-h-11 shrink-0 select-none items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors motion-reduce:transition-none',
-              active
-                ? 'border border-primary/30 bg-primary/10 font-semibold text-primary shadow-2xs'
-                : 'border border-border/60 bg-card text-muted-foreground hover:bg-accent/60 hover:text-foreground'
-            )}
-          >
-            <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>{item.label}</span>
-          </Link>
-        );
+        return { href: item.href, label: item.label, icon: <Icon /> };
       })}
-    </nav>
+    />
   );
 }

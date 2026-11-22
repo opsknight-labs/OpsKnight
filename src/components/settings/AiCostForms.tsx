@@ -11,6 +11,7 @@ import {
 } from '@/app/(app)/settings/intelligence/ai/cost-actions';
 import type { AiBudgetView } from '@/lib/intelligence/ai/cost';
 import { formatUsd, PROVIDER_KINDS, type ModelPriceOverride } from '@/lib/intelligence/ai/pricing';
+import { ActionMessage as Status, fieldClass as inputClass } from '@/components/settings/form-kit';
 
 const idle: CostActionState = { message: '', ok: true };
 const CAPABILITY_OPTIONS = [
@@ -21,20 +22,7 @@ const CAPABILITY_OPTIONS = [
   'CLASSIFY',
   'EMBED',
 ];
-const inputClass = 'min-h-11 w-full rounded-md border border-border bg-background px-3 text-sm';
 const labelClass = 'mb-1 block text-xs font-medium text-muted-foreground';
-
-function Status({ state }: { state: CostActionState }) {
-  if (!state.message) return null;
-  return (
-    <p
-      role="status"
-      className={`text-sm ${state.ok ? 'text-muted-foreground' : 'text-destructive'}`}
-    >
-      {state.message}
-    </p>
-  );
-}
 
 function BudgetForm({
   budget,

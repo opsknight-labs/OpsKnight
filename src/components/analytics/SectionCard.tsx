@@ -11,6 +11,8 @@ type SectionCardProps = {
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Full-bleed body for divided lists that pad their own rows. */
+  flush?: boolean;
 };
 
 /** The frame every analytics section uses: titled card, optional actions. */
@@ -22,11 +24,15 @@ export function SectionCard({
   actions,
   children,
   className,
+  flush = false,
 }: SectionCardProps) {
   return (
     <section
       aria-labelledby={id}
-      className={cn('min-w-0 rounded-lg border bg-card text-card-foreground shadow-sm', className)}
+      className={cn(
+        'flex min-w-0 flex-col rounded-lg border bg-card text-card-foreground shadow-sm',
+        className
+      )}
     >
       <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b px-4 py-3 sm:px-5">
         <div className="min-w-0">
@@ -41,7 +47,7 @@ export function SectionCard({
         </div>
         {actions}
       </header>
-      <div className="p-4 sm:p-5">{children}</div>
+      <div className={cn('flex-1', flush ? 'divide-y divide-border' : 'p-4 sm:p-5')}>{children}</div>
     </section>
   );
 }

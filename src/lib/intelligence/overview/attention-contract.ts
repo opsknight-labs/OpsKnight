@@ -23,6 +23,8 @@ export interface AttentionItem {
   href: string;
   /** When the newest thing behind the row happened, for ranking; absent rows sort last in their severity. */
   at?: Date;
+  /** The "N more …" overflow row of its kind, shown as the group's footer link. */
+  more?: true;
 }
 
 export type AttentionSeverity = 'INFO' | 'WARNING' | 'CRITICAL';

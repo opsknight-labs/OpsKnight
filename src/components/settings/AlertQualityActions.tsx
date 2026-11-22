@@ -7,6 +7,7 @@ import {
   type DependencyActionState,
 } from '@/app/(app)/settings/intelligence/response/actions';
 import { Button } from '@/components/ui/shadcn/button';
+import { ActionMessage } from '@/components/settings/form-kit';
 
 const initial: DependencyActionState = { message: '', ok: false };
 
@@ -41,14 +42,7 @@ export default function AlertQualityActions({
           </Button>
         </form>
       )}
-      {state.message && (
-        <p
-          role={state.ok ? 'status' : 'alert'}
-          className={state.ok ? 'text-xs text-emerald-600' : 'text-xs text-destructive'}
-        >
-          {state.message}
-        </p>
-      )}
+      <ActionMessage state={state} />
     </div>
   );
 }

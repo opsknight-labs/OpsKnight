@@ -82,6 +82,36 @@ export function alertReadWhere(actor: AuthorizationActor): Prisma.AlertWhereInpu
   return { AND: and };
 }
 
+/**
+ * Text search for the alerts list: case-insensitive on the dedup key, resource key and service name.
+ * shortcut: Prisma's JSON string filter has no case-insensitive mode, so the payload summary and title
+ * match case-sensitively; move to a raw ILIKE on payload->>'summary' if users miss matches.
+ */
+export function alertSearchWhere(q: string): Prisma.AlertWhereInput {
+  return {
+    OR: [
+      { payload: { path: ['summary'], string_contains: q } },
+      { payload: { path: ['title'], string_contains: q } },
+      { dedupKey: { contains: q, mode: 'insensitive' } },
+      { resourceKey: { contains: q, mode: 'insensitive' } },
+      { service: { name: { contains: q, mode: 'insensitive' } } },
+    ],
+  };
+}
+
+/** Filters every alerts-list read shares: scope, service, severity and search (not window or cursor). */
+function alertFilterWhere(
+  readable: Prisma.AlertWhereInput,
+  filters: AlertListFilters
+): Prisma.AlertWhereInput[] {
+  return [
+    readable,
+    ...(filters.serviceId ? [{ serviceId: filters.serviceId }] : []),
+    ...(filters.severity ? [{ severity: filters.severity }] : []),
+    ...(filters.q ? [alertSearchWhere(filters.q)] : []),
+  ];
+}
+
 const keysetBefore = (cursor: ListCursor | null) =>
   cursor
     ? { OR: [{ createdAt: { lt: cursor.at } }, { createdAt: cursor.at, id: { lt: cursor.id } }] }
@@ -270,11 +300,7 @@ export async function listAlertsForActor(
   if (!readable) return empty;
   const pageSize = Math.min(Math.max(options.pageSize ?? LIST_PAGE_SIZE, 1), LIST_PAGE_SIZE);
   const { since, until } = resolveOverviewWindow(filters.window, options.now);
-  const shared: Prisma.AlertWhereInput[] = [
-    readable,
-    ...(filters.serviceId ? [{ serviceId: filters.serviceId }] : []),
-    ...(filters.severity ? [{ severity: filters.severity }] : []),
-  ];
+  const shared = alertFilterWhere(readable, filters);
 
   return withDbBudget(
     LIST_DB_BUDGET,
@@ -354,6 +380,32 @@ export async function listAlertsForActor(
             : null,
       };
     },
+    options.client ?? prisma
+  );
+}
+
+/**
+ * How many alerts match the list's filters in the selected window, for the page header. Its own budgeted
+ * read, so a slow count never holds back or breaks the list. Null with a decision filter: decisions and
+ * alerts are separate tables with no relation to join on, so an exact count would need a second walk.
+ */
+export async function countAlertsForActor(
+  actor: AuthorizationActor,
+  filters: AlertListFilters,
+  options: { client?: Client; now?: Date } = {}
+): Promise<number | null> {
+  if (filters.decision) return null;
+  const readable = alertReadWhere(actor);
+  if (!readable) return 0;
+  const { since, until } = resolveOverviewWindow(filters.window, options.now);
+  return withDbBudget(
+    LIST_DB_BUDGET,
+    tx =>
+      tx.alert.count({
+        where: {
+          AND: [...alertFilterWhere(readable, filters), { createdAt: { gte: since, lt: until } }],
+        },
+      }),
     options.client ?? prisma
   );
 }

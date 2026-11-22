@@ -8,9 +8,9 @@ import {
   type DependencyActionState,
 } from '@/app/(app)/settings/intelligence/response/actions';
 import { Button } from '@/components/ui/shadcn/button';
+import { ActionMessage as Status, fieldClass } from '@/components/settings/form-kit';
 
 const initial: DependencyActionState = { message: '', ok: false };
-const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
 
 type ServiceOption = { id: string; name: string };
 type DependencyRow = {
@@ -22,15 +22,6 @@ type DependencyRow = {
   confidence: number;
 };
 
-function Status({ state }: { state: DependencyActionState }) {
-  if (!state.message) return null;
-  return (
-    <p role={state.ok ? 'status' : 'alert'} className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}>
-      {state.message}
-    </p>
-  );
-}
-
 export function DeclareDependencyForm({ services }: { services: ServiceOption[] }) {
   const [state, action, pending] = useActionState(declareDependencyAction, initial);
   const id = useId();
@@ -40,7 +31,13 @@ export function DeclareDependencyForm({ services }: { services: ServiceOption[] 
         <label htmlFor={`${id}-down`} className="text-sm font-medium">
           Service
         </label>
-        <select id={`${id}-down`} name="downstreamServiceId" required className={fieldClass} defaultValue="">
+        <select
+          id={`${id}-down`}
+          name="downstreamServiceId"
+          required
+          className={fieldClass}
+          defaultValue=""
+        >
           <option value="" disabled>
             Select a service
           </option>
@@ -55,7 +52,13 @@ export function DeclareDependencyForm({ services }: { services: ServiceOption[] 
         <label htmlFor={`${id}-up`} className="text-sm font-medium">
           Depends on
         </label>
-        <select id={`${id}-up`} name="upstreamServiceId" required className={fieldClass} defaultValue="">
+        <select
+          id={`${id}-up`}
+          name="upstreamServiceId"
+          required
+          className={fieldClass}
+          defaultValue=""
+        >
           <option value="" disabled>
             Select a service
           </option>
@@ -105,7 +108,13 @@ function RowButton({
   );
 }
 
-export function DependencyList({ dependencies, canManage }: { dependencies: DependencyRow[]; canManage: boolean }) {
+export function DependencyList({
+  dependencies,
+  canManage,
+}: {
+  dependencies: DependencyRow[];
+  canManage: boolean;
+}) {
   if (dependencies.length === 0) {
     return <p className="py-4 text-sm text-muted-foreground">No dependencies yet.</p>;
   }
@@ -115,7 +124,8 @@ export function DependencyList({ dependencies, canManage }: { dependencies: Depe
         <li key={dependency.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
           <div className="space-y-1">
             <p className="text-sm font-medium">
-              {dependency.downstreamName} <span className="text-muted-foreground">depends on</span> {dependency.upstreamName}
+              {dependency.downstreamName} <span className="text-muted-foreground">depends on</span>{' '}
+              {dependency.upstreamName}
             </p>
             <p className="text-xs text-muted-foreground">
               {dependency.status === 'SUGGESTED'
@@ -129,12 +139,26 @@ export function DependencyList({ dependencies, canManage }: { dependencies: Depe
             <div className="flex flex-wrap gap-2">
               {dependency.status === 'SUGGESTED' && (
                 <>
-                  <RowButton action={reviewDependencyAction} fields={{ id: dependency.id, decision: 'APPROVE' }} label="Approve" />
-                  <RowButton action={reviewDependencyAction} fields={{ id: dependency.id, decision: 'REJECT' }} label="Reject" variant="ghost" />
+                  <RowButton
+                    action={reviewDependencyAction}
+                    fields={{ id: dependency.id, decision: 'APPROVE' }}
+                    label="Approve"
+                  />
+                  <RowButton
+                    action={reviewDependencyAction}
+                    fields={{ id: dependency.id, decision: 'REJECT' }}
+                    label="Reject"
+                    variant="ghost"
+                  />
                 </>
               )}
               {dependency.status === 'ACTIVE' && (
-                <RowButton action={removeDependencyAction} fields={{ id: dependency.id }} label="Remove" variant="ghost" />
+                <RowButton
+                  action={removeDependencyAction}
+                  fields={{ id: dependency.id }}
+                  label="Remove"
+                  variant="ghost"
+                />
               )}
             </div>
           )}

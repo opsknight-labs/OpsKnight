@@ -18,21 +18,9 @@ import {
   type ObservabilityConnectionView,
   type ObservabilityKind,
 } from '@/lib/intelligence/connectors/contract';
+import { ActionMessage as Status, fieldClass } from '@/components/settings/form-kit';
 
 const initial: ConnectionActionState = { message: '', ok: false };
-const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
-
-function Status({ state }: { state: ConnectionActionState }) {
-  if (!state.message) return null;
-  return (
-    <p
-      role={state.ok ? 'status' : 'alert'}
-      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
-    >
-      {state.message}
-    </p>
-  );
-}
 
 function Field({
   name,
@@ -106,7 +94,7 @@ function Check({
         value={value}
         defaultChecked={defaultChecked}
         disabled={disabled}
-        className="mt-1 h-4 w-4"
+        className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
       />
       <label htmlFor={id} className="text-sm font-medium">
         {label}

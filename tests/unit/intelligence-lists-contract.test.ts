@@ -16,6 +16,8 @@ import {
   parseAlertListFilters,
   parseChangeListFilters,
   parseListId,
+  parseListSearch,
+  LIST_SEARCH_MAX,
 } from '@/lib/intelligence/lists/contract';
 
 describe('list cursor', () => {
@@ -54,6 +56,7 @@ describe('list filters', () => {
       serviceId: null,
       severity: null,
       decision: null,
+      q: null,
       window: DEFAULT_LIST_WINDOW,
       cursor: null,
     });
@@ -61,9 +64,18 @@ describe('list filters', () => {
       serviceId: null,
       source: null,
       risk: null,
+      q: null,
       window: DEFAULT_LIST_WINDOW,
       cursor: null,
     });
+  });
+
+  it('keeps a trimmed, bounded search and drops an empty one', () => {
+    expect(parseAlertListFilters({ q: '  disk full ' }).q).toBe('disk full');
+    expect(parseChangeListFilters({ q: ['v43', 'ignored'] }).q).toBe('v43');
+    expect(parseAlertListFilters({ q: '   ' }).q).toBeNull();
+    expect(parseListSearch('x'.repeat(LIST_SEARCH_MAX + 20))).toHaveLength(LIST_SEARCH_MAX);
+    expect(listQueryString({ q: 'disk', window: '7d' })).toBe('?q=disk&window=7d');
   });
 
   it('accepts known values and drops anything else', () => {

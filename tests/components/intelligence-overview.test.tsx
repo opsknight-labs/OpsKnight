@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/link', () => ({
@@ -13,10 +13,12 @@ vi.mock('@/app/(app)/settings/intelligence/response/actions', () => ({
 }));
 
 import NoisePanel from '@/components/intelligence/overview/NoisePanel';
-import SpeedPanel from '@/components/intelligence/overview/SpeedPanel';
+import FeedbackPanel from '@/components/intelligence/overview/FeedbackPanel';
+import ImpactSummary, { impactSentences } from '@/components/intelligence/overview/ImpactSummary';
+import { KPI_CARD } from '@/components/analytics/KpiCard';
 import QualityPanel from '@/components/intelligence/overview/QualityPanel';
 import ChangePanel, { riskBand } from '@/components/intelligence/overview/ChangePanel';
-import OutcomesPanel, { bucketLabel } from '@/components/intelligence/overview/OutcomesPanel';
+import OutcomeTrends, { bucketKey } from '@/components/intelligence/overview/OutcomeTrends';
 import HealthPanel from '@/components/intelligence/overview/HealthPanel';
 import WindowSelector from '@/components/intelligence/overview/WindowSelector';
 import {
@@ -91,14 +93,14 @@ describe('NoisePanel', () => {
     const off = noise({ modes: { on: 0, shadow: 0 }, suppressedBySource: [] });
     const { unmount } = render(<NoisePanel data={off} windowLabel="Last 7 days" canManage />);
     expect(screen.getByText('Noise controls are off')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open settings' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Turn on in settings' })).toHaveAttribute(
       'href',
       '/settings/intelligence/noise-controls'
     );
     unmount();
     render(<NoisePanel data={off} windowLabel="Last 7 days" canManage={false} />);
     expect(screen.getByText('Noise controls are off')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Open settings' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Turn on in settings' })).toBeNull();
     expect(screen.getByText(/Ask an administrator/)).toBeInTheDocument();
   });
 });
@@ -115,24 +117,185 @@ const speed = (overrides: Partial<OverviewSpeed> = {}): OverviewSpeed => ({
   ...overrides,
 });
 
-describe('SpeedPanel', () => {
-  it('shows time to first insight and acceptance, and never fabricates a rate without reviews', () => {
-    render(<SpeedPanel data={speed()} windowLabel="Last 7 days" triageEnabled canManage={false} />);
-    expect(within(tile('First insight, median')).getByText('45 s')).toBeInTheDocument();
+const outcomes = (series = true): OverviewOutcomes => ({
+  current: { incidents: 10, acknowledged: 8, resolved: 6, mttaSeconds: 300, mttrSeconds: 3600 },
+  previous: { incidents: 5, acknowledged: 5, resolved: 5, mttaSeconds: 600, mttrSeconds: 1800 },
+  series: Array.from({ length: 7 }, (_, index) => ({
+    index,
+    current: {
+      incidents: 1,
+      mttaSeconds: series && index === 6 ? 300 : null,
+      mttrSeconds: series ? 3600 : null,
+    },
+    previous: {
+      incidents: 1,
+      mttaSeconds: series ? 600 : null,
+      mttrSeconds: series ? 1800 : null,
+    },
+  })),
+});
+
+const ok = <T,>(data: T) => ({ ok: true as const, data });
+const metric = (label: string) =>
+  screen.getByText(label, { selector: 'span' }).closest('li') as HTMLElement;
+
+describe('ImpactSummary', () => {
+  const impact = (overrides: Partial<Parameters<typeof ImpactSummary>[0]> = {}) =>
+    render(
+      <ImpactSummary
+        noise={ok(noise())}
+        speed={ok(speed())}
+        outcomes={ok(outcomes())}
+        enabled
+        windowLabel="Last 7 days"
+        {...overrides}
+      />
+    );
+
+  it('answers in one sentence, then four headline numbers as Analytics KPI tiles', () => {
+    impact();
+    const card = screen.getByRole('region', { name: /Impact/ });
+    expect(card).toHaveTextContent(
+      'Intelligence found insights for 30 of 40 incidents, a median of 45 s after they opened.'
+    );
+    // Coverage, then the noise controls as a status with what they did.
+    expect(card).toHaveTextContent('75% of incidents got an insight');
+    expect(within(card).getByText('Noise controls on')).toBeInTheDocument();
+    expect(within(card).getByText('Held back 120 pages')).toBeInTheDocument();
+    const tiles = within(card).getAllByRole('listitem');
+    expect(tiles).toHaveLength(4);
+    // The same tile as Analytics, so both pages' headline numbers match in size and type.
+    expect(tiles[0]).toHaveClass(KPI_CARD);
     expect(
-      within(tile('First insight, median')).getByText('30 of 40 incidents had an insight')
+      within(metric('Alerts to incidents')).getByText('12.9K alerts became 300 incidents')
     ).toBeInTheDocument();
-    expect(within(tile('First insight, 90th percentile')).getByText('12 min')).toBeInTheDocument();
-    expect(within(tile('Related suggestions accepted')).getByText('75%')).toBeInTheDocument();
-    expect(within(tile('Findings rated helpful')).getByText('—')).toBeInTheDocument();
-    expect(within(tile('Findings rated helpful')).getByText('None rated yet')).toBeInTheDocument();
-    expect(within(tile('Triage chips accepted')).getByText('50%')).toBeInTheDocument();
+    expect(
+      within(metric('Alerts to incidents')).getByText('43.0 alerts per incident')
+    ).toBeInTheDocument();
+    expect(within(metric('Time to first insight')).getByText('45 s')).toBeInTheDocument();
+    expect(
+      within(metric('Time to first insight')).getByText('p90 12 min · 30 of 40 incidents')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'How Alerts to incidents is calculated' })
+    ).toBeInTheDocument();
   });
 
-  it('replaces the triage tile with a turn-on hint when triage is off', () => {
-    render(<SpeedPanel data={speed()} windowLabel="Last 7 days" triageEnabled={false} canManage />);
-    expect(screen.queryByText('Triage chips accepted')).toBeNull();
-    expect(screen.getByText('Triage suggestions are off')).toBeInTheDocument();
+  it('compares MTTA and MTTR with the previous window, judging lower as better', () => {
+    impact();
+    const mtta = metric('MTTA');
+    expect(within(mtta).getByText('5 min')).toBeInTheDocument();
+    expect(within(mtta).getByText('−50%')).toBeInTheDocument();
+    expect(within(mtta).getByText(/vs previous period, better/)).toBeInTheDocument();
+    expect(within(mtta).getByText('8 acknowledged')).toBeInTheDocument();
+    const mttr = metric('MTTR');
+    expect(within(mttr).getByText('+100%')).toBeInTheDocument();
+    expect(within(mttr).getByText(/vs previous period, worse/)).toBeInTheDocument();
+    // No previous value for the other numbers, so no badge is invented.
+    expect(within(metric('Alerts to incidents')).queryByText(/vs previous period/)).toBeNull();
+  });
+
+  it('blanks only the numbers of a failed loader and drops its sentence', () => {
+    impact({ noise: { ok: false, error: 'Noise is unavailable.' } });
+    expect(within(metric('Alerts to incidents')).getByText('—')).toBeInTheDocument();
+    expect(within(metric('Alerts to incidents')).getByText('Unavailable')).toBeInTheDocument();
+    expect(within(metric('Time to first insight')).getByText('45 s')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /Impact/ })).not.toHaveTextContent('Noise controls');
+  });
+
+  it('says honestly when Intelligence is off, there were no incidents, or controls only shadow', () => {
+    const shadow = ok(noise({ modes: { on: 0, shadow: 2 }, shadowWouldAvoid: 0 }));
+    expect(impactSentences({ enabled: false, speed: ok(speed()), noise: shadow })).toEqual([
+      'Intelligence is off, so no insights were generated in this window.',
+      'Noise controls are in shadow mode: nothing was held back.',
+    ]);
+    expect(
+      impactSentences({
+        enabled: true,
+        speed: ok(speed({ incidents: 0, incidentsWithInsight: 0 })),
+        noise: ok(noise({ modes: { on: 0, shadow: 0 } })),
+      })
+    ).toEqual([
+      'No incidents opened in this window, so Intelligence had nothing to look at.',
+      'Noise controls are off, so nothing was held back.',
+    ]);
+    expect(
+      impactSentences({
+        enabled: true,
+        speed: { ok: false, error: 'x' },
+        noise: { ok: false, error: 'y' },
+      })
+    ).toEqual(['These figures could not be loaded. Refresh to try again.']);
+  });
+});
+
+describe('FeedbackPanel', () => {
+  const row = (label: string) =>
+    screen.getByText(label, { selector: 'dt span' }).closest('div') as HTMLElement;
+  const footnote = (container: HTMLElement) =>
+    container.querySelector('[data-feedback-footnote]') as HTMLElement;
+
+  it('lists the secondary rates and folds empty ones into one footnote', () => {
+    const { container } = render(
+      <FeedbackPanel noise={ok(noise())} speed={ok(speed())} triageEnabled canManage={false} />
+    );
+    expect(within(row('Suggestions accepted')).getByText('75%')).toBeInTheDocument();
+    expect(within(row('Suggestions accepted')).getByText('3 of 4 reviewed')).toBeInTheDocument();
+    expect(within(row('Triage accepted')).getByText('50%')).toBeInTheDocument();
+    expect(within(row('False-group rate')).getByText('10%')).toBeInTheDocument();
+    expect(within(row('Pages avoided')).getByText('120')).toBeInTheDocument();
+    expect(within(row('Would have avoided (shadow)')).getByText('40')).toBeInTheDocument();
+    // Nothing rated and no heartbeats: no "—" rows, one explanation instead.
+    expect(screen.queryByText('Rated helpful', { selector: 'dt span' })).toBeNull();
+    expect(screen.queryByText('Heartbeat monitors', { selector: 'dt span' })).toBeNull();
+    expect(screen.queryByText('—')).toBeNull();
+    expect(footnote(container)).toHaveTextContent(
+      "Responders haven't reviewed any findings in this window yet. No heartbeat monitors cover these services."
+    );
+  });
+
+  it('says once that there is no feedback yet when nobody reviewed anything', () => {
+    const none = { accepted: 0, reviewed: 0, rate: null };
+    const { container } = render(
+      <FeedbackPanel
+        noise={ok(noise())}
+        speed={ok(speed({ relatedSuggestions: none, findings: none, triage: none }))}
+        triageEnabled
+        canManage={false}
+      />
+    );
+    expect(footnote(container)).toHaveTextContent(
+      "No feedback yet: responders haven't accepted, rated or decided any suggestions in this window."
+    );
+  });
+
+  it('points administrators at the triage switch, and offers responders no link', () => {
+    const { container, unmount } = render(
+      <FeedbackPanel
+        noise={{ ok: false, error: 'Noise is unavailable.' }}
+        speed={ok(speed())}
+        triageEnabled={false}
+        canManage
+      />
+    );
+    expect(footnote(container)).toHaveTextContent('Triage suggestions are off.');
+    expect(footnote(container)).toHaveTextContent(
+      /Some figures could not be loaded \(False-group rate/
+    );
+    expect(within(footnote(container)).getByRole('link', { name: 'Turn on' })).toHaveAttribute(
+      'href',
+      '/settings/intelligence#triage'
+    );
+    unmount();
+    const responder = render(
+      <FeedbackPanel
+        noise={ok(noise())}
+        speed={ok(speed())}
+        triageEnabled={false}
+        canManage={false}
+      />
+    );
+    expect(within(footnote(responder.container)).queryByRole('link')).toBeNull();
   });
 });
 
@@ -186,6 +349,13 @@ describe('QualityPanel', () => {
     );
   });
 
+  it('gives the noisy list the full width and says so in one line when nothing flaps', () => {
+    render(<QualityPanel data={{ ...data, flapping: [] }} canManage />);
+    expect(screen.getByRole('list', { name: 'Noisiest services' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Flapping services' })).toBeNull();
+    expect(screen.getByText('No flapping services in the last 30 days.')).toBeInTheDocument();
+  });
+
   it('hides the Jira action when Jira is not configured and explains an empty list', () => {
     const { unmount } = render(
       <QualityPanel data={{ ...data, jiraConfigured: false }} canManage />
@@ -193,9 +363,12 @@ describe('QualityPanel', () => {
     expect(screen.queryByRole('button', { name: /Open Jira issue/ })).toBeNull();
     unmount();
     render(<QualityPanel data={{ ...data, noisy: [], flapping: [] }} canManage />);
-    expect(
-      screen.getByText(/No noisy or flapping services in the last 30 days/)
-    ).toBeInTheDocument();
+    expect(screen.getByText('No noisy or flapping services')).toBeInTheDocument();
+    expect(screen.getByText(/Nothing stood out in the last 30 days/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View services' })).toHaveAttribute(
+      'href',
+      '/services'
+    );
   });
 });
 
@@ -272,51 +445,44 @@ describe('ChangePanel', () => {
       />
     );
     expect(screen.getByText('No changes recorded in this window')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open settings' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Set up change sources' })).toHaveAttribute(
       'href',
       '/settings/intelligence/services#change-sources'
     );
   });
 });
 
-describe('OutcomesPanel', () => {
-  const outcomes: OverviewOutcomes = {
-    current: { incidents: 10, acknowledged: 8, resolved: 6, mttaSeconds: 300, mttrSeconds: 3600 },
-    previous: { incidents: 5, acknowledged: 5, resolved: 5, mttaSeconds: 600, mttrSeconds: 1800 },
-    series: Array.from({ length: 7 }, (_, index) => ({
-      index,
-      current: { incidents: 1, mttaSeconds: index === 6 ? 300 : null, mttrSeconds: 3600 },
-      previous: { incidents: 1, mttaSeconds: 600, mttrSeconds: 1800 },
-    })),
-  };
+describe('OutcomeTrends', () => {
+  const since = new Date('2026-11-02T00:00:00Z');
 
-  it('compares MTTA and MTTR with the previous window, judging lower as better', () => {
-    render(
-      <OutcomesPanel data={outcomes} windowKey="7d" since={new Date('2026-11-02T00:00:00Z')} />
+  it('draws one trend at a time, with a measure picker and a Chart/Table toggle', () => {
+    render(<OutcomeTrends data={outcomes()} windowKey="7d" since={since} />);
+    const card = screen.getByRole('region', { name: 'Response trend' });
+    const measure = within(card).getByRole('group', { name: 'Measure' });
+    expect(within(measure).getByRole('button', { name: 'MTTA' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
     );
-    const mtta = tile('Mean time to acknowledge');
-    expect(within(mtta).getByText('5 min')).toBeInTheDocument();
-    expect(within(mtta).getByText(/−50% vs previous 7d/)).toBeInTheDocument();
-    expect(within(mtta).getByText('(better)')).toBeInTheDocument();
-    const mttr = tile('Mean time to resolve');
-    expect(within(mttr).getByText(/\+100% vs previous 7d/)).toBeInTheDocument();
-    expect(within(mttr).getByText('(worse)')).toBeInTheDocument();
-    // Volume is shown without a better/worse judgement.
-    expect(within(tile('Incidents')).queryByText(/better|worse/)).toBeNull();
-  });
-
-  it('draws one small multiple per measure and offers a data table', () => {
-    render(
-      <OutcomesPanel data={outcomes} windowKey="7d" since={new Date('2026-11-02T00:00:00Z')} />
-    );
-    expect(screen.getAllByRole('img')).toHaveLength(2);
-    const table = screen.getByRole('table');
+    fireEvent.click(within(card).getByRole('button', { name: 'Table' }));
+    const table = within(card).getByRole('table');
     expect(within(table).getAllByRole('row')).toHaveLength(8);
-    expect(within(table).getByRole('rowheader', { name: 'Nov 8' })).toBeInTheDocument();
+    const last = within(table).getByRole('rowheader', { name: 'Nov 8' }).closest('tr')!;
+    expect(within(last).getByText('5m')).toBeInTheDocument();
+    expect(within(last).getByText('10m')).toBeInTheDocument();
+    fireEvent.click(within(measure).getByRole('button', { name: 'MTTR' }));
+    expect(within(card).getByRole('table')).toHaveTextContent('Time to resolve per period');
   });
 
-  it('labels hourly buckets in UTC for the 24 hour window', () => {
-    expect(bucketLabel(new Date('2026-11-08T12:00:00Z'), 3_600_000, 3)).toBe('15:00 UTC');
+  it('says so instead of drawing an empty chart', () => {
+    render(<OutcomeTrends data={outcomes(false)} windowKey="7d" since={since} />);
+    expect(screen.getByText(/No acknowledged or resolved incidents/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Table' })).toBeNull();
+  });
+
+  it('buckets the 24 hour window by UTC hour', () => {
+    expect(bucketKey(new Date('2026-11-08T12:00:00Z'), 3_600_000, 3)).toBe('2026-11-08T15:00:00');
+    render(<OutcomeTrends data={outcomes()} windowKey="24h" since={since} />);
+    expect(screen.getByText(/Mean per hour \(UTC\)/)).toBeInTheDocument();
   });
 });
 
@@ -344,7 +510,14 @@ describe('overview primitives', () => {
     const nav = screen.getByRole('navigation', { name: 'Time window' });
     const current = within(nav).getByRole('link', { current: 'page' });
     expect(current).toHaveAttribute('href', '/intelligence?window=24h');
-    expect(current).toHaveAccessibleName('24h (last 24 hours)');
+    expect(current).toHaveAccessibleName('24 hours');
+    expect(within(nav).getAllByRole('link')).toHaveLength(3);
+  });
+
+  it('keeps the same links and names in the compact header style', () => {
+    render(<WindowSelector current="7d" variant="header" />);
+    const nav = screen.getByRole('navigation', { name: 'Time window' });
+    expect(within(nav).getByRole('link', { current: 'page' })).toHaveAccessibleName('7 days');
     expect(within(nav).getAllByRole('link')).toHaveLength(3);
   });
 
@@ -365,6 +538,27 @@ describe('overview primitives', () => {
   it('shows the how-to only to administrators', () => {
     render(<FeatureOff title="Off" adminHint="Do this" href="/x" canManage={false} />);
     expect(screen.queryByText('Do this')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('renders the page-wide off state as a compact labelled banner with one action', () => {
+    render(
+      <FeatureOff
+        variant="banner"
+        title="Intelligence is off"
+        adminHint="Turn it on."
+        href="/s"
+        canManage
+      />
+    );
+    const banner = screen.getByRole('region', { name: 'Intelligence is off' });
+    expect(within(banner).getByRole('heading', { level: 2 })).toHaveTextContent(
+      'Intelligence is off'
+    );
+    expect(within(banner).getByRole('link', { name: 'Turn on in settings' })).toHaveAttribute(
+      'href',
+      '/s'
+    );
   });
 
   it('computes signed relative deltas', () => {

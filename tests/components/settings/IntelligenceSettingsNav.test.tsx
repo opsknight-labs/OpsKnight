@@ -98,11 +98,14 @@ describe('IntelligenceGroupHeader', () => {
       </IntelligenceGroupHeader>
     );
     expect(screen.getByRole('heading', { level: 1, name: 'Intelligence' })).toBeInTheDocument();
-    expect(screen.getAllByRole('link').map(link => link.getAttribute('href'))).toEqual([
-      '#general',
-      '#triage',
-    ]);
+    expect(
+      within(screen.getByRole('navigation', { name: 'On this page' }))
+        .getAllByRole('link')
+        .map(link => link.getAttribute('href'))
+    ).toEqual(['#general', '#triage']);
     expect(screen.queryByRole('link', { name: 'Failed work' })).not.toBeInTheDocument();
+    // The group tabs sit under the page header on every group page.
+    expect(screen.getByRole('navigation', { name: 'Intelligence sections' })).toBeInTheDocument();
 
     rerender(
       <IntelligenceGroupHeader group="engine" visible={['general']}>

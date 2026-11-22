@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Bot, BookOpen } from 'lucide-react';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import IntelligenceSubNav from '@/components/settings/layout/IntelligenceSubNav';
+import { LearnMore } from '@/components/settings/layout/LearnMore';
+import EmptyState from '@/components/patterns/EmptyState';
+import RelativeTime from '@/components/patterns/RelativeTime';
 import {
   ProactivePolicyForm,
   ReconfirmFactButton,
@@ -50,19 +56,21 @@ export default async function ServiceSquirePage({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <p className="text-sm">
-          <Link href="/settings/intelligence/services" className="text-muted-foreground underline">
-            Per-service policies
-          </Link>
-        </p>
-        <h1 className="text-2xl font-semibold">Squire for {service.name}</h1>
-        <p className="text-sm text-muted-foreground">
-          Proactive help for this service’s incidents and what Squire has been told to remember
-          about it. Everything here is off until someone turns it on, runs in the intelligence lane
-          after paging, and never changes an incident on its own.
-        </p>
-      </header>
+      <SettingsPageHeader
+        eyebrow="AIOps Intelligence"
+        title={`Squire for ${service.name}`}
+        description="Proactive help for this service’s incidents and what Squire remembers about it."
+        icon={Bot}
+        trail={[
+          { label: 'Services & changes', href: '/settings/intelligence/services' },
+          { label: service.name },
+        ]}
+      />
+      <IntelligenceSubNav />
+      <LearnMore label="How this works">
+        Everything here is off until someone turns it on, runs in the intelligence lane after
+        paging, and never changes an incident on its own.
+      </LearnMore>
 
       <SettingsSection
         title="Proactive Squire"
@@ -73,18 +81,27 @@ export default async function ServiceSquirePage({
 
       <SettingsSection
         title="Learned facts"
-        description="Facts Squire proposed during an investigation and a person confirmed. Squire cites them when it answers, for 180 days after the last confirmation."
+        description="Facts Squire proposed and a person confirmed. Squire cites them for 180 days after the last confirmation."
       >
         {!memory.knowledgeEnabled && (
-          <p className="py-2 text-sm text-muted-foreground">
+          <p className="pt-4 text-sm text-muted-foreground">
             The knowledge index is off, so Squire does not use or propose facts.{' '}
-            <Link href="/settings/intelligence/ai#knowledge-memory" className="underline">
+            <Link
+              href="/settings/intelligence/ai#knowledge-memory"
+              className="font-medium text-foreground underline underline-offset-4"
+            >
               Squire memory settings
             </Link>
           </p>
         )}
         {!facts || facts.length === 0 ? (
-          <p className="py-3 text-sm text-muted-foreground">No learned facts yet.</p>
+          <EmptyState
+            size="sm"
+            variant="simple"
+            icon={<BookOpen aria-hidden="true" />}
+            title="No learned facts yet"
+            description="When Squire proposes a fact during an investigation and someone confirms it, it appears here."
+          />
         ) : (
           <ul className="divide-y divide-border">
             {facts.map(fact => (
@@ -92,7 +109,7 @@ export default async function ServiceSquirePage({
                 <div className="min-w-0 space-y-1">
                   <p className="whitespace-pre-wrap break-words text-sm">{fact.text}</p>
                   <p className="text-xs text-muted-foreground">
-                    Confirmed {fact.confirmedAt.toISOString().slice(0, 10)}
+                    Confirmed <RelativeTime date={fact.confirmedAt} format="long" />
                     {fact.approvedBy ? ` by ${fact.approvedBy}` : ''}
                     {fact.stale &&
                       ' · Stale: Squire stops using it until someone confirms it again.'}
