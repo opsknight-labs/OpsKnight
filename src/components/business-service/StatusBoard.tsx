@@ -45,10 +45,12 @@ function OverallBanner({ tiles }: { tiles: readonly StatusBoardTile[] }) {
         <h2 className="text-base font-semibold">{headline}</h2>
         {impacted.length > 0 && (
           <p className="text-xs opacity-90">
-            Worst: {meta.label.toLowerCase()} on{' '}
+            Most affected:{' '}
             {impacted
               .slice(0, 3)
-              .map(tile => tile.name)
+              .map(
+                tile => `${tile.name} (${BS_STATUS_META[tile.health.status].label.toLowerCase()})`
+              )
               .join(', ')}
             {impacted.length > 3 ? ` and ${impacted.length - 3} more` : ''}.
           </p>

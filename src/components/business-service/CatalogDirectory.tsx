@@ -87,12 +87,14 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
     id: 'health',
     header: 'Health',
     cell: row => <HealthBadge status={row.status} since={row.since} variant="solid" />,
-    className: 'min-w-[11rem]',
+    className: 'min-w-[11rem] font-normal',
   },
   {
     id: 'criticality',
     header: 'Criticality',
     cell: row => <Criticality tier={row.criticality} />,
+    // Global `table td` is 600; DESIGN.md wants 400 for secondary cells.
+    className: 'font-normal',
   },
   {
     id: 'owner',
@@ -103,12 +105,13 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
       ) : (
         <span className="text-muted-foreground">No owner</span>
       ),
+    className: 'font-normal',
   },
   {
     id: 'members',
     header: 'Services',
     cell: row => <Members row={row} />,
-    className: 'text-right',
+    className: 'text-right font-normal',
   },
   {
     id: 'incidents',
@@ -118,13 +121,13 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
         {row.openIncidentCount.toLocaleString()}
       </span>
     ),
-    className: 'text-right',
+    className: 'text-right font-normal',
   },
   {
     id: 'followers',
     header: 'Followers',
     cell: row => <span className="tabular-nums">{row.followerCount.toLocaleString()}</span>,
-    className: 'text-right',
+    className: 'text-right font-normal',
   },
 ];
 

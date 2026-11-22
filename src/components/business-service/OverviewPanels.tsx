@@ -10,7 +10,7 @@ import DependencyMiniGraph from './DependencyMiniGraph';
 import HealthBadge, { CRITICALITY_LABEL } from './HealthBadge';
 
 const head = 'h-9 px-3 text-left text-xs font-medium text-muted-foreground whitespace-nowrap';
-const cell = 'px-3 py-2.5 align-middle text-sm';
+const cell = 'px-3 py-2.5 align-middle text-sm font-normal';
 const row = 'border-t border-border transition-colors hover:bg-muted/50';
 const link =
   'font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -114,7 +114,7 @@ export function OverviewIncidents({ incidents }: { incidents: readonly OverviewI
       {incidents.map(incident => (
         <li
           key={incident.id}
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm sm:px-5"
         >
           <StatusBadge status={incident.status} size="xs" />
           <SeverityBadge urgency={incident.urgency} size="xs" />
