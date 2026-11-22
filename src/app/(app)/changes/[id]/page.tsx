@@ -5,7 +5,7 @@ import { GitCommitHorizontal, Siren } from 'lucide-react';
 import { getCurrentAuthorizationActor, getCurrentUser } from '@/lib/rbac';
 import { getUserTimeZone } from '@/lib/timezone';
 import { readChangeReference } from '@/lib/intelligence/squire/references';
-import { requirePageAccess } from '@/lib/access/server';
+import { requirePageAccess, redirectWithoutIncidentRead } from '@/lib/access/server';
 import { getChangeFollowers, FOLLOW_WINDOW_MINUTES } from '@/lib/intelligence/changes/followers';
 import { RiskMeter } from '@/components/intelligence/overview/ChangePanel';
 import { ListChip, ListWhen } from '@/components/intelligence/lists/shared';
@@ -18,6 +18,7 @@ const kindLabel = (kind: string) => kind.toLowerCase().replace(/_/g, ' ');
 
 export default async function ChangeReferencePage({ params }: { params: Promise<{ id: string }> }) {
   await requirePageAccess('/changes/[id]');
+  await redirectWithoutIncidentRead();
   const timeZone = getUserTimeZone(await getCurrentUser());
   const { id } = await params;
   const actor = await getCurrentAuthorizationActor();

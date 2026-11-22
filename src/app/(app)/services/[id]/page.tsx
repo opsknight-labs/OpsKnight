@@ -119,7 +119,11 @@ import {
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { INTEGRATION_TYPES, IntegrationType } from '@/components/service/integration-types';
-import { denyResourceAccess, requirePageAccess } from '@/lib/access/server';
+import {
+  denyResourceAccess,
+  requirePageAccess,
+  redirectWithoutIncidentRead,
+} from '@/lib/access/server';
 
 export const revalidate = 0;
 
@@ -143,6 +147,7 @@ type ServiceDetailPageProps = {
 
 export default async function ServiceDetailPage({ params, searchParams }: ServiceDetailPageProps) {
   await requirePageAccess('/services/[id]');
+  await redirectWithoutIncidentRead();
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const requestedPage = parsePageParam(resolvedSearchParams?.page);

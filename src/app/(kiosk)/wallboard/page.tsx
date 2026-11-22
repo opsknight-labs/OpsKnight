@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { redirect } from 'next/navigation';
+import { redirectWithoutIncidentRead } from '@/lib/access/server';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import { getRealtimeChangeGeneration } from '@/lib/realtime-change-control-plane';
 import { getLiveDashboardSnapshot } from '@/lib/dashboard/live-incidents';
@@ -32,6 +33,7 @@ export default async function WallboardPage({
 }) {
   const requestContext = await getRequestActorContext();
   if (!requestContext) redirect('/login?error=SessionExpired&callbackUrl=%2Fwallboard');
+  await redirectWithoutIncidentRead();
   const { actor, user } = requestContext;
 
   const urlParams = new URLSearchParams();

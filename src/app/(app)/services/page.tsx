@@ -28,7 +28,7 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { resolveAccessContext } from '@/lib/access-context';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 import { getServiceListBadges } from '@/lib/intelligence/surfaces/service-list-badges';
-import { requirePageAccess } from '@/lib/access/server';
+import { requirePageAccess, redirectWithoutIncidentRead } from '@/lib/access/server';
 import { seedShadowServicePolicy } from '@/lib/intelligence/settings/service-defaults';
 
 export const revalidate = 0;
@@ -117,6 +117,7 @@ type ServicesPageProps = {
 
 export default async function ServicesPage({ searchParams }: ServicesPageProps) {
   await requirePageAccess('/services');
+  await redirectWithoutIncidentRead();
   const params = await searchParams;
   const searchQuery = typeof params?.search === 'string' ? params.search.trim() : '';
   const statusFilter = typeof params?.status === 'string' ? params.status : 'all';

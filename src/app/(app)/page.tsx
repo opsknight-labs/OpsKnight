@@ -18,7 +18,7 @@ import { getAiopsPulse } from '@/lib/intelligence/surfaces/dashboard-pulse';
 import DashboardHistorySection, {
   DashboardHistoryProvider,
 } from '@/components/dashboard/DashboardHistorySection';
-import { requirePageAccess } from '@/lib/access/server';
+import { requirePageAccess, redirectWithoutIncidentRead } from '@/lib/access/server';
 import GetStartedChecklist from '@/components/onboarding/GetStartedChecklist';
 import { getOnboardingSteps } from '@/lib/onboarding';
 
@@ -43,6 +43,7 @@ function toUrlParams(params: SearchParams): URLSearchParams {
  */
 export default async function Dashboard({ searchParams }: { searchParams: Promise<SearchParams> }) {
   await requirePageAccess('/');
+  await redirectWithoutIncidentRead();
   const urlParams = toUrlParams(await searchParams);
   const requestContext = await getRequestActorContext();
   if (!requestContext) redirect('/login?error=SessionExpired');

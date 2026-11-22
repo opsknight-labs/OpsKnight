@@ -93,6 +93,18 @@ export default function AccessDeniedView({
                 {title}
               </h1>
               <p className="text-sm leading-relaxed text-muted-foreground">{reason}</p>
+              {snapshot?.role === 'STAKEHOLDER' && (
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Your stakeholder account can view the status dashboard and business services. Ask
+                  an administrator for responder access to see incidents.{' '}
+                  <Link
+                    href="/status-dashboard"
+                    className="font-medium text-foreground underline underline-offset-4"
+                  >
+                    Open the status dashboard
+                  </Link>
+                </p>
+              )}
             </div>
           </div>
 

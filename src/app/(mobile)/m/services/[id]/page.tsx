@@ -18,7 +18,7 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { getRequestActorContext } from '@/lib/request-actor-context';
-import { requirePageAccess } from '@/lib/access/server';
+import { requirePageAccess, redirectWithoutIncidentRead } from '@/lib/access/server';
 import { assertCanModifyService } from '@/lib/rbac';
 import {
   listServiceMaintenanceOverview,
@@ -37,6 +37,7 @@ type PageProps = {
 
 export default async function MobileServiceDetailPage({ params, searchParams }: PageProps) {
   await requirePageAccess('/m/services/[id]');
+  await redirectWithoutIncidentRead();
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/services'));
 

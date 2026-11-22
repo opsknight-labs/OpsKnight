@@ -46,7 +46,11 @@ import {
 } from 'lucide-react';
 import EditTeamForm from './EditTeamForm';
 import DeleteTeamCard from './DeleteTeamCard';
-import { denyResourceAccess, requirePageAccess } from '@/lib/access/server';
+import {
+  denyResourceAccess,
+  requirePageAccess,
+  redirectWithoutIncidentRead,
+} from '@/lib/access/server';
 import { CAPABILITIES } from '@/lib/authorization';
 
 type TeamDetailPageProps = {
@@ -56,6 +60,7 @@ type TeamDetailPageProps = {
 
 export default async function TeamDetailPage({ params, searchParams }: TeamDetailPageProps) {
   await requirePageAccess('/teams/[id]');
+  await redirectWithoutIncidentRead();
   const { id } = await params;
   const query = await searchParams;
   try {
