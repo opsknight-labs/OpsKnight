@@ -35,7 +35,20 @@ export type HealthImpactRow = {
   source: BusinessServiceImpactSource;
   excluded: boolean;
   createdById: string | null;
+  /** Rows are intervals; the latest per incident and business service carries its state. */
+  startedAt: Date;
 };
+
+/** The latest interval per incident and business service: it decides marks and exclusions. */
+export function latestImpactRows<T extends HealthImpactRow>(rows: readonly T[]): Map<string, T> {
+  const latest = new Map<string, T>();
+  for (const row of rows) {
+    const key = `${row.incidentId}:${row.businessServiceId}`;
+    const current = latest.get(key);
+    if (!current || row.startedAt >= current.startedAt) latest.set(key, row);
+  }
+  return latest;
+}
 
 export type HealthInputs = {
   now: Date;
@@ -134,8 +147,9 @@ function walkEdges(byUpstream: ReadonlyMap<string, readonly string[]>, serviceId
   return edges;
 }
 
+/** The incident behind a reason of the business service's own; NESTED ones belong to the child. */
 function reasonIncidentId(reason: ImpactReason): string | null {
-  return 'incidentId' in reason ? reason.incidentId : null;
+  return reason.kind !== 'NESTED' && 'incidentId' in reason ? reason.incidentId : null;
 }
 
 function byWorst(a: ImpactReason, b: ImpactReason) {
@@ -150,7 +164,8 @@ function byWorst(a: ImpactReason, b: ImpactReason) {
  * - MANUAL: a responder marked the incident as impacting; bypasses the threshold.
  * - Exclusions remove every reason for that incident on that business service.
  * - MAINTENANCE: all critical members (all members when none is critical) are in maintenance.
- * - NESTED: a supporting business service (depth <= 3) is impacted; caps at DEGRADED.
+ * - NESTED: a supporting business service (depth <= 3) is impacted by an incident this one has
+ *   not unmarked; caps at DEGRADED.
  */
 export function computeHealth(inputs: HealthInputs): Map<string, BusinessServiceHealth> {
   const thresholds = new Map(inputs.businessServices.map(bs => [bs.id, impactThreshold(bs)]));
@@ -163,10 +178,9 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
       else membersByService.set(member.serviceId, [entry]);
     }
   }
+  const latestRows = latestImpactRows(inputs.impactRows);
   const excluded = new Set<string>();
-  for (const row of inputs.impactRows) {
-    if (row.excluded) excluded.add(`${row.incidentId}:${row.businessServiceId}`);
-  }
+  for (const [key, row] of latestRows) if (row.excluded) excluded.add(key);
   const incidentsById = new Map(inputs.incidents.map(incident => [incident.id, incident]));
 
   // bsId -> incidentId -> the worst reason that incident gives it
@@ -235,7 +249,7 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
     }
   }
 
-  for (const row of inputs.impactRows) {
+  for (const row of latestRows.values()) {
     const incident = incidentsById.get(row.incidentId);
     if (row.source !== 'MANUAL' || row.excluded || !incident) continue;
     if (!thresholds.has(row.businessServiceId)) continue;
@@ -292,16 +306,27 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
           if (visited.has(childId)) continue;
           visited.add(childId);
           next.push(childId);
-          const child = own.get(childId);
-          if (!child || rank(child.status) < DEGRADED_RANK) continue;
+          // The child's worst incident that this business service has not unmarked.
+          const carried = own.get(childId)?.reasons.find(reason => {
+            const incidentId = reasonIncidentId(reason);
+            return (
+              incidentId !== null &&
+              rank(reason.status) >= DEGRADED_RANK &&
+              !excluded.has(`${incidentId}:${bs.id}`)
+            );
+          });
+          const incidentId = carried && reasonIncidentId(carried);
+          if (!carried || !incidentId) continue;
           reasons.push({
             kind: 'NESTED',
-            status: cap(child.status, 'DEGRADED'),
+            status: cap(carried.status, 'DEGRADED'),
             childBusinessServiceId: childId,
             depth,
+            incidentId,
           });
-          if (rank(mine.status) < DEGRADED_RANK && child.since && (!since || child.since < since))
-            since = child.since;
+          const startedAt = incidentsById.get(incidentId)?.createdAt;
+          if (rank(mine.status) < DEGRADED_RANK && startedAt && (!since || startedAt < since))
+            since = startedAt;
         }
       }
       frontier = next;
@@ -414,6 +439,7 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
         source: true,
         excluded: true,
         createdById: true,
+        startedAt: true,
       },
     }),
   ]);

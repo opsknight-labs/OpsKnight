@@ -17,6 +17,7 @@ import {
   getHealthSnapshot,
   incidentImpactSources,
   invalidateBusinessServiceHealth,
+  latestImpactRows,
 } from './health';
 
 /**
@@ -29,13 +30,23 @@ export const BUSINESS_SERVICE_IMPACT_RECONCILE_TASK = 'BUSINESS_SERVICE_IMPACT_R
 const RECONCILE_INTERVAL_MS = 60_000;
 const SYNC_BATCH = 500;
 
-type Update = {
-  incidentId: string;
-  businessServiceIds: string[];
-  data: Prisma.IncidentBusinessServiceImpactUpdateManyMutationInput;
-};
+const IMPACT_ROW_SELECT = {
+  id: true,
+  incidentId: true,
+  businessServiceId: true,
+  source: true,
+  excluded: true,
+  createdById: true,
+  startedAt: true,
+  endedAt: true,
+} satisfies Prisma.IncidentBusinessServiceImpactSelect;
 
-/** Brings the impact rows of these incidents in line with the current health rules. */
+/**
+ * Brings the impact intervals of these incidents in line with the current health rules. The
+ * latest interval per business service carries its state: an open one is kept (its source
+ * follows the rules), a closed one that should be impacting starts a new interval from now, so a
+ * reopened incident never counts its healthy gap as downtime. Exclusions and manual marks win.
+ */
 export async function syncIncidentImpacts(
   incidentIds: readonly string[],
   now = new Date()
@@ -58,14 +69,7 @@ export async function syncIncidentImpacts(
     }),
     prisma.incidentBusinessServiceImpact.findMany({
       where: { incidentId: { in: ids } },
-      select: {
-        incidentId: true,
-        businessServiceId: true,
-        source: true,
-        excluded: true,
-        createdById: true,
-        endedAt: true,
-      },
+      select: IMPACT_ROW_SELECT,
     }),
   ]);
   const rowsByIncident = new Map<string, typeof rows>();
@@ -73,14 +77,15 @@ export async function syncIncidentImpacts(
     rowsByIncident.set(row.incidentId, [...(rowsByIncident.get(row.incidentId) ?? []), row]);
   }
   const creates: Prisma.IncidentBusinessServiceImpactCreateManyInput[] = [];
-  const updates: Update[] = [];
-  const queue = (incidentId: string, data: Update['data'], bsId: string) => {
+  const updates = new Map<
+    string,
+    { ids: string[]; data: Prisma.IncidentBusinessServiceImpactUpdateManyMutationInput }
+  >();
+  const queue = (id: string, data: Prisma.IncidentBusinessServiceImpactUpdateManyMutationInput) => {
     const key = JSON.stringify(data);
-    const existing = updates.find(
-      u => u.incidentId === incidentId && JSON.stringify(u.data) === key
-    );
-    if (existing) existing.businessServiceIds.push(bsId);
-    else updates.push({ incidentId, businessServiceIds: [bsId], data });
+    const entry = updates.get(key);
+    if (entry) entry.ids.push(id);
+    else updates.set(key, { ids: [id], data });
   };
 
   for (const incident of incidents) {
@@ -90,25 +95,37 @@ export async function syncIncidentImpacts(
       ? incidentImpactSources({ ...snapshot.inputs, impactRows: existing }, incident)
       : new Map();
     const endedAt = active ? now : (incident.resolvedAt ?? now);
-    const end = { endedAt };
-    const reopen = { endedAt: null };
+    // Any stray open interval that is not the latest is closed (concurrent writers).
+    const latest = latestImpactRows(existing);
+    const latestIds = new Set([...latest.values()].map(row => row.id));
     for (const row of existing) {
-      const want = desired.get(row.businessServiceId);
+      if (row.endedAt === null && !latestIds.has(row.id)) queue(row.id, { endedAt: now });
+    }
+    for (const row of latest.values()) {
       const open = row.endedAt === null;
-      if (row.excluded || (row.source === 'MANUAL' ? !active : !want)) {
-        if (open) queue(incident.id, end, row.businessServiceId);
+      const want = desired.get(row.businessServiceId);
+      const impacting = !row.excluded && (row.source === 'MANUAL' ? active : !!want);
+      if (!impacting) {
+        if (open) queue(row.id, { endedAt });
         continue;
       }
-      if (row.source !== 'MANUAL' && want && want !== row.source) {
-        const data = { source: want, endedAt: null };
-        queue(incident.id, data, row.businessServiceId);
-      } else if (!open) {
-        queue(incident.id, reopen, row.businessServiceId);
+      const source = row.source === 'MANUAL' ? 'MANUAL' : want!;
+      if (!open) {
+        creates.push({
+          incidentId: incident.id,
+          businessServiceId: row.businessServiceId,
+          source,
+          startedAt: now,
+          createdById: row.source === 'MANUAL' ? row.createdById : null,
+        });
+      } else if (source !== row.source) {
+        queue(row.id, { source });
       }
     }
     const known = new Set(existing.map(row => row.businessServiceId));
     for (const [businessServiceId, source] of desired) {
       if (known.has(businessServiceId) || !snapshot.byId.has(businessServiceId)) continue;
+      // The first interval starts with the incident, even when this sync runs late.
       creates.push({
         incidentId: incident.id,
         businessServiceId,
@@ -119,6 +136,14 @@ export async function syncIncidentImpacts(
   }
 
   let updated = 0;
+  for (const update of updates.values()) {
+    const result = await prisma.incidentBusinessServiceImpact.updateMany({
+      where: { id: { in: update.ids } },
+      data: update.data,
+    });
+    updated += result.count;
+  }
+  // skipDuplicates rides the open-interval unique index, so a concurrent sync cannot double-open.
   const created = creates.length
     ? (
         await prisma.incidentBusinessServiceImpact.createMany({
@@ -127,16 +152,6 @@ export async function syncIncidentImpacts(
         })
       ).count
     : 0;
-  for (const update of updates) {
-    const result = await prisma.incidentBusinessServiceImpact.updateMany({
-      where: {
-        incidentId: update.incidentId,
-        businessServiceId: { in: update.businessServiceIds },
-      },
-      data: update.data,
-    });
-    updated += result.count;
-  }
   return { created, updated };
 }
 
@@ -159,14 +174,7 @@ export async function incidentImpactViews(incidentId: string) {
     }),
     prisma.incidentBusinessServiceImpact.findMany({
       where: { incidentId },
-      select: {
-        incidentId: true,
-        businessServiceId: true,
-        source: true,
-        excluded: true,
-        createdById: true,
-        endedAt: true,
-      },
+      select: IMPACT_ROW_SELECT,
     }),
   ]);
   const views = new Map<
@@ -175,21 +183,21 @@ export async function incidentImpactViews(incidentId: string) {
   >();
   if (!incident) return views;
   const open = isActiveIncidentStatus(incident.status);
-  for (const row of rows) {
+  const live = open
+    ? incidentImpactSources({ ...(await getHealthSnapshot()).inputs, impactRows: rows }, incident)
+    : new Map<string, BusinessServiceImpactSource>();
+  for (const row of latestImpactRows(rows).values()) {
     views.set(row.businessServiceId, {
       source: row.source,
       excluded: row.excluded,
-      active: open && !row.excluded && !row.endedAt,
+      active:
+        open &&
+        !row.excluded &&
+        (row.endedAt === null || row.source === 'MANUAL' || live.has(row.businessServiceId)),
     });
   }
-  if (open) {
-    const snapshot = await getHealthSnapshot();
-    for (const [id, source] of incidentImpactSources(
-      { ...snapshot.inputs, impactRows: rows },
-      incident
-    )) {
-      if (!views.has(id)) views.set(id, { source, excluded: false, active: true });
-    }
+  for (const [id, source] of live) {
+    if (!views.has(id)) views.set(id, { source, excluded: false, active: true });
   }
   return views;
 }
@@ -275,48 +283,54 @@ export async function setIncidentImpactCommand(
   ]);
   if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
   if (!businessService) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
-  const key = {
-    incidentId_businessServiceId: {
-      incidentId: input.incidentId,
-      businessServiceId: input.businessServiceId,
-    },
-  };
+  const pair = { incidentId: input.incidentId, businessServiceId: input.businessServiceId };
   const now = new Date();
   const active = isActiveIncidentStatus(incident.status);
   const run = async (tx: Prisma.TransactionClient) => {
-    const current = await tx.incidentBusinessServiceImpact.findUnique({ where: key });
+    // Serializes marks on one pair so two requests cannot both open an interval.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`bs-impact:${pair.incidentId}:${pair.businessServiceId}`}, 0))`;
+    const latest = await tx.incidentBusinessServiceImpact.findFirst({
+      where: pair,
+      orderBy: [{ startedAt: 'desc' }, { createdAt: 'desc' }],
+    });
     if (input.impacted) {
-      if (current && !current.excluded && (current.endedAt === null || !active)) return false;
-      await tx.incidentBusinessServiceImpact.upsert({
-        where: key,
-        create: {
-          ...key.incidentId_businessServiceId,
+      if (latest && !latest.excluded && (latest.endedAt === null || !active)) return false;
+      await tx.incidentBusinessServiceImpact.updateMany({
+        where: { ...pair, endedAt: null },
+        data: { endedAt: now },
+      });
+      // A new interval from now: earlier (possibly unmarked) intervals keep their own flags.
+      await tx.incidentBusinessServiceImpact.create({
+        data: {
+          ...pair,
           source: 'MANUAL',
           startedAt: now,
-          endedAt: active ? null : now,
-          createdById: actor.id,
-        },
-        update: {
-          source: 'MANUAL',
-          excluded: false,
           endedAt: active ? null : now,
           createdById: actor.id,
         },
       });
     } else {
-      if (current?.excluded) return false;
-      await tx.incidentBusinessServiceImpact.upsert({
-        where: key,
-        create: {
-          ...key.incidentId_businessServiceId,
-          source: 'MANUAL',
-          excluded: true,
-          startedAt: now,
-          endedAt: now,
-          createdById: actor.id,
-        },
-        update: { excluded: true, endedAt: current?.endedAt ?? now, createdById: actor.id },
+      if (latest?.excluded) return false;
+      // Unmarking says the incident never impacted it: every interval leaves the numbers.
+      await tx.incidentBusinessServiceImpact.updateMany({
+        where: { ...pair, endedAt: null },
+        data: { endedAt: now },
       });
+      await tx.incidentBusinessServiceImpact.updateMany({
+        where: pair,
+        data: { excluded: true },
+      });
+      if (!latest)
+        await tx.incidentBusinessServiceImpact.create({
+          data: {
+            ...pair,
+            source: 'MANUAL',
+            excluded: true,
+            startedAt: now,
+            endedAt: now,
+            createdById: actor.id,
+          },
+        });
     }
     await emitAuditEvent(
       {
@@ -364,7 +378,8 @@ export async function backfillDirectImpacts(input: {
     prisma.incident.findMany({
       where: {
         createdAt: { gte: input.since },
-        status: { not: 'SUPPRESSED' },
+        // Same as the live engine: held, suppressed and snoozed incidents never impact.
+        status: { notIn: ['SUPPRESSED', 'SNOOZED'] },
         ...(input.after
           ? {
               OR: [
@@ -407,22 +422,25 @@ export async function backfillDirectImpacts(input: {
       });
     }
   }
-  let written = 0;
-  if (rows.length && input.apply) {
-    written = (
-      await prisma.incidentBusinessServiceImpact.createMany({ data: rows, skipDuplicates: true })
-    ).count;
-  } else if (rows.length) {
-    const existing = await prisma.incidentBusinessServiceImpact.count({
-      where: {
-        OR: rows.map(row => ({
-          incidentId: row.incidentId,
-          businessServiceId: row.businessServiceId,
-        })),
-      },
-    });
-    written = rows.length - existing;
-  }
+  // Intervals have no pair-unique key, so pairs that already have any row are skipped explicitly.
+  const existing = rows.length
+    ? await prisma.incidentBusinessServiceImpact.findMany({
+        where: { incidentId: { in: [...new Set(rows.map(row => row.incidentId))] } },
+        distinct: ['incidentId', 'businessServiceId'],
+        select: { incidentId: true, businessServiceId: true },
+      })
+    : [];
+  const known = new Set(existing.map(row => `${row.incidentId}:${row.businessServiceId}`));
+  const missing = rows.filter(row => !known.has(`${row.incidentId}:${row.businessServiceId}`));
+  const written =
+    missing.length && input.apply
+      ? (
+          await prisma.incidentBusinessServiceImpact.createMany({
+            data: missing,
+            skipDuplicates: true,
+          })
+        ).count
+      : missing.length;
   const last = incidents.at(-1);
   return {
     scanned: incidents.length,

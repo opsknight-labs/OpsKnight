@@ -930,9 +930,9 @@ export type BusinessServiceImpactTimeline = {
   mttaMinutes: number | null;
   mttrMinutes: number | null;
   entries: Array<{
-    incidentId: string;
-    incidentTitle: string;
-    urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+    incidentId: string | null;
+    incidentTitle: string | null;
+    urgency: 'LOW' | 'MEDIUM' | 'HIGH' | null;
     source: 'DIRECT' | 'DEPENDENCY' | 'NESTED' | 'MANUAL';
     excluded: boolean;
     startedAt: string;
