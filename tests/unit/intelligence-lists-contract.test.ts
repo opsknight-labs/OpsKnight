@@ -165,10 +165,10 @@ describe('noise decision and risk labels', () => {
 
 describe('alerts and changes navigation', () => {
   it.each(['/alerts', '/changes'])(
-    '%s sits under MAIN for exactly the roles that hold INTELLIGENCE_READ',
+    '%s sits under Respond for exactly the roles that hold INTELLIGENCE_READ',
     href => {
       const item = NAVIGATION_ITEMS.find(entry => entry.href === href);
-      expect(item?.section).toBe('MAIN');
+      expect(item?.section).toBe('RESPOND');
       const expected = APP_ROLES.filter(role =>
         hasCapability(role, CAPABILITIES.INTELLIGENCE_READ)
       );
