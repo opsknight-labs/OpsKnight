@@ -1176,13 +1176,15 @@ type OpsRollupSource = (sql: PrismaNamespace['sql'], dayStart: Date, dayEnd: Dat
  * incident by primary key. Acted on: acknowledged through the page itself (Notification.ackedAt), or as
  * the incident's assignee after the page.
  */
+// `length(incidentId) > 0` rather than `IS NOT NULL`: same rows, but it keeps the planner off
+// Notification_incidentId_idx (which reads every incident page ever sent) and on the day-range index.
 const noisePagesSql = (sql: PrismaNamespace['sql'], dayStart: Date, dayEnd: Date) => sql`
   WITH p AS (
     SELECT n."userId", n."incidentId", min(n."createdAt") AS "firstAt",
       bool_or(n."ackedAt" IS NOT NULL) AS "direct"
     FROM "Notification" n
     WHERE n."createdAt" >= ${dayStart} AND n."createdAt" < ${dayEnd}
-      AND n."category" = 'INCIDENT' AND n."incidentId" IS NOT NULL
+      AND n."category" = 'INCIDENT' AND length(n."incidentId") > 0
       AND n."eventType" IN ('incident-triggered', 'triggered') AND n."status" <> 'SKIPPED'
     GROUP BY n."userId", n."incidentId"
   ), page AS (
@@ -1212,7 +1214,7 @@ export const OPS_ROLLUP_SOURCES: Partial<Record<OpsRollupName, OpsRollupSource>>
       JOIN "User" u ON u."id" = n."userId"
       LEFT JOIN pg_timezone_names zone ON zone."name" = u."timeZone"
       WHERE n."createdAt" >= ${dayStart} AND n."createdAt" < ${dayEnd}
-        AND n."category" = 'INCIDENT' AND n."incidentId" IS NOT NULL
+        AND n."category" = 'INCIDENT' AND length(n."incidentId") > 0
     ) page
     GROUP BY page."userId", page."hour", page."weekend"`,
   // idx_escalation_step_attempt_created ("createdAt"); the next step and the incident by primary key.
