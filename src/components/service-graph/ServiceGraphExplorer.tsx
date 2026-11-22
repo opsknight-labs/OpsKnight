@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, List, Network, X } from 'lucide-react';
 import { FilterBar, FilterChip, FilterField } from '@/components/patterns';
-import { segmentClass } from '@/components/analytics/ChartFrame';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -35,6 +34,7 @@ import {
 } from '@/app/(app)/services/graph/actions';
 import type { ServiceGraphView } from '@/lib/intelligence/dependencies/graph-view';
 import { notify } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 import GraphListView from './GraphListView';
 import GraphLegend from './GraphLegend';
 import GraphSidePanel, { type PanelRelation } from './GraphSidePanel';
@@ -55,6 +55,13 @@ const ServiceGraphCanvas = dynamic(() => import('./ServiceGraphCanvas'), {
 
 export type View = 'graph' | 'list';
 type Pending = { link: GraphLink; mode: 'remove' | 'review' } | null;
+
+// The analytics segment control's muted label is 4.3:1 on bg-muted; ink-600 keeps AA.
+const segmentClass = (active: boolean) =>
+  cn(
+    'inline-flex h-11 items-center gap-1 rounded-sm px-2 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:h-7',
+    active ? 'bg-background text-foreground shadow-xs' : 'text-ink-600 hover:text-foreground'
+  );
 
 export type GraphExplorerParams = { q: string; team: string; impacted: boolean; view: View };
 

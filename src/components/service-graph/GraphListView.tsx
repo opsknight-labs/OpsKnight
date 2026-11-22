@@ -44,7 +44,7 @@ export default function GraphListView({
         <caption className="sr-only">Services in the graph, with status and relations</caption>
         <thead className="border-b">
           <tr>
-            <th scope="col" className={head}>
+            <th scope="col" className={cn(head, 'w-[40%]')}>
               Name
             </th>
             <th scope="col" className={cn(head, 'hidden sm:table-cell')}>

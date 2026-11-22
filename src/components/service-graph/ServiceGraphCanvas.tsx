@@ -36,7 +36,7 @@ import { oneHop, type GraphItem, type GraphLink } from './model';
 
 const SIZE = { bs: { width: 224, height: 68 }, svc: { width: 204, height: 64 } } as const;
 
-type ItemData = { item: GraphItem; dimmed: boolean; connectable: boolean };
+type ItemData = { item: GraphItem; connectable: boolean };
 type TeamData = { label: string };
 type ItemNode = Node<ItemData, 'bs' | 'svc'>;
 type TeamNode = Node<TeamData, 'team'>;
@@ -86,17 +86,16 @@ const usePrefersReducedMotion = () =>
 const handleClass = '!h-2.5 !w-2.5 !border-2 !border-background !bg-ink-400';
 
 const ItemCard = memo(function ItemCard({ data, selected }: NodeProps<ItemNode>) {
-  const { item, dimmed, connectable } = data;
+  const { item, connectable } = data;
   const tone = toneClasses(GRAPH_STATUS_META[item.status]?.tone ?? 'neutral');
   const Icon = item.kind === 'bs' ? Boxes : Server;
   return (
     <div
       className={cn(
-        'flex h-full w-full flex-col justify-center gap-1 border border-l-4 bg-card px-3 text-left shadow-xs transition-opacity duration-150 motion-reduce:transition-none',
+        'flex h-full w-full flex-col justify-center gap-1 border border-l-4 bg-card px-3 text-left shadow-xs',
         item.kind === 'bs' ? 'rounded-sm' : 'rounded-xl',
         tone.borderLeft,
-        selected && 'ring-2 ring-ring ring-offset-1 ring-offset-background',
-        dimmed && 'opacity-30'
+        selected && 'ring-2 ring-ring ring-offset-1 ring-offset-background'
       )}
       title={`${item.name}${item.teamName ? ` · ${item.teamName}` : ''}`}
     >
@@ -212,7 +211,6 @@ export default function ServiceGraphCanvas({
         position: layout.positions[item.key] ?? { x: 0, y: 0 },
         data: {
           item,
-          dimmed: !!near && !near.has(item.key),
           connectable: canEdit && item.kind === 'svc',
         },
         selected: item.key === selectedKey,
@@ -221,13 +219,11 @@ export default function ServiceGraphCanvas({
         connectable: canEdit && item.kind === 'svc',
       })),
     ];
-  }, [layout, items, near, selectedKey, canEdit, teamNames]);
+  }, [layout, items, selectedKey, canEdit, teamNames]);
 
   const edges = useMemo<Edge[]>(
     () =>
       links.map(link => {
-        const lit = !!near && near.has(link.source) && near.has(link.target);
-        const dim = !!near && !lit;
         return {
           id: link.key,
           source: link.source,
@@ -239,17 +235,27 @@ export default function ServiceGraphCanvas({
               : undefined,
           markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
           style: {
-            strokeWidth: lit ? 2 : link.kind === 'member' ? 1 : 1.5,
+            strokeWidth: link.kind === 'member' ? 1 : 1.5,
             strokeDasharray: link.suggested ? '6 4' : link.kind === 'member' ? '2 3' : undefined,
-            opacity: dim ? 0.15 : 1,
           },
           className: link.suggested ? 'graph-edge-suggested' : undefined,
         };
       }),
-    [links, near]
+    [links]
   );
 
   const byKey = useMemo(() => new Map(links.map(link => [link.key, link])), [links]);
+  // Hover/selection highlight is a style rule, so nodes and edges keep their identity while the
+  // pointer moves (re-creating 2000 nodes per hover is slow and interrupts drag-to-connect).
+  const highlight = useMemo(() => {
+    if (!near) return '';
+    const notNear = [...near].map(key => `:not([data-id="${key}"])`).join('');
+    const notLit = links
+      .filter(link => near.has(link.source) && near.has(link.target))
+      .map(link => `:not([data-id="${link.key}"])`)
+      .join('');
+    return `.sg-canvas .react-flow__node:not(.react-flow__node-team)${notNear}{opacity:.3}.sg-canvas .react-flow__edge${notLit}{opacity:.15}`;
+  }, [near, links]);
 
   if (!layout) {
     return (
@@ -263,42 +269,45 @@ export default function ServiceGraphCanvas({
   }
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      forceColorMode={theme}
-      fitView
-      fitViewOptions={{ padding: 0.15, duration: reducedMotion ? 0 : 200 }}
-      minZoom={0.05}
-      onlyRenderVisibleElements={items.length > 300}
-      nodesDraggable={false}
-      nodesConnectable={canEdit}
-      elementsSelectable
-      proOptions={{ hideAttribution: true }}
-      isValidConnection={(connection: Connection | Edge) =>
-        connection.source !== connection.target &&
-        connection.source.startsWith('svc:') &&
-        connection.target.startsWith('svc:')
-      }
-      onConnect={connection => {
-        if (connection.source && connection.target)
-          onConnect(connection.source.slice(4), connection.target.slice(4));
-      }}
-      onNodeClick={(_event, node) => node.type !== 'team' && onSelect(node.id)}
-      onNodeMouseEnter={(_event, node) => node.type !== 'team' && setHovered(node.id)}
-      onNodeMouseLeave={() => setHovered(null)}
-      onPaneClick={() => onSelect(null)}
-      onEdgeClick={(_event, edge) => {
-        const link = byKey.get(edge.id);
-        if (link?.kind === 'dependency') onLinkClick(link);
-      }}
-    >
-      <Background gap={24} size={1} />
-      <Controls showInteractive={false} />
-      {items.length > 40 && (
-        <MiniMap pannable zoomable ariaLabel="Graph overview" className="!hidden sm:!block" />
-      )}
-    </ReactFlow>
+    <div className="sg-canvas h-full w-full">
+      <style>{`.sg-canvas .react-flow__node,.sg-canvas .react-flow__edge{transition:opacity 150ms}@media (prefers-reduced-motion:reduce){.sg-canvas .react-flow__node,.sg-canvas .react-flow__edge{transition:none}}${highlight}`}</style>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        forceColorMode={theme}
+        fitView
+        fitViewOptions={{ padding: '12%', duration: reducedMotion ? 0 : 200 }}
+        minZoom={0.05}
+        onlyRenderVisibleElements={items.length > 300}
+        nodesDraggable={false}
+        nodesConnectable={canEdit}
+        elementsSelectable
+        proOptions={{ hideAttribution: true }}
+        isValidConnection={(connection: Connection | Edge) =>
+          connection.source !== connection.target &&
+          connection.source.startsWith('svc:') &&
+          connection.target.startsWith('svc:')
+        }
+        onConnect={connection => {
+          if (connection.source && connection.target)
+            onConnect(connection.source.slice(4), connection.target.slice(4));
+        }}
+        onNodeClick={(_event, node) => node.type !== 'team' && onSelect(node.id)}
+        onNodeMouseEnter={(_event, node) => node.type !== 'team' && setHovered(node.id)}
+        onNodeMouseLeave={() => setHovered(null)}
+        onPaneClick={() => onSelect(null)}
+        onEdgeClick={(_event, edge) => {
+          const link = byKey.get(edge.id);
+          if (link?.kind === 'dependency') onLinkClick(link);
+        }}
+      >
+        <Background gap={24} size={1} />
+        <Controls showInteractive={false} />
+        {items.length > 40 && (
+          <MiniMap pannable zoomable ariaLabel="Graph overview" className="!hidden sm:!block" />
+        )}
+      </ReactFlow>
+    </div>
   );
 }
