@@ -148,6 +148,70 @@ describe('Squire operation catalog', () => {
     expect((await db.service.findUnique({ where: { id: service.id } }))!.name).toBe(service.name);
   });
 
+  it('verifies a rename after it lands and offers a sealed undo that restores the old name', async () => {
+    const { admin, service } = await world();
+    const proposal = await buildOperationProposal(admin, {
+      operationId: 'updateService',
+      args: { path: { id: service.id }, body: { name: 'Checkout v2' } },
+    });
+    const result = await executeSquireAction(admin, proposal!.token);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.message).toContain('Now: name = Checkout v2');
+    const undo = result.followUp!;
+    expect(undo).toMatchObject({
+      title: expect.stringMatching(/^Undo: /),
+      confirmLabel: 'Undo',
+      href: `/services/${service.id}`,
+    });
+    expect(undo.incidentId).toBeUndefined();
+    expect(undo.preview).toContainEqual({ label: 'name', value: `Checkout v2 → ${service.name}` });
+    // The stored outcome keeps the undo card (an operation follow-up has no incident).
+    expect(await readSquireActionOutcome(admin, proposal!.receiptId!)).toMatchObject({
+      result: { followUp: { token: undo.token, confirmLabel: 'Undo' } },
+    });
+
+    expect((await executeSquireAction(admin, undo.token)).ok).toBe(true);
+    expect((await db.service.findUnique({ where: { id: service.id } }))!.name).toBe(service.name);
+    // Single use, like every card.
+    expect((await executeSquireAction(admin, undo.token)).ok).toBe(false);
+  });
+
+  it('undoes an added tag by removing it', async () => {
+    const { admin, incident } = await world();
+    const proposal = await buildOperationProposal(admin, {
+      operationId: 'addIncidentTag',
+      args: { path: { id: incident.id }, body: { name: 'database' } },
+    });
+    const result = await executeSquireAction(admin, proposal!.token);
+    expect(result.ok && result.followUp).toBeTruthy();
+    if (!result.ok) return;
+    expect((await executeSquireAction(admin, result.followUp!.token)).ok).toBe(true);
+    expect(await db.incidentTag.count({ where: { incidentId: incident.id } })).toBe(0);
+  });
+
+  it('offers no undo to a person whose role cannot make the inverse change', async () => {
+    const { admin, service } = await world();
+    const user = await createTestUser({ role: 'USER', name: 'Op Responder' });
+    const responder = (await resolveUserActor(user.id))!;
+    const mine = await createTestIncident('Assigned to me', service.id, { assigneeId: user.id });
+    const theirs = await createTestIncident('Admin acks', service.id);
+    const ack = (actor: typeof admin, id: string) =>
+      buildOperationProposal(actor, {
+        operationId: 'acknowledgeIncident',
+        args: { path: { id }, body: {} },
+      });
+    const asAdmin = await executeSquireAction(admin, (await ack(admin, theirs.id))!.token);
+    expect(asAdmin.ok && asAdmin.followUp?.confirmLabel).toBe('Undo');
+    // A responder may acknowledge their own incident but not unacknowledge it (incident.manage).
+    const asResponder = await executeSquireAction(
+      responder,
+      (await ack(responder, mine.id))!.token
+    );
+    expect(asResponder.ok).toBe(true);
+    expect(asResponder.ok && asResponder.followUp).toBeFalsy();
+  });
+
   it('reads through the catalog with the field allowlist applied', async () => {
     const { admin, service } = await world();
     const read = buildOperationTools(admin).find(tool => tool.name === 'read_operation')!;

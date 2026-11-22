@@ -36,6 +36,7 @@ import {
   correctSpelling,
   extractSlots,
   normalizeMessage,
+  parseDuration,
   parseSlashCommand,
   type Slots,
   type SpellingCorrection,
@@ -290,6 +291,7 @@ const HELP = [
   '• Product guidance: schedules, overrides, urgency, integrations, notifications, privacy and permissions.',
   '• On an incident: a briefing, similar incidents and recorded fixes, change leads, runbooks, a factual timeline, and proposals you confirm: "acknowledge this", "resolve this: rolled back v42", "add a note: …", "assign to Alice".',
   '• Shortcuts: /ack, /resolve <what fixed it>, /note <text>, /assign <name>, /oncall <service or team>, /incidents <filters>, /help.',
+  '• Changes you confirm (when your administrator allows them): /tag <name> on an incident, /maintenance <duration> [title] or /rename <new name> on a service, /override <duration> on a schedule. Durations: 30m, 2h, 1d.',
   'I never change anything on my own. A proposal happens only when you confirm its card. AI adds free-form reasoning on top of the same data.',
 ].join('\n');
 
@@ -457,11 +459,19 @@ export interface BasicProposalRequest {
   input: Record<string, unknown>;
 }
 
+/** A catalog change to build as a card with `buildOperationProposal`. */
+export interface BasicOperationRequest {
+  operationId: string;
+  args: Record<string, unknown>;
+}
+
 export interface BasicTurnResult {
   text: string;
   intent: SquireIntent;
   /** Actions to build as proposal cards; basic mode never executes anything itself. */
   proposals: BasicProposalRequest[];
+  /** A change beyond incidents, from a slash command; also only ever a card. */
+  operation?: BasicOperationRequest;
   suggestions: string[];
   nextState: DialogueState | null;
   corrections: SpellingCorrection[];
@@ -548,6 +558,100 @@ function expandSlash(message: string): { message: string; help?: boolean } {
   return { message };
 }
 
+const MAX_CHANGE_MS = 7 * 86_400_000;
+const OPERATION_USAGE = {
+  tag: 'Usage: /tag <name>, on an incident page. Example: /tag database',
+  maintenance:
+    'Usage: /maintenance <duration> [title], on a service page. Durations: 30m, 2h, 1d (at most 7 days). Example: /maintenance 2h Database upgrade',
+  override:
+    'Usage: /override <duration>, on a schedule page; you cover the schedule from now. Durations: 30m, 2h, 1d (at most 7 days).',
+  rename: 'Usage: /rename <new name>, on a service page.',
+} as const;
+
+/**
+ * Slash commands that propose a change beyond incidents. Parsing is strict: a missing, ambiguous or
+ * out-of-range argument, or the wrong page, answers with the usage line rather than a guess.
+ */
+function operationSlash(
+  input: BasicTurnInput,
+  now: Date
+): { text: string; intent: SquireIntent; operation?: BasicOperationRequest } | null {
+  const slash = parseSlashCommand(input.message);
+  if (!slash || !(slash.command in OPERATION_USAGE)) return null;
+  const command = slash.command as keyof typeof OPERATION_USAGE;
+  const { args } = slash;
+  // eslint-disable-next-line security/detect-object-injection -- `command` is a key of the closed table above
+  const usage = OPERATION_USAGE[command];
+  const page = input.page;
+  const confirm = 'Nothing happens until you confirm the card below.';
+  const until = (ms: number) => new Date(now.getTime() + ms).toISOString();
+  switch (command) {
+    case 'tag': {
+      if (!input.incident) return { text: `Open the incident first. ${usage}`, intent: 'UNKNOWN' };
+      if (!args || args.length > 100) return { text: usage, intent: 'RESPONDERS' };
+      return {
+        text: `I can propose tagging ${short(input.incident.title)} with "${args}". ${confirm}`,
+        intent: 'RESPONDERS',
+        operation: {
+          operationId: 'addIncidentTag',
+          args: { path: { id: input.incident.id }, body: { name: args } },
+        },
+      };
+    }
+    case 'maintenance': {
+      if (page?.kind !== 'service')
+        return { text: `Open the service first. ${usage}`, intent: 'UNKNOWN' };
+      const [first = '', ...rest] = args.split(/\s+/);
+      const ms = parseDuration(first);
+      const title = rest.join(' ').trim() || 'Maintenance via Squire';
+      if (!ms || ms > MAX_CHANGE_MS || title.length > 200)
+        return { text: usage, intent: 'SERVICE_HEALTH' };
+      return {
+        text: `I can propose a maintenance window "${title}" for ${page.name} from now until ${until(ms)}. ${confirm}`,
+        intent: 'SERVICE_HEALTH',
+        operation: {
+          operationId: 'createMaintenanceWindow',
+          args: {
+            body: { title, serviceIds: [page.id], startsAt: now.toISOString(), endsAt: until(ms) },
+          },
+        },
+      };
+    }
+    case 'override': {
+      if (page?.kind !== 'schedule')
+        return { text: `Open the schedule first. ${usage}`, intent: 'UNKNOWN' };
+      const ms = parseDuration(args);
+      if (!ms || ms > MAX_CHANGE_MS) return { text: usage, intent: 'ON_CALL' };
+      return {
+        text: `I can propose an override putting you on call for ${page.name} from now until ${until(ms)}. ${confirm}`,
+        intent: 'ON_CALL',
+        operation: {
+          operationId: 'createScheduleOverride',
+          args: {
+            path: { id: page.id },
+            body: { userId: input.actor.id, startDate: now.toISOString(), endDate: until(ms) },
+          },
+        },
+      };
+    }
+    case 'rename': {
+      if (page?.kind !== 'service')
+        return { text: `Open the service first. ${usage}`, intent: 'UNKNOWN' };
+      if (!args || args.length > 200) return { text: usage, intent: 'SERVICE_HEALTH' };
+      if (args === page.name)
+        return { text: `${page.name} already has that name.`, intent: 'SERVICE_HEALTH' };
+      return {
+        text: `I can propose renaming ${page.name} to "${args}". ${confirm}`,
+        intent: 'SERVICE_HEALTH',
+        operation: {
+          operationId: 'updateService',
+          args: { path: { id: page.id }, body: { name: args } },
+        },
+      };
+    }
+  }
+}
+
 /**
  * One basic-mode turn: understand, resolve names, read, propose, and decide the next chips and dialogue
  * state. Everything is deterministic and permission-scoped; nothing here writes to incidents.
@@ -581,6 +685,7 @@ export async function planBasicTurn(
     text,
     intent,
     proposals: extra.proposals ?? [],
+    ...(extra.operation ? { operation: extra.operation } : {}),
     suggestions:
       extra.suggestions ??
       suggestFollowUps({
@@ -594,6 +699,8 @@ export async function planBasicTurn(
     cached: extra.cached ?? false,
   });
 
+  const change = operationSlash(input, now);
+  if (change) return result(change.text, change.intent, { operation: change.operation });
   const expanded = expandSlash(input.message);
   if (expanded.help) return result(HELP, 'HELP');
   const normalized = normalizeMessage(expanded.message);

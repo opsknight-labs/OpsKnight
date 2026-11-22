@@ -1,7 +1,7 @@
 import 'server-only';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { CAPABILITIES, hasCapability, type Capability } from '@/lib/authorization';
 import {
   dashboardUserReadWhere,
   incidentReadWhere,
@@ -831,6 +831,9 @@ export function buildSquireTools(
     if (FOLLOW_UP_ONLY_ACTIONS.has(name)) continue;
     if (!options.personal && name === 'add_responder') continue;
     if (!options.knowledge && name === 'learn_service_fact') continue;
+    // Never offer a card the role could not confirm: the model then says who can instead.
+    const needs = PROPOSAL_CAPABILITY.get(name);
+    if (needs && !hasCapability(actor.role, needs)) continue;
     if (
       name === 'draft_automation_rule' &&
       !hasCapability(actor.role, CAPABILITIES.AUTOMATION_EDIT)
@@ -897,6 +900,17 @@ const READ_FAMILIES: Array<{ tools: Set<string>; words: RegExp; intents?: Set<st
   },
 ];
 
+/** Role capability an extended proposal needs (mirrors the checks in actions/extended.ts). */
+const PROPOSAL_CAPABILITY = new Map<string, Capability>([
+  ['change_urgency', CAPABILITIES.OPERATIONS_MANAGE],
+  ['snooze_incident', CAPABILITIES.OPERATIONS_MANAGE],
+  ['create_jira_issue', CAPABILITIES.OPERATIONS_MANAGE],
+  ['unlink_related_incident', CAPABILITIES.INTELLIGENCE_FEEDBACK],
+  ['draft_status_update', CAPABILITIES.ADMIN_MANAGE],
+  ['publish_status_update', CAPABILITIES.ADMIN_MANAGE],
+  ['run_runbook', CAPABILITIES.RUNBOOK_EXECUTE],
+]);
+
 /** The everyday incident actions stay on offer for any question; the rest only when the message asks to act. */
 const CORE_PROPOSALS = new Set([
   'propose_acknowledge_incident',
@@ -906,7 +920,7 @@ const CORE_PROPOSALS = new Set([
 // Bounded, literal alternatives over a message capped by the request schema.
 
 const ACTION_WORDS =
-  /\b(ack|acknowledge|resolve|close|reopen|re-?assign|assign|hand ?over|snooze|mute|escalate|page|un-?link|link|note|add|remove|draft|start|open|create|run|execute|publish|post|mark|set|raise|lower|bump|make|remember|learn|follow(?!-ups)|unfollow|notify|invite|subscribe|propose|suggest)\b/;
+  /\b(ack|acknowledge|resolve|close|reopen|re-?assign|assign|hand ?over|snooze|mute|escalate|page|un-?link|link|note|add|remove|draft|start|open|create|run|execute|publish|post|mark|set|raise|lower|bump|make|remember|learn|follow(?!-ups)|unfollow|notify|invite|subscribe|propose|suggest|change(?![sd])|update|edit|rename|cover|swap|archive)\b/;
 
 /**
  * Tool subset by intent, so a question does not carry every schema. Uses the basic-mode NLU: a message with

@@ -64,6 +64,19 @@ On an incident page, ask for an action in plain words or with a shortcut and Squ
 
 If something is missing (the resolution note, or which of several people you mean), Squire asks for it and prepares the card from your reply. A how-to question (“how do I acknowledge an incident?”) gets instructions, never a card. Other shortcuts: `/oncall <service or team>`, `/incidents <filters>` and `/help`.
 
+### Changes with slash commands
+
+A few changes beyond incidents have shortcuts too. Each one targets the page you are on and prepares a confirmation card; nothing changes until you confirm it.
+
+| Shortcut                          | Where       | Card                                                                       |
+| --------------------------------- | ----------- | -------------------------------------------------------------------------- |
+| `/tag <name>`                     | An incident | Add the tag to the incident                                                |
+| `/maintenance <duration> [title]` | A service   | A maintenance window from now (title defaults to “Maintenance via Squire”) |
+| `/override <duration>`            | A schedule  | An override putting you on call from now                                   |
+| `/rename <new name>`              | A service   | Rename the service                                                         |
+
+Durations are written `30m`, `2h` or `1d`, up to 7 days. A missing or unclear argument, or the wrong page, gets the usage line instead of a guess. These cards need **Extended assistant actions** turned on in the AI settings and a role that may make the change; otherwise Squire says which one is missing.
+
 ## Suggested checks and feedback
 
 Incident answers include **suggested checks**: investigation prompts chosen by the incident title. Administrators can add their own in **Settings → Intelligence → Assistant → Suggested checks** (a title pattern and up to six checks); theirs match before the built-in ones. They are prompts only and never run anything.

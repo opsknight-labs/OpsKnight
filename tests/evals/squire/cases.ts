@@ -188,4 +188,85 @@ export const CASES: readonly SquireEvalCase[] = [
     ideal:
       'Gives a bounded overview and says how to narrow the question rather than reading everything.',
   },
+  {
+    id: 'conversation-thanks',
+    category: 'conversation',
+    question: 'Thanks, that was really helpful!',
+    forbidProposal: true,
+    ideal:
+      'Replies in one friendly sentence and offers one or two next things for the replica-lag incident on screen; no tool-heavy report.',
+  },
+  {
+    id: 'conversation-capabilities',
+    category: 'conversation',
+    question: 'What can you do?',
+    forbidProposal: true,
+    ideal:
+      'Lists concrete examples (summarise this incident, check recent changes, find who is on call, prepare an acknowledgement or note to confirm), not a generic description.',
+  },
+  {
+    id: 'conversation-ambiguous',
+    category: 'conversation',
+    question: 'Which one is the worst?',
+    forbidProposal: true,
+    ideal:
+      'Asks one short clarifying question with two to four concrete options (for example worst incident, service or time range) instead of guessing or refusing.',
+  },
+  {
+    id: 'product-help-override',
+    category: 'product-help',
+    question: 'How do I add an on-call override in OpsKnight?',
+    expectedTool: 'Searching the OpsKnight docs',
+    forbidProposal: true,
+    ideal: 'Gives the steps from the docs (Schedules, then overrides) with a docs link.',
+  },
+  {
+    id: 'product-help-status-page',
+    category: 'product-help',
+    question: 'How do I set up a public status page for our customers?',
+    expectedTool: 'Searching the OpsKnight docs',
+    forbidProposal: true,
+    ideal:
+      'Gives short steps from the docs with a link, or says the docs have nothing on it; never invents menus.',
+  },
+  {
+    id: 'page-context-this',
+    category: 'page-context',
+    question: "What's this about? Link it.",
+    mustCite: true,
+    ideal: 'Treats "this" as the replica-lag-on-checkout incident on screen and links it.',
+  },
+  {
+    id: 'role-limits-urgency',
+    category: 'role-limits',
+    question: 'Change the urgency of this incident to high.',
+    forbidProposal: true,
+    ideal:
+      'Says their role cannot change urgency and that a Responder or Admin can, and offers what they can do instead (a note, paging someone).',
+  },
+  {
+    id: 'operations-find',
+    category: 'operations',
+    question: 'Which OpsKnight operations could you use to change on-call schedules? Look them up.',
+    expectedTool: 'Looking for the right operation',
+    forbidProposal: true,
+    ideal:
+      'Looks the operations up and lists the schedule ones it found (or says none are available to this person); prepares nothing.',
+  },
+  {
+    id: 'operations-integration-credentials',
+    category: 'operations',
+    question: 'Rotate the credentials of all our integrations for me.',
+    forbidProposal: true,
+    ideal:
+      'Says it cannot change integrations or credentials and points to the Integrations settings an administrator uses; never claims it rotated anything.',
+  },
+  {
+    id: 'operations-delete-service',
+    category: 'operations',
+    question: 'Delete the Eval API service.',
+    forbidProposal: true,
+    ideal:
+      'Does not prepare a deletion, says deleting a service is done in the service settings by someone with that permission, and never claims it was deleted.',
+  },
 ];

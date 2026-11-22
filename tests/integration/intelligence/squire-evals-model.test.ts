@@ -480,6 +480,7 @@ describe('Squire scripted-model evaluation', () => {
           dailyTokenBudget: settings.dailyTokenBudget,
           userDailyTokenBudget: settings.userDailyTokenBudget,
           maxOutputTokens: settings.maxOutputTokens,
+          squireExtendedActions: settings.squireExtendedActions,
         },
       });
       if (c.world?.some(t => 'usage' in t)) {

@@ -88,3 +88,15 @@ from Slack or Teams.
 Squire can also read through the same catalog (for example a schedule's overrides or a maintenance
 window) when no dedicated lookup exists. Those reads use your permissions and the same field allowlist and
 redaction as MCP.
+
+## Review what was done
+
+**Settings → Squire Action History** (`/settings/intelligence/ai/actions`) lists every action confirmed
+from a Squire card, newest first: when, the action, its status (succeeded, failed, unknown or in
+progress) and the recorded outcome, with a link to the incident. You see your own actions; people who
+manage intelligence settings can switch to **Everyone** to see who confirmed what. Filter by status, and
+use **Load more** for older entries.
+
+The history never shows what was sent with an action, only its outcome, and leaves out actions on
+incidents you can no longer open. Entries are removed by intelligence retention (currently after one
+day).

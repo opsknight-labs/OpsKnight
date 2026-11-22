@@ -344,6 +344,39 @@ export const BASIC_CASES: readonly SquireBasicEvalCase[] = [
     forbidProposal: true,
     mustContain: ['Open the incident'],
   },
+  // Change commands. The eval world leaves "Extended assistant actions" off, so they refuse plainly;
+  // squire-basic-operations.test.ts covers the cards with the switch on.
+  {
+    id: 'change-tag-refused',
+    question: '/tag database',
+    onIncident: true,
+    expectIntent: 'RESPONDERS',
+    forbidProposal: true,
+    mustContain: ['Extended assistant actions'],
+  },
+  {
+    id: 'change-rename-refused',
+    question: '/rename Checkout Web',
+    onService: true,
+    expectIntent: 'SERVICE_HEALTH',
+    forbidProposal: true,
+    mustContain: ['Extended assistant actions'],
+  },
+  {
+    id: 'change-maintenance-usage',
+    question: '/maintenance soon',
+    onService: true,
+    expectIntent: 'SERVICE_HEALTH',
+    forbidProposal: true,
+    mustContain: ['Usage: /maintenance'],
+  },
+  {
+    id: 'change-override-off-schedule',
+    question: '/override 2h',
+    expectIntent: 'UNKNOWN',
+    forbidProposal: true,
+    mustContain: ['Open the schedule first'],
+  },
   {
     id: 'guidance-not-action',
     question: 'how do I acknowledge an incident?',

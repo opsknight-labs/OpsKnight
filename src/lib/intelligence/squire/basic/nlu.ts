@@ -16,6 +16,10 @@ export const SLASH_COMMANDS = [
   'snooze',
   'oncall',
   'incidents',
+  'tag',
+  'maintenance',
+  'override',
+  'rename',
   'help',
 ] as const;
 export type SlashCommand = (typeof SLASH_COMMANDS)[number];
@@ -37,11 +41,25 @@ export function parseSlashCommand(message: string): ParsedSlashCommand | null {
     comment: 'note',
     search: 'incidents',
     find: 'incidents',
+    maint: 'maintenance',
   };
   const command = (SLASH_COMMANDS as readonly string[]).includes(name)
     ? (name as SlashCommand)
     : alias[name];
   return command ? { command, args: (match[2] ?? '').trim() } : null;
+}
+
+const DURATION_UNIT_MS = { m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
+
+/** A compact duration ("30m", "2h", "1d") in milliseconds; null for anything else or zero. */
+export function parseDuration(text: string): number | null {
+  const match = text
+    .trim()
+    .toLowerCase()
+    .match(/^(\d{1,4})([mhd])$/);
+  if (!match) return null;
+  const ms = Number(match[1]) * DURATION_UNIT_MS[match[2] as keyof typeof DURATION_UNIT_MS];
+  return ms > 0 ? ms : null;
 }
 
 /** Words the assistant understands; misspellings within edit distance 1–2 are corrected to these. */

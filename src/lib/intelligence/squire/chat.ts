@@ -43,7 +43,12 @@ import {
   type ResolvedPageContext,
 } from './deterministic';
 import { aboutUserLines, viewingLine } from './about';
-import { buildOperationProposal, PROPOSE_OPERATION_TOOL } from './operations';
+import {
+  buildOperationProposal,
+  mayCall,
+  PROPOSE_OPERATION_TOOL,
+  squireOperation,
+} from './operations';
 import { readDialogueState, writeDialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
@@ -487,6 +492,17 @@ export async function* streamSquire(
   }
 }
 
+/** Why a slash-command change produced no card, in words the person can act on. */
+async function operationRefusal(actor: AuthorizationActor, operationId: string): Promise<string> {
+  const settings = await getAiSettings().catch(() => null);
+  if (!settings?.squireExtendedActions)
+    return 'That change is not available: an administrator has not turned on "Extended assistant actions" in the AI settings. Nothing was prepared.';
+  const operation = squireOperation(operationId);
+  if (!operation || !mayCall(actor, operation))
+    return 'That change is not available: your role does not allow it. Nothing was prepared.';
+  return 'That change is not available right now (the target may have changed or be out of your reach). Nothing was prepared.';
+}
+
 async function* basicAnswer(
   actor: AuthorizationActor,
   request: SquireRequest,
@@ -538,20 +554,31 @@ async function* basicAnswer(
   const readable = await evidence.capture(
     paged ? snapshots.slice(0, MAX_BASIC_SOURCES) : snapshots
   );
+  // A slash-command change is built before the text, so a refusal replaces the "I can propose" line.
+  const operationCard = plan.operation
+    ? await buildOperationProposal(actor, plan.operation).catch(() => null)
+    : null;
+  const refusal =
+    plan.operation && !operationCard
+      ? await operationRefusal(actor, plan.operation.operationId)
+      : null;
   const templateOnly =
     snapshots.length === 0 &&
-    ['HELP', 'GREETING', 'THANKS', 'GUIDANCE', 'UNKNOWN', 'RESPONDERS'].includes(plan.intent);
+    (Boolean(plan.operation) ||
+      ['HELP', 'GREETING', 'THANKS', 'GUIDANCE', 'UNKNOWN', 'RESPONDERS'].includes(plan.intent));
   const verified = Boolean(readable) && (evidence.verified || templateOnly);
   const text = readable
     ? redactSecrets(
-        paged
-          ? `${plan.text}\n\nThis answer touched more than ${MAX_BASIC_SOURCES} records; only the first ${MAX_BASIC_SOURCES} are cited. Narrow the question (a service, a status or a shorter window) for complete citations.`
-          : plan.text
+        refusal ??
+          (paged
+            ? `${plan.text}\n\nThis answer touched more than ${MAX_BASIC_SOURCES} records; only the first ${MAX_BASIC_SOURCES} are cited. Narrow the question (a service, a status or a shorter window) for complete citations.`
+            : plan.text)
       )
     : 'The source changed or became unavailable. Please ask for a fresh answer.';
   yield* typed(text);
   const citations = evidence.citations(text);
   if (citations.length > 0) yield { type: 'citations', items: citations };
+  if (operationCard && readable) yield { type: 'proposal', proposal: operationCard };
   let proposed = 0;
   for (const requestProposal of plan.proposals.slice(0, MAX_PROPOSALS)) {
     const proposal = await buildProposal(

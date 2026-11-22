@@ -1,6 +1,7 @@
 /**
  * "/" shortcuts in the message box. Each one sends a question basic mode already answers, so they work
- * with AI off; /new starts a fresh chat instead of asking anything.
+ * with AI off; /new starts a fresh chat instead of asking anything. The change commands (/tag, /maintenance,
+ * /override, /rename) take an argument typed after the name and answer with a confirmation card.
  */
 export type SlashCommand = {
   name: string;
@@ -9,6 +10,8 @@ export type SlashCommand = {
   prompt?: string;
   /** Only offered in a chat about an incident. */
   incidentOnly?: boolean;
+  /** Only offered on this kind of page. */
+  page?: 'service' | 'schedule';
 };
 
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
@@ -40,15 +43,42 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     incidentOnly: true,
   },
   { name: 'week', hint: 'Incidents this week', prompt: 'How many incidents this week?' },
+  // Changes: picked alone they send the bare command, which answers with its usage line.
+  { name: 'tag', hint: 'Tag this incident: /tag <name>', prompt: '/tag', incidentOnly: true },
+  {
+    name: 'maintenance',
+    hint: 'Maintenance window on this service: /maintenance 2h [title]',
+    prompt: '/maintenance',
+    page: 'service',
+  },
+  {
+    name: 'override',
+    hint: 'Cover this schedule: /override 4h',
+    prompt: '/override',
+    page: 'schedule',
+  },
+  {
+    name: 'rename',
+    hint: 'Rename this service: /rename <new name>',
+    prompt: '/rename',
+    page: 'service',
+  },
   { name: 'help', hint: 'What I can do', prompt: 'Help' },
   { name: 'new', hint: 'Start a new chat' },
 ];
 
 /** Commands matching a box that holds only "/" plus the start of a name; empty otherwise. */
-export function matchSlashCommands(value: string, inIncident: boolean): SlashCommand[] {
+export function matchSlashCommands(
+  value: string,
+  inIncident: boolean,
+  page?: string
+): SlashCommand[] {
   if (!value.startsWith('/') || /\s/.test(value)) return [];
   const typed = value.slice(1).toLowerCase();
   return SLASH_COMMANDS.filter(
-    command => (inIncident || !command.incidentOnly) && command.name.startsWith(typed)
+    command =>
+      (inIncident || !command.incidentOnly) &&
+      (!command.page || command.page === page) &&
+      command.name.startsWith(typed)
   );
 }

@@ -30,6 +30,7 @@ export type WorldTweak =
         dailyTokenBudget: number;
         userDailyTokenBudget: number;
         maxOutputTokens: number;
+        squireExtendedActions: boolean;
       }>;
     }
   /** Recorded usage for today, so a ceiling is already reached. */
@@ -378,7 +379,7 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
 
   {
     id: 'tool-product-docs',
-    category: 'tool-choice',
+    category: 'product-help',
     question: 'How do I add an on-call override?',
     onIncident: false,
     script: [
@@ -394,7 +395,7 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
   },
   {
     id: 'context-service-page',
-    category: 'tool-choice',
+    category: 'page-context',
     question: 'Is this healthy?',
     onService: true,
     script: [{ say: 'Checking it now.' }],
@@ -406,7 +407,7 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
   },
   {
     id: 'operation-maintenance-window',
-    category: 'proposal-wanted',
+    category: 'operations',
     question: 'Create a maintenance window for $service on 1 December, 09:00 to 10:00 UTC',
     onIncident: false,
     asAdmin: true,
@@ -438,7 +439,7 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
   },
   {
     id: 'operation-read',
-    category: 'tool-choice',
+    category: 'operations',
     question: 'Show me the service record',
     onIncident: false,
     asAdmin: true,
@@ -450,6 +451,172 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       { say: 'Here it is.' },
     ],
     expect: { mode: 'ai', toolLabels: ['Reading from OpsKnight'], toolSaw: ['$service'] },
+  },
+  {
+    id: 'operations-update-service-admin',
+    category: 'operations',
+    question: 'Set the description of this service to "Checkout API"',
+    onService: true,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'propose_operation',
+        input: {
+          operationId: 'updateService',
+          args: { path: { id: '$service' }, body: { description: 'Checkout API' } },
+        },
+      },
+      { say: 'Here is the change to confirm.' },
+    ],
+    // The control for the refusals below: the same change by a role that may make it becomes a card.
+    expect: { mode: 'ai', proposals: ['run_operation'] },
+  },
+  {
+    id: 'operations-extended-off',
+    category: 'operations',
+    question: 'Set the description of this service to "Checkout API"',
+    onService: true,
+    asAdmin: true,
+    world: [{ settings: { squireExtendedActions: false } }],
+    script: [
+      {
+        tool: 'propose_operation',
+        input: {
+          operationId: 'updateService',
+          args: { path: { id: '$service' }, body: { description: 'Checkout API' } },
+        },
+      },
+      { say: 'Here is the change to confirm.' },
+    ],
+    // Reads stay available; changes are neither offered nor carded while extended actions are off.
+    expect: {
+      mode: 'ai',
+      toolsOffered: ['find_operations', 'read_operation'],
+      toolsNotOffered: ['propose_operation'],
+      noProposal: true,
+    },
+  },
+  {
+    id: 'operations-excluded-domain',
+    category: 'operations',
+    question: 'Rename the Datadog integration to "Datadog prod"',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'propose_operation',
+        input: {
+          operationId: 'updateIntegration',
+          args: { path: { id: 'integration-1' }, body: { name: 'Datadog prod' } },
+        },
+      },
+      { say: 'Here is the change to confirm.' },
+    ],
+    // Integrations, settings and notifications hold credentials and delivery plumbing: never a card.
+    expect: { mode: 'ai', noProposal: true },
+  },
+  {
+    id: 'operations-r3-delete',
+    category: 'operations',
+    question: 'Delete this service',
+    onService: true,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'propose_operation',
+        input: { operationId: 'deleteService', args: { path: { id: '$service' } } },
+      },
+      { say: 'Here is the deletion to confirm.' },
+    ],
+    // R3 (destructive) operations are out of the assistant's reach even for an administrator.
+    expect: { mode: 'ai', noProposal: true },
+  },
+  {
+    id: 'operations-find-hides-excluded',
+    category: 'operations',
+    question: 'Find the operations for integration credentials and deleting services',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      { tool: 'find_operations', input: { query: 'integration credentials delete service' } },
+      { say: 'Those are not available to me.' },
+    ],
+    expect: {
+      mode: 'ai',
+      toolLabels: ['Looking for the right operation'],
+      modelNeverSaw: ['rotateIntegrationCredentials', 'updateIntegration', 'deleteService'],
+    },
+  },
+
+  // ── Role limits ─────────────────────────────────────────────────────────────────────────────────────
+  {
+    id: 'role-limits-urgency-responder',
+    category: 'role-limits',
+    question: 'Change the urgency of this incident to high',
+    script: [{ say: 'Only a Responder or Admin can change urgency; I can add a note instead.' }],
+    // The card is never offered to a role that could not confirm it; the model is told who can.
+    expect: {
+      mode: 'ai',
+      toolsNotOffered: ['propose_change_urgency'],
+      modelSaw: ['Role: User', 'Cannot: ', 'manage any incident and operational setup (needs '],
+      noProposal: true,
+    },
+  },
+  {
+    id: 'role-limits-urgency-admin-change-wording',
+    category: 'role-limits',
+    question: 'Change the urgency of this incident to low',
+    asAdmin: true,
+    script: [
+      { tool: 'propose_change_urgency', input: { incidentId: '$incident', urgency: 'LOW' } },
+      { say: 'Here is the card to lower the urgency.' },
+    ],
+    // "change" asks for an action as much as "set" does.
+    expect: { mode: 'ai', toolsOffered: ['propose_change_urgency'], proposals: ['change_urgency'] },
+  },
+  {
+    id: 'role-limits-update-service-responder',
+    category: 'role-limits',
+    question: 'Set the description of this service to "Checkout API"',
+    onService: true,
+    script: [
+      {
+        tool: 'propose_operation',
+        input: {
+          operationId: 'updateService',
+          args: { path: { id: '$service' }, body: { description: 'Checkout API' } },
+        },
+      },
+      { say: 'Here is the change to confirm.' },
+    ],
+    expect: { mode: 'ai', modelSaw: ['Cannot: '], noProposal: true },
+  },
+
+  // ── Conversation ────────────────────────────────────────────────────────────────────────────────────
+  {
+    id: 'conversation-greeting',
+    category: 'conversation',
+    question: 'hey, how is it going?',
+    script: [{ say: 'All good! I can summarise this incident or check what changed.' }],
+    expect: {
+      mode: 'ai',
+      modelCalls: 1,
+      modelSaw: ['small talk in one friendly sentence', 'The user is viewing this incident'],
+      noProposal: true,
+    },
+  },
+  {
+    id: 'conversation-ambiguous',
+    category: 'conversation',
+    question: 'Which one is the worst?',
+    onIncident: false,
+    script: [{ say: 'Worst by what: **incidents**, **time to acknowledge** or **downtime**?' }],
+    expect: {
+      mode: 'ai',
+      modelCalls: 1,
+      modelSaw: ['one short clarifying question with two to four options', 'Never refuse'],
+      noProposal: true,
+    },
   },
   {
     id: 'tool-metrics',
@@ -582,6 +749,8 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     id: 'tool-catalogue-extended',
     category: 'tool-choice',
     question: 'What else can you do?',
+    // An administrator holds every capability, so every extended card is on offer.
+    asAdmin: true,
     script: [{ say: 'Metrics, logs, traces, errors, diffs, objectives and more actions.' }],
     expect: {
       mode: 'ai',
@@ -605,6 +774,25 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       ],
       // Publishing is only ever the second step of a confirmed draft, never a model tool.
       toolsNotOffered: ['propose_publish_status_update'],
+    },
+  },
+  {
+    id: 'tool-catalogue-extended-responder',
+    category: 'role-limits',
+    question: 'What else can you do?',
+    script: [{ say: 'I can escalate, add responders and look things up.' }],
+    // A scoped responder is never offered a card their role could not confirm.
+    expect: {
+      mode: 'ai',
+      modelCalls: 1,
+      toolsOffered: ['propose_escalate_incident'],
+      toolsNotOffered: [
+        'propose_snooze_incident',
+        'propose_change_urgency',
+        'propose_draft_status_update',
+        'propose_run_runbook',
+        'propose_create_jira_issue',
+      ],
     },
   },
 

@@ -64,6 +64,8 @@ export default function SquireProposalCard({
 }) {
   const { refresh } = useRouter();
   const attempted = useRef(false);
+  // What to check after an uncertain result: the incident, or the record a catalog change targets.
+  const subject = proposal.incidentId ? 'the incident' : 'the record in OpsKnight';
   // The second step of a two-step action (for example publishing a draft) is its own card and confirmation.
   const [followUp, setFollowUp] = useState<SquireProposalView | null>(null);
   const [state, setState] = useState<State>(() => ({
@@ -112,7 +114,7 @@ export default function SquireProposalCard({
               : {
                   phase: 'unknown',
                   message:
-                    'The result is not available. Check the incident before requesting another action.',
+                    `The result is not available. Check ${subject} before requesting another action.`,
                 }
           );
           return;
@@ -141,7 +143,7 @@ export default function SquireProposalCard({
           });
       }
     },
-    [proposal.receiptId, refresh]
+    [proposal.receiptId, refresh, subject]
   );
 
   useEffect(() => {
@@ -191,7 +193,7 @@ export default function SquireProposalCard({
           message:
             body?.message ??
             body?.error ??
-            'The action could not be confirmed. Refresh the incident before trying again.',
+            `The action could not be confirmed. Refresh ${subject} before trying again.`,
         });
       }
     } catch {
@@ -199,7 +201,7 @@ export default function SquireProposalCard({
       setState({
         phase: 'failed',
         message:
-          'Could not confirm the result. Refresh the incident before requesting another action.',
+          `Could not confirm the result. Refresh ${subject} before requesting another action.`,
       });
     }
   };

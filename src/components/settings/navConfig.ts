@@ -145,6 +145,14 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         ],
       },
       {
+        id: 'squire-action-history',
+        label: 'Squire Action History',
+        description: 'Every action confirmed from a Squire card, who confirmed it, and its outcome',
+        href: '/settings/intelligence/ai/actions',
+        icon: 'activity',
+        keywords: ['squire', 'assistant', 'ai', 'actions', 'history', 'audit', 'receipts'],
+      },
+      {
         id: 'custom-fields',
         label: 'Custom Fields',
         description: 'Define custom incident metadata, dropdown attributes, and validation rules',

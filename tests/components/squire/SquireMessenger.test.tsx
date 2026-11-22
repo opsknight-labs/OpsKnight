@@ -112,6 +112,11 @@ describe('slash commands', () => {
     expect(matchSlashCommands('/fi', false).map(c => c.name)).toEqual(['fire']);
     expect(matchSlashCommands('/fire now', false)).toEqual([]);
     expect(matchSlashCommands('what /fire', false)).toEqual([]);
+    // Change commands are offered only on the page they act on.
+    expect(matchSlashCommands('/re', false).map(c => c.name)).not.toContain('rename');
+    expect(matchSlashCommands('/re', false, 'service').map(c => c.name)).toContain('rename');
+    expect(matchSlashCommands('/ov', false, 'schedule').map(c => c.name)).toEqual(['override']);
+    expect(matchSlashCommands('/ov', false, 'service')).toEqual([]);
   });
 
   it('opens a list from "/" that the keyboard can pick from or dismiss', () => {

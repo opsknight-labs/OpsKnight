@@ -366,6 +366,123 @@ function changesOf(operation: Operation, args: OperationArgs): [string, string][
   );
 }
 
+const summaryOf = (operation: Operation) =>
+  (operation.summary ?? camelWords(operation.operationId)).replace(/\.$/, '');
+
+/** The target of an update as the person sees it (its catalog read); null when there is none or it fails. */
+async function readTarget(
+  actor: AuthorizationActor,
+  operation: Operation,
+  args: OperationArgs
+): Promise<unknown> {
+  const readId = beforeReadFor(operation);
+  const read = readId ? squireOperation(readId) : null;
+  if (!read || !args.path) return null;
+  const raw = await invoke(actor, read, { path: args.path }).catch(() => null);
+  return (raw as { data?: unknown } | null)?.data ?? raw;
+}
+
+/** "Now: field = value" for up to four fields the change set, from a re-read after it. */
+function nowSummary(changes: [string, string][], after: unknown): string {
+  // Decoration only: the change already succeeded, so a surprise in the re-read must not turn it into a failure.
+  try {
+    return nowLine(changes, after);
+  } catch {
+    return '';
+  }
+}
+
+function nowLine(changes: [string, string][], after: unknown): string {
+  const rows = reviewDiff(changes, after)
+    .filter(row => row.before !== null && row.status !== 'removed')
+    .slice(0, 4);
+  return rows.length
+    ? ` Now: ${rows.map(row => `${row.field.slice(0, 64)} = ${row.before!.slice(0, 120)}`).join(', ')}.`
+    : '';
+}
+
+type Inverse = { operationId: string; args: Record<string, unknown> };
+
+/** The change that reverses this one, built exactly from the request, its response and the prior state. */
+async function inverseOf(
+  operation: Operation,
+  args: OperationArgs,
+  before: unknown,
+  response: unknown
+): Promise<Inverse | null> {
+  const path = args.path ?? {};
+  const data = (response as { data?: Record<string, unknown> } | null)?.data;
+  const same = (operationId: string, body?: object): Inverse => ({
+    operationId,
+    args: { path, ...(body ? { body } : {}) },
+  });
+  switch (operation.operationId) {
+    case 'snoozeIncident':
+      return same('unsnoozeIncident', {});
+    case 'suppressIncident':
+      return same('unsuppressIncident', {});
+    case 'unsuppressIncident':
+      return same('suppressIncident', {});
+    case 'acknowledgeIncident':
+      return same('unacknowledgeIncident', {});
+    case 'markIncidentBusinessServiceImpact':
+      return same('unmarkIncidentBusinessServiceImpact');
+    case 'unmarkIncidentBusinessServiceImpact':
+      return same('markIncidentBusinessServiceImpact');
+    case 'addIncidentTag':
+      // A tag that was already there was not added by this change; removing it would undo more.
+      return data?.added === true && typeof data.id === 'string'
+        ? { operationId: 'removeIncidentTag', args: { path: { id: path.id, tagId: data.id } } }
+        : null;
+    case 'removeIncidentTag': {
+      if (data?.removed !== true || !path.tagId) return null;
+      const tag = await prisma.tag.findUnique({
+        where: { id: path.tagId },
+        select: { name: true },
+      });
+      return tag
+        ? {
+            operationId: 'addIncidentTag',
+            args: { path: { id: path.id }, body: { name: tag.name } },
+          }
+        : null;
+    }
+  }
+  // An update: the same operation with the prior values of exactly the fields it changed.
+  if (!['patch', 'put'].includes(operation.method)) return null;
+  if (!before || typeof before !== 'object' || Array.isArray(before)) return null;
+  const rows = reviewDiff(changesOf(operation, args), before);
+  if (rows.some(row => row.status !== 'changed' && row.status !== 'unchanged')) return null;
+  const changed = rows.filter(row => row.status === 'changed');
+  const record = before as Record<string, unknown>;
+  if (!changed.length || changed.some(row => !Object.hasOwn(record, row.field))) return null;
+  const restored = Object.fromEntries(changed.map(row => [row.field, record[row.field]]));
+  return {
+    operationId: operation.operationId,
+    args: {
+      path,
+      ...(args.query ? { query: args.query } : {}),
+      // A replace needs the whole record, so the rest of the request is sent again unchanged.
+      body: operation.method === 'put' ? { ...(args.body as object), ...restored } : restored,
+    },
+  };
+}
+
+/** A fresh sealed card that reverses a change, or null when there is no inverse this person may make. */
+async function undoFor(
+  actor: AuthorizationActor,
+  operation: Operation,
+  args: OperationArgs,
+  before: unknown,
+  response: unknown
+): Promise<(SquireProposal & { href?: string }) | null> {
+  const inverse = await inverseOf(operation, args, before, response);
+  const proposal = inverse ? await buildOperationProposal(actor, inverse) : null;
+  return proposal
+    ? { ...proposal, title: `Undo: ${summaryOf(operation)}`.slice(0, 120), confirmLabel: 'Undo' }
+    : null;
+}
+
 /** Builds the card for a suggested change, or null when it is not one this person could make. */
 export async function buildOperationProposal(
   actor: AuthorizationActor,
@@ -390,11 +507,7 @@ export async function buildOperationProposal(
   }
   const changes = changesOf(operation, args);
   // Best effort, for the card only: the target as the person sees it now.
-  const readId = beforeReadFor(operation);
-  const read = readId ? squireOperation(readId) : null;
-  const before =
-    read && args.path ? await invoke(actor, read, { path: args.path }).catch(() => null) : null;
-  const rows = reviewDiff(changes, (before as { data?: unknown } | null)?.data ?? before);
+  const rows = reviewDiff(changes, await readTarget(actor, operation, args));
   const preview = (
     rows.length
       ? rows
@@ -515,11 +628,18 @@ export async function executeOperationProposal(
     return result;
   };
   try {
-    await invoke(actor, operation, args);
+    const before = await readTarget(actor, operation, args);
+    const response = await invoke(actor, operation, args);
+    // Best effort: neither the re-read nor the undo card can fail a change that has happened.
+    const [after, followUp] = await Promise.all([
+      readTarget(actor, operation, args),
+      undoFor(actor, operation, args, before, response).catch(() => null),
+    ]);
     return finish('SUCCEEDED', {
       ok: true,
-      message: `Done: ${(operation.summary ?? camelWords(operation.operationId)).replace(/\.$/, '')}.`,
+      message: `Done: ${summaryOf(operation)}.${nowSummary(changesOf(operation, args), after)}`,
       href,
+      ...(followUp ? { followUp } : {}),
     });
   } catch (error) {
     logger.warn('[Squire] Confirmed operation was refused', {

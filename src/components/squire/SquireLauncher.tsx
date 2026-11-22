@@ -1418,7 +1418,7 @@ export default function SquireLauncher({
             chips={composerChips}
             retentionDays={history?.retentionDays ?? null}
             fullscreen={fullscreen}
-            commands={matchSlashCommands(input, Boolean(scopeId))}
+            commands={matchSlashCommands(input, Boolean(scopeId), pageContext?.kind)}
             onCommand={runCommand}
           />
         </section>
