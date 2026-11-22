@@ -117,7 +117,7 @@ export default function IntegrationSecretControl({
           Verification Active
         </span>
       </div>
-      <div className="bg-background border border-border rounded-lg px-2.5 py-1.5 font-mono text-xs flex items-center justify-between gap-2 shadow-xs group">
+      <div className="bg-background border border-border rounded-lg px-2.5 py-1.5 font-mono text-xs flex items-center justify-between gap-2 shadow-2xs group">
         <div className="flex items-center gap-2 overflow-hidden flex-1">
           <span className="truncate text-foreground font-mono">
             {revealedSecret || '••••••••••••••••••••••••••••••••'}

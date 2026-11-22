@@ -21,7 +21,7 @@ export function ExecutionRerunPanel({
   return (
     <section
       aria-label="Re-run execution"
-      className="overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs"
+      className="overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs"
     >
       {/* Compact Enterprise Header */}
       <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 sm:px-5">

@@ -36,7 +36,7 @@ function InviteActivation() {
         </div>
         <Link
           href="/login"
-          className="flex w-full items-center justify-center rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex w-full items-center justify-center rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Back to sign in
         </Link>

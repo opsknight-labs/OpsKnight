@@ -171,7 +171,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
 
   if (snapshots.length === 0) {
     return (
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-3">
+      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs space-y-3">
         <div className="flex items-center gap-2">
           <Layers className="h-4 w-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold">War-room Operations</h3>
@@ -188,7 +188,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
   }
 
   return (
-    <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+    <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Layers className="h-4 w-4 text-muted-foreground" />

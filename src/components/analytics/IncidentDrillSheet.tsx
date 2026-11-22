@@ -127,7 +127,7 @@ export default function IncidentDrillSheet({
           type="button"
           aria-label={label}
           className={cn(
-            'rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'rounded-sm text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
             className
           )}
         >
@@ -168,7 +168,7 @@ export default function IncidentDrillSheet({
                 <li key={incident.id}>
                   <Link
                     href={`/incidents/${incident.id}`}
-                    className="block px-3 py-2.5 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    className="block px-3 py-2.5 hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
                     <span className="block truncate text-sm font-medium">{incident.title}</span>
                     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
@@ -202,7 +202,7 @@ export default function IncidentDrillSheet({
                   type="button"
                   onClick={loadMore}
                   disabled={moreState === 'loading'}
-                  className="inline-flex h-11 items-center rounded-md border px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 sm:h-9"
+                  className="inline-flex h-11 items-center rounded-md border px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 sm:h-9"
                 >
                   {moreState === 'loading'
                     ? 'Loading…'

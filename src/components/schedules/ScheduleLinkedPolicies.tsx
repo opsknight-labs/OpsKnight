@@ -35,7 +35,7 @@ export default function ScheduleLinkedPolicies({ linkedRules }: ScheduleLinkedPo
   );
 
   return (
-    <Card className="overflow-hidden border-border/70 shadow-xs">
+    <Card className="overflow-hidden border-border/70 shadow-2xs">
       <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">

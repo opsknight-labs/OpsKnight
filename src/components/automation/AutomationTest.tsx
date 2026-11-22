@@ -175,7 +175,7 @@ export function AutomationTest({
     <div className="grid min-w-0 gap-3.5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section
         aria-labelledby={`${id}-input`}
-        className="min-w-0 space-y-3.5 rounded-xl border border-border/80 bg-card p-3.5 sm:p-4 shadow-xs"
+        className="min-w-0 space-y-3.5 rounded-xl border border-border/80 bg-card p-3.5 sm:p-4 shadow-2xs"
       >
         <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
           <div>
@@ -331,7 +331,7 @@ export function AutomationTest({
         <ManualSample onBuild={setSample} />
 
         <details className="group rounded-lg border border-border/70 bg-background/50">
-          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-3 text-xs font-medium text-foreground/90 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-3 text-xs font-medium text-foreground/90 hover:bg-muted/30 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
             Advanced sample JSON
             <ChevronDown
               className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180"
@@ -398,7 +398,7 @@ export function AutomationTest({
 
         <Button
           size="sm"
-          className="h-8.5 gap-1.5 text-xs font-medium shadow-xs"
+          className="h-8.5 gap-1.5 text-xs font-medium shadow-2xs"
           disabled={busy}
           onClick={() => void runTest()}
         >
@@ -410,7 +410,7 @@ export function AutomationTest({
       <section
         aria-labelledby={`${id}-result`}
         aria-busy={busy}
-        className="min-w-0 space-y-3.5 rounded-xl border border-border/80 bg-card p-3.5 sm:p-4 shadow-xs"
+        className="min-w-0 space-y-3.5 rounded-xl border border-border/80 bg-card p-3.5 sm:p-4 shadow-2xs"
       >
         <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
           <h3 id={`${id}-result`} className="text-sm font-semibold tracking-tight text-foreground">
@@ -446,7 +446,7 @@ export function AutomationTest({
             </p>
 
             {result.result && (
-              <div className="overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-b from-primary/10 via-card to-card p-3.5 shadow-xs space-y-3">
+              <div className="overflow-hidden rounded-xl border border-primary/30 bg-linear-to-b from-primary/10 via-card to-card p-3.5 shadow-2xs space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
                   <div className="flex items-center gap-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/20 text-primary">
@@ -608,7 +608,7 @@ export function AutomationTest({
           serviceId={serviceId}
           snapshot={draft}
           integrationType={integrationType || undefined}
-          className="xl:col-span-2 border-border/80 bg-card shadow-xs"
+          className="xl:col-span-2 border-border/80 bg-card shadow-2xs"
         />
       )}
     </div>

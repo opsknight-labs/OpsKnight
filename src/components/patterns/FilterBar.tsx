@@ -82,7 +82,7 @@ function FilterSearchInput({ search }: { search: FilterBarSearch }) {
   };
 
   return (
-    <div className="relative w-full min-w-[12rem] md:max-w-md md:flex-1">
+    <div className="relative w-full min-w-48 md:max-w-md md:flex-1">
       <Search
         aria-hidden="true"
         className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -101,7 +101,7 @@ function FilterSearchInput({ search }: { search: FilterBarSearch }) {
           type="button"
           onClick={clear}
           aria-label="Clear search"
-          className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
@@ -151,7 +151,7 @@ export default function FilterBar({
   return (
     <section
       aria-label={typeof title === 'string' ? title : 'Filters'}
-      className={cn('rounded-lg border border-border bg-card shadow-sm', className)}
+      className={cn('rounded-lg border border-border bg-card shadow-xs', className)}
     >
       {hasHeader && (
         <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 pb-0.5 pt-3">
@@ -196,7 +196,7 @@ export default function FilterBar({
               {filters && (
                 // Phones: an even two-column grid, each control filling its cell
                 // (callers give triggers fixed desktop widths).
-                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center max-sm:[&_[role=combobox]]:w-full max-sm:[&_button]:w-full">
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center max-sm:**:[[role=combobox]]:w-full max-sm:[&_button]:w-full">
                   {filters}
                 </div>
               )}
@@ -262,7 +262,7 @@ export function FilterField({
 }) {
   const fallbackId = useId();
   return (
-    <div className={cn('flex min-w-0 flex-col sm:min-w-[9rem]', className)}>
+    <div className={cn('flex min-w-0 flex-col sm:min-w-36', className)}>
       {/* Compact bar: the label names the control for assistive tech; the
           selected value ("All statuses") already says what it filters. */}
       <Label htmlFor={htmlFor} id={htmlFor ? undefined : fallbackId} className="sr-only">
@@ -279,27 +279,27 @@ export type FilterChipTone = 'critical' | 'elevated' | 'ok' | 'info' | 'shift';
 
 const CHIP_TONES: Readonly<Record<FilterChipTone, { idle: string; active: string }>> = {
   critical: {
-    idle: '[&_[data-chip-icon]]:text-rose-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800 dark:[&_[data-chip-icon]]:text-rose-400 dark:hover:border-rose-500/30 dark:hover:bg-rose-500/10 dark:hover:text-rose-200',
+    idle: '**:data-chip-icon:text-rose-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800 dark:**:data-chip-icon:text-rose-400 dark:hover:border-rose-500/30 dark:hover:bg-rose-500/10 dark:hover:text-rose-200',
     active:
       'border-rose-600 bg-rose-600 text-white hover:bg-rose-700 dark:border-rose-500 dark:bg-rose-500/90',
   },
   elevated: {
-    idle: '[&_[data-chip-icon]]:text-amber-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-800 dark:[&_[data-chip-icon]]:text-amber-400 dark:hover:border-amber-500/30 dark:hover:bg-amber-500/10 dark:hover:text-amber-200',
+    idle: '**:data-chip-icon:text-amber-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-800 dark:**:data-chip-icon:text-amber-400 dark:hover:border-amber-500/30 dark:hover:bg-amber-500/10 dark:hover:text-amber-200',
     active:
       'border-amber-500 bg-amber-500 text-zinc-950 hover:bg-amber-400 dark:border-amber-400 dark:bg-amber-400',
   },
   ok: {
-    idle: '[&_[data-chip-icon]]:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 dark:[&_[data-chip-icon]]:text-emerald-400 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200',
+    idle: '**:data-chip-icon:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 dark:**:data-chip-icon:text-emerald-400 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200',
     active:
       'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 dark:border-emerald-500 dark:bg-emerald-500/90',
   },
   info: {
-    idle: '[&_[data-chip-icon]]:text-blue-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800 dark:[&_[data-chip-icon]]:text-blue-400 dark:hover:border-blue-500/30 dark:hover:bg-blue-500/10 dark:hover:text-blue-200',
+    idle: '**:data-chip-icon:text-blue-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800 dark:**:data-chip-icon:text-blue-400 dark:hover:border-blue-500/30 dark:hover:bg-blue-500/10 dark:hover:text-blue-200',
     active:
       'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 dark:border-blue-500 dark:bg-blue-500/90',
   },
   shift: {
-    idle: '[&_[data-chip-icon]]:text-violet-600 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-800 dark:[&_[data-chip-icon]]:text-violet-400 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10 dark:hover:text-violet-200',
+    idle: '**:data-chip-icon:text-violet-600 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-800 dark:**:data-chip-icon:text-violet-400 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10 dark:hover:text-violet-200',
     active:
       'border-violet-600 bg-violet-600 text-white hover:bg-violet-700 dark:border-violet-500 dark:bg-violet-500/90',
   },
@@ -356,7 +356,7 @@ export function FilterChip({
       onClick={removable ? onRemove : onClick}
       className={cn(
         'inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors duration-150',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'disabled:pointer-events-none disabled:opacity-50 [&_svg]:h-3.5 [&_svg]:w-3.5',
         active || removable
           ? toneClasses && active

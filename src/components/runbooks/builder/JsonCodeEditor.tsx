@@ -84,7 +84,7 @@ export function JsonCodeEditor({
           </Button>
         )}
       </div>
-      <div className="flex max-h-[32rem] overflow-hidden">
+      <div className="flex max-h-128 overflow-hidden">
         <div
           ref={gutterRef}
           aria-hidden
@@ -116,7 +116,7 @@ export function JsonCodeEditor({
           onScroll={event => {
             if (gutterRef.current) gutterRef.current.scrollTop = event.currentTarget.scrollTop;
           }}
-          className="flex-1 resize-none overflow-auto whitespace-pre bg-transparent px-3 py-2 font-mono text-xs leading-5 outline-none"
+          className="flex-1 resize-none overflow-auto whitespace-pre bg-transparent px-3 py-2 font-mono text-xs leading-5 outline-hidden"
         />
       </div>
       <div

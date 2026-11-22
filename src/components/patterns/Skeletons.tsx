@@ -45,7 +45,7 @@ function TableRows({
           {cols.map((_, c) => (
             <Skeleton
               key={c}
-              className={cn('h-3', c === 0 ? 'flex-[2]' : 'flex-1', 'max-w-[8rem]')}
+              className={cn('h-3', c === 0 ? 'flex-2' : 'flex-1', 'max-w-32')}
             />
           ))}
         </div>
@@ -54,7 +54,7 @@ function TableRows({
         {Array.from({ length: rows }).map((_, r) => (
           <div key={r} className="flex items-center gap-4 px-4 py-3.5">
             {cols.map((__, c) => (
-              <div key={c} className={c === 0 ? 'flex-[2] space-y-1.5' : 'flex-1'}>
+              <div key={c} className={c === 0 ? 'flex-2 space-y-1.5' : 'flex-1'}>
                 <Skeleton className={cn('h-3.5', cellWidth(r, c))} />
                 {c === 0 && <Skeleton className="h-3 w-1/3" />}
               </div>
@@ -183,7 +183,7 @@ export function FilterBarSkeleton({
   return (
     <div
       aria-hidden="true"
-      className="space-y-2.5 rounded-lg border border-border bg-card p-2.5 shadow-sm"
+      className="space-y-2.5 rounded-lg border border-border bg-card p-2.5 shadow-xs"
     >
       <div className="flex gap-1.5">
         {Array.from({ length: chips }).map((_, i) => (
@@ -205,7 +205,7 @@ export function DirectorySkeleton({ rows = 8, columns = 4 }: { rows?: number; co
   return (
     <div
       aria-hidden="true"
-      className="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
     >
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="space-y-1.5">
@@ -246,7 +246,7 @@ export function DetailBodySkeleton({ tabs = 4 }: { tabs?: number }) {
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm"
+              className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-xs"
             >
               <Skeleton className="h-4 w-1/4" />
               <Skeleton className="h-3 w-full" />
@@ -259,7 +259,7 @@ export function DetailBodySkeleton({ tabs = 4 }: { tabs?: number }) {
           {Array.from({ length: 2 }).map((_, i) => (
             <div
               key={i}
-              className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm"
+              className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-xs"
             >
               <Skeleton className="h-4 w-1/3" />
               {Array.from({ length: 4 }).map((__, j) => (
@@ -291,7 +291,7 @@ export function SettingsBodySkeleton({
     return (
       <div aria-hidden="true" className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+          <div key={i} className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-xs">
             <div className="flex items-center gap-3">
               <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
               <div className="min-w-0 flex-1 space-y-1.5">
@@ -309,7 +309,7 @@ export function SettingsBodySkeleton({
   return (
     <div aria-hidden="true" className="space-y-6">
       {Array.from({ length: sections }).map((_, i) => (
-        <div key={i} className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+        <div key={i} className="overflow-hidden rounded-lg border border-border bg-card shadow-xs">
           <div className="space-y-2 border-b border-border px-4 py-4 md:px-6">
             <Skeleton className="h-5 w-40" />
             <Skeleton className="h-3.5 w-72 max-w-full" />
@@ -343,7 +343,7 @@ export function LogTableSkeleton({
 }) {
   return (
     <div aria-hidden="true" className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 shadow-sm md:flex-row md:items-end">
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 shadow-xs md:flex-row md:items-end">
         <Skeleton className="h-9 w-full md:max-w-md" />
         {Array.from({ length: filters }).map((_, i) => (
           <div key={i} className="space-y-1.5">
@@ -353,7 +353,7 @@ export function LogTableSkeleton({
         ))}
         <Skeleton className="h-9 w-36 md:ml-auto" />
       </div>
-      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-xs">
         <TableRows rows={rows} columns={columns} />
       </div>
     </div>
@@ -455,7 +455,7 @@ export function DashboardPageSkeleton({
       <HeaderSkeleton stats={stats} actions={actions} />
       <div aria-hidden="true" className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: panels }).map((_, i) => (
-          <div key={i} className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+          <div key={i} className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-xs">
             <Skeleton className="h-4 w-1/3" />
             <Skeleton className="h-40 w-full" />
           </div>

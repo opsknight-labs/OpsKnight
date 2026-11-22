@@ -120,7 +120,7 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
               onClick={() => setPickerOpen(true)}
               disabled={isUploading}
               aria-label="Change avatar or upload a photo"
-              className="group relative block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+              className="group relative block rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
             >
               <UserAvatar
                 userId={user.id}
@@ -190,7 +190,7 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
             {user.email && (
               <a
                 href={`mailto:${user.email}`}
-                className="inline-flex items-center gap-1.5 rounded-sm hover:text-primary-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300"
+                className="inline-flex items-center gap-1.5 rounded-sm hover:text-primary-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-zinc-300"
               >
                 <Mail className="h-3.5 w-3.5 shrink-0 opacity-70" />
                 {user.email}

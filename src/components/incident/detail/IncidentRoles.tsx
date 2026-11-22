@@ -163,7 +163,7 @@ function RoleSlot({
           aria-label={`${role.label}: ${holder ? holder.name : 'unassigned'}. Change`}
           className={cn(
             slotClass,
-            'hover:border-foreground/30 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60'
+            'hover:border-foreground/30 hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60'
           )}
         >
           {body}

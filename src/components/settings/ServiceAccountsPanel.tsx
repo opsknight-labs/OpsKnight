@@ -295,7 +295,7 @@ export default function ServiceAccountsPanel({
       )}
 
       {/* 2. Control Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-2xs">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
           <form
             method="get"
@@ -317,7 +317,7 @@ export default function ServiceAccountsPanel({
               name="srole"
               defaultValue={inventory.role}
               aria-label="Role"
-              className="h-9 text-xs rounded-md border border-input bg-background px-2 min-w-[140px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 text-xs rounded-md border border-input bg-background px-2 min-w-[140px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="ALL">All roles</option>
               <option value="ADMIN">Admin</option>
@@ -372,7 +372,7 @@ export default function ServiceAccountsPanel({
           {filteredAccounts.map(sa => {
             const isExpanded = expandedAccounts.has(sa.id);
             return (
-              <Card key={sa.id} className="border-border/80 shadow-xs overflow-hidden">
+              <Card key={sa.id} className="border-border/80 shadow-2xs overflow-hidden">
                 <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex items-start gap-3.5 min-w-0">
                     <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0 mt-0.5">
@@ -664,7 +664,7 @@ export default function ServiceAccountsPanel({
                 id="sa-role"
                 name="role"
                 defaultValue="RESPONDER"
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-2xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="RESPONDER">Responder (Can manage & acknowledge incidents)</option>
                 <option value="USER">User (Resource-scoped access to assigned teams)</option>
@@ -792,7 +792,7 @@ export default function ServiceAccountsPanel({
                   value={tokenExpiry}
                   onChange={event => setTokenExpiry(event.target.value)}
                   aria-describedby={tokenExpiry === '0' ? 'token-expiry-warning' : undefined}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-2xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <option value="30">30 days</option>
                   <option value="90">90 days (Recommended)</option>

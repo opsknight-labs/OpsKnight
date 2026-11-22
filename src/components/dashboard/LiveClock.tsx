@@ -85,7 +85,7 @@ const LiveClock = memo(function LiveClock({ timeZone = 'UTC', variant = 'badge' 
   if (!isMounted || time === null) {
     return (
       <div
-        className="ok-inverse-surface flex select-none items-center gap-2.5 rounded-lg border border-border bg-card px-3.5 py-1.5 font-mono text-base text-muted-foreground shadow-sm"
+        className="ok-inverse-surface flex select-none items-center gap-2.5 rounded-lg border border-border bg-card px-3.5 py-1.5 font-mono text-base text-muted-foreground shadow-xs"
         aria-label="Loading clock"
       >
         <div className="relative flex items-center justify-center">
@@ -98,7 +98,7 @@ const LiveClock = memo(function LiveClock({ timeZone = 'UTC', variant = 'badge' 
 
   return (
     <div
-      className="ok-inverse-surface flex select-none items-center gap-2.5 rounded-lg border border-border bg-card px-3.5 py-1.5 font-mono text-base text-foreground shadow-sm"
+      className="ok-inverse-surface flex select-none items-center gap-2.5 rounded-lg border border-border bg-card px-3.5 py-1.5 font-mono text-base text-foreground shadow-xs"
       role="timer"
       aria-label={`Current time: ${time}`}
     >

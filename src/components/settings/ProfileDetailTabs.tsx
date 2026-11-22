@@ -274,7 +274,7 @@ export default function ProfileDetailTabs({
                     <Link
                       key={m.id}
                       href={`/teams/${m.team.id}`}
-                      className="group flex flex-col justify-between rounded-lg border border-border bg-card p-4 transition-all duration-150 hover:bg-muted/30 hover:border-primary/40 hover:shadow-xs"
+                      className="group flex flex-col justify-between rounded-lg border border-border bg-card p-4 transition-all duration-150 hover:bg-muted/30 hover:border-primary/40 hover:shadow-2xs"
                     >
                       <div>
                         <div className="flex items-start justify-between gap-2">
@@ -342,7 +342,7 @@ export default function ProfileDetailTabs({
                   <Link
                     key={assignment.id}
                     href={`/schedules/${assignment.layer.schedule.id}`}
-                    className="group flex flex-col justify-between rounded-lg border border-border bg-card p-4 transition-all duration-150 hover:bg-muted/30 hover:border-primary/40 hover:shadow-xs"
+                    className="group flex flex-col justify-between rounded-lg border border-border bg-card p-4 transition-all duration-150 hover:bg-muted/30 hover:border-primary/40 hover:shadow-2xs"
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2">
@@ -395,7 +395,7 @@ export default function ProfileDetailTabs({
                   <Link
                     key={rule.id}
                     href={`/policies/${rule.policy.id}`}
-                    className="group flex flex-col justify-between rounded-lg border border-border bg-card p-4 transition-all duration-150 hover:bg-muted/30 hover:border-primary/40 hover:shadow-xs"
+                    className="group flex flex-col justify-between rounded-lg border border-border bg-card p-4 transition-all duration-150 hover:bg-muted/30 hover:border-primary/40 hover:shadow-2xs"
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2">

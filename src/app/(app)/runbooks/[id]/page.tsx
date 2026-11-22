@@ -402,7 +402,7 @@ export default async function RunbookDetailPage({
         action={publishDraftAction.bind(null, runbook.draftVersion.id, runbook.id)}
         label="Publish draft"
         variant="default"
-        className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-xs"
+        className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-2xs"
         title={`Publish immutable v${runbook.draftVersion.version}?`}
         description="Only the saved draft is published. Save any builder changes first. Published definitions cannot be edited."
         successMessage="Draft published"
@@ -416,7 +416,7 @@ export default async function RunbookDetailPage({
         <SubmitButton
           size="sm"
           pendingLabel="Creating draft…"
-          className="w-full sm:w-auto bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs"
+          className="w-full sm:w-auto bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-2xs"
         >
           <PencilLine className="h-4 w-4" aria-hidden="true" />
           Create next editable draft
@@ -431,9 +431,9 @@ export default async function RunbookDetailPage({
       : '100%';
 
   const dangerZoneCard = hasManageCapability ? (
-    <div className="rounded-2xl border border-destructive/25 bg-card/60 dark:bg-card/30 backdrop-blur-xs overflow-hidden shadow-xs">
+    <div className="rounded-2xl border border-destructive/25 bg-card/60 dark:bg-card/30 backdrop-blur-xs overflow-hidden shadow-2xs">
       {/* Compact Header */}
-      <div className="flex items-center justify-between border-b border-destructive/15 bg-destructive/[0.03] px-5 py-3">
+      <div className="flex items-center justify-between border-b border-destructive/15 bg-destructive/3 px-5 py-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10 text-destructive">
             <ShieldAlert className="h-4 w-4" aria-hidden="true" />
@@ -847,7 +847,7 @@ export default async function RunbookDetailPage({
                       <li key={binding.id}>
                         <Link
                           href={`/services/${binding.service.id}?tab=runbooks`}
-                          className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
+                          className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-hidden"
                         >
                           <span className="min-w-0">
                             <span className="block truncate text-sm font-medium">
@@ -892,7 +892,7 @@ export default async function RunbookDetailPage({
               <div className="space-y-6">
                 {/* Executions KPI Summary Grid */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-2xs">
                     <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                       Total Runs
                     </p>
@@ -903,7 +903,7 @@ export default async function RunbookDetailPage({
                       <span className="text-xs text-muted-foreground font-mono">recorded</span>
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-2xs">
                     <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                       Succeeded
                     </p>
@@ -914,7 +914,7 @@ export default async function RunbookDetailPage({
                       <span className="text-xs text-muted-foreground font-mono">passed</span>
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-2xs">
                     <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                       Failed / Timeout
                     </p>
@@ -929,7 +929,7 @@ export default async function RunbookDetailPage({
                       <span className="text-xs text-muted-foreground font-mono">errors</span>
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs">
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-2xs">
                     <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                       Success Rate
                     </p>

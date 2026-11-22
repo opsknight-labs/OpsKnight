@@ -393,7 +393,7 @@ export default function CustomFieldsConfig({
       )}
 
       {/* Action and Search Filter Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-2xs">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
           {/* Search Bar */}
           <div className="relative flex-1 min-w-[200px]">
@@ -449,7 +449,7 @@ export default function CustomFieldsConfig({
 
       {/* Quick Starter Templates Banner (When few or no fields exist) */}
       {initialFields.length <= 6 && (
-        <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-primary/5 shadow-xs">
+        <Card className="border-primary/20 bg-linear-to-r from-primary/5 via-background to-primary/5 shadow-2xs">
           <CardHeader className="pb-3 pt-4 px-4 sm:px-5">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
@@ -474,7 +474,7 @@ export default function CustomFieldsConfig({
                       'flex flex-col text-left p-3 rounded-xl border transition-all text-xs group',
                       isAlreadyAdded
                         ? 'border-border/60 bg-muted/40 opacity-60 cursor-not-allowed'
-                        : 'border-border bg-card hover:border-primary/40 hover:bg-accent/40 hover:shadow-xs cursor-pointer'
+                        : 'border-border bg-card hover:border-primary/40 hover:bg-accent/40 hover:shadow-2xs cursor-pointer'
                     )}
                   >
                     <div className="flex items-center justify-between w-full mb-1">
@@ -540,7 +540,7 @@ export default function CustomFieldsConfig({
             return (
               <Card
                 key={field.id}
-                className="border-border/80 bg-card hover:border-primary/30 hover:shadow-xs transition-all duration-150 overflow-hidden"
+                className="border-border/80 bg-card hover:border-primary/30 hover:shadow-2xs transition-all duration-150 overflow-hidden"
               >
                 <CardContent className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="space-y-2 flex-1 min-w-0">

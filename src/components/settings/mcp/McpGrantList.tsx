@@ -75,7 +75,7 @@ export default function McpGrantList({
               {show === 'person' ? (
                 <Link
                   href={`/users/${row.user.id}`}
-                  className="flex min-w-0 items-start gap-2 break-words font-medium text-foreground underline-offset-2 hover:underline"
+                  className="flex min-w-0 items-start gap-2 wrap-break-word font-medium text-foreground underline-offset-2 hover:underline"
                 >
                   <UserAvatar
                     userId={row.user.id}
@@ -107,12 +107,12 @@ export default function McpGrantList({
                     {row.kind === 'oauth' ? (
                       <Link
                         href={`/settings/integrations/mcp/assistants/${encodeURIComponent(row.client.id)}`}
-                        className="block break-words font-medium text-foreground underline-offset-2 hover:underline"
+                        className="block wrap-break-word font-medium text-foreground underline-offset-2 hover:underline"
                       >
                         {name}
                       </Link>
                     ) : (
-                      <span className="block break-words font-medium text-foreground">{name}</span>
+                      <span className="block wrap-break-word font-medium text-foreground">{name}</span>
                     )}
                     <StatusPill tone={row.kind === 'pat' ? 'warning' : 'neutral'}>
                       {row.kind === 'pat' ? 'Personal token' : 'OAuth'}

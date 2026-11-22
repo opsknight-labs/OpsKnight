@@ -135,7 +135,7 @@ export default function FeedbackPanel({
             {' '}
             <Link
               href="/settings/intelligence#triage"
-              className="inline-flex min-h-11 items-center rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
+              className="inline-flex min-h-11 items-center rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
             >
               Turn on
             </Link>

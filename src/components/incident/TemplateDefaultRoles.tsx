@@ -27,7 +27,7 @@ export default function TemplateDefaultRoles({
   const holderOf = (key: IncidentRoleKey) =>
     Object.entries(value).find(([roleKey]) => roleKey === key)?.[1];
   return (
-    <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-xs p-5 sm:p-6 space-y-4">
+    <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xs p-5 sm:p-6 space-y-4">
       <div className="flex items-center gap-2.5 pb-2 border-b border-border/70">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary">
           <UsersRound className="h-4 w-4" aria-hidden />

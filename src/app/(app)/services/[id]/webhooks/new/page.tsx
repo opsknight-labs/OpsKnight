@@ -36,7 +36,7 @@ export default async function NewWebhookPage({
 
   if (!service) {
     return (
-      <main className="container mx-auto max-w-4xl py-12 px-4">
+      <main className="mx-auto w-full max-w-4xl py-12 px-4">
         <Card className="text-center py-12">
           <CardContent className="flex flex-col items-center justify-center p-6 text-center">
             <h2 className="text-2xl font-bold mb-2">Service Not Found</h2>
@@ -82,7 +82,7 @@ export default async function NewWebhookPage({
         <span className="font-medium text-foreground">Add Webhook</span>
       </div>
 
-      <div className="relative overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-gradient-to-r from-card via-card to-primary/5 p-5 sm:p-6 shadow-xs">
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-linear-to-r from-card via-card to-primary/5 p-5 sm:p-6 shadow-2xs">
         <div className="flex items-start gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
             <Webhook className="h-6 w-6" aria-hidden="true" />
@@ -123,7 +123,7 @@ export default async function NewWebhookPage({
           </Alert>
         )}
 
-        <Card className="rounded-2xl border border-border/80 dark:border-border/60 shadow-xs">
+        <Card className="rounded-2xl border border-border/80 dark:border-border/60 shadow-2xs">
           <CardHeader className="border-b pb-4 bg-muted/20">
             <CardTitle className="text-sm font-bold">Webhook Configuration</CardTitle>
             <CardDescription className="text-xs">
@@ -152,7 +152,7 @@ export default async function NewWebhookPage({
                 <div className="relative">
                   <select
                     name="type"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     required
                   >
                     <option value="GENERIC">Generic Webhook</option>

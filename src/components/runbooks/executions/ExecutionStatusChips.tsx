@@ -45,7 +45,7 @@ export function ExecutionStatusChips({ query, counts, selected }: ExecutionStatu
             aria-current={isSelected ? 'page' : undefined}
             aria-label={`${chip.label} (${chip.count})`}
             className={cn(
-              'inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
               isSelected
                 ? 'border-foreground/80 bg-foreground text-background'
                 : 'bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground'

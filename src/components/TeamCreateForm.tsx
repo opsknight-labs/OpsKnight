@@ -32,7 +32,7 @@ type TeamCreateFormProps = {
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending} className="gap-2 font-medium shadow-xs">
+    <Button type="submit" disabled={pending} className="gap-2 font-medium shadow-2xs">
       {pending ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -91,7 +91,7 @@ export default function TeamCreateForm({ action, canCreate = true }: TeamCreateF
 
   return (
     <Card className="border-primary/20 shadow-lg relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 to-primary" />
+      <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-primary/40 to-primary" />
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div className="space-y-1">

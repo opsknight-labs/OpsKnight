@@ -181,7 +181,7 @@ export default function RecoveryAccounts() {
         </div>
         <Button
           size="sm"
-          className="gap-1.5 shrink-0 shadow-xs"
+          className="gap-1.5 shrink-0 shadow-2xs"
           disabled={pending || Boolean(generatedRecovery)}
           onClick={() => {
             setMessage('');
@@ -220,7 +220,7 @@ export default function RecoveryAccounts() {
           </Button>
         </div>
       ) : (
-        <ul className="divide-y divide-border/70 rounded-xl border border-border/80 bg-card shadow-xs overflow-hidden">
+        <ul className="divide-y divide-border/70 rounded-xl border border-border/80 bg-card shadow-2xs overflow-hidden">
           {data.emergencyAccounts.map(value => (
             <li
               key={value.id}
@@ -236,7 +236,7 @@ export default function RecoveryAccounts() {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="break-words font-semibold text-sm text-foreground">
+                    <p className="wrap-break-word font-semibold text-sm text-foreground">
                       {value.displayName}
                     </p>
                     <Badge

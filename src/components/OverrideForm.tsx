@@ -163,7 +163,7 @@ export default function OverrideForm({
                     if (option.value === 'additive') setReplacesUserId('');
                   }}
                   className={cn(
-                    'rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    'rounded-xl border p-4 text-left transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                     mode === option.value
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
                       : 'hover:border-primary/50'
@@ -232,7 +232,7 @@ export default function OverrideForm({
                 onChange={event => setStartTime(event.target.value)}
                 required
                 disabled={isPending}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
             <div className="space-y-2">
@@ -244,7 +244,7 @@ export default function OverrideForm({
                 onChange={event => setEndTime(event.target.value)}
                 required
                 disabled={isPending}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
           </div>

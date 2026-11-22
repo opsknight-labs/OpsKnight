@@ -86,7 +86,7 @@ export default function UngroupButton({
             <button
               type="button"
               disabled={pending}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 sm:min-h-8"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 sm:min-h-8"
             >
               {pending && (
                 <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden="true" />

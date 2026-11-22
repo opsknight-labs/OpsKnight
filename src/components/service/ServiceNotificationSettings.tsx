@@ -566,7 +566,7 @@ export default function ServiceNotificationSettings({
         />
 
         {/* CARD 1: Incident Event Triggers */}
-        <Card className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+        <Card className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs">
           <CardHeader className="py-2.5 px-3.5 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-xs font-bold flex items-center gap-2">
@@ -729,7 +729,7 @@ export default function ServiceNotificationSettings({
         </Card>
 
         {/* CARD 2: Team Chat Channels */}
-        <Card className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+        <Card className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs">
           <CardHeader className="py-2.5 px-3.5 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-xs font-bold flex items-center gap-2">
@@ -1495,7 +1495,7 @@ export default function ServiceNotificationSettings({
       {children}
 
       {/* CARD 4: Outbound Webhook Integrations */}
-      <Card className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+      <Card className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs">
         <CardHeader className="py-2.5 px-3.5 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>

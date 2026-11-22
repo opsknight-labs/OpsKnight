@@ -241,7 +241,7 @@ export default function ServiceRunbooks({
 
   if (loadError || loadErrors.includes('bindings')) {
     return (
-      <div className="flex flex-col items-center rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center shadow-xs">
+      <div className="flex flex-col items-center rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center shadow-2xs">
         <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20">
           <AlertCircle className="h-5 w-5" aria-hidden />
         </span>
@@ -357,7 +357,7 @@ export default function ServiceRunbooks({
             return (
               <div
                 key={stat.label}
-                className="group relative overflow-hidden rounded-xl border border-border/80 bg-card/70 backdrop-blur-xs p-2.5 sm:p-3 shadow-2xs hover:shadow-xs hover:border-border transition-all duration-150"
+                className="group relative overflow-hidden rounded-xl border border-border/80 bg-card/70 backdrop-blur-xs p-2.5 sm:p-3 shadow-2xs hover:shadow-2xs hover:border-border transition-all duration-150"
               >
                 <div className="flex items-center justify-between gap-1.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground truncate">
@@ -554,7 +554,7 @@ export default function ServiceRunbooks({
                       type="button"
                       aria-label="Clear search"
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -589,7 +589,7 @@ export default function ServiceRunbooks({
                     if (searchQuery) params.set('rulesSearch', searchQuery);
                     router.push(`/services/${serviceId}?${params.toString()}`);
                   }}
-                  className="h-9 w-full rounded-xl border border-input/80 bg-background/80 px-2.5 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-primary/40 focus:outline-none transition-colors"
+                  className="h-9 w-full rounded-xl border border-input/80 bg-background/80 px-2.5 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-primary/40 focus:outline-hidden transition-colors"
                 >
                   <option value="active">Attached rules</option>
                   <option value="archived">Archived rules</option>

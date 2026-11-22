@@ -39,19 +39,19 @@ export type StepDiffItem = {
 
 const CHANGE_CONFIG = {
   ADDED: {
-    card: 'border-emerald-500/30 bg-emerald-500/[0.02] dark:border-emerald-500/20',
+    card: 'border-emerald-500/30 bg-emerald-500/2 dark:border-emerald-500/20',
     badge: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
     icon: Plus,
     label: 'Added',
   },
   REMOVED: {
-    card: 'border-rose-500/30 bg-rose-500/[0.02] dark:border-rose-500/20',
+    card: 'border-rose-500/30 bg-rose-500/2 dark:border-rose-500/20',
     badge: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
     icon: Minus,
     label: 'Removed',
   },
   CHANGED: {
-    card: 'border-amber-500/30 bg-amber-500/[0.02] dark:border-amber-500/20',
+    card: 'border-amber-500/30 bg-amber-500/2 dark:border-amber-500/20',
     badge: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
     icon: RefreshCw,
     label: 'Changed',
@@ -129,9 +129,9 @@ function DiffPane({
       className={cn(
         'flex flex-col min-w-0 rounded-xl border p-3.5 transition-colors',
         tone === 'before' &&
-          'border-rose-500/30 bg-rose-500/[0.03] dark:border-rose-500/20 dark:bg-rose-950/10',
+          'border-rose-500/30 bg-rose-500/3 dark:border-rose-500/20 dark:bg-rose-950/10',
         tone === 'after' &&
-          'border-emerald-500/30 bg-emerald-500/[0.03] dark:border-emerald-500/20 dark:bg-emerald-950/10',
+          'border-emerald-500/30 bg-emerald-500/3 dark:border-emerald-500/20 dark:bg-emerald-950/10',
         !tone && 'border-border/80 bg-card/60'
       )}
     >
@@ -169,7 +169,7 @@ function DiffPane({
         </div>
       </div>
 
-      <div className="mt-2 text-xs text-muted-foreground break-words">{side.summary}</div>
+      <div className="mt-2 text-xs text-muted-foreground wrap-break-word">{side.summary}</div>
 
       <div className="mt-2.5 flex flex-col min-w-0">
         <div className="flex items-center justify-between gap-2 bg-zinc-900/95 px-3 py-1.5 rounded-t-lg border-x border-t border-zinc-800 text-[11px] text-zinc-400">
@@ -228,7 +228,7 @@ function StepDiffCard({
     <article
       data-change={step.change}
       className={cn(
-        'group rounded-2xl border bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs transition-all hover:shadow-md',
+        'group rounded-2xl border bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-2xs transition-all hover:shadow-md',
         config.card
       )}
     >
@@ -345,7 +345,7 @@ export function VersionStepDiff({
   return (
     <section aria-label="Workflow changes" className="space-y-4">
       {/* Overview Metric Bar */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <span className="flex items-center gap-1.5 rounded-full border border-border/80 bg-background/80 px-2.5 py-1 text-xs font-semibold text-foreground">
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
@@ -437,7 +437,7 @@ export function VersionStepDiff({
 
       {/* Identical State Message when no step differences exist */}
       {changed.length === 0 && (
-        <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-6 shadow-xs text-center space-y-2">
+        <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-6 shadow-2xs text-center space-y-2">
           <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="h-5 w-5" />
           </div>
@@ -464,8 +464,8 @@ export function VersionStepDiff({
           ))}
 
           {unchanged.length > 0 && (
-            <details className="group rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs overflow-hidden [&_summary::-webkit-details-marker]:hidden">
-              <summary className="flex w-full cursor-pointer select-none items-center justify-between px-5 py-3.5 text-left text-xs font-medium text-foreground hover:bg-accent/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <details className="group rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex w-full cursor-pointer select-none items-center justify-between px-5 py-3.5 text-left text-xs font-medium text-foreground hover:bg-accent/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                 <div className="flex items-center gap-2">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
                     <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />

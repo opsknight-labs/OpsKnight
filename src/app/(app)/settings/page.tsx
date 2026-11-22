@@ -237,7 +237,7 @@ export default async function SettingsOverviewPage() {
                 canAccessPath('/settings/integrations', permissions.capabilities) && (
                   <Link
                     href={settingsSectionHref(section.id)}
-                    className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     All integrations
                     <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -245,7 +245,7 @@ export default async function SettingsOverviewPage() {
                 )}
             </div>
 
-            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-xs">
               {visibleItems.map(item => {
                 const ItemIcon = itemIcons.get(item.id) ?? Settings;
                 const status = itemStatuses.get(item.id);
@@ -254,7 +254,7 @@ export default async function SettingsOverviewPage() {
                   <li key={item.id}>
                     <Link
                       href={item.href}
-                      className="group flex items-center justify-between gap-4 px-4 py-3.5 transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-muted sm:px-5"
+                      className="group flex items-center justify-between gap-4 px-4 py-3.5 transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-muted sm:px-5"
                     >
                       <div className="flex min-w-0 items-center gap-3.5">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">

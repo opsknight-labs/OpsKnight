@@ -306,7 +306,7 @@ export default function AuthenticationDiagnostics({
         <DetailTabContent
           value={view}
           aria-busy={loading}
-          className="mt-0 min-w-0 space-y-4 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs"
+          className="mt-0 min-w-0 space-y-4 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-2xs"
         >
           <div className="flex items-start gap-2.5 rounded-lg border border-border/50 bg-muted/20 p-3 text-xs text-muted-foreground">
             <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />

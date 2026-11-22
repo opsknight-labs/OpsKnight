@@ -89,7 +89,7 @@ export default function SendTestAlertPage() {
           event.preventDefault();
           void sendTestAlert();
         }}
-        className="space-y-5 rounded-lg border border-border bg-card p-4 shadow-sm md:p-6"
+        className="space-y-5 rounded-lg border border-border bg-card p-4 shadow-xs md:p-6"
       >
         <div className="space-y-1.5">
           <Label htmlFor="test-event-key">

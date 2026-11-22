@@ -253,7 +253,7 @@ export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
                 key={session.id}
                 className={`flex flex-col gap-4 rounded-xl border p-4 transition-all sm:flex-row sm:items-center sm:justify-between ${
                   session.isCurrent && !revoked
-                    ? 'border-primary/30 bg-primary/5 shadow-sm'
+                    ? 'border-primary/30 bg-primary/5 shadow-xs'
                     : revoked
                       ? 'border-border/60 bg-muted/30 opacity-75'
                       : 'border-border bg-card'

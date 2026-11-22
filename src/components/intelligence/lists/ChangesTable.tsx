@@ -63,7 +63,7 @@ const buildColumns = (timeZone: string): readonly DirectoryColumn<ChangeListRow>
       <div className="min-w-0 space-y-1 py-0.5">
         <Link
           href={`/changes/${encodeURIComponent(row.id)}`}
-          className="line-clamp-2 break-words font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="line-clamp-2 wrap-break-word font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           {row.summary}
         </Link>
@@ -80,7 +80,7 @@ const buildColumns = (timeZone: string): readonly DirectoryColumn<ChangeListRow>
     hideable: true,
     sortKey: 'source',
     sortValue: row => row.source,
-    className: 'w-36 break-words',
+    className: 'w-36 wrap-break-word',
     cell: row => row.source,
   },
   {
@@ -130,7 +130,7 @@ function mobileRow(row: ChangeListRow, timeZone: string) {
         <ListChip>{kindLabel(row.kind)}</ListChip>
         {row.version && <span className="break-all">{row.version}</span>}
         <span>{row.source}</span>
-        <span className="break-words">{row.serviceName ?? 'No service'}</span>
+        <span className="wrap-break-word">{row.serviceName ?? 'No service'}</span>
         <ListWhen value={row.occurredAt} timeZone={timeZone} />
       </div>
       <Risk score={row.riskScore} />
@@ -165,7 +165,7 @@ export default function ChangesTable({
   return (
     <section
       aria-label="Change list"
-      className="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
     >
       <DirectoryHeader title="Change list" summary={summary} columns={columns} density />
       {notice}

@@ -60,7 +60,7 @@ export default function LayerTimingFields({
   return (
     <>
       <section className="overflow-hidden rounded-xl border bg-card">
-        <div className="flex items-center gap-3 border-b bg-muted/[0.12] p-4">
+        <div className="flex items-center gap-3 border-b bg-muted/12 p-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Repeat className="h-4 w-4" />
           </div>
@@ -127,7 +127,7 @@ export default function LayerTimingFields({
             <CollapsibleTrigger asChild>
               <button
                 type="button"
-                className="flex w-full items-center gap-3 rounded-lg border border-dashed border-primary/30 bg-primary/[0.045] p-3 text-left transition-colors hover:border-primary/55 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex w-full items-center gap-3 rounded-lg border border-dashed border-primary/30 bg-primary/4.5 p-3 text-left transition-colors hover:border-primary/55 hover:bg-primary/8 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                   <SlidersHorizontal className="h-4 w-4" />
@@ -149,7 +149,7 @@ export default function LayerTimingFields({
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-4">
-              <div className="space-y-2 rounded-lg bg-muted/[0.25] p-3">
+              <div className="space-y-2 rounded-lg bg-muted/25 p-3">
                 <Label htmlFor="layer-active-for">This layer is active for</Label>
                 <div className="flex items-center gap-2">
                   <Input
@@ -199,7 +199,7 @@ export default function LayerTimingFields({
                   defaultValue={startDefaultValue}
                   required
                   disabled={disabled}
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 {timeZone && <p className="text-xs text-muted-foreground">Times use {timeZone}.</p>}
               </div>
@@ -216,7 +216,7 @@ export default function LayerTimingFields({
                   name="end"
                   defaultValue={endDefaultValue}
                   disabled={disabled}
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
             </div>

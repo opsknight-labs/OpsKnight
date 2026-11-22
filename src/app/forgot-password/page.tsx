@@ -70,7 +70,7 @@ export default function ForgotPasswordPage() {
             </div>
             <Link
               href={loginHref}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to sign in
@@ -82,7 +82,7 @@ export default function ForgotPasswordPage() {
               <div
                 role="alert"
                 aria-live="assertive"
-                className="mb-5 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs shadow-xs transition-all"
+                className="mb-5 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs shadow-2xs transition-all"
               >
                 <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive mt-0.5">
                   <AlertCircle className="h-3.5 w-3.5" />
@@ -96,7 +96,7 @@ export default function ForgotPasswordPage() {
                   onClick={() => setError('')}
                   aria-label="Dismiss error"
                   title="Dismiss"
-                  className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-3.5 w-3.5 stroke-[2.25]" />
                 </button>
@@ -127,7 +127,7 @@ export default function ForgotPasswordPage() {
                     aria-invalid={error ? true : undefined}
                     aria-describedby={error ? 'email-error' : 'email-help'}
                     className={cn(
-                      'h-11 min-h-11 2xl:h-12 pl-10 pr-4 rounded-xl bg-card text-sm shadow-xs hover:border-ring/50 transition-colors',
+                      'h-11 min-h-11 2xl:h-12 pl-10 pr-4 rounded-xl bg-card text-sm shadow-2xs hover:border-ring/50 transition-colors',
                       error && 'border-destructive'
                     )}
                     autoFocus
@@ -141,7 +141,7 @@ export default function ForgotPasswordPage() {
                 type="submit"
                 disabled={isSubmitting || !email}
                 aria-busy={isSubmitting || undefined}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 {isSubmitting ? (
                   <>

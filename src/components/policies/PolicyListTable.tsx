@@ -66,7 +66,7 @@ export default function PolicyListTable({ policies, canManagePolicies }: PolicyL
           key={policy.id}
           className={cn(
             'group relative rounded-2xl border bg-card shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-all',
-            'hover:shadow-md hover:-translate-y-[1px]',
+            'hover:shadow-md hover:-translate-y-px',
             'focus-within:ring-2 focus-within:ring-primary/20',
             'border-ink-200',
             navigatingId === policy.id && 'opacity-70 pointer-events-none'

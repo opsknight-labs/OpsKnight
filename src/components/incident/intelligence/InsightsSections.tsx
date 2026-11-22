@@ -75,7 +75,7 @@ function Section({
       id={`insights-${id}`}
       aria-labelledby={headingId}
       tabIndex={-1}
-      className="scroll-mt-4 space-y-2 rounded-lg border border-border bg-card p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="scroll-mt-4 space-y-2 rounded-lg border border-border bg-card p-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="space-y-1">
         <h3 id={headingId} className="flex items-center gap-2 text-sm font-semibold">
@@ -160,7 +160,7 @@ export default function InsightsSections({
         <div
           id="insights-briefing"
           tabIndex={-1}
-          className="scroll-mt-4 focus-visible:outline-none"
+          className="scroll-mt-4 focus-visible:outline-hidden"
         >
           <ProactiveNotes
             incidentId={incidentId}
@@ -279,7 +279,7 @@ export default function InsightsSections({
         <div
           id="insights-related"
           tabIndex={-1}
-          className="scroll-mt-4 space-y-3 focus-visible:outline-none"
+          className="scroll-mt-4 space-y-3 focus-visible:outline-hidden"
         >
           {insights.group && (
             <div className="space-y-1">
@@ -517,7 +517,7 @@ export default function InsightsSections({
       )}
 
       {has('impact') && insights.impact && !isImpactEmpty(insights.impact) && (
-        <div id="insights-impact" tabIndex={-1} className="scroll-mt-4 focus-visible:outline-none">
+        <div id="insights-impact" tabIndex={-1} className="scroll-mt-4 focus-visible:outline-hidden">
           <ImpactCardBody
             view={insights.impact}
             action={ask(
@@ -530,7 +530,7 @@ export default function InsightsSections({
       )}
 
       {has('summary') && (
-        <div id="insights-summary" tabIndex={-1} className="scroll-mt-4 focus-visible:outline-none">
+        <div id="insights-summary" tabIndex={-1} className="scroll-mt-4 focus-visible:outline-hidden">
           <IncidentAiSummary incidentId={incidentId} canPostNote={insights.canPostNote} />
         </div>
       )}

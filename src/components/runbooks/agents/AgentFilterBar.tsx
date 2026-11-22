@@ -86,7 +86,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
   };
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 shadow-xs">
+    <div className="space-y-3 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 shadow-2xs">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <form
           onSubmit={e => {

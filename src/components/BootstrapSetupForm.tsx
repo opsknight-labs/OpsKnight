@@ -35,9 +35,9 @@ type Props = {
 };
 
 const setupFieldClass =
-  'h-11 min-h-11 2xl:h-12 pl-12 rounded-xl bg-card text-base sm:text-sm 2xl:text-base shadow-xs hover:border-ring/50 transition-colors';
+  'h-11 min-h-11 2xl:h-12 pl-12 rounded-xl bg-card text-base sm:text-sm 2xl:text-base shadow-2xs hover:border-ring/50 transition-colors';
 const toggleClass =
-  'absolute right-3 z-10 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'absolute right-3 z-10 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
   const { pending } = useFormStatus();
@@ -48,7 +48,7 @@ function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
       aria-busy={pending || undefined}
       className={cn(
         'group relative w-full h-11 2xl:h-12 px-4 rounded-lg font-semibold text-sm 2xl:text-base transition-all duration-150 flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.995]',
-        'bg-primary hover:bg-primary/90 text-primary-foreground border border-primary shadow-sm hover:shadow'
+        'bg-primary hover:bg-primary/90 text-primary-foreground border border-primary shadow-xs hover:shadow-sm'
       )}
     >
       {pending ? (
@@ -144,7 +144,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
         </div>
         <a
           href="/login"
-          className="inline-flex items-center justify-center w-full h-11 2xl:h-12 rounded-lg font-semibold text-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex items-center justify-center w-full h-11 2xl:h-12 rounded-lg font-semibold text-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Continue to sign in
         </a>
@@ -173,7 +173,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
           <button
             type="button"
             onClick={() => setDismissedError(state.error ?? null)}
-            className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Dismiss error"
             title="Dismiss"
           >

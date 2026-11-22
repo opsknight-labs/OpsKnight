@@ -88,10 +88,10 @@ const NotificationList = memo(function NotificationList({
               'group relative flex items-start gap-3 p-3 rounded-xl border text-left transition-all duration-150 shadow-2xs cursor-pointer',
               notification.unread
                 ? isIncident
-                  ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-rose-200 dark:border-rose-900/40 border-l-[3.5px] border-l-rose-500 hover:border-rose-300 dark:hover:border-rose-800/60 hover:shadow-xs'
+                  ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-rose-200 dark:border-rose-900/40 border-l-[3.5px] border-l-rose-500 hover:border-rose-300 dark:hover:border-rose-800/60 hover:shadow-2xs'
                   : isService
-                    ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-blue-200 dark:border-blue-900/40 border-l-[3.5px] border-l-blue-500 hover:border-blue-300 dark:hover:border-blue-800/60 hover:shadow-xs'
-                    : 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-purple-200 dark:border-purple-900/40 border-l-[3.5px] border-l-purple-500 hover:border-purple-300 dark:hover:border-purple-800/60 hover:shadow-xs'
+                    ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-blue-200 dark:border-blue-900/40 border-l-[3.5px] border-l-blue-500 hover:border-blue-300 dark:hover:border-blue-800/60 hover:shadow-2xs'
+                    : 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-purple-200 dark:border-purple-900/40 border-l-[3.5px] border-l-purple-500 hover:border-purple-300 dark:hover:border-purple-800/60 hover:shadow-2xs'
                 : 'bg-white/80 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-800/80 border-zinc-200/80 dark:border-zinc-800/80 border-l-[3.5px] border-l-zinc-300 dark:border-l-zinc-700 opacity-85 hover:opacity-100'
             )}
             onClick={() => onNavigate(notification)}
@@ -203,7 +203,7 @@ const NotificationList = memo(function NotificationList({
                 type="button"
                 title="Mark as read"
                 onClick={e => onMarkAsRead(notification.id, e)}
-                className="opacity-0 group-hover:opacity-100 absolute top-2.5 right-2.5 p-1 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 shadow-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all duration-150 cursor-pointer"
+                className="opacity-0 group-hover:opacity-100 absolute top-2.5 right-2.5 p-1 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 shadow-2xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all duration-150 cursor-pointer"
               >
                 <Check className="h-3.5 w-3.5" />
               </button>
@@ -422,21 +422,21 @@ export default function TopbarNotifications() {
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute top-0 left-[19px] flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none bg-rose-600 text-white ring-2 ring-[#09090b] shadow-xs tabular-nums select-none pointer-events-none">
+            <span className="absolute top-0 left-[19px] flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none bg-rose-600 text-white ring-2 ring-[#09090b] shadow-2xs tabular-nums select-none pointer-events-none">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
           <span className="sr-only">Notifications</span>
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-zinc-50 dark:bg-zinc-950 text-foreground border-l border-zinc-200 dark:border-zinc-800 shadow-2xl [&>button]:z-50 [&>button]:cursor-pointer [&>button]:text-zinc-400 [&>button]:hover:text-white [&>button]:top-4 [&>button]:right-4.5 [&>button]:rounded-md [&>button]:p-1.5 [&>button]:hover:bg-white/10 [&>button]:transition-colors overflow-hidden">
-        <div className="relative px-5 pt-4 pb-3 bg-gradient-to-b from-[#18181b] via-[#121216] to-[#09090b] text-white border-b border-zinc-800/80 shadow-2xs">
+      <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-zinc-50 dark:bg-zinc-950 text-foreground border-l border-zinc-200 dark:border-zinc-800 shadow-2xl [&>button]:z-50 [&>button]:cursor-pointer [&>button]:text-zinc-400 hover:[&>button]:text-white [&>button]:top-4 [&>button]:right-4.5 [&>button]:rounded-md [&>button]:p-1.5 hover:[&>button]:bg-white/10 [&>button]:transition-colors overflow-hidden">
+        <div className="relative px-5 pt-4 pb-3 bg-linear-to-b from-[#18181b] via-[#121216] to-[#09090b] text-white border-b border-zinc-800/80 shadow-2xs">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.06),transparent_60%)] pointer-events-none" />
           <SheetHeader className="p-0 space-y-0 text-left">
             {/* Top row: Bell Icon + Title + Live badge. Leaves right side completely clear for X button */}
             <div className="flex items-center justify-between pr-12">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 border border-zinc-700/60 shadow-xs backdrop-blur-md shrink-0">
+                <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 border border-zinc-700/60 shadow-2xs backdrop-blur-md shrink-0">
                   <Bell className="h-4 w-4 text-white" />
                 </div>
                 <div className="flex items-center gap-2 min-w-0">
@@ -499,13 +499,13 @@ export default function TopbarNotifications() {
             <TabsList className="w-full grid grid-cols-4 h-8 p-0.5 bg-zinc-100 dark:bg-zinc-950 border border-zinc-200/80 dark:border-zinc-800/80 rounded-lg">
               <TabsTrigger
                 value="all"
-                className="text-[11px] font-semibold py-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-xs transition-all"
+                className="text-[11px] font-semibold py-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
               >
                 All
               </TabsTrigger>
               <TabsTrigger
                 value="unread"
-                className="text-[11px] font-semibold py-1 gap-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-xs transition-all"
+                className="text-[11px] font-semibold py-1 gap-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
               >
                 Unread
                 {unreadCount > 0 && (
@@ -516,13 +516,13 @@ export default function TopbarNotifications() {
               </TabsTrigger>
               <TabsTrigger
                 value="incident"
-                className="text-[11px] font-semibold py-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-xs transition-all"
+                className="text-[11px] font-semibold py-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
               >
                 Incidents
               </TabsTrigger>
               <TabsTrigger
                 value="schedule"
-                className="text-[11px] font-semibold py-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-xs transition-all"
+                className="text-[11px] font-semibold py-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
               >
                 Shifts
               </TabsTrigger>
@@ -579,7 +579,7 @@ export default function TopbarNotifications() {
           </div>
         </Tabs>
 
-        <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between gap-2 shadow-xs">
+        <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between gap-2 shadow-2xs">
           <Button
             variant="ghost"
             size="sm"

@@ -4,10 +4,10 @@ import { AlertCircle, ChevronDown, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const selectClass =
-  'peer flex h-8.5 w-full min-w-0 appearance-none cursor-pointer rounded-lg border border-border/70 bg-background/90 py-1 pl-2.5 pr-8 text-xs font-medium text-foreground shadow-2xs transition-all duration-150 hover:border-border hover:bg-background focus-visible:border-primary/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-muted/30 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/30';
+  'peer flex h-8.5 w-full min-w-0 appearance-none cursor-pointer rounded-lg border border-border/70 bg-background/90 py-1 pl-2.5 pr-8 text-xs font-medium text-foreground shadow-2xs transition-all duration-150 hover:border-border hover:bg-background focus-visible:border-primary/50 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-muted/30 aria-invalid:border-destructive aria-invalid:ring-destructive/30';
 
 export const textareaClass =
-  'flex w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 font-mono text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+  'flex w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 font-mono text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
 export interface NativeSelectProps extends ComponentProps<'select'> {
   wrapperClassName?: string;

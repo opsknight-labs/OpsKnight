@@ -54,11 +54,11 @@ export function ListChip({ tone = 'neutral', children }: { tone?: ChipTone; chil
 }
 
 export const listLinkClass =
-  'inline-flex min-h-11 items-center break-words font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex min-h-11 items-center wrap-break-word font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 /** Secondary link inside a row (service, incident): muted, underlined on hover. */
 export const listSubLinkClass =
-  'break-words rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'wrap-break-word rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
  * Forward-only keyset pagination, as the footer of the list card: the cursor lives in the URL, so a page

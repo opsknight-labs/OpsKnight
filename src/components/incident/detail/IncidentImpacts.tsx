@@ -24,7 +24,7 @@ export default function IncidentImpacts({
             {linkable ? (
               <Link
                 href={`/services/business/${service.id}`}
-                className={`${chip} transition-colors hover:border-foreground/30 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                className={`${chip} transition-colors hover:border-foreground/30 hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring`}
               >
                 {service.name}
               </Link>

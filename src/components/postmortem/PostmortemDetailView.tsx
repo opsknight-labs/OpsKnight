@@ -278,8 +278,8 @@ export default function PostmortemDetailView({
         </div>
       )}
 
-      <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md overflow-hidden relative border-ink-200">
-        <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle,rgba(211,47,47,0.05)_0%,transparent_70%)] rounded-full translate-x-[30%] -translate-y-[30%] pointer-events-none" />
+      <Card className="bg-linear-to-br from-card to-ink-50 shadow-md overflow-hidden relative border-ink-200">
+        <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle,rgba(211,47,47,0.05)_0%,transparent_70%)] rounded-full translate-x-[30%] translate-y-[-30%] pointer-events-none" />
 
         <CardContent className="p-6 md:p-8">
           <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-4 relative z-10">
@@ -323,7 +323,7 @@ export default function PostmortemDetailView({
                   variant="outline"
                   size="sm"
                   onClick={() => setPreviewAsPublic(!previewAsPublic)}
-                  className="h-9 gap-1.5 text-xs shadow-xs"
+                  className="h-9 gap-1.5 text-xs shadow-2xs"
                 >
                   {previewAsPublic ? (
                     <>
@@ -343,14 +343,14 @@ export default function PostmortemDetailView({
                   size="sm"
                   onClick={handleTogglePublic}
                   disabled={isUpdatingPublic}
-                  className="h-9 gap-1.5 text-xs shadow-xs"
+                  className="h-9 gap-1.5 text-xs shadow-2xs"
                 >
                   <Globe className="h-3.5 w-3.5 text-muted-foreground" />
                   <span>{isPublic ? 'Make Internal Only' : 'Publish to Status Page'}</span>
                 </Button>
 
                 <Link href={`/postmortems/${incidentId}?edit=true`}>
-                  <Button size="sm" className="h-9 gap-1.5 text-xs font-semibold shadow-xs">
+                  <Button size="sm" className="h-9 gap-1.5 text-xs font-semibold shadow-2xs">
                     <Pencil className="h-3.5 w-3.5" />
                     <span>Edit Postmortem</span>
                   </Button>
@@ -403,7 +403,7 @@ export default function PostmortemDetailView({
       </Card>
 
       {postmortem.summary && (
-        <Card className="bg-card shadow-sm border-ink-200">
+        <Card className="bg-card shadow-xs border-ink-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2 font-bold text-foreground">
               <span className="w-1.5 h-4 bg-primary rounded-sm" />
@@ -430,7 +430,7 @@ export default function PostmortemDetailView({
 
       {Object.keys(impactMetrics).length > 0 && <PostmortemImpactMetrics metrics={impactMetrics} />}
 
-      <Card className="bg-card shadow-sm border-ink-200">
+      <Card className="bg-card shadow-xs border-ink-200">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2 font-bold text-foreground">
             <Sparkles className="h-4 w-4 text-primary" />
@@ -474,7 +474,7 @@ export default function PostmortemDetailView({
       </Card>
 
       {actionItems.length > 0 && (
-        <Card className="bg-card shadow-sm border-ink-200">
+        <Card className="bg-card shadow-xs border-ink-200">
           <CardHeader className="pb-3">
             <div className="flex justify-between items-center">
               <CardTitle className="text-base font-bold text-foreground">
@@ -589,7 +589,7 @@ export default function PostmortemDetailView({
       )}
 
       {postmortem.lessons && (
-        <Card className="bg-card shadow-sm border-ink-200">
+        <Card className="bg-card shadow-xs border-ink-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-bold text-foreground">
               Lessons Learned & Future Resiliency

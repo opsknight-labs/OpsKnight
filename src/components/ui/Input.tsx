@@ -98,7 +98,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         {leftIcon && (
           <span
             className={cn(
-              'ui-input-icon-left absolute z-[1] flex items-center text-muted-foreground',
+              'ui-input-icon-left absolute z-1 flex items-center text-muted-foreground',
               legacyIconInsetClass(size, 'left')
             )}
           >
@@ -124,7 +124,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         {rightIcon && (
           <span
             className={cn(
-              'ui-input-icon-right absolute z-[1] flex items-center text-muted-foreground',
+              'ui-input-icon-right absolute z-1 flex items-center text-muted-foreground',
               legacyIconInsetClass(size, 'right')
             )}
           >

@@ -39,7 +39,7 @@ export default function BashActionEditor({
           Bash always needs approval, and the command must exactly match the Agent’s allowlist.
         </p>
         <details className="group mt-1.5 pl-5 text-muted-foreground">
-          <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm font-medium text-foreground/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm font-medium text-foreground/80 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             <ChevronRight
               className="h-3 w-3 transition-transform group-open:rotate-90"
               aria-hidden="true"
@@ -103,7 +103,7 @@ export default function BashActionEditor({
                   key={input.key}
                   type="button"
                   onClick={() => updateCommand(command ? `${command} ${envVar}` : envVar)}
-                  className="rounded-full bg-background px-2 py-0.5 font-mono text-[11px] ring-1 ring-inset ring-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded-full bg-background px-2 py-0.5 font-mono text-[11px] ring-1 ring-inset ring-border transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   title={input.label ? `Append ${input.label}` : `Append ${envVar}`}
                 >
                   {envVar}

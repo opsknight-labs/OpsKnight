@@ -130,7 +130,7 @@ export default function IncidentResponseTimeline({
             onClick={() => setActive('ALL')}
             aria-pressed={active === 'ALL'}
             className={cn(
-              'h-6.5 px-2.5 rounded-md text-xs font-medium transition-all select-none border focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+              'h-6.5 px-2.5 rounded-md text-xs font-medium transition-all select-none border focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring',
               active === 'ALL'
                 ? 'bg-foreground text-background border-foreground shadow-2xs font-semibold'
                 : 'bg-background text-muted-foreground border-border/80 hover:text-foreground hover:bg-muted/40'
@@ -146,7 +146,7 @@ export default function IncidentResponseTimeline({
               aria-pressed={active === lane}
               aria-label={`${responseLaneLabel(lane)}: ${count} entries`}
               className={cn(
-                'inline-flex h-6.5 items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium transition-all select-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                'inline-flex h-6.5 items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium transition-all select-none focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring',
                 active === lane
                   ? cn(toneChipClass(responseLaneTone(lane)), 'shadow-2xs font-semibold')
                   : count > 0
@@ -256,7 +256,7 @@ export default function IncidentResponseTimeline({
                     </span>
                     <span
                       className={cn(
-                        'min-w-0 break-words text-xs font-semibold text-foreground',
+                        'min-w-0 wrap-break-word text-xs font-semibold text-foreground',
                         entry.tone === 'critical' && 'text-rose-700 dark:text-rose-400'
                       )}
                     >
@@ -275,7 +275,7 @@ export default function IncidentResponseTimeline({
 
                 {/* Detail description */}
                 {entry.detail && (
-                  <p className="mt-1 whitespace-pre-wrap break-words text-xs text-muted-foreground leading-relaxed">
+                  <p className="mt-1 whitespace-pre-wrap wrap-break-word text-xs text-muted-foreground leading-relaxed">
                     {formatDetailMessage(entry.detail, timeZone)}
                   </p>
                 )}
@@ -294,7 +294,7 @@ export default function IncidentResponseTimeline({
                           <dt className="text-muted-foreground font-medium text-[11px] uppercase tracking-wide">
                             {item.label}
                           </dt>
-                          <dd className="min-w-0 break-words font-mono text-xs font-semibold text-foreground">
+                          <dd className="min-w-0 wrap-break-word font-mono text-xs font-semibold text-foreground">
                             {item.value}
                           </dd>
                         </div>
@@ -321,7 +321,7 @@ export default function IncidentResponseTimeline({
 function RecordLink({ record, compact }: { record: ResponseTimelineRecord; compact: boolean }) {
   const link = recordLink(record, compact);
   const className =
-    'inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+    'inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline transition-all focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring';
   const content = (
     <>
       <span>View {link.label.toLowerCase()}</span>

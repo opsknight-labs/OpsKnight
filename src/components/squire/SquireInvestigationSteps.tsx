@@ -58,7 +58,7 @@ export default function SquireInvestigationSteps({
       className="group/steps text-xs text-muted-foreground"
       data-testid="squire-investigation"
     >
-      <summary className="inline-flex min-h-11 cursor-pointer select-none list-none items-center gap-1.5 rounded-md pr-1.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-6 [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex min-h-11 cursor-pointer select-none list-none items-center gap-1.5 rounded-md pr-1.5 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-6 [&::-webkit-details-marker]:hidden">
         {streaming ? (
           <Loader2 aria-hidden className="h-3.5 w-3.5 shrink-0 motion-safe:animate-spin" />
         ) : (
@@ -83,7 +83,7 @@ export default function SquireInvestigationSteps({
           <li key={step.index}>
             <details>
               <summary
-                className="flex cursor-pointer items-center gap-2 rounded py-0.5 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex cursor-pointer items-center gap-2 rounded py-0.5 text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={`Step ${step.index}: ${step.title} (${STATUS_TEXT[step.status]})`}
               >
                 <StepIcon status={step.status} />

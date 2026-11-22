@@ -30,7 +30,7 @@ export default async function RecoveryPage() {
         <RecoveryHeader accountName={accountName} expiresAtIso={session.expiresAt.toISOString()} />
 
         {/* Hero Context Card */}
-        <div className="rounded-2xl border bg-card p-5 sm:p-6 shadow-xs space-y-5">
+        <div className="rounded-2xl border bg-card p-5 sm:p-6 shadow-2xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
               <div className="p-3 rounded-2xl bg-status-elevated/10 text-status-elevated shrink-0">

@@ -122,7 +122,7 @@ export default function NoiseSection({
                       <Link
                         href={`/services/${encodeURIComponent(service.serviceId)}/notifications`}
                         aria-label={`Tune ${service.serviceName}`}
-                        className="inline-flex min-h-11 items-center rounded-md px-2 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+                        className="inline-flex min-h-11 items-center rounded-md px-2 text-xs font-medium text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
                       >
                         Tune
                       </Link>

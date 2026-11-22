@@ -150,7 +150,7 @@ export default async function ServiceObjectivesPage({
 
       <section
         aria-labelledby="objective-measurement-heading"
-        className="space-y-1 rounded-lg border border-border bg-card px-4 py-3 shadow-sm [&_p]:text-xs [&_p]:text-muted-foreground"
+        className="space-y-1 rounded-lg border border-border bg-card px-4 py-3 shadow-xs [&_p]:text-xs [&_p]:text-muted-foreground"
       >
         <h2 id="objective-measurement-heading" className="text-sm font-semibold text-foreground">
           How objectives are measured

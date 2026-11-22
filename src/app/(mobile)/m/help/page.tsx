@@ -44,37 +44,37 @@ export default function MobileHelpPage() {
 
   return (
     <div className="flex flex-col gap-6 p-4 pb-24">
-      <h1 className="text-xl font-bold tracking-tight text-[color:var(--text-primary)]">
+      <h1 className="text-xl font-bold tracking-tight text-(--text-primary)">
         Help & Support
       </h1>
 
       {/* Resources Section */}
       <section className="space-y-3">
-        <h2 className="px-1 text-sm font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
+        <h2 className="px-1 text-sm font-semibold uppercase tracking-wider text-(--text-muted)">
           Resources
         </h2>
-        <div className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-(--border) bg-(--bg-surface) shadow-xs">
           {resources.map((item, index) => (
             <a
               key={item.title}
               href={item.href}
               target="_blank"
               rel="noopener noreferrer"
-              className={`flex items-center gap-4 px-4 py-4 active:bg-[color:var(--bg-secondary)] ${
-                index !== resources.length - 1 ? 'border-b border-[color:var(--border)]' : ''
+              className={`flex items-center gap-4 px-4 py-4 active:bg-(--bg-secondary) ${
+                index !== resources.length - 1 ? 'border-b border-(--border)' : ''
               }`}
             >
               <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${item.bg}`}>
                 <item.icon className={`h-5 w-5 ${item.color}`} />
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-1.5 font-semibold text-[color:var(--text-primary)]">
+                <div className="flex items-center gap-1.5 font-semibold text-(--text-primary)">
                   {item.title}
                   <ExternalLink className="h-3 w-3 opacity-40" />
                 </div>
-                <div className="text-xs text-[color:var(--text-muted)]">{item.subtitle}</div>
+                <div className="text-xs text-(--text-muted)">{item.subtitle}</div>
               </div>
-              <ChevronRight className="h-5 w-5 text-[color:var(--text-muted)] opacity-50" />
+              <ChevronRight className="h-5 w-5 text-(--text-muted) opacity-50" />
             </a>
           ))}
         </div>
@@ -82,17 +82,17 @@ export default function MobileHelpPage() {
 
       {/* Contact Section */}
       <section className="space-y-3">
-        <h2 className="px-1 text-sm font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
+        <h2 className="px-1 text-sm font-semibold uppercase tracking-wider text-(--text-muted)">
           Contact
         </h2>
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] p-5 shadow-sm">
+        <div className="rounded-2xl border border-(--border) bg-(--bg-surface) p-5 shadow-xs">
           <div className="mb-4 flex flex-col items-center gap-3 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400">
               <Mail className="h-6 w-6" />
             </div>
             <div>
-              <h3 className="font-bold text-[color:var(--text-primary)]">Need Assistance?</h3>
-              <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+              <h3 className="font-bold text-(--text-primary)">Need Assistance?</h3>
+              <p className="mt-1 text-xs text-(--text-muted)">
                 Our team is here to help with any integration or account issues.
               </p>
             </div>
@@ -107,7 +107,7 @@ export default function MobileHelpPage() {
       </section>
 
       <div className="mt-auto py-6 text-center">
-        <p className="text-xs font-medium text-[color:var(--text-muted)]">
+        <p className="text-xs font-medium text-(--text-muted)">
           OpsKnight Mobile {APP_VERSION}
         </p>
       </div>

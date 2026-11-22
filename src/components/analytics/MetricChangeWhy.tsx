@@ -49,7 +49,7 @@ export default function MetricChangeWhy({
           aria-expanded={open}
           aria-controls={panelId}
           onClick={toggle}
-          className="-my-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md px-2 font-medium text-foreground/80 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="-my-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md px-2 font-medium text-foreground/80 underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           Why?
         </button>

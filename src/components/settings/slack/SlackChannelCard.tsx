@@ -42,7 +42,7 @@ export function SlackChannelCard({
     <div
       className={cn(
         'group relative flex items-center justify-between gap-4 px-4 py-3 rounded-lg border transition-all duration-200',
-        'hover:shadow-sm',
+        'hover:shadow-xs',
         isConnected && 'border-l-4 border-l-status-ok bg-status-ok-soft/50 dark:bg-status-ok/10',
         !isConnected &&
           isPrivate &&

@@ -57,7 +57,7 @@ export default function AddStepMenu({
                         onAddStep(type);
                         setOpen(false);
                       }}
-                      className="flex min-h-8 w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none transition-colors duration-100 hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
+                      className="flex min-h-8 w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-hidden transition-colors duration-100 hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
                     >
                       <Icon
                         className="mt-0.5 size-4 shrink-0 text-muted-foreground"

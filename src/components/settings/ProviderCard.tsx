@@ -507,11 +507,11 @@ export default function ProviderCard({
   };
 
   return (
-    <Card className="border-border/80 shadow-xs bg-card overflow-hidden">
+    <Card className="border-border/80 shadow-2xs bg-card overflow-hidden">
       <CardHeader className="p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="p-2 rounded-xl bg-background border border-border/80 shadow-xs shrink-0 mt-0.5 flex items-center justify-center">
+            <div className="p-2 rounded-xl bg-background border border-border/80 shadow-2xs shrink-0 mt-0.5 flex items-center justify-center">
               {getProviderBrandLogo(providerConfig.key, 24)}
             </div>
             <div className="space-y-1">

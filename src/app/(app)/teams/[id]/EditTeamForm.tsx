@@ -104,7 +104,7 @@ export default function EditTeamForm({
             value={teamLeadId}
             onChange={e => setTeamLeadId(e.target.value)}
             disabled={!canUpdate || isPending}
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs ring-offset-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">No team lead designated</option>
             {members.map(member => (

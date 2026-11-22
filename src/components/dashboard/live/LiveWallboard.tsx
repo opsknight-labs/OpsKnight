@@ -146,7 +146,7 @@ function readStoredScale(): number | null {
 }
 
 const controlClass =
-  'inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-zinc-800 outline-none focus-visible:ring-4 focus-visible:ring-sky-400/70';
+  'inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-zinc-800 outline-hidden focus-visible:ring-4 focus-visible:ring-sky-400/70';
 
 export default function LiveWallboard({
   timeZone,
@@ -309,14 +309,14 @@ export default function LiveWallboard({
       data-wake-lock={wakeLockActive ? 'on' : 'off'}
       // Explicit edges instead of `inset` and dvh with a vh fallback keep older TV engines happy.
       className={cn(
-        'dark fixed left-0 top-0 z-[70] h-screen w-screen overflow-hidden bg-[#050507] text-foreground',
-        'supports-[height:100dvh]:h-[100dvh]',
+        'dark fixed left-0 top-0 z-70 h-screen w-screen overflow-hidden bg-[#050507] text-foreground',
+        'supports-[height:100dvh]:h-dvh',
         idle && 'cursor-none'
       )}
       style={{ colorScheme: 'dark' }}
     >
       <div
-        className="flex h-full flex-col p-[1.5vw] transition-transform duration-[2000ms]"
+        className="flex h-full flex-col p-[1.5vw] transition-transform duration-2000"
         style={{
           transform: `translate(${offsetX}px, ${offsetY}px)`,
           // `zoom` keeps layout and text crisp; supported by Chromium, Safari and Firefox 126+.
@@ -342,7 +342,7 @@ export default function LiveWallboard({
           </div>
         )}
 
-        <header className="mb-[1.2vh] flex flex-wrap items-center justify-between rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#121216] to-[#09090b] px-[1.5vw] py-[1.2vh] text-slate-100">
+        <header className="mb-[1.2vh] flex flex-wrap items-center justify-between rounded-2xl border border-zinc-800 bg-linear-to-b from-[#121216] to-[#09090b] px-[1.5vw] py-[1.2vh] text-slate-100">
           <div className="mr-[2vw] min-w-0">
             <div className="flex items-center">
               <h1 className="dash-wallboard-title mr-4">Operations Console</h1>
@@ -383,7 +383,7 @@ export default function LiveWallboard({
             aria-label="Wallboard controls"
             className={cn(
               'flex flex-wrap items-center gap-2 transition-opacity duration-500',
-              'min-[1800px]:[zoom:1.15] min-[2200px]:[zoom:1.35] min-[2500px]:[zoom:1.5] min-[3400px]:[zoom:2]',
+              'min-[1800px]:zoom-[1.15] min-[2200px]:zoom-[1.35] min-[2500px]:zoom-[1.5] min-[3400px]:zoom-[2]',
               idle && 'pointer-events-none opacity-0'
             )}
           >
@@ -510,7 +510,7 @@ export default function LiveWallboard({
             />
           </div>
           {/* Rail cards use app sizing; scale them up for across-the-room legibility. */}
-          <aside className="hidden min-h-0 overflow-hidden xl:block min-[1800px]:[zoom:1.2] min-[2200px]:[zoom:1.4] min-[2500px]:[zoom:1.6] min-[3400px]:[zoom:2.2]">
+          <aside className="hidden min-h-0 overflow-hidden xl:block min-[1800px]:zoom-[1.2] min-[2200px]:zoom-[1.4] min-[2500px]:zoom-[1.6] min-[3400px]:zoom-[2.2]">
             <div className="mb-[1.2vw]">
               <OnCallCard />
             </div>

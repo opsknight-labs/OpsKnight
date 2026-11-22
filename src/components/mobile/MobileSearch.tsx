@@ -79,7 +79,7 @@ export default function MobileSearch({
           autoCapitalize="off"
           spellCheck={false}
           className={cn(
-            'h-11 min-h-[44px] min-w-0 flex-1 rounded-xl border-input bg-background pr-11 text-foreground shadow-sm focus-visible:ring-ring',
+            'h-11 min-h-[44px] min-w-0 flex-1 rounded-xl border-input bg-background pr-11 text-foreground shadow-xs focus-visible:ring-ring',
             leftIcon ? 'pl-9' : 'px-4'
           )}
         />
@@ -88,7 +88,7 @@ export default function MobileSearch({
           <button
             type="button"
             onClick={handleClear}
-            className="absolute right-1.5 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="absolute right-1.5 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Clear search"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -111,7 +111,7 @@ export default function MobileSearch({
                   onSearch?.(suggestion);
                   setIsFocused(false);
                 }}
-                className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-popover-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-popover-foreground transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                   <Search className="h-3.5 w-3.5" aria-hidden="true" />

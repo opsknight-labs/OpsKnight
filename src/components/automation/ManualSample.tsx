@@ -14,7 +14,7 @@ export function ManualSample({ onBuild }: { onBuild: (sample: string) => void })
   const [built, setBuilt] = useState(false);
   return (
     <details className="group rounded-lg border border-border/70 bg-card">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-3 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
         Build sample manually
         <ChevronDown
           className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"

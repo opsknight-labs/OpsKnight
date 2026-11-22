@@ -324,7 +324,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
               <Button
                 asChild
                 size="sm"
-                className="gap-1.5 bg-amber-600 text-white hover:bg-amber-700 shadow-xs"
+                className="gap-1.5 bg-amber-600 text-white hover:bg-amber-700 shadow-2xs"
               >
                 <a href={`#step-${waitingStep.id}`}>
                   <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
@@ -348,7 +348,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                 size="sm"
                 variant={isFailure ? 'default' : 'outline'}
                 className={cn(
-                  'gap-1.5 font-semibold shadow-xs',
+                  'gap-1.5 font-semibold shadow-2xs',
                   !isFailure && 'border-zinc-700 bg-zinc-800 text-slate-100 hover:bg-zinc-700'
                 )}
               >
@@ -452,7 +452,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
       {waitingStep && (
         <section
           aria-label="Approval needed"
-          className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/[0.05] backdrop-blur-xs p-5 shadow-xs"
+          className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/5 backdrop-blur-xs p-5 shadow-2xs"
         >
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 ring-1 ring-inset ring-amber-500/25 dark:text-amber-300 border border-amber-500/20 shadow-2xs">
@@ -485,7 +485,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
       {(isFailure || execution.failureCode || execution.failureMessage) && (
         <section
           aria-label="Failure details"
-          className="space-y-3 rounded-2xl border border-rose-500/40 bg-rose-500/[0.05] backdrop-blur-xs p-5 text-sm shadow-xs"
+          className="space-y-3 rounded-2xl border border-rose-500/40 bg-rose-500/5 backdrop-blur-xs p-5 text-sm shadow-2xs"
         >
           <div className="flex items-start gap-3">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/15 text-rose-700 ring-1 ring-inset ring-rose-500/25 dark:text-rose-300">
@@ -497,7 +497,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                   (execution.status === 'TIMED_OUT' ? 'Execution timed out' : 'Execution failed')}
               </p>
               {execution.failureMessage && (
-                <p className="break-words text-xs text-rose-800/90 dark:text-rose-200/90">
+                <p className="wrap-break-word text-xs text-rose-800/90 dark:text-rose-200/90">
                   {redactRunbookOutput(execution.failureMessage)}
                 </p>
               )}

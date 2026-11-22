@@ -147,7 +147,7 @@ export default function EscalationStepItem({
         {/* Step Number Circle */}
         <div
           className={cn(
-            'flex-shrink-0 w-8 h-8 rounded-full border flex items-center justify-center font-bold text-sm bg-card shadow-xs z-10',
+            'shrink-0 w-8 h-8 rounded-full border flex items-center justify-center font-bold text-sm bg-card shadow-2xs z-10',
             step.stepOrder === 0 ? 'border-primary text-primary' : 'border-ink-300 text-ink-600'
           )}
         >
@@ -157,7 +157,7 @@ export default function EscalationStepItem({
         {/* Card Content */}
         <div
           className={cn(
-            'flex-1 group relative rounded-xl border bg-card shadow-xs transition-all',
+            'flex-1 group relative rounded-xl border bg-card shadow-2xs transition-all',
             'hover:shadow-md hover:border-ink-300',
             'border-ink-200'
           )}
@@ -165,7 +165,7 @@ export default function EscalationStepItem({
           <div className="flex items-center justify-between p-3.5 md:p-4">
             <div className="flex items-center gap-4">
               {/* Avatar/Icon */}
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 {step.targetType === 'USER' && step.targetUser ? (
                   <UserAvatar
                     userId={step.targetUser.id}

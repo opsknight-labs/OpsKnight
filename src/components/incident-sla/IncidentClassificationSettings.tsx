@@ -360,7 +360,7 @@ export default function IncidentClassificationSettings({
   }
 
   return (
-    <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+    <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs">
       <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">

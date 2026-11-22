@@ -109,7 +109,7 @@ export function ApplySuggestionForm({
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const selectClass =
-  'h-9 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
+  'h-9 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
 export function DigestSettingsForm({
   settings,

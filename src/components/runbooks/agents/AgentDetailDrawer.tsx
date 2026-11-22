@@ -108,7 +108,7 @@ export function AgentDetailDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl">
-        <SheetHeader className="sticky top-0 z-10 space-y-2 border-b bg-background/95 px-6 py-5 pr-16 text-left backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <SheetHeader className="sticky top-0 z-10 space-y-2 border-b bg-background/95 px-6 py-5 pr-16 text-left backdrop-blur-sm supports-backdrop-filter:bg-background/80">
           <div className="flex flex-wrap items-center gap-2">
             <RunbookStatusBadge status={agent.effectiveStatus} size="sm" />
             <span className="truncate font-mono text-[11px] text-muted-foreground select-all">
@@ -129,12 +129,12 @@ export function AgentDetailDrawer({
                 <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>Last reported Agent error</span>
               </div>
-              <p className="break-words font-mono text-[11px]">{agent.lastError}</p>
+              <p className="wrap-break-word font-mono text-[11px]">{agent.lastError}</p>
             </div>
           )}
 
           {/* Quick Fleet Health Grid */}
-          <div className="grid grid-cols-2 gap-4 rounded-xl border bg-card p-4 text-xs shadow-xs">
+          <div className="grid grid-cols-2 gap-4 rounded-xl border bg-card p-4 text-xs shadow-2xs">
             <div>
               <span className="text-muted-foreground block text-[11px]">Heartbeat</span>
               <span className="font-semibold text-foreground">
@@ -354,7 +354,7 @@ export function AgentDetailDrawer({
             return (
               <div className="space-y-4">
                 {/* Runtime Environment Identity Card */}
-                <div className="rounded-xl border bg-card/60 p-4 shadow-xs space-y-3">
+                <div className="rounded-xl border bg-card/60 p-4 shadow-2xs space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Hosting Environment
@@ -525,7 +525,7 @@ export function AgentDetailDrawer({
                 {/* Out-of-Scope / Policy Disabled Capabilities (Collapsed Disclosure) */}
                 {outOfScopeCapabilities.length > 0 && (
                   <details className="group rounded-xl border bg-muted/20 p-3 text-xs">
-                    <summary className="flex cursor-pointer items-center justify-between font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring select-none">
+                    <summary className="flex cursor-pointer items-center justify-between font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring select-none">
                       <div className="flex items-center gap-2">
                         <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground/80" />
                         <span>
@@ -585,7 +585,7 @@ export function AgentDetailDrawer({
           {/* Scheduling Labels Editor */}
           {canManage && (
             <details className="group rounded-xl border bg-card p-4 text-xs">
-              <summary className="flex cursor-pointer list-none items-center justify-between rounded-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <summary className="flex cursor-pointer list-none items-center justify-between rounded-sm font-semibold text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                 <span>Scheduling labels</span>
                 <span className="text-[11px] font-medium text-primary group-open:hidden">Edit</span>
               </summary>
@@ -610,7 +610,7 @@ export function AgentDetailDrawer({
           {canManage && agent.status !== 'REVOKED' && (
             <Link
               href={`/runbooks/agents/${agent.id}/setup`}
-              className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4 text-sm font-medium transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4 text-sm font-medium transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               Upgrade installed Agent · preserve identity
               <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

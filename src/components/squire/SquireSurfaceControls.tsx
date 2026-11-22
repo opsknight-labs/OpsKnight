@@ -7,7 +7,7 @@ import { findingHref, insightsSectionFor, type SquireEvidenceHandle } from './sq
 
 // 44 px on phones, compact beside the small chips of the desktop panel.
 const ICON_BUTTON =
-  'min-h-11 min-w-11 items-center justify-center rounded-full hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:min-h-6 sm:min-w-6';
+  'min-h-11 min-w-11 items-center justify-center rounded-full hover:bg-accent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 sm:min-h-6 sm:min-w-6';
 
 const KIND_LABEL: Record<SquireEvidenceHandle['kind'], string> = {
   briefing: 'Briefing',

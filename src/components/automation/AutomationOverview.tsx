@@ -50,7 +50,7 @@ function Panel({
   return (
     <section
       aria-labelledby={headingId}
-      className="overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-xs"
+      className="overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-2xs"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/20 px-3.5 py-2.5 sm:px-4">
         <h3
@@ -145,7 +145,7 @@ export const AutomationOverview = memo(function AutomationOverview({
       {data.candidateVersion && (
         <section
           aria-label="Pending candidate"
-          className="overflow-hidden rounded-xl border border-primary/40 bg-primary/5 p-3.5 shadow-xs"
+          className="overflow-hidden rounded-xl border border-primary/40 bg-primary/5 p-3.5 shadow-2xs"
         >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
@@ -188,7 +188,7 @@ export const AutomationOverview = memo(function AutomationOverview({
 
       {/* Top Stats Strip */}
       <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs">
+        <div className="rounded-xl border border-border/80 bg-card p-3 shadow-2xs">
           <dt className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
             <span>Evaluated · 7 days</span>
             <Activity className="h-3.5 w-3.5 text-sky-500/70" aria-hidden="true" />
@@ -201,7 +201,7 @@ export const AutomationOverview = memo(function AutomationOverview({
           </dd>
         </div>
 
-        <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs">
+        <div className="rounded-xl border border-border/80 bg-card p-3 shadow-2xs">
           <dt className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
             <span>Same behavior</span>
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500/70" aria-hidden="true" />
@@ -221,7 +221,7 @@ export const AutomationOverview = memo(function AutomationOverview({
           </dd>
         </div>
 
-        <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs">
+        <div className="rounded-xl border border-border/80 bg-card p-3 shadow-2xs">
           <dt className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
             <span>Different routes</span>
             <GitCompare className="h-3.5 w-3.5 text-indigo-500/70" aria-hidden="true" />
@@ -236,7 +236,7 @@ export const AutomationOverview = memo(function AutomationOverview({
           </dd>
         </div>
 
-        <div className="rounded-xl border border-border/80 bg-card p-3 shadow-xs">
+        <div className="rounded-xl border border-border/80 bg-card p-3 shadow-2xs">
           <dt className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
             <span>Fallbacks / errors</span>
             {totalFailures === 0 ? (
@@ -266,7 +266,7 @@ export const AutomationOverview = memo(function AutomationOverview({
       {evaluated > 0 && (
         <section
           aria-label="Behavior alignment and routing parity"
-          className="rounded-xl border border-border/80 bg-card p-3.5 shadow-xs space-y-2.5"
+          className="rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs space-y-2.5"
         >
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="flex items-center gap-1.5 font-semibold text-foreground">
@@ -445,7 +445,7 @@ export const AutomationOverview = memo(function AutomationOverview({
           </Panel>
         </div>
 
-        <div className="flex flex-col justify-between rounded-xl border border-border/80 bg-card p-3.5 shadow-xs sm:p-4">
+        <div className="flex flex-col justify-between rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs sm:p-4">
           <div className="space-y-2.5">
             <div>
               <p className="text-xs font-semibold tracking-tight text-foreground">Next steps</p>
@@ -455,7 +455,7 @@ export const AutomationOverview = memo(function AutomationOverview({
             </div>
             <div className="space-y-1.5 pt-1">
               <Button
-                className="group h-8.5 w-full justify-between px-3 text-xs font-medium shadow-xs"
+                className="group h-8.5 w-full justify-between px-3 text-xs font-medium shadow-2xs"
                 onClick={() => setArea('rules')}
               >
                 <span className="flex items-center gap-2">
@@ -572,7 +572,7 @@ export const AutomationOverview = memo(function AutomationOverview({
                 key={trace.id}
                 className="overflow-hidden rounded-lg border border-border/70 bg-background text-xs transition-colors hover:border-border"
               >
-                <summary className="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-medium hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                <summary className="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-medium hover:bg-muted/30 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring">
                   <div className="flex items-center gap-2">
                     <Link
                       className="font-medium text-primary hover:underline"

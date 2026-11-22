@@ -157,7 +157,7 @@ function NoteImage({ src, alt }: { src: string; alt: string }) {
 
   return (
     <>
-      <div className="my-2 max-w-md group/img relative overflow-hidden rounded-xl border border-border/70 bg-muted/20 shadow-2xs transition-all hover:border-primary/40 hover:shadow-xs">
+      <div className="my-2 max-w-md group/img relative overflow-hidden rounded-xl border border-border/70 bg-muted/20 shadow-2xs transition-all hover:border-primary/40 hover:shadow-2xs">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
@@ -221,7 +221,7 @@ function NoteImage({ src, alt }: { src: string; alt: string }) {
               <img
                 src={src}
                 alt={alt || 'Full image preview'}
-                className="max-h-[72vh] w-auto object-contain rounded-lg shadow-xs"
+                className="max-h-[72vh] w-auto object-contain rounded-lg shadow-2xs"
               />
             </div>
             <div className="px-3 py-1.5 border-t border-border/60 flex justify-end">
@@ -514,5 +514,5 @@ export function NoteMarkdown({ content }: { content: string }) {
   flushCode('end');
   flushList('end');
 
-  return <div className="space-y-0.5 text-xs text-foreground break-words">{elements}</div>;
+  return <div className="space-y-0.5 text-xs text-foreground wrap-break-word">{elements}</div>;
 }

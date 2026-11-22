@@ -10,7 +10,7 @@ import ShareReviewLink from './ShareReviewLink';
 
 /** Shared definition-list styles for the review and status pages, readable in both themes. */
 export const DT_CLASS = 'text-xs uppercase tracking-wide text-muted-foreground';
-export const DD_CLASS = 'min-w-0 text-foreground [overflow-wrap:anywhere]';
+export const DD_CLASS = 'min-w-0 text-foreground wrap-anywhere';
 
 /** Back to the approvals queue, on every review and status page. */
 export function BackToApprovals() {
@@ -117,7 +117,7 @@ export function ReviewUnavailable({ reason, heading }: { reason: Blocked; headin
   return (
     <div className="min-w-0 max-w-3xl space-y-4 rounded-lg border p-4 sm:p-6">
       <BackToApprovals />
-      <h1 className="font-display text-xl font-bold tracking-tight break-words sm:text-2xl">
+      <h1 className="font-display text-xl font-bold tracking-tight wrap-break-word sm:text-2xl">
         {heading}
       </h1>
       <InlineNotice tone="warning" role="status" title={copy.title}>
@@ -172,7 +172,7 @@ export function RequestedBy({
   timeZone?: string;
 }) {
   return (
-    <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
+    <p className="text-sm text-muted-foreground wrap-anywhere">
       Requested by <span className="font-medium text-foreground">{personText(person)}</span>
       {person.name && person.email ? ` (${person.email})` : ''}
       {assistant ? (
@@ -248,7 +248,7 @@ export function RequesterStatus({
   return (
     <div className="min-w-0 max-w-3xl space-y-4 rounded-lg border p-4 sm:p-6">
       <BackToApprovals />
-      <h1 className="font-display text-xl font-bold tracking-tight break-words sm:text-2xl">
+      <h1 className="font-display text-xl font-bold tracking-tight wrap-break-word sm:text-2xl">
         {heading}
       </h1>
       {children}
@@ -256,7 +256,7 @@ export function RequesterStatus({
         <p className="font-medium">Status: {copy.label}</p>
         <p className="mt-1 text-sm">{copy.body}</p>
       </div>
-      <dl className="grid gap-2 break-words sm:grid-cols-2">
+      <dl className="grid gap-2 wrap-break-word sm:grid-cols-2">
         {open && (
           <>
             <dt className={DT_CLASS}>{status === 'APPROVED' ? 'Apply before' : 'Review before'}</dt>
@@ -289,7 +289,7 @@ export function DecisionReason({ reason }: { reason: string | null }) {
   return (
     <div className="rounded-lg border border-border p-4">
       <p className="text-sm font-medium">Reviewer&apos;s note</p>
-      <p className="mt-1 whitespace-pre-wrap break-words text-sm">{reason}</p>
+      <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm">{reason}</p>
     </div>
   );
 }

@@ -451,7 +451,7 @@ export function ServiceObjectiveCreate() {
     );
   }
   return (
-    <Card className="border-primary/20 shadow-sm">
+    <Card className="border-primary/20 shadow-xs">
       <CardHeader className="space-y-1 pb-4">
         <h2 className="text-base font-semibold text-foreground">Create objective</h2>
         <p className="text-xs text-muted-foreground">
@@ -482,7 +482,7 @@ export function ServiceObjectivesDirectory({
   return (
     <section
       aria-labelledby="active-objectives-heading"
-      className="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
     >
       <DirectoryHeader
         title={<span id="active-objectives-heading">Active objectives</span>}

@@ -94,9 +94,9 @@ export function ExecutionRow({
   return (
     <li
       className={cn(
-        'group relative rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs transition-all hover:bg-muted/40 focus-within:bg-muted/40',
+        'group relative rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs transition-all hover:bg-muted/40 focus-within:bg-muted/40',
         'lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none',
-        waitingApproval && 'border-amber-500/40 bg-amber-500/[0.03]'
+        waitingApproval && 'border-amber-500/40 bg-amber-500/3'
       )}
     >
       <div
@@ -105,21 +105,21 @@ export function ExecutionRow({
           'gap-x-4 gap-y-3 p-3.5 text-xs lg:items-center lg:gap-y-1 lg:px-4 lg:py-3'
         )}
       >
-        <div className="order-2 min-w-0 space-y-1.5 lg:order-none">
+        <div className="order-2 min-w-0 space-y-1.5 lg:order-0">
           <RunbookStatusBadge status={execution.status} size="sm" />
           <ExecutionProgressBar
             totalSteps={execution.totalSteps}
             completedSteps={execution.completedSteps}
             status={execution.status}
-            className="max-w-[7.5rem]"
+            className="max-w-30"
           />
         </div>
-        <div className="order-first col-span-2 min-w-0 lg:order-none lg:col-span-1">
+        <div className="order-first col-span-2 min-w-0 lg:order-0 lg:col-span-1">
           <button
             type="button"
             aria-label={`Inspect execution ${execution.runbook.name} ${execution.id}`}
             onClick={() => onSelect(execution)}
-            className="block max-w-full truncate rounded-sm text-left text-sm font-semibold text-foreground outline-none after:absolute after:inset-0 after:rounded-xl group-hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring lg:after:rounded-none"
+            className="block max-w-full truncate rounded-sm text-left text-sm font-semibold text-foreground outline-hidden after:absolute after:inset-0 after:rounded-xl group-hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring lg:after:rounded-none"
             title={title}
           >
             {execution.runbook.name}
@@ -141,7 +141,7 @@ export function ExecutionRow({
           </span>
           {execution.incidentId ? (
             <Link
-              className="relative z-10 block truncate rounded-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="relative z-10 block truncate rounded-sm text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               href={`/incidents/${execution.incidentId}?tab=runbooks`}
               title={execution.incidentTitle ?? execution.incidentId}
             >
@@ -151,27 +151,27 @@ export function ExecutionRow({
             <span className="block text-muted-foreground">No incident</span>
           )}
         </Cell>
-        <Cell label="Trigger" className="order-3 lg:order-none">
+        <Cell label="Trigger" className="order-3 lg:order-0">
           <span className="block truncate">
             {trigger}
             {execution.triggeredByUser ? ` · ${execution.triggeredByUser.name}` : ''}
           </span>
         </Cell>
-        <Cell label="Started" className="order-4 lg:order-none">
+        <Cell label="Started" className="order-4 lg:order-0">
           <span className="tabular-nums" title={startedAbsolute}>
             {nowIso ? formatRelativeTime(startedValue, nowIso) : startedAbsolute}
           </span>
         </Cell>
-        <Cell label="Duration" className="order-5 lg:order-none">
+        <Cell label="Duration" className="order-5 lg:order-0">
           <span className="tabular-nums">{duration}</span>
         </Cell>
-        <Cell label="Target" className="order-6 col-span-2 lg:order-none lg:col-span-1">
+        <Cell label="Target" className="order-6 col-span-2 lg:order-0 lg:col-span-1">
           <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground" title={target}>
             <TargetIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span className="truncate">{target}</span>
           </span>
         </Cell>
-        <div className="relative z-10 order-last col-span-2 flex items-center justify-end gap-1 lg:order-none lg:col-span-1">
+        <div className="relative z-10 order-last col-span-2 flex items-center justify-end gap-1 lg:order-0 lg:col-span-1">
           {waitingApproval && (
             <Button
               asChild
@@ -214,7 +214,7 @@ export function ExecutionRow({
           </Button>
         </div>
         {execution.failedStepName && (
-          <p className="order-7 col-span-2 flex items-center gap-1.5 text-rose-600 dark:text-rose-400 lg:order-none lg:col-span-7 lg:col-start-2">
+          <p className="order-7 col-span-2 flex items-center gap-1.5 text-rose-600 dark:text-rose-400 lg:order-0 lg:col-span-7 lg:col-start-2">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span>
               Step requires attention: <span className="font-mono">{execution.failedStepName}</span>

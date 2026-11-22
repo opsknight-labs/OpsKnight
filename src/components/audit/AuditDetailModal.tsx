@@ -193,7 +193,7 @@ export default function AuditDetailModal({
                 variant="outline"
                 size="sm"
                 onClick={handleCopy}
-                className="h-7 px-2.5 text-xs gap-1 shadow-sm"
+                className="h-7 px-2.5 text-xs gap-1 shadow-xs"
               >
                 {copied ? (
                   <>

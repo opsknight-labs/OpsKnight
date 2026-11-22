@@ -99,7 +99,7 @@ export default memo(function SquireMessage({
   if (!assistant) {
     return (
       <article aria-label="Your question" className="group ml-10 flex flex-col items-end gap-1">
-        <div className="max-w-full whitespace-pre-wrap break-words rounded-2xl rounded-br-md border border-border bg-muted px-3.5 py-2 text-sm">
+        <div className="max-w-full whitespace-pre-wrap wrap-break-word rounded-2xl rounded-br-md border border-border bg-muted px-3.5 py-2 text-sm">
           {turn.notice && <p className="mb-1 text-xs text-muted-foreground">{turn.notice}</p>}
           {turn.content}
         </div>

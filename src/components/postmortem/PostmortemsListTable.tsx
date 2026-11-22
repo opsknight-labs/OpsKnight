@@ -387,7 +387,7 @@ export default function PostmortemsListTable({
             size="sm"
             onClick={handleBulkDelete}
             disabled={isDeleting}
-            className="flex items-center gap-1.5 shadow-sm"
+            className="flex items-center gap-1.5 shadow-xs"
           >
             {isDeleting ? (
               <Loader2 className="h-4 w-4 animate-spin" />

@@ -93,10 +93,10 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
     <div className="min-w-0 max-w-3xl space-y-6 rounded-lg border p-4 sm:p-6">
       <BackToApprovals />
       <div className="space-y-1">
-        <h1 className="font-display text-xl font-bold tracking-tight break-words sm:text-2xl">
+        <h1 className="font-display text-xl font-bold tracking-tight wrap-break-word sm:text-2xl">
           {heading}
         </h1>
-        {runbook && <p className="text-base [overflow-wrap:anywhere]">Run “{runbook.name}”</p>}
+        {runbook && <p className="text-base wrap-anywhere">Run “{runbook.name}”</p>}
         <RequestedBy
           person={requester.person}
           assistant={requester.assistant}
@@ -109,7 +109,7 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
         Existing step approvals and Agent policies still apply. Input values are withheld under the
         runbook review policy.
       </p>
-      <dl className="grid gap-x-4 gap-y-3 break-words sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+      <dl className="grid gap-x-4 gap-y-3 wrap-break-word sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
         <dt className={DT_CLASS}>Runbook</dt>
         <dd className={DD_CLASS}>
           <Link className="underline" href={`/runbooks/${summary.runbookId}`}>
@@ -171,13 +171,13 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
             These values are used in the actions below. Credentials are never shown, and a value
             that was shortened or partly hidden says so.
           </p>
-          <dl className="space-y-2 break-words">
+          <dl className="space-y-2 wrap-break-word">
             {summary.inputs.map(input => (
               <div key={input.key}>
-                <dt className="font-medium [overflow-wrap:anywhere]">
+                <dt className="font-medium wrap-anywhere">
                   {input.key} <span className="text-xs text-muted-foreground">({input.type})</span>
                 </dt>
-                <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{input.value}</dd>
+                <dd className="whitespace-pre-wrap wrap-anywhere">{input.value}</dd>
               </div>
             ))}
           </dl>
@@ -186,18 +186,18 @@ export default async function RunbookApproval({ params }: { params: Promise<{ id
       <h2 className="font-display text-lg font-semibold">Frozen actions</h2>
       {summary.steps.map(step => (
         <section key={step.key} className="space-y-2 rounded-lg border border-border p-4">
-          <h3 className="font-display font-semibold [overflow-wrap:anywhere]">{step.name}</h3>
+          <h3 className="font-display font-semibold wrap-anywhere">{step.name}</h3>
           <p className="flex flex-wrap items-center gap-2 text-sm">
             <span>{step.type}</span>
             <span className={cn(RISK_PILL_CLASS, runbookStepRiskMeta(step.risk).className)}>
               {runbookStepRiskMeta(step.risk).title}
             </span>
           </p>
-          <dl className="space-y-2 break-words">
+          <dl className="space-y-2 wrap-break-word">
             {step.configuration.map(([label, value]) => (
               <div key={label}>
-                <dt className="font-medium [overflow-wrap:anywhere]">{label}</dt>
-                <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{value}</dd>
+                <dt className="font-medium wrap-anywhere">{label}</dt>
+                <dd className="whitespace-pre-wrap wrap-anywhere">{value}</dd>
               </div>
             ))}
           </dl>

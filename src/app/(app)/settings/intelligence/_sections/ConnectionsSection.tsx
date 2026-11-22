@@ -67,13 +67,13 @@ export default async function ConnectionsSection({ canManage }: { canManage: boo
           {connections.map(connection => (
             <li key={connection.id}>
               <details className="group/connection">
-                <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                   <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
                     <ChevronRight
                       className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 group-open/connection:rotate-90 motion-reduce:transition-none"
                       aria-hidden="true"
                     />
-                    <span className="min-w-0 break-words">
+                    <span className="min-w-0 wrap-break-word">
                       {connection.name}{' '}
                       <span className="font-normal text-muted-foreground">
                         · {KIND_LABELS[connection.kind]} · {capabilitySummary(connection.kind)}
@@ -128,7 +128,7 @@ export default async function ConnectionsSection({ canManage }: { canManage: boo
       )}
       {canManage && (
         <details className="-mx-4 border-t border-border px-4 md:-mx-6 md:px-6">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-3 text-sm font-medium text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
             <Plus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             Add a connection
           </summary>
