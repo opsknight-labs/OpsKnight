@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Clock, PowerOff, RefreshCw, Sparkles, Wallet } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { toneClasses } from '@/components/patterns/status-tone';
 import type { AiAvailability } from './presence';
 
 /**
@@ -58,9 +59,15 @@ function useSecondsUntil(until: number | null): number {
 }
 
 const AI_SETTINGS_HREF = '/settings/intelligence/ai';
+// 44 px tall on phones; a text-sized link in the desktop panel's slim line.
 const actionClass =
-  'inline-flex min-h-11 items-center gap-1.5 rounded-md border border-current px-2.5 py-1 text-xs font-medium hover:bg-background/60 disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:no-underline disabled:opacity-60 sm:min-h-7';
 
+/**
+ * The one slim status line under the chat header: a pill naming the mode, one sentence on why and what
+ * answers use instead, and the next step (retry, or a settings link for people who manage AI). The whole
+ * sentence stays readable on hover and to screen readers when it is truncated.
+ */
 export default function SquireAvailabilityNotice({
   state,
   rateLimit,
@@ -80,26 +87,18 @@ export default function SquireAvailabilityNotice({
   onRetry: () => void;
 }) {
   const seconds = useSecondsUntil(state === 'rate_limited' ? (rateLimit?.until ?? null) : null);
-  const tone =
-    state === 'rate_limited' || state === 'budget'
-      ? 'border-amber-500/30 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100'
-      : 'border-border bg-muted/30 text-foreground';
-  const Icon =
-    state === 'rate_limited'
-      ? Clock
-      : state === 'budget'
-        ? Wallet
-        : state === 'disabled'
-          ? PowerOff
-          : Sparkles;
+  // Waiting is a warning; basic mode is information.
+  const tone = toneClasses(state === 'rate_limited' || state === 'budget' ? 'elevated' : 'info');
+  const pill =
+    state === 'rate_limited' ? 'Rate limited' : state === 'budget' ? 'Budget reached' : 'Basic mode';
   const title =
     state === 'rate_limited'
       ? 'Too many requests'
       : state === 'budget'
         ? 'Daily AI budget reached'
         : state === 'disabled'
-          ? 'AI is off · basic mode'
-          : 'Basic mode · AI unavailable';
+          ? 'AI is off'
+          : 'AI unavailable';
   const detail =
     state === 'rate_limited'
       ? seconds > 0
@@ -111,21 +110,27 @@ export default function SquireAvailabilityNotice({
           : 'Answers use your incident data until the budget resets at 00:00 UTC. An administrator can raise it.'
         : state === 'disabled'
           ? canManageAi
-            ? 'Answers use your incident data. You can turn on AI in settings.'
+            ? 'Answers use your incident data.'
             : 'Answers use your incident data. An administrator can turn on AI.'
           : reason
             ? `${reason}. Answers use your incident data${canManageAi ? '' : ' until an administrator changes the AI providers'}.`
             : 'AI could not answer, so this answer uses your incident data.';
+  const sentence = `${title} · ${detail}`;
   return (
     <div
       role="status"
       data-testid="squire-availability"
       data-state={state}
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2 text-xs ${tone}`}
+      className="flex min-h-9 shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 text-xs text-muted-foreground"
     >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <p className="min-w-0 flex-1">
-        <span className="font-medium">{title}.</span> {detail}
+      <span
+        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 font-medium ${tone.soft}`}
+      >
+        <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${tone.solid}`} />
+        {pill}
+      </span>
+      <p className="min-w-0 flex-1 truncate" title={sentence}>
+        {sentence}
       </p>
       {(state === 'rate_limited' || (state === 'basic' && !reason)) && canRetry && (
         <button

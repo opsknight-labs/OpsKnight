@@ -18,31 +18,16 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import {
-  ArrowLeftRight,
-  History,
-  Send,
-  Square,
-  Trash2,
-  X,
-  ArrowDown,
-  Maximize2,
-  Minimize2,
-  ShieldCheck,
-  Plus,
-  Search,
-} from 'lucide-react';
+import { ArrowDown, Search, Trash2 } from 'lucide-react';
 import SquireAvatar, { type SquireAvatarKind } from '@/components/squire/SquireAvatar';
-import OpsKnightSquire from './OpsKnightSquire';
 import SquireMessage from './SquireMessage';
 import { squirePresence, type AiAvailability } from './presence';
 import { Button } from '@/components/ui/shadcn/button';
-import { Textarea } from '@/components/ui/shadcn/textarea';
 import type { StoredTurnEnvelope } from '@/lib/intelligence/conversations/contract';
 import type { SquireProposalView } from './SquireProposalCard';
 
 import { mergeInvestigationStep, type Turn, type Citation } from './chat-types';
-import { incidentIdFromPath, pageContextFromPath } from './page-context';
+import { describeSquireContext, incidentIdFromPath, pageContextFromPath } from './page-context';
 import { createDeltaBatcher, type DeltaBatcher } from './delta-batcher';
 import { trapTabKey } from './focus-trap';
 import SquireAvailabilityNotice, {
@@ -54,7 +39,12 @@ import { DOCK_PANEL_CLASS, DOCK_WRAPPER_CLASS } from './dock';
 import SquireBarCompanion from './SquireBarCompanion';
 import { useSquireSurfaces } from './use-squire-surfaces';
 import SquirePinnedBriefing from './SquirePinnedBriefing';
-import { SquireContextLabel, SquireDockToggle, SquireEvidenceChip } from './SquireSurfaceControls';
+import { SquireEvidenceChip } from './SquireSurfaceControls';
+import SquireHeader from './SquireHeader';
+import SquireEmptyState from './SquireEmptyState';
+import SquireComposer from './SquireComposer';
+import { toneClasses } from '@/components/patterns/status-tone';
+import { incidentRef } from '@/lib/intelligence/incident-ux/explain';
 type SavedConversation = {
   id: string;
   title: string;
@@ -79,6 +69,7 @@ const INCIDENT_SUGGESTIONS = [
   'Similar incidents?',
   'What could have caused this?',
   'Which runbook fits?',
+  'Who is assigned to this incident?',
 ];
 const SIDE_KEY = 'opsknight.squire.side';
 
@@ -329,7 +320,12 @@ export default function SquireLauncher({
     // the global shortcut was pressed in.
     const remember = (event: FocusEvent) => {
       const target = event.target;
-      if (target instanceof HTMLElement && !dialogRef.current?.contains(target))
+      // The header's More menu is portalled outside the dialog but belongs to it.
+      if (
+        target instanceof HTMLElement &&
+        !dialogRef.current?.contains(target) &&
+        !target.closest('[role="menu"]')
+      )
         returnFocusRef.current = target;
     };
     document.addEventListener('focusin', remember);
@@ -353,7 +349,7 @@ export default function SquireLauncher({
     const el = inputRef.current;
     if (el) {
       el.style.height = 'auto';
-      el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+      el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
     }
   }, [input]);
 
@@ -842,18 +838,59 @@ export default function SquireLauncher({
   const canRetry = !busy && !contextMismatch && turns.some(turn => turn.role === 'user');
   const retryLatest = () => retryAnswer(turnsRef.current.length);
 
-  const suggestions = incidentId
-    ? [...INCIDENT_SUGGESTIONS, 'Who is assigned to this incident?', 'Help']
-    : SUGGESTIONS;
+  // What the conversation is about: the incident it is scoped to (short id and title), else the page.
+  const pageContextLabel = describeSquireContext(pathname);
+  const pageSubject = pageContextLabel.subject;
+  const incidentTitle = typeof currentIncident?.title === 'string' ? currentIncident.title : '';
+  const contextChip = scopeId
+    ? {
+        label: [incidentRef(scopeId), incidentTitle].filter(Boolean).join(' · '),
+        title: `Discussing ${incidentTitle || incidentRef(scopeId)}`,
+        urgent: incidentAttention,
+      }
+    : {
+        label: pageSubject === 'general' ? 'General' : `This ${pageSubject.replace('_', ' ')}`,
+        title: pageContextLabel.label,
+        urgent: false,
+      };
+  const showContext = !showHistory && !contextMismatch;
+  const composerChips =
+    (scopeId && !showHistory) || (showContext && surfaces.evidence) ? (
+      <>
+        {scopeId && !showHistory && (
+          <span
+            title="This conversation includes the incident"
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs ${toneClasses('neutral').soft}`}
+          >
+            {incidentAttention && (
+              <span
+                aria-hidden="true"
+                className={`h-1.5 w-1.5 rounded-full ${toneClasses('critical').solid}`}
+              />
+            )}
+            {incidentRef(scopeId)}
+          </span>
+        )}
+        {showContext && (
+          <SquireEvidenceChip
+            evidence={surfaces.evidence}
+            incidentId={incidentId}
+            mobile={fullscreen}
+            onDismiss={clearEvidence}
+          />
+        )}
+      </>
+    ) : null;
 
   return (
     <div
       className={
         fullscreen
-          ? `fixed z-50 print:hidden ${open ? 'inset-0' : 'bottom-24 right-4'}`
+          ? `fixed print:hidden ${open ? 'inset-0 z-[70]' : 'bottom-24 right-4 z-50'}`
           : dock.docked && open
             ? DOCK_WRAPPER_CLASS
-            : `fixed z-40 print:hidden ${open ? 'inset-0 sm:inset-auto sm:bottom-4' : 'bottom-4'} ${side === 'left' ? 'left-0 sm:left-4' : 'right-0 sm:right-4'}`
+            : // Floating, the panel clears the desktop status bar like everything else pinned to the bottom.
+              `fixed z-40 print:hidden ${open ? 'inset-0 sm:inset-auto sm:bottom-[calc(var(--status-bar-height,0px)_+_1rem)]' : 'bottom-4'} ${side === 'left' ? 'left-0 sm:left-4' : 'right-0 sm:right-4'}`
       }
       data-side={side}
       data-presentation={fullscreen ? 'fullscreen' : dock.docked && open ? 'docked' : 'panel'}
@@ -895,86 +932,41 @@ export default function SquireLauncher({
           aria-label={`${name}, your incident assistant`}
           tabIndex={-1}
           onKeyDown={event => {
+            // A menu inside the panel handles (and prevents) its own Escape and Tab.
+            if (event.defaultPrevented) return;
             if (event.key === 'Escape') close();
             else if (dialogRef.current && !dock.docked) trapTabKey(event, dialogRef.current);
           }}
+          // z-50 keeps the panel (and its send button) above the status-bar companion in the same layer.
           className={
             fullscreen
-              ? 'relative flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]'
+              ? 'relative z-50 flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]'
               : dock.docked
-                ? DOCK_PANEL_CLASS
-                : `relative flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card shadow-2xl sm:h-[min(52rem,calc(100dvh-2rem))] sm:rounded-2xl sm:border sm:border-border ${expanded ? 'sm:w-[min(52rem,calc(100vw-2rem))]' : 'sm:w-[min(34rem,calc(100vw-2rem))]'}`
+                ? `${DOCK_PANEL_CLASS} z-50`
+                : `relative z-50 flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card sm:h-[min(42.5rem,calc(100dvh_-_var(--status-bar-height,0px)_-_2rem))] sm:rounded-2xl sm:border sm:border-border sm:shadow-xl ${expanded ? 'sm:w-[min(45rem,calc(100vw-2rem))]' : 'sm:w-[min(26.25rem,calc(100vw-2rem))]'} motion-safe:transition-[width] motion-safe:duration-200`
           }
         >
-          <header className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <SquireAvatar kind={avatar} size="md" animated={animated} state={mascotState} />
-              <div className="min-w-0">
-                <h2 className="truncate font-display text-base font-semibold">{name}</h2>
-                <p
-                  className="mt-0.5 truncate text-2xs text-muted-foreground"
-                  title={presence.label}
-                >
-                  {statusLabel}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <SquireDockToggle dock={dock} name={name} />
-              {!fullscreen && !dock.docked && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="hidden min-h-11 min-w-11 sm:inline-flex"
-                  onClick={() => setExpanded(value => !value)}
-                  aria-label={expanded ? 'Narrow chat' : 'Expand chat'}
-                >
-                  {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
-                </Button>
-              )}
-              {(turns.length > 0 || showHistory) && (
-                <button
-                  type="button"
-                  onClick={newChat}
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted-foreground hover:bg-accent"
-                >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  <span className="sr-only">New chat</span>
-                </button>
-              )}
-              {history && (
-                <button
-                  type="button"
-                  onClick={toggleHistory}
-                  aria-pressed={showHistory}
-                  aria-label="Saved conversations"
-                  title="Saved conversations"
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-accent"
-                >
-                  <History className="h-4 w-4" aria-hidden="true" />
-                </button>
-              )}
-              {!dock.docked && (
-                <button
-                  type="button"
-                  onClick={switchSide}
-                  aria-label={`Move ${name} to the ${side === 'right' ? 'left' : 'right'} side`}
-                  title="Move to the other side"
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-accent"
-                >
-                  <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={close}
-                aria-label={`Close ${name}`}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-accent"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-          </header>
+          <SquireHeader
+            name={name}
+            avatar={avatar}
+            animated={animated}
+            mascotState={mascotState}
+            statusLabel={statusLabel}
+            context={contextChip}
+            fullscreen={fullscreen}
+            dock={dock}
+            side={side}
+            expanded={expanded}
+            onToggleExpanded={
+              fullscreen || dock.docked ? null : () => setExpanded(value => !value)
+            }
+            onSwitchSide={fullscreen || dock.docked ? null : switchSide}
+            hasHistory={Boolean(history)}
+            showHistory={showHistory}
+            onToggleHistory={toggleHistory}
+            onNewChat={newChat}
+            onClose={close}
+          />
 
           {!showHistory && availabilityState && (
             <SquireAvailabilityNotice
@@ -987,91 +979,41 @@ export default function SquireLauncher({
             />
           )}
           {actionOutcome && (
-            <div
+            <p
               role="status"
-              className="flex items-center gap-3 border-b border-border bg-muted/20 px-4 py-2"
+              className={`shrink-0 border-b border-border bg-muted/40 px-3 py-2 text-xs font-medium ${toneClasses(actionOutcome === 'success' ? 'ok' : 'critical').text}`}
             >
-              <OpsKnightSquire state={actionOutcome} size={56} animated={animated} label="" />
-              <p className="text-sm">
-                {actionOutcome === 'success'
-                  ? 'Your confirmed action completed.'
-                  : 'The action could not be completed. Review the result below.'}
-              </p>
-            </div>
-          )}
-          {!showHistory && !contextMismatch && mascotState === 'alert' && (
-            <div className="flex items-center gap-3 border-b border-amber-500/20 bg-amber-500/5 px-4 py-2">
-              <OpsKnightSquire state="alert" size={56} animated={animated} label="" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium">High urgency needs attention</p>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="min-h-11 px-0 text-xs"
-                  onClick={() =>
-                    void send(
-                      incidentId
-                        ? 'Summarise this incident and suggest next steps'
-                        : 'What is on fire?'
-                    )
-                  }
-                >
-                  Review the evidence
-                </Button>
-              </div>
-            </div>
+              {actionOutcome === 'success'
+                ? 'Your confirmed action completed.'
+                : 'The action could not be completed. Review the result below.'}
+            </p>
           )}
           {!showHistory && contextMismatch && (
             <div
               role="status"
-              className="border-b border-border bg-amber-50 px-4 py-3 text-xs text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+              className={`shrink-0 border-b px-3 py-2 text-xs ${toneClasses('elevated').soft}`}
             >
               <p>This chat keeps its original context. Choose where to continue.</p>
-              <div className="mt-2 flex flex-wrap items-center gap-3">
+              <div className="mt-1 flex flex-wrap items-center gap-3">
                 <Link
                   href={
                     activeScope ? `/incidents/${encodeURIComponent(activeScope)}` : '/incidents'
                   }
-                  className="inline-flex min-h-11 items-center underline underline-offset-2"
+                  className="inline-flex min-h-11 items-center font-medium underline underline-offset-2"
                 >
                   Return to original context
                 </Link>
                 <button
                   type="button"
                   onClick={newChat}
-                  className="min-h-11 rounded border border-current px-3 py-1"
+                  className="min-h-11 rounded-md border border-current px-3 py-1 font-medium"
                 >
                   New chat here
                 </button>
               </div>
             </div>
           )}
-          {!showHistory && !contextMismatch && (
-            <p className="flex items-center gap-2 border-b border-border bg-muted/20 px-4 py-2.5 text-xs text-muted-foreground">
-              <SquireContextLabel pathname={pathname} />
-              <span className="ml-auto inline-flex items-center gap-1.5">
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${availabilityState === null ? 'bg-emerald-500' : availabilityState === 'rate_limited' || availabilityState === 'budget' ? 'bg-amber-500' : 'bg-muted-foreground'}`}
-                />
-                {availabilityState === null
-                  ? 'AI enabled'
-                  : availabilityState === 'rate_limited'
-                    ? 'Rate limited'
-                    : availabilityState === 'budget'
-                      ? 'Budget reached · basic mode'
-                      : 'Basic mode'}
-              </span>
-            </p>
-          )}
-          {!showHistory && !contextMismatch && (
-            <SquireEvidenceChip
-              evidence={surfaces.evidence}
-              incidentId={incidentId}
-              mobile={fullscreen}
-              onDismiss={clearEvidence}
-            />
-          )}
-          {pinBriefing && !showHistory && !contextMismatch && incidentId && (
+          {pinBriefing && showContext && incidentId && (
             <SquirePinnedBriefing incidentId={incidentId} mobile={fullscreen} />
           )}
           {showHistory && history ? (
@@ -1202,192 +1144,121 @@ export default function SquireLauncher({
               )}
             </div>
           ) : (
-            <div
-              ref={scrollRef}
-              role="log"
-              aria-label="Conversation"
-              aria-live="off"
-              aria-busy={busy}
-              onScroll={event => {
-                const el = event.currentTarget;
-                atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 72;
-                if (atBottomRef.current) setUnread(false);
-              }}
-              className="min-h-0 flex-1 space-y-7 overflow-y-auto overscroll-contain px-5 py-5 text-sm sm:px-6"
-            >
-              {turns.length === 0 && (
-                <div className="space-y-3">
-                  {avatar === 'SQUIRE' && (
-                    <div className="flex justify-center py-2" aria-hidden="true">
-                      <OpsKnightSquire state={mascotState} size={96} animated={animated} label="" />
-                    </div>
-                  )}
-                  <div className="text-center">
-                    <h3 className="font-display text-xl font-semibold tracking-tight">
-                      What are we investigating?
-                    </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">Hi, I&apos;m {name}.</p>
-                  </div>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Check incidents, service ownership, on-call coverage, runbooks and follow-up
-                    work with recorded evidence.
-                    {aiEnabled
-                      ? ' Actions always need your confirmation.'
-                      : ' AI is off; live data and built-in investigation guidance are still available.'}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 pt-2">
-                    {suggestions.map(suggestion => (
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <div
+                ref={scrollRef}
+                role="log"
+                aria-label="Conversation"
+                aria-live="off"
+                aria-busy={busy}
+                onScroll={event => {
+                  const el = event.currentTarget;
+                  atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 72;
+                  if (atBottomRef.current) setUnread(false);
+                }}
+                className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-4 text-sm"
+              >
+                {turns.length === 0 && (
+                  <SquireEmptyState
+                    showMascot={avatar === 'SQUIRE'}
+                    mascotState={mascotState}
+                    animated={animated}
+                    description={
+                      scopeId
+                        ? 'I can read this incident, its alerts, recent changes, on-call and runbooks.'
+                        : 'I can check incidents, service ownership, on-call coverage and runbooks.'
+                    }
+                    incidentSuggestions={scopeId ? INCIDENT_SUGGESTIONS : []}
+                    workspaceSuggestions={scopeId ? SUGGESTIONS.slice(0, 2) : SUGGESTIONS}
+                    onAsk={suggestion => void send(suggestion)}
+                  />
+                )}
+                {turns.map((turn, index) => (
+                  <SquireMessage
+                    key={turn.id ?? index}
+                    turn={turn}
+                    index={index}
+                    name={name}
+                    avatar={avatar}
+                    busy={busy && index === turns.length - 1}
+                    last={index === turns.length - 1}
+                    animated={animated}
+                    contextValid={!contextMismatch}
+                    onOutcome={setActionOutcome}
+                    onRetry={retryAnswer}
+                    onEdit={editQuestion}
+                    question={index > 0 ? turns[index - 1]?.content : undefined}
+                    conversationId={conversationId}
+                  />
+                ))}
+                {!busy && (turns.at(-1)?.suggestions?.length ?? 0) > 0 && (
+                  <div aria-label="Suggested questions" className="flex flex-wrap gap-2 pl-9">
+                    {turns.at(-1)!.suggestions!.map(suggestion => (
                       <button
                         key={suggestion}
                         type="button"
                         onClick={() => void send(suggestion)}
-                        aria-label={suggestion}
-                        className="min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-left text-xs leading-5 transition-colors hover:border-primary/40 hover:bg-accent"
+                        className="min-h-11 rounded-full border border-border bg-card px-3 py-1 text-left text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
                       >
                         {suggestion}
                       </button>
                     ))}
                   </div>
+                )}
+                <div ref={endRef} />
+              </div>
+              {unread && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="pointer-events-auto min-h-11 rounded-full bg-card shadow-md sm:min-h-8"
+                    onClick={jumpToLatest}
+                  >
+                    <ArrowDown aria-hidden="true" />
+                    Jump to latest
+                  </Button>
                 </div>
               )}
-              {turns.map((turn, index) => (
-                <SquireMessage
-                  key={turn.id ?? index}
-                  turn={turn}
-                  index={index}
-                  name={name}
-                  busy={busy && index === turns.length - 1}
-                  last={index === turns.length - 1}
-                  animated={animated}
-                  contextValid={!contextMismatch}
-                  onOutcome={setActionOutcome}
-                  onRetry={retryAnswer}
-                  onEdit={editQuestion}
-                  question={index > 0 ? turns[index - 1]?.content : undefined}
-                  conversationId={conversationId}
-                />
-              ))}
-              {!busy && (turns.at(-1)?.suggestions?.length ?? 0) > 0 && (
-                <div aria-label="Suggested questions" className="flex flex-wrap gap-2">
-                  {turns.at(-1)!.suggestions!.map(suggestion => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => void send(suggestion)}
-                      className="min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-left text-xs leading-5 transition-colors hover:border-primary/40 hover:bg-accent"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div ref={endRef} />
             </div>
           )}
 
           <div className="sr-only" role="status" aria-live="polite" data-testid="squire-progress">
             {progressAnnouncement(busy, lastTurn, turns.length > 0)}
           </div>
-          {!showHistory && unread && (
-            <div className="absolute bottom-40 left-0 right-0 flex justify-center pointer-events-none">
-              <Button
-                variant="outline"
-                size="sm"
-                className="pointer-events-auto min-h-11 rounded-full bg-card shadow-md"
-                onClick={jumpToLatest}
-              >
-                <ArrowDown aria-hidden="true" />
-                Jump to latest
-              </Button>
-            </div>
-          )}
           {!online && (
-            <p role="status" className="border-t border-border bg-muted/40 px-4 py-2 text-xs">
+            <p role="status" className="shrink-0 border-t border-border bg-muted/40 px-3 py-2 text-xs">
               You are offline. Your draft is kept here. Reconnect to send a message.
             </p>
           )}
-          <form
+          <SquireComposer
+            name={name}
+            inputId={`${panelId}-input`}
+            inputRef={inputRef}
+            value={input}
+            maxLength={MAX_LENGTH}
+            placeholder={
+              contextMismatch
+                ? 'Choose where to continue…'
+                : incidentId
+                  ? 'Ask about this incident…'
+                  : 'Ask a question…'
+            }
+            onChange={setInput}
             onSubmit={onSubmit}
-            className="shrink-0 border-t border-border bg-card px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3"
-          >
-            {editIndex !== null && (
-              <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span>Editing a question starts a new version of this chat.</span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setEditIndex(null);
-                    setInput('');
-                  }}
-                >
-                  Cancel edit
-                </Button>
-              </div>
-            )}
-            <div className="rounded-2xl border border-border bg-background p-2 shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10">
-              <label htmlFor={`${panelId}-input`} className="sr-only">
-                Message {name}
-              </label>
-              <Textarea
-                id={`${panelId}-input`}
-                ref={inputRef}
-                value={input}
-                onChange={event => setInput(event.target.value)}
-                onKeyDown={onKeyDown}
-                maxLength={MAX_LENGTH}
-                rows={1}
-                placeholder={
-                  contextMismatch
-                    ? 'Choose where to continue…'
-                    : incidentId
-                      ? 'Ask about this incident…'
-                      : 'Ask a question…'
-                }
-                className="max-h-40 min-h-11 resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-              <div className="flex items-center justify-between gap-2 pl-2">
-                <span className="text-2xs text-muted-foreground">
-                  <span className="hidden sm:inline">
-                    Enter to send · Shift + Enter for a new line
-                  </span>
-                  <span className="sm:hidden">
-                    {input.length}/{MAX_LENGTH}
-                  </span>
-                </span>
-                {busy ? (
-                  <Button
-                    type="button"
-                    onClick={stopResponse}
-                    aria-label="Stop response"
-                    variant="secondary"
-                    size="icon"
-                    className="min-h-11 min-w-11 rounded-xl"
-                  >
-                    <Square aria-hidden="true" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    disabled={!online || contextMismatch || input.trim().length === 0}
-                    aria-label="Send"
-                    size="icon"
-                    className="min-h-11 min-w-11 rounded-xl"
-                  >
-                    <Send aria-hidden="true" />
-                  </Button>
-                )}
-              </div>
-            </div>
-            <p className="mt-2 flex items-start justify-center gap-1.5 px-1 text-center text-2xs leading-4 text-muted-foreground">
-              <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
-              {history
-                ? `Private to you · saved for ${history.retentionDays} days. `
-                : 'History is off. '}
-              Review evidence before acting.
-            </p>
-          </form>
+            onKeyDown={onKeyDown}
+            busy={busy}
+            canSend={online && !contextMismatch && input.trim().length > 0}
+            onStop={stopResponse}
+            editing={editIndex !== null}
+            onCancelEdit={() => {
+              setEditIndex(null);
+              setInput('');
+            }}
+            chips={composerChips}
+            retentionDays={history?.retentionDays ?? null}
+            fullscreen={fullscreen}
+          />
         </section>
       )}
     </div>

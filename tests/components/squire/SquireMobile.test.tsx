@@ -90,7 +90,8 @@ describe('Squire on mobile incident pages', () => {
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     // Full screen at every width: no desktop panel sizing.
     expect(dialog.className).not.toMatch(/sm:w-/);
-    expect(screen.queryByRole('button', { name: 'Expand chat' })).toBeNull();
+    // No display controls apply full screen, so the header has no More menu.
+    expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull();
   });
 
   it('renders nothing while the mobile surface is off (the default)', async () => {

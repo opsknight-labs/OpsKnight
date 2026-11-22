@@ -1,16 +1,20 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { CheckCircle2, CircleDashed, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronRight, CircleDashed, Loader2, XCircle } from 'lucide-react';
+import { toneClasses } from '@/components/patterns/status-tone';
 import type { InvestigationStepView } from './chat-types';
 
 function StepIcon({ status }: { status: InvestigationStepView['status'] }) {
   if (status === 'done')
-    return <CheckCircle2 aria-hidden className="h-3.5 w-3.5 shrink-0 text-emerald-600" />;
+    return <CheckCircle2 aria-hidden className={`h-3.5 w-3.5 shrink-0 ${toneClasses('ok').text}`} />;
   if (status === 'failed')
     return <XCircle aria-hidden className="h-3.5 w-3.5 shrink-0 text-destructive" />;
   return (
-    <CircleDashed aria-hidden className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+    <CircleDashed
+      aria-hidden
+      className="h-3.5 w-3.5 shrink-0 text-muted-foreground motion-safe:animate-spin"
+    />
   );
 }
 
@@ -46,23 +50,40 @@ export default function SquireInvestigationSteps({
   }, [streaming]);
   if (steps.length === 0) return null;
   const reads = steps.reduce((sum, step) => sum + step.calls.length, 0);
+  const running = steps.find(step => step.status === 'running');
   return (
     <details
       ref={rootRef}
       open={streaming || undefined}
-      className="mb-2 rounded-lg border border-border bg-muted/30 text-xs"
+      className="group/steps text-xs text-muted-foreground"
       data-testid="squire-investigation"
     >
-      <summary className="cursor-pointer select-none rounded-lg px-3 py-2 font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        Investigation · {steps.length} step{steps.length === 1 ? '' : 's'} · {reads} read
-        {reads === 1 ? '' : 's'}
+      <summary className="inline-flex min-h-11 cursor-pointer select-none list-none items-center gap-1.5 rounded-md pr-1.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-6 [&::-webkit-details-marker]:hidden">
+        {streaming ? (
+          <Loader2 aria-hidden className="h-3.5 w-3.5 shrink-0 motion-safe:animate-spin" />
+        ) : (
+          <ChevronRight
+            aria-hidden
+            className="h-3.5 w-3.5 shrink-0 motion-safe:transition-transform group-open/steps:rotate-90"
+          />
+        )}
+        {streaming && running ? (
+          <span className="truncate">
+            Step {running.index}: {running.title}…
+          </span>
+        ) : (
+          <span>
+            Checked {reads} source{reads === 1 ? '' : 's'} in {steps.length} step
+            {steps.length === 1 ? '' : 's'}
+          </span>
+        )}
       </summary>
-      <ol className="space-y-1 px-3 pb-2" aria-label="Investigation steps">
+      <ol className="mt-1 space-y-1 border-l border-border pl-3" aria-label="Investigation steps">
         {steps.map(step => (
           <li key={step.index}>
             <details>
               <summary
-                className="flex cursor-pointer items-center gap-2 rounded py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex cursor-pointer items-center gap-2 rounded py-0.5 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={`Step ${step.index}: ${step.title} (${STATUS_TEXT[step.status]})`}
               >
                 <StepIcon status={step.status} />
@@ -71,7 +92,7 @@ export default function SquireInvestigationSteps({
                 </span>
               </summary>
               {step.calls.length > 0 ? (
-                <ul className="ml-6 list-disc space-y-0.5 py-1 text-muted-foreground">
+                <ul className="ml-6 list-disc space-y-0.5 py-1">
                   {step.calls.map((call, index) => (
                     <li key={`${call.tool}-${index}`}>
                       {call.label}
@@ -80,7 +101,7 @@ export default function SquireInvestigationSteps({
                   ))}
                 </ul>
               ) : (
-                <p className="ml-6 py-1 text-muted-foreground">No reads in this step.</p>
+                <p className="ml-6 py-1">No reads in this step.</p>
               )}
             </details>
           </li>
