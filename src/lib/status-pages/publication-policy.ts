@@ -179,6 +179,15 @@ export type StatusPageClassifierState = Record<string, unknown> & {
   serviceMappings?: readonly StatusPageServiceMappingState[];
   /** Business services currently shown, in order. */
   businessServiceIds?: readonly string[];
+  /** Current per-business-service presentation, keyed by business service id. */
+  businessServiceMappings?: Readonly<Record<string, StatusPageBusinessServiceConfig>>;
+};
+
+/** Per-page presentation of one business service. */
+export type StatusPageBusinessServiceConfig = {
+  displayName?: string | null;
+  showOnPage?: boolean;
+  showMembers?: boolean;
 };
 
 export type StatusPageRouteDelta = {
@@ -269,8 +278,10 @@ export function classifyStatusPageChange(input: {
   >;
   /** Present only when the caller is rewriting the page's business-service mappings. */
   businessServiceIds?: readonly string[];
+  businessServiceConfigs?: Readonly<Record<string, StatusPageBusinessServiceConfig>>;
 }): StatusPageChangeClassification {
-  const { current, patch, serviceIds, serviceConfigs, businessServiceIds } = input;
+  const { current, patch, serviceIds, serviceConfigs, businessServiceIds, businessServiceConfigs } =
+    input;
   const found = new Set<StatusPageChangeClass>();
   const changedFields: string[] = [];
   const note = (field: string, ...classes: StatusPageChangeClass[]) => {
@@ -400,6 +411,20 @@ export function classifyStatusPageChange(input: {
       note('businessServiceIds', 'PRIVACY_RELAXING');
     else if (businessServiceIds.some((id, index) => before[index] !== id))
       note('businessServiceIds', 'PRESENTATION');
+  }
+
+  for (const [id, config] of Object.entries(businessServiceConfigs ?? {})) {
+    const was = current.businessServiceMappings?.[id];
+    if (!was) continue; // a newly added business service is already classified above
+    for (const flag of ['showOnPage', 'showMembers'] as const) {
+      if (config[flag] === undefined || config[flag] === (was[flag] !== false)) continue;
+      note('businessServiceConfigs', config[flag] ? 'PRIVACY_RELAXING' : 'PRIVACY_TIGHTENING');
+    }
+    if (
+      config.displayName !== undefined &&
+      normalizeText(config.displayName) !== normalizeText(was.displayName)
+    )
+      note('businessServiceConfigs', 'PRESENTATION');
   }
 
   const classes = CLASS_PRECEDENCE.filter(item => found.has(item));

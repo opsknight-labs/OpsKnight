@@ -62,6 +62,7 @@ export interface AnnouncementItem {
   publishAt?: string;
   isActive: boolean;
   affectedServiceIds?: string[] | null;
+  affectedBusinessServiceIds?: string[] | null;
   createdAt?: string;
 }
 
@@ -70,6 +71,8 @@ interface StatusPageAnnouncementManagerProps {
   announcements?: AnnouncementItem[];
   setAnnouncements: React.Dispatch<React.SetStateAction<AnnouncementItem[]>>;
   allServices?: AnnouncementService[];
+  /** Business services on this page; an update can name them instead of each member. */
+  businessServices?: Array<{ id: string; name: string }>;
   browserTimeZone: string;
   /** Opened from an incident's "Post status update": open the composer filled from that incident's draft. */
   draftIncidentId?: string;
@@ -187,6 +190,7 @@ export default function StatusPageAnnouncementManager({
   announcements = [],
   setAnnouncements,
   allServices = [],
+  businessServices = [],
   browserTimeZone,
   draftIncidentId,
   updateCadenceMinutes = null,
@@ -221,6 +225,7 @@ export default function StatusPageAnnouncementManager({
     'ON_PUBLISH'
   );
   const [affectedServiceIds, setAffectedServiceIds] = useState<string[]>([]);
+  const [affectedBusinessServiceIds, setAffectedBusinessServiceIds] = useState<string[]>([]);
 
   // Search & Filter Tabs
   const [searchQuery, setSearchQuery] = useState('');
@@ -429,6 +434,7 @@ export default function StatusPageAnnouncementManager({
     setEndDate('');
     setEndTime('');
     setAffectedServiceIds([]);
+    setAffectedBusinessServiceIds([]);
     setLinkedIncidentId(null);
     setIsActive(true);
     setPublishOption('NOW');
@@ -485,6 +491,8 @@ export default function StatusPageAnnouncementManager({
             notificationTiming,
             isActive: publishOption === 'NOW' ? isActive : true,
             affectedServiceIds: affectedServiceIds.length > 0 ? affectedServiceIds : null,
+            affectedBusinessServiceIds:
+              affectedBusinessServiceIds.length > 0 ? affectedBusinessServiceIds : null,
             incidentId: linkedIncidentId,
           }),
         });
@@ -1340,6 +1348,48 @@ export default function StatusPageAnnouncementManager({
                       );
                     })}
                   </div>
+                )}
+
+                {businessServices.length > 0 && (
+                  <fieldset className="space-y-2">
+                    <legend className="text-xs font-semibold text-foreground">
+                      Affected business services ({affectedBusinessServiceIds.length} of{' '}
+                      {businessServices.length})
+                    </legend>
+                    <p className="text-xs text-muted-foreground">
+                      Every service inside a business service you pick counts as affected.
+                    </p>
+                    <div className="max-h-36 overflow-y-auto border border-border rounded-lg p-2 bg-background space-y-1">
+                      {businessServices.map(business => {
+                        const isChecked = affectedBusinessServiceIds.includes(business.id);
+                        return (
+                          <label
+                            key={business.id}
+                            className={cn(
+                              'flex items-center gap-2 p-1.5 rounded-md text-xs cursor-pointer select-none transition-colors',
+                              isChecked
+                                ? 'bg-primary/10 text-primary font-semibold'
+                                : 'hover:bg-muted/40 text-foreground'
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() =>
+                                setAffectedBusinessServiceIds(prev =>
+                                  prev.includes(business.id)
+                                    ? prev.filter(id => id !== business.id)
+                                    : [...prev, business.id]
+                                )
+                              }
+                              className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
+                            />
+                            <span>{business.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
                 )}
 
                 <div className="space-y-3 pt-2 border-t border-border/60">

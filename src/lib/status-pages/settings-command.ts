@@ -70,9 +70,14 @@ export async function saveStatusPageSection(
   const patch: Record<string, unknown> = Object.fromEntries(
     Object.entries(input).filter(
       ([key, value]) =>
-        !['id', 'expectedUpdatedAt', 'serviceIds', 'serviceConfigs', 'businessServiceIds'].includes(
-          key
-        ) &&
+        ![
+          'id',
+          'expectedUpdatedAt',
+          'serviceIds',
+          'serviceConfigs',
+          'businessServiceIds',
+          'businessServiceConfigs',
+        ].includes(key) &&
         value !== undefined
     )
   );
@@ -97,6 +102,7 @@ export async function saveStatusPageSection(
       serviceIds: input.serviceIds,
       serviceConfigs: input.serviceConfigs,
       businessServiceIds: input.businessServiceIds,
+      businessServiceConfigs: input.businessServiceConfigs,
       expectedRevision,
       expectedUpdatedAt: current.updatedAt.toISOString(),
       section,

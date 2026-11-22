@@ -18,6 +18,7 @@ import { StatusPageAdminError } from '@/lib/status-pages/admin';
 import {
   classifyStatusPageChange,
   type StatusPageChangeClassification,
+  type StatusPageBusinessServiceConfig,
   type StatusPageClassifierState,
 } from '@/lib/status-pages/publication-policy';
 import { getStatusPageServingStore } from '@/lib/status-pages/serving-store';
@@ -61,6 +62,8 @@ export type StatusPageConfigurationChange = {
   >;
   /** Business services to show, in display order; their member services are mapped too. */
   businessServiceIds?: string[];
+  /** Per-business-service presentation; only the fields given change. */
+  businessServiceConfigs?: Record<string, StatusPageBusinessServiceConfig>;
   expectedUpdatedAt?: string;
   expectedRevision?: number;
   /** Settings section that produced the patch, recorded for audit only. */
@@ -110,6 +113,7 @@ export async function applyStatusPageConfigurationChange(
     serviceIds,
     serviceConfigs,
     businessServiceIds,
+    businessServiceConfigs,
     expectedUpdatedAt,
     section,
   } = change;
@@ -140,27 +144,38 @@ export async function applyStatusPageConfigurationChange(
           select: { serviceId: true, showOnPage: true, displayName: true, order: true },
         });
 
+  const currentBusinessServiceRows =
+    businessServiceIds === undefined && businessServiceConfigs === undefined
+      ? undefined
+      : await prisma.statusPageBusinessService.findMany({
+          where: { statusPageId: pageId },
+          orderBy: { order: 'asc' },
+          select: {
+            businessServiceId: true,
+            displayName: true,
+            showOnPage: true,
+            showMembers: true,
+          },
+        });
   const currentBusinessServiceIds =
     businessServiceIds === undefined
       ? undefined
-      : (
-          await prisma.statusPageBusinessService.findMany({
-            where: { statusPageId: pageId },
-            orderBy: { order: 'asc' },
-            select: { businessServiceId: true },
-          })
-        ).map(row => row.businessServiceId);
+      : currentBusinessServiceRows?.map(row => row.businessServiceId);
 
   const classification = classifyStatusPageChange({
     current: {
       ...(current as unknown as StatusPageClassifierState),
       serviceMappings,
       businessServiceIds: currentBusinessServiceIds,
+      businessServiceMappings: currentBusinessServiceRows
+        ? Object.fromEntries(currentBusinessServiceRows.map(row => [row.businessServiceId, row]))
+        : undefined,
     },
     patch,
     serviceIds,
     serviceConfigs,
     businessServiceIds,
+    businessServiceConfigs,
   });
 
   // A save that changes nothing must not disturb a working page.
@@ -297,6 +312,20 @@ export async function applyStatusPageConfigurationChange(
             skipDuplicates: true,
           });
       }
+      for (const [businessServiceId, config] of Object.entries(businessServiceConfigs ?? {})) {
+        const data = {
+          ...(config.displayName !== undefined
+            ? { displayName: config.displayName?.trim() || null }
+            : {}),
+          ...(config.showOnPage !== undefined ? { showOnPage: config.showOnPage } : {}),
+          ...(config.showMembers !== undefined ? { showMembers: config.showMembers } : {}),
+        };
+        if (Object.keys(data).length)
+          await tx.statusPageBusinessService.updateMany({
+            where: { statusPageId: pageId, businessServiceId },
+            data,
+          });
+      }
 
       if (classification.classes.includes('ROUTING')) {
         for (const [operation, routeKeys] of [
@@ -349,7 +378,8 @@ export async function applyStatusPageConfigurationChange(
             failClosed: classification.failClosed,
             section: section ?? null,
             serviceMappingsChanged: serviceIds !== undefined,
-            businessServiceMappingsChanged: businessServiceIds !== undefined,
+            businessServiceMappingsChanged:
+              businessServiceIds !== undefined || businessServiceConfigs !== undefined,
             expectedUpdatedAt: expectedUpdatedAt || current.updatedAt.toISOString(),
           },
         },

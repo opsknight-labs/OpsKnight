@@ -84,6 +84,8 @@ export interface PublicBusinessService {
   description?: string | null;
   status: PublicServiceStatus;
   statusSince?: string;
+  /** false when the page shows this business service without listing its parts. */
+  showMembers?: false;
   /** Published member services, in page order; their rows live in `services`. */
   memberServiceIds: string[];
   activeIncidentCount: number;
@@ -148,6 +150,8 @@ export interface PublicIncident {
   acknowledgedAt?: string;
   resolvedAt?: string;
   service?: { id?: string; name?: string; regions?: string[] };
+  /** Business services on this page the incident affects, by their page display name. */
+  businessServices?: Array<{ id: string; name: string }>;
   updates?: PublicIncidentUpdate[];
   /** @deprecated Prefer `postmortem`; retained for existing consumers. */
   postIncidentReview?: boolean;
@@ -241,6 +245,7 @@ export interface PublicMaintenance {
   endAt?: string | null;
   affectedServices?: Array<{ id: string; name: string }>;
   affectedRegions?: string[];
+  affectedBusinessServices?: Array<{ id: string; name: string }>;
   createdAt?: string;
   updatedAt?: string;
   allDay?: boolean;
@@ -257,6 +262,7 @@ export interface PublicAnnouncement {
   endDate: string | null;
   affectedServices?: Array<{ id: string; name: string }>;
   affectedRegions?: string[];
+  affectedBusinessServices?: Array<{ id: string; name: string }>;
   allDay?: boolean;
   timeMode?: 'EXACT' | 'ALL_DAY';
   publishAt?: string;

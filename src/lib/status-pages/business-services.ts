@@ -13,7 +13,36 @@ export type BusinessServiceGroup = {
   name: string;
   description?: string | null;
   memberServiceIds: readonly string[];
+  /** An admin's component-group override in force now; replaces the computed status. */
+  statusOverride?: PublicServiceStatus | null;
+  /** false keeps the row collapsed: visitors see the business service, not its parts. */
+  showMembers?: boolean;
 };
+
+/**
+ * Service ids an update affects: its own ids plus every member of the business services it
+ * names. Null when it names neither (an unscoped update); an empty array when it names only
+ * business services without members, so it never widens to "all services".
+ */
+export function expandAffectedServiceIds(
+  serviceIds: unknown,
+  businessServiceIds: unknown,
+  membersByBusinessService: ReadonlyMap<string, readonly string[]>
+): string[] | null {
+  const strings = (value: unknown) =>
+    Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+      : [];
+  const direct = strings(serviceIds);
+  const business = strings(businessServiceIds);
+  if (!direct.length && !business.length) return null;
+  return [
+    ...new Set([
+      ...direct,
+      ...business.flatMap(id => membersByBusinessService.get(id) ?? []),
+    ]),
+  ];
+}
 
 /**
  * Worst status at every instant across the members' published segments. Segments only cover
@@ -108,8 +137,9 @@ export function buildPublicBusinessServices(
       return service ? [service] : [];
     });
     if (!members.length) return [];
-    const status = getWorstPublicStatus(members.map(member => member.status));
-    const statusSince = statusSinceFor(status, members);
+    const status = group.statusOverride ?? getWorstPublicStatus(members.map(member => member.status));
+    // An override has no trustworthy start time, so it shows no "since" line.
+    const statusSince = group.statusOverride ? undefined : statusSinceFor(status, members);
     const uptimeMembers = members.flatMap(member => (member.uptime ? [member.uptime] : []));
     const history = mergeHistory(members);
     return [
@@ -119,6 +149,7 @@ export function buildPublicBusinessServices(
         ...(group.description ? { description: group.description } : {}),
         status,
         ...(statusSince ? { statusSince } : {}),
+        ...(group.showMembers === false ? { showMembers: false } : {}),
         memberServiceIds: members.map(member => member.id),
         activeIncidentCount: members.reduce((sum, member) => sum + member.activeIncidentCount, 0),
         impactedServiceCount: members.filter(

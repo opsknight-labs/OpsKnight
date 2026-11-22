@@ -310,6 +310,8 @@ export const StatusPageAnnouncementV2Schema = z.object({
   endDate: z.string().datetime().optional().nullable(),
   isActive: z.boolean().default(true),
   services: z.array(z.string().trim().min(1)).max(200).optional(),
+  /** Business services on the page the announcement names; their members count as affected. */
+  businessServices: z.array(z.string().trim().min(1)).max(200).optional(),
 });
 
 export const RunbookExecuteV2Schema = z.object({

@@ -52,7 +52,17 @@ export default async function StatusPageWorkspacePage({
       where: { id: pageId },
       include: {
         services: { include: { service: true } },
-        businessServices: { select: { businessServiceId: true, order: true } },
+        businessServices: {
+          select: {
+            businessServiceId: true,
+            order: true,
+            displayName: true,
+            showOnPage: true,
+            showMembers: true,
+            statusOverride: true,
+            statusOverrideUntil: true,
+          },
+        },
         announcements: { orderBy: { startDate: 'desc' }, take: 20 },
         apiTokens: { orderBy: { createdAt: 'desc' }, take: 50 },
         _count: {
