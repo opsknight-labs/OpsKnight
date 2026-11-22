@@ -114,6 +114,8 @@ const getRoleStyle = (role: string) => {
       return { badge: NEUTRAL_PILL, label: 'Responder' };
     case 'AUDITOR':
       return { badge: NEUTRAL_PILL, label: 'Auditor' };
+    case 'STAKEHOLDER':
+      return { badge: NEUTRAL_PILL, label: 'Stakeholder' };
     default:
       return { badge: NEUTRAL_PILL, label: 'User' };
   }

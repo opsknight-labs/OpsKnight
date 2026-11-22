@@ -8,8 +8,11 @@
  */
 import { AppError } from '@/lib/errors';
 
-export const APP_ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as const;
+export const APP_ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER', 'STAKEHOLDER'] as const;
 export type AppRole = (typeof APP_ROLES)[number];
+/** Roles an admin, identity provider or access request can assign. STAKEHOLDER is not, yet. */
+export const ASSIGNABLE_ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as const;
+export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 export const CAPABILITIES = {
   AUTOMATION_READ: 'automation.read',
@@ -293,15 +296,27 @@ const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.REPORT_READ,
 ]);
 
+// Business-impact audience: never reads incidents or gets paged. Deliberately minimal until the
+// stakeholder views (status dashboard, business-service read) define their own permissions.
+const STAKEHOLDER_CAPABILITIES = new Set<Capability>([
+  CAPABILITIES.USER_NOTIFICATION_PREFERENCES,
+  CAPABILITIES.SERVICE_READ_SCOPED,
+]);
+
 const ROLE_CAPABILITIES = new Map<AppRole, ReadonlySet<Capability>>([
   ['ADMIN', ADMIN_CAPABILITIES],
   ['RESPONDER', RESPONDER_CAPABILITIES],
   ['AUDITOR', AUDITOR_CAPABILITIES],
   ['USER', USER_CAPABILITIES],
+  ['STAKEHOLDER', STAKEHOLDER_CAPABILITIES],
 ]);
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === 'string' && APP_ROLES.some(role => role === value);
+}
+
+export function isAssignableRole(value: unknown): value is AssignableRole {
+  return typeof value === 'string' && ASSIGNABLE_ROLES.some(role => role === value);
 }
 
 export function getRoleCapabilities(role: AppRole): readonly Capability[] {
@@ -372,6 +387,7 @@ export function roleLabel(role: AppRole): string {
   if (role === 'ADMIN') return 'Admin';
   if (role === 'RESPONDER') return 'Responder';
   if (role === 'AUDITOR') return 'Auditor';
+  if (role === 'STAKEHOLDER') return 'Stakeholder';
   return 'User';
 }
 
@@ -386,6 +402,7 @@ export const ROLE_DESCRIPTIONS = new Map<AppRole, string>([
     'USER',
     'Access to incidents and services in your teams, plus incidents assigned to or watched by you. Can acknowledge, update, escalate and resolve those incidents. Team owners and team admins can manage their own teams.',
   ],
+  ['STAKEHOLDER', 'Business-impact view only: services in your teams. Never paged.'],
 ]);
 
 export class AuthorizationError extends AppError {

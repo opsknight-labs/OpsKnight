@@ -384,7 +384,7 @@ describe('compliance evaluators (unit)', () => {
       expect(result.status).toBe('IMPLEMENTED');
       expect(result.findings).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ code: 'REGISTERED_ROLES_COUNT', value: 4 }),
+          expect.objectContaining({ code: 'REGISTERED_ROLES_COUNT', value: 5 }),
           expect.objectContaining({ code: 'ADMIN_GOVERNANCE_VERIFIED', value: true }),
         ])
       );

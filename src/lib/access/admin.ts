@@ -470,7 +470,7 @@ export async function startAccessReview(
   ]);
   const items: Prisma.AccessReviewItemCreateWithoutReviewInput[] = [];
   for (const user of privileged) {
-    if (user.role !== 'USER') {
+    if (user.role !== 'USER' && user.role !== 'STAKEHOLDER') {
       items.push({
         userId: user.id,
         subjectType: 'ORG_ROLE',

@@ -220,7 +220,7 @@ export function capabilityGroupLabel(group: CapabilityGroup): string {
 export const ALL_CATALOGUED_CAPABILITIES: readonly Capability[] = [...CATALOG.keys()];
 export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [...GROUP_LABELS.keys()];
 
-const ROLE_ORDER: readonly AppRole[] = ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN'];
+const ROLE_ORDER: readonly AppRole[] = ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN'];
 
 function toList(capabilities: Capability | readonly Capability[]): Capability[] {
   return typeof capabilities === 'string' ? [capabilities] : [...capabilities];

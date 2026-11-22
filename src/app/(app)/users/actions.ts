@@ -20,7 +20,7 @@ import {
   assertPermanentAdminForAdminTargets,
   getCurrentUser,
 } from '@/lib/rbac';
-import { isAppRole } from '@/lib/authorization';
+import { isAssignableRole } from '@/lib/authorization';
 import type { Prisma, Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
 import {
@@ -173,7 +173,7 @@ export async function addUser(
       .trim()
       .toLowerCase();
     const role = formData.get('role');
-    if (!isAppRole(role)) return { error: 'Select a valid user role.' };
+    if (!isAssignableRole(role)) return { error: 'Select a valid user role.' };
     const { headers } = await import('next/headers');
     const headerList = await headers();
     const { checkRateLimit } = await import('@/lib/password-reset');
@@ -232,7 +232,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
     };
   }
   const role = formData.get('role') as string;
-  if (!isAppRole(role)) {
+  if (!isAssignableRole(role)) {
     return { error: 'Select a valid user role.' };
   }
   try {
@@ -621,7 +621,7 @@ export async function bulkUpdateUsers(
     if (!role) {
       return { error: 'Role is required.' };
     }
-    if (!isAppRole(role)) {
+    if (!isAssignableRole(role)) {
       return { error: 'Select a valid user role.' };
     }
 
@@ -750,7 +750,7 @@ export async function updateUserProfile(
 
   // Role validation
   let targetRole = existingUser.role;
-  if (role && isAppRole(role)) {
+  if (role && isAssignableRole(role)) {
     if (!isAdmin && role !== existingUser.role) {
       return { error: 'Only administrators can change user roles.' };
     }
