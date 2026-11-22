@@ -820,6 +820,38 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/business-services/{id}/incidents',
+    'listBusinessServiceIncidents',
+    'services:read',
+    'list',
+    'BusinessServiceIncident'
+  ),
+  op(
+    'get',
+    '/business-services/{id}/impact-timeline',
+    'getBusinessServiceImpactTimeline',
+    'services:read',
+    'item',
+    'BusinessServiceImpactTimeline'
+  ),
+  op(
+    'put',
+    '/incidents/{id}/business-service-impacts/{businessServiceId}',
+    'markIncidentBusinessServiceImpact',
+    'incidents:write',
+    'item',
+    'IncidentBusinessServiceImpactChange'
+  ),
+  op(
+    'delete',
+    '/incidents/{id}/business-service-impacts/{businessServiceId}',
+    'unmarkIncidentBusinessServiceImpact',
+    'incidents:write',
+    'item',
+    'IncidentBusinessServiceImpactChange'
+  ),
+  op(
+    'get',
     '/status-pages/{id}/business-services',
     'getStatusPageBusinessServices',
     'status-pages:read',

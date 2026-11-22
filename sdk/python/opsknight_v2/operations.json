@@ -855,6 +855,38 @@
     "requiredHeaders": ["Idempotency-Key"],
     "bodyRequired": false
   },
+  "listBusinessServiceIncidents": {
+    "method": "GET",
+    "path": "/business-services/{id}/incidents",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getBusinessServiceImpactTimeline": {
+    "method": "GET",
+    "path": "/business-services/{id}/impact-timeline",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "markIncidentBusinessServiceImpact": {
+    "method": "PUT",
+    "path": "/incidents/{id}/business-service-impacts/{businessServiceId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": false
+  },
+  "unmarkIncidentBusinessServiceImpact": {
+    "method": "DELETE",
+    "path": "/incidents/{id}/business-service-impacts/{businessServiceId}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": false
+  },
   "getStatusPageBusinessServices": {
     "method": "GET",
     "path": "/status-pages/{id}/business-services",

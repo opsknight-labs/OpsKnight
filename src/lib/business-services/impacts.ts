@@ -224,8 +224,9 @@ export async function processBusinessServiceImpactReconcile() {
 export async function setIncidentImpactCommand(
   input: SetIncidentImpactInput,
   actor: AuthorizationActor,
-  source: AuditEventSource = 'UI'
-): Promise<void> {
+  source: AuditEventSource = 'UI',
+  client?: Prisma.TransactionClient
+): Promise<{ changed: boolean }> {
   if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_MANAGE }).allowed) {
     throw new AppError({
       code: 'AUTHORIZATION_DENIED',
@@ -233,17 +234,19 @@ export async function setIncidentImpactCommand(
     });
   }
   const { businessServiceReadWhere } = await import('./commands');
+  const db = client ?? prisma;
   const [incident, businessService] = await Promise.all([
-    prisma.incident.findFirst({
+    db.incident.findFirst({
       where: { AND: [{ id: input.incidentId }, incidentReadWhere(actor)] },
       select: { id: true, status: true },
     }),
-    prisma.businessService.findFirst({
+    db.businessService.findFirst({
       where: { AND: [{ id: input.businessServiceId }, businessServiceReadWhere(actor)] },
       select: { id: true },
     }),
   ]);
-  if (!incident || !businessService) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+  if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
+  if (!businessService) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
   const key = {
     incidentId_businessServiceId: {
       incidentId: input.incidentId,
@@ -252,10 +255,10 @@ export async function setIncidentImpactCommand(
   };
   const now = new Date();
   const active = isActiveIncidentStatus(incident.status);
-  await prisma.$transaction(async tx => {
+  const run = async (tx: Prisma.TransactionClient) => {
     const current = await tx.incidentBusinessServiceImpact.findUnique({ where: key });
     if (input.impacted) {
-      if (current && !current.excluded && (current.endedAt === null || !active)) return;
+      if (current && !current.excluded && (current.endedAt === null || !active)) return false;
       await tx.incidentBusinessServiceImpact.upsert({
         where: key,
         create: {
@@ -268,7 +271,7 @@ export async function setIncidentImpactCommand(
         update: { source: 'MANUAL', excluded: false, endedAt: active ? null : now, createdById: actor.id },
       });
     } else {
-      if (current?.excluded) return;
+      if (current?.excluded) return false;
       await tx.incidentBusinessServiceImpact.upsert({
         where: key,
         create: {
@@ -292,6 +295,9 @@ export async function setIncidentImpactCommand(
       },
       tx
     );
-  });
-  invalidateBusinessServiceHealth();
+    return true;
+  };
+  const changed = await (client ? run(client) : prisma.$transaction(run));
+  if (changed) invalidateBusinessServiceHealth();
+  return { changed };
 }

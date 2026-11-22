@@ -30,10 +30,32 @@ describe('status page classification for business services', () => {
     ).toEqual([]);
   });
 
+  it('classifies display name and visibility changes of a business service row', () => {
+    const shown = {
+      ...current,
+      businessServiceMappings: [
+        { businessServiceId: 'a', displayName: null, showOnPage: true },
+        { businessServiceId: 'b', displayName: 'Pay', showOnPage: false },
+      ],
+    };
+    const classify = (businessServiceConfigs: Record<string, object>) =>
+      classifyStatusPageChange({
+        current: shown,
+        patch: {},
+        businessServiceIds: ['a', 'b'],
+        businessServiceConfigs,
+      }).classes;
+    expect(classify({ a: { showOnPage: false } })).toEqual(['PRIVACY_TIGHTENING']);
+    expect(classify({ b: { showOnPage: true } })).toEqual(['PRIVACY_RELAXING']);
+    expect(classify({ a: { displayName: 'Checkout' } })).toEqual(['PRESENTATION']);
+    expect(classify({ b: { displayName: ' Pay ', showOnPage: false } })).toEqual([]);
+  });
+
   it('saves layout and mapping from the Services section only', () => {
     const fields = statusPageSectionFields('services')!;
     expect(fields.has('serviceLayout')).toBe(true);
     expect(fields.has('businessServiceIds')).toBe(true);
+    expect(fields.has('businessServiceConfigs')).toBe(true);
     expect(statusPageSectionFields('privacy')!.has('businessServiceIds')).toBe(false);
   });
 });

@@ -249,13 +249,15 @@ describe('TQ-11: tools/list stays small', () => {
     // stays discoverable through search_capabilities on purpose. Incident roles add
     // incident_roles_list and incident_role_assign (id, roleKey enum, userId): about 0.4 KB.
     // business_services_list (cursor pagination only): about 0.25 KB. Merged with the SLO
-    // burn-alert tools from develop: about 0.25 KB more.
+    // burn-alert tools from develop: about 0.25 KB more. Business-service health: the list's
+    // q/tier/status/owner/impactedOnly/sort filters plus business_service_get, _health and
+    // _incidents (id, from, to): about 1.7 KB.
     const named = tools.filter(tool => MCP_CATALOG.some(operation => operation.tool === tool.name));
     const namedBytes = named.reduce(
       (total, tool) => total + Buffer.byteLength(JSON.stringify(tool.inputSchema)),
       0
     );
-    expect(namedBytes).toBeLessThanOrEqual(18432);
+    expect(namedBytes).toBeLessThanOrEqual(20480);
     expect(bytes).toBeGreaterThan(namedBytes);
   });
 });

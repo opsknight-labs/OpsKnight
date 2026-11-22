@@ -24,8 +24,9 @@ export const engine: BusinessServiceEngine = {
     (await import('./stats')).getImpactTimeline(id, window, actor),
   getBusinessServiceStats: async (id, window, actor) =>
     (await import('./stats')).getBusinessServiceStats(id, window, actor),
-  setIncidentImpact: async (input, actor) =>
-    (await import('./impacts')).setIncidentImpactCommand(input, actor),
+  setIncidentImpact: async (input, actor) => {
+    await (await import('./impacts')).setIncidentImpactCommand(input, actor);
+  },
   wouldCreateSupportCycle: async (parentId, childId) =>
     (await import('./stats')).wouldCreateSupportCycle(parentId, childId),
 };

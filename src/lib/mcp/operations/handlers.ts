@@ -162,6 +162,14 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/status-pages/[id]/business-services/route')).GET,
   ],
   [
+    'listBusinessServiceIncidents',
+    async () => (await import('@/app/api/v2/business-services/[id]/incidents/route')).GET,
+  ],
+  [
+    'getBusinessServiceImpactTimeline',
+    async () => (await import('@/app/api/v2/business-services/[id]/impact-timeline/route')).GET,
+  ],
+  [
     'setIncidentRole',
     async () => (await import('@/app/api/v2/incidents/[id]/roles/[roleKey]/route')).PUT,
   ],
@@ -539,6 +547,18 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
 
 // Reachable only from the frozen approval commit; never from generic dispatch.
 export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
+  [
+    'markIncidentBusinessServiceImpact',
+    async () =>
+      (await import('@/app/api/v2/incidents/[id]/business-service-impacts/[businessServiceId]/route'))
+        .PUT,
+  ],
+  [
+    'unmarkIncidentBusinessServiceImpact',
+    async () =>
+      (await import('@/app/api/v2/incidents/[id]/business-service-impacts/[businessServiceId]/route'))
+        .DELETE,
+  ],
   [
     'removeTeamMember',
     async () => (await import('@/app/api/v2/teams/[id]/members/[userId]/route')).DELETE,

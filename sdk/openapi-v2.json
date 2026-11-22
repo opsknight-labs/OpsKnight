@@ -4072,6 +4072,17 @@
           "tier": {
             "type": ["string", "null"]
           },
+          "criticality": {
+            "type": ["string", "null"],
+            "enum": ["TIER_0", "TIER_1", "TIER_2", "TIER_3", null]
+          },
+          "impactMinUrgency": {
+            "type": ["string", "null"],
+            "enum": ["LOW", "MEDIUM", "HIGH", null]
+          },
+          "impactMaxPriority": {
+            "type": ["string", "null"]
+          },
           "ownerTeam": {
             "oneOf": [
               {
@@ -4107,9 +4118,29 @@
                 },
                 "status": {
                   "type": "string"
+                },
+                "critical": {
+                  "type": "boolean"
                 }
               },
-              "required": ["id", "name", "status"],
+              "required": ["id", "name", "status", "critical"],
+              "additionalProperties": false
+            }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": ["id", "name"],
               "additionalProperties": false
             }
           },
@@ -4130,6 +4161,109 @@
               "additionalProperties": false
             }
           },
+          "health": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "OPERATIONAL",
+                      "DEGRADED",
+                      "PARTIAL_OUTAGE",
+                      "MAJOR_OUTAGE",
+                      "MAINTENANCE",
+                      "UNKNOWN"
+                    ]
+                  },
+                  "since": {
+                    "type": ["string", "null"],
+                    "format": "date-time"
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["kind", "status"],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["DIRECT", "DEPENDENCY", "NESTED", "MANUAL", "MAINTENANCE"]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "OPERATIONAL",
+                            "DEGRADED",
+                            "PARTIAL_OUTAGE",
+                            "MAJOR_OUTAGE",
+                            "MAINTENANCE",
+                            "UNKNOWN"
+                          ]
+                        },
+                        "incidentId": {
+                          "type": "string"
+                        },
+                        "serviceId": {
+                          "type": "string"
+                        },
+                        "viaServiceId": {
+                          "type": "string"
+                        },
+                        "childBusinessServiceId": {
+                          "type": "string"
+                        },
+                        "depth": {
+                          "type": "integer"
+                        },
+                        "urgency": {
+                          "type": "string",
+                          "enum": ["LOW", "MEDIUM", "HIGH"]
+                        },
+                        "markedById": {
+                          "type": ["string", "null"]
+                        },
+                        "maintenanceWindowId": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "openIncidentCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "memberCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "impactedMemberCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "computedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "status",
+                  "since",
+                  "reasons",
+                  "openIncidentCount",
+                  "memberCount",
+                  "impactedMemberCount",
+                  "computedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -4144,12 +4278,166 @@
           "name",
           "description",
           "tier",
+          "criticality",
+          "impactMinUrgency",
+          "impactMaxPriority",
           "ownerTeam",
           "members",
+          "dependsOn",
           "followers",
+          "health",
           "createdAt",
           "updatedAt"
         ],
+        "additionalProperties": false
+      },
+      "BusinessServiceIncident": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string"
+          },
+          "urgency": {
+            "type": "string",
+            "enum": ["LOW", "MEDIUM", "HIGH"]
+          },
+          "source": {
+            "type": "string",
+            "enum": ["DIRECT", "DEPENDENCY", "NESTED", "MANUAL"]
+          },
+          "impactStartedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "impactEndedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "title", "urgency", "source", "impactStartedAt", "impactEndedAt"],
+        "additionalProperties": false
+      },
+      "BusinessServiceImpactTimeline": {
+        "type": "object",
+        "properties": {
+          "businessServiceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "window": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "to": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": ["from", "to"],
+            "additionalProperties": false
+          },
+          "impactMinutes": {
+            "type": "number",
+            "minimum": 0
+          },
+          "uptimePercent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "incidentCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mttaMinutes": {
+            "type": ["number", "null"]
+          },
+          "mttrMinutes": {
+            "type": ["number", "null"]
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "incidentId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "incidentTitle": {
+                  "type": "string"
+                },
+                "urgency": {
+                  "type": "string",
+                  "enum": ["LOW", "MEDIUM", "HIGH"]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": ["DIRECT", "DEPENDENCY", "NESTED", "MANUAL"]
+                },
+                "excluded": {
+                  "type": "boolean"
+                },
+                "startedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "endedAt": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "incidentId",
+                "incidentTitle",
+                "urgency",
+                "source",
+                "excluded",
+                "startedAt",
+                "endedAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "businessServiceId",
+          "window",
+          "impactMinutes",
+          "uptimePercent",
+          "incidentCount",
+          "mttaMinutes",
+          "mttrMinutes",
+          "entries"
+        ],
+        "additionalProperties": false
+      },
+      "IncidentBusinessServiceImpactChange": {
+        "type": "object",
+        "properties": {
+          "incidentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "businessServiceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "impacted": {
+            "type": "boolean"
+          },
+          "changed": {
+            "type": "boolean"
+          }
+        },
+        "required": ["incidentId", "businessServiceId", "impacted", "changed"],
         "additionalProperties": false
       },
       "BusinessServiceDeletion": {
@@ -35055,7 +35343,7 @@
       "get": {
         "tags": ["Services"],
         "summary": "List business services the caller can see",
-        "description": "Org-wide readers see every business service; others see those owned by, or containing services of, their teams.\n\nRequires API scope `services:read` (Services read).",
+        "description": "Org-wide readers see every business service; others see those owned by, or containing services of, their teams. Each item carries engine health (status, reasons, open incident count).\n\nRequires API scope `services:read` (Services read).",
         "parameters": [
           {
             "name": "limit",
@@ -35074,6 +35362,61 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Matches name or description."
+            }
+          },
+          {
+            "name": "tier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated criticality tiers, e.g. TIER_0,TIER_1."
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated health statuses, e.g. MAJOR_OUTAGE."
+            }
+          },
+          {
+            "name": "ownerTeamId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "impactedOnly",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["newest", "name"],
+              "default": "newest"
             }
           }
         ],
@@ -35209,6 +35552,36 @@
                       "maxLength": 100
                     },
                     "maxItems": 500
+                  },
+                  "criticality": {
+                    "type": ["string", "null"],
+                    "enum": ["TIER_0", "TIER_1", "TIER_2", "TIER_3", null]
+                  },
+                  "impactMinUrgency": {
+                    "type": ["string", "null"],
+                    "enum": ["LOW", "MEDIUM", "HIGH", null]
+                  },
+                  "impactMaxPriority": {
+                    "type": ["string", "null"],
+                    "pattern": "^[Pp][1-9]$"
+                  },
+                  "nonCriticalServiceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "maxItems": 200
+                  },
+                  "dependsOnBusinessServiceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "maxItems": 50
                   }
                 },
                 "required": ["name"],
@@ -35300,7 +35673,7 @@
     "/business-services/{id}": {
       "get": {
         "tags": ["Services"],
-        "summary": "Read a business service",
+        "summary": "Read a business service with its current health",
         "parameters": [
           {
             "name": "id",
@@ -35448,6 +35821,36 @@
                       "maxLength": 100
                     },
                     "maxItems": 500
+                  },
+                  "criticality": {
+                    "type": ["string", "null"],
+                    "enum": ["TIER_0", "TIER_1", "TIER_2", "TIER_3", null]
+                  },
+                  "impactMinUrgency": {
+                    "type": ["string", "null"],
+                    "enum": ["LOW", "MEDIUM", "HIGH", null]
+                  },
+                  "impactMaxPriority": {
+                    "type": ["string", "null"],
+                    "pattern": "^[Pp][1-9]$"
+                  },
+                  "nonCriticalServiceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "maxItems": 200
+                  },
+                  "dependsOnBusinessServiceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "maxItems": 50
                   }
                 },
                 "required": [],
@@ -35773,6 +36176,24 @@
                       "maxLength": 100
                     },
                     "maxItems": 200
+                  },
+                  "businessServiceConfigs": {
+                    "type": "object",
+                    "description": "Optional, keyed by business service id: displayName (null clears) and showOnPage. Absent fields stay as they are.",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "displayName": {
+                          "type": ["string", "null"],
+                          "maxLength": 200
+                        },
+                        "showOnPage": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": ["serviceLayout", "businessServiceIds"],
@@ -35877,6 +36298,441 @@
         "x-required-scope": "status-pages:write",
         "x-idempotency": "required",
         "x-concurrency": "etag"
+      }
+    },
+    "/business-services/{id}/incidents": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "List incidents that impacted a business service",
+        "description": "Newest first, from the impact history (direct, dependency, nested and manual). Unmarked impacts are left out. At most 500.\n\nRequires API scope `services:read` (Services read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Default: 30 days before to."
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Default: now. At most 400 days wide."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BusinessServiceIncident"
+                      }
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listBusinessServiceIncidents",
+        "x-required-scope": "services:read"
+      }
+    },
+    "/business-services/{id}/impact-timeline": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "Read the impact timeline and uptime of a business service",
+        "description": "Uptime is over the union of impact intervals, so overlapping incidents count once. Unmarked impacts are listed but excluded from the numbers.\n\nRequires API scope `services:read` (Services read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Default: 30 days before to."
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Default: now. At most 400 days wide."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BusinessServiceImpactTimeline"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getBusinessServiceImpactTimeline",
+        "x-required-scope": "services:read"
+      }
+    },
+    "/incidents/{id}/business-service-impacts/{businessServiceId}": {
+      "put": {
+        "tags": ["Incidents"],
+        "summary": "Mark an incident as impacting a business service",
+        "description": "Requires an Idempotency-Key and Responder or Admin access. A manual mark counts even below the business service threshold.\n\nRequires API scope `incidents:write` (Incidents manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "businessServiceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentBusinessServiceImpactChange"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "markIncidentBusinessServiceImpact",
+        "x-required-scope": "incidents:write",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
+      },
+      "delete": {
+        "tags": ["Incidents"],
+        "summary": "Unmark an incident as impacting a business service",
+        "description": "Requires an Idempotency-Key. The exclusion is remembered so automatic impact never re-adds it.\n\nRequires API scope `incidents:write` (Incidents manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "businessServiceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IncidentBusinessServiceImpactChange"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "unmarkIncidentBusinessServiceImpact",
+        "x-required-scope": "incidents:write",
+        "x-idempotency": "required",
+        "x-concurrency": "none"
       }
     },
     "/status-pages/{id}/preview": {

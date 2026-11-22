@@ -731,6 +731,18 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Deletion cascades its mappings; pages showing it are marked dirty in the same transaction.',
   },
+  'PUT /api/v2/incidents/[id]/business-service-impacts/[businessServiceId]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'The manual impact row and its audit event commit with the replay record; re-marking is a no-op.',
+  },
+  'DELETE /api/v2/incidents/[id]/business-service-impacts/[businessServiceId]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'The exclusion row and its audit event commit with the replay record; it stays so automatic impact never re-adds it.',
+  },
   'PUT /api/v2/status-pages/[id]/business-services': {
     idempotency: 'required',
     concurrency: 'etag',

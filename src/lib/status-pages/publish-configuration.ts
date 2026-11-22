@@ -17,6 +17,7 @@ import {
 import { StatusPageAdminError } from '@/lib/status-pages/admin';
 import {
   classifyStatusPageChange,
+  type StatusPageBusinessServiceConfigs,
   type StatusPageChangeClassification,
   type StatusPageClassifierState,
 } from '@/lib/status-pages/publication-policy';
@@ -61,6 +62,8 @@ export type StatusPageConfigurationChange = {
   >;
   /** Business services to show, in display order; their member services are mapped too. */
   businessServiceIds?: string[];
+  /** Display name and visibility per business service (requires businessServiceIds). */
+  businessServiceConfigs?: StatusPageBusinessServiceConfigs;
   expectedUpdatedAt?: string;
   expectedRevision?: number;
   /** Settings section that produced the patch, recorded for audit only. */
@@ -110,6 +113,7 @@ export async function applyStatusPageConfigurationChange(
     serviceIds,
     serviceConfigs,
     businessServiceIds,
+    businessServiceConfigs,
     expectedUpdatedAt,
     section,
   } = change;
@@ -140,27 +144,28 @@ export async function applyStatusPageConfigurationChange(
           select: { serviceId: true, showOnPage: true, displayName: true, order: true },
         });
 
-  const currentBusinessServiceIds =
+  const businessServiceMappings =
     businessServiceIds === undefined
       ? undefined
-      : (
-          await prisma.statusPageBusinessService.findMany({
-            where: { statusPageId: pageId },
-            orderBy: { order: 'asc' },
-            select: { businessServiceId: true },
-          })
-        ).map(row => row.businessServiceId);
+      : await prisma.statusPageBusinessService.findMany({
+          where: { statusPageId: pageId },
+          orderBy: { order: 'asc' },
+          select: { businessServiceId: true, displayName: true, showOnPage: true },
+        });
+  const currentBusinessServiceIds = businessServiceMappings?.map(row => row.businessServiceId);
 
   const classification = classifyStatusPageChange({
     current: {
       ...(current as unknown as StatusPageClassifierState),
       serviceMappings,
       businessServiceIds: currentBusinessServiceIds,
+      businessServiceMappings,
     },
     patch,
     serviceIds,
     serviceConfigs,
     businessServiceIds,
+    businessServiceConfigs: businessServiceIds === undefined ? undefined : businessServiceConfigs,
   });
 
   // A save that changes nothing must not disturb a working page.
@@ -274,10 +279,19 @@ export async function applyStatusPageConfigurationChange(
           where: { statusPageId: pageId, businessServiceId: { notIn: businessServiceIds } },
         });
         for (const [order, businessServiceId] of businessServiceIds.entries()) {
+          const config = Reflect.get(businessServiceConfigs ?? {}, businessServiceId) as
+            | { displayName?: string | null; showOnPage?: boolean }
+            | undefined;
+          const presentation = {
+            ...(config?.displayName !== undefined
+              ? { displayName: config.displayName?.trim() || null }
+              : {}),
+            ...(config?.showOnPage !== undefined ? { showOnPage: config.showOnPage } : {}),
+          };
           await tx.statusPageBusinessService.upsert({
             where: { statusPageId_businessServiceId: { statusPageId: pageId, businessServiceId } },
-            create: { statusPageId: pageId, businessServiceId, order },
-            update: { order },
+            create: { statusPageId: pageId, businessServiceId, order, ...presentation },
+            update: { order, ...presentation },
           });
         }
         // A business service is shown through its members, so they are published with it.
