@@ -1,6 +1,6 @@
 ---
 title: Upgrade to OpsKnight 2.3.0
-description: What changes when you upgrade from 2.2.x to 2.3.0 (Node.js 22 and Prisma 7.10.1 on the node-postgres driver), how to check your database connections first, apply the upgrade, and recover from a failed migration.
+description: What changes when you upgrade from 2.2.x to 2.3.0 (Node.js 22 and Prisma 7.3.0 on the node-postgres driver), how to check your database connections first, apply the upgrade, and recover from a failed migration.
 type: deployment
 product_area: upgrades
 audience: [operator, administrator]
@@ -18,7 +18,6 @@ verification:
     - src/lib/db/pg-config.ts
     - src/lib/db/raw-parameter-types.ts
     - scripts/db/check-connection.cjs
-    - prisma/migrations/20261018140000_runbook_active_trigger_invariant/migration.sql
     - deploy/kubernetes/helm/opsknight/templates/migration-job.yaml
     - Dockerfile
 ---
@@ -26,7 +25,7 @@ verification:
 This page covers what is different about the 2.2.x to 2.3.0 upgrade. Follow it together with the
 general [upgrade runbook](./upgrade), and keep the [rollback runbook](./rollback) open during the change.
 ## What changes in 2.3.0
-- **Prisma 5.22 to Prisma 7.10.1.** The database layer now runs on the `node-postgres` (`pg`) driver
+- **Prisma 5.22 to Prisma 7.3.0.** The database layer now runs on the `node-postgres` (`pg`) driver
   through Prisma's driver adapter. Your existing `DATABASE_URL`, `DIRECT_DATABASE_URL`,
   `WEB_DATABASE_URL`, and `MCP_DATABASE_URL` values keep working, and the Prisma URL parameters
   (`connection_limit`, `pool_timeout`, `connect_timeout`, `schema`, `options`, `pgbouncer`, and the
@@ -34,7 +33,7 @@ general [upgrade runbook](./upgrade), and keep the [rollback runbook](./rollback
 - **Node.js 22 LTS** replaces Node.js 20. The image is `node:22-alpine`. Anything you run outside the
   image (scripts, CI, local development) needs Node.js 22.12 or newer within 22.x.
 - **Prisma is pinned exactly** (`prisma`, `@prisma/client`, `@prisma/adapter-pg`,
-  `@prisma/driver-adapter-utils` at 7.10.1). Do not float these versions.
+  `@prisma/driver-adapter-utils` at 7.3.0). Do not float these versions.
 ## Behaviour changes to prepare for
 ### Database TLS now verifies certificates
 Earlier releases treated `sslmode=verify-ca` and `sslmode=verify-full` like `prefer`: the certificate
@@ -75,20 +74,15 @@ Follow the [upgrade runbook](./upgrade) for your topology (Compose, Kubernetes/H
 The image runs `prisma migrate deploy` through `prisma.config.ts`, the same migration ownership as
 before: one migration owner (the Helm migration Job, or the single migration container), never every
 replica.
-Two things differ from 2.2.x:
-1. **Migrations are not atomic any more.** The Prisma 7.10.1 CLI applies each statement of a
-   migration separately. If a migration fails part-way, the statements before the failure **stay
-   applied** and the migration is marked failed (`P3009` on the next run). Treat the pre-upgrade
-   backup as your rollback point. To recover without a restore, follow
-   [migration fails](../../troubleshooting/upgrades/migration-fails), run
-   `npm run prisma:health`, and only then use `prisma migrate resolve` on the verified state. Never
-   edit `_prisma_migrations` or run `prisma db push`.
-2. **Migration `20261018140000_runbook_active_trigger_invariant` changed.** It created its temporary
-   table with `ON COMMIT DROP`, which cannot work when statements run one at a time; it now drops the
-   table explicitly. Databases that already applied it are unaffected, and `migrate deploy` does not
-   re-check applied migrations. Do not revert this edit.
-New migrations written for 2.3.0 and later must be safe to apply one statement at a time (no
-transaction-scoped temporary tables, idempotent where possible).
+Migrations stay atomic: the pinned Prisma 7.3.0 CLI applies each migration file in one transaction,
+as 2.2.x did, so a failed migration leaves no partial changes. If one fails, follow
+[migration fails](../../troubleshooting/upgrades/migration-fails) and run `npm run prisma:health`;
+never edit `_prisma_migrations` or run `prisma db push`.
+**Do not upgrade the Prisma CLI past 7.3.0 on your own.** From 7.4.0 the CLI applies migration
+statements one at a time (prisma/orm#30640), which breaks the migration history on a fresh database
+(a temporary table created `ON COMMIT DROP`) and makes failed migrations non-atomic. OpsKnight raises
+the pin only after its migrations are certified against the newer CLI.
+
 ## Verify
 1. `GET /api/health` reports healthy on every runtime role, and `/api/health/deep` confirms the database path.
 2. `npm run prisma:validate` and `npm run prisma:health` pass against the upgraded database.
@@ -97,10 +91,9 @@ transaction-scoped temporary tables, idempotent where possible).
 4. Send a synthetic alert and confirm the incident, notification, and acknowledgement path end to end.
 ## Roll back
 Prisma 7 does not change the schema, but 2.3.0 includes forward migrations; use the
-[rollback runbook](./rollback). If a migration failed part-way, restore the verified backup instead of
-re-running a half-applied migration.
+[rollback runbook](./rollback). 
 ## Known limits
-- Prisma 8 is not adopted: it was a release candidate when 2.3.0 was cut. The upgrade is a separate change.
+- Prisma is held at 7.3.0 on purpose (see above). Newer 7.x releases and Prisma 8 (a release candidate when 2.3.0 was cut) are separate, certified changes.
 - The `$metrics` client API no longer exists in Prisma 7. OpsKnight's pool-pressure checks read the
   `pg` pool's waiting-connection count instead, and they report "unknown" (never zero) for clients it
   did not create.
