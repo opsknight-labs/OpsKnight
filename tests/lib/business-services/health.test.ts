@@ -309,6 +309,22 @@ describe('computeHealth', () => {
     expect(health.get('store')!.since).toEqual(early);
   });
 
+  it('lets an older nested incident set since when it matches the parent’s own status', () => {
+    const early = new Date('2026-11-22T09:00:00Z');
+    const health = computeHealth(
+      inputs({
+        businessServices: [bs('checkout', ['api']), bs('store', ['web'])],
+        supports: [{ parentId: 'store', childId: 'checkout' }],
+        incidents: [
+          incident('i1', 'api', 'HIGH', null, early), // nested, capped to DEGRADED
+          incident('i2', 'web', 'LOW', null, new Date('2026-11-22T11:00:00Z')), // own DEGRADED
+        ],
+      })
+    );
+    expect(health.get('store')!.status).toBe('DEGRADED');
+    expect(health.get('store')!.since).toEqual(early);
+  });
+
   it('honours a parent exclusion for nested impact, carrying the incident id', () => {
     const base = inputs({
       businessServices: [bs('payments', ['api']), bs('checkout', [])],

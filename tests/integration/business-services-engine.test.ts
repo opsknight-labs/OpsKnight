@@ -227,11 +227,23 @@ describe('status page member sync', () => {
     // one goes; two stays through Gamma; the admin's direct selection stays.
     expect(await rows()).toEqual({ [direct.id]: false, [two.id]: true, [extra.id]: true });
 
-    // Taking Gamma off the page drops two; a save that lists extra directly keeps it as direct.
-    const current = await db.statusPage.findUniqueOrThrow({ where: { id: page.id } });
+    // The settings UI resends every row on the page. Taking both business services off still
+    // drops their members: a resent id is not a direct choice.
+    let current = await db.statusPage.findUniqueOrThrow({ where: { id: page.id } });
     await saveStatusPageSection(
       page.id,
-      { businessServiceIds: [], serviceIds: [direct.id, extra.id] },
+      { businessServiceIds: [], serviceIds: [direct.id, two.id, extra.id] },
+      { id: admin.id },
+      current.revision,
+      'services'
+    );
+    expect(await rows()).toEqual({ [direct.id]: false });
+
+    // Re-adding the service afterwards makes it a direct selection.
+    current = await db.statusPage.findUniqueOrThrow({ where: { id: page.id } });
+    await saveStatusPageSection(
+      page.id,
+      { serviceIds: [direct.id, extra.id] },
       { id: admin.id },
       current.revision,
       'services'
