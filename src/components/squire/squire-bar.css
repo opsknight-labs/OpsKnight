@@ -1,0 +1,267 @@
+/* ==========================================================================
+   Squire on duty: the assistant standing on the desktop status bar.
+   2.5D: real 3D turns (rotateY with perspective), a three-quarter turn and
+   forward lean while walking, contact shadow, and a lantern that lights the
+   bar. Desktop only (the status bar exists from lg up). Prop colours are the
+   artwork's own fixed palette, like the mascot itself (squire-mascot.css).
+   ========================================================================== */
+
+.sqbar-stage,
+.sqbar-glow,
+.sqbar-scroll {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .sqbar-stage,
+  .sqbar-glow,
+  .sqbar-scroll {
+    display: block;
+  }
+}
+
+.sqbar-stage {
+  position: fixed;
+  left: 0;
+  bottom: calc(var(--status-bar-height, 1.75rem) - 2px);
+  z-index: 41;
+  width: 44px;
+  height: 44px;
+  perspective: 320px;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  pointer-events: none;
+}
+
+.sqbar-actor {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 10px;
+}
+
+.sqbar-actor:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Facing is a 3D turn, not a flat mirror; walking adds a three-quarter turn and a lean. */
+.sqbar-stage.face-left .sqbar-actor { transform: rotateY(180deg); }
+.sqbar-stage.pose-walk.face-right .sqbar-actor { transform: rotateY(-20deg) rotateX(4deg); }
+.sqbar-stage.pose-walk.face-left .sqbar-actor { transform: rotateY(200deg) rotateX(4deg); }
+
+.sqbar-actor .opsknight-squire {
+  width: 44px !important;
+  height: 44px !important;
+  overflow: visible;
+  filter: drop-shadow(0 4px 2px rgb(0 0 0 / 0.28)) drop-shadow(0 1px 0 rgb(255 255 255 / 0.12));
+}
+
+.sqbar-stage.lit .sqbar-actor .opsknight-squire {
+  filter: drop-shadow(0 4px 2px rgb(0 0 0 / 0.28)) drop-shadow(5px -2px 6px rgb(255 180 80 / 0.55));
+}
+
+.sqbar-actor .oksq-shadow { display: none; }
+
+.sqbar-contact {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  width: 30px;
+  height: 6px;
+  margin-left: -15px;
+  border-radius: 50%;
+  background: radial-gradient(rgb(0 0 0 / 0.45), transparent 70%);
+  filter: blur(1px);
+}
+
+/* Rig pivots on the artwork's own groups. */
+.sqbar-actor .oksq-rig,
+.sqbar-actor .oksq-head,
+.sqbar-actor .oksq-arm-l,
+.sqbar-actor .oksq-arm-r,
+.sqbar-actor .oksq-plume,
+.sqbar-actor .oksq-cape {
+  transform-box: fill-box;
+}
+.sqbar-actor .oksq-rig { transform-origin: 50% 100%; }
+.sqbar-actor .oksq-head { transform-origin: 50% 90%; }
+.sqbar-actor .oksq-arm-l,
+.sqbar-actor .oksq-arm-r { transform-origin: 50% 0%; }
+.sqbar-actor .oksq-plume { transform-origin: 20% 100%; }
+.sqbar-actor .oksq-cape { transform-origin: 50% 0%; }
+
+/* ---- Props ---- */
+.sqbar-prop {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms, transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sqbar-prop.on { opacity: 1; }
+.sqbar-lantern { width: 12px; height: 18px; left: 36px; bottom: 5px; transform-origin: 50% 0; }
+.sqbar-shield { width: 18px; height: 21px; left: 35px; bottom: -1px; }
+.sqbar-stage.pose-rest .sqbar-shield { transform: rotate(10deg); }
+.sqbar-cloth {
+  position: absolute;
+  left: 34px;
+  bottom: 11px;
+  width: 7px;
+  height: 5px;
+  border-radius: 1.5px;
+  background: #f5f5f4;
+  border: 0.5px solid #d6d3d1;
+  opacity: 0;
+}
+.sqbar-stage.pose-polish .sqbar-cloth { opacity: 1; }
+.sqbar-zz {
+  position: absolute;
+  left: 30px;
+  bottom: 38px;
+  font: 700 0.6875rem/1 var(--font-family-sans, Inter, sans-serif);
+  color: #a1a1aa;
+  opacity: 0;
+}
+
+/* The lantern's light on the bar. */
+.sqbar-glow {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  z-index: 41;
+  width: 160px;
+  height: 60px;
+  pointer-events: none;
+  opacity: 0;
+  transition-property: transform, opacity;
+  transition-timing-function: linear, ease;
+  background: radial-gradient(ellipse at 50% 85%, rgb(255 190 90 / 0.36), rgb(255 170 60 / 0.1) 40%, transparent 70%);
+  mix-blend-mode: screen;
+}
+.sqbar-glow.on { opacity: 1; }
+
+/* The message scroll, unrolled in 3D above him. */
+.sqbar-scroll {
+  position: fixed;
+  left: 0;
+  bottom: calc(var(--status-bar-height, 1.75rem) + 52px);
+  z-index: 42;
+  perspective: 500px;
+  pointer-events: none;
+}
+.sqbar-paper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 4px;
+  white-space: nowrap;
+  cursor: pointer;
+  color: #3f2d14;
+  font: 600 0.8125rem/1.2 var(--font-family-display, 'Space Grotesk', Inter, sans-serif);
+  background: linear-gradient(180deg, #fbf3df 0%, #f3e4bf 55%, #e6d2a1 100%);
+  box-shadow: 0 10px 18px -10px rgb(60 40 10 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.7);
+  transform-origin: 50% 100%;
+  transform: rotateX(-88deg) scaleX(0.15);
+  opacity: 0;
+  transition: transform 520ms cubic-bezier(0.2, 1.2, 0.3, 1), opacity 160ms;
+}
+.sqbar-paper::before,
+.sqbar-paper::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 7px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #b78a45, #e8c983 45%, #9c7236);
+}
+.sqbar-paper::before { left: -4px; }
+.sqbar-paper::after { right: -4px; }
+.sqbar-paper kbd {
+  font: 0.6875rem ui-monospace, monospace;
+  border: 1px solid #c9a96a;
+  border-radius: 4px;
+  padding: 0 4px;
+  color: #6b4f22;
+}
+.sqbar-paper:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.sqbar-scroll.open { pointer-events: auto; }
+.sqbar-scroll.open .sqbar-paper { transform: none; opacity: 1; }
+
+/* ---- Motion (only when the person allows it) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .sqbar-stage.pose-walk .oksq-rig { animation: sqbar-waddle 520ms cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+  .sqbar-stage.pose-walk .oksq-head { animation: sqbar-headlag 520ms cubic-bezier(0.45, 0, 0.55, 1) 70ms infinite; }
+  .sqbar-stage.pose-walk .oksq-arm-l { animation: sqbar-swing-l 1040ms ease-in-out infinite; }
+  .sqbar-stage.pose-walk:not(.lit) .oksq-arm-r { animation: sqbar-swing-r 1040ms ease-in-out infinite; }
+  .sqbar-stage.pose-walk.lit .oksq-arm-r { transform: rotate(-38deg); }
+  .sqbar-stage.pose-walk .oksq-plume { animation: sqbar-plume 520ms ease-in-out 120ms infinite; }
+  .sqbar-stage.pose-walk .oksq-cape { animation: sqbar-cape 520ms ease-in-out 40ms infinite; }
+  .sqbar-stage.pose-walk .sqbar-contact { animation: sqbar-contact 520ms cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+  .sqbar-stage.pose-walk .sqbar-lantern.on { animation: sqbar-pendulum 1040ms ease-in-out infinite; }
+  .sqbar-stage.hurry .oksq-rig,
+  .sqbar-stage.hurry .oksq-head,
+  .sqbar-stage.hurry .oksq-plume,
+  .sqbar-stage.hurry .oksq-cape,
+  .sqbar-stage.hurry .sqbar-contact { animation-duration: 300ms; }
+  .sqbar-stage.crouch .oksq-rig { animation: sqbar-crouch 150ms ease-out forwards; }
+  .sqbar-stage.settle .oksq-rig { animation: sqbar-settle 480ms cubic-bezier(0.2, 1.6, 0.4, 1); }
+  .sqbar-lantern .sqbar-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: sqbar-flame 600ms ease-in-out infinite alternate; }
+  .sqbar-glow.on { animation: sqbar-flicker 1.8s steps(12) infinite; }
+  .sqbar-stage.pose-polish .oksq-arm-r { animation: sqbar-rub 380ms ease-in-out infinite; }
+  .sqbar-stage.pose-polish .sqbar-cloth { animation: sqbar-cloth 380ms ease-in-out infinite; }
+  .sqbar-stage.pose-polish .sqbar-shine,
+  .sqbar-stage.pose-idle .sqbar-shield.on .sqbar-shine { animation: sqbar-shine 1.4s ease-in-out infinite; }
+  .sqbar-stage.pose-scout .oksq-arm-r { transform: rotate(-150deg); transition: transform 250ms; }
+  .sqbar-stage.pose-scout .oksq-head { animation: sqbar-scan 2.4s ease-in-out; }
+  .sqbar-stage.pose-message .oksq-rig { animation: sqbar-hello 900ms cubic-bezier(0.3, 1.5, 0.5, 1) 2; }
+  .sqbar-stage.pose-rest .oksq-rig { animation: sqbar-breathe 3.6s ease-in-out infinite; }
+  .sqbar-stage.pose-rest:not(.awake) .sqbar-zz { animation: sqbar-zz 3.6s ease-in-out infinite; }
+  .sqbar-stage.awake .oksq-rig { animation: sqbar-perk 360ms cubic-bezier(0.3, 1.4, 0.5, 1) forwards; }
+}
+
+@keyframes sqbar-waddle {
+  0% { transform: translateY(0) scale(1.03, 0.95) rotate(-2.5deg); }
+  40% { transform: translateY(-3px) scale(0.98, 1.03); }
+  50% { transform: translateY(-3.5px) rotate(2.5deg); }
+  100% { transform: translateY(0) scale(1.03, 0.95) rotate(-2.5deg); }
+}
+@keyframes sqbar-headlag { 0%, 100% { transform: translateY(1px) rotate(3deg); } 50% { transform: translateY(-2px) rotate(-4deg); } }
+@keyframes sqbar-swing-l { 0%, 100% { transform: rotate(18deg); } 50% { transform: rotate(-16deg); } }
+@keyframes sqbar-swing-r { 0%, 100% { transform: rotate(-16deg); } 50% { transform: rotate(18deg); } }
+@keyframes sqbar-plume { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(9deg); } }
+@keyframes sqbar-cape { 0%, 100% { transform: skewX(-6deg); } 50% { transform: skewX(8deg) scaleY(1.04); } }
+@keyframes sqbar-contact { 0%, 100% { transform: scale(1.1, 1); opacity: 1; } 50% { transform: scale(0.72, 0.8); opacity: 0.5; } }
+@keyframes sqbar-pendulum { 0%, 100% { transform: rotate(9deg); } 50% { transform: rotate(-9deg); } }
+@keyframes sqbar-crouch { to { transform: translateY(1px) scale(1.06, 0.92); } }
+@keyframes sqbar-settle { 0% { transform: scale(1.06, 0.92); } 45% { transform: scale(0.97, 1.04) translateY(-1px); } 100% { transform: none; } }
+@keyframes sqbar-flame { from { transform: scale(0.9, 1); opacity: 0.9; } to { transform: scale(1.05, 1.12); opacity: 1; } }
+@keyframes sqbar-flicker { 0%, 100% { filter: brightness(1); } 30% { filter: brightness(0.86); } 55% { filter: brightness(1.08); } 80% { filter: brightness(0.93); } }
+@keyframes sqbar-rub { 0% { transform: rotate(-40deg); } 25% { transform: rotate(-52deg) translate(1px, -1px); } 50% { transform: rotate(-44deg) translate(2px, 0); } 75% { transform: rotate(-34deg) translate(1px, 1px); } 100% { transform: rotate(-40deg); } }
+@keyframes sqbar-cloth { 0% { transform: translate(0, 0); } 25% { transform: translate(2px, -2px); } 50% { transform: translate(3px, 0); } 75% { transform: translate(2px, 2px); } }
+@keyframes sqbar-shine { from { transform: translateX(-30px) skewX(-20deg); } to { transform: translateX(34px) skewX(-20deg); } }
+@keyframes sqbar-scan { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-12deg); } 65% { transform: rotate(10deg); } }
+@keyframes sqbar-hello { 30% { transform: translateY(-5px) scale(0.97, 1.05); } 60% { transform: scale(1.05, 0.95); } }
+@keyframes sqbar-breathe { 0%, 100% { transform: translateY(2px) scale(1.03, 0.93); } 50% { transform: translateY(1.5px) scale(1.01, 0.96); } }
+@keyframes sqbar-perk { to { transform: translateY(-1px) scale(1, 1.02); } }
+@keyframes sqbar-zz { 0% { opacity: 0; transform: translate(0, 0) scale(0.6); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -14px) scale(1.1); } }
+
+/* Without motion he still rests in a seated pose. */
+@media (prefers-reduced-motion: reduce) {
+  .sqbar-stage.pose-rest .oksq-rig { transform: translateY(2px) scale(1.03, 0.93); }
+}
+
+@media print {
+  .sqbar-stage,
+  .sqbar-glow,
+  .sqbar-scroll { display: none !important; }
+}

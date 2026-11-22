@@ -13,6 +13,13 @@ import OpsInsightsSettingsForm from '@/components/settings/OpsInsightsSettingsFo
 import IntelligenceSetupChecklist from '@/components/settings/IntelligenceSetupChecklist';
 import DigestSection from './_sections/DigestSection';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { LearnMore } from '@/components/settings/layout/LearnMore';
+import { NO_VALUE, StatGrid, StatTile } from '@/components/intelligence/overview/primitives';
+import { pageHeaderBadgeClass } from '@/components/patterns/PageHeader';
+import { toneClasses, type ToneKey } from '@/components/patterns/status-tone';
+import RelativeTime from '@/components/patterns/RelativeTime';
+import { AlertTriangle, History } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { assertCapability } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
@@ -52,13 +59,26 @@ const formatAge = (ms: number | null) => {
   return `${Math.round(ms / 60_000)} min`;
 };
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+/** A stat hint that carries a tone (icon + text), for a degraded lane. */
+function ToneHint({ tone, children }: { tone: ToneKey; children: string }) {
   return (
-    <div className="space-y-1 py-3">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-lg font-semibold">{value}</p>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
+    <span className={cn('inline-flex items-start gap-1', toneClasses(tone).text)}>
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      {children}
+    </span>
+  );
+}
+
+/** Header pill: a tone dot and a label on the dark band. */
+function HeaderPill({ tone, children }: { tone: ToneKey; children: string }) {
+  return (
+    <span className={pageHeaderBadgeClass}>
+      <span
+        aria-hidden="true"
+        className={cn('h-1.5 w-1.5 rounded-full', toneClasses(tone).solid)}
+      />
+      {children}
+    </span>
   );
 }
 
@@ -84,6 +104,12 @@ export default async function IntelligenceSettingsPage() {
   const triageEnabled = policy?.definition.triage.enabled ?? false;
   const showSetup = Boolean(setup && setupChecklist(setup).some(item => !item.on));
 
+  const sharedProcess =
+    ['integrated', 'worker', 'general-worker'].includes(getOpsKnightProcessRole()) &&
+    process.env.OPSKNIGHT_INTELLIGENCE_DEDICATED !== 'true';
+  const lagThreshold = settings.backpressureEscalationLagMs;
+  const lagHigh = criticalLagMs !== null && criticalLagMs > lagThreshold;
+
   return (
     <div className="space-y-6">
       <IntelligenceGroupHeader
@@ -100,67 +126,96 @@ export default async function IntelligenceSettingsPage() {
           'correlation-rules',
           ...(hasFailedWork ? ['failed-work'] : []),
         ]}
+        badges={
+          <>
+            <HeaderPill tone={settings.enabled ? 'ok' : 'neutral'}>
+              {settings.enabled ? 'Enabled' : 'Disabled'}
+            </HeaderPill>
+            {policy && <HeaderPill tone="neutral">{`Mode ${policy.effectiveMode}`}</HeaderPill>}
+          </>
+        }
+        about={
+          <>
+            <p>
+              Learns from your incident history to suggest similar past incidents, related
+              incidents, possible causes and runbooks. It runs entirely off the paging path: it
+              never delays escalation or notifications.
+            </p>
+            <p>
+              Certified service AUTO adds reversible related links after paging. Turning it off
+              stops analysis; existing accepted links remain available to undo.
+            </p>
+          </>
+        }
       >
-        Learns from your incident history to suggest similar past incidents, related incidents,
-        possible causes and runbooks. It runs entirely off the paging path: it never delays
-        escalation or notifications. Certified service AUTO adds reversible related links after
-        paging. Turning it off stops analysis; existing accepted links remain available to undo.
+        Suggestions from your incident history, kept off the paging path.
       </IntelligenceGroupHeader>
 
       {setup && <IntelligenceSetupChecklist state={setup} canManage={canManage} />}
 
       <SettingsSection
         id="lane-health"
-        title="Status"
-        description="Live health of the intelligence lane."
-        action={
-          <Badge variant={settings.enabled ? 'default' : 'secondary'}>
-            {settings.enabled ? 'Enabled' : 'Disabled'}
-          </Badge>
+        title="Lane health"
+        description="Live health of the intelligence lane. Paging never waits for it."
+        contentClassName="py-4"
+        footer={
+          sharedProcess ? (
+            <p role="status" className="flex items-start gap-2 text-sm text-foreground">
+              <AlertTriangle
+                className={cn('mt-0.5 h-4 w-4 shrink-0', toneClasses('elevated').text)}
+                aria-hidden="true"
+              />
+              Intelligence shares this process with paging work. For isolated capacity, use the
+              dedicated Intelligence worker in a split deployment.
+            </p>
+          ) : undefined
         }
       >
-        <div className="grid gap-4 py-2 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat
+        <StatGrid label="Intelligence lane health">
+          <StatTile
             label="Global mode"
-            value={policy ? policy.effectiveMode : 'Unavailable'}
+            value={policy ? policy.effectiveMode : NO_VALUE}
             hint={
-              policy && policy.mode !== policy.effectiveMode
-                ? `Policy is ${policy.mode}, held off by the master switch`
-                : undefined
+              !policy ? (
+                'Unavailable'
+              ) : policy.mode !== policy.effectiveMode ? (
+                <ToneHint tone="elevated">{`Policy is ${policy.mode}, held off by the master switch`}</ToneHint>
+              ) : undefined
             }
           />
-          <Stat
+          <StatTile
             label="Similarity engine"
-            value={capabilities ? capabilities.similarityTier.replace('_', ' + ') : 'Unavailable'}
+            value={capabilities ? capabilities.similarityTier.replace('_', ' + ') : NO_VALUE}
             hint={
-              capabilities && !capabilities.trigramAvailable
-                ? 'pg_trgm is not installed; full-text search is used'
-                : undefined
+              !capabilities ? (
+                'Unavailable'
+              ) : !capabilities.trigramAvailable ? (
+                <ToneHint tone="elevated">
+                  pg_trgm is not installed; full-text search is used
+                </ToneHint>
+              ) : undefined
             }
           />
-          <Stat
+          <StatTile
             label="Queue"
-            value={backlog ? `${backlog.ready} ready · ${backlog.leased} running` : 'Unavailable'}
-            hint={backlog ? `Oldest waiting: ${formatAge(backlog.oldestReadyAgeMs)}` : undefined}
+            value={backlog ? `${backlog.ready} ready · ${backlog.leased} running` : NO_VALUE}
+            hint={
+              backlog ? `Oldest waiting: ${formatAge(backlog.oldestReadyAgeMs)}` : 'Unavailable'
+            }
           />
-          <Stat
+          <StatTile
             label="Paging queue lag"
-            value={criticalLagMs === null ? 'Unavailable' : formatAge(criticalLagMs)}
-            hint={`Pauses above ${formatAge(settings.backpressureEscalationLagMs)}`}
+            value={criticalLagMs === null ? NO_VALUE : formatAge(criticalLagMs)}
+            hint={
+              lagHigh ? (
+                <ToneHint tone="critical">{`Paused: above ${formatAge(lagThreshold)}`}</ToneHint>
+              ) : (
+                `Pauses above ${formatAge(lagThreshold)}`
+              )
+            }
           />
-        </div>
+        </StatGrid>
       </SettingsSection>
-
-      {['integrated', 'worker', 'general-worker'].includes(getOpsKnightProcessRole()) &&
-        process.env.OPSKNIGHT_INTELLIGENCE_DEDICATED !== 'true' && (
-          <p
-            role="status"
-            className="rounded-lg border border-status-elevated/40 bg-status-elevated-soft p-3 text-sm text-foreground dark:bg-status-elevated/10"
-          >
-            Intelligence shares this process with paging work. For isolated capacity, use the
-            dedicated Intelligence worker in a split deployment.
-          </p>
-        )}
 
       <SettingsSection
         id="general"
@@ -173,7 +228,7 @@ export default async function IntelligenceSettingsPage() {
       <SettingsSection
         id="operations-insights"
         title="Operations insights"
-        description="Suggestions about service automation, escalation policies, on-call schedules, postmortems, runbooks and notifications. Off by default."
+        description="Suggestions about automation, escalation, on-call, postmortems, runbooks and notifications. Off by default."
       >
         <OpsInsightsSettingsForm settings={settings} canManage={canManage} />
       </SettingsSection>
@@ -183,7 +238,7 @@ export default async function IntelligenceSettingsPage() {
       <SettingsSection
         id="global-policy"
         title="Global policy"
-        description="Each save publishes a new immutable version, so any change can be undone and every decision stays traceable."
+        description="Each save publishes a new immutable version, so any change can be undone."
         action={<Badge variant="outline">Version {headVersion}</Badge>}
       >
         <IntelligencePolicyForm
@@ -197,25 +252,35 @@ export default async function IntelligenceSettingsPage() {
         />
         {versions && versions.versions.length > 0 && (
           <div className="border-t border-border py-4">
-            <h4 className="mb-3 text-sm font-medium">History</h4>
-            <ul className="space-y-3">
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+              <History className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              History
+            </h3>
+            <ul className="divide-y divide-border rounded-lg border border-border">
               {versions.versions.map(version => (
-                <li key={version.version} className="space-y-2 text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">Version {version.version}</span>
-                    <Badge variant="secondary">{version.mode}</Badge>
-                    {version.createdFromVersion && (
-                      <span className="text-xs text-muted-foreground">
-                        restored from version {version.createdFromVersion}
-                      </span>
+                <li
+                  key={version.version}
+                  className="flex flex-col gap-2 px-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium tabular-nums">Version {version.version}</span>
+                      <Badge variant="secondary">{version.mode}</Badge>
+                      {version.version === headVersion && <Badge variant="outline">Current</Badge>}
+                      <RelativeTime
+                        date={version.createdAt}
+                        className="text-xs text-muted-foreground"
+                      />
+                    </div>
+                    {(version.reason || version.createdFromVersion) && (
+                      <p className="text-xs text-muted-foreground">
+                        {version.createdFromVersion
+                          ? `Restored from version ${version.createdFromVersion}. `
+                          : ''}
+                        {version.reason}
+                      </p>
                     )}
-                    <span className="text-xs text-muted-foreground">
-                      {version.createdAt.toISOString().slice(0, 16).replace('T', ' ')} UTC
-                    </span>
                   </div>
-                  {version.reason && (
-                    <p className="text-xs text-muted-foreground">{version.reason}</p>
-                  )}
                   {canManage && version.version < headVersion && (
                     <RollbackForm targetVersion={version.version} headVersion={headVersion} />
                   )}
@@ -229,14 +294,14 @@ export default async function IntelligenceSettingsPage() {
       <SettingsSection
         id="triage"
         title="Triage suggestions"
-        description="Off by default. Suggestions only: nothing is applied until a responder accepts it."
+        description="Suggestions only: nothing is applied until a responder accepts it. Off by default."
         action={
           <Badge variant={triageEnabled ? 'default' : 'secondary'}>
             {triageEnabled ? 'On' : 'Off'}
           </Badge>
         }
       >
-        <div className="space-y-2 py-4 text-sm text-muted-foreground">
+        <LearnMore className="pt-3">
           <p>
             When an incident opens, triage looks at how similar incidents were handled and proposes,
             as chips on the incident:
@@ -252,7 +317,7 @@ export default async function IntelligenceSettingsPage() {
             visible. A service with its own policy decides for itself. Turning it on or off
             publishes a new policy version, so it can be rolled back from the history above.
           </p>
-        </div>
+        </LearnMore>
         <TriagePolicyForm
           headVersion={headVersion}
           enabled={triageEnabled}
@@ -276,7 +341,7 @@ export default async function IntelligenceSettingsPage() {
       {canManage && policy && (
         <SettingsSection
           title="Suggested grouping rules"
-          description="Grouping rules learned from the links responders confirmed and the suggestions they rejected, checked against recent history before they are offered."
+          description="Learned from links responders confirmed and suggestions they rejected, checked against recent history."
         >
           <RuleSuggestionsPanel expectedHeadVersion={headVersion} mode={policy.mode} />
         </SettingsSection>
@@ -286,24 +351,36 @@ export default async function IntelligenceSettingsPage() {
         <SettingsSection
           id="failed-work"
           title="Failed work"
-          description="Items that exhausted their retries. Quarantined items failed twice within a day and wait for a replay instead of retrying on their own. Nothing here affects incident handling."
+          description="Items that exhausted their retries. Nothing here affects incident handling."
         >
+          <LearnMore className="pt-3">
+            Quarantined items failed twice within a day and wait for a replay instead of retrying on
+            their own.
+          </LearnMore>
           <ul className="divide-y divide-border">
             {deadLetters.map(item => (
               <li
                 key={item.id}
-                className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+                className="flex flex-col gap-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="space-y-1">
-                  <p className="font-medium">
-                    {item.kind} · {item.attempts} attempts
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{item.kind}</span>
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {item.attempts} attempts
+                    </span>
                     {item.quarantined && (
-                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
+                      <span
+                        className={cn(
+                          'rounded-full border px-2 py-0.5 text-2xs font-semibold',
+                          toneClasses('elevated').soft
+                        )}
+                      >
                         Quarantined
                       </span>
                     )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{item.failureSummary}</p>
+                  </div>
+                  <p className="break-words text-xs text-muted-foreground">{item.failureSummary}</p>
                 </div>
                 {canManage && <ReplayForm id={item.id} />}
               </li>

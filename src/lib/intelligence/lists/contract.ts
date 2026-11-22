@@ -35,6 +35,14 @@ export function parseListId(value: ListParam): string | null {
   return raw && ID_PATTERN.test(raw) ? raw : null;
 }
 
+/** Longest free-text search kept from the URL; longer input is cut, not rejected. */
+export const LIST_SEARCH_MAX = 100;
+
+/** Free-text search from the URL (`q`): trimmed and bounded, or null when empty. */
+export function parseListSearch(value: ListParam): string | null {
+  return first(value)?.slice(0, LIST_SEARCH_MAX) ?? null;
+}
+
 /** Position after the last row of a page: its sort timestamp and id (the tiebreaker). */
 export interface ListCursor {
   at: Date;
@@ -88,6 +96,8 @@ export interface AlertListFilters {
   serviceId: string | null;
   severity: AlertSeverity | null;
   decision: AlertDecisionKind | null;
+  /** Case-insensitive text search on the alert's summary, title, dedup key, resource or service. */
+  q: string | null;
   window: OverviewWindowKey;
   cursor: ListCursor | null;
 }
@@ -99,6 +109,7 @@ export function parseAlertListFilters(params: Record<string, ListParam> = {}): A
     serviceId: parseListId(params.service),
     severity: ALERT_SEVERITIES.find(value => value === severity) ?? null,
     decision: ALERT_DECISION_KINDS.find(value => value === decision) ?? null,
+    q: parseListSearch(params.q),
     window: parseListWindow(params.window),
     cursor: decodeListCursor(params.cursor),
   };
@@ -137,6 +148,8 @@ export interface ChangeListFilters {
   serviceId: string | null;
   source: string | null;
   risk: ChangeRiskBand | null;
+  /** Case-insensitive text search on the change's summary, source, version or component. */
+  q: string | null;
   window: OverviewWindowKey;
   cursor: ListCursor | null;
 }
@@ -148,6 +161,7 @@ export function parseChangeListFilters(params: Record<string, ListParam> = {}): 
     serviceId: parseListId(params.service),
     source: source && source.length <= 120 ? source : null,
     risk: CHANGE_RISK_BANDS.find(value => value === risk) ?? null,
+    q: parseListSearch(params.q),
     window: parseListWindow(params.window),
     cursor: decodeListCursor(params.cursor),
   };

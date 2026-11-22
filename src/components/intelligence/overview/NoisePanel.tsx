@@ -1,6 +1,6 @@
 import type { OverviewNoise } from '@/lib/intelligence/overview/noise';
 import { formatCount, formatPercent } from '@/lib/intelligence/overview/window';
-import { FeatureOff, RankedBars, StatGrid, StatTile } from './primitives';
+import { FeatureOff, NO_VALUE, RankedBars, StatGrid, StatTile } from './primitives';
 
 const NOISE_SETTINGS = '/settings/intelligence/noise-controls';
 
@@ -13,11 +13,9 @@ export default function NoisePanel({
   windowLabel: string;
   canManage: boolean;
 }) {
-  const controlsOff = data.modes.on === 0 && data.modes.shadow === 0;
-  const shadowOnly = data.modes.on === 0 && data.modes.shadow > 0;
   return (
     <div className="space-y-4">
-      <StatGrid label={`Noise, ${windowLabel.toLowerCase()}`}>
+      <StatGrid flush label={`Noise, ${windowLabel.toLowerCase()}`}>
         <StatTile
           label="Alerts received"
           value={formatCount(data.alerts)}
@@ -44,7 +42,7 @@ export default function NoisePanel({
         />
         <StatTile
           label="False-group rate"
-          value={data.grouped === 0 ? '—' : formatPercent(data.falseGroupRate)}
+          value={data.grouped === 0 ? NO_VALUE : formatPercent(data.falseGroupRate)}
           hint={
             data.grouped === 0
               ? 'No alerts were grouped'
@@ -60,40 +58,52 @@ export default function NoisePanel({
         )}
       </StatGrid>
 
-      {controlsOff ? (
-        <FeatureOff
-          title="Noise controls are off"
-          adminHint="Maintenance windows, suppression rules and grouping start in shadow mode, so you can see what they would avoid before anything is held back."
-          href={NOISE_SETTINGS}
-          canManage={canManage}
+      <NoiseControls data={data} canManage={canManage} />
+    </div>
+  );
+}
+
+/**
+ * What the suppression rules and maintenance windows held back, or how to turn them on. Shared by the
+ * mobile Noise card and the desktop "Noise controls" section.
+ */
+export function NoiseControls({ data, canManage }: { data: OverviewNoise; canManage: boolean }) {
+  const controlsOff = data.modes.on === 0 && data.modes.shadow === 0;
+  const shadowOnly = data.modes.on === 0 && data.modes.shadow > 0;
+  return controlsOff ? (
+    <FeatureOff
+      title="Noise controls are off"
+      adminHint="Maintenance windows, suppression rules and grouping start in shadow mode, so you can see what they would avoid before anything is held back."
+      href={NOISE_SETTINGS}
+      canManage={canManage}
+    />
+  ) : (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold text-foreground">
+        Suppressed by rule or maintenance window
+      </h3>
+      {shadowOnly && (
+        <p className="text-xs text-muted-foreground">
+          Every control is in shadow mode, so nothing is suppressed yet. See &ldquo;Would have
+          avoided&rdquo; above.
+        </p>
+      )}
+      {data.suppressedBySource.length > 0 ? (
+        <RankedBars
+          label="Alerts suppressed per rule or maintenance window"
+          items={data.suppressedBySource.map(source => ({
+            key: source.key,
+            label: source.label,
+            detail: source.control === 'MAINTENANCE' ? 'Maintenance' : 'Rule',
+            value: source.count,
+          }))}
         />
       ) : (
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium">Suppressed by rule or maintenance window</h3>
-          {shadowOnly && (
-            <p className="text-xs text-muted-foreground">
-              Every control is in shadow mode, so nothing is suppressed yet. See &ldquo;Would have
-              avoided&rdquo; above.
-            </p>
-          )}
-          {data.suppressedBySource.length > 0 ? (
-            <RankedBars
-              label="Alerts suppressed per rule or maintenance window"
-              items={data.suppressedBySource.map(source => ({
-                key: source.key,
-                label: source.label,
-                detail: source.control === 'MAINTENANCE' ? 'Maintenance' : 'Rule',
-                value: source.count,
-              }))}
-            />
-          ) : (
-            !shadowOnly && (
-              <p className="text-sm text-muted-foreground">
-                No alerts were suppressed by a rule or maintenance window in this window.
-              </p>
-            )
-          )}
-        </div>
+        !shadowOnly && (
+          <p className="text-sm text-muted-foreground">
+            No alerts were suppressed by a rule or maintenance window in this window.
+          </p>
+        )
       )}
     </div>
   );

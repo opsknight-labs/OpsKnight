@@ -2,8 +2,12 @@ import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, MinusCircle } from 'lucide-react';
 import type { OverviewHealth } from '@/lib/intelligence/overview/health';
 import { formatCount } from '@/lib/intelligence/overview/window';
+import { toneClasses } from '@/components/patterns/status-tone';
 import { cn } from '@/lib/utils';
-import { actionLinkClass, StatGrid, StatTile } from './primitives';
+import { Button } from '@/components/ui/shadcn/button';
+import { NO_VALUE, StatGrid, StatTile } from './primitives';
+
+const LANE_TONE = { healthy: 'ok', degraded: 'elevated', disabled: 'neutral' } as const;
 
 const formatAge = (ms: number | null) => {
   if (ms === null) return 'None waiting';
@@ -31,43 +35,33 @@ export default function HealthPanel({ data }: { data: OverviewHealth }) {
           };
   return (
     <div className="space-y-4">
-      <div
-        className={cn(
-          'flex items-start gap-3 rounded-lg border p-3',
-          lane.status === 'healthy' &&
-            'border-status-ok-border/40 bg-status-ok-soft dark:bg-status-ok/10',
-          lane.status === 'degraded' &&
-            'border-status-elevated-border/40 bg-status-elevated-soft dark:bg-status-elevated/10',
-          lane.status === 'disabled' && 'border-border bg-muted/40'
-        )}
-      >
+      <div className="flex items-start gap-3">
         <view.Icon
-          className={cn(
-            'mt-0.5 h-5 w-5 shrink-0',
-            lane.status === 'healthy' && 'text-status-ok-deep dark:text-status-ok',
-            lane.status === 'degraded' && 'text-status-elevated-deep dark:text-status-elevated',
-            lane.status === 'disabled' && 'text-muted-foreground'
-          )}
+          className={cn('mt-0.5 h-5 w-5 shrink-0', toneClasses(LANE_TONE[lane.status]).text)}
           aria-hidden="true"
         />
-        <div>
-          <p className="text-sm font-semibold text-foreground">Lane: {view.label}</p>
-          <p className="text-xs text-muted-foreground">{view.detail}</p>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">Lane: {view.label}</p>
+          <p className="break-words text-xs text-muted-foreground">{view.detail}</p>
         </div>
       </div>
-      <StatGrid label="Intelligence work backlog">
+      <StatGrid flush columns={4} label="Intelligence work backlog">
         <StatTile label="Ready" value={formatCount(backlog.ready)} hint="Waiting to run" />
         <StatTile label="Running" value={formatCount(backlog.leased)} />
-        <StatTile label="Oldest waiting" value={formatAge(backlog.oldestReadyAgeMs)} />
+        <StatTile
+          label="Oldest waiting"
+          value={backlog.oldestReadyAgeMs === null ? NO_VALUE : formatAge(backlog.oldestReadyAgeMs)}
+          hint={backlog.oldestReadyAgeMs === null ? 'Nothing waiting' : undefined}
+        />
         <StatTile
           label="Failed work"
           value={formatCount(backlog.deadLetters)}
           hint={`${formatCount(backlog.quarantined)} quarantined`}
         />
       </StatGrid>
-      <Link href="/settings/intelligence" className={actionLinkClass}>
-        Open Intelligence settings
-      </Link>
+      <Button asChild size="sm" variant="outline" className="h-11 sm:h-9">
+        <Link href="/settings/intelligence">Open Intelligence settings</Link>
+      </Button>
     </div>
   );
 }

@@ -14,23 +14,11 @@ import {
   METRIC_TEMPLATE_BOUNDS,
   type MetricTemplateView,
 } from '@/lib/intelligence/metric-anomaly/contract';
+import { ActionMessage as Status, fieldClass } from '@/components/settings/form-kit';
 
 const initial: MetricTemplateActionState = { message: '', ok: false };
-const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
 
 type Option = { id: string; name: string };
-
-function Status({ state }: { state: MetricTemplateActionState }) {
-  if (!state.message) return null;
-  return (
-    <p
-      role={state.ok ? 'status' : 'alert'}
-      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
-    >
-      {state.message}
-    </p>
-  );
-}
 
 function NumberField({
   id,

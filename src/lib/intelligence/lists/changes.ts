@@ -79,6 +79,55 @@ function riskWhere(band: ChangeRiskBand): Prisma.ChangeEventWhereInput {
   }
 }
 
+/** Text search for the changes list: case-insensitive on the summary, source, version and component. */
+export function changeSearchWhere(q: string): Prisma.ChangeEventWhereInput {
+  return {
+    OR: [
+      { summary: { contains: q, mode: 'insensitive' } },
+      { source: { contains: q, mode: 'insensitive' } },
+      { version: { contains: q, mode: 'insensitive' } },
+      { component: { contains: q, mode: 'insensitive' } },
+    ],
+  };
+}
+
+/** Filters every changes-list read shares: scope, window, service, source, risk and search. */
+function changeFilterWhere(
+  readable: Prisma.ChangeEventWhereInput,
+  filters: ChangeListFilters,
+  since: Date,
+  until: Date
+): Prisma.ChangeEventWhereInput[] {
+  return [
+    readable,
+    { occurredAt: { gte: since, lt: until } },
+    filters.serviceId ? { serviceId: filters.serviceId } : {},
+    filters.source ? { source: filters.source } : {},
+    filters.risk ? riskWhere(filters.risk) : {},
+    filters.q ? changeSearchWhere(filters.q) : {},
+  ];
+}
+
+/**
+ * How many changes match the list's filters in the selected window, for the page header. Its own budgeted
+ * read, so a slow count never holds back or breaks the list.
+ */
+export async function countChangesForActor(
+  actor: AuthorizationActor,
+  filters: ChangeListFilters,
+  options: { client?: Client; now?: Date } = {}
+): Promise<number> {
+  const readable = changeReadWhere(actor);
+  if (!readable) return 0;
+  const { since, until } = resolveOverviewWindow(filters.window, options.now);
+  return withDbBudget(
+    LIST_DB_BUDGET,
+    tx =>
+      tx.changeEvent.count({ where: { AND: changeFilterWhere(readable, filters, since, until) } }),
+    options.client ?? prisma
+  );
+}
+
 const clip = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
 
@@ -130,11 +179,7 @@ export async function listChangesForActor(
       const changes = await tx.changeEvent.findMany({
         where: {
           AND: [
-            readable,
-            { occurredAt: { gte: since, lt: until } },
-            filters.serviceId ? { serviceId: filters.serviceId } : {},
-            filters.source ? { source: filters.source } : {},
-            filters.risk ? riskWhere(filters.risk) : {},
+            ...changeFilterWhere(readable, filters, since, until),
             cursor
               ? {
                   OR: [

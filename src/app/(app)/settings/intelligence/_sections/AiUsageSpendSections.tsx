@@ -7,6 +7,8 @@ import { backgroundEmbeddingTokenBudget } from '@/lib/intelligence/ai/contract';
 import { loadAiCostView } from '@/lib/intelligence/ai/cost-view';
 import AiSpendPanel from '@/components/settings/AiSpendPanel';
 import { AiBudgetsForm, AiModelPricesForm } from '@/components/settings/AiCostForms';
+import { LearnMore } from '@/components/settings/layout/LearnMore';
+import { NO_VALUE, StatGrid, StatTile } from '@/components/intelligence/overview/primitives';
 
 async function safely<T>(label: string, load: () => Promise<T>): Promise<T | null> {
   try {
@@ -62,25 +64,24 @@ export default async function AiUsageSpendSections({
         id="usage"
         title="Usage"
         description="Today's totals reset at 00:00 UTC. Red bars reached the daily budget."
+        contentClassName="space-y-3 pt-4"
       >
-        <div className="grid gap-4 py-3 sm:grid-cols-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Requests</p>
-            <p className="text-lg font-semibold">{usage ? usage.requests : 'Unavailable'}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Tokens</p>
-            <p className="text-lg font-semibold">
-              {usage ? used.toLocaleString('en-US') : 'Unavailable'}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Daily budget</p>
-            <p className="text-lg font-semibold">
-              {settings.dailyTokenBudget.toLocaleString('en-US')}
-            </p>
-          </div>
-        </div>
+        <StatGrid label="AI usage today">
+          <StatTile
+            label="Requests"
+            value={usage ? String(usage.requests) : NO_VALUE}
+            hint={usage ? undefined : 'Unavailable'}
+          />
+          <StatTile
+            label="Tokens"
+            value={usage ? used.toLocaleString('en-US') : NO_VALUE}
+            hint={usage ? undefined : 'Unavailable'}
+          />
+          <StatTile
+            label="Daily budget"
+            value={settings.dailyTokenBudget.toLocaleString('en-US')}
+          />
+        </StatGrid>
         {history && <AiUsageChart history={history} budget={settings.dailyTokenBudget} />}
         <p className="py-2 text-sm text-muted-foreground">
           Background embedding:{' '}
@@ -94,8 +95,18 @@ export default async function AiUsageSpendSections({
 
       <SettingsSection
         title="Spend and budgets"
-        description="Dollar spend by team, capability and model, from token counts and the prices below. A call is charged to the incident's team, or else to the person's first team. Optional daily budgets per team or capability are enforced with the global budget: at the limit, new AI requests in that scope are refused until 00:00 UTC and answers fall back to basic mode."
+        description="Dollar spend by team, capability and model, with optional daily budgets per team or capability."
       >
+        <LearnMore className="pt-3">
+          <p>
+            Spend comes from token counts and the prices below. A call is charged to the
+            incident&apos;s team, or else to the person&apos;s first team.
+          </p>
+          <p>
+            Budgets are enforced with the global budget: at the limit, new AI requests in that scope
+            are refused until 00:00 UTC and answers fall back to basic mode.
+          </p>
+        </LearnMore>
         {cost ? (
           <>
             <AiSpendPanel breakdown={cost.breakdown} statuses={cost.statuses} />
@@ -111,8 +122,12 @@ export default async function AiUsageSpendSections({
       <SettingsSection
         id="model-prices"
         title="Model prices"
-        description="US dollars per million tokens. Built-in list prices cover common hosted models; set your own for negotiated, regional or self-hosted rates. A model with no price still counts toward token budgets."
+        description="US dollars per million tokens. Set your own for negotiated, regional or self-hosted rates."
       >
+        <LearnMore className="pt-3">
+          Built-in list prices cover common hosted models. A model with no price still counts toward
+          token budgets.
+        </LearnMore>
         {cost ? (
           <AiModelPricesForm
             configured={cost.configuredPrices}

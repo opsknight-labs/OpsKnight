@@ -51,6 +51,7 @@ import SquireAvailabilityNotice, {
   type SquireRateLimit,
 } from './SquireAvailabilityNotice';
 import { DOCK_PANEL_CLASS, DOCK_WRAPPER_CLASS } from './dock';
+import SquireBarCompanion from './SquireBarCompanion';
 import { useSquireSurfaces } from './use-squire-surfaces';
 import SquirePinnedBriefing from './SquirePinnedBriefing';
 import { SquireContextLabel, SquireDockToggle, SquireEvidenceChip } from './SquireSurfaceControls';
@@ -857,6 +858,15 @@ export default function SquireLauncher({
       data-side={side}
       data-presentation={fullscreen ? 'fullscreen' : dock.docked && open ? 'docked' : 'panel'}
     >
+      {launcher === 'FLOATING' && avatar === 'SQUIRE' && !fullscreen && (
+        <SquireBarCompanion
+          name={name}
+          open={open}
+          onOpen={() => setOpen(true)}
+          launcherState={busy || !online ? mascotState : 'idle'}
+          animated={animated}
+        />
+      )}
       {!open && launcher === 'FLOATING' && (
         <button
           ref={launcherRef}
@@ -865,7 +875,7 @@ export default function SquireLauncher({
           aria-expanded={false}
           aria-controls={panelId}
           // An open right-side sheet (Insights inspector) owns that corner; the launcher steps aside until it closes.
-          className={`flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-lg transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${side === 'left' ? '' : '[body:has([data-sheet-side=right][data-state=open])_&]:hidden'}`}
+          className={`flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-lg transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 lg:[html[data-squire-bar=on]_&]:hidden ${side === 'left' ? '' : '[body:has([data-sheet-side=right][data-state=open])_&]:hidden'}`}
         >
           <SquireAvatar
             kind={avatar}

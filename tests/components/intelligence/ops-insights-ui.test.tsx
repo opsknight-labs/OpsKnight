@@ -213,6 +213,8 @@ describe('NeedsAttention with operations insights', () => {
           insight({ id: 'warn', severity: 'WARNING', title: 'No alerts for 3 days' }),
           insight({
             id: 'crit',
+            kind: 'escalation.policy',
+            key: 'never-acked:2',
             severity: 'CRITICAL',
             title: 'Step 2 never acknowledges',
             scopeName: 'Checkout',
@@ -238,6 +240,84 @@ describe('NeedsAttention with operations insights', () => {
     );
     expect(section).toHaveTextContent('3+ items');
     expect(section).toHaveTextContent('Accept or dismiss some to see more.');
+  });
+
+  it('keeps Accept and Dismiss as buttons and moves the other actions into a menu', async () => {
+    render(<NeedsAttention items={[]} insights={[insight()]} canDecide squireName="Squire" />);
+    const section = screen.getByRole('region', { name: 'Needs attention' });
+    expect(within(section).getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(within(section).queryByRole('button', { name: 'Evidence' })).toBeNull();
+    expect(within(section).queryByRole('link', { name: 'Create draft' })).toBeNull();
+    const more = within(section).getByRole('button', { name: 'More actions' });
+    fireEvent.pointerDown(more, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    expect(await screen.findByRole('menuitem', { name: 'Create draft' })).toHaveAttribute(
+      'href',
+      '/services/svc-1/integrations'
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Ask Squire about this' }));
+    expect(openSquire).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(within(section).getByRole('button', { name: 'More actions' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Evidence' }));
+    const dialog = await screen.findByRole('dialog', { name: 'No alerts for 3 days' });
+    expect(within(dialog).getByText('Usual alerts per day')).toBeInTheDocument();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(within(section).getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(decideInsightAction).toHaveBeenCalledWith('ins-1', 'dismiss'));
+  });
+
+  it('folds insights of one kind into a disclosure row that reveals each with its actions', async () => {
+    const schedule = (id: string, hours: number, name: string) =>
+      insight({
+        id,
+        scopeType: 'SCHEDULE',
+        scopeId: id,
+        kind: 'oncall.schedule',
+        key: 'same-person',
+        title: `The same person is primary and backup for ${hours} hours in the next 14 days`,
+        summary: 'If that person misses a page there is nobody else behind them.',
+        scopeName: name,
+        scopeHref: `/schedules/${id}`,
+      });
+    render(
+      <NeedsAttention
+        items={[]}
+        insights={[schedule('s1', 114, 'Primary'), insight(), schedule('s2', 30, 'Backend')]}
+        canDecide
+      />
+    );
+    const section = screen.getByRole('region', { name: 'Needs attention' });
+    // Three insights, two rows: the group and the lone one. The heading still counts every insight.
+    expect(section).toHaveTextContent('3 items');
+    expect(within(section).getAllByRole('listitem')).toHaveLength(2);
+    const toggle = within(section).getByRole('button', {
+      name: /2 schedules: the same person is primary and backup/,
+    });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveTextContent('Warning');
+    expect(toggle).toHaveTextContent('If that person misses a page');
+    expect(within(section).queryByRole('link', { name: 'Primary' })).toBeNull();
+    expect(within(section).getAllByRole('button', { name: 'Accept' })).toHaveLength(1);
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const group = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    const rows = within(group).getAllByRole('listitem');
+    expect(rows.map(row => row.textContent)).toEqual([
+      expect.stringContaining('for 114 hours'),
+      expect.stringContaining('for 30 hours'),
+    ]);
+    expect(within(rows[1]).getByRole('link', { name: 'Backend' })).toHaveAttribute(
+      'href',
+      '/schedules/s2'
+    );
+    fireEvent.click(within(rows[1]).getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(decideInsightAction).toHaveBeenCalledWith('s2', 'dismiss'));
+    expect(within(rows[0]).getByRole('button', { name: 'More actions' })).toBeInTheDocument();
   });
 
   it('renders nothing when both sources are empty', () => {

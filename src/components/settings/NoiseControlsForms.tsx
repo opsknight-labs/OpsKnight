@@ -31,29 +31,12 @@ import type {
 import type { PrePagingDecisionRow } from '@/lib/intelligence/noise-controls/decisions';
 import type { NoiseControlVersionView } from '@/lib/intelligence/noise-controls/policy-versions';
 import type { NoiseVersionDiffEntry } from '@/lib/intelligence/noise-controls/versioning';
+import { StatGrid, StatTile } from '@/components/intelligence/overview/primitives';
+import { ActionMessage as Status, fieldClass, labelClass } from '@/components/settings/form-kit';
 
 const initial: NoiseActionState = { message: '', ok: false };
-const fieldClass =
-  'min-h-11 w-full rounded-md border border-border bg-background p-2 text-sm sm:min-h-9';
-const labelClass = 'text-sm font-medium';
 
 type Option = { id: string; name: string };
-
-function Status({ state }: { state: NoiseActionState }) {
-  if (!state.message) return null;
-  return (
-    <p
-      role={state.ok ? 'status' : 'alert'}
-      className={
-        state.ok
-          ? 'text-sm text-status-ok-deep dark:text-status-ok-soft'
-          : 'text-sm text-destructive'
-      }
-    >
-      {state.message}
-    </p>
-  );
-}
 
 function formatAt(value: Date | string | null | undefined) {
   if (!value) return '—';
@@ -142,15 +125,11 @@ export function KpiTiles({ kpis }: { kpis: NoiseControlKpis }) {
     },
   ];
   return (
-    <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" aria-label="Noise control KPIs">
+    <StatGrid label="Noise control KPIs">
       {tiles.map(tile => (
-        <div key={tile.label} className="rounded-lg border border-border bg-card p-3">
-          <dt className="text-xs text-muted-foreground">{tile.label}</dt>
-          <dd className="text-xl font-semibold">{tile.value}</dd>
-          {tile.hint && <dd className="text-xs text-muted-foreground">{tile.hint}</dd>}
-        </div>
+        <StatTile key={tile.label} label={tile.label} value={tile.value} hint={tile.hint} />
       ))}
-    </dl>
+    </StatGrid>
   );
 }
 

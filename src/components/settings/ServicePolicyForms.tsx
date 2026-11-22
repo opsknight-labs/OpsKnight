@@ -9,21 +9,9 @@ import {
 import { Button } from '@/components/ui/shadcn/button';
 import type { IntelligenceModeValue } from '@/lib/intelligence/contract';
 import Link from 'next/link';
+import { ActionMessage as Status, fieldClass } from '@/components/settings/form-kit';
 
 const initial: ServicePolicyActionState = { message: '', ok: false };
-const fieldClass = 'w-full rounded-md border border-border bg-background p-2 text-sm';
-
-function Status({ state }: { state: ServicePolicyActionState }) {
-  if (!state.message) return null;
-  return (
-    <p
-      role={state.ok ? 'status' : 'alert'}
-      className={state.ok ? 'text-sm text-emerald-600' : 'text-sm text-destructive'}
-    >
-      {state.message}
-    </p>
-  );
-}
 
 export type ServicePolicyRow = {
   serviceId: string;
@@ -87,7 +75,7 @@ export function ServicePolicyForm({
           type="checkbox"
           defaultChecked={row.similarityEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <label htmlFor={`${id}-sim`} className="text-sm font-medium">
           Find similar past incidents
@@ -100,7 +88,7 @@ export function ServicePolicyForm({
           type="checkbox"
           defaultChecked={row.responseEnabled}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <label htmlFor={`${id}-resp`} className="text-sm font-medium">
           Suggest probable causes and runbooks
@@ -113,7 +101,7 @@ export function ServicePolicyForm({
           type="checkbox"
           defaultChecked={row.triageEnabled ?? false}
           disabled={disabled}
-          className="mt-1 h-4 w-4"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
         />
         <label htmlFor={`${id}-triage`} className="text-sm font-medium">
           Suggest triage (urgency, owner, duplicates, expected time to resolve)

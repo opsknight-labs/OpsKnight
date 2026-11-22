@@ -15,6 +15,7 @@ export function InsightRow({
   squireName,
   draftLabel,
   className,
+  compact = false,
 }: {
   insight: InsightsPanelItem;
   canDecide: boolean;
@@ -22,6 +23,8 @@ export function InsightRow({
   draftLabel?: string;
   /** Replaces the default list padding when the row sits in another list. */
   className?: string;
+  /** Dense inbox row: the summary clamps to two lines and the secondary actions sit in a menu. */
+  compact?: boolean;
 }) {
   return (
     <li
@@ -47,7 +50,12 @@ export function InsightRow({
           )}
           <p className="min-w-0 break-words text-sm font-medium">{insight.title}</p>
         </div>
-        <p className="break-words text-sm text-muted-foreground">{insight.summary}</p>
+        <p
+          title={compact ? insight.summary : undefined}
+          className={cn('break-words text-sm text-muted-foreground', compact && 'line-clamp-2')}
+        >
+          {insight.summary}
+        </p>
         {insight.scopeName && insight.scopeHref && (
           <p className="text-xs text-muted-foreground">
             On {SCOPE_NOUN[insight.scopeType]}{' '}
@@ -73,6 +81,7 @@ export function InsightRow({
         draftLabel={draftLabel}
         canDecide={canDecide}
         squireName={squireName}
+        menu={compact}
       />
     </li>
   );

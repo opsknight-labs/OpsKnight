@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import {
   MetricTemplateForm,
@@ -12,6 +11,11 @@ import { KIND_CAPABILITIES } from '@/lib/intelligence/connectors/contract';
 import { listObservabilityConnections } from '@/lib/intelligence/connectors/service';
 import { listMetricTemplates } from '@/lib/intelligence/metric-anomaly/service';
 import { requirePageAccess } from '@/lib/access/server';
+import { LineChart } from 'lucide-react';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import IntelligenceSubNav from '@/components/settings/layout/IntelligenceSubNav';
+import { LearnMore } from '@/components/settings/layout/LearnMore';
+import EmptyState from '@/components/patterns/EmptyState';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -51,25 +55,26 @@ export default async function MetricTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <p className="text-xs text-muted-foreground">
-          <Link href="/settings/intelligence/services#metric-evidence" className="hover:underline">
-            Services &amp; changes
-          </Link>{' '}
-          / Metric anomaly evidence
-        </p>
-        <h1 className="text-2xl font-semibold">Metric anomaly evidence</h1>
-        <p className="text-sm text-muted-foreground">
-          Optional. Point a service at a metric it cares about; the intelligence lane compares the
-          last window with the same time in previous weeks and records deviations as leads for
-          probable-cause analysis and the incident timeline. Nothing pages, mutes or runs
-          automatically, and nothing here touches alert ingestion.
-        </p>
-      </header>
+      <SettingsPageHeader
+        eyebrow="AIOps Intelligence"
+        title="Metric anomaly evidence"
+        description="Point a service at a metric it cares about; deviations become leads for probable causes."
+        icon={LineChart}
+        trail={[
+          { label: 'Services & changes', href: '/settings/intelligence/services#metric-evidence' },
+          { label: 'Metric anomaly evidence' },
+        ]}
+      />
+      <IntelligenceSubNav />
+      <LearnMore label="How this works">
+        The intelligence lane compares the last window with the same time in previous weeks and
+        records deviations as leads for probable-cause analysis and the incident timeline. Nothing
+        pages, mutes or runs automatically, and nothing here touches alert ingestion.
+      </LearnMore>
 
       <SettingsSection
         title="Templates"
-        description="Each template is off until you enable it. It runs only through a connection the service's team may use; if the connection fails, the template simply produces no evidence."
+        description="Each template is off until you enable it, and runs only through a connection the service's team may use."
       >
         {canManage && services && (
           <MetricTemplateForm services={services} connections={metricConnections} />
@@ -82,7 +87,12 @@ export default async function MetricTemplatesPage() {
             canManage={canManage}
           />
         ) : (
-          <p className="py-2 text-sm text-muted-foreground">Unavailable.</p>
+          <EmptyState
+            size="sm"
+            variant="simple"
+            title="Templates unavailable"
+            description="They could not be loaded. Refresh to try again."
+          />
         )}
       </SettingsSection>
 

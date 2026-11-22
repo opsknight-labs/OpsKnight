@@ -3,6 +3,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { DeclareDependencyForm, DependencyList } from '@/components/settings/DependencyManager';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { Button } from '@/components/ui/shadcn/button';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
@@ -20,6 +21,8 @@ import {
   MIN_INCIDENTS_FOR_QUALITY,
 } from '@/lib/intelligence/triage/alert-quality';
 import AlertQualityActions from '@/components/settings/AlertQualityActions';
+import { LearnMore } from '@/components/settings/layout/LearnMore';
+import RelativeTime from '@/components/patterns/RelativeTime';
 
 async function safely<T>(label: string, load: () => Promise<T>): Promise<T | null> {
   try {
@@ -116,21 +119,25 @@ export default async function DependenciesChangesSections({ canManage }: { canMa
       <SettingsSection
         id="metric-evidence"
         title="Metric anomaly evidence"
-        description="Optional, off by default: per-service metric queries evaluated against a seasonal baseline, as extra leads for probable causes and the incident timeline."
+        description="Optional, off by default: per-service metric queries checked against a seasonal baseline, as extra leads for probable causes."
+        contentClassName="py-4"
       >
-        <p className="py-3 text-sm">
-          <Link href="/settings/intelligence/response/metrics" className="hover:underline">
-            Manage metric templates
-          </Link>
-        </p>
+        <Button asChild variant="outline" className="min-h-11 sm:min-h-10">
+          <Link href="/settings/intelligence/response/metrics">Manage metric templates</Link>
+        </Button>
       </SettingsSection>
 
       <SettingsSection
         id="change-sources"
         title="Recent changes"
-        description="Deploys, config and flag changes recorded for probable-cause analysis. Native sources: Argo CD, LaunchDarkly, Unleash, HCP Terraform, GitHub and GitLab deployments and Kubernetes rollouts (github-deployments, gitlab-deployments, kubernetes-rollouts) have their own endpoints under /api/integrations/."
+        description="Deploys, config and flag changes recorded for probable-cause analysis."
       >
-        <div className="space-y-2 py-3 text-sm text-muted-foreground">
+        <LearnMore label="How to send changes" className="pt-3">
+          <p>
+            Native sources (Argo CD, LaunchDarkly, Unleash, HCP Terraform, GitHub and GitLab
+            deployments and Kubernetes rollouts: github-deployments, gitlab-deployments,
+            kubernetes-rollouts) have their own endpoints under /api/integrations/.
+          </p>
           <p>
             Send changes with{' '}
             <code className="rounded bg-muted px-1">
@@ -142,7 +149,7 @@ export default async function DependenciesChangesSections({ canManage }: { canMa
           </p>
           <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{`{ "kind": "DEPLOY", "summary": "api v2.4.1", "version": "2.4.1",
   "source": "github-actions", "dedupKey": "run-8841", "occurredAt": "2026-01-01T12:00:00Z" }`}</pre>
-        </div>
+        </LearnMore>
         {changes && changes.length > 0 ? (
           <ul className="divide-y divide-border">
             {changes.map(change => (
@@ -154,7 +161,7 @@ export default async function DependenciesChangesSections({ canManage }: { canMa
                   <p className="truncate text-sm font-medium">{change.summary}</p>
                   <p className="text-xs text-muted-foreground">
                     {change.service?.name ?? 'No service'} · {change.source} ·{' '}
-                    {change.occurredAt.toISOString().slice(0, 16).replace('T', ' ')} UTC
+                    <RelativeTime date={change.occurredAt} />
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -184,7 +191,7 @@ export default async function DependenciesChangesSections({ canManage }: { canMa
       <SettingsSection
         id="alert-quality"
         title="Alert quality"
-        description={`Services whose incidents mostly clear within minutes or are never acknowledged, over ${ALERT_QUALITY_WINDOW_DAYS} days. Needs at least ${MIN_INCIDENTS_FOR_QUALITY} incidents. Flag only: nothing is suppressed.`}
+        description={`Services whose incidents mostly clear within minutes or are never acknowledged, over ${ALERT_QUALITY_WINDOW_DAYS} days. Flag only: nothing is suppressed.`}
       >
         {quality && quality.length > 0 ? (
           <div className="space-y-4">
@@ -235,7 +242,12 @@ export default async function DependenciesChangesSections({ canManage }: { canMa
             </ul>
           </div>
         ) : (
-          <p className="py-2 text-sm text-muted-foreground">Not enough incident history yet.</p>
+          <EmptyState
+            size="sm"
+            variant="simple"
+            title="Not enough incident history yet"
+            description={`A service needs at least ${MIN_INCIDENTS_FOR_QUALITY} incidents in ${ALERT_QUALITY_WINDOW_DAYS} days before its alert quality is scored.`}
+          />
         )}
       </SettingsSection>
     </>
