@@ -7,6 +7,9 @@ import type {
   PublicUptimeWindow,
 } from './public-contract';
 import { getWorstPublicStatus } from './status-presentation';
+import { serviceAvailability, type HealthSegment } from './availability-engine';
+
+const DAY_MS = 86_400_000;
 
 export type BusinessServiceGroup = {
   id: string;
@@ -63,20 +66,41 @@ function mergeHistory(members: readonly PublicStatusService[]): PublicStatusHist
   };
 }
 
-/** The weakest member's uptime: a business service is only as available as its worst part. */
-function mergeUptimeWindow(windows: readonly PublicUptimeWindow[]): PublicUptimeWindow {
+/**
+ * Uptime over the union of the members' downtime: the business service is down while any member
+ * is, and overlapping member outages count once. Without merged history it falls back to the
+ * weakest member, which is the same number when only one member was ever down.
+ * Incident counts add up per member; every incident belongs to exactly one service, so the sum
+ * is already a count of distinct incidents.
+ */
+function mergeUptimeWindow(
+  windows: readonly PublicUptimeWindow[],
+  history: PublicStatusHistory | undefined
+): PublicUptimeWindow {
   const measured = windows.filter(window => window.percentage !== null);
   const worst = measured.reduce<PublicUptimeWindow | undefined>(
     (lowest, window) =>
       !lowest || (window.percentage ?? 100) < (lowest.percentage ?? 100) ? window : lowest,
     undefined
   );
+  const measuredDays = Math.min(...windows.map(window => window.measuredDays));
+  let percentage = worst?.percentage ?? null;
+  if (history && measured.length) {
+    const end = Date.parse(history.rangeEnd);
+    const start = Math.max(Date.parse(history.rangeStart), end - measuredDays * DAY_MS);
+    const segments: HealthSegment[] = history.segments.map(segment => ({
+      start: Date.parse(segment.startAt),
+      end: Date.parse(segment.endAt),
+      status: segment.status,
+    }));
+    percentage = serviceAvailability(segments, new Date(start), new Date(end)).percentage ?? percentage;
+  }
   return {
-    percentage: worst?.percentage ?? null,
+    percentage,
     incidentCount: windows.reduce((sum, window) => sum + window.incidentCount, 0),
-    measuredDays: Math.min(...windows.map(window => window.measuredDays)),
+    measuredDays,
     complete: windows.every(window => window.complete),
-    ...(worst?.grade ? { grade: worst.grade } : {}),
+    ...(worst?.grade && percentage === worst.percentage ? { grade: worst.grade } : {}),
   };
 }
 
@@ -93,8 +117,9 @@ function statusSinceFor(
 }
 
 /**
- * Business-service rows for a status page: status is the worst member status, history and
- * uptime are merged from members. Only members published on the page count; a business service
+ * Business-service rows for a status page: status is the worst published member status (public
+ * pages only reflect public incidents, so they do not use the internal health engine), history
+ * is merged from members and uptime is the union of their downtime. Only members published on the page count; a business service
  * with no published member is left out rather than shown as healthy.
  */
 export function buildPublicBusinessServices(
@@ -127,8 +152,14 @@ export function buildPublicBusinessServices(
         ...(uptimeMembers.length === members.length
           ? {
               uptime: {
-                days30: mergeUptimeWindow(uptimeMembers.map(uptime => uptime.days30)),
-                days90: mergeUptimeWindow(uptimeMembers.map(uptime => uptime.days90)),
+                days30: mergeUptimeWindow(
+                  uptimeMembers.map(uptime => uptime.days30),
+                  history
+                ),
+                days90: mergeUptimeWindow(
+                  uptimeMembers.map(uptime => uptime.days90),
+                  history
+                ),
               },
             }
           : {}),
