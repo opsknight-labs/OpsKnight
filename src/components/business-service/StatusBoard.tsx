@@ -66,7 +66,7 @@ function Notices({ notices, now }: { notices: readonly StatusBoardNotice[]; now:
     <section aria-labelledby="board-notices" className="space-y-2">
       <h2
         id="board-notices"
-        className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+        className="text-xs font-semibold uppercase tracking-wider text-ink-600"
       >
         Announcements and maintenance
       </h2>
@@ -181,7 +181,7 @@ export default function StatusBoard({
       <section aria-labelledby="board-tiles" className="space-y-2">
         <h2
           id="board-tiles"
-          className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+          className="text-xs font-semibold uppercase tracking-wider text-ink-600"
         >
           Business services
         </h2>

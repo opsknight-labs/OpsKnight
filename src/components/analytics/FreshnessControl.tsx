@@ -32,7 +32,7 @@ export default function FreshnessControl({
     });
 
   return (
-    <div className="flex min-h-11 items-center justify-end gap-2 text-xs text-muted-foreground sm:min-h-5">
+    <div className="flex min-h-11 items-center justify-end gap-2 text-xs text-ink-600 sm:min-h-5">
       {failed && (
         <span role="alert" className="text-destructive">
           Couldn&apos;t refresh. Try again.

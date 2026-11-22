@@ -51,6 +51,8 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const DAY = 86_400_000;
+// Tab panels sit on a card, like the overview's sections, so muted text keeps AA contrast.
+const TAB_CARD = 'rounded-lg border bg-card p-4 text-card-foreground shadow-xs sm:p-5';
 const windowOf = (days: number, to = new Date()) => ({
   from: new Date(to.getTime() - days * DAY),
   to,
@@ -481,19 +483,25 @@ export default async function BusinessServiceOverviewPage({
             id: 'members',
             label: 'Members',
             count: memberIds.length,
-            content: <MembersPanel members={members} supporting={related(children)} />,
+            content: (
+              <div className={TAB_CARD}>
+                <MembersPanel members={members} supporting={related(children)} />
+              </div>
+            ),
           },
           {
             id: 'dependencies',
             label: 'Dependencies',
             count: children.length + parents.length + technical.length,
             content: (
-              <DependenciesPanel
-                businessServiceId={item.id}
-                supporting={related(children)}
-                dependents={related(parents)}
-                technical={technical}
-              />
+              <div className={TAB_CARD}>
+                <DependenciesPanel
+                  businessServiceId={item.id}
+                  supporting={related(children)}
+                  dependents={related(parents)}
+                  technical={technical}
+                />
+              </div>
             ),
           },
           {
@@ -501,29 +509,31 @@ export default async function BusinessServiceOverviewPage({
             label: 'Status pages',
             count: item.statusPages.length,
             content: (
-              <StatusPagesPanel
-                canManage={canManage}
-                pages={item.statusPages.map(link => ({
-                  id: link.id,
-                  pageId: link.statusPage.id,
-                  name: link.statusPage.name,
-                  href: link.statusPage.enabled
-                    ? link.statusPage.isDefault || !link.statusPage.slug
-                      ? '/status'
-                      : `/status/${link.statusPage.slug}`
-                    : null,
-                  displayName: link.displayName,
-                  showOnPage: link.showOnPage,
-                  showMembers: link.showMembers,
-                  grouped: link.statusPage.serviceLayout !== 'FLAT',
-                  override:
-                    link.statusOverride &&
-                    (!link.statusOverrideUntil || link.statusOverrideUntil > new Date())
-                      ? (link.statusOverride as BusinessServiceHealth['status'])
+              <div className={TAB_CARD}>
+                <StatusPagesPanel
+                  canManage={canManage}
+                  pages={item.statusPages.map(link => ({
+                    id: link.id,
+                    pageId: link.statusPage.id,
+                    name: link.statusPage.name,
+                    href: link.statusPage.enabled
+                      ? link.statusPage.isDefault || !link.statusPage.slug
+                        ? '/status'
+                        : `/status/${link.statusPage.slug}`
                       : null,
-                  overrideUntil: link.statusOverrideUntil,
-                }))}
-              />
+                    displayName: link.displayName,
+                    showOnPage: link.showOnPage,
+                    showMembers: link.showMembers,
+                    grouped: link.statusPage.serviceLayout !== 'FLAT',
+                    override:
+                      link.statusOverride &&
+                      (!link.statusOverrideUntil || link.statusOverrideUntil > new Date())
+                        ? (link.statusOverride as BusinessServiceHealth['status'])
+                        : null,
+                    overrideUntil: link.statusOverrideUntil,
+                  }))}
+                />
+              </div>
             ),
           },
           {
@@ -531,14 +541,16 @@ export default async function BusinessServiceOverviewPage({
             label: 'Followers',
             count: item._count.followers,
             content: (
-              <FollowersPanel
-                followers={item.followers.map(({ user }) => ({
-                  id: user.id,
-                  name: user.name ?? 'Unnamed user',
-                }))}
-                teams={item.teamSubscribers.map(({ team }) => team)}
-                dashboards={item.dashboards.map(({ dashboard }) => dashboard)}
-              />
+              <div className={TAB_CARD}>
+                <FollowersPanel
+                  followers={item.followers.map(({ user }) => ({
+                    id: user.id,
+                    name: user.name ?? 'Unnamed user',
+                  }))}
+                  teams={item.teamSubscribers.map(({ team }) => team)}
+                  dashboards={item.dashboards.map(({ dashboard }) => dashboard)}
+                />
+              </div>
             ),
           },
         ]}

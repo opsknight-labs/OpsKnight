@@ -98,7 +98,7 @@ export default async function StatusBoardPage({
                       'inline-flex h-9 items-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                       current
                         ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        : 'text-ink-600 hover:bg-muted hover:text-foreground'
                     )}
                   >
                     {entry.name}

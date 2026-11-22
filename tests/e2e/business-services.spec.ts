@@ -6,15 +6,8 @@ import bcrypt from 'bcryptjs';
 /**
  * Journey: business-service catalog → overview → status dashboard, for an admin and a stakeholder,
  * with axe at 1280 px and 390 px in light and dark.
- *
- * NEEDS THE P1b HEALTH ENGINE. Until `src/lib/business-services/health-impl.ts` is the real engine these
- * pages show "Health is being prepared", so the spec is skipped unless E2E_BUSINESS_SERVICES_ENGINE=1.
+ * Seeds its own users, team, service, business service and incident, and removes them afterwards.
  */
-test.skip(
-  process.env.E2E_BUSINESS_SERVICES_ENGINE !== '1',
-  'Needs the P1b business-service health engine (set E2E_BUSINESS_SERVICES_ENGINE=1)'
-);
-
 const prisma = new PrismaClient();
 const password = 'Business-E2E-Pass-7731!';
 const adminEmail = 'e2e-bs-admin@example.com';
@@ -83,13 +76,16 @@ async function expectAccessible(page: Page) {
     for (const scheme of ['light', 'dark'] as const) {
       await page.setViewportSize({ width, height: 900 });
       await page.emulateMedia({ colorScheme: scheme });
+      // Let theme transitions and the tab fade-in settle, or axe measures blended colours.
+      await page.waitForTimeout(400);
       const result = await new AxeBuilder({ page })
         .include('#main-content')
         .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
         .analyze();
       expect(
         result.violations.map(
-          v => `${width}/${scheme} ${v.id}: ${v.nodes.map(n => n.target).join(', ')}`
+          v =>
+            `${width}/${scheme} ${v.id}: ${v.nodes.map(n => `${n.target} ${n.failureSummary?.split('\n')[1] ?? ''}`).join(', ')}`
         )
       ).toEqual([]);
       const overflow = await page.evaluate(
@@ -103,7 +99,8 @@ async function expectAccessible(page: Page) {
 
 test.describe.serial('business services', () => {
   test.beforeAll(async () => {
-    if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
+    // The CI e2e database is opsknight_e2e; local runs use a *_test database.
+    if (!/_(test|e2e)$/.test(new URL(process.env.DATABASE_URL ?? '').pathname))
       throw new Error('Dedicated test DB required');
     await cleanup();
     await seed();
@@ -124,11 +121,13 @@ test.describe.serial('business services', () => {
 
     await row.getByRole('link', { name: `${prefix}Checkout` }).click();
     await expect(page).toHaveURL(`/services/business/${businessServiceId}`);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`${prefix}Checkout`);
+    await expect(page.locator('#main-content').getByRole('heading', { level: 1 })).toHaveText(
+      `${prefix}Checkout`
+    );
     await expect(page.getByRole('list', { name: 'Why it has this status' })).toContainText(
       'checkout-api has an open high-urgency incident'
     );
-    await expect(page.getByRole('link', { name: incidentTitle })).toBeVisible();
+    await expect(page.getByRole('link', { name: incidentTitle }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: 'Edit' })).toHaveAttribute(
       'href',
       `/services/business/${businessServiceId}/edit`
