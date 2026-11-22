@@ -21,7 +21,7 @@ import { getRequestActorContext } from '@/lib/request-actor-context';
 import { getInternalOperationalStatusSnapshot } from '@/lib/status/internal-operational-status-snapshot';
 import { logger } from '@/lib/logger';
 import { requirePageAccess } from '@/lib/access/server';
-import { isEngineNotReady, loadStatusBoard } from '@/lib/business-services/dashboards';
+import { loadStatusBoard, orUnavailable } from '@/lib/business-services/dashboards';
 import HealthBadge from '@/components/business-service/HealthBadge';
 import { sortTiles } from '@/components/business-service/StatusBoard';
 
@@ -36,7 +36,7 @@ function statusMeta(status: string) {
       dot: 'bg-rose-500',
     };
   }
-  if (status === 'PARTIAL_OUTAGE') {
+  if (status === 'PARTIAL_OUTAGE' || status === 'DEGRADED') {
     return {
       label: 'Degraded performance',
       Icon: AlertTriangle,
@@ -97,13 +97,11 @@ export default async function MobileStatusPage() {
   const overall = statusMeta(snapshot.overallStatus);
   const OverallIcon = overall.Icon;
   const impactedServices = snapshot.services.filter(service => service.status !== 'OPERATIONAL');
-  // Same read model as the console's status dashboard; empty until the health engine is live.
-  const board = await loadStatusBoard(context.actor).catch(error => {
-    if (!isEngineNotReady(error)) {
-      logger.error('mobile.status.boardUnavailable', { component: 'MobileStatusPage', error });
-    }
-    return null;
-  });
+  // Same read model as the console's status dashboard; hidden if health cannot be loaded.
+  const board = await orUnavailable(
+    loadStatusBoard(context.actor),
+    'mobile.status.boardUnavailable'
+  );
   const businessServices = sortTiles(board?.tiles ?? []);
 
   return (

@@ -6,17 +6,16 @@ import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { businessServiceReadWhere } from '@/lib/business-services/commands';
 import {
   canManageStatusDashboards,
-  isEngineNotReady,
   listStatusDashboards,
   loadStatusBoard,
-  type StatusBoard as Board,
+  orUnavailable,
 } from '@/lib/business-services/dashboards';
 import FreshnessControl from '@/components/analytics/FreshnessControl';
 import { EmptyState, PageHeader } from '@/components/patterns';
 import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
 import { Button } from '@/components/ui/shadcn/button';
 import AutoRefresh from '@/components/business-service/AutoRefresh';
-import HealthPreparing from '@/components/business-service/HealthPreparing';
+import HealthUnavailable from '@/components/business-service/HealthUnavailable';
 import StatusBoard from '@/components/business-service/StatusBoard';
 import StatusDashboardManager from '@/components/business-service/StatusDashboardManager';
 import { isImpacted } from '@/components/business-service/catalog-model';
@@ -43,10 +42,10 @@ export default async function StatusBoardPage({
           select: { id: true, name: true },
         })
       : Promise.resolve([]),
-    loadStatusBoard(actor, { dashboardId: dashboard?.id }).catch((error): Board | null => {
-      if (isEngineNotReady(error)) return null;
-      throw error;
-    }),
+    orUnavailable(
+      loadStatusBoard(actor, { dashboardId: dashboard?.id }),
+      'business_services.board.unavailable'
+    ),
   ]);
 
   const impacted = board?.tiles.filter(tile => isImpacted(tile.health.status)).length;
@@ -118,7 +117,7 @@ export default async function StatusBoardPage({
       )}
 
       {!board ? (
-        <HealthPreparing description="The board fills in with live status for every business service as soon as health is computed." />
+        <HealthUnavailable message="The board could not load live status. It refreshes on its own every 30 seconds." />
       ) : board.tiles.length === 0 ? (
         <EmptyState
           variant="card"

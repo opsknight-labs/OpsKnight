@@ -108,14 +108,28 @@ describe('business-service catalog', () => {
     expect(page.items.map(item => item.name)).toEqual(['Checkout']);
 
     const visible = [
-      { id: 'checkout', name: 'Checkout', criticality: 'TIER_0' as const, ownerTeamId: 't1' },
-      { id: 'billing', name: 'Billing', criticality: 'TIER_1' as const, ownerTeamId: 't1' },
-      { id: 'search', name: 'Search', criticality: null, ownerTeamId: null },
+      {
+        id: 'checkout',
+        name: 'Checkout',
+        description: null,
+        criticality: 'TIER_0' as const,
+        ownerTeamId: 't1',
+      },
+      {
+        id: 'billing',
+        name: 'Billing',
+        description: 'Invoices and refunds',
+        criticality: 'TIER_1' as const,
+        ownerTeamId: 't1',
+      },
+      { id: 'search', name: 'Search', description: null, criticality: null, ownerTeamId: null },
     ];
     const health = await engine.getBusinessServiceHealth(['checkout', 'billing', 'search'], actor);
     expect(countMatching(visible, health, query)).toBe(1);
     expect(countMatching(visible, health, parseCatalogParams({ q: 'CHE' }).query)).toBe(1);
     expect(countMatching(visible, health, parseCatalogParams({ tier: 'TIER_1' }).query)).toBe(1);
+    // Like the engine, the query also matches the description.
+    expect(countMatching(visible, health, parseCatalogParams({ q: 'refund' }).query)).toBe(1);
     expect(countMatching(visible, health, parseCatalogParams().query)).toBe(3);
   });
 

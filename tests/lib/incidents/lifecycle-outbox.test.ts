@@ -245,6 +245,7 @@ describe('incident creation outbox', () => {
       'TRIGGER_STATUS_PAGE',
       'TRIGGER_WAR_ROOM',
       'TRIGGER_JIRA',
+      'BUSINESS_SERVICE_IMPACT',
     ]);
     expect(getIncidentCreationSideEffects({ source: 'REST_API' })).toEqual([
       'TRIGGER_WEBHOOK',
@@ -252,6 +253,7 @@ describe('incident creation outbox', () => {
       'TRIGGER_SERVICE_NOTIFICATION',
       'TRIGGER_STATUS_PAGE',
       'TRIGGER_WAR_ROOM',
+      'BUSINESS_SERVICE_IMPACT',
     ]);
   });
   it('persists the expanded creation fan-out at one database order instant', async () => {
@@ -276,6 +278,7 @@ describe('incident creation outbox', () => {
             'TRIGGER_STATUS_PAGE',
             'TRIGGER_WAR_ROOM',
             'TRIGGER_JIRA',
+            'BUSINESS_SERVICE_IMPACT',
           ],
         },
       },

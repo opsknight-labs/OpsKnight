@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
       branding,
       serviceIds,
       businessServiceIds,
+      businessServiceConfigs,
       serviceLayout,
       serviceConfigs = {},
       privacyMode,
@@ -312,6 +313,7 @@ export async function POST(req: NextRequest) {
       serviceIds,
       serviceConfigs,
       businessServiceIds,
+      businessServiceConfigs,
       expectedUpdatedAt,
       section: req.headers.get(STATUS_PAGE_SECTION_HEADER) ?? undefined,
       // Logo externalization must commit atomically with the settings row that references it.

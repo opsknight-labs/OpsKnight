@@ -60,6 +60,7 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
         'TRIGGER_STATUS_PAGE',
         'TRIGGER_WAR_ROOM',
         'TRIGGER_WEBHOOK',
+        'BUSINESS_SERVICE_IMPACT',
       ].sort()
     );
     expect(
@@ -128,7 +129,7 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
     const effects = logicalEffects(jobs);
 
     expect(jobs).toHaveLength(6);
-    expect(effects).toHaveLength(15);
+    expect(effects).toHaveLength(18);
     for (const effect of [
       'LIFECYCLE_USER_NOTIFICATION',
       'LIFECYCLE_SERVICE_NOTIFICATION',
@@ -202,6 +203,7 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
         'LIFECYCLE_STATUS_PAGE',
         'LIFECYCLE_WEBHOOK',
         'LIFECYCLE_WAR_ROOM_ARCHIVE',
+        'BUSINESS_SERVICE_IMPACT',
       ].sort()
     );
   });

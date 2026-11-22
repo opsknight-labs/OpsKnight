@@ -179,7 +179,17 @@ export type StatusPageClassifierState = Record<string, unknown> & {
   serviceMappings?: readonly StatusPageServiceMappingState[];
   /** Business services currently shown, in order. */
   businessServiceIds?: readonly string[];
+  /** Their current presentation, when the caller changes it. */
+  businessServiceMappings?: ReadonlyArray<{
+    businessServiceId: string;
+    displayName: string | null;
+    showOnPage: boolean;
+  }>;
 };
+
+export type StatusPageBusinessServiceConfigs = Readonly<
+  Record<string, { displayName?: string | null; showOnPage?: boolean }>
+>;
 
 export type StatusPageRouteDelta = {
   /** Route keys that must resolve to this page once the change is published. */
@@ -269,8 +279,11 @@ export function classifyStatusPageChange(input: {
   >;
   /** Present only when the caller is rewriting the page's business-service mappings. */
   businessServiceIds?: readonly string[];
+  /** Display name and visibility per business service; absent fields stay as they are. */
+  businessServiceConfigs?: StatusPageBusinessServiceConfigs;
 }): StatusPageChangeClassification {
-  const { current, patch, serviceIds, serviceConfigs, businessServiceIds } = input;
+  const { current, patch, serviceIds, serviceConfigs, businessServiceIds, businessServiceConfigs } =
+    input;
   const found = new Set<StatusPageChangeClass>();
   const changedFields: string[] = [];
   const note = (field: string, ...classes: StatusPageChangeClass[]) => {
@@ -400,6 +413,27 @@ export function classifyStatusPageChange(input: {
       note('businessServiceIds', 'PRIVACY_RELAXING');
     else if (businessServiceIds.some((id, index) => before[index] !== id))
       note('businessServiceIds', 'PRESENTATION');
+  }
+
+  if (businessServiceConfigs !== undefined) {
+    let tightened = false;
+    let relaxed = false;
+    let renamed = false;
+    for (const mapping of current.businessServiceMappings ?? []) {
+      const config = Reflect.get(businessServiceConfigs, mapping.businessServiceId) as
+        { displayName?: string | null; showOnPage?: boolean } | undefined;
+      if (!config) continue;
+      if (config.showOnPage === false && mapping.showOnPage) tightened = true;
+      if (config.showOnPage === true && !mapping.showOnPage) relaxed = true;
+      if (
+        config.displayName !== undefined &&
+        normalizeText(config.displayName) !== normalizeText(mapping.displayName)
+      )
+        renamed = true;
+    }
+    if (tightened) note('businessServiceConfigs', 'PRIVACY_TIGHTENING');
+    else if (relaxed) note('businessServiceConfigs', 'PRIVACY_RELAXING');
+    else if (renamed) note('businessServiceConfigs', 'PRESENTATION');
   }
 
   const classes = CLASS_PRECEDENCE.filter(item => found.has(item));

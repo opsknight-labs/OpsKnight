@@ -9,9 +9,8 @@ import {
 } from '@/lib/business-services/commands';
 import { PageHeader } from '@/components/patterns';
 import BusinessServiceForm from '@/components/service/BusinessServiceForm';
-import BusinessServiceStatusPill, {
-  worstServiceStatus,
-} from '@/components/service/BusinessServiceStatusPill';
+import HealthBadge from '@/components/business-service/HealthBadge';
+import { getBusinessServiceHealth } from '@/lib/business-services/contract';
 import { loadBusinessServiceFormOptions } from '../../form-options';
 
 export default async function EditBusinessServicePage({
@@ -30,26 +29,24 @@ export default async function EditBusinessServicePage({
     select: BUSINESS_SERVICE_SELECT,
   });
   if (!item) notFound();
-  const options = await loadBusinessServiceFormOptions(actor);
-  // Keep current members and followers visible even when they are outside the actor's scope.
-  const known = new Set(options.services.map(service => service.id));
-  const services = [
-    ...options.services,
-    ...item.members
-      .filter(member => !known.has(member.service.id))
-      .map(member => ({ id: member.service.id, name: member.service.name, hint: null })),
-  ];
+  const dependsOn = item.supportedBy.map(({ child }) => ({ ...child, hint: null }));
+  const [options, health] = await Promise.all([
+    loadBusinessServiceFormOptions(actor, {
+      serviceIds: item.members.map(member => member.service.id),
+      userIds: item.followers.map(follower => follower.user.id),
+      businessServiceId: item.id,
+      dependsOn,
+    }),
+    getBusinessServiceHealth([item.id], actor),
+  ]);
+  const status = health.get(item.id);
   return (
     <div className="mx-auto w-full max-w-[1200px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <PageHeader
         eyebrow="Service catalog"
         title={`Edit ${item.name}`}
         icon={Boxes}
-        badges={
-          <BusinessServiceStatusPill
-            status={worstServiceStatus(item.members.map(member => member.service.status))}
-          />
-        }
+        badges={status ? <HealthBadge status={status.status} variant="solid" /> : undefined}
         breadcrumbs={[
           { label: 'Services', href: '/services' },
           { label: 'Business services', href: '/services/business' },
@@ -59,9 +56,10 @@ export default async function EditBusinessServicePage({
         description="Changes apply to status pages that show this business service on their next publish."
       />
       <BusinessServiceForm
-        services={services}
+        services={options.services}
         teams={options.teams}
         users={options.users}
+        businessServices={options.businessServices}
         canDelete={permissions.isAdmin}
         initial={{
           id: item.id,
@@ -71,6 +69,13 @@ export default async function EditBusinessServicePage({
           ownerTeamId: item.ownerTeamId ?? '',
           memberServiceIds: item.members.map(member => member.service.id),
           followerUserIds: item.followers.map(follower => follower.user.id),
+          criticality: item.criticality ?? '',
+          impactMinUrgency: item.impactMinUrgency ?? '',
+          impactMaxPriority: item.impactMaxPriority ?? '',
+          nonCriticalServiceIds: item.members
+            .filter(member => !member.critical)
+            .map(member => member.service.id),
+          dependsOnBusinessServiceIds: dependsOn.map(child => child.id),
         }}
       />
     </div>

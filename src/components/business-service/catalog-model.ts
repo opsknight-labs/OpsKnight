@@ -74,15 +74,16 @@ export function catalogHref(query: CatalogQuery, cursors: readonly string[] = []
 type CountRow = {
   id: string;
   name: string;
+  description: string | null;
   criticality: BusinessServiceTier | null;
   ownerTeamId: string | null;
 };
 
 /**
- * How many visible business services match the filter, for the pagination footer. Mirrors the list
- * filter: name contains the query (case-insensitive), tier, owner team, status.
- * shortcut: re-implements the engine's matching; switch to an engine count if it grows a description
- * search or fuzzy matching.
+ * How many visible business services match the filter, for the pagination footer.
+ * shortcut: listBusinessServices returns no total, so this mirrors its matching (name or description
+ * contains the query, case-insensitive; tier; owner team; status). Switch to an engine count when the
+ * contract gains one.
  */
 export function countMatching(
   rows: readonly CountRow[],
@@ -93,7 +94,12 @@ export function countMatching(
   return rows.filter(row => {
     const status = health.get(row.id)?.status;
     if (!status) return false;
-    if (needle && !row.name.toLowerCase().includes(needle)) return false;
+    if (
+      needle &&
+      !row.name.toLowerCase().includes(needle) &&
+      !row.description?.toLowerCase().includes(needle)
+    )
+      return false;
     if (query.tier && row.criticality !== query.tier) return false;
     if (query.team && row.ownerTeamId !== query.team) return false;
     if (query.status === 'impacted') return isImpacted(status);

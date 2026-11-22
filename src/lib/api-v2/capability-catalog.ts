@@ -73,7 +73,7 @@ const decisions: readonly ApiCapability[] = [
     title: 'Business services and grouped status pages',
     status: 'available',
     explanation:
-      'Customer-facing groupings of technical services with followers, plus the status page layout and business-service mapping published through the shared publication command.',
+      'Customer-facing groupings of technical services with followers and engine health, their impact history and uptime, manual impact marks on incidents, plus the status page layout and business-service mapping published through the shared publication command.',
     operationIds: [
       'listBusinessServices',
       'createBusinessService',
@@ -82,6 +82,10 @@ const decisions: readonly ApiCapability[] = [
       'deleteBusinessService',
       'getStatusPageBusinessServices',
       'setStatusPageBusinessServices',
+      'listBusinessServiceIncidents',
+      'getBusinessServiceImpactTimeline',
+      'markIncidentBusinessServiceImpact',
+      'unmarkIncidentBusinessServiceImpact',
     ],
   },
   {

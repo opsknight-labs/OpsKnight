@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Loader2, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import {
   createBusinessServiceAction,
   deleteBusinessServiceAction,
+  searchBusinessServiceOptionsAction,
   updateBusinessServiceAction,
 } from '@/app/(app)/services/business/actions';
 
@@ -32,33 +33,101 @@ export type BusinessServiceFormValue = {
   ownerTeamId: string;
   memberServiceIds: string[];
   followerUserIds: string[];
+  /** '' = not set. */
+  criticality: '' | 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3';
+  /** '' = the tier default. */
+  impactMinUrgency: '' | 'LOW' | 'MEDIUM' | 'HIGH';
+  /** '' = the tier default; else P1..P5. */
+  impactMaxPriority: string;
+  /** Members that can make it degraded at most; a subset of memberServiceIds. */
+  nonCriticalServiceIds: string[];
+  /** Business services this one depends on. */
+  dependsOnBusinessServiceIds: string[];
 };
 
 const NO_TEAM = '__none__';
-const TIERS = ['Tier 1', 'Tier 2', 'Tier 3'];
+const DEFAULT = '__default__';
+const CRITICALITIES = [
+  { value: 'TIER_0', label: 'Tier 0 · Mission critical' },
+  { value: 'TIER_1', label: 'Tier 1 · Business critical' },
+  { value: 'TIER_2', label: 'Tier 2 · Important' },
+  { value: 'TIER_3', label: 'Tier 3 · Supporting' },
+] as const;
+const URGENCIES = [
+  { value: 'HIGH', label: 'High urgency only' },
+  { value: 'MEDIUM', label: 'Medium urgency and above' },
+  { value: 'LOW', label: 'Any urgency' },
+] as const;
+const PRIORITIES = ['P1', 'P2', 'P3', 'P4', 'P5'];
+
+const EMPTY: BusinessServiceFormValue = {
+  name: '',
+  description: '',
+  tier: '',
+  ownerTeamId: '',
+  memberServiceIds: [],
+  followerUserIds: [],
+  criticality: '',
+  impactMinUrgency: '',
+  impactMaxPriority: '',
+  nonCriticalServiceIds: [],
+  dependsOnBusinessServiceIds: [],
+};
 
 /** Pick many from a searchable list; selected rows stay on top so the choice is visible. */
 function MultiPicker({
   label,
   description,
-  options,
+  options: initialOptions,
+  kind,
   value,
   onChange,
   emptyText,
+  rowAddon,
 }: {
   label: string;
   description: string;
   options: Option[];
+  /** Searches the server as the user types; the initial list is only the first page. Omit to filter `options` locally. */
+  kind?: 'services' | 'users';
   value: string[];
   onChange: (next: string[]) => void;
   emptyText: string;
+  /** Extra control beside a selected row (outside its label, so controls never nest). */
+  rowAddon?: (option: Option) => ReactNode;
 }) {
   const [query, setQuery] = useState('');
+  const [options, setOptions] = useState(initialOptions);
   const selected = new Set(value);
+  useEffect(() => {
+    const needle = query.trim();
+    if (!needle || !kind) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      searchBusinessServiceOptionsAction(kind, needle)
+        .then(found => {
+          if (cancelled) return;
+          setOptions(current => {
+            const known = new Set(current.map(option => option.id));
+            return [...current, ...found.filter(option => !known.has(option.id))];
+          });
+        })
+        .catch(() => undefined);
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [kind, query]);
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return options
-      .filter(option => !needle || option.name.toLowerCase().includes(needle))
+      .filter(
+        option =>
+          !needle ||
+          option.name.toLowerCase().includes(needle) ||
+          !!option.hint?.toLowerCase().includes(needle)
+      )
       .sort((a, b) => Number(selected.has(b.id)) - Number(selected.has(a.id)));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sort on selection is intentional
   }, [options, query, value]);
@@ -94,11 +163,10 @@ function MultiPicker({
           visible.map(option => {
             const checked = selected.has(option.id);
             return (
-              <li key={option.id}>
+              <li key={option.id} className={cn('flex items-center', checked && 'bg-muted/30')}>
                 <label
                   className={cn(
-                    'flex min-h-10 cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-muted/50',
-                    checked && 'bg-muted/30'
+                    'flex min-h-10 min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-muted/50'
                   )}
                 >
                   <input
@@ -129,6 +197,7 @@ function MultiPicker({
                     </span>
                   )}
                 </label>
+                {checked && rowAddon && <span className="shrink-0 pr-2">{rowAddon(option)}</span>}
               </li>
             );
           })
@@ -143,29 +212,25 @@ export default function BusinessServiceForm({
   services,
   teams,
   users,
+  businessServices = [],
   canDelete = false,
 }: {
   initial?: BusinessServiceFormValue;
   services: Option[];
   teams: Option[];
   users: Option[];
+  /** Other business services it can depend on (never itself). */
+  businessServices?: Option[];
   canDelete?: boolean;
 }) {
   const router = useRouter();
-  const [value, setValue] = useState<BusinessServiceFormValue>(
-    initial ?? {
-      name: '',
-      description: '',
-      tier: '',
-      ownerTeamId: '',
-      memberServiceIds: [],
-      followerUserIds: [],
-    }
-  );
+  const [value, setValue] = useState<BusinessServiceFormValue>(initial ?? EMPTY);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const set = <K extends keyof BusinessServiceFormValue>(key: K, next: BusinessServiceFormValue[K]) =>
-    setValue(current => ({ ...current, [key]: next }));
+  const set = <K extends keyof BusinessServiceFormValue>(
+    key: K,
+    next: BusinessServiceFormValue[K]
+  ) => setValue(current => ({ ...current, [key]: next }));
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -181,6 +246,13 @@ export default function BusinessServiceForm({
       ownerTeamId: value.ownerTeamId || null,
       memberServiceIds: value.memberServiceIds,
       followerUserIds: value.followerUserIds,
+      criticality: value.criticality || null,
+      impactMinUrgency: value.impactMinUrgency || null,
+      impactMaxPriority: value.impactMaxPriority || null,
+      nonCriticalServiceIds: value.nonCriticalServiceIds.filter(serviceId =>
+        value.memberServiceIds.includes(serviceId)
+      ),
+      dependsOnBusinessServiceIds: value.dependsOnBusinessServiceIds,
     };
     startTransition(async () => {
       const result = value.id
@@ -191,7 +263,7 @@ export default function BusinessServiceForm({
         return;
       }
       notify.success(value.id ? 'Business service saved' : 'Business service created');
-      router.push('/services/business');
+      router.push(`/services/business/${result.id}`);
       router.refresh();
     });
   };
@@ -241,18 +313,26 @@ export default function BusinessServiceForm({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label htmlFor="bs-tier" className="text-sm font-semibold">
-                Tier
+              <label htmlFor="bs-criticality" className="text-sm font-semibold">
+                Criticality
               </label>
-              <Select value={value.tier || 'none'} onValueChange={next => set('tier', next === 'none' ? '' : next)}>
-                <SelectTrigger id="bs-tier">
-                  <SelectValue placeholder="No tier" />
+              <Select
+                value={value.criticality || NO_TEAM}
+                onValueChange={next =>
+                  set(
+                    'criticality',
+                    next === NO_TEAM ? '' : (next as BusinessServiceFormValue['criticality'])
+                  )
+                }
+              >
+                <SelectTrigger id="bs-criticality">
+                  <SelectValue placeholder="Not set" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No tier</SelectItem>
-                  {TIERS.map(tier => (
-                    <SelectItem key={tier} value={tier}>
-                      {tier}
+                  <SelectItem value={NO_TEAM}>Not set</SelectItem>
+                  {CRITICALITIES.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -283,11 +363,110 @@ export default function BusinessServiceForm({
         </div>
         <MultiPicker
           label="Technical services"
-          description="Its status is the worst status among these services."
+          description="Open incidents on these services, and on what they depend on, set its status."
           options={services}
+          kind="services"
           value={value.memberServiceIds}
           onChange={next => set('memberServiceIds', next)}
           emptyText="No services match."
+          rowAddon={option => {
+            const critical = !value.nonCriticalServiceIds.includes(option.id);
+            return (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-pressed={critical}
+                aria-label={`${option.name}: ${critical ? 'critical' : 'non-critical'}. Toggle`}
+                className="h-7 px-2 text-xs"
+                onClick={() =>
+                  set(
+                    'nonCriticalServiceIds',
+                    critical
+                      ? [...value.nonCriticalServiceIds, option.id]
+                      : value.nonCriticalServiceIds.filter(serviceId => serviceId !== option.id)
+                  )
+                }
+              >
+                {critical ? 'Critical' : 'Non-critical'}
+              </Button>
+            );
+          }}
+        />
+      </section>
+
+      <section
+        aria-labelledby="bs-impact-heading"
+        className="grid gap-6 rounded-xl border border-border bg-card p-5 text-card-foreground sm:p-6 lg:grid-cols-2"
+      >
+        <div className="space-y-4">
+          <div>
+            <h2 id="bs-impact-heading" className="text-sm font-semibold">
+              What counts as impact
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Incidents below these thresholds do not change its health. Leave them on the tier
+              default unless this business service needs its own rule. Non-critical services (set in
+              the list above) can only make it degraded.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="bs-urgency" className="text-sm font-semibold">
+                Minimum urgency
+              </label>
+              <Select
+                value={value.impactMinUrgency || DEFAULT}
+                onValueChange={next =>
+                  set(
+                    'impactMinUrgency',
+                    next === DEFAULT ? '' : (next as BusinessServiceFormValue['impactMinUrgency'])
+                  )
+                }
+              >
+                <SelectTrigger id="bs-urgency">
+                  <SelectValue placeholder="Tier default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={DEFAULT}>Tier default</SelectItem>
+                  {URGENCIES.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="bs-priority" className="text-sm font-semibold">
+                Lowest priority
+              </label>
+              <Select
+                value={value.impactMaxPriority || DEFAULT}
+                onValueChange={next => set('impactMaxPriority', next === DEFAULT ? '' : next)}
+              >
+                <SelectTrigger id="bs-priority">
+                  <SelectValue placeholder="Tier default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={DEFAULT}>Tier default</SelectItem>
+                  {PRIORITIES.map(priority => (
+                    <SelectItem key={priority} value={priority}>
+                      {priority} and more severe
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+        <MultiPicker
+          label="Depends on business services"
+          description="When one of these is impacted, this one is degraded too. A business service cannot depend on itself, directly or in a loop."
+          options={businessServices}
+          value={value.dependsOnBusinessServiceIds}
+          onChange={next => set('dependsOnBusinessServiceIds', next)}
+          emptyText="No other business services."
         />
       </section>
 
@@ -296,6 +475,7 @@ export default function BusinessServiceForm({
           label="Followers"
           description="People told in plain language when it is affected and when it recovers. In-app only; nobody is paged."
           options={users}
+          kind="users"
           value={value.followerUserIds}
           onChange={next => set('followerUserIds', next)}
           emptyText="No people match."
@@ -303,7 +483,10 @@ export default function BusinessServiceForm({
       </section>
 
       {error && (
-        <p role="alert" className="rounded-lg border border-status-critical-border/30 bg-status-critical-soft px-3 py-2 text-sm text-status-critical-deep dark:bg-status-critical/15 dark:text-rose-300">
+        <p
+          role="alert"
+          className="rounded-lg border border-status-critical-border/30 bg-status-critical-soft px-3 py-2 text-sm text-status-critical-deep dark:bg-status-critical/15 dark:text-rose-300"
+        >
           {error}
         </p>
       )}

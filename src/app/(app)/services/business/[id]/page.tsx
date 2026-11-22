@@ -20,7 +20,7 @@ import {
   getImpactTimeline,
   type BusinessServiceHealth,
 } from '@/lib/business-services/contract';
-import { isEngineNotReady } from '@/lib/business-services/dashboards';
+import { orUnavailable } from '@/lib/business-services/dashboards';
 import { SectionCard, SectionSkeleton } from '@/components/analytics/SectionCard';
 import { KpiGridSkeleton } from '@/components/analytics/KpiCard';
 import { PageHeader } from '@/components/patterns';
@@ -32,7 +32,7 @@ import HealthBadge, {
   CRITICALITY_HINT,
   CRITICALITY_LABEL,
 } from '@/components/business-service/HealthBadge';
-import HealthPreparing from '@/components/business-service/HealthPreparing';
+import HealthUnavailable from '@/components/business-service/HealthUnavailable';
 import ImpactTimeline from '@/components/business-service/ImpactTimeline';
 import {
   DependenciesPanel,
@@ -73,30 +73,18 @@ function safeLinks(value: unknown): { label: string; url: string }[] {
   });
 }
 
-/** Engine reads resolve to null while the engine is not live yet; other errors propagate. */
-function unlessNotReady<T>(promise: Promise<T>): Promise<T | null> {
-  return promise.catch(error => {
-    if (isEngineNotReady(error)) return null;
-    throw error;
-  });
-}
-
 /** Uptime and response KPIs (30 and 90 days). */
 async function KpiSection({ id, actor }: { id: string; actor: AuthorizationActor }) {
   const now = new Date();
-  const stats = await unlessNotReady(
+  const stats = await orUnavailable(
     Promise.all([
       getBusinessServiceStats(id, windowOf(30, now), actor),
       getBusinessServiceStats(id, windowOf(90, now), actor),
-    ])
+    ]),
+    'business_services.overview.stats_unavailable'
   );
   if (!stats) {
-    return (
-      <HealthPreparing
-        size="sm"
-        description="Uptime, MTTA and MTTR appear once impact history is recorded."
-      />
-    );
+    return <HealthUnavailable />;
   }
   return <OverviewKpis last30={stats[0]} last90={stats[1]} />;
 }
@@ -111,7 +99,10 @@ async function TimelineSection({
   showIncidents: boolean;
 }) {
   const window = windowOf(30);
-  const entries = await unlessNotReady(getImpactTimeline(id, window, actor));
+  const entries = await orUnavailable(
+    getImpactTimeline(id, window, actor),
+    'business_services.overview.timeline_unavailable'
+  );
   return (
     <SectionCard
       id="bs-impact"
@@ -121,10 +112,7 @@ async function TimelineSection({
       {entries ? (
         <ImpactTimeline entries={entries} window={window} showIncidents={showIncidents} />
       ) : (
-        <HealthPreparing
-          size="sm"
-          description="The impact timeline appears once impact history is recorded."
-        />
+        <HealthUnavailable />
       )}
     </SectionCard>
   );
@@ -190,7 +178,10 @@ async function IncidentCountSection({
   actor: AuthorizationActor;
   open: number;
 }) {
-  const stats = await unlessNotReady(getBusinessServiceStats(id, windowOf(30), actor));
+  const stats = await orUnavailable(
+    getBusinessServiceStats(id, windowOf(30), actor),
+    'business_services.overview.stats_unavailable'
+  );
   const last30 = stats?.incidentCount ?? null;
   return (
     <SectionCard id="bs-incidents" title="Incidents">
@@ -288,11 +279,12 @@ export default async function BusinessServiceOverviewPage({
   const children = item.supportedBy.map(link => link.child);
   const parents = item.supports.map(link => link.parent);
 
-  const health = await unlessNotReady(
+  const health = await orUnavailable(
     getBusinessServiceHealth(
       [item.id, ...children.map(child => child.id), ...parents.map(parent => parent.id)],
       actor
-    )
+    ),
+    'business_services.overview.health_unavailable'
   );
   const own: BusinessServiceHealth | null = health?.get(item.id) ?? null;
 
@@ -409,7 +401,7 @@ export default async function BusinessServiceOverviewPage({
           own ? (
             <HealthBadge status={own.status} since={own.since} variant="solid" />
           ) : (
-            <span className={pageHeaderBadgeClass}>Health pending</span>
+            <span className={pageHeaderBadgeClass}>Health unavailable</span>
           )
         }
         description={
@@ -476,7 +468,9 @@ export default async function BusinessServiceOverviewPage({
         }
       />
 
-      {!own && <HealthPreparing size="sm" />}
+      {!health && (
+        <HealthUnavailable message="Live status could not be loaded. Members, dependencies, status pages and followers below are current; refresh in a moment to try again." />
+      )}
 
       <DetailTabs
         label="Business service sections"

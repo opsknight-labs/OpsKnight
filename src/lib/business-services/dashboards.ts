@@ -4,6 +4,7 @@ import { Prisma, type BusinessServiceTier } from '@prisma/client';
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { emitAuditEvent } from '@/lib/audit';
 import { CAPABILITIES } from '@/lib/authorization';
 import { actorHasCapability, type AuthorizationActor } from '@/lib/authorization-policy';
@@ -17,12 +18,18 @@ import { getBusinessServiceHealth, type BusinessServiceHealth } from './contract
  */
 
 /**
- * True for the error the placeholder engine throws before P1b lands, so pages can show a calm
- * "being prepared" state instead of an error.
- * shortcut: matches the stub's message, remove once health-impl.ts is the real engine.
+ * Resolves to null instead of throwing when health cannot be computed (database or engine failure),
+ * so a page can show the rest of its content with an inline error. User-facing `AppError`s (access
+ * denied, bad cursor) still throw.
  */
-export function isEngineNotReady(error: unknown): boolean {
-  return error instanceof Error && /is not implemented yet/.test(error.message);
+export async function orUnavailable<T>(promise: Promise<T>, event: string): Promise<T | null> {
+  try {
+    return await promise;
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    logger.error(event, { component: 'business-services', error });
+    return null;
+  }
 }
 
 /** A board shows at most this many business services; the catalog is the place to browse more. */

@@ -228,6 +228,18 @@ export const StatusPageSettingsSchema = z
       .max(200)
       .optional()
       .transform(ids => (ids ? Array.from(new Set(ids)) : ids)),
+    /** Display name and visibility per business service; applies with businessServiceIds. */
+    businessServiceConfigs: z
+      .record(
+        z
+          .object({
+            displayName: z.string().trim().max(200).optional().nullable(),
+            showOnPage: z.boolean().optional(),
+          })
+          .strict()
+      )
+      .refine(value => Object.keys(value).length <= 200, 'At most 200 business services.')
+      .optional(),
     serviceLayout: z.enum(['FLAT', 'BUSINESS', 'BUSINESS_EXPANDABLE']).optional(),
     serviceConfigs: z
       .record(

@@ -11,6 +11,7 @@ import {
   setBusinessServiceFollow,
   updateBusinessService,
 } from '@/lib/business-services/commands';
+import { searchBusinessServiceFormOptions } from './form-options';
 
 export type BusinessServiceActionResult = { ok: true; id: string } | { ok: false; error: string };
 
@@ -67,7 +68,9 @@ export async function updateBusinessServiceAction(
   }
 }
 
-export async function deleteBusinessServiceAction(id: string): Promise<BusinessServiceActionResult> {
+export async function deleteBusinessServiceAction(
+  id: string
+): Promise<BusinessServiceActionResult> {
   try {
     const permissions = await getUserPermissions();
     if (!permissions.isAdmin) {
@@ -101,4 +104,17 @@ export async function followBusinessServiceAction(
   } catch (error) {
     return failure(error);
   }
+}
+
+/** Server-side search for the form pickers; bounded to one page of matches. */
+export async function searchBusinessServiceOptionsAction(
+  kind: 'services' | 'users',
+  query: string
+) {
+  const actor = await managerActor();
+  return searchBusinessServiceFormOptions(
+    actor,
+    z.enum(['services', 'users']).parse(kind),
+    z.string().max(120).parse(query)
+  );
 }

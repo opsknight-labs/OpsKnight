@@ -156,7 +156,7 @@ export type OverviewMember = {
   teamName: string | null;
   /** The viewer can open the service page. */
   canOpen: boolean;
-  /** Null while health is being prepared. */
+  /** Null when health could not be loaded. */
   status: BsStatus | null;
 };
 
@@ -198,7 +198,7 @@ function RelatedList({
   );
 }
 
-const Pending = () => <span className="text-xs text-muted-foreground">Health pending</span>;
+const Pending = () => <span className="text-xs text-muted-foreground">Status unavailable</span>;
 
 export function MembersPanel({
   members,
@@ -255,7 +255,7 @@ export function MembersPanel({
                       {member.status ? <HealthBadge status={member.status} /> : <Pending />}
                     </td>
                     <td className={cn(cell, 'text-muted-foreground')}>
-                      {member.critical ? 'Critical' : 'Informational'}
+                      {member.critical ? 'Critical' : 'Non-critical'}
                     </td>
                     <td className={cn(cell, 'hidden text-muted-foreground sm:table-cell')}>
                       {member.teamName ?? '—'}
@@ -267,8 +267,8 @@ export function MembersPanel({
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          Only critical services change this business service&apos;s health. Informational ones are
-          shown for context.
+          A critical service can take this business service down; a non-critical one can make it
+          degraded at most.
         </p>
       </section>
       <section aria-labelledby="bs-supporting" className="space-y-2">

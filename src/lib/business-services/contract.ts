@@ -67,6 +67,8 @@ export type BusinessServiceListFilter = {
 
 export type BusinessServiceListParams = {
   filter?: BusinessServiceListFilter;
+  /** name (default) or newest first. */
+  sort?: 'name' | 'newest';
   /** Opaque keyset cursor from the previous page. */
   cursor?: string | null;
   limit?: number;

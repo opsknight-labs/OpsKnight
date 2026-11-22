@@ -62,8 +62,7 @@ recorded in the audit log.
 `/m/status` in the mobile app lists the same business services, worst first, with their status and
 since when.
 
-## While health is being prepared
+## If health is unavailable
 
-If the board says **Health is being prepared**, live health has not been computed yet on this
-installation. Business services, owners and followers are already in place; the board fills in on
-its own once health is available.
+If the board says **Health is unavailable right now**, live status could not be loaded. It tries
+again on its next refresh, every 30 seconds.

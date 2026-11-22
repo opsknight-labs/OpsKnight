@@ -7,19 +7,15 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { actorHasCapability } from '@/lib/authorization-policy';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { businessServiceReadWhere } from '@/lib/business-services/commands';
-import {
-  getBusinessServiceHealth,
-  listBusinessServices,
-  type BusinessServiceHealth,
-  type BusinessServiceListPage,
-} from '@/lib/business-services/contract';
-import { isEngineNotReady } from '@/lib/business-services/dashboards';
+import { getBusinessServiceHealth, listBusinessServices } from '@/lib/business-services/contract';
+import { orUnavailable } from '@/lib/business-services/dashboards';
+import { AppError } from '@/lib/errors';
 import { PageHeader } from '@/components/patterns';
 import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
 import { Button } from '@/components/ui/shadcn/button';
 import ListFilterBar from '@/components/intelligence/lists/ListFilterBar';
 import CatalogDirectory, { type CatalogRow } from '@/components/business-service/CatalogDirectory';
-import HealthPreparing from '@/components/business-service/HealthPreparing';
+import HealthUnavailable from '@/components/business-service/HealthUnavailable';
 import { BS_STATUS_META, CRITICALITY_LABEL } from '@/components/business-service/HealthBadge';
 import {
   catalogHref,
@@ -46,10 +42,6 @@ const STATUS_CHIPS = [
   { value: 'OPERATIONAL', label: BS_STATUS_META.OPERATIONAL.label, tone: 'ok' },
 ] as const;
 
-type EngineResult =
-  | { ready: true; page: BusinessServiceListPage; health: Map<string, BusinessServiceHealth> }
-  | { ready: false };
-
 /**
  * Business-service catalog: PageHeader (totals, impacted now, tiers) → FilterBar → directory with keyset
  * pages. One `listBusinessServices` call per page; header and footer counts come from one scoped
@@ -63,7 +55,7 @@ export default async function BusinessServicesPage({
   await requirePageAccess('/services/business');
   const actor = await getCurrentAuthorizationActor();
   const canManage = actorHasCapability(actor, CAPABILITIES.OPERATIONS_MANAGE);
-  const { query, cursors, filter } = parseCatalogParams(await searchParams);
+  const { query, filter, cursors: requested } = parseCatalogParams(await searchParams);
 
   const visible = await prisma.businessService.findMany({
     where: businessServiceReadWhere(actor),
@@ -71,6 +63,7 @@ export default async function BusinessServicesPage({
     select: {
       id: true,
       name: true,
+      description: true,
       criticality: true,
       ownerTeamId: true,
       ownerTeam: { select: { id: true, name: true } },
@@ -80,21 +73,29 @@ export default async function BusinessServicesPage({
   });
   const byId = new Map(visible.map(row => [row.id, row]));
 
-  let engine: EngineResult = { ready: false };
-  try {
-    const [page, health] = await Promise.all([
-      listBusinessServices({ filter, cursor: cursors.at(-1) ?? null, limit: PAGE_SIZE }, actor),
+  const list = (cursor: string | null) =>
+    listBusinessServices({ filter, cursor, limit: PAGE_SIZE }, actor);
+  const loadPage = async () => {
+    try {
+      return { page: await list(requested.at(-1) ?? null), cursors: requested };
+    } catch (error) {
+      // A stale cursor (its business service was deleted) starts over at the first page.
+      if (!(error instanceof AppError) || error.code !== 'INVALID_PAGINATION_CURSOR') throw error;
+      return { page: await list(null), cursors: [] as string[] };
+    }
+  };
+  const engine = await orUnavailable(
+    Promise.all([
+      loadPage(),
       getBusinessServiceHealth(
         visible.map(row => row.id),
         actor
       ),
-    ]);
-    engine = { ready: true, page, health };
-  } catch (error) {
-    if (!isEngineNotReady(error)) throw error;
-  }
+    ]).then(([{ page, cursors }, health]) => ({ page, cursors, health })),
+    'business_services.catalog.unavailable'
+  );
 
-  const impactedNow = engine.ready
+  const impactedNow = engine
     ? [...engine.health.values()].filter(entry => isImpacted(entry.status)).length
     : null;
   const tierCounts = TIERS.map(tier => ({
@@ -124,7 +125,7 @@ export default async function BusinessServicesPage({
     ),
   ].sort((a, b) => a[1].localeCompare(b[1]));
 
-  const rows: CatalogRow[] = engine.ready
+  const rows: CatalogRow[] = engine
     ? engine.page.items.map(item => {
         const extra = byId.get(item.id);
         return {
@@ -208,33 +209,26 @@ export default async function BusinessServicesPage({
         ]}
       />
 
-      {engine.ready ? (
+      {engine ? (
         <CatalogDirectory
           rows={rows}
           filtered={filtered}
           clearHref="/services/business"
           canManage={canManage}
           pagination={{
-            page: cursors.length + 1,
+            page: engine.cursors.length + 1,
             pageSize: PAGE_SIZE,
             totalCount: countMatching(visible, engine.health, query),
-            prevHref: cursors.length ? catalogHref(query, cursors.slice(0, -1)) : undefined,
+            prevHref: engine.cursors.length
+              ? catalogHref(query, engine.cursors.slice(0, -1))
+              : undefined,
             nextHref: engine.page.nextCursor
-              ? catalogHref(query, [...cursors, engine.page.nextCursor])
+              ? catalogHref(query, [...engine.cursors, engine.page.nextCursor])
               : undefined,
           }}
         />
       ) : (
-        <HealthPreparing
-          description={`${visible.length.toLocaleString()} business ${visible.length === 1 ? 'service is' : 'services are'} set up. The directory with live health, impact and open incidents appears as soon as health is computed.`}
-          action={
-            canManage && visible.length === 0 ? (
-              <Button asChild size="sm">
-                <Link href="/services/business/new">Create a business service</Link>
-              </Button>
-            ) : undefined
-          }
-        />
+        <HealthUnavailable />
       )}
     </div>
   );

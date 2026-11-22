@@ -4002,22 +4002,24 @@
     "reason": "Read-only catalog of business services through the existing REST route authorization and scoped projection.",
     "tool": "business_services_list",
     "title": "List business services",
-    "agentDescription": "List business services (Checkout, Payments) with their technical services and current member status. Use to answer what customers are affected when a service is down.",
+    "agentDescription": "List business services (Checkout, Payments) with their technical services and engine health; filter by q, tier, status, ownerTeamId or impactedOnly. Use to answer what customers are affected when a service is down.",
     "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.read"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "6eaa4c76739c169eb564e123377409147d830430fc5275d4be158f950eca4196",
-    "contractSha256": "c653dc9baf0ab8e4dbcdaf80fa1b6ad66d7fe707c7969101aaa5d292dd5c503b"
+    "routeSha256": "0d0feffcc8db343f87d2a066151a3fef6dff90fc6c5a0ed4bafc3114872ca257",
+    "contractSha256": "4b01ef2221cd3abd5f7bd780f27f78e177a43945ec4521a1f1176e73041046ce"
   },
   "getBusinessService": {
-    "status": "DISCOVERABLE",
+    "status": "CURATED",
     "risk": "R0",
-    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
-    "tool": null,
-    "evidence": "pending final-SHA parity certification",
+    "reason": "Read-only business service with engine health through the existing REST route authorization and scoped projection.",
+    "tool": "business_service_get",
+    "title": "Get a business service",
+    "agentDescription": "Read one business service: its member technical services, what it depends on, owner and current health (status, why, open incident count). Use to answer whether Checkout is affected right now and why.",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.read"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "047a184d8ae8cfa2dc26d4adae8124a79b9dc9bcd257f7788345229675e420a3",
+    "routeSha256": "ef8aa37daa351c08c6c648142b49f6201730b9064870387411555bb8f6a412bf",
     "contractSha256": "2ae60b7b4864b3940bab4110802ea328f5e463f00a926d5a5f48f2988ac72321"
   },
   "getStatusPageBusinessServices": {
@@ -4028,7 +4030,7 @@
     "evidence": "pending final-SHA parity certification",
     "actions": ["status_page.read"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "09b79607e6fc4cf713a3c5969e124dc3979763a33eb37e39669e33c78cf8dbe7",
+    "routeSha256": "4ea851a210cd1bc847aee712bd2e8e243c9428163b79f1cd32331ebe3901b0ea",
     "contractSha256": "374b7b104eb907adf8ca0b7c6045ab20ba1d0b96dee422168575b74e44c2a9c9"
   },
   "createBusinessService": {
@@ -4039,8 +4041,8 @@
     "evidence": "pending final-SHA parity certification",
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "6eaa4c76739c169eb564e123377409147d830430fc5275d4be158f950eca4196",
-    "contractSha256": "d4fdc284e943cb14ce410094889754891c5074c9fb56e2e123e434b850880310"
+    "routeSha256": "0d0feffcc8db343f87d2a066151a3fef6dff90fc6c5a0ed4bafc3114872ca257",
+    "contractSha256": "bda5296525f33dfac580b23a0a7f982907b26abad28a94850ae5dfcc10ea3971"
   },
   "updateBusinessService": {
     "status": "UNSUPPORTED_WITH_REASON",
@@ -4050,8 +4052,8 @@
     "evidence": "pending final-SHA parity certification",
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "047a184d8ae8cfa2dc26d4adae8124a79b9dc9bcd257f7788345229675e420a3",
-    "contractSha256": "3a272350240cde70725fafef6cfff39fe115b3ee42cfa63883d79d15ca18dfb4"
+    "routeSha256": "ef8aa37daa351c08c6c648142b49f6201730b9064870387411555bb8f6a412bf",
+    "contractSha256": "bd39456a2c37db0f396dd4dd78552e6dab7a96b79000cfaf6cfa5eefa307dea5"
   },
   "deleteBusinessService": {
     "status": "UNSUPPORTED_WITH_REASON",
@@ -4061,7 +4063,7 @@
     "evidence": "pending final-SHA parity certification",
     "actions": ["service.delete"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "047a184d8ae8cfa2dc26d4adae8124a79b9dc9bcd257f7788345229675e420a3",
+    "routeSha256": "ef8aa37daa351c08c6c648142b49f6201730b9064870387411555bb8f6a412bf",
     "contractSha256": "521132ecea66e6bc2cadad5795265d1a43dbbe9efefe9b0124de6a598bf9f541"
   },
   "setStatusPageBusinessServices": {
@@ -4072,7 +4074,55 @@
     "evidence": "pending final-SHA parity certification",
     "actions": ["status_page.manage"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "09b79607e6fc4cf713a3c5969e124dc3979763a33eb37e39669e33c78cf8dbe7",
-    "contractSha256": "6a269931bbab2b10e7ecbcc0bd76acafd4149fd05d5ac6451dc8b513ddacc39f"
+    "routeSha256": "4ea851a210cd1bc847aee712bd2e8e243c9428163b79f1cd32331ebe3901b0ea",
+    "contractSha256": "9fb8afd347236245a1d36939bc7333e78576f2d71944244ffc553bc61c06a27b"
+  },
+  "listBusinessServiceIncidents": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only impact history of one business service through the existing REST route authorization and scoped projection.",
+    "tool": "business_service_incidents",
+    "title": "List incidents that impacted a business service",
+    "agentDescription": "Incidents that impacted a business service in a window (default 30 days), newest first, with why (direct, dependency, nested, manual) and when the impact started and ended. Use for 'what broke Checkout this week'.",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "deaba7acbc4bdefed99de396ad0c00e16a23530ab838ea13d7e0baa219af5229",
+    "contractSha256": "6ea55d368e2371acc9cfea6dd195e1d0b949735f8bb4658096f0173974494e2c"
+  },
+  "getBusinessServiceImpactTimeline": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only health history and uptime of one business service through the existing REST route authorization and scoped projection.",
+    "tool": "business_service_health",
+    "title": "Business service health and uptime",
+    "agentDescription": "Health of a business service over a window (default 30 days): uptime over the union of impact intervals, impacted minutes, incident count, MTTA, MTTR and the impact timeline. Use for 'how reliable was Checkout this month'.",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "c4a964b9dcaba1847a7a1e864813ad07b0439cad808d028cf774a38b56955057",
+    "contractSha256": "67ff1ab5ddaf91b4e30dc2f473f139ed2dd208da772975a6e46b25975bbc8604"
+  },
+  "markIncidentBusinessServiceImpact": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Changes what stakeholders see and are told; prepared, reviewed by a person, then committed through the existing REST command.",
+    "tool": null,
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "actions": ["incident.manage"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "015b1893236d8d358742a50820e01b54f368cbe588c7c44e0e318e27d5af0318",
+    "contractSha256": "418bf7807cfbcc6c2c7531dea9402ac324bcc44681bb5cfa98d4141114d32620"
+  },
+  "unmarkIncidentBusinessServiceImpact": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Hides business impact from stakeholders and is remembered; prepared, reviewed by a person, then committed through the existing REST command.",
+    "tool": null,
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "actions": ["incident.manage"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "015b1893236d8d358742a50820e01b54f368cbe588c7c44e0e318e27d5af0318",
+    "contractSha256": "0c65d2ba6b23084b3a1f615368f60e64f2e4f90a3642435c4c4d1dd4c91314ab"
   }
 }

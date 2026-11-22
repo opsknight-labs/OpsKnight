@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { createFakeBusinessServiceEngine } from '@/lib/business-services/__fixtures__/health';
-import { engine as stubEngine } from '@/lib/business-services/health-impl';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 
 const actor: AuthorizationActor = { id: 'u1', role: 'USER', status: 'ACTIVE', teamIds: [] };
@@ -79,11 +78,5 @@ describe('fake business-service engine', () => {
       actor
     );
     expect(impactCalls).toEqual([{ incidentId: 'i1', businessServiceId: 'bs0', impacted: false }]);
-  });
-});
-
-describe('engine stub', () => {
-  it('fails loudly until the real engine lands', async () => {
-    await expect(stubEngine.wouldCreateSupportCycle('a', 'b')).rejects.toThrow(/P1b/);
   });
 });

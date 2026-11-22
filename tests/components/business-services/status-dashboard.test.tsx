@@ -57,10 +57,11 @@ vi.mock('@/contexts/TimezoneContext', () => ({ useTimezone: () => ({ userTimeZon
 
 import {
   createStatusDashboard,
-  isEngineNotReady,
   loadStatusBoard,
+  orUnavailable,
   StatusDashboardInputSchema,
 } from '@/lib/business-services/dashboards';
+import { AppError } from '@/lib/errors';
 import StatusBoard, { sortTiles } from '@/components/business-service/StatusBoard';
 
 const stakeholder: AuthorizationActor = {
@@ -191,13 +192,17 @@ describe('status dashboard', () => {
     );
   });
 
-  it('recognises the placeholder engine so pages can show a calm state', async () => {
-    const stub = await vi.importActual<typeof import('@/lib/business-services/health-impl')>(
-      '@/lib/business-services/health-impl'
-    );
-    const error = await stub.engine.getBusinessServiceHealth([], stakeholder).catch(e => e);
-    expect(isEngineNotReady(error)).toBe(true);
-    expect(isEngineNotReady(new Error('connection refused'))).toBe(false);
+  it('turns engine failures into an unavailable state but keeps user-facing errors', async () => {
+    await expect(
+      orUnavailable(Promise.reject(new Error('connection refused')), 'test.unavailable')
+    ).resolves.toBeNull();
+    await expect(orUnavailable(Promise.resolve(3), 'test.unavailable')).resolves.toBe(3);
+    await expect(
+      orUnavailable(
+        Promise.reject(new AppError({ code: 'AUTHORIZATION_DENIED' })),
+        'test.unavailable'
+      )
+    ).rejects.toMatchObject({ code: 'AUTHORIZATION_DENIED' });
   });
 
   it('only lets managers create dashboards and validates the URL', async () => {

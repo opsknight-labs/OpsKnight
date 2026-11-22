@@ -65,15 +65,22 @@ export async function saveStatusPageSection(
       where: { id: { in: input.businessServiceIds } },
     });
     if (count !== input.businessServiceIds.length)
-      throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Business service not found.' });
+      throw new AppError({
+        code: 'RESOURCE_NOT_FOUND',
+        userMessage: 'Business service not found.',
+      });
   }
   const patch: Record<string, unknown> = Object.fromEntries(
     Object.entries(input).filter(
       ([key, value]) =>
-        !['id', 'expectedUpdatedAt', 'serviceIds', 'serviceConfigs', 'businessServiceIds'].includes(
-          key
-        ) &&
-        value !== undefined
+        ![
+          'id',
+          'expectedUpdatedAt',
+          'serviceIds',
+          'serviceConfigs',
+          'businessServiceIds',
+          'businessServiceConfigs',
+        ].includes(key) && value !== undefined
     )
   );
   if (input.branding !== undefined)
@@ -97,6 +104,7 @@ export async function saveStatusPageSection(
       serviceIds: input.serviceIds,
       serviceConfigs: input.serviceConfigs,
       businessServiceIds: input.businessServiceIds,
+      businessServiceConfigs: input.businessServiceConfigs,
       expectedRevision,
       expectedUpdatedAt: current.updatedAt.toISOString(),
       section,

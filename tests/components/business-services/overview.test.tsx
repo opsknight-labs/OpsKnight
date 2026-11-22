@@ -118,13 +118,13 @@ describe('business-service overview', () => {
       '/services/api'
     );
     const cdn = screen.getByRole('row', { name: /CDN/ });
-    expect(within(cdn).getByText('Informational')).toBeInTheDocument();
+    expect(within(cdn).getByText('Non-critical')).toBeInTheDocument();
     expect(within(cdn).queryByRole('link')).toBeNull();
     expect(screen.getByRole('link', { name: 'Payments' })).toHaveAttribute(
       'href',
       '/services/business/payments'
     );
-    expect(screen.getByText('Health pending')).toBeInTheDocument();
+    expect(screen.getByText('Status unavailable')).toBeInTheDocument();
   });
 
   it('renders uptime 30/90 d, incidents, MTTA and MTTR from the engine stats', async () => {
