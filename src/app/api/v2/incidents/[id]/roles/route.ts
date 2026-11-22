@@ -4,7 +4,6 @@ import { defineV2Route } from '@/lib/api-v2/endpoint';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
-import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
 import { listIncidentRoles } from '@/lib/incidents/roles-command';
 
 export const GET = defineV2Route({
@@ -17,7 +16,6 @@ export const GET = defineV2Route({
       include: {
         service: { select: { teamId: true } },
         watchers: { select: { userId: true } },
-        roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       },
     });
     if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
@@ -28,7 +26,7 @@ export const GET = defineV2Route({
       serviceTeamId: incident.service.teamId,
       visibility: incident.visibility,
       watcherIds: incident.watchers.map(item => item.userId),
-      ...incidentRoleRelations(incident.roleAssignments),
+      id: incident.id,
     };
   },
   handler: async ({ params }) => {

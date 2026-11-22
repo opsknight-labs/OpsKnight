@@ -13,7 +13,7 @@ import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
 import { toIncidentApiDto } from '@/lib/incidents/api-dto';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
-import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
+import { withActorIncidentRoles } from '@/lib/incidents/role-relations';
 
 const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
@@ -80,7 +80,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       automationDecision: { select: { incidentId: true } },
       service: { select: { id: true, name: true, teamId: true } },
       watchers: { select: { userId: true } },
-      roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       assignee: {
         select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
       },
@@ -100,15 +99,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const decision = authorize({
     actor,
     action: AUTHORIZATION_ACTIONS.INCIDENT_READ,
-    resource: {
+    resource: await withActorIncidentRoles(actor, AUTHORIZATION_ACTIONS.INCIDENT_READ, {
       type: 'incident',
       assigneeId: incident.assigneeId,
       watcherIds: incident.watchers.map(watcher => watcher.userId),
-      ...incidentRoleRelations(incident.roleAssignments),
+      id: incident.id,
       visibility: incident.visibility,
       serviceTeamId: incident.service?.teamId,
       assignedTeamId: incident.teamId,
-    },
+    }),
   });
   if (!decision.allowed) {
     return jsonError(

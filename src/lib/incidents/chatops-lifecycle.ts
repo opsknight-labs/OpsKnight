@@ -24,6 +24,7 @@ import { authorizationActorFromUser } from '@/lib/authorization-actors';
 import { effectiveAccessSelect } from '@/lib/access/effective';
 import { isPagedForIncident } from '@/lib/access/incident-relations';
 import { getAccessControlSettings } from '@/lib/access/settings';
+import { withActorIncidentRoles } from '@/lib/incidents/role-relations';
 import { assignIncidentRoleCommand } from '@/lib/incidents/roles-command';
 import {
   decideIncidentRoleChange,
@@ -68,12 +69,16 @@ export type ChatOpsIncidentAuthorizationAction =
 async function withOnCallRelation(
   actor: AuthorizationActor,
   action: (typeof AUTHORIZATION_ACTIONS)[keyof typeof AUTHORIZATION_ACTIONS],
-  resource: Extract<AuthorizationResource, { type: 'incident' }>,
-  escalationPolicyId: string | null
+  base: Extract<AuthorizationResource, { type: 'incident' }>,
+  escalationPolicyId: string | null,
+  db?: Prisma.TransactionClient
 ) {
   const needsRelation =
     isIncidentOperatorAction(action) || action === AUTHORIZATION_ACTIONS.INCIDENT_READ;
-  if (!needsRelation || incidentOperatorRelation(actor, resource)) return resource;
+  if (!needsRelation || incidentOperatorRelation(actor, base)) return base;
+  // The actor's own incident roles, read only when nothing cheaper already decides.
+  const resource = await withActorIncidentRoles(actor, action, base, db);
+  if (incidentOperatorRelation(actor, resource)) return resource;
   return (await isPagedForIncident(actor, escalationPolicyId))
     ? { ...resource, onCallUserIds: [actor.id] }
     : resource;
@@ -116,7 +121,6 @@ export async function authorizeChatOpsIncidentInTransaction(
         teamId: true,
         visibility: true,
         watchers: { select: { userId: true } },
-        roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
         service: { select: { teamId: true, escalationPolicyId: true } },
       },
     }),
@@ -149,7 +153,8 @@ export async function authorizeChatOpsIncidentInTransaction(
       actor,
       action,
       incidentResource(incident),
-      incident.service.escalationPolicyId
+      incident.service.escalationPolicyId,
+      tx
     ),
   });
   if (!decision.allowed)
@@ -526,7 +531,6 @@ export async function executeChatOpsLifecycleCommand(
           teamId: true,
           visibility: true,
           watchers: { select: { userId: true } },
-          roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
           service: { select: { teamId: true, escalationPolicyId: true } },
         },
       }),
@@ -561,7 +565,8 @@ export async function executeChatOpsLifecycleCommand(
         actor,
         action,
         incidentResource(incident),
-        incident.service.escalationPolicyId
+        incident.service.escalationPolicyId,
+        tx
       ),
     });
 

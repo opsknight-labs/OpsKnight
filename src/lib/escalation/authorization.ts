@@ -21,7 +21,7 @@ import { createHash } from 'node:crypto';
 import type { IdempotencyContext } from '@/lib/idempotency';
 import { AppError } from '@/lib/errors';
 import { Prisma } from '@prisma/client';
-import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
+import { withActorIncidentRoles } from '@/lib/incidents/role-relations';
 
 export type ManualEscalationSource = 'WEB' | 'MOBILE' | 'REST_API' | 'SLACK' | 'MICROSOFT_TEAMS';
 
@@ -60,7 +60,6 @@ export async function authorizeIncidentEscalation(input: {
         visibility: true,
         service: { select: { teamId: true, escalationPolicyId: true } },
         watchers: { select: { userId: true } },
-        roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       },
     }),
   ]);
@@ -79,9 +78,17 @@ export async function authorizeIncidentEscalation(input: {
     serviceTeamId: incident.service?.teamId ?? null,
     visibility: incident.visibility,
     watcherIds: incident.watchers.map(watcher => watcher.userId),
-    ...incidentRoleRelations(incident.roleAssignments),
   };
-  let decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE, resource });
+  const withRoles = await withActorIncidentRoles(
+    actor,
+    AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE,
+    resource
+  );
+  let decision = authorize({
+    actor,
+    action: AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE,
+    resource: withRoles,
+  });
   // Whoever this incident pages may escalate it too.
   if (
     !decision.allowed &&
@@ -91,7 +98,7 @@ export async function authorizeIncidentEscalation(input: {
     decision = authorize({
       actor,
       action: AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE,
-      resource: { ...resource, onCallUserIds: [actor.id] },
+      resource: { ...withRoles, onCallUserIds: [actor.id] },
     });
   }
 

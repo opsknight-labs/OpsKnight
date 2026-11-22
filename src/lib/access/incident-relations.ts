@@ -3,7 +3,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import { CAPABILITIES } from '@/lib/authorization';
-import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
+import { incidentRoleRelations } from '@/lib/incidents/roles';
 import {
   actorHasCapability,
   incidentOperatorRelation,
@@ -24,7 +24,6 @@ export async function loadIncidentAccessResource(
       teamId: true,
       visibility: true,
       watchers: { select: { userId: true } },
-      roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       service: { select: { teamId: true, escalationPolicyId: true } },
     },
   });
@@ -36,7 +35,6 @@ export async function loadIncidentAccessResource(
     assignedTeamId: incident.teamId,
     visibility: incident.visibility,
     watcherIds: (incident.watchers ?? []).map(watcher => watcher.userId),
-    ...incidentRoleRelations(incident.roleAssignments),
     serviceTeamId: incident.service?.teamId ?? null,
     escalationPolicyId: incident.service?.escalationPolicyId ?? null,
   };
@@ -85,6 +83,19 @@ export async function resolveIncidentResourceForActor(
     actorHasCapability(actor, CAPABILITIES.INCIDENT_READ_ALL)
   )
     return resource;
+  // Incident commander / ops lead: one indexed read of the actor's own roles, only here.
+  const roles = await prisma.incidentRoleAssignment.findMany({
+    where: { incidentId, userId: actor.id },
+    select: { roleKey: true, userId: true },
+  });
+  if (roles.length) {
+    const withRoles = { ...resource, ...incidentRoleRelations(roles) };
+    if (incidentOperatorRelation(actor, withRoles)) return withRoles;
+    if (await isPagedForIncident(actor, escalationPolicyId)) {
+      return { ...withRoles, onCallUserIds: [actor.id] };
+    }
+    return withRoles;
+  }
   if (await isPagedForIncident(actor, escalationPolicyId)) {
     return { ...resource, onCallUserIds: [actor.id] };
   }

@@ -8,7 +8,6 @@ import { buildCursorWhere, formatCursorPagination } from '@/lib/api-v2/paginatio
 import { PaginationQuerySchema } from '@/lib/api-v2/validation';
 import { IncidentWatcherSchema, setIncidentWatcher } from '@/lib/incidents/watchers';
 import { AppError } from '@/lib/errors';
-import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
 
 export const GET = defineV2Route({
   action: AUTHORIZATION_ACTIONS.INCIDENT_READ,
@@ -20,7 +19,6 @@ export const GET = defineV2Route({
       include: {
         service: { select: { teamId: true } },
         watchers: { select: { userId: true } },
-        roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       },
     });
     if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
@@ -31,7 +29,7 @@ export const GET = defineV2Route({
       serviceTeamId: incident.service.teamId,
       visibility: incident.visibility,
       watcherIds: incident.watchers.map(item => item.userId),
-      ...incidentRoleRelations(incident.roleAssignments),
+      id: incident.id,
     };
   },
   handler: async ({ params, pagination }) => {

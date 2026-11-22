@@ -25,6 +25,8 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     incident: { findUnique: mocks.incidentFindUnique },
+    // A denied reader is checked for their own incident roles before the 403.
+    incidentRoleAssignment: { findMany: async () => [] },
   },
 }));
 
@@ -131,11 +133,16 @@ describe('GET /api/incidents/:id typed errors', () => {
   });
 
   it('returns INCIDENT_ACCESS_DENIED for a resource-level denial', async () => {
-    mocks.authorize.mockReturnValueOnce({ allowed: true, scope: 'scoped' }).mockReturnValueOnce({
+    const denied = {
       allowed: false,
       reason: 'MISSING_CAPABILITY',
       requiredCapability: 'incident.read.scoped',
-    });
+    };
+    // Scope check, the role-holder probe (still denied, no roles), then the resource decision.
+    mocks.authorize
+      .mockReturnValueOnce({ allowed: true, scope: 'scoped' })
+      .mockReturnValueOnce(denied)
+      .mockReturnValueOnce(denied);
     const req = await createMockRequest('GET', '/api/incidents/inc-1');
 
     const { status, data } = await parseResponse(await GET(req, context));

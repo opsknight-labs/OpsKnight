@@ -14,7 +14,7 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
 import { withV2Observability } from '@/lib/api-v2/observability';
-import { INCIDENT_ROLE_RELATION_SELECT, incidentRoleRelations } from '@/lib/incidents/roles';
+import { withActorIncidentRoles } from '@/lib/incidents/role-relations';
 
 export const GET = withV2Observability(async function GET(
   req: NextRequest,
@@ -31,7 +31,6 @@ export const GET = withV2Observability(async function GET(
       include: {
         service: { select: { id: true, name: true, teamId: true } },
         watchers: { select: { userId: true } },
-        roleAssignments: INCIDENT_ROLE_RELATION_SELECT,
       },
     });
 
@@ -42,15 +41,19 @@ export const GET = withV2Observability(async function GET(
       });
     }
 
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INCIDENT_READ, {
-      type: 'incident',
-      assigneeId: incident.assigneeId,
-      watcherIds: incident.watchers.map(w => w.userId),
-      ...incidentRoleRelations(incident.roleAssignments),
-      visibility: incident.visibility,
-      serviceTeamId: incident.service.teamId,
-      assignedTeamId: incident.teamId,
-    });
+    enforceV2Authorization(
+      actor,
+      AUTHORIZATION_ACTIONS.INCIDENT_READ,
+      await withActorIncidentRoles(actor, AUTHORIZATION_ACTIONS.INCIDENT_READ, {
+        type: 'incident',
+        assigneeId: incident.assigneeId,
+        watcherIds: incident.watchers.map(w => w.userId),
+        id: incident.id,
+        visibility: incident.visibility,
+        serviceTeamId: incident.service.teamId,
+        assignedTeamId: incident.teamId,
+      })
+    );
 
     const { searchParams } = new URL(req.url);
     const { limit, cursor } = parsePaginationParams(searchParams);

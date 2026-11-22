@@ -10,6 +10,8 @@ import {
   PUT as setRole,
   DELETE as clearRole,
 } from '@/app/api/v2/incidents/[id]/roles/[roleKey]/route';
+import { GET as timelineGet } from '@/app/api/v2/incidents/[id]/timeline/route';
+import { POST as acknowledgePost } from '@/app/api/v2/incidents/[id]/acknowledge/route';
 import { createV2Credential, invokeV2 } from '../helpers/api-v2';
 import {
   createTestIncident,
@@ -17,6 +19,11 @@ import {
   resetDatabase,
   testPrisma as db,
 } from '../helpers/test-db';
+
+// Hand-written routes take a required context; invokeV2 always passes one.
+type V2Handler = Parameters<typeof invokeV2>[0];
+const readTimeline = timelineGet as unknown as V2Handler;
+const acknowledge = acknowledgePost as unknown as V2Handler;
 
 beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test'))
@@ -183,4 +190,37 @@ it('assigns and clears incident roles over REST with relationship checks', async
   );
   expect(cleared.status).toBe(200);
   expect(await db.incidentRoleAssignment.count()).toBe(0);
+});
+
+it('lets a commander with no other relationship read and acknowledge a private incident', async () => {
+  const commander = await createV2Credential(['incidents:read', 'incidents:write'], 'USER');
+  const stranger = await createV2Credential(['incidents:read', 'incidents:write'], 'USER');
+  const service = await createTestService('Private API');
+  const incident = await createTestIncident('Secret outage', service.id, {
+    visibility: 'PRIVATE',
+  });
+  const timeline = `/incidents/${incident.id}/timeline`;
+  expect([403, 404]).toContain(
+    (await invokeV2(readTimeline, stranger.token, 'GET', timeline, { id: incident.id })).status
+  );
+  // Role holders are resolved lazily, only for actors nothing else authorizes.
+  await db.incidentRoleAssignment.create({
+    data: { incidentId: incident.id, roleKey: 'COMMANDER', userId: commander.user.id },
+  });
+  expect(
+    (await invokeV2(readTimeline, commander.token, 'GET', timeline, { id: incident.id })).status
+  ).toBe(200);
+  const ack = await invokeV2(
+    acknowledge,
+    commander.token,
+    'POST',
+    `/incidents/${incident.id}/acknowledge`,
+    { id: incident.id },
+    {},
+    { 'Idempotency-Key': 'commander-ack-1' }
+  );
+  expect(ack.status).toBe(200);
+  expect([403, 404]).toContain(
+    (await invokeV2(readTimeline, stranger.token, 'GET', timeline, { id: incident.id })).status
+  );
 });
