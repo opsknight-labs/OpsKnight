@@ -6,7 +6,11 @@ import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { emitAuditEvent, type AuditEventSource } from '@/lib/audit';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { assertCanManageBusinessServices } from './commands';
+import {
+  assertCanManageBusinessServices,
+  businessServiceReadWhere,
+  businessServiceWriteWhere,
+} from './commands';
 import { wouldCreateSupportCycle as engineCycleCheck } from './contract';
 
 export const SupportingInputSchema = z
@@ -30,8 +34,13 @@ export async function setSupportingBusinessServices(
   const cycle = options.wouldCreateSupportCycle ?? engineCycleCheck;
   const run = async (tx: Prisma.TransactionClient) => {
     // Sequential: interactive transactions cannot run queries in parallel.
-    const parent = await tx.businessService.count({ where: { id: parentId } });
-    const children = await tx.businessService.count({ where: { id: { in: childIds } } });
+    // Out-of-scope business services look the same as missing ones.
+    const parent = await tx.businessService.count({
+      where: { AND: [{ id: parentId }, businessServiceWriteWhere(context.actor)] },
+    });
+    const children = await tx.businessService.count({
+      where: { AND: [{ id: { in: childIds } }, businessServiceReadWhere(context.actor)] },
+    });
     if (!parent || children !== childIds.length)
       throw new AppError({
         code: 'RESOURCE_NOT_FOUND',

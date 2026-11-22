@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Prisma } from '@prisma/client';
+import type { IncidentUrgency, Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
@@ -162,19 +162,29 @@ export const STAKEHOLDER_NOTIFY_LIMIT = { count: 3, windowMs: 10 * 60_000 };
 
 /**
  * Business services an incident impacts, from the engine's impact rows (unmarked ones left out).
- * Only an incident with no rows at all (older than the backfill, or not yet reconciled) falls
- * back to the business services that list its service as a critical member.
+ * An incident with no rows at all (older than the backfill, or not yet reconciled) is evaluated
+ * now with the engine's own rules and thresholds, the same way the reconcile would write it.
  */
-async function impactedBusinessServices(incidentId: string, serviceId: string) {
+async function impactedBusinessServices(incident: {
+  id: string;
+  serviceId: string;
+  urgency: IncidentUrgency;
+  priority: string | null;
+  createdAt: Date;
+}) {
   const impacts = await prisma.incidentBusinessServiceImpact.findMany({
-    where: { incidentId },
+    where: { incidentId: incident.id },
     select: { excluded: true, businessService: { select: { id: true, name: true } } },
   });
-  if (impacts.length)
-    return impacts.filter(row => !row.excluded).map(row => row.businessService);
+  if (impacts.length) return impacts.filter(row => !row.excluded).map(row => row.businessService);
+  const { getHealthSnapshot, incidentImpactSources } = await import('./health');
+  const snapshot = await getHealthSnapshot();
+  const ids = [...incidentImpactSources({ ...snapshot.inputs, impactRows: [] }, incident).keys()];
+  if (!ids.length) return [];
   return prisma.businessService.findMany({
-    where: { members: { some: { serviceId, critical: true } } },
+    where: { id: { in: ids } },
     select: { id: true, name: true },
+    orderBy: { name: 'asc' },
   });
 }
 
@@ -202,11 +212,18 @@ export async function notifyIncidentStakeholders(
     throw new AppError({ code: 'AUTHORIZATION_DENIED' });
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
-    select: { id: true, title: true, serviceId: true, priority: true, urgency: true },
+    select: {
+      id: true,
+      title: true,
+      serviceId: true,
+      priority: true,
+      urgency: true,
+      createdAt: true,
+    },
   });
   if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
 
-  const impacted = await impactedBusinessServices(incident.id, incident.serviceId);
+  const impacted = await impactedBusinessServices(incident);
   const wanted = input.businessServiceIds ? new Set(input.businessServiceIds) : null;
   const targets = wanted ? impacted.filter(row => wanted.has(row.id)) : impacted;
   if (wanted && targets.length !== wanted.size)

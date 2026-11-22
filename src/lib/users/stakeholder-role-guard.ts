@@ -62,3 +62,18 @@ export async function assertCanBecomeStakeholder(
     userMessage: `${who} still ${reasons.slice(0, 3).join('; ')}. Stakeholders are never paged: remove them from schedules, overrides and escalation steps first.`,
   });
 }
+
+/**
+ * For identity-provider driven role changes (SCIM, OIDC sign-in), which must never fail or
+ * lock someone out: the duties that block turning this person into a stakeholder, or null
+ * when the change may go ahead.
+ */
+export async function stakeholderConversionBlockers(
+  userId: string,
+  from: string,
+  to: string,
+  client: Client = prisma
+): Promise<string[] | null> {
+  if (to !== 'STAKEHOLDER' || from === 'STAKEHOLDER') return null;
+  return (await pagingDutiesOf([userId], client)).get(userId) ?? null;
+}

@@ -3,6 +3,8 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import type { Prisma, Role, RoleSource } from '@prisma/client';
 import { bulkUpdateUserSecurityState } from '@/lib/users/admin-invariants';
+import { pagingDutiesOf } from '@/lib/users/stakeholder-role-guard';
+import { logger } from '@/lib/logger';
 
 // A fixed, visible precedence keeps overlapping group memberships deterministic.
 const precedence: readonly Role[] = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER', 'STAKEHOLDER'];
@@ -107,7 +109,35 @@ export async function reconcileScimRoles(
   requestId: string,
   actorId?: string
 ) {
-  const { changes } = await planScimRoles(tx, connectorId, userIds);
+  const planned = (await planScimRoles(tx, connectorId, userIds)).changes;
+  // Stakeholders are never paged: someone still on call or an escalation target keeps their
+  // role until those duties are removed. The rest of the sync goes ahead.
+  const becomingStakeholders = planned
+    .filter(change => change.role === 'STAKEHOLDER' && change.from !== 'STAKEHOLDER')
+    .map(change => change.userId);
+  const blocked = await pagingDutiesOf(becomingStakeholders, tx);
+  const changes = planned.filter(change => !blocked.has(change.userId));
+  if (blocked.size) {
+    logger.warn('[SCIM] Stakeholder role skipped for people with paging duties', {
+      connectorId,
+      requestId,
+      userIds: [...blocked.keys()],
+    });
+    await tx.scimEvent.createMany({
+      data: [...blocked].map(([userId, duties]) => ({
+        connectorId,
+        action: 'user.role.sync_skipped',
+        resourceId: userId,
+        requestId,
+        details: {
+          role: 'STAKEHOLDER',
+          reason: 'Stakeholders are never paged; remove these duties first.',
+          duties,
+          ...(actorId ? { actorId } : {}),
+        },
+      })),
+    });
+  }
   // Promotions first permit a safe administrator handover. Reuse shared last-admin
   // and MCP protection; callers invalidate projections only after commit.
   for (const role of precedence) {
