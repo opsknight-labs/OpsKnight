@@ -6,6 +6,7 @@ import {
   type Capability,
 } from '@/lib/authorization';
 import type { ResolvedPageContext } from './deterministic';
+import type { SquireMentionKind } from './contract';
 
 /**
  * What the assistant is told about the person and the page they are on, so "this" and "can I…" have an
@@ -23,7 +24,7 @@ const ABILITIES: ReadonlyArray<readonly [Capability, string]> = [
   [CAPABILITIES.ADMIN_MANAGE, 'administer the workspace'],
 ];
 
-const ROLE_LABEL: Record<AppRole, string> = {
+export const ROLE_LABEL: Record<AppRole, string> = {
   ADMIN: 'Admin',
   RESPONDER: 'Responder',
   AUDITOR: 'Auditor',
@@ -76,6 +77,26 @@ const PAGE_PATH: Partial<Record<ResolvedPageContext['kind'], string>> = {
   postmortem: '/postmortems/',
   escalation_policy: '/policies/',
 };
+
+const MENTION_PATH: Record<Exclude<SquireMentionKind, 'person'>, string> = {
+  incident: '/incidents/',
+  service: '/services/',
+  schedule: '/schedules/',
+  team: '/teams/',
+  runbook: '/runbooks/',
+};
+
+/** A volatile line for a record the person picked with "@", already read under their permissions. */
+export function mentionLine(mention: {
+  kind: SquireMentionKind;
+  id: string;
+  name: string;
+}): string {
+  const name = mention.name.slice(0, 160);
+  return mention.kind === 'person'
+    ? `The user mentioned the person "${name}" (person id ${mention.id}).`
+    : `The user mentioned the ${mention.kind} "${name}" ${MENTION_PATH[mention.kind]}${mention.id}.`;
+}
 
 /** The volatile "The user is viewing" line for a non-incident page (incident pages have their briefing). */
 export function viewingLine(page: ResolvedPageContext): string {

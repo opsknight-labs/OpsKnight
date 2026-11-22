@@ -7,10 +7,34 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { ArrowUp, Square } from 'lucide-react';
+import { ArrowUp, Square, X } from 'lucide-react';
 import type { SlashCommand } from './slash-commands';
+import type { SquireMentionKind } from '@/lib/intelligence/squire/contract';
+import { useEntitySearch } from '@/components/command-palette/use-entity-search';
+import type { SearchResult } from '@/components/command-palette/palette-model';
 import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+
+/** A record picked with "@": sent as `{kind, id}`, shown as a chip with its label. */
+export interface SquireMention {
+  kind: SquireMentionKind;
+  id: string;
+  label: string;
+}
+
+export const MAX_MENTIONS = 5;
+
+const MENTION_KIND: Partial<Record<SearchResult['type'], SquireMentionKind>> = {
+  incident: 'incident',
+  service: 'service',
+  schedule: 'schedule',
+  team: 'team',
+  runbook: 'runbook',
+  user: 'person',
+};
+
+/** "@" and at least the search's two characters, at the end of the text, with no space yet. */
+const MENTION_QUERY = /(?:^|\s)@([^\s@]{2,40})$/;
 
 /**
  * The message box: attached context chips above a one-line field that grows with the text, the send (or
@@ -37,6 +61,8 @@ export default function SquireComposer({
   fullscreen,
   commands = [],
   onCommand,
+  mentions = [],
+  onMentionsChange,
 }: {
   name: string;
   inputId: string;
@@ -60,26 +86,56 @@ export default function SquireComposer({
   /** Commands matching what is typed (see slash-commands); the list shows while there are any. */
   commands?: readonly SlashCommand[];
   onCommand?: (command: SlashCommand) => void;
+  /** Records picked with "@" for the next message; typing "@" offers them while this is set. */
+  mentions?: readonly SquireMention[];
+  onMentionsChange?: (mentions: SquireMention[]) => void;
 }) {
   const [active, setActive] = useState(0);
   // Escape hides the list for the text it was pressed on; typing more brings it back.
   const [closedFor, setClosedFor] = useState<string | null>(null);
   const menuOpen = commands.length > 0 && closedFor !== value && Boolean(onCommand);
-  const current = Math.min(active, commands.length - 1);
-  const listId = `${inputId}-commands`;
+  const mentionQuery =
+    onMentionsChange && !menuOpen && mentions.length < MAX_MENTIONS
+      ? (MENTION_QUERY.exec(value)?.[1] ?? '')
+      : '';
+  const search = useEntitySearch(mentionQuery);
+  const found = mentionQuery
+    ? search.results.filter(result => MENTION_KIND[result.type]).slice(0, 8)
+    : [];
+  const mentionOpen = found.length > 0 && closedFor !== value;
+  const listOpen = menuOpen || mentionOpen;
+  const count = menuOpen ? commands.length : found.length;
+  const current = Math.min(active, count - 1);
+  const listId = `${inputId}-${menuOpen ? 'commands' : 'mentions'}`;
+  const pickMention = (result: SearchResult) => {
+    const kind = MENTION_KIND[result.type];
+    if (!kind) return;
+    const label = result.title.replace(/\s+/g, ' ').trim().slice(0, 80);
+    onChange(value.replace(/@[^\s@]{2,40}$/, `@${label} `).slice(0, maxLength));
+    if (!mentions.some(mention => mention.kind === kind && mention.id === result.id))
+      onMentionsChange?.([...mentions, { kind, id: result.id, label }]);
+  };
+  const pick = (index: number) => {
+    setActive(0);
+    if (menuOpen) {
+      const command = commands.at(index);
+      if (command) onCommand?.(command);
+    } else {
+      const result = found.at(index);
+      if (result) pickMention(result);
+    }
+  };
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (menuOpen && !event.nativeEvent.isComposing) {
+    if (listOpen && !event.nativeEvent.isComposing) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
         const step = event.key === 'ArrowDown' ? 1 : -1;
-        setActive((current + step + commands.length) % commands.length);
+        setActive((current + step + count) % count);
         return;
       }
       if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
         event.preventDefault();
-        setActive(0);
-        const command = commands.at(current);
-        if (command) onCommand?.(command);
+        pick(current);
         return;
       }
       if (event.key === 'Escape') {
@@ -97,32 +153,50 @@ export default function SquireComposer({
       onSubmit={onSubmit}
       className="relative shrink-0 border-t border-border bg-card px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3"
     >
-      {menuOpen && (
+      {listOpen && (
         <ul
           id={listId}
           role="listbox"
-          aria-label="Commands"
+          aria-label={menuOpen ? 'Commands' : 'Mention a record'}
           className="absolute inset-x-3 bottom-full z-10 mb-1 max-h-60 overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg"
         >
-          {commands.map((command, index) => (
-            <li
-              key={command.name}
-              id={`${listId}-${index}`}
-              role="option"
-              aria-selected={index === current}
-              // Keep focus in the field; the click still picks the command.
-              onMouseDown={event => event.preventDefault()}
-              onMouseEnter={() => setActive(index)}
-              onClick={() => {
-                setActive(0);
-                onCommand?.(command);
-              }}
-              className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 text-sm sm:min-h-8 ${index === current ? 'bg-accent text-accent-foreground' : ''}`}
-            >
-              <span className="w-20 shrink-0 font-mono text-xs font-semibold">/{command.name}</span>
-              <span className="min-w-0 truncate text-muted-foreground">{command.hint}</span>
-            </li>
-          ))}
+          {mentionOpen &&
+            found.map((result, index) => (
+              <li
+                key={`${result.type}:${result.id}`}
+                id={`${listId}-${index}`}
+                role="option"
+                aria-selected={index === current}
+                onMouseDown={event => event.preventDefault()}
+                onMouseEnter={() => setActive(index)}
+                onClick={() => pick(index)}
+                className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 text-sm sm:min-h-8 ${index === current ? 'bg-accent text-accent-foreground' : ''}`}
+              >
+                <span className="min-w-0 flex-1 truncate">{result.title}</span>
+                <span className="shrink-0 text-xs capitalize text-muted-foreground">
+                  {MENTION_KIND[result.type]}
+                </span>
+              </li>
+            ))}
+          {menuOpen &&
+            commands.map((command, index) => (
+              <li
+                key={command.name}
+                id={`${listId}-${index}`}
+                role="option"
+                aria-selected={index === current}
+                // Keep focus in the field; the click still picks the command.
+                onMouseDown={event => event.preventDefault()}
+                onMouseEnter={() => setActive(index)}
+                onClick={() => pick(index)}
+                className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 text-sm sm:min-h-8 ${index === current ? 'bg-accent text-accent-foreground' : ''}`}
+              >
+                <span className="w-20 shrink-0 font-mono text-xs font-semibold">
+                  /{command.name}
+                </span>
+                <span className="min-w-0 truncate text-muted-foreground">{command.hint}</span>
+              </li>
+            ))}
         </ul>
       )}
       {editing && (
@@ -134,7 +208,27 @@ export default function SquireComposer({
         </div>
       )}
       <div className="space-y-1.5 rounded-xl border border-border bg-background py-2 pl-3 pr-2 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/15">
-        {chips && <div className="flex flex-wrap items-center gap-1.5">{chips}</div>}
+        {(chips || mentions.length > 0) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {chips}
+            {mentions.map(mention => (
+              <span
+                key={`${mention.kind}:${mention.id}`}
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-muted py-0.5 pl-2 pr-0.5 text-xs"
+              >
+                <span className="truncate">@{mention.label}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove mention ${mention.label}`}
+                  onClick={() => onMentionsChange?.(mentions.filter(other => other !== mention))}
+                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X aria-hidden="true" className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <label htmlFor={inputId} className="sr-only">
             Message {name}
@@ -148,9 +242,9 @@ export default function SquireComposer({
               onChange(event.target.value);
             }}
             onKeyDown={handleKeyDown}
-            aria-autocomplete={onCommand ? 'list' : undefined}
-            aria-controls={menuOpen ? listId : undefined}
-            aria-activedescendant={menuOpen ? `${listId}-${current}` : undefined}
+            aria-autocomplete={onCommand || onMentionsChange ? 'list' : undefined}
+            aria-controls={listOpen ? listId : undefined}
+            aria-activedescendant={listOpen ? `${listId}-${current}` : undefined}
             maxLength={maxLength}
             rows={1}
             placeholder={placeholder}
@@ -186,7 +280,9 @@ export default function SquireComposer({
             ? 'History is off'
             : `Private to you · kept ${retentionDays} ${retentionDays === 1 ? 'day' : 'days'}`}
         </span>
-        <span className="hidden shrink-0 sm:inline">Enter to send · / for commands</span>
+        <span className="hidden shrink-0 sm:inline">
+          Enter to send · / for commands{onMentionsChange ? ' · @ to mention' : ''}
+        </span>
         <span className="shrink-0 tabular-nums sm:hidden">
           {value.length}/{maxLength}
         </span>

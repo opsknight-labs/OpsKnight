@@ -42,13 +42,18 @@ import {
   type ReadableIncident,
   type ResolvedPageContext,
 } from './deterministic';
-import { aboutUserLines, viewingLine } from './about';
+import { aboutUserLines, mentionLine, viewingLine } from './about';
+import { resolveMentions } from './mentions';
+import { traceReadTool, traceTurn } from './tracing';
 import {
   buildOperationProposal,
+  buildOperationTools,
   mayCall,
   PROPOSE_OPERATION_TOOL,
+  rolesAllowing,
   squireOperation,
 } from './operations';
+import { buildPlanProposal, PROPOSE_PLAN_TOOL } from './plans';
 import { readDialogueState, writeDialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
@@ -121,22 +126,36 @@ function mayRead(scope: SquireTurnScope, ...names: string[]): boolean {
  * back to the basic (no-AI) answer, so a model outage degrades the assistant rather than breaking it.
  * Unreadable or unknown incident ids are dropped silently so they cannot be probed.
  */
-export async function* streamSquire(
+export function streamSquire(
   actor: AuthorizationActor,
   request: SquireRequest,
   signal?: AbortSignal,
   scope: SquireTurnScope = {}
 ): AsyncGenerator<SquireEvent> {
+  return traceTurn(squireTurn(actor, request, signal, scope), signal);
+}
+
+async function* squireTurn(
+  actor: AuthorizationActor,
+  request: SquireRequest,
+  signal: AbortSignal | undefined,
+  scope: SquireTurnScope
+): AsyncGenerator<SquireEvent> {
   try {
-    const [settings, requestedIncident, page] = await Promise.all([
+    const [settings, requestedIncident, page, mentioned] = await Promise.all([
       getAiSettings(),
       request.incidentId ? readIncidentForActor(actor, request.incidentId) : Promise.resolve(null),
       resolvePageContext(actor, request.pageContext),
+      resolveMentions(actor, request.mentions),
     ]);
     // An alert or postmortem page is its incident's page, when the person may read that incident.
     const incident =
       requestedIncident ??
       (page?.incidentId ? await readIncidentForActor(actor, page.incidentId) : null);
+    // Basic answers have no model to read mention lines: one mentioned record, asked off any page, is the page.
+    const sole = !incident && !page && mentioned.length === 1 ? mentioned[0] : undefined;
+    const basicIncident = incident ?? sole?.incident ?? null;
+    const basicPage = page ?? sole?.page ?? null;
     if (!settings.squireEnabled) {
       yield { type: 'error', message: 'The assistant is turned off.' };
       return;
@@ -242,6 +261,10 @@ export async function* streamSquire(
             teams: teams.map(team => team.name),
           }),
           ...(page && !incident ? { viewing: viewingLine(page) } : {}),
+          // A person's name is personal data, like the first name above.
+          mentions: mentioned
+            .filter(mention => personal || mention.kind !== 'person')
+            .map(mentionLine),
         }
       );
       const system: AiMessage = { role: 'system', content: prompt.system, dataClass };
@@ -296,13 +319,22 @@ export async function* streamSquire(
               dataClass,
               signal,
               observability,
+              // The operation catalog: reads for everyone, changes (confirmable cards) with extended actions.
+              extraTools: [
+                ...buildOperationTools(actor),
+                ...(settings.squireExtendedActions
+                  ? [PROPOSE_OPERATION_TOOL, PROPOSE_PLAN_TOOL]
+                  : []),
+              ],
               observe: (name, input, result) => {
                 // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
                 ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
                 readUntrusted = true;
                 return evidence.observe(name, input, result);
               },
-            }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
+            })
+              .filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name))
+              .map(traceReadTool),
             request.message,
             Boolean(incident)
           ),
@@ -325,11 +357,14 @@ export async function* streamSquire(
           } else if (event.type === 'tool-call') {
             const action = actionForTool(event.call.name);
             const operation = event.call.name === PROPOSE_OPERATION_TOOL.name;
-            if ((!action && !operation) || proposals >= MAX_PROPOSALS) continue;
+            const plan = event.call.name === PROPOSE_PLAN_TOOL.name;
+            if ((!action && !operation && !plan) || proposals >= MAX_PROPOSALS) continue;
             const proposal = await (
-              operation
-                ? buildOperationProposal(actor, event.call.input)
-                : buildProposal(actor, action!, event.call.input)
+              plan
+                ? buildPlanProposal(actor, event.call.input)
+                : operation
+                  ? buildOperationProposal(actor, event.call.input)
+                  : buildProposal(actor, action!, event.call.input)
             ).catch(() => null);
             if (proposal) {
               proposals += 1;
@@ -361,12 +396,12 @@ export async function* streamSquire(
             yield* basicAnswer(
               actor,
               request,
-              incident,
+              basicIncident,
               settings.squireName,
               dataClass,
               savedConversation,
               limit ? 'quota' : 'unavailable',
-              page,
+              basicPage,
               limit
             );
             return;
@@ -379,12 +414,12 @@ export async function* streamSquire(
           yield* basicAnswer(
             actor,
             request,
-            incident,
+            basicIncident,
             settings.squireName,
             dataClass,
             savedConversation,
             'ready',
-            page
+            basicPage
           );
           return;
         }
@@ -470,12 +505,12 @@ export async function* streamSquire(
     yield* basicAnswer(
       actor,
       request,
-      incident,
+      basicIncident,
       settings.squireName,
       dataClass,
       savedConversation,
       settings.enabled ? 'unavailable' : 'disabled',
-      page,
+      basicPage,
       undefined,
       settings.enabled
         ? dataClass === 'SENSITIVE'
@@ -498,8 +533,9 @@ async function operationRefusal(actor: AuthorizationActor, operationId: string):
   if (!settings?.squireExtendedActions)
     return 'That change is not available: an administrator has not turned on "Extended assistant actions" in the AI settings. Nothing was prepared.';
   const operation = squireOperation(operationId);
-  if (!operation || !mayCall(actor, operation))
-    return 'That change is not available: your role does not allow it. Nothing was prepared.';
+  if (!operation) return 'That change is not available from Squire. Nothing was prepared.';
+  if (!mayCall(actor, operation))
+    return `You don't have permission for that change: it needs ${rolesAllowing(actor, operation)}. Ask someone with that role, or an administrator to change your role. Nothing was prepared.`;
   return 'That change is not available right now (the target may have changed or be out of your reach). Nothing was prepared.';
 }
 

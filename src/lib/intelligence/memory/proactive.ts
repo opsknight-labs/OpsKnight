@@ -26,6 +26,7 @@ import {
   type IncidentFacts,
   type ProactiveRefs,
 } from './proactive-content';
+import { investigateIncident } from './proactive-investigation';
 import {
   getSquireServicePolicy,
   listProactivePolicies,
@@ -42,9 +43,10 @@ export const proactiveSubject = (kind: ProactiveKind, incidentId: string) =>
 export function parseProactiveSubject(
   subject: string
 ): { kind: ProactiveKind; incidentId: string } | null {
-  const match = /^(BRIEFING|STAKEHOLDER_NUDGE|POSTMORTEM_DRAFT):([A-Za-z0-9_-]{1,64})$/.exec(
-    subject
-  );
+  const match =
+    /^(BRIEFING|STAKEHOLDER_NUDGE|POSTMORTEM_DRAFT|INVESTIGATION):([A-Za-z0-9_-]{1,64})$/.exec(
+      subject
+    );
   return match ? { kind: match[1] as ProactiveKind, incidentId: match[2] } : null;
 }
 
@@ -64,6 +66,13 @@ export async function scanProactiveWork(budget: Budget): Promise<number> {
       active.push(policy);
   if (active.length === 0) return 0;
 
+  // Investigations need AI and the administrator's investigation mode: without them nothing is enqueued.
+  const investigating = active.some(policy => policy.investigationEnabled)
+    ? await getAiSettings()
+        .then(ai => ai.enabled && ai.squireEnabled && Boolean(ai.squireInvestigationEnabled))
+        .catch(() => false)
+    : false;
+
   const items = await withDbBudget(budget, async tx => {
     const now = await dbNow(tx);
     const ids = (pick: (policy: SquireServicePolicyView) => boolean) =>
@@ -71,8 +80,9 @@ export async function scanProactiveWork(budget: Budget): Promise<number> {
     const briefing = ids(policy => policy.briefingEnabled);
     const nudging = active.filter(policy => policy.nudgeAfterMinutes !== null);
     const drafting = ids(policy => policy.postmortemDraftEnabled);
+    const investigate = investigating ? ids(policy => policy.investigationEnabled) : [];
     const take = PROACTIVE_LIMITS.scanBatch;
-    const [toBrief, toNudge, toDraft] = await Promise.all([
+    const [toBrief, toNudge, toDraft, toInvestigate] = await Promise.all([
       briefing.length
         ? tx.incident.findMany({
             where: {
@@ -123,11 +133,31 @@ export async function scanProactiveWork(budget: Budget): Promise<number> {
             select: { id: true },
           })
         : [],
+      // Private incidents are left out: the investigation reads only what the owning team can see.
+      investigate.length
+        ? tx.incident.findMany({
+            where: {
+              serviceId: { in: investigate },
+              status: { in: [...OPEN] },
+              urgency: 'HIGH',
+              visibility: 'PUBLIC',
+              createdAt: {
+                gte: new Date(now.getTime() - PROACTIVE_LIMITS.investigationWindowMs),
+                lte: new Date(now.getTime() - 60_000),
+              },
+              squireProactiveNotes: { none: { kind: 'INVESTIGATION' } },
+            },
+            orderBy: { createdAt: 'asc' },
+            take,
+            select: { id: true },
+          })
+        : [],
     ]);
     return [
       ...toBrief.map(row => proactiveSubject('BRIEFING', row.id)),
       ...toNudge.map(row => proactiveSubject('STAKEHOLDER_NUDGE', row.id)),
       ...toDraft.map(row => proactiveSubject('POSTMORTEM_DRAFT', row.id)),
+      ...toInvestigate.map(row => proactiveSubject('INVESTIGATION', row.id)),
     ];
   });
   if (items.length)
@@ -427,6 +457,23 @@ export async function runProactiveJob(
       };
     }
     content = nudge as unknown as Prisma.InputJsonValue;
+  } else if (kind === 'INVESTIGATION') {
+    if (!policy.investigationEnabled) return 'off';
+    if (!open || existing || facts.urgency !== 'HIGH') return 'skipped';
+    if (now.getTime() - facts.createdAt.getTime() > PROACTIVE_LIMITS.investigationWindowMs)
+      return 'skipped';
+    // AI only: without a model there is no investigation and no note (never a deterministic stand-in).
+    const investigation = await investigateIncident(incidentId, gathered.serviceId, signal).catch(
+      error => {
+        logger.info('[Squire] Automatic investigation unavailable', {
+          error: error instanceof Error ? error.name : 'error',
+        });
+        return null;
+      }
+    );
+    if (!investigation) return 'skipped';
+    mode = 'AI';
+    content = investigation as unknown as Prisma.InputJsonValue;
   } else {
     if (!policy.postmortemDraftEnabled) return 'off';
     if (facts.status !== 'RESOLVED' || gathered.hasPostmortem || existing) return 'skipped';

@@ -18,6 +18,8 @@ export interface SquireServicePolicyView {
   briefingEnabled: boolean;
   nudgeAfterMinutes: number | null;
   postmortemDraftEnabled: boolean;
+  /** Investigate high-urgency incidents automatically (one INVESTIGATION note per incident). */
+  investigationEnabled: boolean;
   revision: number;
 }
 
@@ -97,6 +99,7 @@ const policyDefaults = (serviceId: string): SquireServicePolicyView => ({
   briefingEnabled: false,
   nudgeAfterMinutes: null,
   postmortemDraftEnabled: false,
+  investigationEnabled: false,
   revision: 0,
 });
 
@@ -105,6 +108,7 @@ const POLICY_SELECT = {
   briefingEnabled: true,
   nudgeAfterMinutes: true,
   postmortemDraftEnabled: true,
+  investigationEnabled: true,
   revision: true,
 } as const;
 
@@ -131,6 +135,8 @@ const policyInput = z
       .max(PROACTIVE_LIMITS.maxNudgeMinutes)
       .nullable(),
     postmortemDraftEnabled: z.boolean(),
+    // Optional so older callers that do not know the switch leave it unchanged.
+    investigationEnabled: z.boolean().optional(),
     expectedRevision: z.number().int().nonnegative(),
   })
   .strict();
@@ -179,6 +185,7 @@ export async function listProactivePolicies(
         { briefingEnabled: true },
         { nudgeAfterMinutes: { not: null } },
         { postmortemDraftEnabled: true },
+        { investigationEnabled: true },
       ],
     },
     orderBy: { serviceId: 'asc' },

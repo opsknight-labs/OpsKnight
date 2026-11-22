@@ -173,6 +173,22 @@ describe('basic mode (no AI)', () => {
     expect(missing).toBe(probed); // an unreadable and a nonexistent incident are indistinguishable
   });
 
+  it('treats one readable @-mention as the page, and an unreadable one as no mention', async () => {
+    await setup();
+    const { member, mine, theirs } = await scopedWorld();
+    const own = textOf(
+      await turn(member.id, 'tell me about this', { mentions: [{ kind: 'incident', id: mine.id }] })
+    );
+    expect(own).toContain('Checkout latency high');
+    const probed = textOf(
+      await turn(member.id, 'tell me about this', {
+        mentions: [{ kind: 'incident', id: theirs.id }],
+      })
+    );
+    expect(probed).not.toMatch(/Payroll|corruption/);
+    expect(probed).toBe(textOf(await turn(member.id, 'tell me about this')));
+  });
+
   it('answers similar, cause and runbook questions from the intelligence findings', async () => {
     const admin = await setup();
     const service = await createTestService('API');
@@ -280,6 +296,46 @@ describe('AI mode', () => {
       'who_is_on_call',
     ]);
     expect(tools).toContain('propose_reassign_incident');
+  });
+
+  it('adds readable @-mentions to the volatile prompt and silently drops unreadable ones', async () => {
+    const admin = await setup({ ai: true, provider: true });
+    const { member, mine, theirs, serviceA, serviceB } = await scopedWorld();
+    model.script.push({ content: 'Noted.' });
+    const events = await turn(member.id, 'how are these doing?', {
+      mentions: [
+        { kind: 'service', id: serviceA.id },
+        { kind: 'service', id: serviceB.id },
+        { kind: 'incident', id: mine.id },
+        { kind: 'incident', id: theirs.id },
+        // A USER outside the admin's teams may not read the admin's profile.
+        { kind: 'person', id: admin.id },
+        { kind: 'team', id: 'does-not-exist' },
+      ],
+    });
+    expect(events.at(-1)).toEqual({ type: 'done' });
+    const body = model.requests[0].body as { messages: Array<{ role: string; content: string }> };
+    const volatile = body.messages.at(-2)!;
+    expect(volatile.role).toBe('user');
+    expect(volatile.content).toContain('[Untrusted data:');
+    expect(volatile.content).toContain(
+      `The user mentioned the service "${serviceA.name}" /services/${serviceA.id}.`
+    );
+    expect(volatile.content).toContain(
+      `The user mentioned the incident "Checkout latency high" /incidents/${mine.id}.`
+    );
+    const all = JSON.stringify(body);
+    expect(all).not.toContain(serviceB.name);
+    expect(all).not.toContain(serviceB.id);
+    expect(all).not.toContain('Payroll');
+    expect(all).not.toContain(admin.id);
+    expect(all).not.toContain('does-not-exist');
+
+    // The administrator may read people, so the same person mention reaches their prompt.
+    model.requests.length = 0;
+    model.script.push({ content: 'Noted.' });
+    await turn(admin.id, 'who is this?', { mentions: [{ kind: 'person', id: member.id }] });
+    expect(JSON.stringify(model.requests[0].body)).toContain(`(person id ${member.id})`);
   });
 
   it('lets tools read only what the asker may read', async () => {

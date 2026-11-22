@@ -102,6 +102,19 @@ seconds is shown as stalled so you can ask again.
 In AI mode Squire also knows your first name (when the provider is allowed personal data), your role and
 teams, and what your role can and cannot do, so it can say who to ask when something needs another role.
 
+## Mention records with @
+
+Type `@` and at least two letters in the message box to pick an incident, service, schedule, team,
+runbook or person from the same search as the command palette. Use the arrow keys and Enter (or click) to
+pick one, and Escape to close the list. The pick is written into your question, such as `@Checkout API`,
+and shown as a chip above the box; remove a chip to leave that record out. You can mention up to five
+records in one question.
+
+Squire reads each mentioned record with your own permissions. A record you cannot read is ignored without
+saying so, and a person is only included if your role may see people. In basic mode, when you mention
+exactly one incident or service, team, schedule or runbook and are not on a record's page, Squire answers
+as if you had opened that record.
+
 ## Dock Squire beside the page
 
 On a desktop-width window (1024 px and wider) the panel can sit beside the page instead of on top of it.

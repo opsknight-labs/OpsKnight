@@ -47,7 +47,7 @@ import SquirePinnedBriefing from './SquirePinnedBriefing';
 import { SquireEvidenceChip } from './SquireSurfaceControls';
 import SquireHeader from './SquireHeader';
 import SquireEmptyState from './SquireEmptyState';
-import SquireComposer from './SquireComposer';
+import SquireComposer, { type SquireMention } from './SquireComposer';
 import { buildNotes, nextNoteAt } from './squire-messages';
 import {
   emptyHeadline,
@@ -230,6 +230,7 @@ export default function SquireLauncher({
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
+  const [mentions, setMentions] = useState<SquireMention[]>([]);
   const [busy, setBusy] = useState(false);
   const online = useSyncExternalStore(subscribeOnline, onlineSnapshot, serverOnline);
   const [expanded, setExpanded] = useState(false);
@@ -502,6 +503,9 @@ export default function SquireLauncher({
       atBottomRef.current = true;
       setUnread(false);
       setInput('');
+      // Mentions go with the question they were picked for, not with a replayed one.
+      const sentMentions = replayFrom === undefined ? mentions : [];
+      setMentions([]);
       setBusy(true);
       const controller = new AbortController();
       abortRef.current = controller;
@@ -532,6 +536,9 @@ export default function SquireLauncher({
           history,
           ...(incidentId ? { incidentId } : {}),
           ...(pageContext ? { pageContext } : {}),
+          ...(sentMentions.length
+            ? { mentions: sentMentions.map(({ kind, id }) => ({ kind, id })) }
+            : {}),
           ...(conversationId && replayFrom === undefined ? { conversationId } : {}),
         };
         // Bound the serialized UTF-8 request, including integrity proofs and multibyte text.
@@ -750,7 +757,7 @@ export default function SquireLauncher({
         }
       }
     },
-    [busy, conversationId, incidentId, pageContext, contextKey, aiEnabled, turns, online]
+    [busy, conversationId, incidentId, pageContext, contextKey, aiEnabled, turns, online, mentions]
   );
 
   const retryAnswer = useCallback((index: number) => {
@@ -1420,6 +1427,8 @@ export default function SquireLauncher({
             fullscreen={fullscreen}
             commands={matchSlashCommands(input, Boolean(scopeId), pageContext?.kind)}
             onCommand={runCommand}
+            mentions={mentions}
+            onMentionsChange={setMentions}
           />
         </section>
       )}

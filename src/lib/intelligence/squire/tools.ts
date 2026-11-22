@@ -44,7 +44,6 @@ import { buildObservabilityTools, OBSERVABILITY_TOOL_DATA_CLASS } from './tools-
 import { buildIncidentTools, INCIDENT_TOOL_DATA_CLASS } from './tools-incident';
 import { buildKnowledgeTools, KNOWLEDGE_TOOL_DATA_CLASS } from './tools-knowledge';
 import { buildDocsTool } from './docs';
-import { buildOperationTools, PROPOSE_OPERATION_TOOL } from './operations';
 import { AUTOMATION_TOOL_DATA_CLASS, buildAutomationTools } from './tools-automation';
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
@@ -146,6 +145,11 @@ export function buildSquireTools(
     extendedActions?: boolean;
     /** The knowledge index is on: offer search_knowledge and the learn_service_fact proposal (F4). */
     knowledge?: boolean;
+    /**
+     * More tools, data-class filtered and evidence-observed like the built-in ones. The chat turn passes the
+     * operation catalog (operations.ts) here, so the investigation lane's worker bundle never loads it.
+     */
+    extraTools?: readonly AiToolDefinition[];
   }
 ): AiToolDefinition[] {
   const tools: AiToolDefinition[] = [
@@ -819,10 +823,8 @@ export function buildSquireTools(
   tools.push(...buildAutomationTools(actor));
   // Product documentation for how-to questions.
   tools.push(buildDocsTool());
-  // The reviewed operation catalog: reads for everyone, changes (as confirmable cards) when extended
-  // actions are on.
-  tools.push(...buildOperationTools(actor));
-  if (options.extendedActions) tools.push(PROPOSE_OPERATION_TOOL);
+  // Tools the caller supplies (the chat turn adds the operation catalog), wrapped like every other below.
+  if (options.extraTools) tools.push(...options.extraTools);
 
   for (const name of SQUIRE_ACTION_NAMES) {
     if (!options.personal && name === 'reassign_incident') continue;
@@ -920,7 +922,7 @@ const CORE_PROPOSALS = new Set([
 // Bounded, literal alternatives over a message capped by the request schema.
 
 const ACTION_WORDS =
-  /\b(ack|acknowledge|resolve|close|reopen|re-?assign|assign|hand ?over|snooze|mute|escalate|page|un-?link|link|note|add|remove|draft|start|open|create|run|execute|publish|post|mark|set|raise|lower|bump|make|remember|learn|follow(?!-ups)|unfollow|notify|invite|subscribe|propose|suggest|change(?![sd])|update|edit|rename|cover|swap|archive)\b/;
+  /\b(ack|acknowledge|resolve|close|reopen|re-?assign|assign|hand ?over|snooze|mute|escalate|page|un-?link|link|note|add|remove|draft|start|open|create|run|execute|publish|post|mark|set|raise|lower|bump|make|remember|learn|follow(?!-ups)|unfollow|notify|invite|subscribe|propose|suggest|change(?![sd])|update|edit|rename|cover|swap|archive|delete|cancel|end)\b/;
 
 /**
  * Tool subset by intent, so a question does not carry every schema. Uses the basic-mode NLU: a message with

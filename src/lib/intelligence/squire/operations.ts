@@ -7,6 +7,8 @@ import { decrypt, encrypt } from '@/lib/encryption';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { authorize, type AuthorizationActor } from '@/lib/authorization-policy';
+import { APP_ROLES } from '@/lib/authorization';
+import { ROLE_LABEL } from './about';
 import { withInternalV2Invocation } from '@/lib/api-v2/internal-context';
 import type { V2AuthContext } from '@/lib/api-v2/auth';
 import {
@@ -34,8 +36,11 @@ import { UNKNOWN_ACTION_MESSAGE, type SquireActionResult } from './actions/outco
  * Squire's bridge to the reviewed API v2 operation catalog (the same one the MCP server exposes), so the
  * assistant can read and change almost anything a person can in the application, not only incidents.
  *
- * - Only reviewed, executable operations of risk R0–R2 in operational domains are reachable. Sensitive reads,
- *   R3 operations, credentials, webhook configuration and anything the catalog denies never are.
+ * - Reviewed operations in operational domains are reachable: everything executable up to R2, and the R3
+ *   changes the catalog lets through with an impact preview (deletes and the like), shown as high-risk cards.
+ *   Sensitive reads, credentials, webhook configuration and anything the catalog denies never are.
+ * - Like Datadog Bits, Squire does exactly what the person's role allows, after they confirm it; no second
+ *   person is involved. When the role does not allow something, the catalog search says which role does.
  * - Every call runs the operation's own REST v2 handler in-process as the signed-in person: the same
  *   validation, role and resource checks, audit and timeline text as an API call they made themselves.
  * - A change is only ever proposed. The card shows the operation and a before/after diff; the person's
@@ -47,15 +52,19 @@ import { UNKNOWN_ACTION_MESSAGE, type SquireActionResult } from './actions/outco
 /** Domains holding credentials, webhook URLs or delivery plumbing stay out of reach. */
 const EXCLUDED_DOMAINS = new Set(['integrations', 'settings', 'notifications']);
 
-type Operation = (typeof MCP_CATALOG)[number];
+export type Operation = (typeof MCP_CATALOG)[number];
 
 export function squireOperation(operationId: string): Operation | null {
   const operation = MCP_OPERATION_MAP.get(operationId);
-  if (!operation) return null;
-  if (EXCLUDED_DOMAINS.has(operation.domain) || operation.risk === 'R3') return null;
-  if (isMcpSensitiveRead(operation)) return null;
+  if (!operation || EXCLUDED_DOMAINS.has(operation.domain) || isMcpSensitiveRead(operation))
+    return null;
+  // R3 only where the catalog reviewed it with an impact preview; denied R3 operations never pass.
+  if (operation.risk === 'R3') return isMcpApprovalGated(operation) ? operation : null;
   return isMcpExecutable(operation) || isMcpApprovalGated(operation) ? operation : null;
 }
+
+/** A change that cannot be undone from Squire and deserves a louder card (deletes and the like). */
+export const isHighRisk = (operation: Operation) => operation.risk === 'R3';
 
 export const isReadOperation = (operation: Operation) => isMcpSideEffectFreeRead(operation);
 
@@ -68,14 +77,34 @@ export function mayCall(actor: AuthorizationActor, operation: Operation): boolea
   );
 }
 
-const camelWords = (id: string) => id.replace(/([a-z])([A-Z])/g, '$1 $2');
+export const camelWords = (id: string) => id.replace(/([a-z])([A-Z])/g, '$1 $2');
 
-/** Operations this person may call that best match a request, best first. */
+/** The roles that could make this call for this person's teams, e.g. "Responder or Admin". */
+export function rolesAllowing(actor: AuthorizationActor, operation: Operation): string {
+  const roles = APP_ROLES.filter(
+    role =>
+      operation.authorizationActions.every(
+        action =>
+          authorize({
+            actor: { ...actor, role, apiKey: undefined, capabilities: undefined },
+            action,
+          }).allowed
+      )
+    // eslint-disable-next-line security/detect-object-injection -- role is a member of the closed AppRole union
+  ).map(role => ROLE_LABEL[role]);
+  if (!roles.length || !operation.authorizationActions.length) return 'no role';
+  return roles.length > 1 ? `${roles.slice(0, -1).join(', ')} or ${roles.at(-1)}` : roles[0];
+}
+
+/**
+ * Operations that best match a request, best first. Ones the person's role does not allow are listed too,
+ * marked with the role that could, so the answer can say "you need X" instead of "I can't".
+ */
 export function searchOperations(actor: AuthorizationActor, query: string, limit = 8) {
   const wanted = new Set(docsTerms(query));
   if (wanted.size === 0) return [];
   return MCP_CATALOG.flatMap(operation => {
-    if (!squireOperation(operation.operationId) || !mayCall(actor, operation)) return [];
+    if (!squireOperation(operation.operationId)) return [];
     const terms = docsTerms(
       `${camelWords(operation.operationId)} ${operation.summary ?? ''} ${operation.domain}`
     );
@@ -86,11 +115,16 @@ export function searchOperations(actor: AuthorizationActor, query: string, limit
       (a, b) => b.score - a.score || a.operation.operationId.localeCompare(b.operation.operationId)
     )
     .slice(0, limit)
-    .map(({ operation }) => ({
-      operationId: operation.operationId,
-      summary: operation.summary ?? camelWords(operation.operationId),
-      kind: isReadOperation(operation) ? 'read' : 'change',
-    }));
+    .map(({ operation }) => {
+      const allowed = mayCall(actor, operation);
+      return {
+        operationId: operation.operationId,
+        summary: operation.summary ?? camelWords(operation.operationId),
+        kind: isReadOperation(operation) ? 'read' : 'change',
+        ...(isHighRisk(operation) ? { highRisk: true } : {}),
+        ...(allowed ? {} : { allowed: false, needsRole: rolesAllowing(actor, operation) }),
+      };
+    });
 }
 
 /** Who is acting, as the REST handler sees it: the person, through Squire. */
@@ -115,10 +149,10 @@ function authFor(actor: AuthorizationActor, operation: Operation, name: string):
   };
 }
 
-type OperationArgs = ReturnType<typeof validateOperationArgs>;
+export type OperationArgs = ReturnType<typeof validateOperationArgs>;
 
 /** Runs one operation's REST handler as the person. Throws McpBoundaryError on a refusal. */
-async function invoke(
+export async function invoke(
   actor: AuthorizationActor,
   operation: Operation,
   args: OperationArgs,
@@ -176,7 +210,7 @@ async function invoke(
 }
 
 /** A refusal in words a person can act on, never the domain's own free text. */
-function refusal(error: unknown): string {
+export function refusal(error: unknown): string {
   if (!(error instanceof McpBoundaryError)) return 'The change could not be completed.';
   if (error.status === 403) return 'Your role does not allow this change.';
   if (error.status === 404) return 'That record no longer exists or you cannot open it.';
@@ -185,7 +219,7 @@ function refusal(error: unknown): string {
   return error.hint ?? `The change was refused (${error.code}).`;
 }
 
-const argsSchema = z
+export const argsSchema = z
   .object({
     operationId: z.string().regex(/^[A-Za-z0-9]{1,80}$/),
     args: z.record(z.string(), z.unknown()).default({}),
@@ -206,7 +240,7 @@ export function buildOperationTools(actor: AuthorizationActor): AiToolDefinition
     {
       name: 'find_operations',
       description:
-        'Find OpsKnight operations you can use beyond the dedicated tools: reading or changing schedules and overrides, maintenance windows, services, teams, escalation policies, runbooks, postmortems, SLOs, status pages, dashboards and incident fields. Returns operation ids with a summary and whether each reads or changes something. Only operations this person may use are listed.',
+        'Find OpsKnight operations you can use beyond the dedicated tools: reading or changing schedules and overrides, maintenance windows, services, teams, escalation policies, runbooks, postmortems, SLOs, status pages, dashboards and incident fields. Returns operation ids with a summary and a kind (read or change). An item with allowed:false is one their role cannot do: do not propose it; tell them which role can (needsRole). highRisk:true marks changes such as deletes.',
       kind: 'READ',
       dataClass: 'PUBLIC',
       inputSchema: {
@@ -219,7 +253,7 @@ export function buildOperationTools(actor: AuthorizationActor): AiToolDefinition
         const query = (input as { query?: unknown })?.query;
         if (typeof query !== 'string') return { error: 'Invalid input' };
         const items = searchOperations(actor, query);
-        return items.length ? { items } : { items, note: 'No matching operation you may use.' };
+        return items.length ? { items } : { items, note: 'No matching operation.' };
       },
     },
     {
@@ -237,8 +271,11 @@ export function buildOperationTools(actor: AuthorizationActor): AiToolDefinition
       execute: async input => {
         const id = (input as { operationId?: unknown })?.operationId;
         const operation = typeof id === 'string' ? squireOperation(id) : null;
-        if (!operation || !mayCall(actor, operation))
-          return { error: 'Unknown operation, or one you may not use.' };
+        if (!operation) return { error: 'Unknown operation.' };
+        if (!mayCall(actor, operation))
+          return {
+            error: `This person's role cannot do this. It needs ${rolesAllowing(actor, operation)}.`,
+          };
         const schema = JSON.stringify(operation.inputSchema);
         return {
           operationId: operation.operationId,
@@ -248,6 +285,9 @@ export function buildOperationTools(actor: AuthorizationActor): AiToolDefinition
           ...(isReadOperation(operation)
             ? {}
             : { note: 'Leave out idempotencyKey; Squire adds it. Pass ifMatch only if listed.' }),
+          ...(isHighRisk(operation)
+            ? { highRisk: 'Cannot be undone from Squire. Say so plainly before proposing it.' }
+            : {}),
         };
       },
     },
@@ -344,19 +384,19 @@ const WEB_PATH: Partial<Record<string, string>> = {
   'status-pages': '/settings/status-pages',
 };
 
-function webPath(operation: Operation, path: Record<string, string> | undefined): string {
+export function webPath(operation: Operation, path: Record<string, string> | undefined): string {
   const base = WEB_PATH[operation.domain];
   if (!base) return '/';
   return path?.id ? `${base}/${encodeURIComponent(path.id)}` : base;
 }
 
-async function extendedOn(): Promise<boolean> {
+export async function extendedOn(): Promise<boolean> {
   const settings = await getAiSettings();
   return settings.squireEnabled && settings.squireExtendedActions;
 }
 
 /** The fields a change sets, flattened and redacted like an MCP review; shallow for routine changes. */
-function changesOf(operation: Operation, args: OperationArgs): [string, string][] {
+export function changesOf(operation: Operation, args: OperationArgs): [string, string][] {
   if (isMcpApprovalGated(operation)) return reviewSummary(operation.operationId, args).changes;
   return Object.entries((args.body as Record<string, unknown> | undefined) ?? {}).map(
     ([field, value]): [string, string] => [
@@ -366,11 +406,11 @@ function changesOf(operation: Operation, args: OperationArgs): [string, string][
   );
 }
 
-const summaryOf = (operation: Operation) =>
+export const summaryOf = (operation: Operation) =>
   (operation.summary ?? camelWords(operation.operationId)).replace(/\.$/, '');
 
 /** The target of an update as the person sees it (its catalog read); null when there is none or it fails. */
-async function readTarget(
+export async function readTarget(
   actor: AuthorizationActor,
   operation: Operation,
   args: OperationArgs
@@ -494,6 +534,7 @@ export async function buildOperationProposal(
   if (!parsed.success) return null;
   const operation = squireOperation(parsed.data.operationId);
   if (!operation || isReadOperation(operation) || !mayCall(actor, operation)) return null;
+  const highRisk = isHighRisk(operation);
   const id = randomUUID();
   let args: OperationArgs;
   try {
@@ -538,12 +579,13 @@ export async function buildOperationProposal(
     kind: 'WRITE',
     title: (operation.summary ?? camelWords(operation.operationId)).slice(0, 120),
     detail:
-      `${operation.method.toUpperCase()} ${operation.path}${targets.length ? ` (${targets.join(', ')})` : ''}. Runs as you, with your permissions.`.slice(
-        0,
-        2_000
-      ),
+      `${operation.method.toUpperCase()} ${operation.path}${targets.length ? ` (${targets.join(', ')})` : ''}. ${
+        highRisk
+          ? 'High-risk change: it runs as you as soon as you confirm, and Squire cannot undo it.'
+          : 'Runs as you, with your permissions.'
+      }`.slice(0, 2_000),
     expiresAt: new Date(sealed.exp).toISOString(),
-    confirmLabel: 'Apply change',
+    confirmLabel: highRisk ? 'Confirm high-risk change' : 'Apply change',
     href: webPath(operation, args.path),
     ...(preview.length ? { preview } : {}),
   };

@@ -9,7 +9,19 @@ export const SQUIRE_LIMITS = {
   historyMax: 10,
   /** Ceiling on model/tool round trips per answer. */
   maxSteps: 6,
+  /** Records picked with "@" in one question. */
+  mentionsMax: 5,
 } as const;
+
+export const SQUIRE_MENTION_KINDS = [
+  'incident',
+  'service',
+  'schedule',
+  'team',
+  'runbook',
+  'person',
+] as const;
+export type SquireMentionKind = (typeof SQUIRE_MENTION_KINDS)[number];
 
 /** Anything up to this is accepted and trimmed; beyond it the request is malformed, not just long. */
 const HISTORY_TURN_ACCEPTED = 16_000;
@@ -55,6 +67,21 @@ export const squireRequestSchema = z
         id: z.string().trim().min(1).max(64),
       })
       .strict()
+      .optional(),
+    /**
+     * Records the person picked with "@". Only identifiers: each is read under the person's own
+     * permissions, and one they cannot read is ignored without saying so.
+     */
+    mentions: z
+      .array(
+        z
+          .object({
+            kind: z.enum(SQUIRE_MENTION_KINDS),
+            id: z.string().trim().min(1).max(64),
+          })
+          .strict()
+      )
+      .max(SQUIRE_LIMITS.mentionsMax)
       .optional(),
     /** Saved conversation to continue; ignored unless history is on and the caller owns it. */
     conversationId: z

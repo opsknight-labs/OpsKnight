@@ -95,6 +95,31 @@ Besides the existing tools, the assistant can read, always with your own permiss
 | Incident analytics | Counts, mean time to acknowledge and resolve, noisiest services, over up to 30 days |
 | Escalation policy  | Steps of a service's policy; schedules you cannot open stay anonymous               |
 
+## Automatic investigations
+
+Squire can start one investigation by itself when a high-urgency incident opens, so the diagnosis is
+waiting when responders arrive. It is **off by default** and set per service:
+
+1. Open the service's Squire settings (**Settings → Intelligence → Services →** the service **→ Squire**).
+2. Select **Investigate high-urgency incidents automatically**, then **Save**. The change is audited with
+   the service's other proactive settings; if someone saved them since you opened the page, refresh and
+   try again.
+
+It runs only while AI, the assistant and **Investigation mode** (above) are on, and a provider is cleared
+for Personal data; otherwise nothing is written. Each incident is investigated at most once, within 30
+minutes of opening, and each run counts toward the service's daily limit of AI-written proactive notes and
+the usual daily token budget.
+
+**Whose permissions.** No person asked, so the investigation reads as a read-only member of the incident's
+owning team (the incident's team, or its service's team): public incidents, services, metrics, schedules
+and connections that team can see, nothing else, and it can never change anything. Private incidents and
+incidents with no owning team are not investigated.
+
+The result appears on the incident page as **Squire investigated this**, with the same diagnosis, evidence
+levels and **Ruled out** section as a chat investigation. Each time someone opens the page, every source
+the investigation read is checked again with that person's permissions; if they cannot open one of them,
+the diagnosis is withheld from them. To dig further, use **Ask Squire** on the same card.
+
 ## Route models by task
 
 Each capability can prefer one provider, and optionally a specific model on it:

@@ -73,6 +73,7 @@ export async function scheduleSquireMemoryWork(
           { briefingEnabled: true },
           { nudgeAfterMinutes: { not: null } },
           { postmortemDraftEnabled: true },
+          { investigationEnabled: true },
         ],
       },
       select: { serviceId: true },

@@ -192,9 +192,32 @@ describe('intelligence architecture boundaries', () => {
     const executor = join(squireDir, 'actions/execute.ts');
     const writes =
       /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$executeRaw|\$transaction/;
+    // Operation-catalog changes and plans keep only their own receipts; every change
+    // they make runs through the REST v2 handler of that operation, as the person (operations.ts invoke).
+    const recordKeepers = new Map([
+      [join(squireDir, 'operations.ts'), ['squireActionReceipt']],
+      [join(squireDir, 'plans.ts'), ['squireActionReceipt']],
+    ]);
+    const tables = (source: string) => [
+      ...new Set(
+        [
+          ...source.matchAll(
+            /\b(?:prisma|tx)\.(\w+)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+          ),
+        ].map(match => match[1])
+      ),
+    ];
+    for (const [file, allowed] of recordKeepers) {
+      const source = read(file);
+      expect(source, relative(root, file)).not.toMatch(/\$executeRaw|\$transaction/);
+      expect(
+        tables(source).filter(table => !allowed.includes(table)),
+        relative(root, file)
+      ).toEqual([]);
+    }
     // Reading, proposing and answering never write anything.
     const offenders = sourceFiles(squireDir).filter(
-      file => file !== executor && writes.test(read(file))
+      file => file !== executor && !recordKeepers.has(file) && writes.test(read(file))
     );
     expect(offenders.map(file => relative(root, file))).toEqual([]);
 
@@ -215,9 +238,24 @@ describe('intelligence architecture boundaries', () => {
 
     // Proposal tools are declared in one place and never carry an executor of their own.
     const proposing = sourceFiles(squireDir).filter(file => /PROPOSE_WRITE/.test(read(file)));
-    expect(proposing.map(file => relative(root, file))).toEqual([
+    expect(proposing.map(file => relative(root, file)).sort()).toEqual([
+      'src/lib/intelligence/squire/operations.ts',
+      'src/lib/intelligence/squire/plans.ts',
       'src/lib/intelligence/squire/tools.ts',
     ]);
+    // The catalog proposal tools are plain declarations too: no executor of their own.
+    for (const [file, name] of [
+      ['operations.ts', 'PROPOSE_OPERATION_TOOL'],
+      ['plans.ts', 'PROPOSE_PLAN_TOOL'],
+    ]) {
+      const declaration =
+        read(join(squireDir, file)).match(
+          // eslint-disable-next-line security/detect-non-literal-regexp -- name is one of two fixed identifiers above
+          new RegExp(`export const ${name}: AiToolDefinition = \\{[\\s\\S]*?\\n\\};`)
+        )?.[0] ?? '';
+      expect(declaration).toContain("kind: 'PROPOSE_WRITE'");
+      expect(declaration).not.toMatch(/execute/);
+    }
     const proposalTool =
       read(join(squireDir, 'tools.ts')).match(/function proposalTool[\s\S]*?\n\}/)?.[0] ?? '';
     expect(proposalTool).toContain("kind: 'PROPOSE_WRITE'");

@@ -115,6 +115,26 @@ describe('Squire action history', () => {
     expect(JSON.stringify(page)).not.toMatch(/Secret outage|top-secret-intent/);
   });
 
+  it('lists multi-step plan receipts (no incident) with a readable label and their outcome', async () => {
+    const w = await world();
+    await receipt({
+      userId: w.member.id,
+      action: 'plan:3 steps',
+      result: { ok: true, message: 'Done: 3 of 3 steps.' },
+    });
+    // A receipt in no shape Squire writes stays out.
+    await receipt({ userId: w.member.id, action: 'planned_thing' });
+    const page = (await listSquireActionHistory(w.memberActor))!;
+    expect(page.rows).toEqual([
+      expect.objectContaining({
+        action: 'Plan of 3 steps',
+        status: 'SUCCEEDED',
+        message: 'Done: 3 of 3 steps.',
+      }),
+    ]);
+    expect(page.rows[0]).not.toHaveProperty('href');
+  });
+
   it('lets an intelligence manager see everyone, with names, and filter by status', async () => {
     const w = await world();
     await receipt({ userId: w.member.id, action: 'acknowledge_incident', incidentId: w.hidden.id });

@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
+import RelativeTime from '@/components/patterns/RelativeTime';
+import SquireMarkdown from '@/components/squire/SquireMarkdown';
 import type { ProactiveNotesView } from '@/lib/intelligence/memory/proactive-view';
 
 const modeLabel = (mode: 'BASIC' | 'AI') => (mode === 'AI' ? 'Written with AI' : 'Basic mode');
@@ -23,7 +25,7 @@ export function ProactiveNotes({
   /** Optional control shown beside the heading (the inspector's "Ask Squire"). */
   action?: ReactNode;
 }) {
-  const { briefing, nudge, postmortemDraft } = notes;
+  const { briefing, nudge, postmortemDraft, investigation } = notes;
   return (
     <section
       aria-labelledby="squire-proactive-heading"
@@ -49,6 +51,29 @@ export function ProactiveNotes({
           </p>
           <p className="text-muted-foreground">Suggested update (review before posting):</p>
           <p className="whitespace-pre-wrap wrap-break-word">{nudge.aiDraft ?? nudge.draft}</p>
+        </div>
+      )}
+
+      {investigation && (
+        <div className="space-y-2 text-sm">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h4 className="font-medium">Squire investigated this</h4>
+            <span className="text-xs text-muted-foreground">
+              <RelativeTime date={investigation.createdAt} format="long" />
+              {investigation.partial ? ' · partial' : ''}
+            </span>
+          </div>
+          {investigation.answer ? (
+            <SquireMarkdown
+              text={investigation.answer}
+              allowed={investigation.citations.map(item => item.href)}
+              references={investigation.citations}
+            />
+          ) : (
+            <p className="text-muted-foreground">
+              This investigation used sources you cannot open, so it is not shown.
+            </p>
+          )}
         </div>
       )}
 

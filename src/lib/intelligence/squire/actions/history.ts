@@ -60,6 +60,9 @@ export function actionLabel(action: string): string {
     const id = action.slice('operation:'.length);
     return MCP_OPERATION_MAP.get(id)?.summary ?? id;
   }
+  // Multi-step plans (plans.ts) record `plan:<n> steps`.
+  const plan = /^plan:(\d+) steps$/.exec(action);
+  if (plan) return `Plan of ${plan[1]} steps`;
   const words = action.replace(/_/g, ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -129,8 +132,14 @@ export async function listSquireActionHistory(
     where: {
       AND: [
         scope === 'mine' ? { userId: actor.id } : {},
-        // Only the two shapes Squire writes; anything else is not ours to describe.
-        { OR: [{ incidentId: { not: null } }, { action: { startsWith: 'operation:' } }] },
+        // Only the shapes Squire writes; anything else is not ours to describe.
+        {
+          OR: [
+            { incidentId: { not: null } },
+            { action: { startsWith: 'operation:' } },
+            { action: { startsWith: 'plan:' } },
+          ],
+        },
         statusWhere(status, now),
       ],
     },

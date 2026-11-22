@@ -69,7 +69,12 @@ export const KNOWLEDGE_LIMITS = {
 export const factStaleBefore = (now: Date = new Date()) =>
   new Date(now.getTime() - KNOWLEDGE_LIMITS.factTtlMs);
 
-export const PROACTIVE_KINDS = ['BRIEFING', 'STAKEHOLDER_NUDGE', 'POSTMORTEM_DRAFT'] as const;
+export const PROACTIVE_KINDS = [
+  'BRIEFING',
+  'STAKEHOLDER_NUDGE',
+  'POSTMORTEM_DRAFT',
+  'INVESTIGATION',
+] as const;
 export type ProactiveKind = (typeof PROACTIVE_KINDS)[number];
 
 export const PROACTIVE_LIMITS = {
@@ -81,6 +86,8 @@ export const PROACTIVE_LIMITS = {
   analysisGraceMs: 5 * 60_000,
   /** Postmortem drafts are written for incidents resolved within this window. */
   draftWindowMs: 24 * 3_600_000,
+  /** Automatic investigations start only for high-urgency incidents opened within this window. */
+  investigationWindowMs: 30 * 60_000,
   /** Incidents considered per kind per scan. */
   scanBatch: 50,
   /** Services with any proactive switch on, read per scan. */

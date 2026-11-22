@@ -3,10 +3,12 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, runbookReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { readSourceStates, sourceKey, type SourceIdentity } from '../squire/evidence-access';
 import {
   aiInputsVisible,
   briefingContentSchema,
   filterProactiveRefs,
+  investigationContentSchema,
   nudgeContentSchema,
   postmortemDraftContentSchema,
   suggestNextSteps,
@@ -51,10 +53,23 @@ export interface PostmortemDraftView {
   refs: ProactiveRefs;
 }
 
+export interface InvestigationView {
+  createdAt: Date;
+  partial: boolean;
+  /**
+   * The markdown diagnosis, or null when the viewer cannot open one or more of the sources it was built from
+   * (the text could quote them, so it is withheld whole).
+   */
+  answer: string | null;
+  citations: Array<{ kind: string; id: string; label: string; href: string }>;
+}
+
 export interface ProactiveNotesView {
   briefing: BriefingView | null;
   nudge: NudgeView | null;
   postmortemDraft: PostmortemDraftView | null;
+  /** Absent in views built before automatic investigations existed. */
+  investigation?: InvestigationView | null;
 }
 
 async function ids<T extends { id: string }>(load: () => Promise<T[]>): Promise<Set<string>> {
@@ -102,6 +117,7 @@ export async function getProactiveNotesForActor(
     briefing: notes.find(note => note.kind === 'BRIEFING'),
     nudge: notes.find(note => note.kind === 'STAKEHOLDER_NUDGE'),
     draft: notes.find(note => note.kind === 'POSTMORTEM_DRAFT'),
+    investigation: notes.find(note => note.kind === 'INVESTIGATION'),
   };
   const briefing = parsed.briefing
     ? briefingContentSchema.safeParse(parsed.briefing.content)
@@ -241,6 +257,28 @@ export async function getProactiveNotesForActor(
     };
   }
 
-  if (!briefingView && !nudgeView && !draftView) return null;
-  return { briefing: briefingView, nudge: nudgeView, postmortemDraft: draftView };
+  let investigationView: InvestigationView | null = null;
+  const investigation = parsed.investigation
+    ? investigationContentSchema.safeParse(parsed.investigation.content)
+    : null;
+  if (investigation?.success && parsed.investigation) {
+    // Every source the investigation read, re-checked under the viewer's own permissions; any miss withholds it.
+    const sources = investigation.data.sources as SourceIdentity[];
+    const states = await readSourceStates(actor, sources);
+    const readable = sources.every(source => states.has(sourceKey(source)));
+    investigationView = {
+      createdAt: parsed.investigation.createdAt,
+      partial: investigation.data.partial,
+      answer: readable ? investigation.data.answer : null,
+      citations: readable ? investigation.data.citations : [],
+    };
+  }
+
+  if (!briefingView && !nudgeView && !draftView && !investigationView) return null;
+  return {
+    briefing: briefingView,
+    nudge: nudgeView,
+    postmortemDraft: draftView,
+    investigation: investigationView,
+  };
 }

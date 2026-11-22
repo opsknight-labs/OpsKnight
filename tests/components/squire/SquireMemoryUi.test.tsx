@@ -58,6 +58,7 @@ describe('Squire memory settings forms', () => {
           briefingEnabled: false,
           nudgeAfterMinutes: null,
           postmortemDraftEnabled: false,
+          investigationEnabled: false,
           revision: 0,
         }}
       />
@@ -69,6 +70,9 @@ describe('Squire memory settings forms', () => {
     expect(minutes).toBeEnabled();
     fireEvent.change(minutes, { target: { value: '45' } });
     fireEvent.click(screen.getByRole('checkbox', { name: /Briefing when an incident opens/ }));
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /Investigate high-urgency incidents automatically/ })
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(actions.saveSquireServicePolicyAction).toHaveBeenCalledTimes(1));
     const form = formOf(actions.saveSquireServicePolicyAction);
@@ -77,6 +81,7 @@ describe('Squire memory settings forms', () => {
     expect(form.get('nudgeEnabled')).toBe('on');
     expect(form.get('nudgeAfterMinutes')).toBe('45');
     expect(form.get('postmortemDraftEnabled')).toBeNull();
+    expect(form.get('investigationEnabled')).toBe('on');
     expect(form.get('expectedRevision')).toBe('0');
   });
 
@@ -130,6 +135,30 @@ describe('Proactive Squire notes on the incident page', () => {
     expect(screen.getByText('Likely change (unconfirmed)')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Restart api pods' })).toBeInTheDocument();
     expect(screen.queryByText('Possible causes (to verify)')).toBeNull();
+  });
+
+  it('shows an automatic investigation, or withholds it when its sources are not all readable', async () => {
+    const investigation = {
+      createdAt: new Date('2026-11-08T10:00:00Z'),
+      partial: false,
+      answer: '**Release 42** is the most likely trigger.',
+      citations: [],
+    };
+    const { unmount } = render(
+      <ProactiveNotes incidentId="inc-1" notes={view({ briefing: null, investigation })} />
+    );
+    expect(screen.getByRole('heading', { name: 'Squire investigated this' })).toBeInTheDocument();
+    expect(await screen.findByText('Release 42')).toBeInTheDocument();
+    unmount();
+
+    render(
+      <ProactiveNotes
+        incidentId="inc-1"
+        notes={view({ briefing: null, investigation: { ...investigation, answer: null } })}
+      />
+    );
+    expect(screen.getByText(/used sources you cannot open/)).toBeInTheDocument();
+    expect(screen.queryByText('Release 42')).toBeNull();
   });
 
   it('prefers AI text when present and labels it', () => {

@@ -53,19 +53,26 @@ beforeEach(async () => {
 });
 
 describe('Squire operation catalog', () => {
-  it('reaches operational changes but never credentials, settings or R3 operations', async () => {
+  it('reaches operational changes and reviewed high-risk ones, never credentials, settings or denied operations', async () => {
     const { admin, stakeholder } = await world();
     expect(squireOperation('createScheduleOverride')).not.toBeNull();
     expect(squireOperation('updateChatOpsConfiguration')).toBeNull();
     expect(squireOperation('updateIntegration')).toBeNull();
-    expect(squireOperation('deleteService')).toBeNull();
+    // A reviewed R3 change (impact preview) is reachable as a high-risk card; a denied R3 one never is.
+    expect(squireOperation('deleteService')).not.toBeNull();
+    expect(squireOperation('deleteServiceAccount')).toBeNull();
     expect(squireOperation('rotateIntegrationCredentials')).toBeNull();
     const found = searchOperations(admin, 'create a maintenance window for a service');
     expect(found.map(item => item.operationId)).toContain('createMaintenanceWindow');
-    // A role that may change nothing is offered no change.
-    expect(
-      searchOperations(stakeholder, 'update the service').filter(item => item.kind === 'change')
-    ).toEqual([]);
+    // A role that may change nothing sees changes only as not allowed, with the role that could.
+    const changes = searchOperations(stakeholder, 'update the service').filter(
+      item => item.kind === 'change'
+    );
+    expect(changes.length).toBeGreaterThan(0);
+    for (const item of changes) {
+      expect(item).toMatchObject({ allowed: false });
+      expect(item.needsRole).toMatch(/Admin/);
+    }
   });
 
   it('proposes a change with a before/after diff, applies it once on confirmation, and records the outcome', async () => {

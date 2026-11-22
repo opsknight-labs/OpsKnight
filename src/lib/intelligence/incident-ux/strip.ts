@@ -273,7 +273,13 @@ export function insightsSections(insights: IncidentInsights): InsightsSectionId[
   const has = new Map<InsightsSectionId, boolean>([
     [
       'briefing',
-      Boolean(proactive && (proactive.briefing || proactive.nudge || proactive.postmortemDraft)),
+      Boolean(
+        proactive &&
+        (proactive.briefing ||
+          proactive.nudge ||
+          proactive.postmortemDraft ||
+          proactive.investigation)
+      ),
     ],
     ['triage', Boolean(insights.triage?.suggestions.length)],
     ['similar', Boolean(insights.similar?.length)],

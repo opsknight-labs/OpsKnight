@@ -301,7 +301,7 @@ export const OPERATIONAL_METRICS = [
     kind: 'counter',
     labels: ['kind', 'mode'],
     scope: 'counter',
-    estimatedMaxSeries: 6,
+    estimatedMaxSeries: 7,
   },
   {
     name: 'opsknight_intelligence_metric_evaluations_total',

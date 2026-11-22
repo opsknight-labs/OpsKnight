@@ -86,7 +86,7 @@ export async function readSquireActionOutcome(
   // An operation-catalog change has no incident; the receipt is owner-scoped like every other.
   if (receipt.incidentId) {
     if (!(await readIncidentForActor(actor, receipt.incidentId))) return null;
-  } else if (!receipt.action.startsWith('operation:')) return null;
+  } else if (!/^(?:operation|plan):/.test(receipt.action)) return null;
   let status = ACTION_OUTCOME_STATES.find(state => state === receipt.status) ?? 'UNKNOWN';
   // A crashed executor cannot leave the UI claiming "still running" forever. This is informational:
   // lookup never changes the receipt, resumes work or authorizes a second mutation.

@@ -6972,6 +6972,8 @@ model SquireServicePolicy {
   /// Minutes without a stakeholder update before a nudge; null turns nudges off.
   nudgeAfterMinutes      Int?
   postmortemDraftEnabled Boolean  @default(false)
+  /// Start a Squire investigation by itself when a high-urgency incident opens on this service.
+  investigationEnabled   Boolean  @default(false)
   revision               Int      @default(0)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt

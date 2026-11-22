@@ -35,6 +35,7 @@ import {
 } from './catalog';
 import { buildProposal, openProposal, type OpenedProposal } from './proposals';
 import { executeOperationProposal, openOperationProposal } from '../operations';
+import { executePlanProposal, openPlanProposal } from '../plans';
 import { isExtendedSquireAction, type ExtendedSquireActionName } from './catalog-extended';
 import { checkExtendedPreconditions, extendedActionsAvailable } from './extended';
 import {
@@ -69,6 +70,9 @@ export async function executeSquireAction(
     return channel
       ? failed(CHAT_UNCONFIRMABLE_MESSAGE)
       : executeOperationProposal(actor, operation);
+  // A multi-step plan of catalog changes (plans.ts).
+  const plan = await openPlanProposal(token, actor.id);
+  if (plan) return channel ? failed(CHAT_UNCONFIRMABLE_MESSAGE) : executePlanProposal(actor, plan);
   const proposal = await openProposal(token, actor.id);
   if (!proposal) return failed('This suggestion has expired. Ask again for a fresh one.');
   if (SQUIRE_ACTION_KIND[proposal.action] !== 'WRITE')

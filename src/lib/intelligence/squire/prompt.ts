@@ -48,7 +48,7 @@ export function buildSystemPrompt(
   guidance: { text: string; revision: number } | null = null,
   timeZone = 'UTC',
   now = new Date(),
-  about: { user?: string[]; viewing?: string } = {}
+  about: { user?: string[]; viewing?: string; mentions?: string[] } = {}
 ): RenderedPrompt & { volatile?: string } {
   const context: string[] = [
     'Cite only sources returned in this turn. Evidence handles identify reads, not proof of a causal claim.',
@@ -57,7 +57,7 @@ export function buildSystemPrompt(
     timeZoneRule(timeZone, now),
     ...(about.user ?? []),
   ];
-  const volatile: string[] = about.viewing ? [about.viewing] : [];
+  const volatile: string[] = [...(about.viewing ? [about.viewing] : []), ...(about.mentions ?? [])];
   if (briefing) {
     const { incident } = briefing;
     context.push(

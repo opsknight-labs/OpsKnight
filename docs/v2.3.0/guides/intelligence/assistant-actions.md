@@ -80,14 +80,34 @@ the same reviewed API catalog the MCP server uses, and you get a card with:
   audit as if you had called the API yourself;
 - **Open in OpsKnight**, to review the record first.
 
-Only operations your role already allows are offered. Credentials, webhook and integration settings,
-notification delivery, sensitive reads and every high-risk operation (deletes, credential rotation, user
-administration) are never reachable from Squire. These cards can only be confirmed in the web app, not
-from Slack or Teams.
+Squire does exactly what your role allows, after you confirm it, and nothing more. If you ask for
+something your role cannot do, it says so and names the role that can (for example "this needs Admin"),
+so you know whom to ask. Credentials, webhook and integration settings, notification delivery, sensitive
+reads and high-risk operations the catalog denies (credential rotation, user administration) are never
+reachable from Squire. These cards can only be confirmed in the web app, not from Slack or Teams.
 
 Squire can also read through the same catalog (for example a schedule's overrides or a maintenance
 window) when no dedicated lookup exists. Those reads use your permissions and the same field allowlist and
 redaction as MCP.
+
+## High-risk changes
+
+Deleting a service, schedule, team or escalation policy, and similar changes, are offered only if your
+role allows them. The card is marked **High-risk change**, its button reads **Confirm high-risk change**,
+and it says that Squire cannot undo it. It runs as you the moment you confirm, like the same action in
+OpsKnight, and is audited.
+
+## Several changes at once
+
+When a request needs two to five related changes (for example "create a Payments service and a
+maintenance window for it"), Squire can suggest them as one **Plan** card. Each step is listed with the
+fields it sets; a value that comes from an earlier step (such as the new service's id) shows as
+`from-step-1`. Every step must be a change your role allows, or no card is shown.
+
+**Apply all** runs the steps in order, as you, each exactly like its single-change card. It stops at the
+first step that fails and tells you which steps were done, which failed and why, and which were not
+attempted. Steps already done are not rolled back; fix or undo them in OpsKnight. A plan card works once,
+expires after 10 minutes and can only be confirmed in the web app.
 
 ## Review what was done
 

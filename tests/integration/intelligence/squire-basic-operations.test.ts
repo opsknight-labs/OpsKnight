@@ -166,7 +166,7 @@ describe('basic-mode change commands', () => {
     const onService = { pageContext: { kind: 'service' as const, id: service.id } };
     const denied = await ask(user, '/maintenance 1h', onService);
     expect(denied.cards).toHaveLength(0);
-    expect(denied.text).toContain('your role does not allow it');
+    expect(denied.text).toContain("You don't have permission for that change: it needs ");
 
     await settings(false);
     const off = await ask(admin, '/rename Checkout Web', onService);

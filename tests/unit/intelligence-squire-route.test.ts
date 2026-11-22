@@ -106,6 +106,28 @@ describe('POST /api/intelligence/squire', () => {
     expect(turns.run).not.toHaveBeenCalled();
   });
 
+  it('accepts at most five @-mentions of known kinds, as bare kind and id', async () => {
+    const mention = (kind: string, id = 'svc_1') => ({ kind, id });
+    const bad = [
+      [mention('alert')],
+      [mention('service', '')],
+      [mention('service', 'x'.repeat(65))],
+      [{ ...mention('service'), label: 'Checkout API' }],
+      Array.from({ length: 6 }, (_, i) => mention('team', `t${i}`)),
+    ];
+    for (const mentions of bad)
+      expect((await POST(make({ message: 'x', mentions }))).status).toBe(400);
+    expect(turns.run).not.toHaveBeenCalled();
+
+    const mentions = [mention('service'), mention('person', 'u2'), mention('incident', 'inc1')];
+    expect((await POST(make({ message: 'x', mentions }))).status).toBe(200);
+    expect(turns.run).toHaveBeenCalledWith(
+      expect.anything(),
+      { message: 'x', history: [], mentions },
+      expect.any(AbortSignal)
+    );
+  });
+
   it('aborts the turn when the client disconnects', async () => {
     let signal: AbortSignal | undefined;
     turns.run.mockImplementation(async function* (
