@@ -66,6 +66,13 @@ function creationPayload(input: IncidentCreationInput): Record<string, unknown> 
       .sort((left, right) => left.fieldId.localeCompare(right.fieldId)),
     source: input.source,
     actorId: input.actor?.id ?? null,
+    ...(input.defaultRoles?.length
+      ? {
+          defaultRoles: [...input.defaultRoles]
+            .map(role => ({ roleKey: role.roleKey, userId: role.userId }))
+            .sort((left, right) => left.roleKey.localeCompare(right.roleKey)),
+        }
+      : {}),
   };
 }
 

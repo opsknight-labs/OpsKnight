@@ -1,7 +1,7 @@
 /**
  * ChatOps Slash Command Dispatcher
  * Handles /incident slash commands from Slack war-room channels.
- * Supports: ack, resolve, note, who, help
+ * Supports: ack, resolve, note, who, role, roles, postmortem, help
  */
 
 import prisma from '@/lib/prisma';
@@ -13,7 +13,47 @@ import {
   executeChatOpsLifecycleCommand,
   authorizeChatOpsIncident,
   executeChatOpsNote,
+  executeChatOpsRole,
 } from '@/lib/incidents/chatops-lifecycle';
+import {
+  INCIDENT_ROLES,
+  INCIDENT_ROLE_SUMMARY_SELECT,
+  parseIncidentRoleKey,
+  summarizeIncidentRoles,
+  type IncidentRoleKey,
+} from '@/lib/incidents/roles';
+
+export type RoleCommandTarget =
+  { kind: 'me' } | { kind: 'clear' } | { kind: 'slack'; slackUserId: string };
+
+/** Parses `/incident role <role> @user|me|clear`. */
+export function parseRoleCommandArgs(
+  args: string
+): { roleKey: IncidentRoleKey; target: RoleCommandTarget } | { error: string } {
+  const usage = 'Usage: `/incident role <commander|ops-lead|comms-lead|scribe> @person|me|clear`';
+  const match = args.trim().match(/^(.+?)\s+(\S+)$/);
+  if (!match) return { error: usage };
+  const roleKey = parseIncidentRoleKey(match[1]);
+  if (!roleKey) return { error: `Unknown role \`${match[1].trim()}\`. ${usage}` };
+  const target = match[2];
+  if (/^me$/i.test(target)) return { roleKey, target: { kind: 'me' } };
+  if (/^(clear|none|unassign)$/i.test(target)) return { roleKey, target: { kind: 'clear' } };
+  // Slack sends mentions as <@U123> or <@U123|name>.
+  if (target.startsWith('<@') && target.endsWith('>')) {
+    const slackUserId = target.slice(2, -1).split('|')[0];
+    if (/^[A-Z0-9]+$/i.test(slackUserId)) {
+      return { roleKey, target: { kind: 'slack', slackUserId } };
+    }
+  }
+  return { error: usage };
+}
+
+function formatRolesText(roles: ReturnType<typeof summarizeIncidentRoles>): string {
+  const byKey = new Map(roles.map(role => [role.roleKey, role.name]));
+  return INCIDENT_ROLES.map(
+    role => `• *${role.label}:* ${byKey.get(role.key) ?? '_unassigned_'}`
+  ).join('\n');
+}
 
 export interface SlashCommandPayload {
   command: string;
@@ -115,6 +155,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     include: {
       service: { select: { id: true, name: true, escalationPolicyId: true } },
       assignee: { select: { name: true } },
+      roleAssignments: INCIDENT_ROLE_SUMMARY_SELECT,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -136,7 +177,9 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
               '`/incident ack` — Acknowledge this incident',
               '`/incident resolve [summary]` — Resolve with optional summary',
               '`/incident note <message>` — Add an incident note',
-              '`/incident who` — Show who is on-call',
+              '`/incident who` — Show incident roles and who is on-call',
+              '`/incident roles` — Show who holds each incident role',
+              '`/incident role commander @person|me|clear` — Assign or clear a role',
               '`/incident postmortem` — Create a postmortem draft from timeline & notes',
               '`/incident ask <question>` — Ask Squire about this incident (when enabled)',
               '`/incident help` — Show this help message',
@@ -166,6 +209,8 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     // Squire answers under the asker's own permissions, so it needs the linked account too.
     'ask',
     'squire',
+    'role',
+    'roles',
   ]);
   const actor =
     mutatingCommands.has(subcommand) && botToken
@@ -304,10 +349,74 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
       };
     }
 
+    case 'roles': {
+      try {
+        await authorizeChatOpsIncident(incident.id, actor!.id, 'READ');
+      } catch (error) {
+        return { response_type: 'ephemeral', text: `⚠️ ${chatOpsLifecycleErrorMessage(error)}` };
+      }
+      return {
+        response_type: 'ephemeral',
+        text: `🎖️ *Incident roles*\n${formatRolesText(summarizeIncidentRoles(incident.roleAssignments))}`,
+      };
+    }
+
+    case 'role': {
+      const parsed = parseRoleCommandArgs(args);
+      if ('error' in parsed) return { response_type: 'ephemeral', text: `⚠️ ${parsed.error}` };
+      let targetUserId: string | null = null;
+      if (parsed.target.kind === 'me') targetUserId = actor!.id;
+      if (parsed.target.kind === 'slack') {
+        const target = botToken
+          ? await resolveOpsKnightUser(parsed.target.slackUserId, botToken)
+          : null;
+        if (!target) {
+          return {
+            response_type: 'ephemeral',
+            text: '⚠️ That Slack user is not linked to an active OpsKnight account (their emails must match).',
+          };
+        }
+        targetUserId = target.id;
+      }
+      const label = INCIDENT_ROLES.find(role => role.key === parsed.roleKey)!.label;
+      try {
+        const result = await executeChatOpsRole({
+          incidentId: incident.id,
+          actor: { id: actor!.id, name: actor!.name },
+          roleKey: parsed.roleKey,
+          targetUserId,
+          provider: 'SLACK',
+          ...(idempotency ? { idempotency } : {}),
+        });
+        if (!result.changed) {
+          return {
+            response_type: 'ephemeral',
+            text: targetUserId
+              ? `ℹ️ ${result.userName} is already ${label.toLowerCase()}.`
+              : `ℹ️ Nobody holds the ${label.toLowerCase()} role.`,
+          };
+        }
+        return {
+          response_type: 'in_channel',
+          text: targetUserId
+            ? `🎖️ *${result.userName}* is now *${label}* (set by <@${user_id}>)`
+            : `🎖️ *${label}* role cleared by <@${user_id}>`,
+        };
+      } catch (error) {
+        logger.warn('[ChatOps] Slash role rejected', {
+          incidentId: incident.id,
+          userId: actor!.id,
+          error,
+        });
+        return { response_type: 'ephemeral', text: `⚠️ ${chatOpsLifecycleErrorMessage(error)}` };
+      }
+    }
+
     case 'who': {
       // Query on-call schedule for the service
       try {
         await authorizeChatOpsIncident(incident.id, actor!.id, 'READ');
+        const rolesText = `🎖️ *Incident roles*\n${formatRolesText(summarizeIncidentRoles(incident.roleAssignments))}`;
         const policy = incident.service.escalationPolicyId
           ? await prisma.escalationPolicy.findUnique({
               where: { id: incident.service.escalationPolicyId },
@@ -336,7 +445,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         if (!policy?.steps?.length) {
           return {
             response_type: 'ephemeral',
-            text: `ℹ️ No escalation policy configured for *${incident.service.name}*.`,
+            text: `${rolesText}\n\nℹ️ No escalation policy configured for *${incident.service.name}*.`,
           };
         }
 
@@ -378,7 +487,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
 
         return {
           response_type: 'ephemeral',
-          text: `📋 *On-Call for ${incident.service.name}:*\n${lines.join('\n')}`,
+          text: `${rolesText}\n\n📋 *On-Call for ${incident.service.name}:*\n${lines.join('\n')}`,
         };
       } catch (error) {
         logger.error('[ChatOps] Failed to query on-call', { error });

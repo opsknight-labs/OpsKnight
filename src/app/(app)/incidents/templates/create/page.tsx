@@ -22,10 +22,14 @@ export default async function CreateTemplatePage({
     redirect('/incidents/templates');
   }
 
-  const services = await prisma.service.findMany({
-    orderBy: { name: 'asc' },
-    select: { id: true, name: true },
-  });
+  const [services, users] = await Promise.all([
+    prisma.service.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.user.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    }),
+  ]);
   const resolvedSearchParams = await searchParams;
   const errorCode = resolvedSearchParams?.error;
 
@@ -72,7 +76,7 @@ export default async function CreateTemplatePage({
         </div>
       )}
 
-      <TemplateCreateForm services={services} action={createTemplateAction} />
+      <TemplateCreateForm services={services} users={users} action={createTemplateAction} />
     </main>
   );
 }

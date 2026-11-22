@@ -19,6 +19,7 @@ import { getIncidentChatOpsCapabilities } from '@/lib/chatops/incident-capabilit
 import { chatOpsKindForTeamsVerb } from '@/lib/chatops/teams-action-map';
 import { buildMicrosoftTeamsIncidentCard } from './cards';
 import { parseMicrosoftTeamsAction, TEAMS_CHATOPS_VERBS } from './action-schema';
+import { INCIDENT_ROLE_SUMMARY_SELECT, summarizeIncidentRoles } from '@/lib/incidents/roles';
 import { createMicrosoftTeamsIdentityChallenge, resolveMicrosoftTeamsUser } from './identity';
 import {
   teamsActionCard,
@@ -113,7 +114,11 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
       }),
       prisma.incident.findUnique({
         where: { id: incidentId },
-        include: { service: { select: { name: true } }, assignee: { select: { name: true } } },
+        include: {
+          service: { select: { name: true } },
+          assignee: { select: { name: true } },
+          roleAssignments: INCIDENT_ROLE_SUMMARY_SELECT,
+        },
       }),
       prisma.microsoftTeamsIncidentMessage.findUnique({
         where: { incidentId_destinationId: { incidentId, destinationId } },
@@ -392,6 +397,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 canSnooze: true,
                 canEscalate: true,
                 canJoinResponder: true,
+                canTakeCommand: true,
               };
           const eventType =
             incident.status === 'RESOLVED'
@@ -422,6 +428,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 priority: incident.priority,
                 serviceName: incident.service.name,
                 assigneeName: incident.assignee?.name ?? null,
+                roles: summarizeIncidentRoles(incident.roleAssignments),
                 incidentUrl: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${incident.id}`,
                 createdAt: incident.createdAt,
                 acknowledgedAt: incident.acknowledgedAt,
@@ -529,6 +536,25 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
               });
               result = teamsActionSuccess('You joined as a responder.');
               break;
+            case 'TAKE_COMMAND': {
+              const role = (await executeChatOpsCommand({
+                provider: 'MICROSOFT_TEAMS',
+                actor: { id: activeLink.userId, name: activeLink.displayName },
+                command: {
+                  kind: 'SET_ROLE',
+                  incidentId,
+                  roleKey: 'COMMANDER',
+                  targetUserId: activeLink.userId,
+                },
+                idempotency,
+              })) as { changed: boolean };
+              result = teamsActionSuccess(
+                role.changed
+                  ? 'You are now the incident commander.'
+                  : 'You are already the incident commander.'
+              );
+              break;
+            }
             case 'VIEW_RESPONDERS': {
               await executeChatOpsCommand({
                 provider: 'MICROSOFT_TEAMS',
@@ -540,6 +566,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 where: { id: incidentId },
                 select: {
                   assignee: { select: { name: true } },
+                  roleAssignments: INCIDENT_ROLE_SUMMARY_SELECT,
                   watchers: { select: { user: { select: { name: true } } }, take: 20 },
                 },
               });
@@ -547,11 +574,13 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 responders?.assignee?.name,
                 ...(responders?.watchers.map(w => w.user.name) ?? []),
               ].filter(Boolean);
-              result = teamsActionSuccess(
-                names.length
-                  ? `Current responders: ${[...new Set(names)].join(', ')}`
-                  : 'No responder is currently assigned.'
-              );
+              const roles = summarizeIncidentRoles(responders?.roleAssignments)
+                .map(role => `${role.shortLabel}: ${role.name}`)
+                .join(' · ');
+              const people = names.length
+                ? `Current responders: ${[...new Set(names)].join(', ')}`
+                : 'No responder is currently assigned.';
+              result = teamsActionSuccess(roles ? `${roles}. ${people}` : people);
               break;
             }
             default:

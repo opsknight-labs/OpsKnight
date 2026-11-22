@@ -129,6 +129,10 @@ export type AuthorizationResource =
       /** People currently on call for the incident's escalation policy. */
       onCallUserIds?: readonly string[];
       watcherIds?: readonly string[];
+      /** Incident commander and ops lead: operator rights on this incident, even when private. */
+      roleOperatorIds?: readonly string[];
+      /** Comms lead and scribe: may read the incident and add notes. */
+      roleContributorIds?: readonly string[];
       visibility?: 'PUBLIC' | 'PRIVATE';
       serviceTeamId?: string | null;
       assignedTeamId?: string | null;
@@ -777,17 +781,21 @@ export function isIncidentOperatorAction(action: AuthorizationAction): boolean {
   return INCIDENT_OPERATOR_ACTIONS.has(action);
 }
 
+export type IncidentOperatorRelation = 'ASSIGNEE' | 'ON_CALL' | 'INCIDENT_ROLE' | 'TEAM_MEMBER';
+
 /**
  * Who may work an incident without organization-wide operations access: the assignee, anyone
- * currently on call for it, and members of the owning team (public incidents only). Watchers
- * and stakeholders may read an incident but not operate it.
+ * currently on call for it, its commander and ops lead, and members of the owning team (public
+ * incidents only). Watchers and stakeholders may read an incident but not operate it; the comms
+ * lead and scribe may also add notes.
  */
 export function incidentOperatorRelation(
   actor: AuthorizationActor,
   resource: IncidentResource
-): 'ASSIGNEE' | 'ON_CALL' | 'TEAM_MEMBER' | null {
+): IncidentOperatorRelation | null {
   if (resource.assigneeId && resource.assigneeId === actor.id) return 'ASSIGNEE';
   if (resource.onCallUserIds?.includes(actor.id)) return 'ON_CALL';
+  if (resource.roleOperatorIds?.includes(actor.id)) return 'INCIDENT_ROLE';
   if (resource.visibility === 'PRIVATE') return null;
   const teams = new Set(actor.teamIds);
   if (
@@ -816,7 +824,9 @@ function isResourceInScope(actor: AuthorizationActor, resource: AuthorizationRes
     if (
       resource.assigneeId === actor.id ||
       resource.watcherIds?.includes(actor.id) ||
-      resource.onCallUserIds?.includes(actor.id)
+      resource.onCallUserIds?.includes(actor.id) ||
+      resource.roleOperatorIds?.includes(actor.id) ||
+      resource.roleContributorIds?.includes(actor.id)
     )
       return true;
     if (resource.visibility !== 'PUBLIC') return false;
@@ -877,7 +887,9 @@ export function authorize<A extends AuthorizationAction>(
   )
     return { allowed: false, reason: 'RESOURCE_OUT_OF_SCOPE', requiredCapability: policy.scoped };
   if (resource.type === 'incident' && isIncidentOperatorAction(action)) {
-    return incidentOperatorRelation(actor, resource)
+    return incidentOperatorRelation(actor, resource) ||
+      (action === AUTHORIZATION_ACTIONS.INCIDENT_NOTE &&
+        resource.roleContributorIds?.includes(actor.id))
       ? { allowed: true, scope: 'resource' }
       : { allowed: false, reason: 'RESOURCE_OUT_OF_SCOPE', requiredCapability: policy.scoped };
   }

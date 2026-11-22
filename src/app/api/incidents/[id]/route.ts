@@ -13,6 +13,7 @@ import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
 import { toIncidentApiDto } from '@/lib/incidents/api-dto';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
+import { withActorIncidentRoles } from '@/lib/incidents/role-relations';
 
 const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
@@ -39,9 +40,7 @@ function rateLimitError(retryAfter: number) {
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError(
-      new AppError({ code: 'API_KEY_INVALID' })
-    );
+    return jsonError(new AppError({ code: 'API_KEY_INVALID' }));
   }
 
   const rate = await checkRateLimit(
@@ -100,14 +99,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const decision = authorize({
     actor,
     action: AUTHORIZATION_ACTIONS.INCIDENT_READ,
-    resource: {
+    resource: await withActorIncidentRoles(actor, AUTHORIZATION_ACTIONS.INCIDENT_READ, {
       type: 'incident',
       assigneeId: incident.assigneeId,
       watcherIds: incident.watchers.map(watcher => watcher.userId),
+      id: incident.id,
       visibility: incident.visibility,
       serviceTeamId: incident.service?.teamId,
       assignedTeamId: incident.teamId,
-    },
+    }),
   });
   if (!decision.allowed) {
     return jsonError(
@@ -142,9 +142,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError(
-      new AppError({ code: 'API_KEY_INVALID' })
-    );
+    return jsonError(new AppError({ code: 'API_KEY_INVALID' }));
   }
 
   const rate = await checkRateLimit(

@@ -18,7 +18,10 @@ export const GET = defineV2Route({
   resourceExtractor: async ({ actor, params }) => {
     const incident = await prisma.incident.findFirst({
       where: { AND: [{ id: params.id }, incidentReadWhere(actor)] },
-      include: { service: { select: { teamId: true } }, watchers: { select: { userId: true } } },
+      include: {
+        service: { select: { teamId: true } },
+        watchers: { select: { userId: true } },
+      },
     });
     if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
     return {
@@ -28,6 +31,7 @@ export const GET = defineV2Route({
       serviceTeamId: incident.service.teamId,
       visibility: incident.visibility,
       watcherIds: incident.watchers.map(item => item.userId),
+      id: incident.id,
     };
   },
   handler: async ({ params }) => {

@@ -26,6 +26,8 @@ export function chatOpsKindForTeamsVerb(verb: string): ChatOpsActionKind | null 
       return 'ESCALATE';
     case TEAMS_CHATOPS_VERBS.JOIN_RESPONDER:
       return 'JOIN_RESPONDER';
+    case TEAMS_CHATOPS_VERBS.TAKE_COMMAND:
+      return 'TAKE_COMMAND';
     case TEAMS_CHATOPS_VERBS.WHO:
       return 'VIEW_RESPONDERS';
     case TEAMS_CHATOPS_VERBS.REFRESH:
@@ -53,6 +55,8 @@ export function teamsVerbForChatOpsKind(kind: ChatOpsActionKind): TeamsChatOpsVe
       return TEAMS_CHATOPS_VERBS.ESCALATE;
     case 'JOIN_RESPONDER':
       return TEAMS_CHATOPS_VERBS.JOIN_RESPONDER;
+    case 'TAKE_COMMAND':
+      return TEAMS_CHATOPS_VERBS.TAKE_COMMAND;
     case 'VIEW_RESPONDERS':
       return TEAMS_CHATOPS_VERBS.WHO;
     case 'REFRESH':

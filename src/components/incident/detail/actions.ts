@@ -2,7 +2,17 @@
 
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
-import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
+import { revalidatePath } from 'next/cache';
+import {
+  assertCanViewIncident,
+  getCurrentAuthorizationActor,
+  getCurrentUser,
+  getUserPermissions,
+} from '@/lib/rbac';
+import { AppError } from '@/lib/errors';
+import { INCIDENT_ROLE_KEYS } from '@/lib/incidents/roles';
+import { assertCanChangeIncidentRole } from '@/lib/incidents/role-access';
+import { assignIncidentRoleCommand } from '@/lib/incidents/roles-command';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import {
   addNote,
@@ -269,4 +279,37 @@ export async function loadOlderIncidentTimelineActivity(
       user: notif.user,
     })),
   };
+}
+
+const roleChangeSchema = z
+  .object({
+    roleKey: z.enum(INCIDENT_ROLE_KEYS),
+    userId: z.string().trim().min(1).max(191).nullable(),
+  })
+  .strict();
+
+/** Sets (or, with `userId: null`, clears) one incident role from the incident page. */
+export async function setIncidentDetailRole(
+  incidentIdValue: string,
+  roleKey: string,
+  userId: string | null
+) {
+  const parsedIncidentId = incidentId(incidentIdValue);
+  const input = roleChangeSchema.parse({ roleKey, userId });
+  const permissions = await getUserPermissions();
+  if (!permissions.authenticated) throw new AppError({ code: 'AUTHENTICATION_REQUIRED' });
+  const actor = await getCurrentAuthorizationActor();
+  // Relationship-aware check: operators take roles, the commander delegates, managers set any.
+  await assertCanChangeIncidentRole(actor, parsedIncidentId, input.roleKey, input.userId);
+  const user = await getCurrentUser();
+  const result = await assignIncidentRoleCommand({
+    incidentId: parsedIncidentId,
+    roleKey: input.roleKey,
+    userId: input.userId,
+    actor: { id: user.id, name: user.name },
+    source: 'UI',
+  });
+  revalidatePath(`/incidents/${parsedIncidentId}`);
+  revalidatePath(`/m/incidents/${parsedIncidentId}`);
+  return { changed: result.changed };
 }

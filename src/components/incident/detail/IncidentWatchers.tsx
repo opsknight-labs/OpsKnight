@@ -9,14 +9,6 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/shadcn/command';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -37,6 +29,7 @@ import {
   Megaphone,
 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
+import IncidentUserPicker from './IncidentUserPicker';
 import { cn } from '@/lib/utils';
 
 type Watcher = {
@@ -283,54 +276,14 @@ export default function IncidentWatchers({
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="p-0 border shadow-md rounded-lg w-72" align="start">
-                      <Command className="rounded-lg">
-                        <CommandInput
-                          placeholder="Search teammates..."
-                          className="h-8 text-xs border-none focus:ring-0"
-                        />
-                        <CommandList className="max-h-48">
-                          <CommandEmpty className="py-4 text-center text-xs text-ink-400">
-                            No available teammates found.
-                          </CommandEmpty>
-                          <CommandGroup className="p-1">
-                            {availableUsers.map(user => (
-                              <CommandItem
-                                key={user.id}
-                                value={`${user.name}|${user.email}`}
-                                onSelect={() => {
-                                  setSelectedUserId(user.id);
-                                  setUserSearchOpen(false);
-                                }}
-                                className="flex items-center gap-2 cursor-pointer text-xs rounded-md py-1.5"
-                              >
-                                <UserAvatar
-                                  userId={user.id}
-                                  name={user.name}
-                                  gender={user.gender}
-                                  avatarUrl={user.avatarUrl}
-                                  size="xs"
-                                  className="shrink-0"
-                                  aria-hidden
-                                />
-                                <div className="flex flex-col min-w-0">
-                                  <span className="font-semibold truncate text-xs">
-                                    {user.name}
-                                  </span>
-                                  <span className="text-[10px] text-ink-400 truncate">
-                                    {user.email}
-                                  </span>
-                                </div>
-                                <Check
-                                  className={cn(
-                                    'ml-auto h-3.5 w-3.5 text-primary shrink-0',
-                                    selectedUserId === user.id ? 'opacity-100' : 'opacity-0'
-                                  )}
-                                />
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
+                      <IncidentUserPicker
+                        users={availableUsers}
+                        selectedUserId={selectedUserId}
+                        onSelect={user => {
+                          setSelectedUserId(user.id);
+                          setUserSearchOpen(false);
+                        }}
+                      />
                     </PopoverContent>
                   </Popover>
                 </div>

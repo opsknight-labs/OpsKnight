@@ -121,6 +121,18 @@ const historySegment = z
     message: 'History segment end must follow its start',
   });
 
+const serviceHistory = z
+  .object({
+    rangeStart: dateTime,
+    rangeEnd: dateTime,
+    coverage: z.enum(['COMPLETE', 'PARTIAL']),
+    segments: z.array(historySegment),
+  })
+  .passthrough()
+  .refine(history => Date.parse(history.rangeStart) < Date.parse(history.rangeEnd), {
+    message: 'History range end must follow its start',
+  });
+
 const incidentUpdate = z
   .object({
     id: z.string(),
@@ -184,6 +196,7 @@ export const publicStatusPageSnapshotSchema = z
         subscription: subscriptionCapabilities.optional(),
         showSubscribe: z.boolean(),
         showServicesByRegion: z.boolean(),
+        serviceLayout: z.enum(['FLAT', 'BUSINESS', 'BUSINESS_EXPANDABLE']).optional(),
         showRegionHeatmap: z.boolean(),
         showPostIncidentReview: z.boolean(),
         showChangelog: z.boolean(),
@@ -238,21 +251,31 @@ export const publicStatusPageSnapshotSchema = z
             .passthrough()
             .optional(),
           uptime: z.object({ days30: uptimeWindow, days90: uptimeWindow }).passthrough().optional(),
-          history: z
-            .object({
-              rangeStart: dateTime,
-              rangeEnd: dateTime,
-              coverage: z.enum(['COMPLETE', 'PARTIAL']),
-              segments: z.array(historySegment),
-            })
-            .passthrough()
-            .refine(history => Date.parse(history.rangeStart) < Date.parse(history.rangeEnd), {
-              message: 'History range end must follow its start',
-            })
-            .optional(),
+          history: serviceHistory.optional(),
         })
         .passthrough()
     ),
+    businessServices: z
+      .array(
+        z
+          .object({
+            id: z.string(),
+            name: z.string(),
+            description: z.string().nullable().optional(),
+            status,
+            statusSince: dateTime.optional(),
+            memberServiceIds: z.array(z.string()),
+            activeIncidentCount: z.number().int().nonnegative(),
+            impactedServiceCount: z.number().int().nonnegative(),
+            uptime: z
+              .object({ days30: uptimeWindow, days90: uptimeWindow })
+              .passthrough()
+              .optional(),
+            history: serviceHistory.optional(),
+          })
+          .passthrough()
+      )
+      .optional(),
     regions: z.array(
       z
         .object({

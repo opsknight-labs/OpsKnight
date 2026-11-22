@@ -4,20 +4,31 @@ import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getBaseUrl } from '@/lib/env-validation';
 import { getSlackBotToken } from '@/lib/slack';
-import { findSlackWarRoomAuthority, projectSlackWarRoomToLegacyIncident } from '../../slack-compatibility';
+import {
+  findSlackWarRoomAuthority,
+  projectSlackWarRoomToLegacyIncident,
+} from '../../slack-compatibility';
 import { slackApiCall } from './client';
 
 export async function postSlackWarRoomUpdate(
   incidentId: string,
   message: string
-): Promise<{ success: boolean; error?: string; sideEffectAmbiguous?: boolean; transportFailure?: boolean; httpStatus?: number }> {
+): Promise<{
+  success: boolean;
+  error?: string;
+  sideEffectAmbiguous?: boolean;
+  transportFailure?: boolean;
+  httpStatus?: number;
+}> {
   try {
     const [incident, room] = await Promise.all([
       prisma.incident.findUnique({ where: { id: incidentId }, select: { serviceId: true } }),
       findSlackWarRoomAuthority(incidentId),
     ]);
-    if (!room?.providerChannelId) return { success: false, error: 'No war-room channel for this incident' };
-    if (room.state === 'ARCHIVED' || room.state === 'CLOSED') return { success: false, error: 'War-room channel is archived' };
+    if (!room?.providerChannelId)
+      return { success: false, error: 'No war-room channel for this incident' };
+    if (room.state === 'ARCHIVED' || room.state === 'CLOSED')
+      return { success: false, error: 'War-room channel is archived' };
     if (!incident) return { success: false, error: 'Incident not found' };
     const botToken = await getSlackBotToken(incident.serviceId);
     if (!botToken) return { success: false, error: 'No Slack bot token' };
@@ -26,7 +37,14 @@ export async function postSlackWarRoomUpdate(
       text: message,
       unfurl_links: false,
     });
-    if (!result.ok) return { success: false, error: result.error, sideEffectAmbiguous: result.sideEffectAmbiguous, transportFailure: result.transportFailure, httpStatus: result.httpStatus };
+    if (!result.ok)
+      return {
+        success: false,
+        error: result.error,
+        sideEffectAmbiguous: result.sideEffectAmbiguous,
+        transportFailure: result.transportFailure,
+        httpStatus: result.httpStatus,
+      };
     return { success: true };
   } catch (error) {
     const err = error instanceof Error ? error.message : String(error);
@@ -42,7 +60,11 @@ export async function postSlackWarRoomUpdate(
  */
 export async function archiveExternalSlackRoom(
   warRoomId: string
-): Promise<{ ok: boolean; code?: 'NOT_FOUND' | 'TRANSIENT' | 'AMBIGUOUS_SIDE_EFFECT' | 'RATE_LIMITED'; message?: string }> {
+): Promise<{
+  ok: boolean;
+  code?: 'NOT_FOUND' | 'TRANSIENT' | 'AMBIGUOUS_SIDE_EFFECT' | 'RATE_LIMITED';
+  message?: string;
+}> {
   try {
     const room = await prisma.incidentWarRoom.findUnique({
       where: { id: warRoomId },
@@ -70,28 +92,55 @@ export async function archiveExternalSlackRoom(
       if (room.state === 'ARCHIVED' || room.state === 'CLOSED') {
         // Debt lane handles orphan reconciliation asynchronously; this immediate
         // archive call must not fail the local close.
-        if ((room as { externalCleanupPending?: boolean }).externalCleanupPending) return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel (debt pending)' };
+        if ((room as { externalCleanupPending?: boolean }).externalCleanupPending)
+          return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel (debt pending)' };
         return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel' };
       }
       // CLOSING-but-unresolved with no local channel id yet — attempt marker
       // resolution so we can archive the orphan immediately if credentials allow.
       try {
-        const incidentForLookup = await prisma.incident.findUnique({ where: { id: room.incidentId }, select: { serviceId: true } });
-        const tokenForLookup = incidentForLookup ? await getSlackBotToken(incidentForLookup.serviceId).catch(() => null) : null;
+        const incidentForLookup = await prisma.incident.findUnique({
+          where: { id: room.incidentId },
+          select: { serviceId: true },
+        });
+        const tokenForLookup = incidentForLookup
+          ? await getSlackBotToken(incidentForLookup.serviceId).catch(() => null)
+          : null;
         if (tokenForLookup) {
-          const { findSlackChannelByMarker, slackWarRoomMarker, findExistingSlackChannel } = await import('./client');
-          const marker = slackWarRoomMarker(room.incidentId, (room as { generation: number }).generation);
+          const { findSlackChannelByMarker, slackWarRoomMarker, findExistingSlackChannel } =
+            await import('./client');
+          const marker = slackWarRoomMarker(
+            room.incidentId,
+            (room as { generation: number }).generation
+          );
           let found: { id: string; name: string } | null = null;
-          try { found = await findSlackChannelByMarker(tokenForLookup, marker); } catch {}
+          try {
+            found = await findSlackChannelByMarker(tokenForLookup, marker);
+          } catch {}
           if (!found && (room as { plannedExternalName?: string | null }).plannedExternalName) {
-            try { found = await findExistingSlackChannel(tokenForLookup, (room as { plannedExternalName: string }).plannedExternalName!); } catch {}
+            try {
+              found = await findExistingSlackChannel(
+                tokenForLookup,
+                (room as { plannedExternalName: string }).plannedExternalName!
+              );
+            } catch {}
           }
           if (found) channelId = found.id;
-          else return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel (marker not found)' };
+          else
+            return {
+              ok: false,
+              code: 'NOT_FOUND',
+              message: 'No war-room channel (marker not found)',
+            };
         } else {
           // Credentials unavailable now — treat as NOT_FOUND for local close;
           // the debt lane will retry when they recover.
-          if ((room as { externalCleanupPending?: boolean }).externalCleanupPending) return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel (debt pending, token unavailable)' };
+          if ((room as { externalCleanupPending?: boolean }).externalCleanupPending)
+            return {
+              ok: false,
+              code: 'NOT_FOUND',
+              message: 'No war-room channel (debt pending, token unavailable)',
+            };
           return { ok: false, code: 'TRANSIENT', message: 'No Slack bot token' };
         }
       } catch {
@@ -99,7 +148,10 @@ export async function archiveExternalSlackRoom(
       }
     }
     if (room.state === 'ARCHIVED' || room.state === 'CLOSED') return { ok: true };
-    const incident = await prisma.incident.findUnique({ where: { id: room.incidentId }, select: { serviceId: true } });
+    const incident = await prisma.incident.findUnique({
+      where: { id: room.incidentId },
+      select: { serviceId: true },
+    });
     if (!incident) return { ok: false, code: 'NOT_FOUND', message: 'Incident not found' };
     const botToken = await getSlackBotToken(incident.serviceId);
     if (!botToken) return { ok: false, code: 'TRANSIENT', message: 'No Slack bot token' };
@@ -118,23 +170,37 @@ export async function archiveExternalSlackRoom(
       channel: channelId,
     });
     const isIdempotentSuccess =
-      archiveResult.ok || archiveResult.error === 'already_archived' || archiveResult.error === 'channel_not_found';
+      archiveResult.ok ||
+      archiveResult.error === 'already_archived' ||
+      archiveResult.error === 'channel_not_found';
     if (!isIdempotentSuccess) {
       const lower = (archiveResult.error ?? '').toLowerCase();
       const isRateLimited = lower.includes('rate_limited') || lower.includes('ratelimited');
-      if (isRateLimited) return { ok: false, code: 'RATE_LIMITED', message: archiveResult.error ?? 'Rate limited' };
+      if (isRateLimited)
+        return { ok: false, code: 'RATE_LIMITED', message: archiveResult.error ?? 'Rate limited' };
       if (archiveResult.sideEffectAmbiguous || archiveResult.transportFailure) {
-        return { ok: false, code: 'AMBIGUOUS_SIDE_EFFECT', message: archiveResult.error ?? 'Archive ambiguous' };
+        return {
+          ok: false,
+          code: 'AMBIGUOUS_SIDE_EFFECT',
+          message: archiveResult.error ?? 'Archive ambiguous',
+        };
       }
       logger.warn('[ChatOps] Failed to archive channel', { error: archiveResult.error });
-      return { ok: false, code: 'TRANSIENT', message: archiveResult.error || 'Failed to archive Slack channel' };
+      return {
+        ok: false,
+        code: 'TRANSIENT',
+        message: archiveResult.error || 'Failed to archive Slack channel',
+      };
     }
     if (archiveResult.error === 'already_archived' || archiveResult.error === 'channel_not_found') {
-      logger.info('[ChatOps] Channel already archived or not found in Slack; treating as archived', {
-        warRoomId,
-        channelId,
-        slackError: archiveResult.error,
-      });
+      logger.info(
+        '[ChatOps] Channel already archived or not found in Slack; treating as archived',
+        {
+          warRoomId,
+          channelId,
+          slackError: archiveResult.error,
+        }
+      );
       return { ok: true };
     }
 
@@ -156,17 +222,23 @@ export async function archiveSlackWarRoomChannel(
       prisma.incident.findUnique({ where: { id: incidentId }, select: { serviceId: true } }),
       findSlackWarRoomAuthority(incidentId),
     ]);
-    if (!incident || !room?.providerChannelId) return { success: false, error: 'No war-room channel' };
+    if (!incident || !room?.providerChannelId)
+      return { success: false, error: 'No war-room channel' };
     if (room.state === 'ARCHIVED' || room.state === 'CLOSED') return { success: true };
     if (!options.force) {
       const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
-      if (!config?.archiveOnResolve) return { success: false, error: 'Archive on resolve is disabled' };
+      if (!config?.archiveOnResolve)
+        return { success: false, error: 'Archive on resolve is disabled' };
     }
     // Delegate external I/O to provider-only function; then let engine own state.
     const ext = await archiveExternalSlackRoom(room.id);
     if (!ext.ok) {
       const lower = (ext.message ?? '').toLowerCase();
-      if (lower.includes('channel_not_found') || lower.includes('already_archived') || ext.code === 'NOT_FOUND') {
+      if (
+        lower.includes('channel_not_found') ||
+        lower.includes('already_archived') ||
+        ext.code === 'NOT_FOUND'
+      ) {
         // Idempotent success — still commit ARCHIVED via engine path
       } else {
         return { success: false, error: ext.message ?? 'Failed to archive Slack channel' };
@@ -184,7 +256,11 @@ export async function archiveSlackWarRoomChannel(
 
     await prisma.incidentEvent
       .create({
-        data: { incidentId, type: 'STATUS_CHANGE', message: `War-room channel #${room.providerChannelName} archived` },
+        data: {
+          incidentId,
+          type: 'STATUS_CHANGE',
+          message: `War-room channel #${room.providerChannelName} archived`,
+        },
       })
       .catch(() => {});
 
@@ -200,7 +276,13 @@ export async function archiveSlackWarRoomChannel(
 export async function updateSlackWarRoomTopic(
   incidentId: string,
   newStatus?: string
-): Promise<{ success: boolean; error?: string; sideEffectAmbiguous?: boolean; transportFailure?: boolean; httpStatus?: number }> {
+): Promise<{
+  success: boolean;
+  error?: string;
+  sideEffectAmbiguous?: boolean;
+  transportFailure?: boolean;
+  httpStatus?: number;
+}> {
   try {
     const [incident, room] = await Promise.all([
       prisma.incident.findUnique({
@@ -212,6 +294,10 @@ export async function updateSlackWarRoomTopic(
           serviceId: true,
           assignee: { select: { name: true } },
           team: { select: { name: true } },
+          roleAssignments: {
+            where: { roleKey: 'COMMANDER' },
+            select: { user: { select: { name: true } } },
+          },
         },
       }),
       findSlackWarRoomAuthority(incidentId, { activeOnly: true }),
@@ -222,18 +308,28 @@ export async function updateSlackWarRoomTopic(
     const appUrl = getBaseUrl();
     const dashboardUrl = `${appUrl}/incidents/${incidentId}`;
     const displayStatus = newStatus || incident.status;
-    const statusIcon = displayStatus === 'ACKNOWLEDGED' ? '👀' : displayStatus === 'RESOLVED' ? '✅' : '🚨';
+    const statusIcon =
+      displayStatus === 'ACKNOWLEDGED' ? '👀' : displayStatus === 'RESOLVED' ? '✅' : '🚨';
     const assigneeText = incident.assignee
       ? ` | 👤 ${incident.assignee.name}`
       : incident.team
         ? ` | 👥 ${incident.team.name}`
         : '';
-    const topic = `${statusIcon} ${incident.title} | ${displayStatus} | ${incident.urgency}${assigneeText} | ${dashboardUrl}`;
+    const commander = incident.roleAssignments[0]?.user.name;
+    const commanderText = commander ? ` | 🎖️ IC ${commander}` : '';
+    const topic = `${statusIcon} ${incident.title} | ${displayStatus} | ${incident.urgency}${assigneeText}${commanderText} | ${dashboardUrl}`;
     const result = await slackApiCall('conversations.setTopic', botToken, {
       channel: room.providerChannelId,
       topic: topic.slice(0, 250),
     });
-    if (!result.ok) return { success: false, error: result.error || 'Slack topic update failed', sideEffectAmbiguous: result.sideEffectAmbiguous, transportFailure: result.transportFailure, httpStatus: result.httpStatus };
+    if (!result.ok)
+      return {
+        success: false,
+        error: result.error || 'Slack topic update failed',
+        sideEffectAmbiguous: result.sideEffectAmbiguous,
+        transportFailure: result.transportFailure,
+        httpStatus: result.httpStatus,
+      };
     return { success: true };
   } catch (err) {
     logger.warn('[ChatOps] Failed to update war-room topic', { incidentId, error: err });
@@ -249,14 +345,18 @@ export async function inviteUserToSlackWarRoom(
   try {
     const room = await findSlackWarRoomAuthority(incidentId);
     if (!room?.providerChannelId) return { success: false, error: 'No active war-room channel' };
-    if (room.state === 'ARCHIVED' || room.state === 'CLOSED') return { success: false, error: 'War-room channel is archived' };
+    if (room.state === 'ARCHIVED' || room.state === 'CLOSED')
+      return { success: false, error: 'War-room channel is archived' };
     const { requestWarRoomParticipant } = await import('../../participant-desired-state');
     const result = await requestWarRoomParticipant(room.id, userId, source);
     return result.accepted
       ? { success: true }
       : {
           success: false,
-          error: result.code === 'IDENTITY_NOT_LINKED' ? 'User has no verified Slack identity link' : 'War-room is not ready',
+          error:
+            result.code === 'IDENTITY_NOT_LINKED'
+              ? 'User has no verified Slack identity link'
+              : 'War-room is not ready',
         };
   } catch (error) {
     const err = error instanceof Error ? error.message : String(error);
@@ -270,7 +370,10 @@ export async function inviteTeamToSlackWarRoom(
   teamId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const teamMembers = await prisma.teamMember.findMany({ where: { teamId }, select: { userId: true } });
+    const teamMembers = await prisma.teamMember.findMany({
+      where: { teamId },
+      select: { userId: true },
+    });
     for (const member of teamMembers) {
       await inviteUserToSlackWarRoom(incidentId, member.userId, 'TEAM').catch(() => {});
     }

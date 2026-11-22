@@ -22,9 +22,15 @@ import ListReturnLink from '@/components/layout/ListReturnLink';
 import { notFound } from 'next/navigation';
 import {
   assertCanViewIncident,
+  getCurrentAuthorizationActor,
   getIncidentOperatorPermissions,
   getUserPermissions,
 } from '@/lib/rbac';
+import IncidentRoles, { type IncidentRoleSlot } from '@/components/incident/detail/IncidentRoles';
+import IncidentImpacts from '@/components/incident/detail/IncidentImpacts';
+import { businessServicesForServices } from '@/lib/business-services/commands';
+import { INCIDENT_ROLES } from '@/lib/incidents/roles';
+import { loadIncidentRoleAccess } from '@/lib/incidents/role-access';
 import { denyResourceAccess } from '@/lib/access/server';
 import { getPostmortem } from '@/app/(app)/postmortems/actions';
 import IncidentHeader from '@/components/incident/IncidentHeader';
@@ -57,6 +63,7 @@ import {
   addIncidentDetailWatcher,
   removeIncidentDetailWatcher,
   reopenIncidentDetail,
+  setIncidentDetailRole,
   suppressIncidentDetail,
   updateIncidentDetailDescription,
 } from '@/components/incident/detail/actions';
@@ -172,6 +179,7 @@ export default async function IncidentDetailScreen({
         include: { user: { select: CLIENT_USER_SELECT } },
         orderBy: { createdAt: 'asc' },
       },
+      roleAssignments: { select: { roleKey: true, user: { select: CLIENT_USER_SELECT } } },
       tags: { include: { tag: true }, orderBy: { createdAt: 'asc' } },
       customFieldValues: { include: { customField: true } },
       maintenanceWindow: { select: { id: true, title: true, endsAt: true } },
@@ -224,6 +232,10 @@ export default async function IncidentDetailScreen({
   const canManageIncident = permissions.isResponderOrAbove;
   const operator = await getIncidentOperatorPermissions(id);
   const canAcknowledgeIncident = operator.canAcknowledge;
+  const roleAccess = await loadIncidentRoleAccess(await getCurrentAuthorizationActor(), id);
+  const canAssignRolesToOthers = Object.values(roleAccess?.access.canAssignOthers ?? {}).some(
+    Boolean
+  );
   const canAddIncidentNote = operator.canAddNote;
   const canResolveIncident = operator.canResolve;
   const canReadAutomation =
@@ -239,7 +251,7 @@ export default async function IncidentDetailScreen({
     totalNotificationsCount,
     chatEvents,
   ] = await Promise.all([
-    canManageIncident
+    canManageIncident || canAssignRolesToOthers
       ? prisma.user.findMany({
           where: { status: 'ACTIVE' },
           select: {
@@ -467,6 +479,36 @@ export default async function IncidentDetailScreen({
 
   const routePrefix = presentation === 'mobile' ? '/m' : '';
 
+  const holderByRole = new Map(
+    storedIncident.roleAssignments.map(assignment => [assignment.roleKey, assignment.user])
+  );
+  const roleSlots: IncidentRoleSlot[] = INCIDENT_ROLES.map(role => ({
+    roleKey: role.key,
+    label: role.label,
+    shortLabel: role.shortLabel,
+    description: role.description,
+    holder: holderByRole.get(role.key) ?? null,
+    canAssignOthers: roleAccess?.access.canAssignOthers[role.key] ?? false,
+    canTakeSelf: roleAccess?.access.canTakeSelf[role.key] ?? false,
+    canClear: roleAccess?.access.canClear[role.key] ?? false,
+  }));
+  const handleSetRole = setIncidentDetailRole.bind(null, id);
+  const impactedBusinessServices = await businessServicesForServices([incident.serviceId]);
+  const canTakeCommand =
+    incident.status !== 'RESOLVED' &&
+    (roleAccess?.access.canTakeSelf.COMMANDER ?? false) &&
+    holderByRole.get('COMMANDER')?.id !== user.id;
+  const handleTakeCommand = setIncidentDetailRole.bind(null, id, 'COMMANDER', user.id);
+  const rolesContent = (
+    <IncidentRoles
+      roles={roleSlots}
+      users={users}
+      currentUserId={user.id}
+      onSetRole={handleSetRole}
+      presentation={presentation}
+    />
+  );
+
   const quickLinksContent = (
     <IncidentQuickLinksCard
       incidentPolicy={incidentPolicy}
@@ -559,6 +601,14 @@ export default async function IncidentDetailScreen({
               </span>
             </div>
           </div>
+
+          {impactedBusinessServices.length > 0 && (
+            <div className="mt-3">
+              <IncidentImpacts businessServices={impactedBusinessServices} linkable={false} />
+            </div>
+          )}
+
+          <div className="mt-3 border-t border-border/70 pt-3">{rolesContent}</div>
         </section>
       ) : (
         <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xs">
@@ -616,8 +666,10 @@ export default async function IncidentDetailScreen({
                   </Suspense>
                 )}
                 <IncidentSLABadges sla={incidentSla} />
+                <IncidentImpacts businessServices={impactedBusinessServices} />
               </div>
             </div>
+            <div className="mt-3.5 border-t border-border/70 pt-3">{rolesContent}</div>
           </div>
         </section>
       )}
@@ -658,6 +710,8 @@ export default async function IncidentDetailScreen({
         canManage={canManageIncident}
         canAcknowledge={canManageIncident || canAcknowledgeIncident}
         canResolve={canManageIncident || canResolveIncident}
+        canTakeCommand={canTakeCommand}
+        onTakeCommand={handleTakeCommand}
         snoozedUntil={incident.snoozedUntil}
         onAcknowledge={handleAcknowledge}
         onUnacknowledge={handleReopen}

@@ -14,6 +14,7 @@ import { deriveNewIncidentSlaTransition } from '@/lib/incident-sla/next-transiti
 import { resolveSupportHours } from '@/lib/incidents/support-hours';
 import { resolveIncidentEngagement } from '@/lib/incidents/engagement';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
+import type { IncidentRoleKey } from '@/lib/incidents/roles';
 
 export const INCIDENT_CREATION_OUTCOMES = ['CREATED', 'MERGED', 'REOPENED'] as const;
 export type IncidentCreationOutcome = (typeof INCIDENT_CREATION_OUTCOMES)[number];
@@ -42,6 +43,8 @@ export interface IncidentCreationInput {
   customFields?: readonly IncidentCreationCustomFieldInput[];
   source: IncidentCreationSource;
   actor?: IncidentCreationActor;
+  /** Roles the incident starts with (template defaults); applied in the creation transaction. */
+  defaultRoles?: ReadonlyArray<{ roleKey: IncidentRoleKey; userId: string }>;
   /** Test seam. Production callers should use the server clock. */
   now?: Date;
 }
@@ -435,6 +438,16 @@ export async function applyIncidentCreation(
     source: input.source,
     responderNotBefore: engagement?.earliestDeliveryAt,
   });
+
+  if (input.defaultRoles?.length) {
+    // Same transaction as the incident and its idempotency record: all-or-nothing, replayable.
+    const { applyDefaultRolesInTx } = await import('@/lib/incidents/roles-command');
+    await applyDefaultRolesInTx(tx, {
+      incidentId: incident.id,
+      roles: input.defaultRoles,
+      actor: { id: input.actor?.id ?? null, name: input.actor?.name ?? null },
+    });
+  }
 
   return {
     id: incident.id,

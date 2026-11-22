@@ -9,7 +9,8 @@ function isSlackSupported(action: string): boolean {
     action === 'ACKNOWLEDGE' ||
     action === 'ASSIGN_SELF' ||
     action === 'ASSIGN_TO_ME' ||
-    action === 'RESOLVE'
+    action === 'RESOLVE' ||
+    action === 'TAKE_COMMAND'
   );
 }
 
@@ -47,6 +48,21 @@ export function renderSlackWarRoomProjection(model: WarRoomProjectionModel) {
           },
         ],
       },
+      ...(model.incident.roles.length
+        ? [
+            {
+              type: 'context',
+              elements: [
+                {
+                  type: 'mrkdwn',
+                  text: model.incident.roles
+                    .map(role => `*${role.shortLabel}:* ${role.name}`)
+                    .join(' · '),
+                },
+              ],
+            },
+          ]
+        : []),
       ...(model.meeting?.joinUrl && model.phase !== 'RESOLVED'
         ? [
             {

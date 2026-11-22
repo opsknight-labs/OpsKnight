@@ -138,6 +138,40 @@ describe('scoped incident operations', () => {
     expect(incidentOperatorRelation(actor('USER'), resource)).toBeNull();
   });
 
+  it.each(operatorActions)(
+    'lets the commander or ops lead %s, including a private incident',
+    action => {
+      for (const visibility of ['PUBLIC', 'PRIVATE'] as const) {
+        const resource = incident({ roleOperatorIds: ['u-1'], visibility });
+        expect(authorize({ actor: actor('USER'), action, resource }).allowed).toBe(true);
+        expect(incidentOperatorRelation(actor('USER'), resource)).toBe('INCIDENT_ROLE');
+      }
+    }
+  );
+
+  it('lets the comms lead and scribe read and add notes but not ack, escalate or resolve', () => {
+    for (const visibility of ['PUBLIC', 'PRIVATE'] as const) {
+      const resource = incident({ roleContributorIds: ['u-1'], visibility });
+      const allowed = (
+        action: (typeof AUTHORIZATION_ACTIONS)[keyof typeof AUTHORIZATION_ACTIONS]
+      ) => authorize({ actor: actor('USER'), action, resource }).allowed;
+      expect(allowed(AUTHORIZATION_ACTIONS.INCIDENT_READ)).toBe(true);
+      expect(allowed(AUTHORIZATION_ACTIONS.INCIDENT_NOTE)).toBe(true);
+      expect(allowed(AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE)).toBe(false);
+      expect(allowed(AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE)).toBe(false);
+      expect(allowed(AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE)).toBe(false);
+      expect(incidentOperatorRelation(actor('USER'), resource)).toBeNull();
+    }
+  });
+
+  it('does not give another user role rights', () => {
+    const resource = incident({ roleOperatorIds: ['someone-else'], visibility: 'PRIVATE' });
+    expect(
+      authorize({ actor: actor('USER'), action: AUTHORIZATION_ACTIONS.INCIDENT_READ, resource })
+        .allowed
+    ).toBe(false);
+  });
+
   it('does not let team membership operate a private incident', () => {
     const resource = incident({ serviceTeamId: 'team-a', visibility: 'PRIVATE' });
     expect(

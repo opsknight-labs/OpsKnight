@@ -713,6 +713,43 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Parent-scoped idempotent removal emits a timeline event only when an association existed.',
   },
+  'POST /api/v2/business-services': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Business service, members, followers, page member sync and audit commit with the replay record.',
+  },
+  'PATCH /api/v2/business-services/[id]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Set replacement of members and followers, page member sync and audit commit together.',
+  },
+  'DELETE /api/v2/business-services/[id]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Deletion cascades its mappings; pages showing it are marked dirty in the same transaction.',
+  },
+  'PUT /api/v2/status-pages/[id]/business-services': {
+    idempotency: 'required',
+    concurrency: 'etag',
+    preconditionRequired: true,
+    rationale:
+      'Layout and mapping go through the shared publication command: narrowing withdraws the page before the write, then republishes.',
+  },
+  'PUT /api/v2/incidents/[id]/roles/[roleKey]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Shared role command: assignment, follower watcher, timeline, audit and war-room outbox commit with the replay record.',
+  },
+  'DELETE /api/v2/incidents/[id]/roles/[roleKey]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale:
+      'Clearing a role and its timeline event commit atomically; clearing an empty role is a no-op.',
+  },
   'DELETE /api/v2/incidents/[id]/watchers/[watcherId]': {
     idempotency: 'required',
     concurrency: 'none',

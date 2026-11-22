@@ -64,6 +64,7 @@ export function categorize(type: string, message: string): TimelineFilter {
   if (type === 'CREATED' || type === 'ACKNOWLEDGED' || type === 'RESOLVED') return 'LIFECYCLE';
   if (type === 'NOTIFICATION') return 'NOTIFICATIONS';
   if (isRunbookEventType(type)) return 'RUNBOOKS';
+  if (type === 'ROLE_ASSIGNED' || type === 'ROLE_UNASSIGNED') return 'ASSIGNMENT';
   if (/\bnote\b|pinned message|comment/i.test(message)) return 'NOTES';
   if (/escalat/i.test(message)) return 'ESCALATION';
   if (/assign|unassigned/i.test(message)) return 'ASSIGNMENT';

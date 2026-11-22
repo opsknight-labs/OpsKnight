@@ -44,7 +44,7 @@ describe('Slack war-room participants resolve by email when no identity link exi
       id: 'room-1',
       provider: 'SLACK',
       providerTenantId: 'T1',
-      incident: { serviceId: 'svc-1', assigneeId: 'u1', watchers: [] },
+      incident: { serviceId: 'svc-1', assigneeId: 'u1', roleAssignments: [], watchers: [] },
     });
 
     await projectIncidentWarRoomParticipants('room-1');
@@ -59,6 +59,31 @@ describe('Slack war-room participants resolve by email when no identity link exi
         state: 'DESIRED',
       }),
     });
+  });
+
+  it('projects incident role holders as ROLE participants and keeps the assignee source', async () => {
+    db.user.findMany.mockResolvedValue([
+      { id: 'u1', email: 'dev@example.com' },
+      { id: 'u2', email: 'ic@example.com' },
+    ]);
+    db.incidentWarRoom.findUnique.mockResolvedValue({
+      id: 'room-1',
+      provider: 'SLACK',
+      providerTenantId: 'T1',
+      incident: {
+        serviceId: 'svc-1',
+        assigneeId: 'u1',
+        roleAssignments: [{ userId: 'u1' }, { userId: 'u2' }],
+        watchers: [{ userId: 'u2' }],
+      },
+    });
+
+    await projectIncidentWarRoomParticipants('room-1');
+
+    const sources = Object.fromEntries(
+      db.tx.warRoomParticipant.create.mock.calls.map(([arg]) => [arg.data.userId, arg.data.source])
+    );
+    expect(sources).toEqual({ u1: 'ASSIGNEE', u2: 'ROLE' });
   });
 
   it('accepts a manual invite for an unlinked user found by email', async () => {
@@ -83,7 +108,7 @@ describe('Slack war-room participants resolve by email when no identity link exi
       id: 'room-1',
       provider: 'SLACK',
       providerTenantId: 'T1',
-      incident: { serviceId: 'svc-1', assigneeId: 'u1', watchers: [] },
+      incident: { serviceId: 'svc-1', assigneeId: 'u1', roleAssignments: [], watchers: [] },
     });
 
     await projectIncidentWarRoomParticipants('room-1');

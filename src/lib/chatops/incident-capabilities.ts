@@ -1,5 +1,6 @@
 import 'server-only';
 
+import prisma from '@/lib/prisma';
 import {
   authorizeChatOpsIncident,
   type ChatOpsIncidentAuthorizationAction,
@@ -15,6 +16,8 @@ export type IncidentChatOpsCapabilities = {
   canSnooze: boolean;
   canEscalate: boolean;
   canJoinResponder: boolean;
+  /** Operators may take the commander role while they do not already hold it. */
+  canTakeCommand: boolean;
 };
 
 async function allowed(
@@ -34,7 +37,7 @@ export async function getIncidentChatOpsCapabilities(input: {
   incidentId: string;
   userId: string;
 }): Promise<IncidentChatOpsCapabilities> {
-  const [canRead, canAcknowledge, canAddNote, canResolve, canEscalate, canManage] =
+  const [canRead, canAcknowledge, canAddNote, canResolve, canEscalate, canManage, commander] =
     await Promise.all([
       allowed(input.incidentId, input.userId, 'READ'),
       allowed(input.incidentId, input.userId, 'ACKNOWLEDGE'),
@@ -42,6 +45,10 @@ export async function getIncidentChatOpsCapabilities(input: {
       allowed(input.incidentId, input.userId, 'RESOLVE'),
       allowed(input.incidentId, input.userId, 'ESCALATE'),
       allowed(input.incidentId, input.userId, 'MANAGE'),
+      prisma.incidentRoleAssignment.findUnique({
+        where: { incidentId_roleKey: { incidentId: input.incidentId, roleKey: 'COMMANDER' } },
+        select: { userId: true },
+      }),
     ]);
   return {
     canRead,
@@ -53,5 +60,8 @@ export async function getIncidentChatOpsCapabilities(input: {
     canSnooze: canManage,
     canEscalate,
     canJoinResponder: canRead,
+    // Same rule as the role command: operators may only take a vacant commander role.
+    canTakeCommand:
+      canAcknowledge && commander?.userId !== input.userId && (!commander || canManage),
   };
 }

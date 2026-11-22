@@ -3,6 +3,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import { CAPABILITIES } from '@/lib/authorization';
+import { incidentRoleRelations } from '@/lib/incidents/roles';
 import {
   actorHasCapability,
   incidentOperatorRelation,
@@ -82,6 +83,19 @@ export async function resolveIncidentResourceForActor(
     actorHasCapability(actor, CAPABILITIES.INCIDENT_READ_ALL)
   )
     return resource;
+  // Incident commander / ops lead: one indexed read of the actor's own roles, only here.
+  const roles = await prisma.incidentRoleAssignment.findMany({
+    where: { incidentId, userId: actor.id },
+    select: { roleKey: true, userId: true },
+  });
+  if (roles.length) {
+    const withRoles = { ...resource, ...incidentRoleRelations(roles) };
+    if (incidentOperatorRelation(actor, withRoles)) return withRoles;
+    if (await isPagedForIncident(actor, escalationPolicyId)) {
+      return { ...withRoles, onCallUserIds: [actor.id] };
+    }
+    return withRoles;
+  }
   if (await isPagedForIncident(actor, escalationPolicyId)) {
     return { ...resource, onCallUserIds: [actor.id] };
   }

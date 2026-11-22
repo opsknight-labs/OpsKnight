@@ -53,6 +53,7 @@ export const GET = withV2Observability(async function GET(
       type: 'incident',
       assigneeId: incident.assigneeId,
       watcherIds: incident.watchers.map(watcher => watcher.userId),
+      id: incident.id,
       visibility: incident.visibility,
       serviceTeamId: incident.service.teamId,
       assignedTeamId: incident.teamId,

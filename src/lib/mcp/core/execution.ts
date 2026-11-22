@@ -38,6 +38,7 @@ import { loadEffectiveDisabledMcpCapabilities } from '../auth/effective-capabili
 import { ERROR_REGISTRY } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+import { withActorIncidentRoles } from '@/lib/incidents/role-relations';
 
 // Static: the reads that some approval-gated destructive operation declares as its preview.
 const MCP_CATALOG_PREVIEW_IDS = new Set(
@@ -544,14 +545,24 @@ async function executeMcpOperation(
                   : operationId === 'resolveIncident'
                     ? AUTHORIZATION_ACTIONS.INCIDENT_RESOLVE
                     : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
-          enforceV2ResourceAuthorization(auth.actor, action, {
-            type: 'incident',
-            assigneeId: incident.assigneeId,
-            visibility: incident.visibility,
-            assignedTeamId: incident.teamId,
-            serviceTeamId: incident.service.teamId,
-            watcherIds: incident.watchers.map(watcher => watcher.userId),
-          });
+          enforceV2ResourceAuthorization(
+            auth.actor,
+            action,
+            await withActorIncidentRoles(
+              auth.actor,
+              action,
+              {
+                type: 'incident',
+                assigneeId: incident.assigneeId,
+                visibility: incident.visibility,
+                assignedTeamId: incident.teamId,
+                serviceTeamId: incident.service.teamId,
+                watcherIds: incident.watchers.map(watcher => watcher.userId),
+                id,
+              },
+              tx
+            )
+          );
         }
       }
     },

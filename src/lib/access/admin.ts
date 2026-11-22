@@ -193,11 +193,15 @@ export async function checkAccess(
         ? 'Assigned to this incident.'
         : relation === 'ON_CALL'
           ? 'Paged by this incident’s escalation policy.'
-          : relation === 'TEAM_MEMBER'
-            ? 'Member of the owning team.'
-            : resource.watcherIds?.includes(actor.id)
-              ? 'Watching this incident (watchers can read, not operate).'
-              : 'No relationship (not assignee, on call, team member or watcher).',
+          : relation === 'INCIDENT_ROLE'
+            ? 'Holds the commander or ops lead role on this incident.'
+            : relation === 'TEAM_MEMBER'
+              ? 'Member of the owning team.'
+              : resource.roleContributorIds?.includes(actor.id)
+                ? 'Holds the comms lead or scribe role (can read and add notes, not operate).'
+                : resource.watcherIds?.includes(actor.id)
+                  ? 'Watching this incident (watchers can read, not operate).'
+                  : 'No relationship (not assignee, on call, role holder, team member or watcher).',
   });
   steps.push({
     label: `Action: ${body.action}`,

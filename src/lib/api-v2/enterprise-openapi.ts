@@ -27,6 +27,16 @@ import {
   MAINTENANCE_WINDOW_SCHEMAS,
   MAINTENANCE_WINDOW_OPERATIONS,
 } from './maintenance-window-openapi';
+import {
+  INCIDENT_ROLE_SCHEMAS,
+  INCIDENT_ROLE_OPERATIONS,
+  incidentTemplateDefaultRoles,
+  incidentRoleKeySchema,
+} from './incident-roles-openapi';
+import {
+  BUSINESS_SERVICE_SCHEMAS,
+  BUSINESS_SERVICE_OPERATIONS,
+} from './business-services-openapi';
 import { statusPageSectionFields } from '@/lib/status-pages/settings-sections';
 import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
 import {
@@ -361,6 +371,8 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   ...RUNBOOK_INTERVENTION_SCHEMAS,
   ...SERVICE_OBJECTIVE_SCHEMAS,
   ...MAINTENANCE_WINDOW_SCHEMAS,
+  ...INCIDENT_ROLE_SCHEMAS,
+  ...BUSINESS_SERVICE_SCHEMAS,
   StatusPagePublicationState: object(
     {
       status: { type: 'string', enum: ['LIVE', 'PUBLISHING', 'FAILED', 'DISABLED'] },
@@ -945,6 +957,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       defaultUrgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
       defaultPriority: { type: ['string', 'null'] },
       defaultServiceId: { type: ['string', 'null'] },
+      defaultRoles: { oneOf: [incidentTemplateDefaultRoles, { type: 'null' }] },
       createdById: { type: ['string', 'null'] },
       isPublic: { type: 'boolean' },
       createdAt: date,
@@ -1898,6 +1911,8 @@ const operations: Operation[] = [
   ...RUNBOOK_INTERVENTION_OPERATIONS,
   ...SERVICE_OBJECTIVE_OPERATIONS,
   ...MAINTENANCE_WINDOW_OPERATIONS,
+  ...INCIDENT_ROLE_OPERATIONS,
+  ...BUSINESS_SERVICE_OPERATIONS,
   {
     method: 'get',
     path: '/status-pages/{id}/preview',
@@ -2502,6 +2517,7 @@ const operations: Operation[] = [
         defaultPriority: { type: ['string', 'null'] },
         defaultServiceId: { type: ['string', 'null'] },
         isPublic: { type: 'boolean' },
+        defaultRoles: incidentTemplateDefaultRoles,
       },
       ['name', 'title']
     ),
@@ -2524,6 +2540,7 @@ const operations: Operation[] = [
       defaultPriority: { type: ['string', 'null'] },
       defaultServiceId: { type: ['string', 'null'] },
       isPublic: { type: 'boolean' },
+      defaultRoles: incidentTemplateDefaultRoles,
     }),
   },
   {
@@ -3079,7 +3096,7 @@ export function enterpriseOpenApiPaths() {
       name: match[1],
       in: 'path',
       required: true,
-      schema: id,
+      schema: match[1] === 'roleKey' ? incidentRoleKeySchema : id,
     }));
     const queryParameters = operation.paginated
       ? [
@@ -3106,7 +3123,8 @@ export function enterpriseOpenApiPaths() {
                 : operation.path.startsWith('/runbooks')
                   ? 'Runbooks'
                   : operation.path.startsWith('/services') ||
-                      operation.path.startsWith('/maintenance-')
+                      operation.path.startsWith('/maintenance-') ||
+                      operation.path.startsWith('/business-services')
                     ? 'Services'
                     : operation.path.startsWith('/schedules')
                       ? 'Schedules'

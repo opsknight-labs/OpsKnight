@@ -152,6 +152,8 @@ export const STATUS_PAGE_PRESENTATION_FIELDS = [
   'branding',
   'showSubscribe',
   'showServicesByRegion',
+  // Groups already-published services under business services; never publishes a new service.
+  'serviceLayout',
   'showRegionHeatmap',
   'uptimeExcellentThreshold',
   'uptimeGoodThreshold',
@@ -175,6 +177,8 @@ export type StatusPageServiceMappingState = {
 
 export type StatusPageClassifierState = Record<string, unknown> & {
   serviceMappings?: readonly StatusPageServiceMappingState[];
+  /** Business services currently shown, in order. */
+  businessServiceIds?: readonly string[];
 };
 
 export type StatusPageRouteDelta = {
@@ -263,8 +267,10 @@ export function classifyStatusPageChange(input: {
   serviceConfigs?: Readonly<
     Record<string, { displayName?: string | null; order?: number; showOnPage?: boolean }>
   >;
+  /** Present only when the caller is rewriting the page's business-service mappings. */
+  businessServiceIds?: readonly string[];
 }): StatusPageChangeClassification {
-  const { current, patch, serviceIds, serviceConfigs } = input;
+  const { current, patch, serviceIds, serviceConfigs, businessServiceIds } = input;
   const found = new Set<StatusPageChangeClass>();
   const changedFields: string[] = [];
   const note = (field: string, ...classes: StatusPageChangeClass[]) => {
@@ -384,6 +390,16 @@ export function classifyStatusPageChange(input: {
     if (tightened) note('serviceIds', 'PRIVACY_TIGHTENING');
     else if (relaxed) note('serviceIds', 'PRIVACY_RELAXING');
     else if (rearranged) note('serviceConfigs', 'PRESENTATION');
+  }
+
+  if (businessServiceIds !== undefined) {
+    const before = current.businessServiceIds ?? [];
+    const next = new Set(businessServiceIds);
+    if (before.some(id => !next.has(id))) note('businessServiceIds', 'PRIVACY_TIGHTENING');
+    else if (businessServiceIds.some(id => !before.includes(id)))
+      note('businessServiceIds', 'PRIVACY_RELAXING');
+    else if (businessServiceIds.some((id, index) => before[index] !== id))
+      note('businessServiceIds', 'PRESENTATION');
   }
 
   const classes = CLASS_PRECEDENCE.filter(item => found.has(item));
