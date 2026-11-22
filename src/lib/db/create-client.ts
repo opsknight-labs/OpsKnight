@@ -219,6 +219,13 @@ class OpsKnightPgAdapterFactory implements SqlMigrationAwareDriverAdapterFactory
 
   constructor(private readonly plan: PgConnectionPlan) {}
 
+  readonly #pools: pg.Pool[] = [];
+
+  /** Queries queued for a connection across this client's pools (replaces Prisma 5's $metrics gauge). */
+  waitingCount(): number {
+    return this.#pools.reduce((sum, pool) => sum + pool.waitingCount, 0);
+  }
+
   #create(ssl: pg.PoolConfig['ssl']): PrismaPg {
     const connectTimeoutMillis = this.plan.connectTimeoutMillis;
     // Each new server connection is bounded by connect_timeout; the pool bounds the overall wait.
@@ -237,6 +244,7 @@ class OpsKnightPgAdapterFactory implements SqlMigrationAwareDriverAdapterFactory
       ssl,
       Client: ConnectTimeoutClient as unknown as pg.PoolConfig['Client'],
     });
+    this.#pools.push(pool);
     return new PrismaPg(pool, {
       schema: this.plan.schema,
       disposeExternalPool: true,
@@ -383,14 +391,21 @@ export function createPrismaClient<const Log extends LogDefinitions = []>(
   { adapter: SqlMigrationAwareDriverAdapterFactory; log: Log },
   Prisma.GetEvents<Log>
 > {
+  const adapter = createPgAdapter(options.url ?? process.env.DATABASE_URL, options);
   const client = new PrismaClient<
     { adapter: SqlMigrationAwareDriverAdapterFactory; log: Log },
     Prisma.GetEvents<Log>
-  >({
-    adapter: createPgAdapter(options.url ?? process.env.DATABASE_URL, options),
-    log: (options.log ?? []) as Log,
-  });
-  return withOpsKnightBehaviour(client, options.transactionOptions);
+  >({ adapter, log: (options.log ?? []) as Log });
+  const view = withOpsKnightBehaviour(client, options.transactionOptions);
+  if (adapter instanceof OpsKnightPgAdapterFactory) poolOwners.set(view, adapter);
+  return view;
+}
+
+const poolOwners = new WeakMap<object, OpsKnightPgAdapterFactory>();
+
+/** Queries waiting for a pooled connection, or null for a client not built by createPrismaClient. */
+export function poolWaitingCount(client: object): number | null {
+  return poolOwners.get(client)?.waitingCount() ?? null;
 }
 
 const RAW_METHODS: readonly PropertyKey[] = [
