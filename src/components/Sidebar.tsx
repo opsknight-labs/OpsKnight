@@ -111,7 +111,9 @@ export default function Sidebar({
   // Manual toggle state; accordion is also open when user is on any /status route
   const [statusPagesManuallyExpanded, setStatusPagesExpanded] = useState(false);
   // Derive expanded state — no useEffect needed, avoids cascading renders
-  const statusPagesExpanded = statusPagesManuallyExpanded || pathname.startsWith('/status');
+  // Segment match: /status-dashboard is its own nav entry, not a status page.
+  const onStatusPageRoute = pathname === '/status' || pathname.startsWith('/status/');
+  const statusPagesExpanded = statusPagesManuallyExpanded || onStatusPageRoute;
 
   const isDesktopCollapsed = !isMobile && isCollapsed;
   const sidebarId = 'app-sidebar';
@@ -285,7 +287,7 @@ export default function Sidebar({
 
   // ─── Status Pages nav item (dynamic, conditional) ───────────────────────────
   const renderStatusPagesItem = () => {
-    const isOnStatusPage = pathname.startsWith('/status');
+    const isOnStatusPage = onStatusPageRoute;
     const hasPages = statusPages.length > 0;
     const showManageLink = isStatusPageAdmin;
 

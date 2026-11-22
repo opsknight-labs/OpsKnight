@@ -357,7 +357,7 @@ describe('page access registry', () => {
     ['/settings/access', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/settings/access/admin', ['ADMIN']],
     ['/services/business', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
-    ['/services/business/abc', ['RESPONDER', 'ADMIN']],
+    ['/services/business/abc', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/services/business/abc/edit', ['RESPONDER', 'ADMIN']],
     ['/services/business/new', ['RESPONDER', 'ADMIN']],
     ['/services/business/setup', ['RESPONDER', 'ADMIN']],

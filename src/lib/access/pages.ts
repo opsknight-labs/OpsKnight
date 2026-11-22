@@ -81,12 +81,7 @@ export const PAGE_ACCESS: readonly PageAccessRule[] = [
     label: 'New business service',
     anyOf: [C.OPERATIONS_MANAGE],
   },
-  {
-    // Still the edit form; becomes a SERVICE_READ overview when that page replaces it (P2).
-    pattern: '/services/business/[id]',
-    label: 'Business service',
-    anyOf: [C.OPERATIONS_MANAGE],
-  },
+  { pattern: '/services/business/[id]', label: 'Business service', anyOf: SERVICE_READ },
   {
     pattern: '/services/business/[id]/edit',
     label: 'Edit business service',
