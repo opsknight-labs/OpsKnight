@@ -150,7 +150,9 @@ describe('deployment configuration invariants', () => {
     expect(onlineIndexes).toContain('pg_advisory_lock');
     expect(onlineIndexes).toContain('pg_advisory_unlock');
     // build:scripts bundles the recovery helper to the exact path the entrypoint executes.
-    expect(read('package.json')).toContain('"build:scripts": "node scripts/build-script-bundles.mjs"');
+    expect(read('package.json')).toContain(
+      '"build:scripts": "node scripts/build-script-bundles.mjs && node scripts/build-intelligence-lane-thread.mjs"'
+    );
     expect(read('scripts/build-script-bundles.mjs')).toContain(
       "['scripts/auto-recover-migrations.ts', 'scripts/dist/scripts/auto-recover-migrations.js']"
     );
