@@ -383,6 +383,9 @@ describe('page access registry', () => {
     expect(labels('USER')).toContain('/services/business');
     expect(labels('STAKEHOLDER')).toContain('/services/business');
     expect(labels('STAKEHOLDER')).not.toContain('/incidents');
+    for (const role of ['STAKEHOLDER', 'USER', 'ADMIN'] as AppRole[]) {
+      expect(labels(role)).toContain('/status-dashboard');
+    }
     expect(getAuthorizedNavItems(null)).toEqual([]);
     // Legacy role-string callers still work.
     expect(getAuthorizedNavItems('AUDITOR').map(item => item.href)).toContain('/audit');
