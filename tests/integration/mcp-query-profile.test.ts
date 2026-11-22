@@ -45,7 +45,7 @@ const statementBudgets = new Map([
   // (two before E4), so revocation stays immediate across slow uploads at half the reads.
   ['tools/list', 3],
   ['incident_search', 8],
-  ['incident_get_context', 21], // 20 on Prisma 5; one more ORM statement under Prisma 7 (baseline not isolated)
+  ['incident_get_context', 20],
   ['execute_plan:3', 20],
   ['incident_search:4-concurrent-same-grant', 32],
 ]);
@@ -67,8 +67,11 @@ function observe(event: Prisma.QueryEvent) {
   // Prisma 7 loads an optional to-one relation even when its foreign key is NULL (for example
   // an unassigned incident's assignee: `"User"."id" IN ($1)` with a null key). It is neither a
   // domain statement nor an authentication read, so it is tallied separately.
+  // The key is either a NULL parameter or absent altogether (an empty key list); only the
+  // trailing OFFSET parameter remains.
+  const keys = (JSON.parse(event.params) as unknown[]).slice(0, -1);
   const emptyRelationLoad =
-    / IN \(\$1\) OFFSET \$2$/.test(sql) && (JSON.parse(event.params) as unknown[])[0] === null;
+    read && / OFFSET \$\d+$/.test(sql) && /"id" IN \(/.test(sql) && keys.every(key => key === null);
   if (emptyRelationLoad) {
     collecting.emptyRelationLoads++;
     return;
