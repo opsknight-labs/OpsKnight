@@ -3,6 +3,7 @@ import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
 import SquireLauncher from '@/components/squire/LazySquireLauncher';
+import type { StatusBarShift } from '@/lib/status-bar';
 
 async function loadStatus() {
   try {
@@ -25,19 +26,27 @@ async function loadStatus() {
  * on, so when it is off no assistant code is sent to the browser. Fails closed and silent: the
  * assistant is optional and must never affect the page it sits on.
  */
-export default async function SquireMount() {
+export default async function SquireMount({
+  shifts = [],
+  userName = null,
+}: {
+  /** The person's upcoming on-call shifts, already loaded for the status bar; Squire gives heads-ups. */
+  shifts?: StatusBarShift[];
+  userName?: string | null;
+}) {
   const status = await loadStatus();
   if (!status) return null;
   return (
     <SquireLauncher
       name={status.squireName}
-      avatar={status.squireAvatar}
       launcher={status.squireLauncher}
       animated={status.squireAnimations}
       aiEnabled={status.aiEnabled}
       history={status.historyEnabled ? { retentionDays: status.historyRetentionDays } : null}
       canManageAi={status.canManageAi}
       pinBriefing
+      shifts={shifts}
+      userName={userName}
     />
   );
 }

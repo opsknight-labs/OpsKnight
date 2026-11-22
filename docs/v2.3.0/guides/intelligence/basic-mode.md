@@ -23,9 +23,9 @@ verification:
 
 # Use Squire without an AI provider
 
-Enable the assistant under **Settings → Intelligence → Assistant**. The **Enable AI** switch can remain off. Basic mode uses deterministic language rules, product instructions and fresh OpsKnight database reads. It does not call a language model, run commands or send a page, and it changes an incident only when you confirm a card it prepared.
+The assistant is on by default (**Settings → Intelligence → Assistant → Show the assistant**), and the **Enable AI** switch stays off until an administrator turns it on. Basic mode uses deterministic language rules, product instructions and fresh OpsKnight database reads. It does not call a language model, run commands or send a page, and it changes an incident only when you confirm a card it prepared.
 
-Open the assistant or press **⌘/Ctrl+J**. These are example questions, not required command syntax:
+Open the assistant or press **⌘/Ctrl+J**. Type **/** for shortcuts to common questions. These are example questions, not required command syntax:
 
 - **Your work:** “My open incidents”, “Show unassigned incidents”, “Show my team’s unassigned incidents”, “Show my high urgency P1 incidents”. Person assignment and team assignment are separate; unassigned means neither is set.
 - **Incident search:** “Find checkout incidents from last week”, “Show resolved incidents today”. Filters can include status, urgency, priority, service/title keywords, ownership and a time window. Quoted names help distinguish services with similar names.

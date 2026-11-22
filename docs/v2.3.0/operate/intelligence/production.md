@@ -201,8 +201,8 @@ incidents.
    unhelpful it proposes a higher threshold, which you apply with one click as a new policy version.
 4. **Suggest globally.** Publish the global policy in **Suggest** mode. Keep noisy services on Shadow with
    their own policies.
-5. **Assistant without AI.** In **Assistant**, turn on the assistant and leave AI off. It answers from
-   your incident data only.
+5. **Assistant without AI.** The assistant is on by default (**Assistant → Show the assistant**) with AI
+   off. It answers from your incident data only.
 6. **Assistant with AI.** Add a provider and use **Test connection**. Start with a self-hosted model or a
    provider your data-processing agreement covers. AI conversations require a data ceiling of **Personal**
    because questions, browser history and saved history may identify people. Approve that data boundary
@@ -482,7 +482,13 @@ Open **Saved conversations** in the assistant to read earlier chats. **Load olde
 
 Without AI, the assistant can search accessible incidents by service/title and relative time, prioritize active incidents by urgency, show a factual event timeline, and combine similar incidents, recorded resolutions, change leads and runbook recommendations into a briefing. Suggested investigation checks are fixed templates, not confirmed diagnoses or executed commands. Follow-ups reuse earlier questions for intent and fetch fresh facts; old assistant text is never treated as evidence. Free-form reasoning still requires an AI provider.
 
-The signature Squire mascot uses the supplied pearl-white helm, crimson plume and cape, and slate visor as a lightweight SVG. The full character appears in the chat welcome state and the head appears in the launcher and header. Expressions follow typing, lookup, streaming, request failures and confirmed action outcomes. When AI is disabled, unavailable, or over quota, the resting mascot sleeps with an explicit Basic mode label; it wakes to think and respond using live data. Network loss preserves the draft and disables sending. Amber attention comes from the existing authorized realtime feed or the incident facts returned with an answer. All nine visual states are available in `OpsKnightSquire`; existing alternative avatars remain selectable. Optional motion respects both the application setting and reduced-motion preferences.
+The signature Squire mascot uses the supplied pearl-white helm, crimson plume and cape, and slate visor as a lightweight SVG. The full character appears in the chat welcome state and the head appears in the launcher and header. Expressions follow typing, lookup, streaming, request failures and confirmed action outcomes. With AI simply off he stays awake with a **Basic mode** label; when AI is unavailable or over quota he sleeps with an explicit Basic mode label and wakes to think and respond using live data. Network loss preserves the draft and disables sending. Amber attention comes from the existing authorized realtime feed or the incident facts returned with an answer. All nine visual states are available in `OpsKnightSquire`. Squire is the only avatar; the earlier icon, knight, owl and robot choices were removed, and a saved choice is dropped on upgrade. Motion is on by default and still respects both the application setting and reduced-motion preferences.
+
+New installations, and installations that never saved assistant settings, show Squire by default; **Enable AI** stays off until an administrator turns it on. A saved **Show the assistant** choice is kept on upgrade.
+
+On desktop Squire stands at the right end of the status bar. He rests awake and dozes after two quiet minutes. He is also a messenger: once per browser he introduces himself on first visit (with **Show me** and **Later**), and he brings short notes on his scroll — a heads-up two hours before your next on-call shift, a reminder thirty minutes before a real handoff, and "your answer is ready" when an answer finishes while the chat is closed (with a dot on him until you open it). Incident alerts are not repeated; the incident banner and toasts own them. Notes appear without motion too; with motion he steps out to deliver them.
+
+His wording is playful when things are calm (a greeting with your first name, tips, small celebrations on a helpful rating) and plain while a high-urgency incident needs attention. Answers themselves are never dressed up. Type **/** in the message box for shortcuts such as `/fire`, `/mine`, `/oncall`, `/similar`, `/cause`, `/runbook`, `/who`, `/week`, `/help` and `/new`; each asks a question basic mode already answers.
 
 The assistant opens with **⌘/Ctrl+J**, expands to a wider desktop panel, and fills the screen on phones. Answers support markdown headings, lists, tables and copyable code. HTML stays inert; only exact server-cited destinations become answer links and remote images are not fetched. Completed messages are memoized so streaming updates affect the current response. Scrolling up pauses automatic following; **Jump to latest** returns to the new content. A separate live region announces completion without reading every streamed chunk.
 

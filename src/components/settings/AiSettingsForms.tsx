@@ -11,12 +11,7 @@ import {
 } from '@/app/(app)/settings/intelligence/ai/actions';
 import { Button } from '@/components/ui/shadcn/button';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
-import {
-  AI_SETTINGS_BOUNDS,
-  type SquireAvatar,
-  type SquireLauncherStyle,
-} from '@/lib/intelligence/ai/contract';
-import SquireAvatarIcon from '@/components/squire/SquireAvatar';
+import { AI_SETTINGS_BOUNDS, type SquireLauncherStyle } from '@/lib/intelligence/ai/contract';
 import SquireAppearancePreview from '@/components/squire/SquireAppearancePreview';
 import { ActionMessage as Status, fieldClass } from '@/components/settings/form-kit';
 
@@ -103,14 +98,6 @@ function Field({
   );
 }
 
-const AVATARS: ReadonlyArray<readonly [SquireAvatar, string]> = [
-  ['SQUIRE', 'Squire mascot'],
-  ['ICON', 'Simple icon'],
-  ['KNIGHT', 'Knight'],
-  ['OWL', 'Owl'],
-  ['ROBOT', 'Robot'],
-];
-
 function SelectField({
   name,
   label,
@@ -151,7 +138,6 @@ type SettingsValues = {
   enabled: boolean;
   squireEnabled: boolean;
   squireName: string;
-  squireAvatar: SquireAvatar;
   squireLauncher: SquireLauncherStyle;
   squireAnimations: boolean;
   allowExternalFallback: boolean;
@@ -187,7 +173,6 @@ export function AiSettingsForm({
   const [state, action, pending] = useActionState(saveAiSettingsAction, initial);
   const [preview, setPreview] = useState({
     name: settings.squireName,
-    avatar: settings.squireAvatar,
     animated: settings.squireAnimations,
   });
   const b = AI_SETTINGS_BOUNDS;
@@ -202,10 +187,6 @@ export function AiSettingsForm({
         if (input.name === 'squireName') setPreview(current => ({ ...current, name: input.value }));
         if (input.name === 'squireAnimations')
           setPreview(current => ({ ...current, animated: input.checked }));
-        if (input.name === 'squireAvatar' && input.checked) {
-          const selected = AVATARS.find(([kind]) => kind === input.value);
-          if (selected) setPreview(current => ({ ...current, avatar: selected[0] }));
-        }
       }}
     >
       <input type="hidden" name="expectedRevision" value={settings.revision} />
@@ -219,7 +200,7 @@ export function AiSettingsForm({
       <Check
         name="squireEnabled"
         label="Show the assistant"
-        help="Shows the assistant button for signed-in users. It works without AI, using your incident data."
+        help="On by default. Shows the assistant to signed-in users; without AI it answers from your incident data."
         defaultChecked={settings.squireEnabled}
         disabled={disabled}
       />
@@ -231,27 +212,6 @@ export function AiSettingsForm({
         disabled={disabled}
         required
       />
-      <fieldset className="space-y-2" disabled={disabled}>
-        <legend className="text-sm font-medium">Look</legend>
-        <div className="flex flex-wrap gap-2">
-          {AVATARS.map(([kind, label]) => (
-            <label
-              key={kind}
-              className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm has-checked:border-primary has-checked:bg-primary/5"
-            >
-              <input
-                type="radio"
-                name="squireAvatar"
-                value={kind}
-                defaultChecked={settings.squireAvatar === kind}
-                className="h-4 w-4"
-              />
-              <SquireAvatarIcon kind={kind} size="md" />
-              <span>{label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
       <SelectField
         name="squireLauncher"
         label="Where people find it"
@@ -269,11 +229,7 @@ export function AiSettingsForm({
         defaultChecked={settings.squireAnimations}
         disabled={disabled}
       />
-      <SquireAppearancePreview
-        name={preview.name}
-        avatar={preview.avatar}
-        animated={preview.animated}
-      />
+      <SquireAppearancePreview name={preview.name} animated={preview.animated} />
       <Check
         name="allowExternalFallback"
         label="Allow fallback from self-hosted to external providers"

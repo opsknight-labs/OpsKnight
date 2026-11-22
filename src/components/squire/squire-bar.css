@@ -196,6 +196,61 @@
 .sqbar-paper:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
 .sqbar-scroll.open { pointer-events: auto; }
 .sqbar-scroll.open .sqbar-paper { transform: none; opacity: 1; }
+/* Motion off (setting or system): the scroll simply fades in, no unrolling. */
+.sqbar-scroll.still .sqbar-paper { transform: none; transition: opacity 160ms; }
+@media (prefers-reduced-motion: reduce) {
+  .sqbar-paper { transform: none; transition: opacity 160ms; }
+}
+
+/* A note: a small letter with a reply or two, ending at his right edge. */
+.sqbar-paper.sqbar-letter {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: max-content;
+  max-width: 18rem;
+  padding: 10px 14px;
+  white-space: normal;
+  cursor: default;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.sqbar-letter p { margin: 0; }
+.sqbar-letter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.sqbar-letter-actions > * {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid #c9a96a;
+  border-radius: 999px;
+  background: transparent;
+  color: #6b4f22;
+  font: 600 0.75rem/1 var(--font-family-sans);
+  text-decoration: none;
+  cursor: pointer;
+}
+.sqbar-letter-actions > *:hover { background: rgb(201 169 106 / 0.25); }
+.sqbar-letter-actions > .primary { border-color: #6b4f22; background: #6b4f22; color: #fbf3df; }
+.sqbar-letter-actions > .primary:hover { background: #57401b; }
+.sqbar-letter-actions > *:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+
+/* An answer finished while the chat was closed. */
+.sqbar-dot {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  z-index: 1;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e11d48;
+  box-shadow: 0 0 0 1.5px #fff, 0 1px 2px rgb(0 0 0 / 0.4);
+}
 
 /* ---- Motion (only when the person allows it) ---- */
 @media (prefers-reduced-motion: no-preference) {
@@ -224,8 +279,9 @@
   .sqbar-stage.pose-scout .oksq-arm-r { transform: rotate(-150deg); transition: transform 250ms; }
   .sqbar-stage.pose-scout .oksq-head { animation: sqbar-scan 2.4s ease-in-out; }
   .sqbar-stage.pose-message .oksq-rig { animation: sqbar-hello 900ms cubic-bezier(0.3, 1.5, 0.5, 1) 2; }
-  .sqbar-stage.pose-rest .oksq-rig { animation: sqbar-breathe 3.6s ease-in-out infinite; }
-  .sqbar-stage.pose-rest:not(.awake) .sqbar-zz { animation: sqbar-zz 3.6s ease-in-out infinite; }
+  .sqbar-stage.dozing .oksq-rig { animation: sqbar-breathe 3.6s ease-in-out infinite; }
+  .sqbar-stage.pose-rest:not(.dozing):not(.awake) .oksq-rig { animation: sqbar-stand 4.2s ease-in-out infinite; }
+  .sqbar-stage.dozing .sqbar-zz { animation: sqbar-zz 3.6s ease-in-out infinite; }
   .sqbar-stage.awake .oksq-rig { animation: sqbar-perk 360ms cubic-bezier(0.3, 1.4, 0.5, 1) forwards; }
 }
 
@@ -252,12 +308,13 @@
 @keyframes sqbar-scan { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-12deg); } 65% { transform: rotate(10deg); } }
 @keyframes sqbar-hello { 30% { transform: translateY(-5px) scale(0.97, 1.05); } 60% { transform: scale(1.05, 0.95); } }
 @keyframes sqbar-breathe { 0%, 100% { transform: translateY(2px) scale(1.03, 0.93); } 50% { transform: translateY(1.5px) scale(1.01, 0.96); } }
+@keyframes sqbar-stand { 0%, 100% { transform: none; } 50% { transform: translateY(-0.5px) scale(1, 1.015); } }
 @keyframes sqbar-perk { to { transform: translateY(-1px) scale(1, 1.02); } }
 @keyframes sqbar-zz { 0% { opacity: 0; transform: translate(0, 0) scale(0.6); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -14px) scale(1.1); } }
 
-/* Without motion he still rests in a seated pose. */
+/* Without motion he still dozes in a seated pose. */
 @media (prefers-reduced-motion: reduce) {
-  .sqbar-stage.pose-rest .oksq-rig { transform: translateY(2px) scale(1.03, 0.93); }
+  .sqbar-stage.dozing .oksq-rig { transform: translateY(2px) scale(1.03, 0.93); }
 }
 
 @media print {

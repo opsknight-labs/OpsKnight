@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import OpsKnightSquire, { type SquireState } from './OpsKnightSquire';
-import SquireAvatar, { type SquireAvatarKind } from './SquireAvatar';
+import SquireAvatar from './SquireAvatar';
 
 const STATES: ReadonlyArray<{ value: SquireState; label: string; detail: string }> = [
   { value: 'idle', label: 'Ready', detail: 'Waiting for a question.' },
@@ -35,11 +35,9 @@ const STATES: ReadonlyArray<{ value: SquireState; label: string; detail: string 
 /** Local-only design preview: switching expressions never calls a provider or changes settings. */
 export default function SquireAppearancePreview({
   name,
-  avatar,
   animated,
 }: {
   name: string;
-  avatar: SquireAvatarKind;
   animated: boolean;
 }) {
   const id = useId();
@@ -52,11 +50,7 @@ export default function SquireAppearancePreview({
     >
       <div className="flex items-center gap-5">
         <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-xl bg-background">
-          {avatar === 'SQUIRE' ? (
-            <OpsKnightSquire state={state} size={96} animated={animated} label="" />
-          ) : (
-            <SquireAvatar kind={avatar} size="md" animated={animated} />
-          )}
+          <OpsKnightSquire state={state} size={96} animated={animated} label="" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -80,7 +74,6 @@ export default function SquireAppearancePreview({
             if (next) setState(next.value);
           }}
           className="min-h-11 flex-1 rounded-lg border border-border bg-background px-3 text-sm"
-          disabled={avatar !== 'SQUIRE'}
         >
           {STATES.map(item => (
             <option key={item.value} value={item.value}>
@@ -88,7 +81,7 @@ export default function SquireAppearancePreview({
             </option>
           ))}
         </select>
-        <SquireAvatar kind={avatar} animated={animated} state={state} size="md" />
+        <SquireAvatar animated={animated} state={state} size="md" />
       </div>
       <p className="mt-2 text-2xs leading-5 text-muted-foreground">
         Preview only. Save below to apply your appearance settings. Reduced motion is always

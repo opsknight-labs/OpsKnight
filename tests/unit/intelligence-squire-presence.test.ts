@@ -27,10 +27,18 @@ describe('truthful Squire expressions', () => {
   ] as const)('maps %j to %s', (input, state) =>
     expect(squirePresence({ ...ready, ...input }).state).toBe(state)
   );
+  it('stays awake in basic mode when AI is simply off', () => {
+    expect(squirePresence({ ...ready, availability: 'disabled' })).toEqual({
+      state: 'idle',
+      label: 'Basic mode · ready',
+    });
+  });
   it('wakes for basic answers despite AI being disabled or quota exhausted', () => {
     for (const availability of ['disabled', 'quota', 'unavailable'] as const) {
-      expect(squirePresence({ ...ready, availability }).state).toBe('offline');
-      expect(squirePresence({ ...ready, availability }).label).toContain('basic mode available');
+      if (availability !== 'disabled') {
+        expect(squirePresence({ ...ready, availability }).state).toBe('offline');
+        expect(squirePresence({ ...ready, availability }).label).toContain('basic mode available');
+      }
       expect(squirePresence({ ...ready, availability, busy: true }).state).toBe('thinking');
       expect(squirePresence({ ...ready, availability, busy: true, speaking: true }).state).toBe(
         'speaking'

@@ -79,7 +79,6 @@ async function seed() {
       enabled: false,
       squireEnabled: true,
       squireName: 'Pip',
-      squireAvatar: 'SQUIRE',
       squireAnimations: true,
       squireHistoryEnabled: false,
       updatedAt: new Date(),

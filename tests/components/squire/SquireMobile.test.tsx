@@ -16,7 +16,6 @@ const server = vi.hoisted(() => ({
   status: {
     squireEnabled: true,
     squireName: 'Pip',
-    squireAvatar: 'SQUIRE',
     squireLauncher: 'FLOATING',
     squireAnimations: false,
     aiEnabled: false,

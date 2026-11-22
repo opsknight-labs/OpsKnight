@@ -54,7 +54,8 @@ describe('SquireLauncher', () => {
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
     expect(screen.getByRole('dialog', { name: /Pip/ })).toBeInTheDocument();
     expect(screen.getByLabelText('Message Pip')).toHaveFocus();
-    expect(screen.getByRole('heading', { name: 'What are we investigating?' })).toBeInTheDocument();
+    // Calm: a greeting by time of day; the question is the same in every variant.
+    expect(screen.getByRole('heading', { name: /What shall we look into\?$/ })).toBeInTheDocument();
     // AI is off by default: one status line says so instead of a stack of banners.
     expect(screen.getByTestId('squire-availability')).toHaveTextContent('AI is off');
   });
@@ -218,9 +219,9 @@ describe('SquireLauncher', () => {
     expect(screen.getByRole('button', { name: /Ask Pip/ })).toHaveFocus();
   });
 
-  it('shows the chosen mascot', () => {
-    const { container } = render(<SquireLauncher name="Pip" avatar="OWL" />);
-    expect(container.querySelector('[data-avatar="OWL"]')).not.toBeNull();
+  it('always shows the Squire mascot', () => {
+    const { container } = render(<SquireLauncher name="Pip" />);
+    expect(container.querySelector('[data-avatar="SQUIRE"]')).not.toBeNull();
   });
 
   it('shows a suggested action that does nothing until confirmed, then runs it with only the sealed token', async () => {
@@ -637,7 +638,8 @@ describe('supplied Squire mascot lifecycle', () => {
       controller.enqueue(new TextEncoder().encode('{"type":"done"}\n'));
       controller.close();
     });
-    await waitFor(() => expect(avatar()).toHaveAttribute('data-state', 'offline'));
+    // AI off is normal basic mode: he goes back to resting awake, not asleep.
+    await waitFor(() => expect(avatar()).toHaveAttribute('data-state', 'idle'));
     expect(dialog).toHaveTextContent('Basic mode · AI disabled');
   });
 

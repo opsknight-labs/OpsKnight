@@ -137,10 +137,10 @@ describe('settings and providers', () => {
     );
   });
 
-  it('is off by default and uses a revision lock', async () => {
+  it('keeps AI off but Squire on (basic mode) by default, and uses a revision lock', async () => {
     expect(await getAiSettings()).toMatchObject({
       enabled: false,
-      squireEnabled: false,
+      squireEnabled: true,
       squireName: 'Squire',
       revision: 0,
     });
@@ -192,24 +192,24 @@ describe('assistant personalisation and usage history', () => {
     requestTimeoutMs: 5000,
   };
 
-  it('defaults to the Squire mascot, floating button and no motion, and round-trips every option', async () => {
+  it('defaults to Squire on (basic mode, AI off), floating button and motion, and round-trips every option', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     const actor = { actorId: admin.id, source: 'UI' as const };
     expect(await getAiSettings()).toMatchObject({
-      squireAvatar: 'SQUIRE',
+      enabled: false,
+      squireEnabled: true,
       squireLauncher: 'FLOATING',
-      squireAnimations: false,
+      squireAnimations: true,
     });
-    await updateAiSettings({ ...base, expectedRevision: 0 }, actor);
+    expect(await getAiPublicStatus()).toMatchObject({ aiEnabled: false, squireEnabled: true });
+    await updateAiSettings({ ...base, squireAnimations: false, expectedRevision: 0 }, actor);
     expect(await getAiSettings()).toMatchObject({
-      squireAvatar: 'SQUIRE',
       squireLauncher: 'FLOATING',
       squireAnimations: false,
     });
     await updateAiSettings(
       {
         ...base,
-        squireAvatar: 'KNIGHT',
         squireLauncher: 'SEARCH_ONLY',
         squireAnimations: true,
         expectedRevision: 1,
@@ -218,13 +218,9 @@ describe('assistant personalisation and usage history', () => {
     );
     expect(await getAiPublicStatus()).toMatchObject({
       squireName: 'Pip',
-      squireAvatar: 'KNIGHT',
       squireLauncher: 'SEARCH_ONLY',
       squireAnimations: true,
     });
-    await expect(
-      updateAiSettings({ ...base, squireAvatar: 'DRAGON', expectedRevision: 2 }, actor)
-    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
     await expect(
       updateAiSettings({ ...base, squireLauncher: 'POPUP', expectedRevision: 2 }, actor)
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
@@ -232,7 +228,7 @@ describe('assistant personalisation and usage history', () => {
 
   it('is constrained in the database too', async () => {
     await expect(
-      db.$executeRaw`INSERT INTO "AiSettings" ("id", "squireAvatar", "updatedAt") VALUES ('default', 'DRAGON', now())`
+      db.$executeRaw`INSERT INTO "AiSettings" ("id", "squireLauncher", "updatedAt") VALUES ('default', 'POPUP', now())`
     ).rejects.toThrow();
   });
 

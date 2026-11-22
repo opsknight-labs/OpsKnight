@@ -11,7 +11,7 @@ import {
   Plus,
   X,
 } from 'lucide-react';
-import SquireAvatar, { type SquireAvatarKind } from './SquireAvatar';
+import SquireAvatar from './SquireAvatar';
 import type { SquireState } from './OpsKnightSquire';
 import type { SquireDock } from './dock';
 import { toneClasses } from '@/components/patterns/status-tone';
@@ -32,7 +32,6 @@ export const squireIconButton = (fullscreen: boolean) =>
  */
 export default function SquireHeader({
   name,
-  avatar,
   animated,
   mascotState,
   statusLabel,
@@ -50,7 +49,6 @@ export default function SquireHeader({
   onClose,
 }: {
   name: string;
-  avatar: SquireAvatarKind;
   animated: boolean;
   mascotState: SquireState;
   statusLabel: string;
@@ -73,7 +71,7 @@ export default function SquireHeader({
   const hasMenu = Boolean(onToggleExpanded || dock.available || onSwitchSide);
   return (
     <header className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border py-1.5 pl-3 pr-1.5">
-      <SquireAvatar kind={avatar} animated={animated} state={mascotState} />
+      <SquireAvatar animated={animated} state={mascotState} />
       <h2 className="shrink-0 text-sm font-semibold">{name}</h2>
       <span className="sr-only">{statusLabel}</span>
       <span
@@ -92,7 +90,13 @@ export default function SquireHeader({
         <span className="truncate">{context.label}</span>
       </span>
       <div className="ml-auto flex shrink-0 items-center">
-        <button type="button" onClick={onNewChat} aria-label="New chat" title="New chat" className={iconButton}>
+        <button
+          type="button"
+          onClick={onNewChat}
+          aria-label="New chat"
+          title="New chat"
+          className={iconButton}
+        >
           <Plus className="h-4 w-4" aria-hidden="true" />
         </button>
         {hasHistory && (
@@ -109,7 +113,11 @@ export default function SquireHeader({
         )}
         {hasMenu && (
           <DropdownMenu>
-            <DropdownMenuTrigger aria-label="More actions" title="More actions" className={iconButton}>
+            <DropdownMenuTrigger
+              aria-label="More actions"
+              title="More actions"
+              className={iconButton}
+            >
               <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

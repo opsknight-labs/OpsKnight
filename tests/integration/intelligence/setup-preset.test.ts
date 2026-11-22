@@ -49,11 +49,12 @@ describe('Recommended intelligence preset', () => {
     expect(settings.opsHelpersEnabled).toBe(true);
 
     const after = await getSetupState();
+    // The assistant is on by default (basic mode, AI off), so nothing on the checklist is left off.
     expect(
       setupChecklist(after)
         .filter(item => !item.on)
         .map(item => item.id)
-    ).toEqual(['assistant']);
+    ).toEqual([]);
     const audits = await db.auditLog.count({ where: { actorId: actor.actorId } });
     expect(audits).toBeGreaterThanOrEqual(3);
 
@@ -64,7 +65,12 @@ describe('Recommended intelligence preset', () => {
     const actor = await setup();
     const noise = await getNoiseControlPolicy(null);
     await saveNoiseControlPolicy(
-      { serviceId: null, mode: 'SHADOW', definition: noise.definition, expectedRevision: noise.revision },
+      {
+        serviceId: null,
+        mode: 'SHADOW',
+        definition: noise.definition,
+        expectedRevision: noise.revision,
+      },
       actor
     );
     const changed = await applyRecommendedPreset(setupRevisions(await getSetupState()), actor);

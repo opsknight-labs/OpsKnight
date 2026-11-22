@@ -23,6 +23,7 @@ const INTENT_ICONS: Array<[RegExp, LucideIcon]> = [
   [/cause|changed/i, GitCompareArrows],
   [/runbook/i, BookOpen],
   [/assigned|on call|who /i, UserRound],
+  [/changes/i, GitCompareArrows],
   [/my open/i, Inbox],
   [/how many/i, BarChart3],
   [/services/i, Layers],
@@ -72,40 +73,52 @@ function SuggestionList({
   );
 }
 
-/** First screen of a conversation: a short greeting and suggested questions grouped by scope. */
+/**
+ * First screen of a conversation: a greeting (warm when things are calm, plain during a high-urgency
+ * incident), an optional tip, and suggested questions grouped by scope.
+ */
 export default function SquireEmptyState({
-  showMascot,
   mascotState,
   animated,
+  headline,
   description,
+  tip,
   incidentSuggestions,
+  pageSuggestions = null,
   workspaceSuggestions,
   onAsk,
 }: {
-  showMascot: boolean;
   mascotState: SquireState;
   animated: boolean;
+  headline: string;
   description: string;
+  tip?: string | null;
   incidentSuggestions: readonly string[];
+  /** Questions about the page the person is on (a service, a schedule). */
+  pageSuggestions?: { title: string; items: readonly string[] } | null;
   workspaceSuggestions: readonly string[];
   onAsk: (text: string) => void;
 }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        {showMascot && (
-          <span aria-hidden="true" className="shrink-0">
-            <OpsKnightSquire state={mascotState} size={40} animated={animated} label="" />
-          </span>
-        )}
+        <span aria-hidden="true" className="shrink-0">
+          <OpsKnightSquire state={mascotState} size={40} animated={animated} label="" />
+        </span>
         <div className="min-w-0">
-          <h3 className="font-display text-lg font-semibold tracking-tight">
-            What are we investigating?
-          </h3>
+          <h3 className="font-display text-lg font-semibold tracking-tight">{headline}</h3>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
+      {tip && (
+        <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+          {tip}
+        </p>
+      )}
       <SuggestionList title="For this incident" items={incidentSuggestions} onAsk={onAsk} />
+      {pageSuggestions && (
+        <SuggestionList title={pageSuggestions.title} items={pageSuggestions.items} onAsk={onAsk} />
+      )}
       <SuggestionList title="Across your workspace" items={workspaceSuggestions} onAsk={onAsk} />
     </div>
   );

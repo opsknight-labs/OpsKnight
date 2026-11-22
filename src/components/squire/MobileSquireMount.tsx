@@ -30,7 +30,6 @@ export default async function MobileSquireMount() {
   return (
     <SquireLauncher
       name={status.squireName}
-      avatar={status.squireAvatar}
       launcher="FLOATING"
       animated={status.squireAnimations}
       aiEnabled={status.aiEnabled}

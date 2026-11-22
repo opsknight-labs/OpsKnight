@@ -55,24 +55,20 @@ describe('IntelligenceSubNav', () => {
 });
 
 describe('SquireAvatar', () => {
-  it.each(['SQUIRE', 'KNIGHT', 'OWL', 'ROBOT'] as const)(
-    'renders %s as decorative inline SVG with no network request',
-    kind => {
-      const { container } = render(<SquireAvatar kind={kind} />);
-      const wrapper = container.querySelector(`[data-avatar="${kind}"]`)!;
-      expect(wrapper.getAttribute('aria-hidden')).toBe('true');
-      expect(wrapper.querySelector('svg')).not.toBeNull();
-      expect(container.querySelector('img, image, [href]')).toBeNull();
-    }
-  );
+  it('renders the Squire mascot as decorative inline SVG with no network request', () => {
+    const { container } = render(<SquireAvatar />);
+    const wrapper = container.querySelector('[data-avatar="SQUIRE"]')!;
+    expect(wrapper.getAttribute('aria-hidden')).toBe('true');
+    expect(wrapper.querySelector('svg')).not.toBeNull();
+    expect(container.querySelector('img, image, [href]')).toBeNull();
+  });
 
-  it('only animates when asked, and only behind motion-safe', () => {
-    const still = render(<SquireAvatar kind="OWL" />);
-    expect(still.container.innerHTML).not.toMatch(/animate-/);
+  it('only animates when asked', () => {
+    const still = render(<SquireAvatar />);
+    expect(still.container.querySelector('svg')).toHaveAttribute('data-motion', 'off');
     still.unmount();
-    const moving = render(<SquireAvatar kind="OWL" animated />);
-    expect(moving.container.innerHTML).toMatch(/motion-safe:animate-/);
-    expect(moving.container.innerHTML).not.toMatch(/(^|\s)animate-\[/);
+    const moving = render(<SquireAvatar animated />);
+    expect(moving.container.querySelector('svg')).toHaveAttribute('data-motion', 'on');
   });
 });
 
