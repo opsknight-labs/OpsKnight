@@ -17,6 +17,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Check, ChevronDown, Users as UsersIcon, User, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import TruncatedText from '@/components/patterns/TruncatedText';
 
 type AssigneeSectionProps = {
   assignee: {
@@ -189,7 +190,7 @@ export default function AssigneeSection({
           {team ? (
             <>
               <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0 dark:text-indigo-400" />
-              <span className="truncate max-w-48" title={team.name}>{team.name}</span>
+              <TruncatedText text={team.name} className="max-w-48" />
             </>
           ) : assignee ? (
             <>
@@ -202,7 +203,7 @@ export default function AssigneeSection({
                 className="border-border/80 shrink-0 h-4 w-4 text-[9px]"
                 aria-hidden
               />
-              <span className="truncate max-w-48" title={assignee.name}>{assignee.name}</span>
+              <TruncatedText text={assignee.name} className="max-w-48" />
             </>
           ) : (
             <>
@@ -223,12 +224,12 @@ export default function AssigneeSection({
               SELECTOR_BASE_CLASS,
               'hover:bg-muted/40 hover:border-border cursor-pointer group'
             )}
-            title={`Change assignee: ${team?.name ?? assignee?.name ?? "unassigned"}`}
+            aria-label={`Change assignee (currently ${team?.name ?? assignee?.name ?? "unassigned"})`}
           >
             {team ? (
               <>
                 <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0 dark:text-indigo-400" />
-                <span className="truncate max-w-48" title={team.name}>{team.name}</span>
+                <TruncatedText text={team.name} className="max-w-48" />
               </>
             ) : assignee ? (
               <>
@@ -241,7 +242,7 @@ export default function AssigneeSection({
                   className="border-border/80 shrink-0 h-4 w-4 text-[9px]"
                   aria-hidden
                 />
-                <span className="truncate max-w-48" title={assignee.name}>{assignee.name}</span>
+                <TruncatedText text={assignee.name} className="max-w-48" />
               </>
             ) : (
               <>

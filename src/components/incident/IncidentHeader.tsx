@@ -30,6 +30,7 @@ import RelativeTime from '@/components/patterns/RelativeTime';
 import EscalationStatusBadge from './EscalationStatusBadge';
 import AssigneeSection from './AssigneeSection';
 import PrioritySelector from './PrioritySelector';
+import TruncatedText from '@/components/patterns/TruncatedText';
 
 type IncidentHeaderProps = {
   incident: Incident & {
@@ -265,7 +266,6 @@ export default function IncidentHeader({
         {/* Service */}
         <Link
           href={`${routePrefix}/services/${incident.serviceId}`}
-          title={`Service: ${incident.service.name}`}
           className={cn(cellClass, "group", linkCell)}
         >
           <div className={labelClass}>
@@ -274,10 +274,11 @@ export default function IncidentHeader({
               Service
             </span>
           </div>
-          <div className="flex items-center gap-1 max-w-full">
-            <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-              {incident.service.name}
-            </span>
+          <div className="flex min-w-0 items-center gap-1 max-w-full">
+            <TruncatedText
+              text={incident.service.name}
+              className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors"
+            />
             <ArrowUpRight className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
           </div>
         </Link>
@@ -307,7 +308,6 @@ export default function IncidentHeader({
         {incident.incidentPolicy ? (
           <Link
             href={`${routePrefix}/policies/${incident.incidentPolicy.id}`}
-            title={`Escalation Policy: ${incident.incidentPolicy.name}`}
             className={cn(cellClass, shrinkCell, "group", linkCell)}
           >
             <div className={labelClass}>
@@ -316,10 +316,11 @@ export default function IncidentHeader({
                 Incident policy
               </span>
             </div>
-            <div className="flex items-center gap-1 max-w-full">
-              <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-                {incident.incidentPolicy.name}
-              </span>
+            <div className="flex min-w-0 items-center gap-1 max-w-full">
+              <TruncatedText
+                text={incident.incidentPolicy.name}
+                className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors"
+              />
               <ArrowUpRight className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
             </div>
           </Link>
