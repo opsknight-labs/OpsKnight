@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
 import { emitAuditEvent, type AuditEventSource } from '@/lib/audit';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
+import { assertPageableUser } from '@/lib/authorization';
 import { enqueueIncidentUpdateSideEffects, enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 import { logger } from '@/lib/logger';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
@@ -104,7 +105,7 @@ export async function assignIncidentRoleCommand(
       return { ...unchanged({ userName: null }), userId: null, changed: true };
     }
 
-    let holder: { id: string; name: string };
+    let holder: { id: string; name: string; role: string };
     try {
       holder = await requireOperationalUser(tx, input.userId);
     } catch {
@@ -114,6 +115,7 @@ export async function assignIncidentRoleCommand(
         details: { resource: 'user', userId: input.userId },
       });
     }
+    assertPageableUser(holder);
     if (previousUserId === holder.id) return unchanged({ userName: holder.name });
 
     await tx.incidentRoleAssignment.upsert({

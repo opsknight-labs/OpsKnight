@@ -143,6 +143,14 @@ export async function createPolicy(formData: FormData) {
       if (!validation.valid) {
         return { error: `Step ${stepIndex + 1}: ${firstEscalationStepIssue(validation.issues)}` };
       }
+      if (targetType === 'USER') {
+        try {
+          if (!(await escalationTargetExists(prisma, 'USER', id)))
+            return { error: `Step ${stepIndex + 1}: the selected user no longer exists.` };
+        } catch (error) {
+          return { error: `Step ${stepIndex + 1}: ${(error as Error).message}` };
+        }
+      }
       steps.push({ ...validation.step, stepOrder: stepIndex });
     }
 

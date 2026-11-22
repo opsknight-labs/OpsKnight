@@ -6,7 +6,7 @@ const object = (properties: Record<string, Schema>): Schema => ({
   properties,
   required: Object.keys(properties),
 });
-const role = { type: 'string', enum: ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] };
+const role = { type: 'string', enum: ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER', 'STAKEHOLDER'] };
 export const USER_ADMINISTRATION_SCHEMAS = {
   UserAdministration: object({
     id: { type: 'string' },

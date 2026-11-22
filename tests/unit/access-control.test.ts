@@ -5,10 +5,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   APP_ROLES,
+  ASSIGNABLE_ROLES,
   CAPABILITIES,
   NON_DELEGABLE_CAPABILITIES,
+  assertPageableUser,
   getRoleCapabilities,
   hasCapability,
+  isAssignableRole,
+  isPageableRole,
   type AppRole,
 } from '@/lib/authorization';
 import {
@@ -63,6 +67,41 @@ describe('role capability matrix', () => {
     for (const capability of getRoleCapabilities('STAKEHOLDER')) {
       expect(capability).not.toMatch(/incident|manage|edit|execute|approve|create|schedule/);
     }
+  });
+
+  it('lets a Stakeholder read business services in their teams but never incidents', () => {
+    const stakeholder = actor('STAKEHOLDER');
+    // Not even incidents they watch, are assigned to or are paged for.
+    for (const resource of [
+      incident({ serviceTeamId: 'team-a' }),
+      incident({ watcherIds: ['u-1'] }),
+      incident({ assigneeId: 'u-1', onCallUserIds: ['u-1'] }),
+    ]) {
+      expect(
+        authorize({ actor: stakeholder, action: AUTHORIZATION_ACTIONS.INCIDENT_READ, resource })
+          .allowed
+      ).toBe(false);
+    }
+    expect(
+      authorize({ actor: stakeholder, action: AUTHORIZATION_ACTIONS.SERVICE_READ })
+    ).toMatchObject({ allowed: true, scope: 'resource' });
+    expect(
+      authorize({ actor: stakeholder, action: AUTHORIZATION_ACTIONS.SERVICE_CREATE }).allowed
+    ).toBe(false);
+    expect(hasCapability('STAKEHOLDER', CAPABILITIES.USER_NOTIFICATION_PREFERENCES)).toBe(true);
+  });
+
+  it('makes every role except Stakeholder pageable', () => {
+    expect(APP_ROLES.filter(role => !isPageableRole(role))).toEqual(['STAKEHOLDER']);
+    expect(() => assertPageableUser({ role: 'USER', name: 'Uma' })).not.toThrow();
+    expect(() => assertPageableUser({ role: 'STAKEHOLDER', name: 'Sam' })).toThrow(
+      /Sam is a stakeholder/
+    );
+  });
+
+  it('lets administrators and identity providers assign Stakeholder', () => {
+    expect(ASSIGNABLE_ROLES).toContain('STAKEHOLDER');
+    expect(isAssignableRole('STAKEHOLDER')).toBe(true);
   });
 
   it('keeps Auditor strictly read-only', () => {
@@ -352,6 +391,11 @@ describe('page access registry', () => {
     ['/settings/integrations/slack', ['ADMIN']],
     ['/settings/integrations/mcp', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/incidents', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/incidents/abc', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/m/incidents/abc', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/postmortems', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/schedules', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/settings/profile', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/incidents/create', ['RESPONDER', 'ADMIN']],
     ['/system-logs', ['ADMIN']],
     ['/settings/access', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],

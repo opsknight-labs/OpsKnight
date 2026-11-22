@@ -35,7 +35,7 @@ describe('Policy Step Actions', () => {
       findMany: ReturnType<typeof vi.fn>;
       update: ReturnType<typeof vi.fn>;
     };
-    user: { count: ReturnType<typeof vi.fn> };
+    user: { findFirst: ReturnType<typeof vi.fn> };
     team: { count: ReturnType<typeof vi.fn> };
     onCallSchedule: { count: ReturnType<typeof vi.fn> };
   };
@@ -52,7 +52,7 @@ describe('Policy Step Actions', () => {
     );
     vi.mocked(lockResponderPolicy).mockResolvedValue(undefined);
     vi.mocked(assertResponderPolicySnapshotSafe).mockResolvedValue({ id: 'pol-1', name: 'Policy', steps: [] });
-    prismaMock.user.count.mockResolvedValue(1);
+    prismaMock.user.findFirst.mockResolvedValue({ name: 'Ada', role: 'RESPONDER' });
     prismaMock.team.count.mockResolvedValue(1);
     prismaMock.onCallSchedule.count.mockResolvedValue(1);
   });
@@ -232,6 +232,18 @@ describe('Policy Step Actions', () => {
       await updatePolicyStep('step-1', editForm({ delayMinutes: '20' }));
 
       expect(writtenData()).toMatchObject({ delayMinutes: 20, notificationChannels: [] });
+    });
+
+    it('rejects a stakeholder as the step target and writes nothing', async () => {
+      prismaMock.user.findFirst.mockResolvedValue({ name: 'Sam', role: 'STAKEHOLDER' });
+
+      const result = await updatePolicyStep(
+        'step-1',
+        editForm({ targetType: 'USER', targetUserId: 'stake-1', delayMinutes: '5' })
+      );
+
+      expect(result).toEqual({ error: expect.stringContaining('Stakeholders are never paged') });
+      expect(prismaMock.escalationRule.update).not.toHaveBeenCalled();
     });
   });
 });

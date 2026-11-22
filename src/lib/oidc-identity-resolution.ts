@@ -1,5 +1,6 @@
 import { normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
 import type { Prisma } from '@prisma/client';
+import type { AssignableRole } from '@/lib/authorization';
 import {
   assertCurrentOidcRegistration,
   OidcRegistrationChangedError,
@@ -83,7 +84,7 @@ type ResolveOidcIdentityInput = {
    */
   denyNewIncomplete?: boolean;
   /** The role a newly created account starts with (the workspace default role). */
-  initialRole?: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+  initialRole?: AssignableRole;
   /**
    * Existing non-administrator accounts in the allowed domains link on first sign-in without a
    * per-user approval, when the provider proves the email domain.

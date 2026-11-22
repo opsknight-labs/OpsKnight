@@ -8,7 +8,7 @@ import {
   saveScimRoleMappingAction,
 } from '@/app/(app)/settings/system/scim-role-actions';
 
-type Role = 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+type Role = 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | 'STAKEHOLDER';
 type Data<T> = Exclude<Awaited<T>, { scimError: string }>;
 type Impact = Data<ReturnType<typeof previewScimRoleMappingAction>>;
 async function unwrap<T>(pending: Promise<T>): Promise<Data<T>> {
@@ -42,7 +42,7 @@ export default function ScimRoleMapping({
       .then(value => {
         if (current) {
           setGroup(value);
-          setRole(value.systemRole && value.systemRole !== 'STAKEHOLDER' ? value.systemRole : '');
+          setRole(value.systemRole ?? '');
         }
       })
       .catch(e => {
@@ -104,6 +104,7 @@ export default function ScimRoleMapping({
           <option value="RESPONDER">Responder</option>
           <option value="AUDITOR">Auditor</option>
           <option value="USER">User</option>
+          <option value="STAKEHOLDER">Stakeholder</option>
         </select>
       </label>
       <Button

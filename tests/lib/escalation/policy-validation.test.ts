@@ -156,26 +156,46 @@ describe('escalationTargetExists', () => {
     'checks only the table that owns a %s target',
     async targetType => {
       const tx = {
-        user: { count: vi.fn().mockResolvedValue(targetType === 'USER' ? 1 : 0) },
+        user: {
+          findFirst: vi
+            .fn()
+            .mockResolvedValue(targetType === 'USER' ? { name: 'Ada', role: 'RESPONDER' } : null),
+        },
         team: { count: vi.fn().mockResolvedValue(targetType === 'TEAM' ? 1 : 0) },
         onCallSchedule: { count: vi.fn().mockResolvedValue(targetType === 'SCHEDULE' ? 1 : 0) },
       };
 
       await expect(escalationTargetExists(tx as never, targetType, 'target-1')).resolves.toBe(true);
 
-      const owning =
-        targetType === 'USER' ? tx.user : targetType === 'TEAM' ? tx.team : tx.onCallSchedule;
-      expect(owning.count).toHaveBeenCalledWith({
-        where: targetType === 'USER' ? { id: 'target-1', status: 'ACTIVE' } : { id: 'target-1' },
-      });
-      const others = [tx.user, tx.team, tx.onCallSchedule].filter(model => model !== owning);
-      for (const model of others) expect(model.count).not.toHaveBeenCalled();
+      if (targetType === 'USER') {
+        expect(tx.user.findFirst).toHaveBeenCalledWith({
+          where: { id: 'target-1', status: 'ACTIVE' },
+          select: { name: true, role: true },
+        });
+      } else {
+        expect(tx.user.findFirst).not.toHaveBeenCalled();
+        const owning = targetType === 'TEAM' ? tx.team : tx.onCallSchedule;
+        const other = targetType === 'TEAM' ? tx.onCallSchedule : tx.team;
+        expect(owning.count).toHaveBeenCalledWith({ where: { id: 'target-1' } });
+        expect(other.count).not.toHaveBeenCalled();
+      }
     }
   );
 
   it('reports a missing target', async () => {
-    const tx = { user: { count: vi.fn().mockResolvedValue(0) } };
+    const tx = { user: { findFirst: vi.fn().mockResolvedValue(null) } };
 
     await expect(escalationTargetExists(tx as never, 'USER', 'gone')).resolves.toBe(false);
+  });
+
+  it('rejects a stakeholder as a USER target with a clear error', async () => {
+    const tx = {
+      user: { findFirst: vi.fn().mockResolvedValue({ name: 'Sam', role: 'STAKEHOLDER' }) },
+    };
+
+    await expect(escalationTargetExists(tx as never, 'USER', 'stake-1')).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+      userMessage: expect.stringContaining('Sam is a stakeholder'),
+    });
   });
 });

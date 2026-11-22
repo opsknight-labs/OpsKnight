@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod/v3';
+import { ASSIGNABLE_ROLES } from '@/lib/authorization';
 import type { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
@@ -14,7 +15,7 @@ export const userAdministrationInput = z.discriminatedUnion('operation', [
   z
     .object({
       operation: z.literal('set-role'),
-      role: z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']),
+      role: z.enum(ASSIGNABLE_ROLES),
     })
     .strict(),
   z.object({ operation: z.literal('deactivate') }).strict(),

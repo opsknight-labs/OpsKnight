@@ -1,6 +1,7 @@
+import type { AssignableRole } from '@/lib/authorization';
 import type { OidcClaims } from '@/lib/oidc/provider-policy';
 
-export type OidcRole = 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+export type OidcRole = AssignableRole;
 export type OidcRoleRule = {
   claim: string;
   value: string;
@@ -31,6 +32,7 @@ export type OidcRoleEvaluation = {
 };
 
 export const OIDC_ROLE_RANK: Record<OidcRole, number> = {
+  STAKEHOLDER: -1,
   USER: 0,
   AUDITOR: 1,
   RESPONDER: 2,
@@ -156,20 +158,18 @@ export function evaluateOidcRoleClaims(
 export function resolveSignInRole(
   evaluation: OidcRoleEvaluation,
   current: {
-    /** Stakeholder is never mapped from claims but may already be held (set manually). */
-    role: OidcRole | 'STAKEHOLDER';
+    role: OidcRole;
     roleSource: 'MANUAL' | 'OIDC' | 'SCIM';
     scimRoleMappingAdopted?: boolean;
   },
   options: { firstLink?: boolean } = {}
-): { role: OidcRole | 'STAKEHOLDER'; roleSource: 'MANUAL' | 'OIDC' | 'SCIM'; changed: boolean } {
+): { role: OidcRole; roleSource: 'MANUAL' | 'OIDC' | 'SCIM'; changed: boolean } {
   const preserved = { role: current.role, roleSource: current.roleSource, changed: false };
   if (current.roleSource === 'SCIM' && current.scimRoleMappingAdopted) return preserved;
   if (evaluation.outcome === 'INCOMPLETE') {
     const lower =
       current.roleSource === 'OIDC' &&
-      (current.role === 'STAKEHOLDER' ? -1 : OIDC_ROLE_RANK[current.role]) >
-        OIDC_ROLE_RANK[evaluation.role];
+      OIDC_ROLE_RANK[current.role] > OIDC_ROLE_RANK[evaluation.role];
     return lower ? { role: evaluation.role, roleSource: 'OIDC', changed: true } : preserved;
   }
   const matched = evaluation.outcome === 'MATCHED';

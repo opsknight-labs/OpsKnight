@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors';
+import { assertPageableUser } from '@/lib/authorization';
 import { logAudit } from '@/lib/audit';
 
 type TransactionClient = Prisma.TransactionClient;
@@ -64,17 +65,17 @@ async function requireActiveResponder(
   tx: TransactionClient,
   userId: string,
   field: string
-): Promise<{ id: string; name: string }> {
+): Promise<{ id: string; name: string; role: string }> {
   const user = await tx.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, status: true },
+    select: { id: true, name: true, status: true, role: true },
   });
 
   if (!user || user.status !== 'ACTIVE') {
     throw responderNotActiveError(userId, field);
   }
 
-  return { id: user.id, name: user.name };
+  return { id: user.id, name: user.name, role: user.role };
 }
 
 async function normalizeLayerPositions(
@@ -124,6 +125,7 @@ export async function addScheduleLayerUser(
       }
 
       const responder = await requireActiveResponder(tx, userId, 'userId');
+      assertPageableUser(responder);
       const existingAssignment = await tx.onCallLayerUser.findFirst({
         where: {
           userId,
@@ -329,7 +331,7 @@ export async function createScheduleOverrideMutation(
         });
       }
 
-      await requireActiveResponder(tx, input.userId, 'userId');
+      assertPageableUser(await requireActiveResponder(tx, input.userId, 'userId'));
       if (input.replacesUserId) {
         await requireActiveResponder(tx, input.replacesUserId, 'replacesUserId');
         const assignment = await tx.onCallLayerUser.findFirst({

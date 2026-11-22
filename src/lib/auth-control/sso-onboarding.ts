@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod/v3';
+import { ASSIGNABLE_ROLES } from '@/lib/authorization';
 import prisma from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { requireUserAdministrator, type UserAdministrationActor } from '@/lib/users/administration';
@@ -16,7 +17,7 @@ const invitationSchema = z
       .email()
       .max(320)
       .transform(value => value.toLowerCase()),
-    role: z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']),
+    role: z.enum(ASSIGNABLE_ROLES),
     userId: z.string().min(1).optional(),
   })
   .strict();

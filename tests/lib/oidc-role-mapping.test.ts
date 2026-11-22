@@ -101,6 +101,22 @@ describe('OIDC role mapping policy', () => {
     );
   });
 
+  it('maps a group to Stakeholder, which ranks below every other role', () => {
+    const rules: OidcRoleRule[] = [
+      { claim: 'groups', value: 'execs', role: 'STAKEHOLDER' },
+      { claim: 'groups', value: 'staff', role: 'USER' },
+    ];
+    expect(evaluateOidcRoleClaims({ groups: ['execs'] }, rules)).toMatchObject({
+      outcome: 'MATCHED',
+      role: 'STAKEHOLDER',
+    });
+    expect(
+      evaluateOidcRoleClaims({ groups: ['execs', 'staff'] }, rules, {
+        rolePrecedence: 'HIGHEST_ROLE',
+      }).role
+    ).toBe('USER');
+  });
+
   it('uses the configured default role and deny policy only when rules exist', () => {
     expect(
       evaluateOidcRoleClaims({ groups: [] }, legacyRules, {
@@ -221,6 +237,12 @@ describe('resolving the role a person ends up with', () => {
     expect(
       resolveSignInRole(incomplete, { role: 'USER', roleSource: 'MANUAL' }, { firstLink: true })
     ).toMatchObject({ roleSource: 'MANUAL', changed: false });
+    // A stakeholder is already below any default role, so incomplete claims never raise it.
+    expect(resolveSignInRole(incomplete, { role: 'STAKEHOLDER', roleSource: 'OIDC' })).toEqual({
+      role: 'STAKEHOLDER',
+      roleSource: 'OIDC',
+      changed: false,
+    });
   });
 });
 

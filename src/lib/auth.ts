@@ -1270,8 +1270,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
             if (Object.keys(updateData).length > 0) {
               const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
-              const mappedRole = updateData.role as
-                'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | undefined;
+              const mappedRole = updateData.role as OidcRole | undefined;
               const mappedRoleSource = updateData.roleSource as 'OIDC' | 'MANUAL' | undefined;
               const mappedStatus = updateData.status as 'ACTIVE' | undefined;
               delete updateData.role;

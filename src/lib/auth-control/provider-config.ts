@@ -1,7 +1,8 @@
 import { z } from 'zod/v3';
+import { ASSIGNABLE_ROLES } from '@/lib/authorization';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 
-const roleSchema = z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']);
+const roleSchema = z.enum(ASSIGNABLE_ROLES);
 /** A claim name, or a dotted path into nested claims such as realm_access.roles. */
 const claimPathSchema = z
   .string()

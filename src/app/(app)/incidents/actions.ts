@@ -10,7 +10,12 @@ import {
   assertCanAddIncidentNote,
   assertCanViewIncident,
 } from '@/lib/rbac';
-import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
+import {
+  CAPABILITIES,
+  PAGEABLE_USER_WHERE,
+  hasCapability,
+  type AppRole,
+} from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
 import { emitAuditEvent } from '@/lib/audit';
 import {
@@ -332,6 +337,7 @@ export async function getIncidentCreationContext() {
     prisma.user.findMany({
       where: {
         status: 'ACTIVE',
+        ...PAGEABLE_USER_WHERE,
         ...(canCreateAll
           ? {}
           : {

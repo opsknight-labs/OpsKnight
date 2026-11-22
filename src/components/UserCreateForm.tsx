@@ -52,6 +52,7 @@ const ROLE_DESCRIPTIONS = {
   RESPONDER: 'Can manage incidents and view reports',
   AUDITOR: 'Organization-wide read-only access and audit evidence',
   USER: 'Standard access to view status and dashboards',
+  STAKEHOLDER: 'Status dashboard and business services only; never paged',
 };
 
 function SubmitButton({ disabled }: { disabled?: boolean }) {
@@ -576,6 +577,19 @@ export default function UserCreateForm({ action, className = '', disabled = fals
                     <div className="flex flex-col">
                       <span className="font-medium text-xs">User</span>
                       <span className="text-[10px] text-muted-foreground">View only access</span>
+                    </div>
+                  </div>
+                </SelectItem>
+                <SelectItem value="STAKEHOLDER">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1 bg-muted text-muted-foreground rounded-md shrink-0">
+                      <Users className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-xs">Stakeholder</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Business impact only, never paged
+                      </span>
                     </div>
                   </div>
                 </SelectItem>

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import { AppError } from '@/lib/errors';
+import { assertPageableUser } from '@/lib/authorization';
 
 const layerValuesSchema = z
   .object({
@@ -103,9 +104,13 @@ export async function createScheduleLayer(
     });
   }
   if (responderIds.length) {
-    const active = await tx.user.count({ where: { id: { in: responderIds }, status: 'ACTIVE' } });
-    if (active !== responderIds.length)
+    const active = await tx.user.findMany({
+      where: { id: { in: responderIds }, status: 'ACTIVE' },
+      select: { name: true, role: true },
+    });
+    if (active.length !== responderIds.length)
       throw new AppError({ code: 'SCHEDULE_RESPONDER_NOT_ACTIVE' });
+    active.forEach(assertPageableUser);
     const assigned = await tx.onCallLayerUser.findFirst({
       where: { userId: { in: responderIds }, layer: { scheduleId } },
       select: { id: true },

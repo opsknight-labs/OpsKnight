@@ -111,7 +111,7 @@ const GUIDE_STEPS = [
   {
     title: 'Choose a role',
     description:
-      'Admins have full control, Responders handle incidents and on-call, Users get basic access and Auditors can view everything read-only.',
+      'Admins have full control, Responders handle incidents and on-call, Users get basic access, Auditors can view everything read-only and Stakeholders see business impact only and are never paged.',
   },
   {
     title: 'Add them to teams',

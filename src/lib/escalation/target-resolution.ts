@@ -6,8 +6,8 @@
  *
  * Two rules matter more than anything else here:
  *
- * 1. Only `ACTIVE` users are eligible. An invited-but-not-onboarded or a
- *    disabled account must never be paged or made an incident's owner.
+ * 1. Only `ACTIVE`, pageable users are eligible. An invited-but-not-onboarded or a
+ *    disabled account, or a stakeholder, must never be paged or made an incident's owner.
  * 2. Infrastructure failures are thrown, never flattened into an empty
  *    recipient list. "The database was unreachable" and "nobody is on call"
  *    lead to opposite escalation decisions, so they must stay distinguishable.
@@ -22,6 +22,7 @@ import {
   type OverrideInput,
 } from '../oncall';
 import { isValidTimeZone, startOfDayInTimeZone, startOfNextDayInTimeZone } from '../timezone';
+import { isPageableRole } from '../authorization';
 
 export type EscalationTargetResolution =
   | { outcome: 'RESOLVED'; userIds: string[]; targetName: string }
@@ -65,7 +66,7 @@ async function resolveUserTarget(targetId: string): Promise<EscalationTargetReso
   const user = await infrastructureGuarded('user target', () =>
     prisma.user.findUnique({
       where: { id: targetId },
-      select: { id: true, name: true, status: true },
+      select: { id: true, name: true, status: true, role: true },
     })
   );
 
@@ -83,6 +84,13 @@ async function resolveUserTarget(targetId: string): Promise<EscalationTargetReso
       code: 'TARGET_INACTIVE',
     };
   }
+  if (!isPageableRole(user.role)) {
+    return {
+      outcome: 'INVALID_TARGET',
+      reason: 'Target user is a stakeholder; stakeholders are never paged',
+      code: 'TARGET_INVALID',
+    };
+  }
   return { outcome: 'RESOLVED', userIds: [user.id], targetName: user.name || 'Unknown User' };
 }
 
@@ -98,7 +106,7 @@ async function resolveTeamTarget(
         teamLeadId: true,
         members: {
           where: { receiveTeamNotifications: true },
-          select: { userId: true, user: { select: { status: true } } },
+          select: { userId: true, user: { select: { status: true, role: true } } },
         },
       },
     })
@@ -114,7 +122,9 @@ async function resolveTeamTarget(
 
   const targetName = team.name || 'Unknown Team';
   const eligible = stableUserIds(
-    team.members.filter(member => member.user?.status === 'ACTIVE').map(member => member.userId)
+    team.members
+      .filter(member => member.user?.status === 'ACTIVE' && isPageableRole(member.user.role))
+      .map(member => member.userId)
   );
 
   if (notifyOnlyTeamLead) {
@@ -174,7 +184,13 @@ async function resolveScheduleTarget(
     return { outcome: 'NO_ELIGIBLE_RESPONDERS', targetName };
   }
 
-  const userIds = effectiveOnCallUserIds(schedule, atTime);
+  // Membership writes reject stakeholders; this covers someone made a stakeholder while on call.
+  const stakeholders = new Set(
+    [...schedule.layers.flatMap(layer => layer.users), ...schedule.overrides]
+      .filter(entry => entry.user && !isPageableRole(entry.user.role))
+      .map(entry => entry.userId)
+  );
+  const userIds = effectiveOnCallUserIds(schedule, atTime).filter(id => !stakeholders.has(id));
   return userIds.length > 0
     ? { outcome: 'RESOLVED', userIds, targetName }
     : { outcome: 'NO_ELIGIBLE_RESPONDERS', targetName };

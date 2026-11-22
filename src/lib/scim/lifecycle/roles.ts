@@ -5,7 +5,7 @@ import type { Prisma, Role, RoleSource } from '@prisma/client';
 import { bulkUpdateUserSecurityState } from '@/lib/users/admin-invariants';
 
 // A fixed, visible precedence keeps overlapping group memberships deterministic.
-const precedence: readonly Role[] = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'];
+const precedence: readonly Role[] = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER', 'STAKEHOLDER'];
 type RoleState = { role: Role; roleSource: RoleSource; scimRoleMappingAdopted: boolean };
 export function resolveScimRole(roles: readonly Role[], current: RoleState): RoleState {
   const role = precedence.find(candidate => roles.includes(candidate));
