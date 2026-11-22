@@ -46,7 +46,6 @@ export default memo(function SquireMessage({
   busy,
   last,
   animated,
-  contextValid,
   onOutcome,
   onRetry,
   onEdit,
@@ -61,7 +60,6 @@ export default memo(function SquireMessage({
   busy: boolean;
   last: boolean;
   animated: boolean;
-  contextValid: boolean;
   onOutcome: (outcome: 'success' | 'error') => void;
   onRetry: (index: number) => void;
   onEdit: (index: number) => void;
@@ -113,7 +111,7 @@ export default memo(function SquireMessage({
             size="sm"
             variant="ghost"
             className={`${ACTION_BUTTON} ${REVEAL}`}
-            disabled={busy || !contextValid}
+            disabled={busy}
             onClick={() => onEdit(index)}
           >
             <Pencil aria-hidden="true" />
@@ -189,7 +187,6 @@ export default memo(function SquireMessage({
           <SquireProposalCard
             key={proposal.token}
             proposal={proposal}
-            reviewContextValid={contextValid}
             onOutcome={onOutcome}
           />
         ))}
@@ -222,7 +219,7 @@ export default memo(function SquireMessage({
                 className={ACTION_BUTTON}
                 aria-label={turn.failed ? undefined : 'Regenerate'}
                 title={turn.failed ? undefined : 'Regenerate'}
-                disabled={busy || !contextValid}
+                disabled={busy}
                 onClick={() => onRetry(index)}
               >
                 <RefreshCw aria-hidden="true" />

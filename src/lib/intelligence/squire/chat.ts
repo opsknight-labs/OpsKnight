@@ -150,14 +150,6 @@ export async function* streamSquire(
         };
         return;
       }
-      if (saved && saved.incidentId !== (incident?.id ?? null)) {
-        yield {
-          type: 'error',
-          message:
-            'This conversation belongs to a different context. Open its incident or start a new conversation.',
-        };
-        return;
-      }
     }
 
     registerAiGateway();
@@ -188,7 +180,10 @@ export async function* streamSquire(
       };
     // A conversation turn is Personal: free text can name people and customers, and redaction only removes
     // emails, phones and IPs. Without a provider cleared for Personal data the turn gets a basic answer.
-    const historyClass = highestDataClass(['INTERNAL', ...history.map(message => message.dataClass)]);
+    const historyClass = highestDataClass([
+      'INTERNAL',
+      ...history.map(message => message.dataClass),
+    ]);
     const dataClass: AiDataClass = highestDataClass(['PERSONAL', historyClass]);
     const port: LanguageModelPort | null = settings.enabled
       ? await resolveLanguageModel('SQUIRE_CHAT', dataClass)
@@ -660,10 +655,24 @@ async function priorTurns(
     );
     const turns = saved.messages.slice(cut);
     const isReplayable = (message: ConversationDetail['messages'][number]) =>
-      message.role === 'user' ||
-      (message.replayable !== false &&
-        message.envelope?.verified &&
-        message.envelope.completion === 'COMPLETED');
+      message.replayable !== false &&
+      (message.role === 'user' ||
+        (message.envelope?.verified && message.envelope.completion === 'COMPLETED'));
+    // The conversation follows the person across pages: a question asked elsewhere says where.
+    const here = incidentId
+      ? `incident:${incidentId}`
+      : request.pageContext
+        ? `${request.pageContext.kind}:${request.pageContext.id}`
+        : null;
+    const askedOn = (message: ConversationDetail['messages'][number]) => {
+      const context =
+        message.envelope?.context ??
+        (saved.incidentId ? { kind: 'incident' as const, id: saved.incidentId } : null);
+      if (!context || `${context.kind}:${context.id}` === here) return '';
+      return context.kind === 'incident'
+        ? `[Asked while viewing incident /incidents/${context.id}] `
+        : `[Asked while viewing a ${context.kind.replace('_', ' ')} page] `;
+    };
     const replayable = turns.filter(isReplayable);
     // Turns before the replay window are summarised (pinned after the system prompt), not dropped. The
     // summary is the deterministic digest: a model summary here would add a SUMMARIZE call, a per-user
@@ -686,7 +695,7 @@ async function priorTurns(
                     ? replayDigest(message.content)
                     : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)
                 }`
-              : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax),
+              : `${askedOn(message)}${message.content}`.slice(0, SQUIRE_LIMITS.historyTurnMax),
           dataClass: message.dataClass,
         })),
       ],

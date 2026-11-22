@@ -200,7 +200,9 @@ describe('basic mode (no AI)', () => {
     });
     await analyzeResponse({ subjectKey: target.id, generation: 1 }, settings);
 
-    const similar = textOf(await turn(admin.id, 'any similar incidents?', { incidentId: target.id }));
+    const similar = textOf(
+      await turn(admin.id, 'any similar incidents?', { incidentId: target.id })
+    );
     expect(similar).toContain('db-9');
     // Look-alikes carry their short id and opening date, so same-titled ones can be told apart.
     expect(similar).toContain(`#${precedent.id.slice(-5).toUpperCase()}, opened `);
@@ -427,7 +429,10 @@ it('gives a basic answer and sends nothing when no provider may receive Personal
   await db.aiProvider.updateMany({ data: { maxDataClass: 'INTERNAL' } });
   invalidateGatewayCache();
   // Free text can name people; redaction alone does not make it Internal.
-  const events = await turn(admin.id, 'Why did Alice Smith page customer Acme? Mail ops-lead@example.com');
+  const events = await turn(
+    admin.id,
+    'Why did Alice Smith page customer Acme? Mail ops-lead@example.com'
+  );
   expect(model.requests).toHaveLength(0);
   expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
 });
@@ -459,7 +464,7 @@ it('keeps saved Personal history away from Internal-only fallback after a provid
   expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
 });
 
-it('rejects saved incident history in a global conversation before provider egress', async () => {
+it('continues saved incident history on another page, labelled with the incident it was asked on', async () => {
   const admin = await setup({ ai: true, provider: true });
   const { recordExchange } = await import('@/lib/intelligence/conversations/store');
   await db.aiSettings.update({ where: { id: 'default' }, data: { squireHistoryEnabled: true } });
@@ -468,16 +473,14 @@ it('rejects saved incident history in a global conversation before provider egre
   const conversationId = await recordExchange({
     userId: admin.id,
     incidentId: historyIncident.id,
-    question: 'Old context',
-    answer: 'context-canary-42',
+    question: 'context-question-42',
+    answer: 'context-answer',
   });
   const events = await turn(admin.id, 'Continue here', { conversationId });
-  expect(model.requests).toHaveLength(0);
-  expect(events).toContainEqual(
-    expect.objectContaining({
-      type: 'error',
-      message: expect.stringContaining('different context'),
-    })
+  expect(events).not.toContainEqual(expect.objectContaining({ type: 'error' }));
+  expect(model.requests).toHaveLength(1);
+  expect(JSON.stringify(model.requests[0].body)).toContain(
+    `[Asked while viewing incident /incidents/${historyIncident.id}] context-question-42`
   );
 });
 

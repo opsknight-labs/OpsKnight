@@ -118,7 +118,7 @@ describe('saved assistant conversations', () => {
     expect((await getConversation(admin.id, id))?.messages).toHaveLength(4);
   });
 
-  it('starts a separate conversation when the requested context changes', async () => {
+  it('continues one conversation when the page changes, keeping the incident it started on', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     await configure(admin.id, { enabled: true });
     const first = await recordExchange({
@@ -140,10 +140,9 @@ describe('saved assistant conversations', () => {
       question: 'Global?',
       answer: 'Global.',
     });
-    expect(new Set([first, second, global]).size).toBe(3);
-    expect((await getConversation(admin.id, first))?.messages).toHaveLength(2);
-    expect((await getConversation(admin.id, second))?.incidentId).toBe('inc-b');
-    expect((await getConversation(admin.id, global))?.incidentId).toBeNull();
+    expect(new Set([first, second, global]).size).toBe(1);
+    expect((await getConversation(admin.id, first))?.messages).toHaveLength(6);
+    expect((await getConversation(admin.id, first))?.incidentId).toBe('inc-a');
   });
 
   it('serves owner-only HTTP endpoints, refuses cross-site and API-key callers, and deletes on request', async () => {

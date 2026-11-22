@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { parseSquireOpenDetail, subscribeSquireOpen } from './squire-bus';
 export { openSquire } from './squire-bus';
 import { usePathname } from 'next/navigation';
@@ -8,6 +7,7 @@ import { useOptionalRealtime } from '@/hooks/useRealtime';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import {
+  Fragment,
   useCallback,
   useEffect,
   useId,
@@ -71,6 +71,9 @@ type SavedConversation = {
 const CONVERSATIONS_URL = '/api/intelligence/squire/conversations';
 
 const HISTORY_TURNS = 10;
+const STALL_MS = 45_000;
+/** The open conversation, per tab, so a reload continues it instead of starting over. */
+const CONVERSATION_KEY = 'opsknight.squire.conversation';
 const MAX_LENGTH = 2000;
 /** The server keeps this much of each earlier turn as context; sending more only wastes the request. */
 const HISTORY_TURN_LENGTH = 4000;
@@ -139,6 +142,36 @@ const subscribeOnline = (change: () => void) => {
 // "this service" or "this team" mean something to the assistant.
 const incidentIdFrom = incidentIdFromPath;
 const pageContextFrom = pageContextFromPath;
+
+function readStoredConversation(): string | null {
+  try {
+    return window.sessionStorage.getItem(CONVERSATION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeConversation(id: string | undefined) {
+  try {
+    if (id) window.sessionStorage.setItem(CONVERSATION_KEY, id);
+    else window.sessionStorage.removeItem(CONVERSATION_KEY);
+  } catch {
+    // Storage can be disabled; a reload then starts a new conversation, as before.
+  }
+}
+
+/** The page context of the user turn before `index`, or undefined when there is none. */
+function previousContext(turns: Turn[], index: number): string | undefined {
+  return turns.slice(0, index).findLast(turn => turn.role === 'user' && turn.context)?.context;
+}
+
+/** "Now on incident #ABCDE" style marker shown where the conversation moved to another page. */
+export function contextDividerLabel(context: string): string {
+  if (context === 'general') return 'Now a general question';
+  const [kind, id = ''] = context.split(':');
+  if (kind === 'incident') return `Now on incident ${incidentRef(id)}`;
+  return `Now on this ${kind.replace('_', ' ')}`;
+}
 
 /**
  * What the polite live region reads out. An investigation announces the step it is on, then each lookup
@@ -251,9 +284,13 @@ export default function SquireLauncher({
   // Picks the playful lines once per mount, so they do not change on every render.
   const [seed] = useState(() => Math.floor(Math.random() * 1000));
   const lastTurn = turns.at(-1);
-  const [activeScope, setActiveScope] = useState<string | null | undefined>(undefined);
-  const contextMismatch = activeScope !== undefined && activeScope !== (incidentId ?? null);
-  const scopeId = activeScope === undefined ? incidentId : activeScope;
+  // The conversation follows the person across pages; each turn records the page it was asked on.
+  const scopeId = incidentId;
+  const contextKey = incidentId
+    ? `incident:${incidentId}`
+    : pageContext
+      ? `${pageContext.kind}:${pageContext.id}`
+      : 'general';
   const currentIncident = scopeId
     ? realtime?.recentIncidents.find(row => row.id === scopeId)
     : null;
@@ -424,19 +461,14 @@ export default function SquireLauncher({
     async (raw: string, replayFrom?: number) => {
       const message = raw.trim().slice(0, MAX_LENGTH);
       if (!message || !online) return;
-      if (activeScope !== undefined && activeScope !== (incidentId ?? null)) {
-        setInput(message);
-        return;
-      }
       if (busy) {
         // Asked while an answer is still arriving (for example from another part of the page): send it next.
         pendingRef.current = message;
         return;
       }
-      if (activeScope === undefined) setActiveScope(incidentId ?? null);
       const priorTurns = replayFrom === undefined ? turns : turns.slice(0, replayFrom);
       const history = priorTurns
-        .filter(turn => turn.content && !turn.failed && turn.incidentId === incidentId)
+        .filter(turn => turn.content && !turn.failed)
         .slice(-HISTORY_TURNS)
         .map(({ role, content, contextProof }) => ({
           role,
@@ -446,7 +478,13 @@ export default function SquireLauncher({
       const exchange = ++nextTurnId.current;
       setTurns([
         ...priorTurns,
-        { id: `live-${exchange}-user`, role: 'user', content: message, incidentId },
+        {
+          id: `live-${exchange}-user`,
+          role: 'user',
+          content: message,
+          incidentId,
+          context: contextKey,
+        },
         {
           id: `live-${exchange}-assistant`,
           role: 'assistant',
@@ -467,6 +505,8 @@ export default function SquireLauncher({
       setBusy(true);
       const controller = new AbortController();
       abortRef.current = controller;
+      let stalled = false;
+      let stallTimer: number | undefined;
       const seq = ++requestSeq.current;
       const patchNow = (update: (turn: Turn) => Turn) => {
         if (seq !== requestSeq.current) return;
@@ -531,6 +571,15 @@ export default function SquireLauncher({
           return;
         }
         const reader = response.body.getReader();
+        // The server pings while it works; this long without a byte means the answer stalled.
+        const armStall = () => {
+          window.clearTimeout(stallTimer);
+          stallTimer = window.setTimeout(() => {
+            stalled = true;
+            controller.abort();
+          }, STALL_MS);
+        };
+        armStall();
         const decoder = new TextDecoder();
         let buffer = '';
         let completed = false;
@@ -645,6 +694,7 @@ export default function SquireLauncher({
           for (;;) {
             const { value, done } = await reader.read();
             if (done) break;
+            armStall();
             buffer += decoder.decode(value, { stream: true });
             let newline = buffer.indexOf('\n');
             while (newline >= 0) {
@@ -674,7 +724,14 @@ export default function SquireLauncher({
           reader.releaseLock?.();
         }
       } catch (error) {
-        if ((error as { name?: string }).name !== 'AbortError') {
+        if (stalled)
+          patch(turn => ({
+            ...turn,
+            failed: true,
+            content: turn.content || 'The answer stalled. Please try again.',
+            ...(turn.content ? { error: 'The answer stalled. Ask again to continue.' } : {}),
+          }));
+        else if ((error as { name?: string }).name !== 'AbortError') {
           patch(turn => ({
             ...turn,
             failed: true,
@@ -685,6 +742,7 @@ export default function SquireLauncher({
           }));
         }
       } finally {
+        window.clearTimeout(stallTimer);
         patch(turn => ({ ...turn, activity: undefined }));
         if (seq === requestSeq.current) {
           setBusy(false);
@@ -692,7 +750,7 @@ export default function SquireLauncher({
         }
       }
     },
-    [busy, conversationId, incidentId, pageContext, aiEnabled, turns, activeScope, online]
+    [busy, conversationId, incidentId, pageContext, contextKey, aiEnabled, turns, online]
   );
 
   const retryAnswer = useCallback((index: number) => {
@@ -768,7 +826,6 @@ export default function SquireLauncher({
     atBottomRef.current = true;
     setUnread(false);
     setConversationId(undefined);
-    setActiveScope(undefined);
     setShowHistory(false);
     clearEvidence();
     inputRef.current?.focus();
@@ -806,7 +863,7 @@ export default function SquireLauncher({
   }, [loadSaved, showHistory]);
 
   const openSaved = useCallback(
-    async (id: string) => {
+    async (id: string, quiet = false) => {
       setHistoryError('');
       try {
         const response = await fetch(`${CONVERSATIONS_URL}/${encodeURIComponent(id)}`, {
@@ -842,7 +899,17 @@ export default function SquireLauncher({
             id: `${conversation.id}-${index}`,
             role,
             content,
-            incidentId: conversation.incidentId ?? undefined,
+            incidentId:
+              envelope?.context?.kind === 'incident'
+                ? envelope.context.id
+                : envelope?.context
+                  ? undefined
+                  : (conversation.incidentId ?? undefined),
+            context: envelope?.context
+              ? `${envelope.context.kind}:${envelope.context.id}`
+              : conversation.incidentId
+                ? `incident:${conversation.incidentId}`
+                : 'general',
             contextProof,
             ...(envelope?.mode === 'ai' || envelope?.mode === 'basic'
               ? { mode: envelope.mode }
@@ -854,15 +921,28 @@ export default function SquireLauncher({
               undefined,
           }))
         );
-        setActiveScope(conversation.incidentId ?? null);
         setConversationId(conversation.id);
         setShowHistory(false);
       } catch {
-        setHistoryError('That conversation could not be opened.');
+        if (quiet) storeConversation(undefined);
+        else setHistoryError('That conversation could not be opened.');
       }
     },
     [stopCurrent]
   );
+
+  // Restore this tab's conversation after a reload; keep the stored id in step with what is open.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    const id = readStoredConversation();
+    // After the effect, like a subscription callback: opening sets state.
+    if (id && history) void Promise.resolve().then(() => openSaved(id, true));
+  }, [history, openSaved]);
+  useEffect(() => {
+    if (restored.current) storeConversation(conversationId);
+  }, [conversationId]);
 
   const removeSaved = useCallback(
     async (id?: string) => {
@@ -876,7 +956,6 @@ export default function SquireLauncher({
         if (!id || id === conversationId) {
           stopCurrent();
           setConversationId(undefined);
-          setActiveScope(undefined);
           setTurns([]);
           setInput('');
         }
@@ -917,7 +996,7 @@ export default function SquireLauncher({
   };
 
   const availabilityState = squireAvailabilityState({ availability, rateLimit });
-  const canRetry = !busy && !contextMismatch && turns.some(turn => turn.role === 'user');
+  const canRetry = !busy && turns.some(turn => turn.role === 'user');
   const retryLatest = () => retryAnswer(turnsRef.current.length);
 
   // What the conversation is about: the incident it is scoped to (short id and title), else the page.
@@ -935,7 +1014,7 @@ export default function SquireLauncher({
         title: pageContextLabel.label,
         urgent: false,
       };
-  const showContext = !showHistory && !contextMismatch;
+  const showContext = !showHistory;
   const pageSuggestions =
     !scopeId && pageContext ? (PAGE_SUGGESTIONS[pageContext.kind] ?? null) : null;
   const composerChips =
@@ -1076,31 +1155,6 @@ export default function SquireLauncher({
                 ? 'Your confirmed action completed.'
                 : 'The action could not be completed. Review the result below.'}
             </p>
-          )}
-          {!showHistory && contextMismatch && (
-            <div
-              role="status"
-              className={`shrink-0 border-b px-3 py-2 text-xs ${toneClasses('elevated').soft}`}
-            >
-              <p>This chat keeps its original context. Choose where to continue.</p>
-              <div className="mt-1 flex flex-wrap items-center gap-3">
-                <Link
-                  href={
-                    activeScope ? `/incidents/${encodeURIComponent(activeScope)}` : '/incidents'
-                  }
-                  className="inline-flex min-h-11 items-center font-medium underline underline-offset-2"
-                >
-                  Return to original context
-                </Link>
-                <button
-                  type="button"
-                  onClick={newChat}
-                  className="min-h-11 rounded-md border border-current px-3 py-1 font-medium"
-                >
-                  New chat here
-                </button>
-              </div>
-            </div>
           )}
           {pinBriefing && showContext && incidentId && (
             <SquirePinnedBriefing incidentId={incidentId} mobile={fullscreen} />
@@ -1271,23 +1325,34 @@ export default function SquireLauncher({
                   />
                 )}
                 {turns.map((turn, index) => (
-                  <SquireMessage
-                    key={turn.id ?? index}
-                    turn={turn}
-                    index={index}
-                    name={name}
-                    busy={busy && index === turns.length - 1}
-                    last={index === turns.length - 1}
-                    animated={animated}
-                    contextValid={!contextMismatch}
-                    onOutcome={setActionOutcome}
-                    onRetry={retryAnswer}
-                    onEdit={editQuestion}
-                    question={index > 0 ? turns[index - 1]?.content : undefined}
-                    conversationId={conversationId}
-                    pendingLabel={pendingLine(tone, seed + index)}
-                    onCheer={cheerUp}
-                  />
+                  <Fragment key={turn.id ?? index}>
+                    {turn.role === 'user' &&
+                      turn.context &&
+                      previousContext(turns, index) !== undefined &&
+                      previousContext(turns, index) !== turn.context && (
+                        <p
+                          role="separator"
+                          className="flex items-center gap-2 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
+                        >
+                          {contextDividerLabel(turn.context)}
+                        </p>
+                      )}
+                    <SquireMessage
+                      turn={turn}
+                      index={index}
+                      name={name}
+                      busy={busy && index === turns.length - 1}
+                      last={index === turns.length - 1}
+                      animated={animated}
+                      onOutcome={setActionOutcome}
+                      onRetry={retryAnswer}
+                      onEdit={editQuestion}
+                      question={index > 0 ? turns[index - 1]?.content : undefined}
+                      conversationId={conversationId}
+                      pendingLabel={pendingLine(tone, seed + index)}
+                      onCheer={cheerUp}
+                    />
+                  </Fragment>
                 ))}
                 {!busy && (turns.at(-1)?.suggestions?.length ?? 0) > 0 && (
                   <div aria-label="Suggested questions" className="flex flex-wrap gap-2 pl-9">
@@ -1338,18 +1403,12 @@ export default function SquireLauncher({
             inputRef={inputRef}
             value={input}
             maxLength={MAX_LENGTH}
-            placeholder={
-              contextMismatch
-                ? 'Choose where to continue…'
-                : incidentId
-                  ? 'Ask about this incident…'
-                  : 'Ask a question…'
-            }
+            placeholder={incidentId ? 'Ask about this incident…' : 'Ask a question…'}
             onChange={setInput}
             onSubmit={onSubmit}
             onKeyDown={onKeyDown}
             busy={busy}
-            canSend={online && !contextMismatch && input.trim().length > 0}
+            canSend={online && input.trim().length > 0}
             onStop={stopResponse}
             editing={editIndex !== null}
             onCancelEdit={() => {
@@ -1359,7 +1418,7 @@ export default function SquireLauncher({
             chips={composerChips}
             retentionDays={history?.retentionDays ?? null}
             fullscreen={fullscreen}
-            commands={contextMismatch ? [] : matchSlashCommands(input, Boolean(scopeId))}
+            commands={matchSlashCommands(input, Boolean(scopeId))}
             onCommand={runCommand}
           />
         </section>

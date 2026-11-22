@@ -91,7 +91,9 @@ const titleFrom = (question: string) => {
 
 /**
  * Saves one question and its answer. Continues `conversationId` when the person owns it and it has
- * room; otherwise starts a new conversation. Returns the conversation the exchange was saved to.
+ * room, whatever page it is asked on (the conversation's incident is the one it started on; each turn
+ * records its own page in the envelope); otherwise starts a new conversation. Returns the conversation
+ * the exchange was saved to.
  */
 export async function recordExchange(input: {
   userId: string;
@@ -127,7 +129,7 @@ export async function recordExchange(input: {
   const [question, answer, questionEnvelope, answerEnvelope] = await Promise.all([
     encrypt(questionText),
     encrypt(answerText),
-    encrypt(envelope(questionText, { verified: true, dataClass })),
+    encrypt(envelope(questionText, { verified: true, dataClass, context: turn.context })),
     encrypt(envelope(answerText, turn)),
   ]);
   const settings = await getAiSettings();
@@ -140,7 +142,6 @@ export async function recordExchange(input: {
         where: {
           id: input.conversationId,
           userId: input.userId,
-          incidentId,
           updatedAt: { gt: cutoff },
           messageCount: { lte: CONVERSATION_LIMITS.messagesPerConversation - 2 },
         },

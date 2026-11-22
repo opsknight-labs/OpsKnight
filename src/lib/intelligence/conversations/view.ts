@@ -13,6 +13,17 @@ import {
 } from './store';
 import type { ConversationCursor } from './contract';
 
+/** Turn contexts whose readability can be re-checked; the others hold no derived data of their own. */
+const RECHECKED_CONTEXTS: ReadonlySet<string> = new Set([
+  'incident',
+  'service',
+  'runbook',
+  'schedule',
+  'alert',
+  'change',
+  'status_page',
+]);
+
 const mayRead = (actor: AuthorizationActor) =>
   actor.status === 'ACTIVE' &&
   !actor.apiKey &&
@@ -56,7 +67,16 @@ export async function getConversationForActor(
   if (!mayRead(actor) || !(await getHistoryStatus()).enabled) return null;
   const saved = await getConversation(actor.id, id);
   if (!saved) return null;
+  // Older turns carry no page of their own: they were asked in the conversation's incident.
+  const contextOf = (message: (typeof saved.messages)[number]): SourceIdentity | null => {
+    const context = message.envelope?.context;
+    if (!context) return saved.incidentId ? { kind: 'incident', id: saved.incidentId } : null;
+    return RECHECKED_CONTEXTS.has(context.kind)
+      ? { kind: context.kind as SourceIdentity['kind'], id: context.id }
+      : null;
+  };
   const sources: SourceIdentity[] = saved.messages.flatMap(message => [
+    ...(contextOf(message) ? [contextOf(message)!] : []),
     ...(message.envelope?.sources ?? []),
     ...(message.envelope?.citations ?? []),
     ...(message.envelope?.actions ?? []).map(action => ({
@@ -72,6 +92,18 @@ export async function getConversationForActor(
   const messages = await Promise.all(
     saved.messages.map(async message => {
       const envelope = message.envelope;
+      const context = contextOf(message);
+      // A turn asked on a page the person can no longer open is withheld, question and answer alike.
+      if (context && !states.has(sourceKey(context)))
+        return {
+          ...message,
+          content:
+            message.role === 'user'
+              ? 'A question asked on a page you can no longer open.'
+              : 'This earlier answer is unavailable because you can no longer open the page it was about.',
+          envelope: undefined,
+          replayable: false,
+        };
       const unavailable = envelope?.sources.some(source => !states.has(sourceKey(source))) ?? false;
       if (message.role === 'assistant' && unavailable)
         return {
@@ -125,7 +157,7 @@ export async function getConversationForActor(
       const contextProof = replayable
         ? await mintContextProof({
             actor,
-            incidentId: saved.incidentId,
+            incidentId: context?.kind === 'incident' ? context.id : null,
             role: message.role,
             text: message.content,
             dataClass: message.dataClass,

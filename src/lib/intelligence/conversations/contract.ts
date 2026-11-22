@@ -75,8 +75,27 @@ export const savedActionReferenceSchema = z
   .strict();
 export type SavedActionReference = z.infer<typeof savedActionReferenceSchema>;
 
+/** The page a turn was asked on. A conversation follows the person, so each turn keeps its own. */
+export const TURN_CONTEXT_KINDS = [
+  'incident',
+  'service',
+  'team',
+  'schedule',
+  'runbook',
+  'alert',
+  'change',
+  'postmortem',
+  'escalation_policy',
+  'status_page',
+] as const;
+export const turnContextSchema = z
+  .object({ kind: z.enum(TURN_CONTEXT_KINDS), id: z.string().min(1).max(64) })
+  .strict();
+export type TurnContext = z.infer<typeof turnContextSchema>;
+
 export const savedTurnInputSchema = z
   .object({
+    context: turnContextSchema.optional(),
     mode: z.enum(['ai', 'basic', 'unknown']).default('unknown'),
     completion: z.enum(['COMPLETED', 'INTERRUPTED', 'STOPPED', 'FAILED']).default('COMPLETED'),
     dataClass: z.enum(AI_DATA_CLASSES).default('PERSONAL'),

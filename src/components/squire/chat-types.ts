@@ -26,8 +26,10 @@ export type Turn = {
   savedActions?: SavedActionReference[];
   citations?: Citation[];
   suggestions?: string[];
-  /** The incident page the turn was asked on; history only carries turns from the same page. */
+  /** The incident the turn was asked about, for finding links in its citations. */
   incidentId?: string;
+  /** The page the turn was asked on (`incident:<id>`, `service:<id>`, …, or `general`). */
+  context?: string;
   /** Steps of an investigation answer, in order. */
   investigation?: InvestigationStepView[];
 };

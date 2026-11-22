@@ -154,6 +154,47 @@ describe('POST /api/intelligence/squire', () => {
     expect(turns.run).not.toHaveBeenCalled();
   });
 
+  it('keeps a partial answer as interrupted when the client disconnects', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    turns.run.mockImplementation(async function* () {
+      yield { type: 'delta', text: 'partial answer' };
+      await new Promise(() => undefined);
+    });
+    const response = await POST(make({ message: 'hello', incidentId: 'inc1' }));
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    await vi.waitFor(() => expect(store.record).toHaveBeenCalledOnce());
+    expect(store.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        answer: 'partial answer',
+        turn: expect.objectContaining({ completion: 'INTERRUPTED', verified: false }),
+      })
+    );
+  });
+
+  it('pings while a step is slow so the client can tell slow from stalled', async () => {
+    vi.useFakeTimers();
+    try {
+      let release: () => void = () => undefined;
+      turns.run.mockImplementation(async function* () {
+        await new Promise<void>(resolve => {
+          release = resolve;
+        });
+        yield { type: 'done' };
+      });
+      const reader = (await POST(make({ message: 'hello' }))).body!.getReader();
+      const first = reader.read();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(new TextDecoder().decode((await first).value)).toBe('{"type":"ping"}\n');
+      release();
+      const next = await reader.read();
+      expect(new TextDecoder().decode(next.value)).toBe('{"type":"done"}\n');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('saves nothing while history is off', async () => {
     const lines = (await (await POST(make({ message: 'hello' }))).text())
       .trim()
@@ -180,7 +221,13 @@ describe('POST /api/intelligence/squire', () => {
       question: 'hello',
       answer: 'hi',
       dataClass: undefined,
-      turn: { completion: 'COMPLETED', citations: [], actions: [], notices: [] },
+      turn: {
+        completion: 'COMPLETED',
+        context: { kind: 'incident', id: 'inc1' },
+        citations: [],
+        actions: [],
+        notices: [],
+      },
     });
   });
 

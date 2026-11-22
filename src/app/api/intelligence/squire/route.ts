@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger';
 export const dynamic = 'force-dynamic';
 
 const MAX_BODY_BYTES = 65_536;
+const PING_MS = 10_000;
 
 const deny = (status: number, error: string) =>
   jsonError(error, status, undefined, { 'Cache-Control': 'no-store' });
@@ -86,16 +87,16 @@ export async function POST(request: NextRequest) {
   const notices: string[] = [];
   const actions: SavedActionReference[] = [];
   let citations: Extract<SquireEvent, { type: 'citations' }>['items'] = [];
+  let saved = false;
 
   /** Saving is best effort: the person already has the answer, so a storage failure only loses history. */
-  const save = async (): Promise<SquireEvent | null> => {
-    if (
-      failed ||
-      !completed ||
-      controller.signal.aborted ||
-      (!answer.trim() && actions.length === 0)
-    )
+  const save = async (
+    completion: 'COMPLETED' | 'INTERRUPTED' = 'COMPLETED'
+  ): Promise<SquireEvent | null> => {
+    if (completion === 'COMPLETED' && (failed || !completed || controller.signal.aborted))
       return null;
+    if (saved || (!answer.trim() && actions.length === 0)) return null;
+    saved = true;
     // Persistence lookups do not delay the first answer token.
     const [history, savedIncident] = await Promise.all([
       getHistoryStatus().catch(() => ({ enabled: false, retentionDays: 0 })),
@@ -114,7 +115,12 @@ export async function POST(request: NextRequest) {
         dataClass: memory?.dataClass,
         turn: {
           ...memory,
-          completion: 'COMPLETED',
+          // An interrupted answer is kept as the person's record but never replayed to the model.
+          ...(completion === 'INTERRUPTED' ? { verified: false } : {}),
+          context: savedIncident
+            ? { kind: 'incident', id: savedIncident.id }
+            : parsed.data.pageContext,
+          completion,
           citations,
           actions,
           notices: [...new Set([...(memory?.notices ?? []), ...notices])].slice(0, 4),
@@ -132,10 +138,25 @@ export async function POST(request: NextRequest) {
     }
   };
 
+  // A ping every few seconds while tools run keeps proxies from closing a quiet stream and lets the
+  // client tell a slow answer from a stalled one.
+  let pending: ReturnType<typeof events.next> | null = null;
   const stream = new ReadableStream<Uint8Array>({
     async pull(streamController) {
       for (;;) {
-        const next = await events.next();
+        pending ??= events.next();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const next = await Promise.race([
+          pending,
+          new Promise<'ping'>(resolve => {
+            timer = setTimeout(() => resolve('ping'), PING_MS);
+          }),
+        ]).finally(() => clearTimeout(timer));
+        if (next === 'ping') {
+          streamController.enqueue(encoder.encode('{"type":"ping"}\n'));
+          return;
+        }
+        pending = null;
         if (next.done) {
           const saved = await save();
           if (saved) streamController.enqueue(encoder.encode(`${JSON.stringify(saved)}\n`));
@@ -173,6 +194,9 @@ export async function POST(request: NextRequest) {
       controller.abort();
       // Let the turn finish its own cleanup (usage accounting, spans) instead of being abandoned mid-await.
       await events.return(undefined).catch(() => undefined);
+      // The person left (reload, closed tab, lost network): keep what was already written.
+      // Not awaited: a slow history lookup must not hold the cancelled stream open.
+      void save('INTERRUPTED').catch(() => undefined);
     },
   });
 

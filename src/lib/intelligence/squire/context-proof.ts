@@ -117,16 +117,21 @@ export async function readBrowserContext(
           value.exp <= now.getTime() ||
           value.actorId !== actor.id ||
           value.authorizationHash !== authorizationContextHash(actor) ||
-          value.incidentId !== incidentId ||
           value.role !== turn.role ||
           value.hash !== textHash(turn.content)
         )
           return null;
+        // The conversation follows the person: a turn from another incident is kept, labelled, and its
+        // incident must still be readable like any other source.
+        const elsewhere = value.incidentId !== null && value.incidentId !== incidentId;
         return {
           turn,
           dataClass: value.dataClass,
-          sources: value.sources,
+          sources: elsewhere
+            ? [{ kind: 'incident' as const, id: value.incidentId! }, ...value.sources]
+            : value.sources,
           observedAt: value.observedAt,
+          label: elsewhere ? `[Asked while viewing incident /incidents/${value.incidentId}] ` : '',
         };
       } catch {
         return null;
@@ -154,7 +159,7 @@ export async function readBrowserContext(
       content:
         value.turn.role === 'assistant' && 'observedAt' in value
           ? `[Earlier answer recorded ${value.observedAt}; verify current facts with tools.]\n${value.turn.content.slice(0, MAX_TEXT)}`
-          : value.turn.content.slice(0, MAX_TEXT),
+          : `${'label' in value ? value.label : ''}${value.turn.content}`.slice(0, MAX_TEXT),
       dataClass: highestDataClass(['PERSONAL', value.dataClass]),
     });
   }

@@ -137,6 +137,58 @@ it('removes inaccessible incident conversations from both listing and opening', 
   expect(await getConversationForActor(revoked, id)).toBeNull();
 });
 
+it('continues one conversation across pages and withholds only the turns on a page that became unreadable', async () => {
+  const { user, actor, incident } = await fixture();
+  const id = await recordExchange({ userId: user.id, question: 'general-question', answer: 'a1' });
+  const continued = await recordExchange({
+    userId: user.id,
+    conversationId: id,
+    incidentId: incident.id,
+    question: 'incident-question-canary-17',
+    answer: 'a2',
+    turn: { context: { kind: 'incident', id: incident.id } },
+  });
+  expect(continued).toBe(id);
+  const open = await getConversationForActor(actor, id);
+  expect(open?.messages.map(message => message.content)).toEqual([
+    'general-question',
+    'a1',
+    'incident-question-canary-17',
+    'a2',
+  ]);
+  expect(open?.messages[2].envelope?.context).toEqual({ kind: 'incident', id: incident.id });
+  await db.teamMember.deleteMany({ where: { userId: user.id } });
+  const revoked = await getConversationForActor((await resolveUserActor(user.id))!, id);
+  expect(revoked?.messages[0].content).toBe('general-question');
+  expect(revoked?.messages[2].replayable).toBe(false);
+  expect(JSON.stringify(revoked)).not.toContain('incident-question-canary-17');
+});
+
+it('keeps a browser turn from another incident only while that incident stays readable', async () => {
+  const { user, actor, incident } = await fixture();
+  const proof = await mintContextProof({
+    actor,
+    incidentId: incident.id,
+    role: 'user',
+    text: 'asked elsewhere',
+    dataClass: 'PERSONAL',
+  });
+  const context = await readBrowserContext(actor, null, [
+    { role: 'user', content: 'asked elsewhere', contextProof: proof },
+  ]);
+  expect(context.messages[0].content).toBe(
+    `[Asked while viewing incident /incidents/${incident.id}] asked elsewhere`
+  );
+  await db.teamMember.deleteMany({ where: { userId: user.id } });
+  expect(
+    (
+      await readBrowserContext((await resolveUserActor(user.id))!, null, [
+        { role: 'user', content: 'asked elsewhere', contextProof: proof },
+      ])
+    ).messages
+  ).toHaveLength(0);
+});
+
 it('mints evidence only for actual reads and rejects readable but unretrieved citations', async () => {
   const { actor, incident } = await fixture();
   const { SquireEvidenceRegistry } = await import('@/lib/intelligence/squire/evidence');

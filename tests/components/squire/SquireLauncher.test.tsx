@@ -447,7 +447,7 @@ it('stops an active response, aborts its request and retains the partial answer 
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
-it('keeps a saved incident conversation in its original context', async () => {
+it('continues a saved conversation from another incident page', async () => {
   nav.pathname = '/incidents/incident-b';
   fetchMock.mockResolvedValueOnce({
     ok: true,
@@ -472,7 +472,10 @@ it('keeps a saved incident conversation in its original context', async () => {
         conversation: {
           id: 'saved-a',
           incidentId: 'incident-a',
-          messages: [{ role: 'assistant', content: 'Wrong context canary' }],
+          messages: [
+            { role: 'user', content: 'What happened on A?' },
+            { role: 'assistant', content: 'Earlier answer about A' },
+          ],
         },
       },
     }),
@@ -481,17 +484,22 @@ it('keeps a saved incident conversation in its original context', async () => {
   fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Saved conversations' }));
   fireEvent.click(await screen.findByRole('button', { name: /^Incident A conversation/ }));
-  expect(await screen.findByText('Wrong context canary')).toBeInTheDocument();
-  expect(
-    screen.getByText('This chat keeps its original context. Choose where to continue.')
-  ).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Return to original context' })).toHaveAttribute(
-    'href',
-    '/incidents/incident-a'
+  expect(await screen.findByText('Earlier answer about A')).toBeInTheDocument();
+  expect(screen.queryByText(/keeps its original context/)).not.toBeInTheDocument();
+  fetchMock.mockResolvedValueOnce(
+    streamOf([{ type: 'delta', text: 'Answer about B' }, { type: 'done' }])
   );
+  fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'And this one?' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(await screen.findByText('Answer about B')).toBeInTheDocument();
+  expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toMatchObject({
+    incidentId: 'incident-b',
+    conversationId: 'saved-a',
+  });
+  expect(screen.getByRole('separator')).toHaveTextContent(/Now on incident/);
 });
 
-it('keeps the original incident scope across navigation until the user starts a new chat', async () => {
+it('keeps one conversation across navigation and marks where the page changed', async () => {
   nav.pathname = '/incidents/incident-a';
   fetchMock.mockResolvedValue(
     streamOf([{ type: 'delta', text: 'Earlier answer' }, { type: 'done' }])
@@ -502,23 +510,22 @@ it('keeps the original incident scope across navigation until the user starts a 
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   await screen.findByText('Earlier answer');
   await waitFor(() => expect(screen.getByLabelText('Message Pip')).toBeEnabled());
-  nav.pathname = '/incidents/incident-b';
+  nav.pathname = '/services/svc-1';
   view.rerender(<SquireLauncher name="Pip" />);
-  expect(screen.getByRole('link', { name: 'Return to original context' })).toHaveAttribute(
-    'href',
-    '/incidents/incident-a'
-  );
-  expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'New chat here' }));
+  expect(screen.queryByRole('button', { name: 'New chat here' })).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Message Pip'), {
-    target: { value: 'Summarise new incident' },
+    target: { value: 'Is this healthy?' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-  expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
-    incidentId: 'incident-b',
-    history: [],
-  });
+  const body = JSON.parse(fetchMock.mock.calls[1][1].body);
+  expect(body).toMatchObject({ pageContext: { kind: 'service', id: 'svc-1' } });
+  expect(body.incidentId).toBeUndefined();
+  expect(body.history.map((turn: { content: string }) => turn.content)).toEqual([
+    'Summarise this',
+    'Earlier answer',
+  ]);
+  expect(screen.getByRole('separator')).toHaveTextContent('Now on this service');
 });
 
 it('passes server context proofs on the next question and leaves unretrieved links inert', async () => {
