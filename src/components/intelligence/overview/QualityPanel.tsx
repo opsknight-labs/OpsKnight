@@ -85,7 +85,7 @@ function ServiceList({
           >
             <div className="min-w-0 flex-[1_1_16rem] space-y-0.5">
               <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
-                <span className="min-w-0 break-words">{row.serviceName}</span>
+                <span className="min-w-0 wrap-break-word">{row.serviceName}</span>
                 {row.teamName && (
                   <span className="rounded-full border border-border px-2 py-0.5 text-2xs font-medium text-muted-foreground">
                     <span className="sr-only">, team </span>

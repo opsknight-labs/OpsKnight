@@ -93,7 +93,7 @@ export function RunbookHealthPanel({
           </h3>
           <ul className="space-y-1 text-sm text-foreground" aria-label="Suggested steps">
             {suggestions.map(insight => (
-              <li key={insight.id} className="break-words">
+              <li key={insight.id} className="wrap-break-word">
                 {suggestedSteps[insight.id]}
               </li>
             ))}

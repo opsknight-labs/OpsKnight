@@ -43,13 +43,13 @@ export default function ReadinessBar({
   const approvalGates = executableSteps.filter(stepRequiresApproval).length;
   const mutationSteps = executableSteps.filter(s => s.riskClass !== 'READ_ONLY').length;
   const issueClass =
-    'flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+    'flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
   return (
     <aside
       aria-label="Runbook publish readiness summary"
       className={cn(
-        'rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs px-5 py-3.5 shadow-xs',
+        'rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs px-5 py-3.5 shadow-2xs',
         errorCount > 0 && 'border-destructive/30'
       )}
     >
@@ -65,7 +65,7 @@ export default function ReadinessBar({
               type="button"
               onClick={() => setExpanded(!expanded)}
               aria-expanded={expanded}
-              className="flex items-center gap-1.5 rounded-sm font-medium text-destructive underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center gap-1.5 rounded-sm font-medium text-destructive underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               title="Toggle error details"
             >
               <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />

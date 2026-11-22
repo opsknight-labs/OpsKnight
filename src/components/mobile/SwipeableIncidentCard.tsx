@@ -143,7 +143,7 @@ export default function SwipeableIncidentCard({
           draggable={false}
           onDragStart={e => e.preventDefault()}
           aria-disabled={isUpdating}
-          className="block w-full min-w-0 px-3.5 pb-2.5 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="block w-full min-w-0 px-3.5 pb-2.5 pt-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           aria-label={`Incident: ${incident.title}`}
         >
           <div className="flex min-w-0 items-center justify-between gap-2">
@@ -157,7 +157,7 @@ export default function SwipeableIncidentCard({
             </span>
           </div>
 
-          <h3 className="mt-2 line-clamp-2 break-words text-[13px] font-semibold leading-[1.35] text-foreground sm:text-sm">
+          <h3 className="mt-2 line-clamp-2 wrap-break-word text-[13px] font-semibold leading-[1.35] text-foreground sm:text-sm">
             {incident.title}
           </h3>
         </Link>
@@ -174,7 +174,7 @@ export default function SwipeableIncidentCard({
                 acknowledgeAction(incident.id);
               }}
               disabled={isUpdating}
-              className="inline-flex h-11 min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-lg bg-amber-700 px-3.5 text-xs font-bold text-white transition-colors hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              className="inline-flex h-11 min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-lg bg-amber-700 px-3.5 text-xs font-bold text-white transition-colors hover:bg-amber-800 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               aria-label={`Acknowledge incident ${incident.title}`}
             >
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
@@ -186,7 +186,7 @@ export default function SwipeableIncidentCard({
               onClick={handleLinkClick}
               draggable={false}
               onDragStart={e => e.preventDefault()}
-              className="inline-flex h-11 min-h-[44px] shrink-0 items-center rounded-lg px-3 text-xs font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-11 min-h-[44px] shrink-0 items-center rounded-lg px-3 text-xs font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={`View details for ${incident.title}`}
             >
               View details
@@ -196,7 +196,7 @@ export default function SwipeableIncidentCard({
 
         {isUpdating && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-background/55 backdrop-blur-[1px]">
-            <span className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-sm">
+            <span className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-xs">
               Updating…
             </span>
           </div>

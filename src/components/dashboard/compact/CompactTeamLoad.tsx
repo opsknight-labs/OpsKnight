@@ -72,7 +72,7 @@ const CompactTeamLoad = memo(function CompactTeamLoad({ assigneeLoad }: CompactT
         </p>
         <Link
           href="/incidents?filter=all_open"
-          className="mt-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          className="mt-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
         >
           View open incidents
         </Link>

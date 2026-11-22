@@ -48,7 +48,7 @@ export function ProactiveNotes({
             No stakeholder update for {nudge.minutesSinceUpdate} minutes.
           </p>
           <p className="text-muted-foreground">Suggested update (review before posting):</p>
-          <p className="whitespace-pre-wrap break-words">{nudge.aiDraft ?? nudge.draft}</p>
+          <p className="whitespace-pre-wrap wrap-break-word">{nudge.aiDraft ?? nudge.draft}</p>
         </div>
       )}
 

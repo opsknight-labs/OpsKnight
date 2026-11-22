@@ -227,7 +227,7 @@ export default function NotificationCapacityOverview({
         </p>
       )}
       <div className="grid gap-3 md:grid-cols-3">
-        <Card className="border-border/80 shadow-xs">
+        <Card className="border-border/80 shadow-2xs">
           <CardHeader className="pb-2">
             <CardDescription>Bulk delivery</CardDescription>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -256,7 +256,7 @@ export default function NotificationCapacityOverview({
             )}
           </CardContent>
         </Card>
-        <Card className="border-border/80 shadow-xs">
+        <Card className="border-border/80 shadow-2xs">
           <CardHeader className="pb-2">
             <CardDescription>Active worker leases</CardDescription>
             <CardTitle className="flex items-center gap-2 text-2xl">
@@ -268,7 +268,7 @@ export default function NotificationCapacityOverview({
             Expiring distributed provider reservations
           </CardContent>
         </Card>
-        <Card className="border-border/80 shadow-xs">
+        <Card className="border-border/80 shadow-2xs">
           <CardHeader className="pb-2">
             <CardDescription>Recent campaigns</CardDescription>
             <CardTitle className="flex items-center gap-2 text-2xl">
@@ -282,7 +282,7 @@ export default function NotificationCapacityOverview({
         </Card>
       </div>
 
-      <Card className="border-border/80 shadow-xs">
+      <Card className="border-border/80 shadow-2xs">
         <CardHeader>
           <CardTitle className="text-sm">Queue & backpressure</CardTitle>
           <CardDescription>
@@ -451,7 +451,7 @@ export default function NotificationCapacityOverview({
         </CardContent>
       </Card>
 
-      <Card className="border-border/80 shadow-xs">
+      <Card className="border-border/80 shadow-2xs">
         <CardHeader>
           <CardTitle className="text-sm">Provider capacity</CardTitle>
           <CardDescription>
@@ -521,7 +521,7 @@ export default function NotificationCapacityOverview({
       </Card>
 
       {campaigns.length > 0 && (
-        <Card className="border-border/80 shadow-xs">
+        <Card className="border-border/80 shadow-2xs">
           <CardHeader>
             <CardTitle className="text-sm">Fanout progress</CardTitle>
             <CardDescription>Latest durable subscriber campaigns.</CardDescription>

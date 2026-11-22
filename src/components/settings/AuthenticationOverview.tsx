@@ -255,7 +255,7 @@ export default function AuthenticationOverview({
                 <Link2 className="h-3.5 w-3.5 text-primary" />
                 Configured issuer
               </dt>
-              <dd className="text-xs font-mono font-medium text-foreground [overflow-wrap:anywhere]">
+              <dd className="text-xs font-mono font-medium text-foreground wrap-anywhere">
                 {data.activeProvider.issuer}
               </dd>
             </div>
@@ -328,7 +328,7 @@ export default function AuthenticationOverview({
       )}
 
       {/* Interactive Workflow & Navigation Guide */}
-      <div className="rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs space-y-3">
+      <div className="rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-2xs space-y-3">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">How setup works</h3>

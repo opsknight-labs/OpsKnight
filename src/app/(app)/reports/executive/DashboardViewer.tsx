@@ -561,14 +561,14 @@ export default function DashboardViewer({
           <div
             role="region"
             aria-label="NOC Wallboard Presentation"
-            className="fixed inset-0 z-[99999] bg-[#09090b] text-zinc-100 overflow-y-auto flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-200 print:hidden"
+            className="fixed inset-0 z-99999 bg-[#09090b] text-zinc-100 overflow-y-auto flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-200 print:hidden"
             style={{ zIndex: 99999 }}
           >
             {/* Wallboard Top Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-zinc-800/80 bg-zinc-950/60 -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8 p-4 sm:p-6 lg:p-8 backdrop-blur-md sticky top-0 z-10">
               {/* Left: Branding & Status */}
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold select-none shadow-xs">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold select-none shadow-2xs">
                   <span className="relative flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
@@ -578,7 +578,7 @@ export default function DashboardViewer({
                   <span className="text-emerald-400 font-bold">LIVE</span>
                 </div>
                 {wallboardClock && (
-                  <div className="font-mono text-xs text-zinc-300 bg-zinc-900/90 px-2.5 py-1 rounded-md border border-zinc-800 shadow-xs">
+                  <div className="font-mono text-xs text-zinc-300 bg-zinc-900/90 px-2.5 py-1 rounded-md border border-zinc-800 shadow-2xs">
                     {wallboardClock}
                   </div>
                 )}
@@ -744,7 +744,7 @@ export default function DashboardViewer({
                   aria-label="Dashboard title"
                   value={dashboardTitle}
                   onChange={e => setDashboardTitle(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-foreground placeholder:text-muted-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/50 text-lg font-bold"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-foreground placeholder:text-muted-foreground transition-all focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-ring/50 text-lg font-bold"
                   placeholder="Dashboard title"
                 />
                 <Pencil className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -754,7 +754,7 @@ export default function DashboardViewer({
                 aria-label="Dashboard description"
                 value={dashboardDesc}
                 onChange={e => setDashboardDesc(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-foreground placeholder:text-muted-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/50 text-xs md:text-sm"
+                className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-foreground placeholder:text-muted-foreground transition-all focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-ring/50 text-xs md:text-sm"
                 placeholder="Dashboard description"
               />
             </div>
@@ -1117,7 +1117,7 @@ export default function DashboardViewer({
               <Button
                 type="button"
                 size="sm"
-                className="gap-1.5 font-medium shadow-xs bg-primary hover:bg-primary/90 text-primary-foreground transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="gap-1.5 font-medium shadow-2xs bg-primary hover:bg-primary/90 text-primary-foreground transition-all hover:scale-[1.02] active:scale-[0.98]"
                 onClick={() => setIsWidgetLibraryOpen(true)}
               >
                 <Plus className="h-4 w-4" />
@@ -1154,7 +1154,7 @@ export default function DashboardViewer({
                 <Button
                   type="button"
                   size="sm"
-                  className="gap-2 font-medium shadow-xs min-w-[125px]"
+                  className="gap-2 font-medium shadow-2xs min-w-[125px]"
                   onClick={handleSaveChanges}
                   disabled={isSaving || !isDirty}
                 >
@@ -1174,7 +1174,7 @@ export default function DashboardViewer({
                 <Button
                   type="button"
                   size="sm"
-                  className="gap-2 font-medium shadow-xs"
+                  className="gap-2 font-medium shadow-2xs"
                   onClick={() => setIsEditing(false)}
                 >
                   <Check className="h-4 w-4" />

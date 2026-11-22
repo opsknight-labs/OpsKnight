@@ -29,7 +29,7 @@ export default function McpConnectEntry({ className }: { className?: string }) {
       </div>
       <Link
         href={mcpHref({ tab: 'connect' })}
-        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         Set up a connection
         <ArrowRight className="h-4 w-4" aria-hidden="true" />

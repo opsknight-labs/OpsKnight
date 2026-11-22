@@ -126,7 +126,7 @@ export default async function MobileServiceDetailPage({ params, searchParams }: 
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h1 className="min-w-0 break-words text-base font-bold text-foreground">
+              <h1 className="min-w-0 wrap-break-word text-base font-bold text-foreground">
                 {service.name}
               </h1>
               <span

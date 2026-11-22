@@ -448,7 +448,7 @@ print(response.json())`;
   };
 
   return (
-    <Card className={`border-border/80 shadow-xs bg-card overflow-hidden ${className}`}>
+    <Card className={`border-border/80 shadow-2xs bg-card overflow-hidden ${className}`}>
       {/* 1. Header with Base URL and API Explorer Link */}
       <CardHeader className="pb-3 border-b border-border/60">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -507,7 +507,7 @@ print(response.json())`;
             value={testKeyInput}
             onChange={event => setTestKeyInput(event.target.value)}
             placeholder={revealedSecret ? 'Using the key you just generated' : 'ok_live_…'}
-            className="h-8 w-full rounded-md border border-input bg-background px-2.5 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-8 w-full rounded-md border border-input bg-background px-2.5 font-mono text-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             aria-describedby="quickstart-live-key-help"
           />
           <p id="quickstart-live-key-help" className="text-2xs text-muted-foreground">
@@ -817,7 +817,7 @@ print(response.json())`;
                   }
                   placeholder={param.placeholder}
                   aria-invalid={invalidParams(activeScenario).some(p => p.name === param.name)}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2.5 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-8 w-full rounded-md border border-input bg-background px-2.5 font-mono text-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 {invalidParams(activeScenario).some(p => p.name === param.name) && (
                   <span

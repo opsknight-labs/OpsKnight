@@ -37,9 +37,9 @@ export const SectionNav = memo(function SectionNav({
               title={`${label} (press ${index + 1})`}
               onClick={() => onSelect(id)}
               className={cn(
-                'group inline-flex min-h-8.5 shrink-0 flex-1 items-center justify-center gap-2 rounded-md px-3 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:flex-none',
+                'group inline-flex min-h-8.5 shrink-0 flex-1 items-center justify-center gap-2 rounded-md px-3 text-xs font-medium transition-all focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:flex-none',
                 selected
-                  ? 'bg-background text-foreground shadow-xs'
+                  ? 'bg-background text-foreground shadow-2xs'
                   : 'text-foreground/80 hover:bg-background/50 hover:text-foreground'
               )}
             >
@@ -56,7 +56,7 @@ export const SectionNav = memo(function SectionNav({
               {id === 'rules' && errorCount > 0 && (
                 <span
                   aria-hidden="true"
-                  className="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground shadow-xs"
+                  className="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground shadow-2xs"
                 >
                   {errorCount}
                 </span>

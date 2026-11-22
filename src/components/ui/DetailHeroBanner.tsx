@@ -76,7 +76,7 @@ function HeroStat({ stat, layoutClass }: { stat: DetailStatItem; layoutClass?: s
     'block min-w-0 bg-card px-3 py-2.5 text-left transition-colors duration-150',
     layoutClass,
     stat.href &&
-      'hover:bg-muted focus-visible:relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+      'hover:bg-muted focus-visible:relative focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
     stat.active && 'bg-muted shadow-[inset_0_-2px_0_hsl(var(--ui-foreground))]',
     stat.className
   );
@@ -159,7 +159,7 @@ export default function DetailHeroBanner({
         </Link>
       )}
 
-      <div className="ok-inverse-surface rounded-xl border border-border bg-card px-4 py-3.5 text-card-foreground shadow-sm sm:px-5 sm:py-4">
+      <div className="ok-inverse-surface rounded-xl border border-border bg-card px-4 py-3.5 text-card-foreground shadow-xs sm:px-5 sm:py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             {icon && <div className="shrink-0">{icon}</div>}
@@ -249,7 +249,7 @@ export function DetailHeroBannerSkeleton({
           <Skeleton className="h-4 w-28 bg-muted/60" />
         </div>
       )}
-      <div className="ok-inverse-surface rounded-xl border border-border bg-card px-4 py-3.5 shadow-sm sm:px-5 sm:py-4">
+      <div className="ok-inverse-surface rounded-xl border border-border bg-card px-4 py-3.5 shadow-xs sm:px-5 sm:py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
             <Skeleton className="h-10 w-10 shrink-0 rounded-lg bg-muted" />

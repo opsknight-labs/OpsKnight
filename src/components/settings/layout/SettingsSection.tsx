@@ -40,7 +40,7 @@ export function SettingsSection({
       id={id}
       aria-labelledby={headingId}
       className={cn(
-        'scroll-mt-24 overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm',
+        'scroll-mt-24 overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-xs',
         tone === 'danger' && 'border-rose-200 dark:border-rose-500/30',
         className
       )}

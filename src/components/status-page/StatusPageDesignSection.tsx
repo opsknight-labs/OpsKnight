@@ -222,7 +222,7 @@ export default function StatusPageDesignSection({
             <select
               value={familyFilter}
               onChange={e => setFamilyFilter(e.target.value)}
-              className="h-7.5 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-7.5 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary"
               aria-label="Filter by theme family"
             >
               {families.map(f => (
@@ -245,7 +245,7 @@ export default function StatusPageDesignSection({
                 aria-pressed={isSelected}
                 onClick={() => onThemeChange(theme.id)}
                 className={cn(
-                  'group relative flex items-center gap-2.5 rounded-lg border p-2.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  'group relative flex items-center gap-2.5 rounded-lg border p-2.5 text-left transition-all focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/50',
                   isSelected
                     ? 'border-primary bg-primary/5 shadow-2xs ring-1 ring-primary/30'
                     : 'border-border/80 bg-card hover:border-primary/40 hover:bg-muted/30'
@@ -376,7 +376,7 @@ export default function StatusPageDesignSection({
               spellCheck={false}
               aria-label="Advanced CSS"
               placeholder="/* Optional advanced CSS overrides */"
-              className="w-full resize-y rounded-lg border border-input bg-background p-3 font-mono text-xs leading-5 text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="w-full resize-y rounded-lg border border-input bg-background p-3 font-mono text-xs leading-5 text-foreground outline-hidden transition-shadow focus-visible:ring-2 focus-visible:ring-ring/40"
             />
             <p className="mt-1.5 text-[11px] text-muted-foreground">
               Styles written here have the highest specificity and override built-in theme styles.

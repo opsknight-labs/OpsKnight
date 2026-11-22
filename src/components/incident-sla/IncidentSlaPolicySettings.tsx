@@ -176,7 +176,7 @@ export default function IncidentSlaPolicySettings({
     <div className="space-y-6">
       {/* Service Inheritance & Effective Summary */}
       {isService && (
-        <div className="rounded-xl border border-border/80 bg-gradient-to-r from-card via-card to-muted/20 p-4 shadow-2xs space-y-3">
+        <div className="rounded-xl border border-border/80 bg-linear-to-r from-card via-card to-muted/20 p-4 shadow-2xs space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
@@ -511,7 +511,7 @@ export default function IncidentSlaPolicySettings({
   }
 
   return (
-    <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+    <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs">
       <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">

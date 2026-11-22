@@ -63,8 +63,8 @@ export function RunbookModuleNav({ summary, className, actions: _actions }: Runb
                   'group relative flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg py-1 sm:py-1.5 px-3 text-xs font-medium transition-all duration-150 select-none cursor-pointer whitespace-nowrap shrink-0',
                   'border shadow-2xs',
                   isActive
-                    ? 'bg-background text-foreground font-semibold border-primary/50 shadow-xs ring-2 ring-primary/20'
-                    : 'border-border/40 bg-background/50 text-muted-foreground/90 hover:text-foreground hover:bg-background hover:border-border hover:shadow-xs active:scale-[0.98]'
+                    ? 'bg-background text-foreground font-semibold border-primary/50 shadow-2xs ring-2 ring-primary/20'
+                    : 'border-border/40 bg-background/50 text-muted-foreground/90 hover:text-foreground hover:bg-background hover:border-border hover:shadow-2xs active:scale-[0.98]'
                 )}
               >
                 <Icon

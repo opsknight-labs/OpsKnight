@@ -232,7 +232,7 @@ export default function MobileQuickSwitcher() {
                 <button
                   type="button"
                   aria-label="Close search"
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-5 w-5" aria-hidden="true" />
                 </button>

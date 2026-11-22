@@ -37,9 +37,9 @@ const IMPACT_NOTICE: Record<NonNullable<SquireProposalView['impact']>, string> =
 
 // Bordered-card actions, right-aligned: 44 px on phones, compact in the desktop panel.
 const PRIMARY =
-  'inline-flex min-h-11 items-center gap-1 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:min-h-8';
+  'inline-flex min-h-11 items-center gap-1 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:min-h-8';
 const SECONDARY =
-  'inline-flex min-h-11 items-center gap-1 rounded-md border border-border bg-card px-3 text-xs font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:min-h-8';
+  'inline-flex min-h-11 items-center gap-1 rounded-md border border-border bg-card px-3 text-xs font-medium hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:min-h-8';
 
 // The confirm handler reads the clock at click time; the compiler's purity check cannot tell it from render.
 const nowMs = () => Date.now();
@@ -216,7 +216,7 @@ export default function SquireProposalCard({
             Suggested action{proposal.step ? ` · ${proposal.step}` : ''}
           </span>
         </p>
-        <p className="mt-0.5 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+        <p className="mt-0.5 whitespace-pre-wrap wrap-break-word text-xs text-muted-foreground">
           {proposal.detail}
         </p>
       </div>
@@ -228,7 +228,7 @@ export default function SquireProposalCard({
           {proposal.preview.map(item => (
             <div key={item.label} className="contents">
               <dt className="font-medium text-muted-foreground">{item.label}</dt>
-              <dd className="whitespace-pre-wrap break-words">{item.value}</dd>
+              <dd className="whitespace-pre-wrap wrap-break-word">{item.value}</dd>
             </div>
           ))}
         </dl>

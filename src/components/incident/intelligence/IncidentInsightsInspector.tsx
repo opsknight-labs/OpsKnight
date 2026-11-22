@@ -156,11 +156,11 @@ export default function IncidentInsightsInspector({
         className={
           bottom
             ? // The sheet primitive's close button is 34 px; as a bottom sheet it is a touch target.
-              'flex max-h-[85dvh] flex-col gap-0 rounded-t-2xl p-0 motion-reduce:!animate-none motion-reduce:!transition-none [&>button]:h-11 [&>button]:w-11'
+              'flex max-h-[85dvh] flex-col gap-0 rounded-t-2xl p-0 motion-reduce:animate-none! motion-reduce:transition-none! [&>button]:h-11 [&>button]:w-11'
             : // Above the page chrome (sidebar 30), below the assistant (40), which it must never cover.
               // A docked assistant owns the right edge (--squire-dock-width); the panel sits beside it.
               // Starts under the fixed app header (top-14, as the sidebar and dock) so its title and close stay visible.
-              'top-14 h-auto z-[35] flex w-full flex-col gap-0 p-0 sm:max-w-xl lg:right-[var(--squire-dock-width,0px)] motion-reduce:!animate-none motion-reduce:!transition-none'
+              'top-14 h-auto z-35 flex w-full flex-col gap-0 p-0 sm:max-w-xl lg:right-(--squire-dock-width,0px) motion-reduce:animate-none! motion-reduce:transition-none!'
         }
       >
         {!bottom && (
@@ -177,7 +177,7 @@ export default function IncidentInsightsInspector({
             onPointerUp={onHandlePointerUp}
             onPointerCancel={onHandlePointerUp}
             onKeyDown={onHandleKeyDown}
-            className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize touch-none bg-transparent hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
+            className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize touch-none bg-transparent hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-hidden"
           />
         )}
         <SheetHeader className="space-y-1 border-b border-border px-4 py-3 pr-14 text-left">
@@ -193,7 +193,7 @@ export default function IncidentInsightsInspector({
                     <button
                       type="button"
                       onClick={() => reveal(`insights-${section}`)}
-                      className={`inline-flex min-h-11 items-center rounded-full border border-border px-3 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      className={`inline-flex min-h-11 items-center rounded-full border border-border px-3 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${
                         bottom ? '' : 'sm:min-h-8'
                       }`}
                     >

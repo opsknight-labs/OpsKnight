@@ -52,7 +52,7 @@ export default async function ChangeReferencePage({ params }: { params: Promise<
             value: change.service ? (
               <Link
                 href={`/services/${change.service.id}`}
-                className="underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {change.service.name}
               </Link>
@@ -73,7 +73,7 @@ export default async function ChangeReferencePage({ params }: { params: Promise<
       {followers && followers.riskScore !== null && (
         <section
           aria-labelledby="change-risk"
-          className="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+          className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
         >
           <header className="border-b border-border px-4 py-3 sm:px-5">
             <h2 id="change-risk" className="font-display text-base font-semibold tracking-tight">
@@ -93,7 +93,7 @@ export default async function ChangeReferencePage({ params }: { params: Promise<
       {followers && (
         <section
           aria-labelledby="change-followers"
-          className="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+          className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
         >
           <header className="border-b border-border px-4 py-3 sm:px-5">
             <h2
@@ -112,7 +112,7 @@ export default async function ChangeReferencePage({ params }: { params: Promise<
                 <li key={incident.id} className="flex flex-wrap items-center gap-x-3 px-4 sm:px-5">
                   <Link
                     href={`/incidents/${incident.id}`}
-                    className="flex min-h-11 min-w-0 flex-1 items-center break-words font-medium underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex min-h-11 min-w-0 flex-1 items-center wrap-break-word font-medium underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {incident.title}
                   </Link>
@@ -133,7 +133,7 @@ export default async function ChangeReferencePage({ params }: { params: Promise<
               primaryAction={
                 <Link
                   href="/changes"
-                  className="inline-flex min-h-11 items-center rounded-md border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+                  className="inline-flex min-h-11 items-center rounded-md border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
                 >
                   Back to changes
                 </Link>

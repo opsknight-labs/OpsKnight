@@ -163,7 +163,7 @@ export default async function AccessRequestsPage({
           role="status"
           aria-label="Linked request"
           data-testid="access-request-focus"
-          className="rounded-xl border border-border bg-card shadow-sm"
+          className="rounded-xl border border-border bg-card shadow-xs"
         >
           {!focused ? (
             <div className="flex items-start gap-3 p-5">
@@ -242,7 +242,7 @@ export default async function AccessRequestsPage({
                   id={`request-${request.id}`}
                   data-testid="access-request-item"
                   className={cn(
-                    'scroll-mt-28 overflow-hidden rounded-lg border border-border bg-card p-0 shadow-xs',
+                    'scroll-mt-28 overflow-hidden rounded-lg border border-border bg-card p-0 shadow-2xs',
                     request.id === focusId && 'border-primary/50 ring-2 ring-primary/25'
                   )}
                 >

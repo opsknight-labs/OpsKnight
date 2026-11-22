@@ -44,13 +44,13 @@ export default function SidebarThemeMenu({
         title={label}
         className={cn(
           'flex items-center justify-center rounded-md text-ink-400 transition-colors hover:bg-white/10 hover:text-white',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-50',
+          'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-50',
           className
         )}
       >
         <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side={side} align="start" className="min-w-[10rem]">
+      <DropdownMenuContent side={side} align="start" className="min-w-40">
         <DropdownMenuLabel>Appearance</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={choice}

@@ -38,7 +38,7 @@ export function LinkTabs({
     href !== activeHref ? undefined : href.startsWith('#') ? 'location' : 'page';
   return (
     <nav aria-label={label} className={cn('min-w-0', className)}>
-      <div className="hidden overflow-x-auto rounded-lg bg-muted p-1 [scrollbar-width:none] md:block [&::-webkit-scrollbar]:hidden">
+      <div className="hidden overflow-x-auto rounded-lg bg-muted p-1 scrollbar-none md:block [&::-webkit-scrollbar]:hidden">
         <ul className="flex w-max min-w-full items-center gap-1">
           {items.map(item => {
             const active = item.href === activeHref;
@@ -48,9 +48,9 @@ export function LinkTabs({
                   href={item.href}
                   aria-current={currentValue(item.href)}
                   className={cn(
-                    'group inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none md:min-h-9',
+                    'group inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none md:min-h-9',
                     active
-                      ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
+                      ? 'bg-card text-foreground shadow-xs ring-1 ring-border'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
@@ -72,7 +72,7 @@ export function LinkTabs({
             <button
               type="button"
               aria-label={`${label}: ${current.label}`}
-              className="flex min-h-11 w-full items-center gap-2 rounded-lg border border-border bg-card px-3 text-left text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-h-11 w-full items-center gap-2 rounded-lg border border-border bg-card px-3 text-left text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               {current.icon && (
                 <span className={cn(iconSlot, 'text-muted-foreground')} aria-hidden="true">
@@ -88,7 +88,7 @@ export function LinkTabs({
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
-            className="w-[var(--radix-dropdown-menu-trigger-width)] max-w-[calc(100vw-2rem)]"
+            className="w-(--radix-dropdown-menu-trigger-width) max-w-[calc(100vw-2rem)]"
           >
             {items.map(item => (
               <DropdownMenuItem key={item.href} asChild className="min-h-11 gap-2">
@@ -141,7 +141,7 @@ export function SectionLinkTabs({
   }, [ids]);
 
   return (
-    <div className="sticky top-0 z-20 -mx-1 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className="sticky top-0 z-20 -mx-1 bg-background/95 px-1 py-2 backdrop-blur-sm supports-backdrop-filter:bg-background/80">
       <LinkTabs
         label="On this page"
         items={sections.map(section => ({ href: `#${section.id}`, label: section.label }))}

@@ -77,7 +77,7 @@ export default function SquireComposer({
             maxLength={maxLength}
             rows={1}
             placeholder={placeholder}
-            className="max-h-36 min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent px-0 py-1.5 text-sm shadow-none focus-visible:!outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="max-h-36 min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent px-0 py-1.5 text-sm shadow-none focus-visible:outline-hidden! focus-visible:ring-0 focus-visible:ring-offset-0"
           />
           {busy ? (
             <Button

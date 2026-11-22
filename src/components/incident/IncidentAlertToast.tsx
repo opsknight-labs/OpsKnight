@@ -126,7 +126,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
     return (
       // The Sonner <li> paints the card surface (toasts.css); this only clips the
       // priority stripe to its rounded corners.
-      <div className="relative w-full overflow-hidden rounded-[13px] text-[var(--toast-fg)]">
+      <div className="relative w-full overflow-hidden rounded-[13px] text-(--toast-fg)">
         {/* Left priority accent stripe */}
         <div className={cn('absolute left-0 top-0 bottom-0 w-1', theme.bar)} />
 
@@ -158,7 +158,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
             </div>
 
             {/* Title: 1 line truncate */}
-            <h4 className="text-xs font-semibold text-slate-900 dark:text-zinc-100 leading-snug line-clamp-1 break-words">
+            <h4 className="text-xs font-semibold text-slate-900 dark:text-zinc-100 leading-snug line-clamp-1 wrap-break-word">
               {cleanTitle(primaryIncident.title)}
             </h4>
 
@@ -207,7 +207,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               e.stopPropagation();
               sonnerToast.dismiss(toastId);
             }}
-            className="shrink-0 h-6 w-6 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--toast-focus)] flex items-center justify-center transition-colors cursor-pointer"
+            className="shrink-0 h-6 w-6 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--toast-focus) flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Dismiss incident alert"
           >
             <X size={14} className="shrink-0 stroke-[2.5]" />
@@ -231,7 +231,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
 
   // Compact Multiple Incidents Alert Card
   return (
-    <div className="relative w-full overflow-hidden rounded-[13px] text-[var(--toast-fg)]">
+    <div className="relative w-full overflow-hidden rounded-[13px] text-(--toast-fg)">
       {/* Left accent bar */}
       <div className={cn('absolute left-0 top-0 bottom-0 w-1', multiTheme.bar)} />
 
@@ -264,7 +264,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               e.stopPropagation();
               sonnerToast.dismiss(toastId);
             }}
-            className="shrink-0 h-5 w-5 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--toast-focus)] flex items-center justify-center transition-colors cursor-pointer"
+            className="shrink-0 h-5 w-5 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-(--toast-focus) flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Dismiss all incident alerts"
           >
             <X size={13} className="shrink-0 stroke-[2.5]" />

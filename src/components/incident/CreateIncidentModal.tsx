@@ -671,15 +671,15 @@ function CreateIncidentModalContent({
 
   return (
     <DialogPrimitive.Content
-      className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[95vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xl outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+      className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[95vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xl outline-hidden duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
       onKeyDown={handleKeyDown}
     >
       {/* Header */}
-      <div className="relative shrink-0 border-b border-zinc-800/80 bg-gradient-to-b from-[#18181b] via-[#121216] to-[#09090b] px-5 sm:px-6 py-4 text-white shadow-2xs">
+      <div className="relative shrink-0 border-b border-zinc-800/80 bg-linear-to-b from-[#18181b] via-[#121216] to-[#09090b] px-5 sm:px-6 py-4 text-white shadow-2xs">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.06),transparent_60%)] pointer-events-none" />
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-700/60 bg-white/10 shadow-xs backdrop-blur-md">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-700/60 bg-white/10 shadow-2xs backdrop-blur-md">
               <Zap className="h-4.5 w-4.5 text-white" />
             </div>
             <div className="min-w-0">
@@ -1240,7 +1240,7 @@ function CreateIncidentModalContent({
                             </FormControl>
                           </PopoverTrigger>
                           <PopoverContent
-                            className="w-[var(--radix-popover-trigger-width)] p-0"
+                            className="w-(--radix-popover-trigger-width) p-0"
                             align="start"
                           >
                             <Command>
@@ -1865,7 +1865,7 @@ function CreateIncidentModalContent({
             )}
 
             {/* Sticky Action Footer */}
-            <div className="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-4 border-t border-border/80 bg-card/95 backdrop-blur-sm px-5 sm:px-6 py-3.5">
+            <div className="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-4 border-t border-border/80 bg-card/95 backdrop-blur-xs px-5 sm:px-6 py-3.5">
               <div className="hidden sm:flex items-center gap-2 text-[11px] text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] shadow-2xs">
@@ -1892,7 +1892,7 @@ function CreateIncidentModalContent({
                   type="submit"
                   size="sm"
                   disabled={isPending}
-                  className="h-9 min-w-36 bg-primary px-5 font-semibold text-xs shadow-sm transition-all hover:bg-primary/90 hover:shadow-md cursor-pointer"
+                  className="h-9 min-w-36 bg-primary px-5 font-semibold text-xs shadow-xs transition-all hover:bg-primary/90 hover:shadow-md cursor-pointer"
                 >
                   {isPending ? (
                     <span className="flex items-center gap-2">
@@ -1926,7 +1926,7 @@ export default function CreateIncidentModal() {
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         {isOpen && (
           <CreateIncidentModalContent onClose={closeCreateIncident} openOptions={openOptions} />
         )}

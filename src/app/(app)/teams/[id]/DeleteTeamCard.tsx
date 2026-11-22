@@ -53,7 +53,7 @@ export default function DeleteTeamCard({
   };
 
   return (
-    <Card className="overflow-hidden border-destructive/30 bg-destructive/5 shadow-xs">
+    <Card className="overflow-hidden border-destructive/30 bg-destructive/5 shadow-2xs">
       <CardHeader className="border-b border-destructive/20 bg-destructive/10 px-4 py-3 sm:px-5">
         <div className="flex items-center gap-2 text-destructive">
           <AlertTriangle className="h-4 w-4" />

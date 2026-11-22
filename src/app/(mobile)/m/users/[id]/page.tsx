@@ -82,16 +82,16 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
           aria-hidden
         />
         <div className="flex-1">
-          <h1 className="text-lg font-bold text-[color:var(--text-primary)]">
+          <h1 className="text-lg font-bold text-(--text-primary)">
             {user.name || 'Unknown User'}
           </h1>
-          <p className="mt-1 text-xs text-[color:var(--text-muted)]">{user.email}</p>
+          <p className="mt-1 text-xs text-(--text-muted)">{user.email}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <span
               className={`rounded-lg px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
                 user.role === 'ADMIN'
-                  ? 'bg-[color:var(--badge-warning-bg)] text-[color:var(--badge-warning-text)]'
-                  : 'bg-[color:var(--badge-neutral-bg)] text-[color:var(--badge-neutral-text)]'
+                  ? 'bg-(--badge-warning-bg) text-(--badge-warning-text)'
+                  : 'bg-(--badge-neutral-bg) text-(--badge-neutral-text)'
               }`}
             >
               {user.role.toLowerCase()}
@@ -99,8 +99,8 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
             <span
               className={`rounded-lg px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
                 user.status === 'ACTIVE'
-                  ? 'bg-[color:var(--badge-success-bg)] text-[color:var(--badge-success-text)]'
-                  : 'bg-[color:var(--badge-error-bg)] text-[color:var(--badge-error-text)]'
+                  ? 'bg-(--badge-success-bg) text-(--badge-success-text)'
+                  : 'bg-(--badge-error-bg) text-(--badge-error-text)'
               }`}
             >
               {user.status}
@@ -111,7 +111,7 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
 
       {/* Teams Section */}
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-(--text-muted)">
           Teams ({user.teamMemberships.length})
         </h3>
         <div className="flex flex-col gap-2">
@@ -126,14 +126,14 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
               >
                 <MobileCard padding="sm" className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-semibold text-[color:var(--text-primary)]">
+                    <div className="text-sm font-semibold text-(--text-primary)">
                       {membership.team.name}
                     </div>
-                    <div className="text-[11px] text-[color:var(--text-muted)]">
+                    <div className="text-[11px] text-(--text-muted)">
                       {membership.role}
                     </div>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-[color:var(--text-muted)]" />
+                  <ChevronRight className="h-4 w-4 text-(--text-muted)" />
                 </MobileCard>
               </Link>
             ))
@@ -154,21 +154,21 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
               <Link key={incident.id} href={`/m/incidents/${incident.id}`} className="no-underline">
                 <MobileCard padding="sm" className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-[color:var(--text-primary)]">
+                    <div className="truncate text-sm font-semibold text-(--text-primary)">
                       {incident.title}
                     </div>
-                    <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">
+                    <div className="mt-1 text-[11px] text-(--text-muted)">
                       {incident.service.name} • {incident.status}
                     </div>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-[color:var(--text-muted)]" />
+                  <ChevronRight className="h-4 w-4 text-(--text-muted)" />
                 </MobileCard>
               </Link>
             ))
           )}
         </div>
         {user._count.assignedIncidents > user.assignedIncidents.length && (
-          <p className="text-[11px] text-[color:var(--text-muted)]">
+          <p className="text-[11px] text-(--text-muted)">
             Showing {user.assignedIncidents.length} of {user._count.assignedIncidents}
           </p>
         )}

@@ -408,7 +408,7 @@ export function ArtifactRetentionForm({
         </div>
 
         {/* Informative Warning Callout */}
-        <div className="flex items-start gap-2.5 rounded-xl border border-destructive/25 bg-destructive/[0.04] p-3 text-xs text-destructive">
+        <div className="flex items-start gap-2.5 rounded-xl border border-destructive/25 bg-destructive/4 p-3 text-xs text-destructive">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
           <div className="space-y-1 leading-relaxed text-[11px]">
             <p className="font-semibold text-destructive">
@@ -443,7 +443,7 @@ export function ArtifactRetentionForm({
         <SubmitButton
           variant="destructive"
           disabled={!confirmed}
-          className="w-full h-9 text-xs font-semibold rounded-xl shadow-xs cursor-pointer"
+          className="w-full h-9 text-xs font-semibold rounded-xl shadow-2xs cursor-pointer"
         >
           <ShieldAlert className="h-3.5 w-3.5 mr-1.5" />
           Save Artifact Retention Policy

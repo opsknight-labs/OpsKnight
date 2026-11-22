@@ -130,7 +130,7 @@ export default async function RunbookSecretsPage({
           title="Create scoped secret"
           description="Grant the credential only to the Agent or pool that requires it."
           trigger={
-            <Button className="gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs">
+            <Button className="gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-2xs">
               <Plus className="h-4 w-4" />
               <span>Create secret</span>
             </Button>
@@ -179,7 +179,7 @@ export default async function RunbookSecretsPage({
               className="bg-card"
             />
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs">
+            <div className="overflow-x-auto rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs">
               <Table>
                 <TableCaption className="sr-only">Scoped secrets</TableCaption>
                 <TableHeader>
@@ -275,11 +275,11 @@ export default async function RunbookSecretsPage({
           >
             <div aria-labelledby="secret-detail-title" className="space-y-6">
               <section aria-labelledby="secret-grants-title" className="space-y-3">
-                <h3 id="secret-grants-title" className="!text-sm !leading-snug font-semibold">
+                <h3 id="secret-grants-title" className="text-sm! leading-snug! font-semibold">
                   Grants
                 </h3>
                 {grants.length > 0 ? (
-                  <div className="overflow-x-auto rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs">
+                  <div className="overflow-x-auto rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs">
                     <Table>
                       <TableCaption className="sr-only">Grants for {selected.name}</TableCaption>
                       <TableHeader>
@@ -365,7 +365,7 @@ export default async function RunbookSecretsPage({
                 aria-labelledby="secret-rotate-title"
                 className="space-y-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:p-5"
               >
-                <h3 id="secret-rotate-title" className="!text-sm !leading-snug font-semibold">
+                <h3 id="secret-rotate-title" className="text-sm! leading-snug! font-semibold">
                   Rotate value
                 </h3>
                 <ActionForm

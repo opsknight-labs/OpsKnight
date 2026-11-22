@@ -42,7 +42,7 @@ export default function ScimRoleMapping({
       .then(value => {
         if (current) {
           setGroup(value);
-          setRole(value.systemRole ?? '');
+          setRole(value.systemRole && value.systemRole !== 'STAKEHOLDER' ? value.systemRole : '');
         }
       })
       .catch(e => {

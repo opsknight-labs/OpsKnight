@@ -648,7 +648,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const escalationContent = (
     <div className="space-y-5">
       {service.policy ? (
-        <Card className="border-border shadow-xs">
+        <Card className="border-border shadow-2xs">
           <CardHeader className="border-b bg-muted/20 pb-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -767,7 +767,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             return (
               <Card
                 key={integration.id}
-                className="border-border shadow-xs flex flex-col justify-between overflow-hidden"
+                className="border-border shadow-2xs flex flex-col justify-between overflow-hidden"
               >
                 <CardHeader className="px-3 py-2.5 sm:px-3.5 sm:py-2.5 border-b bg-muted/20">
                   <div className="flex items-center justify-between gap-2.5">
@@ -1002,7 +1002,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
       {/* Add New Integration Grid */}
       {canManageService && (
-        <Card className="border-border shadow-xs">
+        <Card className="border-border shadow-2xs">
           <CardHeader className="px-3.5 py-2.5 border-b bg-muted/20">
             <CardTitle className="text-xs sm:text-sm font-bold flex items-center gap-2">
               <Plus className="h-4 w-4 text-primary" />
@@ -1152,7 +1152,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
           {/* Card 5: Danger Zone: Delete Service */}
           {canDeleteService && (
-            <Card className="rounded-xl border border-destructive/30 bg-destructive/5 shadow-xs">
+            <Card className="rounded-xl border border-destructive/30 bg-destructive/5 shadow-2xs">
               <div className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-start gap-2.5">
                   <div className="flex h-7 w-7 items-center justify-center rounded-md bg-destructive/10 text-destructive shrink-0 border border-destructive/20 mt-0.5">

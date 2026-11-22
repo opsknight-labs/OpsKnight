@@ -108,7 +108,7 @@ export function RunbookCard({ runbook, userTimeZone, updatedLabel }: RunbookCard
   return (
     <article
       className={cn(
-        'group relative flex flex-col rounded-lg border border-border bg-card p-3.5 shadow-xs transition-colors duration-150 focus-within:border-primary/50 hover:border-ink-300',
+        'group relative flex flex-col rounded-lg border border-border bg-card p-3.5 shadow-2xs transition-colors duration-150 focus-within:border-primary/50 hover:border-ink-300',
         isPublished && 'hover:border-emerald-500/40',
         !isPublished && !isArchived && 'hover:border-amber-500/40',
         isArchived && 'bg-muted/30 opacity-75 hover:opacity-100'
@@ -129,10 +129,10 @@ export function RunbookCard({ runbook, userTimeZone, updatedLabel }: RunbookCard
             >
               <BookOpen className="h-4 w-4" aria-hidden="true" />
             </div>
-            <h2 className="min-w-0 text-sm !leading-snug font-semibold tracking-tight">
+            <h2 className="min-w-0 text-sm leading-snug! font-semibold tracking-tight">
               <Link
                 href={href}
-                className="break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:underline group-hover:text-primary transition-colors"
+                className="wrap-break-word text-foreground outline-hidden after:absolute after:inset-0 after:rounded-lg focus-visible:underline group-hover:text-primary transition-colors"
               >
                 {runbook.name}
               </Link>
@@ -187,7 +187,7 @@ export function RunbookCard({ runbook, userTimeZone, updatedLabel }: RunbookCard
                   <Link
                     href={`/runbooks?tag=${encodeURIComponent(tag)}`}
                     aria-label={`Filter by tag ${tag}`}
-                    className="inline-flex items-center gap-0.5 rounded-full px-2.5 py-0.5 font-mono text-[11px] font-medium text-muted-foreground border border-border/80 bg-muted/40 shadow-2xs transition-colors hover:text-foreground hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex items-center gap-0.5 rounded-full px-2.5 py-0.5 font-mono text-[11px] font-medium text-muted-foreground border border-border/80 bg-muted/40 shadow-2xs transition-colors hover:text-foreground hover:border-primary/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <Hash className="h-2.5 w-2.5" aria-hidden="true" />
                     {tag}

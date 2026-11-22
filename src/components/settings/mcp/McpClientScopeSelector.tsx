@@ -133,7 +133,7 @@ function McpClientScopeSelector({
               className={cn(
                 'group relative flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 text-xs transition-all select-none',
                 isChecked
-                  ? 'border-primary/50 bg-primary/[0.03] ring-1 ring-primary/20'
+                  ? 'border-primary/50 bg-primary/3 ring-1 ring-primary/20'
                   : 'border-border/70 bg-card hover:border-border hover:bg-muted/30'
               )}
             >

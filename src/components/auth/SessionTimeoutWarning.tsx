@@ -109,7 +109,7 @@ export default function SessionTimeoutWarning({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs" />
 
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -121,7 +121,7 @@ export default function SessionTimeoutWarning({
           aria-describedby="session-warning-description"
         >
           {/* Top accent */}
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600" />
+          <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-amber-600 via-amber-500 to-amber-600" />
 
           <div className="p-6">
             {/* Icon */}

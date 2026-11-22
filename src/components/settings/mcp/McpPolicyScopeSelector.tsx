@@ -301,7 +301,7 @@ function ScopeGroup({
               className={cn(
                 'group relative flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-xs transition-all select-none',
                 isChecked
-                  ? 'border-primary/50 bg-primary/[0.03] shadow-2xs ring-1 ring-primary/20'
+                  ? 'border-primary/50 bg-primary/3 shadow-2xs ring-1 ring-primary/20'
                   : 'border-border/70 bg-card hover:border-border hover:bg-muted/30'
               )}
             >

@@ -173,7 +173,7 @@ const RuleRow = memo(
         className={cn(
           'overflow-hidden rounded-xl border bg-card transition-all duration-150',
           expanded
-            ? 'border-primary/50 shadow-xs ring-1 ring-primary/20'
+            ? 'border-primary/50 shadow-2xs ring-1 ring-primary/20'
             : 'border-border/70 hover:border-border hover:shadow-2xs',
           !rule.enabled && 'bg-muted/20 opacity-80'
         )}
@@ -188,7 +188,7 @@ const RuleRow = memo(
           aria-expanded={expanded}
           aria-controls={expanded ? `${id}-panel` : undefined}
           aria-label={`Configure ${rule.name}`}
-          className="flex min-h-10 w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+          className="flex min-h-10 w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/30 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary"
           onClick={() => onToggle(rule.id)}
         >
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border/60 bg-muted/60 font-mono text-[10.5px] font-semibold text-foreground/80">
@@ -675,7 +675,7 @@ export function AutomationRules({
       )}
 
       {/* High-density toolbar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/80 bg-card p-2 shadow-xs">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/80 bg-card p-2 shadow-2xs">
         <div className="relative min-w-44 flex-1">
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
@@ -687,7 +687,7 @@ export function AutomationRules({
             placeholder="Search rules… (⌘K)"
             value={ruleSearch}
             onChange={event => setRuleSearch(event.target.value)}
-            className="search-input h-8 !pl-8 !pr-9 text-xs bg-background"
+            className="search-input h-8 pl-8! pr-9! text-xs bg-background"
           />
           {!ruleSearch ? (
             <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-border/80 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground hidden sm:inline-block">
@@ -751,7 +751,7 @@ export function AutomationRules({
         <NativeSelect
           aria-label="Filter rules"
           wrapperClassName="w-auto shrink-0 sm:hidden"
-          className="h-8 min-w-[7.5rem] text-xs font-medium bg-background"
+          className="h-8 min-w-30 text-xs font-medium bg-background"
           value={ruleStateFilter}
           onChange={event => setRuleStateFilter(event.target.value)}
         >
@@ -785,7 +785,7 @@ export function AutomationRules({
       </p>
 
       {draft.rules.length === 0 && data.canEdit && (
-        <Card className="border-border/80 shadow-xs">
+        <Card className="border-border/80 shadow-2xs">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">
               What would you like to automate?
@@ -839,7 +839,7 @@ export function AutomationRules({
           <section
             key={phase}
             aria-labelledby={`${headingId}-${phase}`}
-            className="min-w-0 space-y-2.5 rounded-xl border border-border/80 bg-card/60 p-3 shadow-xs"
+            className="min-w-0 space-y-2.5 rounded-xl border border-border/80 bg-card/60 p-3 shadow-2xs"
           >
             <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between border-b border-border/60 pb-2">
               <h3

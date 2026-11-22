@@ -355,7 +355,7 @@ export default function TemplatesListClient({
       </div>
 
       {/* Main List Container */}
-      <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-sm overflow-hidden min-h-[380px]">
+      <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-xs overflow-hidden min-h-[380px]">
         {/* Top Header Strip */}
         <div className="px-5 py-3 border-b border-border/70 flex flex-wrap justify-between items-center gap-3 bg-muted/20">
           <div className="flex items-center gap-2">
@@ -388,7 +388,7 @@ export default function TemplatesListClient({
           {templates.length === 0 ? (
             /* System Empty State */
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/60 border border-border/70 shadow-xs mb-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/60 border border-border/70 shadow-2xs mb-4">
                 <LayoutTemplate className="h-8 w-8 text-muted-foreground" />
               </div>
               <h3 className="text-lg font-bold text-foreground mb-1">No Templates Found</h3>
@@ -398,7 +398,7 @@ export default function TemplatesListClient({
               </p>
               {canManageTemplates && (
                 <Link href="/incidents/templates/create">
-                  <Button className="font-semibold shadow-xs">
+                  <Button className="font-semibold shadow-2xs">
                     <Plus className="w-4 h-4 mr-2" />
                     Create First Template
                   </Button>

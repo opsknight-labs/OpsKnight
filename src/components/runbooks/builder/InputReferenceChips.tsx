@@ -56,7 +56,7 @@ export default function InputReferenceChips({
             aria-pressed={current === undefined ? undefined : active}
             onClick={() => onInsert(reference)}
             className={cn(
-              'rounded-full px-2 py-0.5 font-mono text-[11px] ring-1 ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'rounded-full px-2 py-0.5 font-mono text-[11px] ring-1 ring-inset transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
               active
                 ? 'bg-primary/10 text-primary ring-primary/30'
                 : 'bg-background text-foreground ring-border hover:bg-muted'

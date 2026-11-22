@@ -81,7 +81,7 @@ function SetupBlock({ value, disabled = false }: { value: string; disabled?: boo
           {error}
         </p>
       )}
-      <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-zinc-200">
+      <pre className="max-h-80 overflow-auto whitespace-pre-wrap wrap-break-word p-4 font-mono text-xs leading-relaxed text-zinc-200">
         <code>{value}</code>
       </pre>
     </div>
@@ -161,7 +161,7 @@ export default function AgentSetupInstructions({
   return (
     <div className="space-y-6">
       {/* 1. Target Configuration & Deployment Settings Card */}
-      <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs overflow-hidden">
+      <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs overflow-hidden">
         <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -239,7 +239,7 @@ export default function AgentSetupInstructions({
               aria-label="Deployment operation"
               value={operation}
               onChange={event => setOperation(event.target.value as 'install' | 'upgrade')}
-              className="h-9 w-full sm:w-auto rounded-lg border border-input bg-background px-3 text-xs font-medium shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 w-full sm:w-auto rounded-lg border border-input bg-background px-3 text-xs font-medium shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="install">Install new independent Agent</option>
               <option value="upgrade">Upgrade this installed Agent, preserving identity</option>
@@ -319,7 +319,7 @@ export default function AgentSetupInstructions({
             className={cn(
               'flex items-center gap-3 rounded-xl border p-3.5 text-xs font-medium transition-colors cursor-pointer',
               endpointConfirmed
-                ? 'border-emerald-500/40 bg-emerald-500/[0.04] text-foreground'
+                ? 'border-emerald-500/40 bg-emerald-500/4 text-foreground'
                 : 'border-border/80 bg-muted/30 text-muted-foreground hover:bg-muted/50'
             )}
           >
@@ -384,7 +384,7 @@ export default function AgentSetupInstructions({
       </Card>
 
       {/* 2. Deployment Manifest & Commands Card */}
-      <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs overflow-hidden">
+      <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs overflow-hidden">
         <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -454,7 +454,7 @@ export default function AgentSetupInstructions({
       </Card>
 
       {/* 3. Preflight Diagnostics & Verification Checklist Card */}
-      <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs overflow-hidden">
+      <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs overflow-hidden">
         <details className="group" open>
           <summary className="cursor-pointer list-none select-none">
             <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">

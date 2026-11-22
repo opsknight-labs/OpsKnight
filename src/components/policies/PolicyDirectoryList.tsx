@@ -253,9 +253,9 @@ export default function PolicyDirectoryList({
 
   if (totalCount === 0 && !hasActiveFilter) {
     return (
-      <Card className="border-dashed border-2 bg-gradient-to-br from-ink-50/50 via-card to-ink-50/30">
+      <Card className="border-dashed border-2 bg-linear-to-br from-ink-50/50 via-card to-ink-50/30">
         <CardContent className="p-8 md:p-12 text-center space-y-6">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-xs">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-2xs">
             <ShieldAlert className="h-7 w-7" />
           </div>
 
@@ -418,7 +418,7 @@ export default function PolicyDirectoryList({
             )}
           >
             <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <p className="min-w-[14rem] flex-1">
+            <p className="min-w-56 flex-1">
               {[
                 needsSetupCount > 0 &&
                   `${policyCount(needsSetupCount)} ${needsSetupCount === 1 ? 'has' : 'have'} no steps, so nobody gets paged`,

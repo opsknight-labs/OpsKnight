@@ -41,7 +41,7 @@ export default function InsightPhrasing({
         aria-expanded={open}
         aria-controls={regionId}
         onClick={toggle}
-        className="inline-flex min-h-11 items-center rounded-md px-1 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+        className="inline-flex min-h-11 items-center rounded-md px-1 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
       >
         {open ? 'Hide plain-language version' : 'Explain in plain words'}
       </button>
@@ -52,8 +52,8 @@ export default function InsightPhrasing({
             <ul className="space-y-3">
               {phrased.map(({ id, title, text }) => (
                 <li key={id} className="space-y-0.5">
-                  <p className="break-words text-xs text-muted-foreground">{title}</p>
-                  <p className="break-words text-sm">{text}</p>
+                  <p className="wrap-break-word text-xs text-muted-foreground">{title}</p>
+                  <p className="wrap-break-word text-sm">{text}</p>
                 </li>
               ))}
             </ul>

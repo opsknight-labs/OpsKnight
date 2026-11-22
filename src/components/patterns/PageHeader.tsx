@@ -25,7 +25,7 @@ export function Breadcrumbs({ items, className }: { items: BreadcrumbItem[]; cla
               {crumb.href && !isLast ? (
                 <Link
                   href={crumb.href}
-                  className="truncate rounded-sm transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="truncate rounded-sm transition-colors duration-150 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   {crumb.label}
                 </Link>
@@ -50,7 +50,7 @@ export function Breadcrumbs({ items, className }: { items: BreadcrumbItem[]; cla
  * outline buttons assume a light page background, so pass these instead.
  */
 export const pageHeaderActionClass =
-  'border border-zinc-700/80 bg-zinc-800/90 text-zinc-100 shadow-xs hover:bg-zinc-700 hover:text-white active:bg-zinc-600 focus-visible:ring-zinc-400 focus-visible:ring-offset-zinc-950';
+  'border border-zinc-700/80 bg-zinc-800/90 text-zinc-100 shadow-2xs hover:bg-zinc-700 hover:text-white active:bg-zinc-600 focus-visible:ring-zinc-400 focus-visible:ring-offset-zinc-950';
 export const pageHeaderBadgeClass =
   'inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-0.5 text-xs font-medium text-zinc-100 tabular-nums';
 

@@ -211,7 +211,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
       {/* 2-Column Hero: Left = Team Ownership & Lead, Right = Member Roster Snapshot */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left: Team Lead & Mission */}
-        <Card className="overflow-hidden border-border/70 shadow-xs">
+        <Card className="overflow-hidden border-border/70 shadow-2xs">
           <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -241,7 +241,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
         </Card>
 
         {/* Right: Member Snapshot & Quick Add */}
-        <Card className="overflow-hidden border-border/70 shadow-xs">
+        <Card className="overflow-hidden border-border/70 shadow-2xs">
           <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -284,7 +284,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
       </Suspense>
 
       {/* Linked Escalation Policies & Blast Radius */}
-      <Card className="overflow-hidden border-border/70 shadow-xs">
+      <Card className="overflow-hidden border-border/70 shadow-2xs">
         <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -309,7 +309,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
       </Card>
 
       {/* Owned Services Grid */}
-      <Card className="overflow-hidden border-border/70 shadow-xs">
+      <Card className="overflow-hidden border-border/70 shadow-2xs">
         <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -338,7 +338,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
       </Card>
 
       {/* Recent Activity Timeline Preview */}
-      <Card className="overflow-hidden border-border/70 shadow-xs">
+      <Card className="overflow-hidden border-border/70 shadow-2xs">
         <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
@@ -356,7 +356,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
 
   // --- TAB 2: MEMBERS ---
   const membersTab = (
-    <Card className="overflow-hidden border-border/70 shadow-xs">
+    <Card className="overflow-hidden border-border/70 shadow-2xs">
       <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -394,7 +394,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
 
   // --- TAB 3: SERVICES ---
   const servicesTab = (
-    <Card className="overflow-hidden border-border/70 shadow-xs">
+    <Card className="overflow-hidden border-border/70 shadow-2xs">
       <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -426,7 +426,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
 
   // --- TAB 4: ACTIVITY ---
   const activityTab = (
-    <Card className="overflow-hidden border-border/70 shadow-xs">
+    <Card className="overflow-hidden border-border/70 shadow-2xs">
       <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
@@ -449,7 +449,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
   // --- TAB 5: SETTINGS ---
   const settingsTab = (
     <div className="space-y-6">
-      <Card className="overflow-hidden border-border/70 shadow-xs">
+      <Card className="overflow-hidden border-border/70 shadow-2xs">
         <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">

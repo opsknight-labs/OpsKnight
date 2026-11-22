@@ -108,7 +108,7 @@ export default function ServicesTable({ rows, compare }: { rows: ServiceRow[]; c
                       type="button"
                       onClick={() => toggleSort(column.key)}
                       className={cn(
-                        'inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        'inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                         active && 'text-foreground'
                       )}
                     >
@@ -133,7 +133,7 @@ export default function ServicesTable({ rows, compare }: { rows: ServiceRow[]; c
                     href={filterHref(row.id)}
                     scroll={false}
                     title={`Filter analytics to ${row.name}`}
-                    className="block truncate rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="block truncate rounded-sm hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {row.name}
                   </Link>
@@ -194,7 +194,7 @@ export default function ServicesTable({ rows, compare }: { rows: ServiceRow[]; c
         <button
           type="button"
           onClick={() => setExpanded(open => !open)}
-          className="mt-3 h-9 rounded-md px-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mt-3 h-9 rounded-md px-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           {expanded ? 'Show fewer' : `Show all ${sorted.length} services`}
         </button>

@@ -406,7 +406,7 @@ export default function UserList({
       />
 
       {selectedIds.size > 0 && (
-        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-muted/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-muted/70">
+        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-muted/95 px-4 py-2 backdrop-blur-sm supports-backdrop-filter:bg-muted/70">
           <div className="flex items-center gap-3 px-2">
             <Checkbox
               checked={allSelected}

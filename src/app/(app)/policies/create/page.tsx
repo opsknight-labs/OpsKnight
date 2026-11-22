@@ -33,7 +33,7 @@ export default async function CreatePolicyPage() {
         <p className="text-ink-500 mt-1">Set up a new policy to manage incident notifications.</p>
       </div>
 
-      <div className="rounded-xl border border-ink-200 bg-card p-6 shadow-sm">
+      <div className="rounded-xl border border-ink-200 bg-card p-6 shadow-xs">
         <PolicyForm />
       </div>
     </div>

@@ -126,7 +126,7 @@ function NavigationRow({ item }: { item: NavigationItem }) {
   return (
     <Link
       href={item.href}
-      className="flex min-h-[58px] items-center gap-3 px-3.5 py-2.5 text-card-foreground transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="flex min-h-[58px] items-center gap-3 px-3.5 py-2.5 text-card-foreground transition-colors hover:bg-accent/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       <Icon className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden={true} />
       <span className="min-w-0 flex-1">

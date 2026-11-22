@@ -473,7 +473,7 @@ export default function LiveIncidentsPanel({
       data-connection={health}
       data-paused={paused ? 'true' : 'false'}
       data-loading={loading ? 'true' : 'false'}
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm [container-type:inline-size]"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xs @container"
     >
       <header
         className={
@@ -515,7 +515,7 @@ export default function LiveIncidentsPanel({
                   <button
                     type="button"
                     data-testid="live-sort"
-                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-card px-2.5 text-xs font-medium outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-card px-2.5 text-xs font-medium outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <ArrowDownWideNarrow className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     {query.sort === 'attention' ? 'Needs attention' : 'Newest'}
@@ -543,7 +543,7 @@ export default function LiveIncidentsPanel({
                 data-testid="live-pause-toggle"
                 title="Pause / resume live updates (p)"
                 className={cn(
-                  'inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
+                  'inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium outline-hidden transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
                   paused
                     ? toneClasses('elevated').soft
                     : 'border-border bg-card text-foreground hover:bg-muted'
@@ -577,7 +577,7 @@ export default function LiveIncidentsPanel({
                     type="button"
                     data-testid="live-more-actions"
                     aria-label="More live incident actions"
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card p-0 text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card p-0 text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <MoreHorizontal className="h-4 w-4 shrink-0" aria-hidden />
                   </button>
@@ -654,7 +654,7 @@ export default function LiveIncidentsPanel({
 
       {!wallboard && snapshot && snapshot.pinned.length > 0 && (
         <div
-          className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-muted/30 px-4 py-1.5 [scrollbar-width:none]"
+          className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-muted/30 px-4 py-1.5 scrollbar-none"
           data-testid="live-pinned"
         >
           <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -735,7 +735,7 @@ export default function LiveIncidentsPanel({
           </div>
         ) : incidents.length === 0 ? (
           <div
-            className="flex h-full min-h-[12rem] flex-col items-center justify-center py-10 text-center"
+            className="flex h-full min-h-48 flex-col items-center justify-center py-10 text-center"
             data-testid="live-incidents-empty"
           >
             <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
@@ -754,7 +754,7 @@ export default function LiveIncidentsPanel({
             {query.view === 'active' && facetCount === 0 ? (
               <Link
                 href="/incidents?filter=resolved"
-                className="mt-3 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-3 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Review resolved incidents
               </Link>
@@ -773,7 +773,7 @@ export default function LiveIncidentsPanel({
                     search: '',
                   })
                 }
-                className="mt-3 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-3 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Clear filters
               </button>
@@ -831,7 +831,7 @@ export default function LiveIncidentsPanel({
                 onClick={loadOlder}
                 disabled={loadingOlder}
                 data-testid="live-load-older"
-                className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted disabled:opacity-60 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted disabled:opacity-60 outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {loadingOlder
                   ? 'Loading…'
@@ -845,7 +845,7 @@ export default function LiveIncidentsPanel({
                 type="button"
                 onClick={() => setExpanded(value => !value)}
                 data-testid="live-show-more"
-                className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {expanded ? 'Show less' : `Show ${hiddenLoaded} more`}
               </button>
@@ -853,7 +853,7 @@ export default function LiveIncidentsPanel({
             <Link
               href={viewAllHref(query, currentUserId)}
               data-testid="live-view-all"
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               View all incidents
               <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />

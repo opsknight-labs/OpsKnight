@@ -48,11 +48,11 @@ export function InsightRow({
               Dismissed
             </Badge>
           )}
-          <p className="min-w-0 break-words text-sm font-medium">{insight.title}</p>
+          <p className="min-w-0 wrap-break-word text-sm font-medium">{insight.title}</p>
         </div>
         <p
           title={compact ? insight.summary : undefined}
-          className={cn('break-words text-sm text-muted-foreground', compact && 'line-clamp-2')}
+          className={cn('wrap-break-word text-sm text-muted-foreground', compact && 'line-clamp-2')}
         >
           {insight.summary}
         </p>
@@ -61,7 +61,7 @@ export function InsightRow({
             On {SCOPE_NOUN[insight.scopeType]}{' '}
             <Link
               href={insight.scopeHref}
-              className="inline-flex min-h-11 items-center font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
+              className="inline-flex min-h-11 items-center font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
             >
               {insight.scopeName}
             </Link>

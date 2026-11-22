@@ -37,13 +37,13 @@ export default function WindowSelector({
                 className={
                   header
                     ? cn(
-                        'inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 sm:h-8 sm:min-h-0',
+                        'inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-zinc-400 sm:h-8 sm:min-h-0',
                         active
                           ? 'bg-zinc-100 text-zinc-900'
                           : 'text-zinc-300 hover:bg-zinc-700 hover:text-white'
                       )
                     : cn(
-                        'inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:h-7 sm:min-h-0 sm:px-2.5',
+                        'inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:h-7 sm:min-h-0 sm:px-2.5',
                         active
                           ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
                           : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'

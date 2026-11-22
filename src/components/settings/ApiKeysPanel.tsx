@@ -247,7 +247,7 @@ export default function ApiKeysPanel({
       )}
 
       {/* 2. Action and Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-2xs">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
           <form
             method="get"
@@ -268,7 +268,7 @@ export default function ApiKeysPanel({
               name="kstatus"
               defaultValue={inventory.status}
               aria-label="Key status"
-              className="h-9 text-xs rounded-md border border-input bg-background px-2 min-w-[140px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 text-xs rounded-md border border-input bg-background px-2 min-w-[140px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="ALL">All statuses</option>
               <option value="ACTIVE">Active only</option>
@@ -320,7 +320,7 @@ export default function ApiKeysPanel({
           }
         />
       ) : (
-        <Card className="border-border/80 shadow-xs overflow-hidden">
+        <Card className="border-border/80 shadow-2xs overflow-hidden">
           <CardHeader className="pb-3 px-4 sm:px-5 border-b border-border/60">
             <div className="flex items-center justify-between">
               <div>
@@ -520,7 +520,7 @@ export default function ApiKeysPanel({
                   id="modal-expiration-days"
                   name="expirationDays"
                   defaultValue="90"
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-2xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <option value="7">7 days (Short-lived test)</option>
                   <option value="30">30 days</option>

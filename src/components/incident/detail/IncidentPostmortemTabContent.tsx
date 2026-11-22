@@ -360,7 +360,7 @@ export default function IncidentPostmortemTabContent({
   if (isResolved) {
     return (
       <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 dark:bg-zinc-800/20 dark:border-zinc-800 p-6 sm:p-8 text-center space-y-4">
-        <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-xs border border-indigo-100 dark:border-indigo-900/50">
+        <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-2xs border border-indigo-100 dark:border-indigo-900/50">
           <FileText className="h-6 w-6" />
         </div>
 
@@ -393,7 +393,7 @@ export default function IncidentPostmortemTabContent({
         <div className="pt-2">
           {canManage ? (
             <Link href={`/postmortems/${incidentId}`}>
-              <Button className="h-9 gap-2 px-5 text-xs font-semibold shadow-xs">
+              <Button className="h-9 gap-2 px-5 text-xs font-semibold shadow-2xs">
                 <Plus className="h-4 w-4" />
                 <span>Create Postmortem</span>
               </Button>
@@ -410,7 +410,7 @@ export default function IncidentPostmortemTabContent({
 
   return (
     <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 dark:bg-zinc-800/20 dark:border-zinc-800 p-6 sm:p-8 text-center space-y-4">
-      <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 flex items-center justify-center mx-auto shadow-xs border border-slate-200/60 dark:border-zinc-700">
+      <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 flex items-center justify-center mx-auto shadow-2xs border border-slate-200/60 dark:border-zinc-700">
         <Clock className="h-6 w-6" />
       </div>
 

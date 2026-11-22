@@ -319,7 +319,7 @@ export default function RetentionPolicySettings() {
       )}
 
       {stats && (
-        <div className="rounded-lg border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="rounded-lg border bg-card p-5 sm:p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
             <div className="flex items-start sm:items-center gap-3 min-w-0">
               <div className="p-2.5 rounded-lg bg-muted text-muted-foreground shrink-0">
@@ -389,7 +389,7 @@ export default function RetentionPolicySettings() {
         </div>
       )}
 
-      <div className="rounded-lg border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+      <div className="rounded-lg border bg-card p-5 sm:p-6 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b">
           <div className="flex items-start sm:items-center gap-3 min-w-0">
             <div className="p-2.5 rounded-lg bg-muted text-muted-foreground shrink-0">

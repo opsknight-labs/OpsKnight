@@ -256,7 +256,7 @@ export default function JiraIntegrationPage({
         </div>
       )}
 
-      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs space-y-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-lg border bg-muted/30 p-2">
@@ -378,7 +378,7 @@ export default function JiraIntegrationPage({
         )}
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-6">
+      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs space-y-6">
         <div className="flex items-center justify-between gap-3 border-b pb-4">
           <div className="flex items-center gap-3">
             <JiraLogo className="h-6 w-6" />
@@ -472,7 +472,7 @@ export default function JiraIntegrationPage({
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs space-y-5">
         <div>
           <h3 className="text-base font-semibold">Inbound Webhook Sync</h3>
           <p className="text-xs text-muted-foreground">
@@ -559,7 +559,7 @@ export default function JiraIntegrationPage({
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+      <section className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold flex items-center gap-2">

@@ -78,7 +78,7 @@ export function DependenciesPanel({
                 key={edge.id}
                 className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2 text-sm"
               >
-                <span className="min-w-0 break-words">
+                <span className="min-w-0 wrap-break-word">
                   {edge.direction === 'UPSTREAM' ? 'Depends on ' : 'Depended on by '}
                   <Link
                     href={`/services/${encodeURIComponent(edge.neighbourId)}?tab=intelligence`}
@@ -108,7 +108,7 @@ export function DependenciesPanel({
                 className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2"
               >
                 <p className="min-w-0 text-sm">
-                  <span className="break-words">{sentence(edge)}</span>
+                  <span className="wrap-break-word">{sentence(edge)}</span>
                   <span className="ml-2 text-xs text-muted-foreground">
                     Suggested · {formatPercent(edge.confidence)} confidence
                   </span>
@@ -182,7 +182,7 @@ function BurnMeter({ label, rate, threshold }: { label: string; rate: number; th
         </span>
       </div>
       <div aria-hidden="true" className="h-2 w-full rounded-r bg-muted">
-        <div className="h-2 rounded-r bg-[var(--overview-accent)]" style={{ width: `${width}%` }} />
+        <div className="h-2 rounded-r bg-(--overview-accent)" style={{ width: `${width}%` }} />
       </div>
     </div>
   );
@@ -212,7 +212,7 @@ export function SloBurnPanel({
           return (
             <li key={objective.objectiveId} className="space-y-2 py-3 first:pt-0">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <p className="min-w-0 break-words text-sm font-medium">
+                <p className="min-w-0 wrap-break-word text-sm font-medium">
                   {objective.name}
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
                     target {objective.targetPercent}%
@@ -366,7 +366,7 @@ export function ChangesPanel({
               <p className="min-w-0 text-sm">
                 <Link
                   href={`/changes/${encodeURIComponent(change.id)}`}
-                  className="break-words font-medium underline-offset-4 hover:underline"
+                  className="wrap-break-word font-medium underline-offset-4 hover:underline"
                 >
                   {change.summary}
                 </Link>
@@ -478,7 +478,7 @@ export function NoiseStatusPanel({
                 key={window.id}
                 className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2 text-sm"
               >
-                <span className="min-w-0 break-words font-medium">{window.name}</span>
+                <span className="min-w-0 wrap-break-word font-medium">{window.name}</span>
                 <span className="text-xs text-muted-foreground">
                   {window.effect === 'SUPPRESS' ? 'Suppresses alerts' : 'Lowers urgency'} ·{' '}
                   {window.scope === 'SERVICE'
@@ -504,7 +504,7 @@ export function NoiseStatusPanel({
                 key={monitor.id}
                 className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2 text-sm"
               >
-                <span className="min-w-0 break-words font-medium">{monitor.name}</span>
+                <span className="min-w-0 wrap-break-word font-medium">{monitor.name}</span>
                 {monitor.missingSince && (
                   <span className="text-xs text-muted-foreground">
                     since {formatDateTime(monitor.missingSince, timeZone, { format: 'short' })}
@@ -616,7 +616,7 @@ export function RecurringProblemsPanel({
             <p className="min-w-0 text-sm">
               <Link
                 href={`/incidents/${encodeURIComponent(problem.latestIncidentId)}`}
-                className="break-words font-medium underline-offset-4 hover:underline"
+                className="wrap-break-word font-medium underline-offset-4 hover:underline"
               >
                 {problem.template}
               </Link>

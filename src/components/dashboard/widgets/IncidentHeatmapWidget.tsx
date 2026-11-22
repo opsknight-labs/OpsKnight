@@ -116,7 +116,7 @@ export function IncidentHeatmapWidget({
         className={cn(
           'group relative overflow-hidden p-4 sm:p-5',
           variant === 'dashboard'
-            ? 'rounded-lg border border-border bg-card shadow-sm'
+            ? 'rounded-lg border border-border bg-card shadow-xs'
             : 'rounded-lg border border-border bg-muted/40'
         )}
       >
@@ -141,8 +141,8 @@ export function IncidentHeatmapWidget({
           </div>
         </div>
 
-        <div ref={scrollRef} className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
-          <div className="min-w-[40rem]">
+        <div ref={scrollRef} className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-thin">
+          <div className="min-w-160">
             {/* Month labels */}
             <div
               className="grid mb-2 text-xs font-medium text-muted-foreground"

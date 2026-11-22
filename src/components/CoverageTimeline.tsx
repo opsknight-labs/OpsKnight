@@ -206,7 +206,7 @@ export default function CoverageTimeline({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-background shadow-sm">
+      <div className="overflow-hidden rounded-xl border bg-background shadow-xs">
         {rows.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground">
             No coverage is scheduled for today.
@@ -237,8 +237,8 @@ export default function CoverageTimeline({
                 <div className="relative h-12 overflow-hidden">
                   <div className="absolute inset-0 flex" aria-hidden="true">
                     <div className="w-1/4 border-r bg-muted/30" />
-                    <div className="w-1/4 border-r bg-amber-500/[0.04]" />
-                    <div className="w-1/4 border-r bg-amber-500/[0.04]" />
+                    <div className="w-1/4 border-r bg-amber-500/4" />
+                    <div className="w-1/4 border-r bg-amber-500/4" />
                     <div className="w-1/4 bg-muted/30" />
                   </div>
                   {row.shifts.map(shift => {
@@ -264,7 +264,7 @@ export default function CoverageTimeline({
                           <TooltipTrigger asChild>
                             <div
                               className={cn(
-                                'absolute top-2 flex h-8 items-center gap-1.5 rounded-lg px-1.5 shadow-sm transition-shadow hover:ring-2 hover:ring-border hover:ring-offset-1',
+                                'absolute top-2 flex h-8 items-center gap-1.5 rounded-lg px-1.5 shadow-xs transition-shadow hover:ring-2 hover:ring-border hover:ring-offset-1',
                                 blockColor
                               )}
                               style={{

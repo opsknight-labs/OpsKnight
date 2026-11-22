@@ -35,9 +35,9 @@ export default function DiagnosticTable({
             key={item.id}
             className="block py-3 sm:table-row sm:py-0 transition-colors hover:bg-muted/30"
           >
-            <td className="block min-w-0 break-words p-3 sm:table-cell">
-              <p className="font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+            <td className="block min-w-0 wrap-break-word p-3 sm:table-cell">
+              <p className="font-semibold text-foreground wrap-anywhere">{item.title}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground wrap-anywhere">
                 {item.subtitle}
               </p>
             </td>

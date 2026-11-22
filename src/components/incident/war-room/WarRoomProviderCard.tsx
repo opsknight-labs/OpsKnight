@@ -49,17 +49,17 @@ export function WarRoomProviderCard({
       room.health === 'MISSING' ||
       room.state === 'FAILED'
     ) {
-      return 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-rose-200 dark:border-rose-900/40 border-l-[3.5px] border-l-rose-500 hover:border-rose-300 dark:hover:border-rose-800/60 hover:shadow-xs';
+      return 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-rose-200 dark:border-rose-900/40 border-l-[3.5px] border-l-rose-500 hover:border-rose-300 dark:hover:border-rose-800/60 hover:shadow-2xs';
     }
     if (room.health === 'DEGRADED' || isTransitioning) {
-      return 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-amber-200 dark:border-amber-900/40 border-l-[3.5px] border-l-amber-500 hover:border-amber-300 dark:hover:border-amber-800/60 hover:shadow-xs';
+      return 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-amber-200 dark:border-amber-900/40 border-l-[3.5px] border-l-amber-500 hover:border-amber-300 dark:hover:border-amber-800/60 hover:shadow-2xs';
     }
     if (room.state === 'READY') {
       return isSlack
-        ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-emerald-200/80 dark:border-emerald-900/40 border-l-[3.5px] border-l-emerald-500 hover:border-emerald-300 dark:hover:border-emerald-800/60 hover:shadow-xs'
+        ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-emerald-200/80 dark:border-emerald-900/40 border-l-[3.5px] border-l-emerald-500 hover:border-emerald-300 dark:hover:border-emerald-800/60 hover:shadow-2xs'
         : isTeams
-          ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-indigo-200/80 dark:border-indigo-900/40 border-l-[3.5px] border-l-indigo-500 hover:border-indigo-300 dark:hover:border-indigo-800/60 hover:shadow-xs'
-          : 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-sky-200/80 dark:border-sky-900/40 border-l-[3.5px] border-l-sky-500 hover:border-sky-300 dark:hover:border-sky-800/60 hover:shadow-xs';
+          ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-indigo-200/80 dark:border-indigo-900/40 border-l-[3.5px] border-l-indigo-500 hover:border-indigo-300 dark:hover:border-indigo-800/60 hover:shadow-2xs'
+          : 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-sky-200/80 dark:border-sky-900/40 border-l-[3.5px] border-l-sky-500 hover:border-sky-300 dark:hover:border-sky-800/60 hover:shadow-2xs';
     }
     return 'bg-white/80 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-800/80 border-zinc-200/80 dark:border-zinc-800/80 border-l-[3.5px] border-l-zinc-300 dark:border-l-zinc-700 opacity-85 hover:opacity-100';
   })();

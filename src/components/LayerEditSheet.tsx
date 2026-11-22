@@ -169,7 +169,7 @@ export default function LayerEditSheet({
             >
               Cancel
             </Button>
-            <Button type="submit" className="h-10 flex-1 shadow-sm" disabled={isPending}>
+            <Button type="submit" className="h-10 flex-1 shadow-xs" disabled={isPending}>
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -112,7 +112,7 @@ export default function AdhocRunbookLauncher({
             if (initialRunbookId) choose(initialRunbookId);
           }}
           size="sm"
-          className="gap-2 bg-foreground text-background hover:bg-foreground/90 font-medium shadow-xs h-11 sm:h-8 text-xs shrink-0"
+          className="gap-2 bg-foreground text-background hover:bg-foreground/90 font-medium shadow-2xs h-11 sm:h-8 text-xs shrink-0"
         >
           <Play className="h-3.5 w-3.5 fill-current" aria-hidden /> {label}
         </Button>
@@ -199,7 +199,7 @@ export default function AdhocRunbookLauncher({
                           type="button"
                           onClick={() => choose(option.id)}
                           disabled={loading}
-                          className="flex w-full items-start gap-3 px-3.5 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-60"
+                          className="flex w-full items-start gap-3 px-3.5 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-60"
                         >
                           <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                             <BookOpen className="h-3.5 w-3.5" aria-hidden />

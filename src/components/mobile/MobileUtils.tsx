@@ -170,7 +170,7 @@ export function MobileProgressBar({
         />
       </div>
       {showLabel && (
-        <div className="mt-1 text-right text-[11px] font-medium text-[color:var(--text-muted)]">
+        <div className="mt-1 text-right text-[11px] font-medium text-(--text-muted)">
           {Math.round(percentage)}%
         </div>
       )}
@@ -191,14 +191,14 @@ export function MobileEmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[color:var(--border)] bg-[color:var(--bg-secondary)] px-4 py-10 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-(--border) bg-(--bg-secondary) px-4 py-10 text-center">
       {icon && (
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--bg-secondary)] text-2xl text-[color:var(--text-muted)]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--bg-secondary) text-2xl text-(--text-muted)">
           {icon}
         </div>
       )}
-      <h3 className="text-sm font-semibold text-[color:var(--text-primary)]">{title}</h3>
-      {description && <p className="text-xs text-[color:var(--text-muted)]">{description}</p>}
+      <h3 className="text-sm font-semibold text-(--text-primary)">{title}</h3>
+      {description && <p className="text-xs text-(--text-muted)">{description}</p>}
       {action && <div className="mt-2 flex flex-col gap-2">{action}</div>}
     </div>
   );

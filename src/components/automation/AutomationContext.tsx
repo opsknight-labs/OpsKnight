@@ -300,7 +300,7 @@ export function AutomationContext({
                 placeholder="Search context fields…"
                 value={contextSearch}
                 onChange={event => setContextSearch(event.target.value)}
-                className="search-input h-8.5 !pl-8 !pr-8 text-xs bg-background"
+                className="search-input h-8.5 pl-8! pr-8! text-xs bg-background"
               />
               {contextSearch && (
                 <button
@@ -341,7 +341,7 @@ export function AutomationContext({
               </p>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-xs">
+            <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xs">
               <div
                 aria-hidden="true"
                 className="hidden gap-x-3 border-b border-border/60 bg-muted/30 px-3.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1.6fr)_6rem_minmax(0,1fr)_minmax(0,1.2fr)]"
@@ -394,7 +394,7 @@ export function AutomationContext({
           {data.canEdit && (
             <section
               aria-labelledby={`${formId}-title`}
-              className="space-y-3 rounded-xl border border-border/80 bg-card p-3 sm:p-3.5 shadow-xs"
+              className="space-y-3 rounded-xl border border-border/80 bg-card p-3 sm:p-3.5 shadow-2xs"
             >
               <div className="border-b border-border/60 pb-2">
                 <h3
@@ -665,7 +665,7 @@ export function AutomationContext({
               <div className="flex flex-wrap items-center gap-2.5 pt-1">
                 <Button
                   size="sm"
-                  className="h-8 text-xs font-medium gap-1.5 shadow-xs"
+                  className="h-8 text-xs font-medium gap-1.5 shadow-2xs"
                   disabled={
                     draft.fields.length >= LIMITS.fields ||
                     !fieldLabel.trim() ||
@@ -687,7 +687,7 @@ export function AutomationContext({
         {data.canEdit && (
           <aside
             aria-labelledby={`${formId}-discover`}
-            className="min-w-0 space-y-3.5 self-start rounded-xl border border-border/80 bg-card p-3.5 shadow-xs"
+            className="min-w-0 space-y-3.5 self-start rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs"
           >
             <div>
               <h3
@@ -781,7 +781,7 @@ export function AutomationContext({
                         {field.source ? ` · ${field.source}` : ''}
                         {field.frequency ? ` · ${field.frequency} recent alerts` : ''}
                       </p>
-                      <p className="break-words text-xs">
+                      <p className="wrap-break-word text-xs">
                         Examples: {(field.examples ?? [field.value]).join(', ')}
                       </p>
                     </li>

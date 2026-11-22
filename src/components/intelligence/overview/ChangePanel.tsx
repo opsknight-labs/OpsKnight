@@ -18,7 +18,7 @@ export function RiskMeter({ score }: { score: number }) {
   const band = riskBand(score);
   const Icon = band.tone === 'high' ? AlertTriangle : band.tone === 'medium' ? CircleDot : Info;
   return (
-    <div className="flex min-w-[9rem] items-center gap-2">
+    <div className="flex min-w-36 items-center gap-2">
       <div
         aria-hidden="true"
         className={cn(
@@ -107,7 +107,7 @@ export default function ChangePanel({
                 <div className="min-w-0 space-y-0.5">
                   <Link
                     href={`/changes/${encodeURIComponent(change.id)}`}
-                    className="inline-flex min-h-11 items-center break-words text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
+                    className="inline-flex min-h-11 items-center wrap-break-word text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
                   >
                     {change.summary}
                   </Link>
@@ -132,12 +132,12 @@ export default function ChangePanel({
               <li key={row.incidentId} className="space-y-0.5 py-2.5">
                 <Link
                   href={`/incidents/${encodeURIComponent(row.incidentId)}`}
-                  className="inline-flex min-h-11 items-center break-words text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
+                  className="inline-flex min-h-11 items-center wrap-break-word text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
                 >
                   {row.title}
                 </Link>
                 <p className="flex flex-wrap gap-x-1 text-xs text-muted-foreground">
-                  <span className="min-w-0 break-words">
+                  <span className="min-w-0 wrap-break-word">
                     {row.change
                       ? `Likely change: ${row.change.summary}`
                       : 'Linked change not visible to you'}

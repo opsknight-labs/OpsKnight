@@ -55,7 +55,7 @@ function StatTile({
     <Link
       href={href}
       className={cn(
-        'group relative flex min-w-0 flex-col rounded-lg border border-border bg-card p-3.5 shadow-2xs transition-all sm:p-4 hover:border-primary/40 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'group relative flex min-w-0 flex-col rounded-lg border border-border bg-card p-3.5 shadow-2xs transition-all sm:p-4 hover:border-primary/40 hover:shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         tone === 'attention' && 'border-status-elevated-border/40'
       )}
     >
@@ -388,7 +388,7 @@ export default function McpOverviewSection({
               </p>
               <Link
                 href={hrefs.connect}
-                className="inline-flex items-center gap-1.5 rounded-md text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center gap-1.5 rounded-md text-xs font-semibold text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Plug className="h-3.5 w-3.5" aria-hidden="true" />
                 Connect an assistant

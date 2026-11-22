@@ -160,7 +160,7 @@ export default function IncidentDetailTabs({
             <TabsList className="inline-flex h-9 sm:h-8 w-max min-w-full sm:w-auto items-center justify-start gap-1 p-1 bg-muted/50 sm:bg-muted/60 dark:bg-muted/30 border border-border/50 rounded-xl sm:rounded-lg overflow-x-auto">
               <TabsTrigger
                 value="overview"
-                className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+                className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all select-none truncate"
               >
                 <Settings2 className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">Overview</span>
@@ -168,7 +168,7 @@ export default function IncidentDetailTabs({
               {automationContent && (
                 <TabsTrigger
                   value="automation"
-                  className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+                  className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all select-none truncate"
                 >
                   <Workflow className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">Automation</span>
@@ -177,7 +177,7 @@ export default function IncidentDetailTabs({
               {responseContent && (
                 <TabsTrigger
                   value="response"
-                  className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+                  className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all select-none truncate"
                 >
                   <Route className="h-3.5 w-3.5 shrink-0" />
                   <span className="leading-tight sm:hidden truncate">Activity</span>
@@ -187,7 +187,7 @@ export default function IncidentDetailTabs({
               {runbooksContent && (
                 <TabsTrigger
                   value="runbooks"
-                  className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+                  className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all select-none truncate"
                 >
                   <BookOpen className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">Runbooks</span>
@@ -195,7 +195,7 @@ export default function IncidentDetailTabs({
               )}
               <TabsTrigger
                 value="timeline"
-                className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+                className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all select-none truncate"
               >
                 <History className="h-3.5 w-3.5 shrink-0" />
                 <span className="inline-flex items-center gap-1 leading-tight truncate">
@@ -209,7 +209,7 @@ export default function IncidentDetailTabs({
               </TabsTrigger>
               <TabsTrigger
                 value="postmortem"
-                className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all select-none truncate"
+                className="shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-2 text-xs font-medium rounded-lg sm:rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-all select-none truncate"
               >
                 <FileText className="h-3.5 w-3.5 shrink-0" />
                 <span className="inline-flex items-center gap-1 leading-tight truncate">
@@ -243,33 +243,33 @@ export default function IncidentDetailTabs({
 
         {/* Tab Content */}
         <div className="p-4 sm:p-5">
-          <TabsContent value="overview" className="mt-0 space-y-6 focus-visible:outline-none">
+          <TabsContent value="overview" className="mt-0 space-y-6 focus-visible:outline-hidden">
             {activityContent}
           </TabsContent>
 
           {automationContent && (
-            <TabsContent value="automation" className="mt-0 space-y-4 focus-visible:outline-none">
+            <TabsContent value="automation" className="mt-0 space-y-4 focus-visible:outline-hidden">
               {automationContent}
             </TabsContent>
           )}
 
           {responseContent && (
-            <TabsContent value="response" className="mt-0 focus-visible:outline-none">
+            <TabsContent value="response" className="mt-0 focus-visible:outline-hidden">
               {responseContent}
             </TabsContent>
           )}
 
-          <TabsContent value="timeline" className="mt-0 focus-visible:outline-none">
+          <TabsContent value="timeline" className="mt-0 focus-visible:outline-hidden">
             {timelineContent}
           </TabsContent>
 
           {runbooksContent && (
-            <TabsContent value="runbooks" className="mt-0 focus-visible:outline-none">
+            <TabsContent value="runbooks" className="mt-0 focus-visible:outline-hidden">
               {runbooksContent}
             </TabsContent>
           )}
 
-          <TabsContent value="postmortem" className="mt-0 focus-visible:outline-none">
+          <TabsContent value="postmortem" className="mt-0 focus-visible:outline-hidden">
             {postmortemContent}
           </TabsContent>
         </div>

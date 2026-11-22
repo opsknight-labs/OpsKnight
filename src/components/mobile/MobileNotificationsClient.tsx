@@ -374,7 +374,7 @@ export default function MobileNotificationsClient() {
               className={cn(
                 'h-11 min-h-[44px] rounded-md px-3 text-[11px] font-semibold transition-colors',
                 activeFilter === filter
-                  ? 'bg-card text-foreground shadow-sm'
+                  ? 'bg-card text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               )}
               aria-pressed={activeFilter === filter}
@@ -444,13 +444,13 @@ export default function MobileNotificationsClient() {
                       className={cn(
                         'flex min-w-0 items-stretch transition-colors',
                         index > 0 && 'border-t border-border/70',
-                        notification.unread && 'bg-primary/[0.025]'
+                        notification.unread && 'bg-primary/2.5'
                       )}
                     >
                       <Link
                         href={resolveNotificationHref(notification)}
                         onClick={() => haptics.soft()}
-                        className="flex min-h-[76px] min-w-0 flex-1 items-start gap-3 px-3.5 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        className="flex min-h-[76px] min-w-0 flex-1 items-start gap-3 px-3.5 py-3 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       >
                         <span
                           className={cn(
@@ -462,7 +462,7 @@ export default function MobileNotificationsClient() {
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="flex min-w-0 items-start gap-2">
-                            <span className="min-w-0 flex-1 break-words text-[13px] font-semibold leading-snug text-foreground">
+                            <span className="min-w-0 flex-1 wrap-break-word text-[13px] font-semibold leading-snug text-foreground">
                               {notification.title}
                             </span>
                             {notification.unread ? (

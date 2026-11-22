@@ -53,7 +53,7 @@ export function OverviewSection({
       aria-labelledby={`${id}-title`}
       data-overview-section={id}
       className={cn(
-        'flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm',
+        'flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xs',
         className
       )}
     >
@@ -93,7 +93,7 @@ export function DrilldownLink({ id, href, label }: { id: string; href: string; l
     <Link
       href={href}
       data-overview-drilldown={id}
-      className="-my-1 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground underline-offset-4 transition-colors duration-150 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+      className="-my-1 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground underline-offset-4 transition-colors duration-150 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
     >
       {label}
       <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -115,7 +115,7 @@ export const NO_VALUE = '—';
 
 // Inside a flush `StatGrid` (`data-flush`), tiles draw their own hairlines and take the card's padding.
 const FLUSH_TILE =
-  'group-data-[flush]/stats:border-b group-data-[flush]/stats:border-r group-data-[flush]/stats:px-4 group-data-[flush]/stats:py-3 sm:group-data-[flush]/stats:px-5';
+  'group-data-flush/stats:border-b group-data-flush/stats:border-r group-data-flush/stats:px-4 group-data-flush/stats:py-3 sm:group-data-flush/stats:px-5';
 
 /**
  * One cell of a stat strip: sentence-case label, tabular value, then the delta and a one-line hint. A "—"
@@ -144,7 +144,7 @@ export function StatTile({
       <dt className="line-clamp-2 text-xs font-medium text-muted-foreground">{label}</dt>
       <dd
         className={cn(
-          'break-words font-display text-xl font-semibold tabular-nums group-data-[flush]/stats:text-2xl',
+          'wrap-break-word font-display text-xl font-semibold tabular-nums group-data-flush/stats:text-2xl',
           value === NO_VALUE ? 'text-muted-foreground' : 'text-foreground'
         )}
       >
@@ -254,7 +254,7 @@ export function RankedBars({
           </div>
           <div aria-hidden="true" className="h-2 w-full">
             <div
-              className="h-2 rounded-r bg-[var(--overview-accent)]"
+              className="h-2 rounded-r bg-(--overview-accent)"
               style={{ width: `${Math.max(2, (item.value / max) * 100)}%` }}
             />
           </div>
@@ -285,7 +285,7 @@ export function SectionSkeleton({ title, tiles = 3 }: { title: string; tiles?: n
     <section
       aria-busy="true"
       aria-label={`Loading ${title}`}
-      className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+      className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-xs"
     >
       <div className="flex items-start gap-3 border-b border-border px-4 py-3 sm:px-5">
         <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
@@ -359,7 +359,7 @@ export function FeatureOff({
       <section
         aria-label={title}
         data-feature-off="banner"
-        className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center"
+        className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-xs sm:flex-row sm:items-center"
       >
         <span
           aria-hidden="true"
@@ -388,7 +388,7 @@ export function FeatureOff({
 }
 
 export const actionLinkClass =
-  'inline-flex min-h-11 items-center rounded-md border border-border px-3 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9';
+  'inline-flex min-h-11 items-center rounded-md border border-border px-3 text-xs font-medium hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9';
 
 /** Signed relative change between two values, with tone by whether lower is better. */
 export function relativeDelta(

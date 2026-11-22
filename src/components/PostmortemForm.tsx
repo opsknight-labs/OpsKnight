@@ -413,7 +413,7 @@ export default function PostmortemForm({
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {/* Incident Selection */}
         {!incidentId && resolvedIncidents.length > 0 && (
-          <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
+          <Card className="bg-linear-to-br from-card to-ink-50 shadow-md">
             <CardHeader>
               <CardTitle className="text-xl">Select Incident</CardTitle>
             </CardHeader>
@@ -455,7 +455,7 @@ export default function PostmortemForm({
         )}
 
         {incidentId && effectiveIncidentJiraIssues.length > 0 && (
-          <Card className="border-blue-200/80 bg-blue-50/40 shadow-sm dark:border-blue-500/30 dark:bg-blue-500/10">
+          <Card className="border-blue-200/80 bg-blue-50/40 shadow-xs dark:border-blue-500/30 dark:bg-blue-500/10">
             <CardContent className="p-4 flex flex-col gap-1.5">
               <div className="text-xs font-semibold text-foreground">
                 Inherited incident context
@@ -472,7 +472,7 @@ export default function PostmortemForm({
         <PostmortemRecurrenceStrip recurrence={assistView?.recurrence} />
 
         {/* Basic Information */}
-        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
+        <Card className="bg-linear-to-br from-card to-ink-50 shadow-md">
           <CardHeader className="flex flex-row justify-between items-center space-y-0 pb-4">
             <CardTitle className="text-xl">Basic Information</CardTitle>
             <Button
@@ -601,7 +601,7 @@ export default function PostmortemForm({
         </Card>
 
         {/* Timeline */}
-        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
+        <Card className="bg-linear-to-br from-card to-ink-50 shadow-md">
           <CardHeader>
             <CardTitle className="text-xl">Incident Timeline</CardTitle>
           </CardHeader>
@@ -614,7 +614,7 @@ export default function PostmortemForm({
         <PostmortemImpactInput metrics={impactMetrics} onChange={setImpactMetrics} />
 
         {/* Root Cause Analysis & 5-Whys Studio */}
-        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
+        <Card className="bg-linear-to-br from-card to-ink-50 shadow-md">
           <CardHeader className="pb-3">
             <CardTitle className="text-xl flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -702,7 +702,7 @@ export default function PostmortemForm({
         <PostmortemActionSuggestions suggestions={suggestions} onAdd={addSuggestion} />
 
         {/* Lessons Learned */}
-        <Card className="bg-gradient-to-br from-card to-ink-50 shadow-md">
+        <Card className="bg-linear-to-br from-card to-ink-50 shadow-md">
           <CardHeader>
             <CardTitle className="text-xl">Lessons Learned</CardTitle>
           </CardHeader>

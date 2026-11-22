@@ -222,7 +222,7 @@ describe('insights inspector', () => {
     const desktop = render(<Page />);
     fireEvent.keyDown(document.body, { key: 'i' });
     const panel = await inspector();
-    expect(panel.className).toContain('z-[35]');
+    expect(panel.className).toContain('z-35');
     act(() => {
       window.dispatchEvent(new CustomEvent('squire:open', { detail: {} }));
     });

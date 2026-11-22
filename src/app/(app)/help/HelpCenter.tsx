@@ -309,7 +309,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                         href={topic.href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <span>Docs</span>
                         <span className="sr-only">: {topic.title} (opens in a new tab)</span>
@@ -370,7 +370,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                     <span>Public status</span>
                     <Link
                       href="/status"
-                      className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       Status page
                       <ArrowRight className="h-3 w-3" aria-hidden="true" />
@@ -383,7 +383,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                         <span>Instance health</span>
                         <Link
                           href="/settings/system/health"
-                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           Health checks
                           <ArrowRight className="h-3 w-3" aria-hidden="true" />
@@ -393,7 +393,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                         <span>Platform logs</span>
                         <Link
                           href="/system-logs"
-                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           System logs
                           <ArrowRight className="h-3 w-3" aria-hidden="true" />
@@ -409,7 +409,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                           onClick={() =>
                             window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))
                           }
-                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           Show sheet
                           <kbd className="rounded border border-border bg-muted px-1 font-mono text-2xs">
@@ -423,7 +423,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                           href="https://opsknight.com/docs"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="flex items-center gap-1 rounded-sm font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           Online docs
                           <ExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -485,7 +485,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                   type="button"
                   onClick={() => setSearchQuery('')}
                   data-icon-button
-                  className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Clear search"
                 >
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -497,7 +497,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
             <div
               role="group"
               aria-labelledby="faq-categories-label"
-              className="space-y-1 rounded-lg border border-border bg-card p-1.5 shadow-sm"
+              className="space-y-1 rounded-lg border border-border bg-card p-1.5 shadow-xs"
             >
               <div
                 id="faq-categories-label"
@@ -527,7 +527,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                       if (firstMatch) setOpenFaqId(firstMatch.id);
                     }}
                     className={cn(
-                      'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                       isSelected
                         ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
@@ -573,7 +573,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                 href="https://github.com/opsknight-labs/OpsKnight/discussions"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-sm pt-1 text-xs font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center gap-1 rounded-sm pt-1 text-xs font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span>Ask the maintainers</span>
                 <ExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -614,7 +614,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                     setSelectedCategory('all');
                     setSearchQuery('');
                   }}
-                  className="rounded-sm text-xs font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded-sm text-xs font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Reset filters
                 </button>
@@ -646,7 +646,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                   <div
                     key={faq.id}
                     className={cn(
-                      'overflow-hidden rounded-lg border bg-card shadow-sm transition-colors duration-150',
+                      'overflow-hidden rounded-lg border bg-card shadow-xs transition-colors duration-150',
                       isOpen ? 'border-ink-300' : 'border-border'
                     )}
                   >
@@ -657,7 +657,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                         aria-expanded={isOpen}
                         aria-controls={`${faq.id}-panel`}
                         onClick={() => setOpenFaqId(isOpen ? null : faq.id)}
-                        className="flex w-full items-center justify-between px-4 py-3.5 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        className="flex w-full items-center justify-between px-4 py-3.5 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       >
                         <div className="flex items-center gap-2.5 pr-3 min-w-0">
                           <Badge
@@ -703,7 +703,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
                             href="https://opsknight.com/docs"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="ml-2 inline-flex shrink-0 items-center gap-1 rounded-sm text-xs font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="ml-2 inline-flex shrink-0 items-center gap-1 rounded-sm text-xs font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <span>Read in docs</span>
                             <ExternalLink className="h-3 w-3" aria-hidden="true" />

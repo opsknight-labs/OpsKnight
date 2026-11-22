@@ -189,7 +189,7 @@ export default function UserDetailTabs({
       <DetailTabContent value="overview" className="space-y-5 pt-1">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Identity & Personal Info */}
-          <Card className="border-border shadow-xs">
+          <Card className="border-border shadow-2xs">
             <CardHeader className="pb-3 border-b border-border/50 bg-muted/20">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -300,7 +300,7 @@ export default function UserDetailTabs({
           </Card>
 
           {/* Alert & Paging Delivery Channels Matrix */}
-          <Card className="border-border shadow-xs">
+          <Card className="border-border shadow-2xs">
             <CardHeader className="pb-3 border-b border-border/50 bg-muted/20">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
                 <Bell className="h-4 w-4 text-primary" />
@@ -649,7 +649,7 @@ export default function UserDetailTabs({
           </div>
 
           {user.assignedIncidents.length > 0 ? (
-            <div className="border border-border rounded-xl overflow-hidden shadow-xs">
+            <div className="border border-border rounded-xl overflow-hidden shadow-2xs">
               <div className="divide-y divide-border">
                 {user.assignedIncidents.map(inc => (
                   <div

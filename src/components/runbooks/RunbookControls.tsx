@@ -195,7 +195,7 @@ export function ConfigureSheet({
     <Sheet>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-2xl">
-        <SheetHeader className="sticky top-0 z-10 space-y-1 border-b bg-background/95 px-6 py-5 pr-16 text-left backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <SheetHeader className="sticky top-0 z-10 space-y-1 border-b bg-background/95 px-6 py-5 pr-16 text-left backdrop-blur-sm supports-backdrop-filter:bg-background/80">
           <SheetTitle className="text-base font-semibold tracking-tight">{title}</SheetTitle>
           <SheetDescription className="text-xs leading-relaxed">{description}</SheetDescription>
         </SheetHeader>

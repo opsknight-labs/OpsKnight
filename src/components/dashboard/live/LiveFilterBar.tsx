@@ -94,7 +94,7 @@ function FacetCombobox({
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[21rem] overflow-hidden border p-0" align="start">
+      <PopoverContent className="w-84 overflow-hidden border p-0" align="start">
         <Command>
           <CommandInput placeholder={`Search ${label.toLowerCase()}s…`} />
           <CommandList className="max-h-[280px] p-1">
@@ -204,9 +204,9 @@ function Segmented<T extends string>({
               data-value={option.value}
               onClick={() => onChange(option.value)}
               className={cn(
-                'flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-all outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                 selected
-                  ? 'border border-border bg-background font-semibold text-foreground shadow-xs'
+                  ? 'border border-border bg-background font-semibold text-foreground shadow-2xs'
                   : 'border border-transparent text-muted-foreground hover:bg-background/40 hover:text-foreground'
               )}
             >
@@ -251,7 +251,7 @@ function LiveViewPicker() {
               data-testid={`live-view-${view}`}
               onClick={() => setQuery({ view })}
               className={cn(
-                'flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition-all outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                 active
                   ? 'border-primary/60 bg-primary/10 font-semibold text-primary shadow-2xs'
                   : 'border-border/70 bg-card text-foreground hover:border-border hover:bg-muted/60'
@@ -324,7 +324,7 @@ export function LiveToolbar({
 
   return (
     <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center justify-start gap-1.5 sm:basis-0 sm:flex-nowrap sm:justify-end">
-      <div className="relative w-full min-w-[8rem] sm:w-auto sm:max-w-[24rem] sm:flex-1">
+      <div className="relative w-full min-w-32 sm:w-auto sm:max-w-[24rem] sm:flex-1">
         <Search
           className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
           aria-hidden
@@ -356,7 +356,7 @@ export function LiveToolbar({
         value={query.serviceId}
         options={serviceOptions}
         onChange={serviceId => setQuery({ serviceId })}
-        className="max-w-[11rem] shrink-0"
+        className="max-w-44 shrink-0"
         compactLabel
       />
       <Popover>
@@ -382,7 +382,7 @@ export function LiveToolbar({
         <PopoverContent
           align="end"
           collisionPadding={12}
-          className="max-h-[min(38rem,var(--radix-popover-content-available-height))] w-[23rem] max-w-[calc(100vw-2rem)] space-y-3.5 overflow-y-auto overscroll-contain p-3.5 border"
+          className="max-h-[min(38rem,var(--radix-popover-content-available-height))] w-92 max-w-[calc(100vw-2rem)] space-y-3.5 overflow-y-auto overscroll-contain p-3.5 border"
         >
           <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
             <div className="flex items-center gap-1.5">
@@ -407,7 +407,7 @@ export function LiveToolbar({
                     assignment: 'all',
                   })
                 }
-                className="text-2xs font-medium text-muted-foreground hover:text-foreground transition-colors outline-none focus-visible:underline"
+                className="text-2xs font-medium text-muted-foreground hover:text-foreground transition-colors outline-hidden focus-visible:underline"
               >
                 Reset all
               </button>
@@ -529,7 +529,7 @@ export function LiveActiveFilters({
           key={chip.key}
           type="button"
           onClick={() => setQuery(chip.clear)}
-          className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-2xs font-medium text-foreground hover:bg-primary/10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-2xs font-medium text-foreground hover:bg-primary/10 outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`Remove filter ${chip.label}`}
         >
           {chip.label}

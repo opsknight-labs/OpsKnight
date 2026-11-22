@@ -98,7 +98,7 @@ export default function PostmortemTimelineBuilder({
   return (
     <div className="flex flex-col gap-4">
       {/* Add New Event Form */}
-      <Card className="bg-gradient-to-br from-card to-ink-50">
+      <Card className="bg-linear-to-br from-card to-ink-50">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Add Timeline Event</CardTitle>
         </CardHeader>

@@ -41,9 +41,9 @@ export function SectionCard({
     <section
       id={id}
       className={cn(
-        'scroll-mt-24 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border transition-colors overflow-hidden',
-        tone === 'danger' && 'border-destructive/40 bg-destructive/[0.02]',
-        tone === 'warning' && 'border-amber-500/40 bg-amber-500/[0.02]',
+        'scroll-mt-24 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs hover:border-border transition-colors overflow-hidden',
+        tone === 'danger' && 'border-destructive/40 bg-destructive/2',
+        tone === 'warning' && 'border-amber-500/40 bg-amber-500/2',
         className
       )}
     >
@@ -62,7 +62,7 @@ export function SectionCard({
             )}
             <div className="min-w-0">
               {title && (
-                <h2 className="!text-sm !font-bold !tracking-tight !leading-snug text-foreground">
+                <h2 className="text-sm! font-bold! tracking-tight! leading-snug! text-foreground">
                   {title}
                 </h2>
               )}
@@ -124,9 +124,9 @@ export function StatTile({
     </>
   );
   const classes = cn(
-    'block rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-xs transition-all duration-200',
+    'block rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-2xs transition-all duration-200',
     href &&
-      'hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+      'hover:border-primary/40 hover:bg-primary/2 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
     className
   );
   return href ? (
@@ -178,7 +178,7 @@ export function KeyValueGrid({
       {items.map((item, index) => (
         <div key={index} className={cn('min-w-0', item.wide && 'sm:col-span-2')}>
           <dt className="text-xs font-medium text-muted-foreground">{item.label}</dt>
-          <dd className="mt-1 break-words text-sm text-foreground">{item.value}</dd>
+          <dd className="mt-1 wrap-break-word text-sm text-foreground">{item.value}</dd>
         </div>
       ))}
     </dl>
@@ -194,7 +194,7 @@ export function SearchField({
   return (
     <label
       className={cn(
-        'flex h-9 min-w-0 items-center gap-2 rounded-md border border-input bg-background px-3 shadow-xs focus-within:ring-2 focus-within:ring-ring',
+        'flex h-9 min-w-0 items-center gap-2 rounded-md border border-input bg-background px-3 shadow-2xs focus-within:ring-2 focus-within:ring-ring',
         className
       )}
     >
@@ -203,7 +203,7 @@ export function SearchField({
         type="search"
         {...props}
         className={cn(
-          'h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground',
+          'h-full min-w-0 flex-1 bg-transparent text-sm outline-hidden placeholder:text-muted-foreground',
           inputClassName
         )}
       />
@@ -240,9 +240,9 @@ export function Segmented<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap shrink-0',
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap shrink-0',
               active
-                ? 'bg-background text-foreground shadow-xs'
+                ? 'bg-background text-foreground shadow-2xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >

@@ -25,15 +25,15 @@ export default function CreateTrigger({
       type="button"
       onClick={onClick}
       className={cn(
-        'group flex w-full items-center gap-3 rounded-lg border-2 border-dashed border-primary/35 bg-primary/[0.04] px-4 py-2.5 text-left shadow-sm',
-        'transition-colors duration-150 hover:border-primary/70 hover:bg-primary/[0.08]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'group flex w-full items-center gap-3 rounded-lg border-2 border-dashed border-primary/35 bg-primary/4 px-4 py-2.5 text-left shadow-xs',
+        'transition-colors duration-150 hover:border-primary/70 hover:bg-primary/8',
+        'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className
       )}
     >
       <span
         aria-hidden="true"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform duration-150 group-hover:scale-105 motion-reduce:transform-none"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs transition-transform duration-150 group-hover:scale-105 motion-reduce:transform-none"
       >
         <Plus className="h-4 w-4" />
       </span>
@@ -45,7 +45,7 @@ export default function CreateTrigger({
       </span>
       <span
         aria-hidden="true"
-        className="hidden shrink-0 items-center gap-0.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-colors duration-150 group-hover:bg-primary/90 sm:inline-flex"
+        className="hidden shrink-0 items-center gap-0.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-xs transition-colors duration-150 group-hover:bg-primary/90 sm:inline-flex"
       >
         Create
         <ChevronRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transform-none" />

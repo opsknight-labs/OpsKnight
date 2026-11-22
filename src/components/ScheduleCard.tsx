@@ -90,7 +90,7 @@ export default function ScheduleCard({
   return (
     <Link
       href={`/schedules/${schedule.id}`}
-      className="group block rounded-lg border border-border bg-card p-3 transition-colors duration-150 hover:border-primary/30 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group block rounded-lg border border-border bg-card p-3 transition-colors duration-150 hover:border-primary/30 hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">

@@ -158,18 +158,20 @@ export function evaluateOidcRoleClaims(
 export function resolveSignInRole(
   evaluation: OidcRoleEvaluation,
   current: {
-    role: OidcRole;
+    /** Stakeholder is never mapped from claims but may already be held (set manually). */
+    role: OidcRole | 'STAKEHOLDER';
     roleSource: 'MANUAL' | 'OIDC' | 'SCIM';
     scimRoleMappingAdopted?: boolean;
   },
   options: { firstLink?: boolean } = {}
-): { role: OidcRole; roleSource: 'MANUAL' | 'OIDC' | 'SCIM'; changed: boolean } {
+): { role: OidcRole | 'STAKEHOLDER'; roleSource: 'MANUAL' | 'OIDC' | 'SCIM'; changed: boolean } {
   const preserved = { role: current.role, roleSource: current.roleSource, changed: false };
   if (current.roleSource === 'SCIM' && current.scimRoleMappingAdopted) return preserved;
   if (evaluation.outcome === 'INCOMPLETE') {
     const lower =
       current.roleSource === 'OIDC' &&
-      OIDC_ROLE_RANK[current.role] > OIDC_ROLE_RANK[evaluation.role];
+      (current.role === 'STAKEHOLDER' ? -1 : OIDC_ROLE_RANK[current.role]) >
+        OIDC_ROLE_RANK[evaluation.role];
     return lower ? { role: evaluation.role, roleSource: 'OIDC', changed: true } : preserved;
   }
   const matched = evaluation.outcome === 'MATCHED';

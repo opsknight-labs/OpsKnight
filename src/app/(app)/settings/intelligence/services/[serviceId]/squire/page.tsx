@@ -107,7 +107,7 @@ export default async function ServiceSquirePage({
             {facts.map(fact => (
               <li key={fact.id} className="flex flex-wrap items-start justify-between gap-2 py-3">
                 <div className="min-w-0 space-y-1">
-                  <p className="whitespace-pre-wrap break-words text-sm">{fact.text}</p>
+                  <p className="whitespace-pre-wrap wrap-break-word text-sm">{fact.text}</p>
                   <p className="text-xs text-muted-foreground">
                     Confirmed <RelativeTime date={fact.confirmedAt} format="long" />
                     {fact.approvedBy ? ` by ${fact.approvedBy}` : ''}

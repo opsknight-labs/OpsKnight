@@ -19,7 +19,7 @@ export default function AutomationSafetyMeter({ items }: { items: SafetyBudget[]
             className={cn(
               'rounded-xl border p-2.5 sm:p-3 transition-all duration-200',
               exhausted
-                ? 'border-amber-500/40 bg-amber-500/[0.04]'
+                ? 'border-amber-500/40 bg-amber-500/4'
                 : isDisabled
                   ? 'border-border/60 bg-muted/20'
                   : 'border-border/70 bg-card/70 hover:bg-card hover:border-border shadow-2xs'

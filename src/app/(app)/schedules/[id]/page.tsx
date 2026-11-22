@@ -405,7 +405,7 @@ export default async function ScheduleDetailPage({
         />
       </div>
 
-      <Card className="overflow-hidden border-border/70 shadow-sm">
+      <Card className="overflow-hidden border-border/70 shadow-xs">
         <CardHeader className="border-b bg-muted/20 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -508,7 +508,7 @@ export default async function ScheduleDetailPage({
       </div>
 
       {schedule.layers.length > 0 && configuredLayerCount < schedule.layers.length && (
-        <Alert className="border-amber-500/25 bg-amber-500/[0.05]">
+        <Alert className="border-amber-500/25 bg-amber-500/5">
           <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
           <AlertTitle className="text-sm">
             {schedule.layers.length - configuredLayerCount} layer

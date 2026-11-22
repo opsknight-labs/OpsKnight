@@ -75,7 +75,7 @@ export default function AccessDeniedView({
     >
       <section
         aria-labelledby="access-denied-title"
-        className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+        className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card shadow-xs"
       >
         <div className="space-y-6 p-6 sm:p-8">
           <div className="flex items-start gap-4">

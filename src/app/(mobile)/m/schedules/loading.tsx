@@ -1,7 +1,7 @@
 import { Skeleton } from '@/components/mobile/SkeletonLoader';
 
 const ScheduleSkeleton = () => (
-  <div className="flex items-center justify-between gap-3 rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] p-4">
+  <div className="flex items-center justify-between gap-3 rounded-2xl border border-(--border) bg-(--bg-surface) p-4">
     <div className="flex min-w-0 flex-1 flex-col gap-2">
       <Skeleton width="60%" height="14px" borderRadius="4px" />
       <Skeleton width="45%" height="12px" borderRadius="4px" />

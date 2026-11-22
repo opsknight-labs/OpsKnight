@@ -1,3 +1,0 @@
-/* Layer ordering for Tailwind + custom styles.
-   Keeps base resets before components/utilities so @layer overrides resolve deterministically. */
-@layer base, components, utilities;

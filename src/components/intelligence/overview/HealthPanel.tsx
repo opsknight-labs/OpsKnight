@@ -42,7 +42,7 @@ export default function HealthPanel({ data }: { data: OverviewHealth }) {
         />
         <div className="min-w-0">
           <p className="text-sm font-semibold">Lane: {view.label}</p>
-          <p className="break-words text-xs text-muted-foreground">{view.detail}</p>
+          <p className="wrap-break-word text-xs text-muted-foreground">{view.detail}</p>
         </div>
       </div>
       <StatGrid flush columns={4} label="Intelligence work backlog">

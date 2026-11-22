@@ -392,14 +392,14 @@ export default function OrchestrationRulesBuilder({
                     disabled={!canManage}
                     aria-label={`Reorder ${label}, position ${index + 1} of ${rules.length}`}
                     aria-roledescription="sortable handle"
-                    className="flex h-11 w-11 cursor-grab items-center justify-center rounded-md border border-border text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-9"
+                    className="flex h-11 w-11 cursor-grab items-center justify-center rounded-md border border-border text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-9"
                   >
                     <span aria-hidden="true">⠿</span>
                   </button>
                   <span className="text-xs font-semibold tabular-nums text-muted-foreground">
                     #{index + 1}
                   </span>
-                  <div className="min-w-[12rem] flex-1">
+                  <div className="min-w-48 flex-1">
                     <label htmlFor={`${id}-${rule.uid}-name`} className="sr-only">
                       Name of rule {index + 1}
                     </label>

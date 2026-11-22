@@ -110,7 +110,7 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
     <>
       <div
         className={cn(
-          'fixed inset-0 z-[var(--z-critical-overlay,80)] flex flex-col items-center justify-center bg-background/95 px-6 backdrop-blur-xl',
+          'fixed inset-0 z-(--z-critical-overlay,80) flex flex-col items-center justify-center bg-background/95 px-6 backdrop-blur-xl',
           !isLocked && 'pointer-events-none invisible opacity-0'
         )}
         role="dialog"
