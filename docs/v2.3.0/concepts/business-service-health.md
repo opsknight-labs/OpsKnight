@@ -55,7 +55,8 @@ Every status comes with its reasons. The worst reason wins.
 | `MAINTENANCE` | Every critical member (every member when none is critical) is in a maintenance window                       | Under maintenance; any outage reason still wins                                                  |
 
 A responder can also **unmark** an incident for a business service. That removes every reason the
-incident gave it, and the exclusion is remembered for the life of the incident.
+incident gave it, including impact through a supporting business service, and the exclusion is
+remembered for the life of the incident (until someone marks it again).
 
 Business services depend on each other without cycles: a change that would make one depend on
 itself, directly or through others, is rejected.
@@ -73,17 +74,22 @@ fresh one is computed. Each reader then sees only the business services in their
 
 Every impact is also recorded as an interval (incident, business service, reason, start, end). It
 is written off the paging path when an incident is created, acknowledged, resolved or otherwise
-changes, and a reconcile every minute repairs anything missed. Unmarked impacts stay in the
-history, flagged, and are left out of the numbers.
+changes, and a reconcile every minute repairs anything missed. A resolved incident that reopens
+starts a new interval, so the time it was resolved is not counted as impact. Unmarked impacts stay
+in the history, flagged, and are left out of the numbers.
 
 - **Uptime** is the share of the window with no impact, using the **union** of impact intervals,
   so two overlapping incidents count once.
 - **Incident count** is distinct incidents. **MTTA** and **MTTR** average acknowledgement and
   resolution times over those incidents.
+- The numbers cover every interval in the window; the listed timeline shows the newest 500.
+- Incident ids, titles and urgency in the timeline and in health reasons are shown only to people
+  who can read that incident. Others, such as stakeholders, see the intervals and the numbers.
 
 `scripts/backfill-business-service-impacts.ts` writes `DIRECT` history for the last 90 days of
-incidents using today's membership. It is a dry run unless you pass `--apply`, and it never
-overwrites existing rows.
+incidents using today's membership, skipping snoozed and suppressed incidents like the live
+engine. It is a dry run unless you pass `--apply`, and it never touches a business service and
+incident that already have history.
 
 Public status pages are different: they only reflect public incidents, so their business-service
 rows take the worst published member status, and their uptime is the union of the members'

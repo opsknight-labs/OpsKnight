@@ -10,7 +10,9 @@ import {
   BusinessServiceInputSchema,
   businessServiceDto,
   createBusinessService,
+  healthIncidentIds,
 } from '@/lib/business-services/commands';
+import { readableIncidentIds } from '@/lib/business-services/stats';
 
 const csv = <T extends string>(values: readonly [T, ...T[]]) =>
   z
@@ -74,10 +76,14 @@ export const GET = defineV2Route({
         })
       : [];
     const byId = new Map(rows.map(row => [row.id, row]));
+    const readable = await readableIncidentIds(
+      actor,
+      healthIncidentIds(page.items.map(item => item.health))
+    );
     return {
       data: page.items.flatMap(item => {
         const row = byId.get(item.id);
-        return row ? [businessServiceDto(row, item.health)] : [];
+        return row ? [businessServiceDto(row, item.health, readable)] : [];
       }),
       pagination: {
         limit: pagination.limit,

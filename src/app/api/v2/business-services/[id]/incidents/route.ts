@@ -14,16 +14,21 @@ export const GET = defineV2Route({
   handler: async ({ actor, params, query }) => {
     const entries = await getImpactTimeline(params.id, query, actor);
     return {
-      data: entries
-        .filter(entry => !entry.excluded)
-        .map(entry => ({
-          id: entry.incidentId,
-          title: entry.incidentTitle,
-          urgency: entry.urgency,
-          source: entry.source,
-          impactStartedAt: entry.startedAt,
-          impactEndedAt: entry.endedAt,
-        })),
+      // Only incidents the caller may read; impact intervals of others stay in impact-timeline.
+      data: entries.flatMap(entry =>
+        entry.excluded || entry.incidentId === null
+          ? []
+          : [
+              {
+                id: entry.incidentId,
+                title: entry.incidentTitle,
+                urgency: entry.urgency,
+                source: entry.source,
+                impactStartedAt: entry.startedAt,
+                impactEndedAt: entry.endedAt,
+              },
+            ]
+      ),
       headers: { 'Cache-Control': 'no-store' },
     };
   },

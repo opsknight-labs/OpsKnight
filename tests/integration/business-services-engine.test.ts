@@ -5,6 +5,7 @@ import type { AuthorizationActor } from '@/lib/authorization-policy';
 import {
   getBusinessServiceHealth,
   getBusinessServiceStats,
+  getImpactTimeline,
   listBusinessServices,
 } from '@/lib/business-services/contract';
 import {
@@ -13,12 +14,15 @@ import {
 } from '@/lib/business-services/commands';
 import { resetBusinessServiceHealthCacheForTests } from '@/lib/business-services/health';
 import {
+  backfillDirectImpacts,
   enqueueBusinessServiceImpactReconcile,
   reconcileBusinessServiceImpacts,
   setIncidentImpactCommand,
   syncIncidentImpacts,
 } from '@/lib/business-services/impacts';
 import { callMcpOperation } from '@/lib/mcp/core/execution';
+import { saveStatusPageSection } from '@/lib/status-pages/settings-command';
+import { GET as incidentsRoute } from '@/app/api/v2/business-services/[id]/incidents/route';
 import { invokeV2 } from '../helpers/api-v2';
 import { principal, setupMcpReadDatabase } from '../helpers/mcp-read-scenarios';
 import {
@@ -124,6 +128,34 @@ describe('business-service scope', () => {
     await expect(
       callMcpOperation(reader.ctx(), 'getBusinessService', { path: { id: beta.id } })
     ).rejects.toThrow();
+
+    // Impact history: the shared incident is outside the reader's incident scope, and a
+    // stakeholder cannot read incidents at all. Both see intervals and counts, never incident data.
+    await syncIncidentImpacts([incident.id]);
+    const window = { from: new Date(Date.now() - 3_600_000), to: new Date(Date.now() + 60_000) };
+    const stakeholder = actorFor(await createTestUser({ role: 'STAKEHOLDER' }), 'STAKEHOLDER', [
+      teamA.id,
+    ]);
+    for (const who of [readerActor, stakeholder]) {
+      const [entry] = await getImpactTimeline(alpha.id, window, who);
+      expect(entry).toMatchObject({ incidentId: null, incidentTitle: null, urgency: null });
+      expect((await getBusinessServiceStats(alpha.id, window, who)).incidentCount).toBe(1);
+    }
+    expect((await getImpactTimeline(alpha.id, window, admin))[0]).toMatchObject({
+      incidentId: incident.id,
+      incidentTitle: 'Shared database down',
+    });
+    const incidentsList = await invokeV2(
+      incidentsRoute as unknown as V2Handler,
+      reader.restToken,
+      'GET',
+      `/business-services/${alpha.id}/incidents`,
+      { id: alpha.id }
+    );
+    expect(incidentsList.status).toBe(200);
+    expect((await incidentsList.json()).data).toEqual([]);
+    // Health reasons drop incident ids the reader cannot see.
+    expect(JSON.stringify(listed)).not.toContain(incident.id);
   });
 
   it('filters the catalog by status and tier and pages by name', async () => {
@@ -157,11 +189,15 @@ describe('business-service scope', () => {
 });
 
 describe('status page member sync', () => {
-  it('drops a removed member unless another business service on the page still has it', async () => {
+  it('drops a member published only through business services, never a direct selection', async () => {
     const page = await createTestStatusPage({ enabled: true, serviceLayout: 'BUSINESS' });
-    const [one, two] = [await createTestService('one'), await createTestService('two')];
-    for (const service of [one, two]) await linkServiceToStatusPage(page.id, service.id);
-    const alpha = await businessService('Alpha', null, [one.id, two.id]);
+    const [direct, one, two] = [
+      await createTestService('direct'),
+      await createTestService('one'),
+      await createTestService('two'),
+    ];
+    await linkServiceToStatusPage(page.id, direct.id);
+    const alpha = await businessService('Alpha', null, []);
     const gamma = await businessService('Gamma', null, [two.id]);
     await db.statusPageBusinessService.createMany({
       data: [
@@ -170,13 +206,37 @@ describe('status page member sync', () => {
       ],
     });
     const admin = actorFor(await createTestUser({ role: 'ADMIN' }), 'ADMIN');
+    const rows = async () =>
+      Object.fromEntries(
+        (
+          await db.statusPageService.findMany({
+            where: { statusPageId: page.id },
+            select: { serviceId: true, viaBusinessService: true },
+          })
+        ).map(row => [row.serviceId, row.viaBusinessService])
+      );
+    await updateBusinessService(
+      alpha.id,
+      { memberServiceIds: [direct.id, one.id, two.id] },
+      { actor: admin }
+    );
+    expect(await rows()).toEqual({ [direct.id]: false, [one.id]: true, [two.id]: true });
+
     const extra = await createTestService('three');
     await updateBusinessService(alpha.id, { memberServiceIds: [extra.id] }, { actor: admin });
-    const mapped = await db.statusPageService.findMany({
-      where: { statusPageId: page.id },
-      select: { serviceId: true },
-    });
-    expect(mapped.map(row => row.serviceId).sort()).toEqual([two.id, extra.id].sort());
+    // one goes; two stays through Gamma; the admin's direct selection stays.
+    expect(await rows()).toEqual({ [direct.id]: false, [two.id]: true, [extra.id]: true });
+
+    // Taking Gamma off the page drops two; a save that lists extra directly keeps it as direct.
+    const current = await db.statusPage.findUniqueOrThrow({ where: { id: page.id } });
+    await saveStatusPageSection(
+      page.id,
+      { businessServiceIds: [], serviceIds: [direct.id, extra.id] },
+      { id: admin.id },
+      current.revision,
+      'services'
+    );
+    expect(await rows()).toEqual({ [direct.id]: false, [extra.id]: false });
   });
 });
 
@@ -259,6 +319,104 @@ describe('impact history', () => {
         where: { payload: { path: ['task'], equals: 'BUSINESS_SERVICE_IMPACT_RECONCILE' } },
       })
     ).toBe(1);
+  });
+
+  it('starts a new interval when a resolved incident reopens, so the healthy gap is not downtime', async () => {
+    const api = await createTestService('api');
+    const team = await createTestTeam('Reopen');
+    const checkout = await businessService('Checkout', team.id, [api.id]);
+    const hour = 3_600_000;
+    const created = new Date(Date.now() - 10 * hour);
+    const incident = await createTestIncident('Flaky', api.id, { createdAt: created });
+    await syncIncidentImpacts([incident.id], new Date(created.getTime() + 1000));
+    const resolvedAt = new Date(created.getTime() + hour);
+    await db.incident.update({
+      where: { id: incident.id },
+      data: { status: 'RESOLVED', resolvedAt },
+    });
+    await syncIncidentImpacts([incident.id], new Date(created.getTime() + 2 * hour));
+    await db.incident.update({
+      where: { id: incident.id },
+      data: { status: 'OPEN', resolvedAt: null },
+    });
+    const reopenedAt = new Date(created.getTime() + 5 * hour);
+    resetBusinessServiceHealthCacheForTests();
+    await syncIncidentImpacts([incident.id], reopenedAt);
+    await syncIncidentImpacts([incident.id], reopenedAt);
+    const rows = await db.incidentBusinessServiceImpact.findMany({
+      where: { incidentId: incident.id },
+      orderBy: { startedAt: 'asc' },
+    });
+    expect(rows.map(row => [row.startedAt, row.endedAt])).toEqual([
+      [created, resolvedAt],
+      [reopenedAt, null],
+    ]);
+    const actor = actorFor(await createTestUser({ role: 'USER' }), 'USER', [team.id]);
+    const to = new Date(created.getTime() + 6 * hour);
+    const stats = await getBusinessServiceStats(checkout.id, { from: created, to }, actor);
+    // 1 h before resolution + 1 h since the reopen, not the 6 h a merged interval would give.
+    expect(stats.impactMinutes).toBe(120);
+    expect(stats.incidentCount).toBe(1);
+  });
+
+  it('computes stats over every interval, not the 500-row display timeline', async () => {
+    const api = await createTestService('api');
+    const team = await createTestTeam('Many');
+    const checkout = await businessService('Checkout', team.id, [api.id]);
+    const old = await createTestIncident('old', api.id, { status: 'RESOLVED' });
+    const noisy = await createTestIncident('noisy', api.id, { status: 'RESOLVED' });
+    const base = new Date('2026-10-01T00:00:00Z');
+    const minute = 60_000;
+    await db.incidentBusinessServiceImpact.createMany({
+      data: [
+        {
+          incidentId: old.id,
+          businessServiceId: checkout.id,
+          source: 'DIRECT',
+          startedAt: base,
+          endedAt: new Date(base.getTime() + 30 * minute),
+        },
+        // 600 newer unmarked intervals that would fill a capped query.
+        ...Array.from({ length: 600 }, (_, index) => ({
+          incidentId: noisy.id,
+          businessServiceId: checkout.id,
+          source: 'DIRECT' as const,
+          excluded: true,
+          startedAt: new Date(base.getTime() + (60 + index) * minute),
+          endedAt: new Date(base.getTime() + (60 + index) * minute + 1000),
+        })),
+      ],
+    });
+    const actor = actorFor(await createTestUser({ role: 'USER' }), 'USER', [team.id]);
+    const window = { from: base, to: new Date(base.getTime() + 24 * 60 * minute) };
+    const stats = await getBusinessServiceStats(checkout.id, window, actor);
+    expect(stats).toMatchObject({ impactMinutes: 30, incidentCount: 1 });
+    expect(await getImpactTimeline(checkout.id, window, actor)).toHaveLength(500);
+  });
+
+  it('backfills DIRECT history like the live engine: no snoozed incidents, no duplicates', async () => {
+    const api = await createTestService('api');
+    const checkout = await businessService('Checkout', null, [api.id]);
+    const resolved = await createTestIncident('resolved', api.id, {
+      status: 'RESOLVED',
+      resolvedAt: new Date(),
+    });
+    const snoozed = await createTestIncident('snoozed', api.id, { status: 'SNOOZED' });
+    const since = new Date(Date.now() - 86_400_000);
+    const dry = await backfillDirectImpacts({ since, limit: 100, apply: false });
+    expect(dry.written).toBeGreaterThanOrEqual(1);
+    expect(
+      await db.incidentBusinessServiceImpact.count({ where: { businessServiceId: checkout.id } })
+    ).toBe(0);
+    await backfillDirectImpacts({ since, limit: 100, apply: true });
+    const again = await backfillDirectImpacts({ since, limit: 100, apply: true });
+    expect(again.written).toBe(0);
+    const rows = await db.incidentBusinessServiceImpact.findMany({
+      where: { businessServiceId: checkout.id },
+    });
+    expect(rows.map(row => row.incidentId)).toEqual([resolved.id]);
+    expect(rows[0].endedAt).not.toBeNull();
+    expect(rows.some(row => row.incidentId === snoozed.id)).toBe(false);
   });
 
   it('measures uptime over the union of overlapping impacts', async () => {

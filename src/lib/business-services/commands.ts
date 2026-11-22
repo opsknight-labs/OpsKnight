@@ -212,13 +212,19 @@ async function syncStatusPageMembers(
   if (members.length) {
     await tx.statusPageService.createMany({
       data: pageIds.flatMap(statusPageId =>
-        members.map(member => ({ statusPageId, serviceId: member.serviceId }))
+        members.map(member => ({
+          statusPageId,
+          serviceId: member.serviceId,
+          viaBusinessService: true,
+        }))
       ),
+      // A service the admin already selected directly keeps its row and stays direct.
       skipDuplicates: true,
     });
   }
   if (!removedServiceIds.length) return;
-  // A dropped member leaves each page unless another business service on that page still has it.
+  // A dropped member leaves each page it was published on only through business services,
+  // unless another business service on that page still has it; direct selections stay.
   const stillShown = await tx.statusPageBusinessService.findMany({
     where: {
       statusPageId: { in: pageIds },
@@ -245,7 +251,9 @@ async function syncStatusPageMembers(
   for (const statusPageId of pageIds) {
     const remove = removedServiceIds.filter(serviceId => !keep.has(`${statusPageId}:${serviceId}`));
     if (remove.length)
-      await tx.statusPageService.deleteMany({ where: { statusPageId, serviceId: { in: remove } } });
+      await tx.statusPageService.deleteMany({
+        where: { statusPageId, serviceId: { in: remove }, viaBusinessService: true },
+      });
   }
 }
 
@@ -523,7 +531,11 @@ type BusinessServiceRow = Prisma.BusinessServiceGetPayload<{
  * Public API shape: follower names without emails, and engine health when given. Member
  * `status` is the technical service's own status, kept for compatibility; `health` is authoritative.
  */
-export function businessServiceDto(row: BusinessServiceRow, health?: BusinessServiceHealth | null) {
+export function businessServiceDto(
+  row: BusinessServiceRow,
+  health?: BusinessServiceHealth | null,
+  readableIncidents?: ReadonlySet<string>
+) {
   return {
     id: row.id,
     name: row.name,
@@ -541,20 +553,33 @@ export function businessServiceDto(row: BusinessServiceRow, health?: BusinessSer
     })),
     dependsOn: row.supportedBy.map(({ child }) => child),
     followers: row.followers.map(({ user }) => ({ id: user.id, name: user.name })),
-    health: health ? healthDto(health) : null,
+    health: health ? healthDto(health, readableIncidents) : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
-export function healthDto(health: BusinessServiceHealth) {
+/** Incident ids in reasons the reader may not see (and who marked them) are left out. */
+export function healthDto(health: BusinessServiceHealth, readableIncidents?: ReadonlySet<string>) {
   return {
     status: health.status,
     since: health.since,
-    reasons: health.reasons,
+    reasons: health.reasons.map(reason => {
+      if (!('incidentId' in reason) || readableIncidents?.has(reason.incidentId)) return reason;
+      const { incidentId: _incidentId, ...rest } = reason;
+      void _incidentId;
+      return 'markedById' in rest ? { ...rest, markedById: null } : rest;
+    }),
     openIncidentCount: health.openIncidentCount,
     memberCount: health.memberCount,
     impactedMemberCount: health.impactedMemberCount,
     computedAt: health.computedAt,
   };
+}
+
+/** Incident ids referenced by health reasons, to resolve which the reader may see. */
+export function healthIncidentIds(healths: ReadonlyArray<BusinessServiceHealth | undefined>) {
+  return healths.flatMap(health =>
+    (health?.reasons ?? []).flatMap(reason => ('incidentId' in reason ? [reason.incidentId] : []))
+  );
 }

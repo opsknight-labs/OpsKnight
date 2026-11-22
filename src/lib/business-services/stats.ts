@@ -3,7 +3,12 @@ import 'server-only';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import {
+  AUTHORIZATION_ACTIONS,
+  authorize,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import {
   buildCursorWhere,
   decodeCursor,
@@ -63,34 +68,35 @@ function validWindow(window: TimeWindow) {
   }
 }
 
-function impactRowsInWindow(businessServiceId: string, window: TimeWindow) {
-  return prisma.incidentBusinessServiceImpact.findMany({
-    where: {
-      businessServiceId,
-      startedAt: { lt: window.to },
-      OR: [{ endedAt: null }, { endedAt: { gt: window.from } }],
-    },
-    orderBy: [{ startedAt: 'desc' }, { incidentId: 'asc' }],
-    take: MAX_TIMELINE,
-    select: {
-      incidentId: true,
-      source: true,
-      excluded: true,
-      startedAt: true,
-      endedAt: true,
-      incident: {
-        select: {
-          title: true,
-          urgency: true,
-          createdAt: true,
-          acknowledgedAt: true,
-          resolvedAt: true,
-        },
-      },
-    },
+const inWindow = (businessServiceId: string, window: TimeWindow) =>
+  ({
+    businessServiceId,
+    startedAt: { lt: window.to },
+    OR: [{ endedAt: null }, { endedAt: { gt: window.from } }],
+  }) satisfies Prisma.IncidentBusinessServiceImpactWhereInput;
+
+/**
+ * Incidents (of `ids`) whose metadata the actor may see: none without incident read access,
+ * otherwise those inside their incident read scope. Impact intervals themselves are business
+ * service data; only incident identity, titles and urgency need incident access.
+ */
+export async function readableIncidentIds(
+  actor: AuthorizationActor,
+  ids: readonly string[]
+): Promise<Set<string>> {
+  if (!ids.length || !authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_READ }).allowed)
+    return new Set();
+  const rows = await prisma.incident.findMany({
+    where: { AND: [{ id: { in: [...new Set(ids)] } }, incidentReadWhere(actor)] },
+    select: { id: true },
   });
+  return new Set(rows.map(row => row.id));
 }
 
+/**
+ * The newest impact intervals in the window (at most 500, for display). Incident id, title and
+ * urgency are null on intervals of incidents the actor cannot read.
+ */
 export async function getImpactTimeline(
   businessServiceId: string,
   window: TimeWindow,
@@ -98,21 +104,44 @@ export async function getImpactTimeline(
 ): Promise<ImpactTimelineEntry[]> {
   validWindow(window);
   await assertVisible(businessServiceId, actor);
-  const rows = await impactRowsInWindow(businessServiceId, window);
-  return rows.map(row => ({
-    incidentId: row.incidentId,
-    incidentTitle: row.incident.title,
-    urgency: row.incident.urgency,
-    source: row.source,
-    excluded: row.excluded,
-    startedAt: row.startedAt,
-    endedAt: row.endedAt,
-  }));
+  const rows = await prisma.incidentBusinessServiceImpact.findMany({
+    where: inWindow(businessServiceId, window),
+    orderBy: [{ startedAt: 'desc' }, { id: 'asc' }],
+    take: MAX_TIMELINE,
+    select: {
+      incidentId: true,
+      source: true,
+      excluded: true,
+      startedAt: true,
+      endedAt: true,
+      incident: { select: { title: true, urgency: true } },
+    },
+  });
+  const readable = await readableIncidentIds(
+    actor,
+    rows.map(row => row.incidentId)
+  );
+  return rows.map(row => {
+    const visible = readable.has(row.incidentId);
+    return {
+      incidentId: visible ? row.incidentId : null,
+      incidentTitle: visible ? row.incident.title : null,
+      urgency: visible ? row.incident.urgency : null,
+      source: row.source,
+      excluded: row.excluded,
+      startedAt: row.startedAt,
+      endedAt: row.endedAt,
+    };
+  });
 }
 
-const average = (values: number[]) =>
-  values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+const STATS_BATCH = 5000;
 
+/**
+ * Numbers over every non-excluded interval in the window (not the bounded display timeline):
+ * intervals are read in keyset batches and unioned; incident counts, MTTA and MTTR are one SQL
+ * aggregate over the distinct incidents. Counts only, so no incident access is needed.
+ */
 export async function getBusinessServiceStats(
   businessServiceId: string,
   window: TimeWindow,
@@ -120,31 +149,58 @@ export async function getBusinessServiceStats(
 ): Promise<BusinessServiceStats> {
   validWindow(window);
   await assertVisible(businessServiceId, actor);
-  const rows = (await impactRowsInWindow(businessServiceId, window)).filter(row => !row.excluded);
-  const now = Date.now();
-  const bounds = { from: window.from.getTime(), to: Math.min(window.to.getTime(), now) };
-  const impactMs = unionDurationMs(
-    rows.map(row => ({
-      start: row.startedAt.getTime(),
-      end: (row.endedAt ?? new Date(now)).getTime(),
-    })),
-    bounds
-  );
+  const now = new Date();
+  const intervals: Array<{ start: number; end: number }> = [];
+  let after: string | undefined;
+  for (;;) {
+    const batch = await prisma.incidentBusinessServiceImpact.findMany({
+      where: {
+        AND: [
+          inWindow(businessServiceId, window),
+          { excluded: false },
+          after ? { id: { gt: after } } : {},
+        ],
+      },
+      orderBy: { id: 'asc' },
+      take: STATS_BATCH,
+      select: { id: true, startedAt: true, endedAt: true },
+    });
+    for (const row of batch)
+      intervals.push({ start: row.startedAt.getTime(), end: (row.endedAt ?? now).getTime() });
+    if (batch.length < STATS_BATCH) break;
+    after = batch.at(-1)!.id;
+  }
+  const bounds = {
+    from: window.from.getTime(),
+    to: Math.min(window.to.getTime(), now.getTime()),
+  };
+  const impactMs = unionDurationMs(intervals, bounds);
   const total = Math.max(bounds.to - bounds.from, 0);
-  const incidents = [...new Map(rows.map(row => [row.incidentId, row.incident])).values()];
-  const minutes = (from: Date, to: Date | null) =>
-    to ? (to.getTime() - from.getTime()) / MINUTE : null;
+  const [aggregate] = await prisma.$queryRaw<
+    Array<{ incidents: number; mtta: number | null; mttr: number | null }>
+  >`
+    SELECT COUNT(*)::int AS "incidents",
+      (AVG(EXTRACT(EPOCH FROM (i."acknowledgedAt" - i."createdAt")))
+        FILTER (WHERE i."acknowledgedAt" IS NOT NULL))::float8 AS "mtta",
+      (AVG(EXTRACT(EPOCH FROM (i."resolvedAt" - i."createdAt")))
+        FILTER (WHERE i."resolvedAt" IS NOT NULL))::float8 AS "mttr"
+    FROM "Incident" i
+    WHERE i."id" IN (
+      SELECT DISTINCT r."incidentId" FROM "IncidentBusinessServiceImpact" r
+      WHERE r."businessServiceId" = ${businessServiceId}
+        AND NOT r."excluded"
+        AND r."startedAt" < ${window.to}
+        AND (r."endedAt" IS NULL OR r."endedAt" > ${window.from})
+    )`;
+  const minutes = (seconds: number | null | undefined) =>
+    seconds === null || seconds === undefined ? null : seconds / 60;
   return {
     window,
     impactMinutes: impactMs / MINUTE,
     uptimePercent: total > 0 ? Math.max(0, (1 - impactMs / total) * 100) : 100,
-    incidentCount: incidents.length,
-    mttaMinutes: average(
-      incidents.flatMap(incident => minutes(incident.createdAt, incident.acknowledgedAt) ?? [])
-    ),
-    mttrMinutes: average(
-      incidents.flatMap(incident => minutes(incident.createdAt, incident.resolvedAt) ?? [])
-    ),
+    incidentCount: aggregate?.incidents ?? 0,
+    mttaMinutes: minutes(aggregate?.mtta),
+    mttrMinutes: minutes(aggregate?.mttr),
   };
 }
 
