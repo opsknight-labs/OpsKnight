@@ -227,7 +227,7 @@ export default function AuthenticationProviderForm() {
                 <span className="font-bold text-xs truncate text-foreground block w-full mb-0.5">
                   {provider.label}
                 </span>
-                <span className="text-2xs text-muted-foreground line-clamp-1 font-medium">
+                <span className="text-2xs text-ink-600 line-clamp-1 font-medium">
                   {id === 'azure'
                     ? 'Microsoft 365'
                     : id === 'google'
