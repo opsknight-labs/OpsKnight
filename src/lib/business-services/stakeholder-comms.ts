@@ -174,9 +174,14 @@ async function impactedBusinessServices(incident: {
 }) {
   const impacts = await prisma.incidentBusinessServiceImpact.findMany({
     where: { incidentId: incident.id },
+    orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
     select: { excluded: true, businessService: { select: { id: true, name: true } } },
   });
-  if (impacts.length) return impacts.filter(row => !row.excluded).map(row => row.businessService);
+  if (impacts.length) {
+    // A pair can have several intervals; the latest one says whether it is unmarked.
+    const latest = new Map(impacts.map(row => [row.businessService.id, row]));
+    return [...latest.values()].filter(row => !row.excluded).map(row => row.businessService);
+  }
   const { getHealthSnapshot, incidentImpactSources } = await import('./health');
   const snapshot = await getHealthSnapshot();
   const ids = [...incidentImpactSources({ ...snapshot.inputs, impactRows: [] }, incident).keys()];

@@ -495,7 +495,10 @@ export async function buildStatusPageSnapshot(
     }
     return names.size ? [...names].sort() : undefined;
   };
-  const affectedIdsOf = (item: { affectedServiceIds: unknown; affectedBusinessServiceIds: unknown }) =>
+  const affectedIdsOf = (item: {
+    affectedServiceIds: unknown;
+    affectedBusinessServiceIds: unknown;
+  }) =>
     expandAffectedServiceIds(
       item.affectedServiceIds,
       item.affectedBusinessServiceIds,
@@ -577,9 +580,7 @@ export async function buildStatusPageSnapshot(
             name: mapping.displayName || mapping.businessService.name,
             statusOverride: activeStatusOverride(mapping, now),
             showMembers: mapping.showMembers,
-            description: page.showServiceDescriptions
-              ? mapping.businessService.description
-              : null,
+            description: page.showServiceDescriptions ? mapping.businessService.description : null,
             memberServiceIds: mapping.businessService.members
               .map(member => member.serviceId)
               .sort((a, b) => (servicePosition.get(a) ?? 0) - (servicePosition.get(b) ?? 0)),
@@ -601,12 +602,17 @@ export async function buildStatusPageSnapshot(
     const impacts = await db.incidentBusinessServiceImpact.findMany({
       where: {
         incidentId: { in: incidentIds },
-        excluded: false,
         businessServiceId: { in: [...businessNameById.keys()] },
       },
-      select: { incidentId: true, businessServiceId: true },
+      orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+      select: { incidentId: true, businessServiceId: true, excluded: true },
     });
-    for (const impact of impacts) add(impact.incidentId, [impact.businessServiceId]);
+    // Several intervals per pair: the latest one decides whether it is unmarked.
+    const latest = new Map(
+      impacts.map(impact => [`${impact.incidentId}:${impact.businessServiceId}`, impact])
+    );
+    for (const impact of latest.values())
+      if (!impact.excluded) add(impact.incidentId, [impact.businessServiceId]);
     const linkedUpdates = await db.statusPageAnnouncement.findMany({
       where: { statusPageId: pageId, isActive: true, incidentId: { in: incidentIds } },
       select: { incidentId: true, affectedBusinessServiceIds: true },
