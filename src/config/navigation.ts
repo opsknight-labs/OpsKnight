@@ -18,63 +18,53 @@ import {
   Sparkles,
   BellRing,
   GitCommitHorizontal,
+  Network,
+  Gauge,
   LucideIcon,
 } from 'lucide-react';
 import { getRoleCapabilities, isAppRole, type Capability } from '@/lib/authorization';
 import { canAccessPath } from '@/lib/access/pages';
 
-export type NavSectionKey = 'MAIN' | 'RELIABILITY' | 'ON_CALL' | 'ANALYTICS' | 'GOVERNANCE';
+export type NavSectionKey =
+  'MAIN' | 'RESPOND' | 'CATALOG' | 'STATUS' | 'ON_CALL' | 'LEARN' | 'INSIGHTS' | 'ORGANIZATION';
 
 export interface NavSectionConfig {
   key: NavSectionKey;
   label?: string;
   dotClass?: string;
-  textClass?: string;
 }
 
-export const NAV_SECTIONS: Record<NavSectionKey, NavSectionConfig> = {
-  MAIN: {
-    key: 'MAIN',
-  },
-  RELIABILITY: {
-    key: 'RELIABILITY',
-    label: 'Reliability',
-    dotClass: 'bg-emerald-500/80',
-    textClass: 'text-slate-400 dark:text-zinc-400',
-  },
-  ON_CALL: {
-    key: 'ON_CALL',
-    label: 'On-Call',
-    dotClass: 'bg-blue-500/80',
-    textClass: 'text-slate-400 dark:text-zinc-400',
-  },
-  ANALYTICS: {
-    key: 'ANALYTICS',
-    label: 'Analytics',
-    dotClass: 'bg-cyan-500/80',
-    textClass: 'text-slate-400 dark:text-zinc-400',
-  },
-  GOVERNANCE: {
-    key: 'GOVERNANCE',
-    label: 'Governance',
-    dotClass: 'bg-amber-500/80',
-    textClass: 'text-slate-400 dark:text-zinc-400',
-  },
-};
+/** Sidebar groups in display order, by job: respond, know the estate, communicate, learn. */
+export const NAV_SECTION_ORDER: readonly NavSectionKey[] = [
+  'MAIN',
+  'RESPOND',
+  'CATALOG',
+  'STATUS',
+  'ON_CALL',
+  'LEARN',
+  'INSIGHTS',
+  'ORGANIZATION',
+];
 
 export function getNavSectionConfig(key: NavSectionKey): NavSectionConfig {
   switch (key) {
-    case 'RELIABILITY':
-      return NAV_SECTIONS.RELIABILITY;
+    case 'RESPOND':
+      return { key, label: 'Respond', dotClass: 'bg-rose-500/80' };
+    case 'CATALOG':
+      return { key, label: 'Catalog', dotClass: 'bg-violet-500/80' };
+    case 'STATUS':
+      return { key, label: 'Status', dotClass: 'bg-emerald-500/80' };
     case 'ON_CALL':
-      return NAV_SECTIONS.ON_CALL;
-    case 'ANALYTICS':
-      return NAV_SECTIONS.ANALYTICS;
-    case 'GOVERNANCE':
-      return NAV_SECTIONS.GOVERNANCE;
+      return { key, label: 'On-call', dotClass: 'bg-blue-500/80' };
+    case 'LEARN':
+      return { key, label: 'Learn', dotClass: 'bg-orange-500/80' };
+    case 'INSIGHTS':
+      return { key, label: 'Insights', dotClass: 'bg-cyan-500/80' };
+    case 'ORGANIZATION':
+      return { key, label: 'Organization', dotClass: 'bg-amber-500/80' };
     case 'MAIN':
     default:
-      return NAV_SECTIONS.MAIN;
+      return { key: 'MAIN' };
   }
 }
 
@@ -91,7 +81,6 @@ export interface NavItemConfig {
 }
 
 export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
-  // ── MAIN ──────────────────────────────────────────────────────────────────
   {
     href: '/',
     needsIncidentRead: true,
@@ -106,124 +95,54 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     section: 'MAIN',
     badgeKey: 'incidents',
   },
-  {
-    href: '/services',
-    needsIncidentRead: true,
-    label: 'Services',
-    icon: Server,
-    section: 'MAIN',
-  },
-  {
-    href: '/services/business',
-    label: 'Business services',
-    icon: Boxes,
-    section: 'MAIN',
-  },
-  {
-    // Open to every signed-in person (stakeholders included); the page filters what they see.
-    href: '/status-dashboard',
-    label: 'Status dashboard',
-    icon: MonitorCheck,
-    section: 'MAIN',
-  },
+
+  // Alerts, Changes: shown by their page access rule (intelligence.read), like every entry.
+  { href: '/alerts', label: 'Alerts', icon: BellRing, section: 'RESPOND' },
+  { href: '/changes', label: 'Changes', icon: GitCommitHorizontal, section: 'RESPOND' },
   {
     href: '/runbooks',
     label: 'Runbooks',
     releaseStage: 'Beta',
     icon: Workflow,
-    section: 'MAIN',
-  },
-  {
-    // Shown by the page access rule (intelligence.read), like every other entry.
-    href: '/alerts',
-    label: 'Alerts',
-    icon: BellRing,
-    section: 'MAIN',
-  },
-  {
-    href: '/changes',
-    label: 'Changes',
-    icon: GitCommitHorizontal,
-    section: 'MAIN',
-  },
-  {
-    // Shown by the page access rule (intelligence.read); pinned by tests/unit/intelligence-overview.test.ts.
-    href: '/intelligence',
-    label: 'Intelligence',
-    icon: Sparkles,
-    section: 'MAIN',
+    section: 'RESPOND',
   },
 
-  // ── RELIABILITY ───────────────────────────────────────────────────────────
-  // Status Pages are rendered dynamically by Sidebar (conditional on enabled pages)
   {
-    href: '/postmortems',
-    label: 'Postmortems',
-    icon: FileWarning,
-    section: 'RELIABILITY',
+    href: '/services',
+    needsIncidentRead: true,
+    label: 'Services',
+    icon: Server,
+    section: 'CATALOG',
   },
+  { href: '/services/business', label: 'Business services', icon: Boxes, section: 'CATALOG' },
+  { href: '/services/graph', label: 'Service graph', icon: Network, section: 'CATALOG' },
+
+  // Open to every signed-in person (stakeholders included); the page filters what they see.
+  // Public status pages are added to this group by Sidebar when any are enabled.
+  { href: '/status-dashboard', label: 'Status dashboard', icon: MonitorCheck, section: 'STATUS' },
+
+  { href: '/schedules', label: 'Schedules', icon: Calendar, section: 'ON_CALL' },
+  { href: '/policies', label: 'Escalation policies', icon: ShieldAlert, section: 'ON_CALL' },
+
+  { href: '/postmortems', label: 'Postmortems', icon: FileWarning, section: 'LEARN' },
   {
     href: '/action-items',
     needsIncidentRead: true,
-    label: 'Action Items',
+    label: 'Action items',
     icon: ListTodo,
-    section: 'RELIABILITY',
+    section: 'LEARN',
   },
 
-  // ── ON-CALL ──────────────────────────────────────────────────────────────
-  {
-    href: '/schedules',
-    label: 'Schedules',
-    icon: Calendar,
-    section: 'ON_CALL',
-  },
-  {
-    href: '/policies',
-    label: 'Escalation Policies',
-    icon: ShieldAlert,
-    section: 'ON_CALL',
-  },
-  {
-    href: '/teams',
-    needsIncidentRead: true,
-    label: 'Teams',
-    icon: Users,
-    section: 'ON_CALL',
-  },
-  {
-    href: '/users',
-    label: 'Users',
-    icon: User,
-    section: 'ON_CALL',
-  },
+  // Pinned by tests/unit/intelligence-overview.test.ts.
+  { href: '/intelligence', label: 'Intelligence', icon: Sparkles, section: 'INSIGHTS' },
+  { href: '/insights', label: 'Analytics', icon: PieChart, section: 'INSIGHTS' },
+  { href: '/insights/business-impact', label: 'Business impact', icon: Gauge, section: 'INSIGHTS' },
+  { href: '/reports', label: 'Reports', icon: BarChart, section: 'INSIGHTS' },
 
-  // ── ANALYTICS ─────────────────────────────────────────────────────────────
-  {
-    href: '/insights',
-    label: 'Analytics',
-    icon: PieChart,
-    section: 'ANALYTICS',
-  },
-  {
-    href: '/reports',
-    label: 'Reports & Dashboards',
-    icon: BarChart,
-    section: 'ANALYTICS',
-  },
-
-  // ── GOVERNANCE ────────────────────────────────────────────────────────────
-  {
-    href: '/audit',
-    label: 'Audit Log',
-    icon: ClipboardList,
-    section: 'GOVERNANCE',
-  },
-  {
-    href: '/events',
-    label: 'Event Logs',
-    icon: FileClock,
-    section: 'GOVERNANCE',
-  },
+  { href: '/teams', needsIncidentRead: true, label: 'Teams', icon: Users, section: 'ORGANIZATION' },
+  { href: '/users', label: 'Users', icon: User, section: 'ORGANIZATION' },
+  { href: '/audit', label: 'Audit log', icon: ClipboardList, section: 'ORGANIZATION' },
+  { href: '/events', label: 'Event logs', icon: FileClock, section: 'ORGANIZATION' },
 ] as const;
 
 /**
@@ -244,25 +163,11 @@ export function getAuthorizedNavItems(
   );
 }
 
-/**
- * Group authorized items by their navigation section.
- */
+/** Group authorized items by their navigation section. */
 export function groupNavItemsBySection(
   items: NavItemConfig[]
-): Record<NavSectionKey, NavItemConfig[]> {
-  const groups: Record<NavSectionKey, NavItemConfig[]> = {
-    MAIN: [],
-    RELIABILITY: [],
-    ON_CALL: [],
-    ANALYTICS: [],
-    GOVERNANCE: [],
-  };
-
-  for (const item of items) {
-    if (groups[item.section]) {
-      groups[item.section].push(item);
-    }
-  }
-
+): Map<NavSectionKey, NavItemConfig[]> {
+  const groups = new Map<NavSectionKey, NavItemConfig[]>(NAV_SECTION_ORDER.map(key => [key, []]));
+  for (const item of items) groups.get(item.section)?.push(item);
   return groups;
 }
