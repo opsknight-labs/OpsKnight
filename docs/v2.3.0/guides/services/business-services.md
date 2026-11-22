@@ -43,9 +43,10 @@ Responders and Admins can create and edit business services.
 5. Optionally pick **followers** (see below), then select **Create business service**.
 
 Only Admins can delete a business service. Deleting it removes it from status pages and stops
-follower updates; its technical services are not changed. Removing a technical service from a
-business service also removes it from status pages that show the business service, unless another
-business service on that page still contains it.
+follower updates; its technical services are not changed. Status pages that show a business
+service publish its technical services too. Removing a technical service from the business service
+removes it from those pages again, unless another business service on the page still contains it
+or an admin selected it on the page directly.
 
 Criticality (`TIER_0` to `TIER_3`), impact thresholds, non-critical members and the business
 services it depends on are set through the REST API for now (see below).
