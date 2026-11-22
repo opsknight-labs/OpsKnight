@@ -13,6 +13,8 @@ enum Role {
   ADMIN
   RESPONDER
   AUDITOR
+  /// Read-only business-impact audience: status dashboard and business services, never paged.
+  STAKEHOLDER
 }
 
 enum ThemePreference {
@@ -76,6 +78,7 @@ enum AuditEntityType {
   ACCESS_DECISION
   CUSTOM_ROLE
   ACCESS_REVIEW
+  BUSINESS_SERVICE
 }
 
 // Data subject a privacy request concerns. USER supports automated fulfilment
@@ -570,6 +573,7 @@ model User {
   incidentRoles               IncidentRoleAssignment[]        @relation("IncidentRoleHolder")
   incidentRolesAssigned       IncidentRoleAssignment[]        @relation("IncidentRoleAssigner")
   businessServiceFollows      BusinessServiceFollower[]
+  businessServiceImpactsMarked IncidentBusinessServiceImpact[]
   auditLogs                   AuditLog[]
   overrides                   OnCallOverride[]             @relation("OverrideUser")
   overrideReplacements        OnCallOverride[]             @relation("OverrideReplacesUser")
@@ -690,6 +694,8 @@ model Team {
   analyticsViews    AnalyticsView[]
   runbooks          Runbook[]          @relation("RunbookOwnerTeam")
   businessServices  BusinessService[]
+  businessServiceSubscriptions BusinessServiceTeamSubscriber[]
+  statusDashboards  StatusDashboard[]
   teamLeadId        String?
   teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
 }
@@ -1575,6 +1581,7 @@ model Incident {
   slaPauses                           IncidentSlaPause[]
   runbookExecutions                   RunbookExecution[]
   runbookSuggestions                  RunbookSuggestion[]
+  businessServiceImpacts              IncidentBusinessServiceImpact[]
   /// Set when the incident was created SUPPRESSED because its service was in a maintenance window.
   maintenanceWindowId                 String?
   maintenanceWindow                   MaintenanceWindow?              @relation(fields: [maintenanceWindowId], references: [id], onDelete: Restrict)
@@ -2897,20 +2904,53 @@ model StatusPageSubscriptionBusinessService {
   @@index([businessServiceId])
 }
 
+/// Business criticality; drives the default impact thresholds (TIER_0 = most critical).
+enum BusinessServiceTier {
+  TIER_0
+  TIER_1
+  TIER_2
+  TIER_3
+}
+
+enum BusinessServiceImpactSource {
+  DIRECT
+  DEPENDENCY
+  NESTED
+  MANUAL
+}
+
 /// A customer-facing capability (Checkout, Payments) made of technical services.
 model BusinessService {
-  id                String                                  @id @default(cuid())
-  name              String                                  @unique
-  description       String?
-  tier              String?
-  ownerTeamId       String?
-  createdAt         DateTime                                @default(now())
-  updatedAt         DateTime                                @updatedAt
-  ownerTeam         Team?                                   @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
-  members           BusinessServiceMember[]
-  followers         BusinessServiceFollower[]
-  statusPages       StatusPageBusinessService[]
-  subscriptions     StatusPageSubscriptionBusinessService[]
+  id                 String                                  @id @default(cuid())
+  name               String                                  @unique
+  description        String?
+  /// Legacy free-text tier; `criticality` is authoritative.
+  tier               String?
+  criticality        BusinessServiceTier?
+  /// Lowest incident urgency that counts as impact; null = tier default.
+  impactMinUrgency   IncidentUrgency?
+  /// Highest (most severe) priority, e.g. "P2", that counts as impact; null = tier default.
+  impactMaxPriority  String?
+  /// [{ label, url }] links (runbooks, dashboards, docs).
+  links              Json?
+  /// Plain-language description shown on status pages.
+  statusPageSummary  String?
+  ownerTeamId        String?
+  createdAt          DateTime                                @default(now())
+  updatedAt          DateTime                                @updatedAt
+  ownerTeam          Team?                                   @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
+  members            BusinessServiceMember[]
+  followers          BusinessServiceFollower[]
+  statusPages        StatusPageBusinessService[]
+  subscriptions      StatusPageSubscriptionBusinessService[]
+  /// Business services this one depends on (this is the parent).
+  supportedBy        BusinessServiceSupport[]                @relation("BusinessServiceSupportParent")
+  /// Business services that depend on this one (this is the child).
+  supports           BusinessServiceSupport[]                @relation("BusinessServiceSupportChild")
+  incidentImpacts    IncidentBusinessServiceImpact[]
+  dashboards         StatusDashboardBusinessService[]
+  teamSubscribers    BusinessServiceTeamSubscriber[]
+  maintenanceWindows MaintenanceWindowBusinessService[]
 
   @@index([ownerTeamId])
 }
@@ -2918,6 +2958,8 @@ model BusinessService {
 model BusinessServiceMember {
   businessServiceId String
   serviceId         String
+  /// Only critical members drive DIRECT impact; non-critical members are shown but never escalate.
+  critical          Boolean         @default(true)
   createdAt         DateTime        @default(now())
   businessService   BusinessService @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
   service           Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
@@ -2939,18 +2981,103 @@ model BusinessServiceFollower {
 }
 
 model StatusPageBusinessService {
-  id                String          @id @default(cuid())
-  statusPageId      String
-  businessServiceId String
-  displayName       String?
-  order             Int             @default(0)
-  showOnPage        Boolean         @default(true)
-  createdAt         DateTime        @default(now())
-  statusPage        StatusPage      @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
-  businessService   BusinessService @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+  id                  String          @id @default(cuid())
+  statusPageId        String
+  businessServiceId   String
+  displayName         String?
+  order               Int             @default(0)
+  showOnPage          Boolean         @default(true)
+  /// Manual component-group status (a PublicServiceStatus value) shown instead of the computed one.
+  statusOverride      String?
+  statusOverrideUntil DateTime?
+  showMembers         Boolean         @default(true)
+  createdAt           DateTime        @default(now())
+  statusPage          StatusPage      @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  businessService     BusinessService @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
 
   @@unique([statusPageId, businessServiceId])
   @@index([statusPageId, order])
+  @@index([businessServiceId])
+}
+
+/// Nesting: the child business service supports (is a dependency of) the parent. Acyclic by command.
+model BusinessServiceSupport {
+  parentId  String
+  childId   String
+  createdAt DateTime        @default(now())
+  parent    BusinessService @relation("BusinessServiceSupportParent", fields: [parentId], references: [id], onDelete: Cascade)
+  child     BusinessService @relation("BusinessServiceSupportChild", fields: [childId], references: [id], onDelete: Cascade)
+
+  @@id([parentId, childId])
+  @@index([childId])
+}
+
+/// History of which business services an incident impacted and why; open while endedAt is null.
+model IncidentBusinessServiceImpact {
+  incidentId        String
+  businessServiceId String
+  source            BusinessServiceImpactSource
+  /// A responder unmarked this impact; kept so reconcile does not re-add it.
+  excluded          Boolean                     @default(false)
+  startedAt         DateTime                    @default(now())
+  endedAt           DateTime?
+  createdById       String?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  incident          Incident                    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  businessService   BusinessService             @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+  createdBy         User?                       @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@id([incidentId, businessServiceId])
+  @@index([businessServiceId, startedAt])
+  @@index([endedAt])
+}
+
+/// Internal status dashboard: a named, ordered set of business services.
+model StatusDashboard {
+  id               String                           @id @default(cuid())
+  name             String
+  slug             String                           @unique
+  ownerTeamId      String?
+  position         Int                              @default(0)
+  createdAt        DateTime                         @default(now())
+  updatedAt        DateTime                         @updatedAt
+  ownerTeam        Team?                            @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
+  businessServices StatusDashboardBusinessService[]
+
+  @@index([ownerTeamId])
+}
+
+model StatusDashboardBusinessService {
+  dashboardId       String
+  businessServiceId String
+  position          Int             @default(0)
+  dashboard         StatusDashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  businessService   BusinessService @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+
+  @@id([dashboardId, businessServiceId])
+  @@index([businessServiceId])
+}
+
+/// Teams whose members are notified as stakeholders when the business service is impacted.
+model BusinessServiceTeamSubscriber {
+  businessServiceId String
+  teamId            String
+  createdAt         DateTime        @default(now())
+  businessService   BusinessService @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+  team              Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([businessServiceId, teamId])
+  @@index([teamId])
+}
+
+model MaintenanceWindowBusinessService {
+  maintenanceWindowId String
+  businessServiceId   String
+  maintenanceWindow   MaintenanceWindow @relation(fields: [maintenanceWindowId], references: [id], onDelete: Cascade)
+  businessService     BusinessService   @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+
+  @@id([maintenanceWindowId, businessServiceId])
   @@index([businessServiceId])
 }
 
@@ -7158,6 +7285,7 @@ model MaintenanceWindow {
   services            MaintenanceWindowService[]
   heldIncidents       Incident[]
   announcements       StatusPageAnnouncement[]
+  businessServices    MaintenanceWindowBusinessService[]
   /// Set when the window is an occurrence materialised from a recurring schedule.
   scheduleId          String?
   schedule            MaintenanceSchedule?       @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
