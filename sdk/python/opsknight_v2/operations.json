@@ -871,6 +871,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getBusinessServiceGraph": {
+    "method": "GET",
+    "path": "/business-services/{id}/graph",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "markIncidentBusinessServiceImpact": {
     "method": "PUT",
     "path": "/incidents/{id}/business-service-impacts/{businessServiceId}",

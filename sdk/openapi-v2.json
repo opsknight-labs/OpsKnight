@@ -4440,6 +4440,200 @@
         "required": ["incidentId", "businessServiceId", "impacted", "changed"],
         "additionalProperties": false
       },
+      "BusinessServiceGraph": {
+        "type": "object",
+        "properties": {
+          "businessServiceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hops": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "businessServices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "criticality": {
+                  "type": ["string", "null"],
+                  "enum": ["TIER_0", "TIER_1", "TIER_2", "TIER_3", null]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "OPERATIONAL",
+                    "DEGRADED",
+                    "PARTIAL_OUTAGE",
+                    "MAJOR_OUTAGE",
+                    "MAINTENANCE",
+                    "UNKNOWN"
+                  ]
+                },
+                "openIncidentCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "memberCount": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "criticality",
+                "status",
+                "openIncidentCount",
+                "memberCount"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "services": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "teamId": {
+                  "type": ["string", "null"]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "OPERATIONAL",
+                    "DEGRADED",
+                    "PARTIAL_OUTAGE",
+                    "MAJOR_OUTAGE",
+                    "MAINTENANCE",
+                    "UNKNOWN"
+                  ]
+                },
+                "openIncidentCount": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": ["id", "name", "teamId", "status", "openIncidentCount"],
+              "additionalProperties": false
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "description": "downstreamServiceId depends on upstreamServiceId.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "upstreamServiceId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "downstreamServiceId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "origin": {
+                  "type": "string",
+                  "enum": ["DECLARED", "OBSERVED"]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["ACTIVE", "SUGGESTED"]
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "id",
+                "upstreamServiceId",
+                "downstreamServiceId",
+                "origin",
+                "status",
+                "confidence"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "businessServiceId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "serviceId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "critical": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["businessServiceId", "serviceId", "critical"],
+              "additionalProperties": false
+            }
+          },
+          "supports": {
+            "type": "array",
+            "description": "childId supports (is depended on by) parentId.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "parentId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "childId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["parentId", "childId"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "businessServiceId",
+          "hops",
+          "truncated",
+          "businessServices",
+          "services",
+          "dependencies",
+          "members",
+          "supports"
+        ],
+        "additionalProperties": false
+      },
       "BusinessServiceDeletion": {
         "type": "object",
         "properties": {
@@ -36512,6 +36706,103 @@
           }
         },
         "operationId": "getBusinessServiceImpactTimeline",
+        "x-required-scope": "services:read"
+      }
+    },
+    "/business-services/{id}/graph": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "Read the dependency graph around a business service",
+        "description": "Members, supporting and parent business services, and every technical service within hops dependency steps, with live health. At most 500 services; truncated says when more exist. Suggested edges appear only for callers who may read suggestions.\n\nRequires API scope `services:read` (Services read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "hops",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3,
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BusinessServiceGraph"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getBusinessServiceGraph",
         "x-required-scope": "services:read"
       }
     },

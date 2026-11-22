@@ -17,6 +17,7 @@ describe('business service MCP tools', () => {
       'getStatusPageBusinessServices',
       'listBusinessServiceIncidents',
       'getBusinessServiceImpactTimeline',
+      'getBusinessServiceGraph',
     ])
       expect(MCP_HANDLERS.has(id), id).toBe(true);
   });
@@ -26,6 +27,7 @@ describe('business service MCP tools', () => {
       ['getBusinessService', 'business_service_get'],
       ['getBusinessServiceImpactTimeline', 'business_service_health'],
       ['listBusinessServiceIncidents', 'business_service_incidents'],
+      ['getBusinessServiceGraph', 'business_service_graph'],
     ] as const) {
       const operation = MCP_OPERATION_MAP.get(id)!;
       expect(operation, id).toMatchObject({ status: 'CURATED', risk: 'R0', tool });

@@ -945,6 +945,38 @@ export type IncidentBusinessServiceImpactChange = {
   impacted: boolean;
   changed: boolean;
 };
+export type BusinessServiceGraph = {
+  businessServiceId: string;
+  hops: number;
+  truncated: boolean;
+  businessServices: Array<{
+    id: string;
+    name: string;
+    criticality: 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
+    status:
+      'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+    openIncidentCount: number;
+    memberCount: number;
+  }>;
+  services: Array<{
+    id: string;
+    name: string;
+    teamId: string | null;
+    status:
+      'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+    openIncidentCount: number;
+  }>;
+  dependencies: Array<{
+    id: string;
+    upstreamServiceId: string;
+    downstreamServiceId: string;
+    origin: 'DECLARED' | 'OBSERVED';
+    status: 'ACTIVE' | 'SUGGESTED';
+    confidence: number;
+  }>;
+  members: Array<{ businessServiceId: string; serviceId: string; critical: boolean }>;
+  supports: Array<{ parentId: string; childId: string }>;
+};
 export type BusinessServiceDeletion = { id: string; deleted: true };
 export type StatusPageBusinessServices = {
   statusPageId: string;
@@ -3192,6 +3224,7 @@ export interface OperationRequests {
     params: { id: string };
     query?: { from?: string; to?: string };
   };
+  getBusinessServiceGraph: { params: { id: string }; query?: { hops?: number } };
   markIncidentBusinessServiceImpact: {
     params: { id: string; businessServiceId: string };
     headers: { 'Idempotency-Key': string };
@@ -4906,6 +4939,11 @@ export interface OperationResponses {
   } & Record<string, unknown>;
   getBusinessServiceImpactTimeline: {
     data: BusinessServiceImpactTimeline;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getBusinessServiceGraph: {
+    data: BusinessServiceGraph;
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
@@ -6868,6 +6906,14 @@ export const OPERATIONS = {
   getBusinessServiceImpactTimeline: {
     method: 'GET',
     path: '/business-services/{id}/impact-timeline',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  getBusinessServiceGraph: {
+    method: 'GET',
+    path: '/business-services/{id}/graph',
     kind: 'item',
     idempotency: null,
     requiredHeaders: [],

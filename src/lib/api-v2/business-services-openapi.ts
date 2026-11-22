@@ -127,6 +127,54 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     impacted: { type: 'boolean' },
     changed: { type: 'boolean' },
   }),
+  BusinessServiceGraph: object({
+    businessServiceId: id,
+    hops: { type: 'integer', minimum: 1, maximum: 3 },
+    truncated: { type: 'boolean' },
+    businessServices: {
+      type: 'array',
+      items: object({
+        id,
+        name: string,
+        criticality: tier,
+        status,
+        openIncidentCount: { type: 'integer', minimum: 0 },
+        memberCount: { type: 'integer', minimum: 0 },
+      }),
+    },
+    services: {
+      type: 'array',
+      maxItems: 500,
+      items: object({
+        id,
+        name: string,
+        teamId: nullableString,
+        status,
+        openIncidentCount: { type: 'integer', minimum: 0 },
+      }),
+    },
+    dependencies: {
+      type: 'array',
+      description: 'downstreamServiceId depends on upstreamServiceId.',
+      items: object({
+        id,
+        upstreamServiceId: id,
+        downstreamServiceId: id,
+        origin: { type: 'string', enum: ['DECLARED', 'OBSERVED'] },
+        status: { type: 'string', enum: ['ACTIVE', 'SUGGESTED'] },
+        confidence: { type: 'number', minimum: 0, maximum: 1 },
+      }),
+    },
+    members: {
+      type: 'array',
+      items: object({ businessServiceId: id, serviceId: id, critical: { type: 'boolean' } }),
+    },
+    supports: {
+      type: 'array',
+      description: 'childId supports (is depended on by) parentId.',
+      items: object({ parentId: id, childId: id }),
+    },
+  }),
   BusinessServiceDeletion: object({ id, deleted: { const: true } }),
   StatusPageBusinessServices: object({
     statusPageId: id,
@@ -248,6 +296,14 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     description:
       'Uptime is over the union of impact intervals, so overlapping incidents count once. Unmarked impacts are listed but excluded from the numbers.',
     query: windowQuery,
+  },
+  {
+    method: 'get',
+    path: '/business-services/{id}/graph',
+    summary: 'Read the dependency graph around a business service',
+    description:
+      'Members, supporting and parent business services, and every technical service within hops dependency steps, with live health. At most 500 services; truncated says when more exist. Suggested edges appear only for callers who may read suggestions.',
+    query: { hops: { type: 'integer', minimum: 1, maximum: 3, default: 1 } },
   },
   {
     method: 'put',

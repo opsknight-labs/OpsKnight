@@ -4103,6 +4103,19 @@
     "routeSha256": "c4a964b9dcaba1847a7a1e864813ad07b0439cad808d028cf774a38b56955057",
     "contractSha256": "67ff1ab5ddaf91b4e30dc2f473f139ed2dd208da772975a6e46b25975bbc8604"
   },
+  "getBusinessServiceGraph": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only dependency graph around one business service, bounded to 500 services, through the existing REST route authorization and scoped projection.",
+    "tool": "business_service_graph",
+    "title": "Business service dependency graph",
+    "agentDescription": "The dependency graph around a business service: its member services, supporting and parent business services, and technical services within 1 to 3 dependency hops (default 1), each with live status and open incident count. downstreamServiceId depends on upstreamServiceId. Use for 'what does Checkout depend on' or 'what else breaks if the payments API is down'.",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "1fcfb3b402dfabedde0486acc12fbe79712b7a8d9b9ac91461a384773640df34",
+    "contractSha256": "3ed3d61ecff3906443358134ebcc7b3451ee3bcbe9bea438670c2237efe85bbe"
+  },
   "markIncidentBusinessServiceImpact": {
     "status": "APPROVAL_REQUIRED",
     "risk": "R2",

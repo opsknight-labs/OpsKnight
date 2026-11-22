@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resetBusinessServiceHealthCacheForTests } from '@/lib/business-services/health';
 import { getServiceGraphForActor } from '@/lib/intelligence/dependencies/graph-view';
-import { setupMcpReadDatabase } from '../helpers/mcp-read-scenarios';
+import { GET as graphRoute } from '@/app/api/v2/business-services/[id]/graph/route';
+import { callMcpOperation } from '@/lib/mcp/core/execution';
+import { invokeV2 } from '../helpers/api-v2';
+import { principal, setupMcpReadDatabase } from '../helpers/mcp-read-scenarios';
 import {
   createTestIncident,
   createTestService,
@@ -194,5 +197,58 @@ describe('service graph view', () => {
     expect(graph!.nodes.length).toBe(500);
     expect(graph!.nodes.map(node => node.id)).toContain(hub.id);
     expect(graph!.truncated).toBe(true);
+  });
+
+  it('serves GET /business-services/{id}/graph and business_service_graph, scoped', async () => {
+    const s = await scenario();
+    const reader = await principal('USER', ['services:read']);
+    await db.teamMember.create({ data: { teamId: s.mine.id, userId: reader.user.id } });
+    type Handler = Parameters<typeof invokeV2>[0];
+    const response = await invokeV2(
+      graphRoute as unknown as Handler,
+      reader.restToken,
+      'GET',
+      `/business-services/${s.checkout.id}/graph?hops=1`,
+      { id: s.checkout.id }
+    );
+    expect(response.status).toBe(200);
+    const { data } = (await response.json()) as {
+      data: {
+        hops: number;
+        services: Array<{ id: string; status: string }>;
+        members: Array<{ serviceId: string }>;
+        supports: Array<{ parentId: string; childId: string }>;
+        dependencies: Array<{ upstreamServiceId: string; downstreamServiceId: string }>;
+      };
+    };
+    expect(data.hops).toBe(1);
+    const ids = data.services.map(service => service.id);
+    // Members web and api, plus db one hop out; the hidden service never appears.
+    expect(new Set(ids)).toEqual(new Set([s.web.id, s.api.id, s.store.id]));
+    expect(data.supports).toContainEqual({ parentId: s.checkout.id, childId: s.payments.id });
+    expect(JSON.stringify(data)).not.toContain(s.hidden.id);
+
+    const hidden = await invokeV2(
+      graphRoute as unknown as Handler,
+      reader.restToken,
+      'GET',
+      `/business-services/${s.secret.id}/graph`,
+      { id: s.secret.id }
+    );
+    expect(hidden.status).toBe(404);
+    const tooFar = await invokeV2(
+      graphRoute as unknown as Handler,
+      reader.restToken,
+      'GET',
+      `/business-services/${s.checkout.id}/graph?hops=9`,
+      { id: s.checkout.id }
+    );
+    expect(tooFar.status).toBe(400);
+
+    const mcp = await callMcpOperation(reader.ctx(), 'getBusinessServiceGraph', {
+      path: { id: s.checkout.id },
+    });
+    expect(JSON.stringify(mcp.data)).toContain(s.web.id);
+    expect(JSON.stringify(mcp.data)).not.toContain(s.hidden.id);
   });
 });
