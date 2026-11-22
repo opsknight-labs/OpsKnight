@@ -38,7 +38,7 @@ export default function IntelligenceStrip({
   touch?: boolean;
   /** Present only while analysis is unfinished, failed or unverifiable. */
   freshness: IncidentAnalysisState | null;
-  /** Inside another card (the AI briefing): no border or background of its own. */
+  /** Inside another card (the AI briefing): no border, background or opener of its own; chips wrap. */
   bare?: boolean;
 }) {
   if (chips.length === 0 && !freshness) return null;
@@ -59,9 +59,13 @@ export default function IntelligenceStrip({
         <nav
           aria-label="Incident insights"
           // Chips scroll sideways: the trailing edge fades so a cut-off chip reads as "more this way".
-          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5 pr-6 scrollbar-none mask-[linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]"
+          className={
+            bare
+              ? 'flex min-w-0 flex-1 flex-wrap items-center gap-1.5'
+              : 'flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5 pr-6 scrollbar-none mask-[linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]'
+          }
         >
-          {firstSection && (
+          {firstSection && !bare && (
             <a
               href={`?insights=${firstSection}`}
               data-insights-open=""
@@ -77,7 +81,7 @@ export default function IntelligenceStrip({
               </kbd>
             </a>
           )}
-          <ul className="flex items-center gap-1.5">
+          <ul className={bare ? 'flex flex-wrap items-center gap-1.5' : 'flex items-center gap-1.5'}>
             {chips.map(chip => (
               <li key={chip.id} className="flex shrink-0">
                 {'section' in chip.target ? (
