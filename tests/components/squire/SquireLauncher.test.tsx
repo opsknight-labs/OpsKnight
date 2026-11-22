@@ -32,6 +32,14 @@ function streamOf(events: unknown[]) {
   };
 }
 
+/** The display controls live in the header's More menu (a Radix menu opens on pointer down). */
+const openMore = () =>
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: 'mouse',
+  });
+
 const fetchMock = vi.fn();
 beforeEach(() => {
   nav.pathname = '/';
@@ -46,7 +54,9 @@ describe('SquireLauncher', () => {
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
     expect(screen.getByRole('dialog', { name: /Pip/ })).toBeInTheDocument();
     expect(screen.getByLabelText('Message Pip')).toHaveFocus();
-    expect(screen.getByText(/built-in investigation guidance/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What are we investigating?' })).toBeInTheDocument();
+    // AI is off by default: one status line says so instead of a stack of banners.
+    expect(screen.getByTestId('squire-availability')).toHaveTextContent('AI is off');
   });
 
   it('closes with Escape and the close button', () => {
@@ -192,7 +202,8 @@ describe('SquireLauncher', () => {
     const { container, unmount } = render(<SquireLauncher name="Pip" />);
     expect(container.querySelector('[data-side]')!.getAttribute('data-side')).toBe('right');
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Move Pip to the left side' }));
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move Pip to the left side' }));
     expect(container.querySelector('[data-side]')!.getAttribute('data-side')).toBe('left');
     unmount();
     const again = render(<SquireLauncher name="Pip" />);

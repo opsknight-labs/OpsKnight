@@ -23,9 +23,11 @@ describe('Squire investigation steps', () => {
     );
     const outer = container.querySelector('[data-testid="squire-investigation"]')!;
     expect(outer).toHaveAttribute('open');
-    expect(screen.getByText(/Investigation · 2 steps · 2 reads/)).toBeInTheDocument();
+    // While it runs, the heading names the live step.
+    expect(screen.getByText('Step 2: Weighing the evidence…')).toBeInTheDocument();
     rerender(<SquireInvestigationSteps steps={steps} streaming={false} />);
     expect(outer).not.toHaveAttribute('open');
+    expect(screen.getByText('Checked 2 sources in 2 steps')).toBeInTheDocument();
   });
 
   it('expands a step to show the reads it ran, marking failed ones', () => {

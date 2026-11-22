@@ -614,7 +614,8 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(page.getByLabel('Message Pip')).toHaveValue('What changed?');
     await expect(page).not.toHaveURL(/squire=open/);
     expect(sent).toEqual([]);
-    await expect(dialog.getByText('Discussing this incident')).toBeVisible();
+    // The header chip names the incident the conversation is about.
+    await expect(dialog.locator('header').getByTitle(/^Discussing /)).toBeVisible();
 
     const briefing = dialog.getByRole('region', { name: 'Incident briefing' });
     await expect(briefing).toBeVisible();
@@ -634,7 +635,9 @@ test.describe.serial('intelligence responder workflows', () => {
       return box.x + box.width;
     };
     const floatingEdge = await rightEdge(content);
-    await dialog.getByRole('button', { name: 'Dock Pip beside the page' }).click();
+    // Display controls live in the header's More menu (portalled, so looked up on the page).
+    await dialog.getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('menuitem', { name: 'Dock Pip beside the page' }).click();
     await expect(page.locator('html.squire-docked')).toHaveCount(1);
     // Docked: the page ends where the panel starts, so nothing is covered.
     await expect
@@ -643,7 +646,12 @@ test.describe.serial('intelligence responder workflows', () => {
     expect(await rightEdge(content)).toBeLessThan(floatingEdge);
     expect(await rightEdge(dialog)).toBeLessThanOrEqual(1440);
     await noHorizontalOverflow(page);
-    await expect(dialog.getByRole('button', { name: 'Expand chat' })).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'More actions' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Expand chat' })).toHaveCount(0);
+    // Escape closes only the menu; the docked panel stays open.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(dialog).toBeVisible();
     expect(await page.evaluate(() => localStorage.getItem('opsknight.squire.display'))).toBe(
       'docked'
     );
@@ -658,7 +666,8 @@ test.describe.serial('intelligence responder workflows', () => {
     // The choice is remembered; floating again restores the default for the other specs.
     await page.keyboard.press('Control+j');
     await expect(page.locator('html.squire-docked')).toHaveCount(1);
-    await dialog.getByRole('button', { name: 'Float Pip over the page' }).click();
+    await dialog.getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('menuitem', { name: 'Float Pip over the page' }).click();
     await expect(page.locator('html.squire-docked')).toHaveCount(0);
     await page.keyboard.press('Escape');
     await page.evaluate(() => localStorage.removeItem('opsknight.squire.display'));
