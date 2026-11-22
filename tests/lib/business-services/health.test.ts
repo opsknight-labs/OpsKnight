@@ -200,6 +200,7 @@ describe('computeHealth', () => {
             source: 'MANUAL',
             excluded: false,
             createdById: 'u1',
+            startedAt: NOW,
           },
           {
             incidentId: 'i2',
@@ -207,6 +208,7 @@ describe('computeHealth', () => {
             source: 'DIRECT',
             excluded: true,
             createdById: 'u1',
+            startedAt: NOW,
           },
         ],
       },
@@ -226,6 +228,7 @@ describe('computeHealth', () => {
             source: 'MANUAL',
             excluded: false,
             createdById: null,
+            startedAt: NOW,
           },
         ],
       },
@@ -304,6 +307,71 @@ describe('computeHealth', () => {
     );
     expect(health.get('checkout')!.since).toEqual(early);
     expect(health.get('store')!.since).toEqual(early);
+  });
+
+  it('honours a parent exclusion for nested impact, carrying the incident id', () => {
+    const base = inputs({
+      businessServices: [bs('payments', ['api']), bs('checkout', [])],
+      supports: [{ parentId: 'checkout', childId: 'payments' }],
+      incidents: [incident('i1', 'api', 'HIGH'), incident('i2', 'api', 'LOW')],
+    });
+    const nested = computeHealth(base).get('checkout')!;
+    expect(nested.reasons).toEqual([
+      expect.objectContaining({
+        kind: 'NESTED',
+        childBusinessServiceId: 'payments',
+        incidentId: 'i1',
+      }),
+    ]);
+    const row = (incidentId: string) => ({
+      incidentId,
+      businessServiceId: 'checkout',
+      source: 'NESTED' as const,
+      excluded: true,
+      createdById: 'u1',
+      startedAt: NOW,
+    });
+    // Unmarking i1 on the parent falls back to the child's next incident...
+    const one = computeHealth({ ...base, impactRows: [row('i1')] }).get('checkout')!;
+    expect(one.reasons).toEqual([expect.objectContaining({ kind: 'NESTED', incidentId: 'i2' })]);
+    // ...and unmarking both leaves the parent operational, while the child stays down.
+    const both = computeHealth({ ...base, impactRows: [row('i1'), row('i2')] });
+    expect(both.get('checkout')!.status).toBe('OPERATIONAL');
+    expect(both.get('payments')!.status).toBe('MAJOR_OUTAGE');
+    expect(
+      incidentImpactSources({ ...base, impactRows: [row('i1')] }, incident('i1', 'api')).has(
+        'checkout'
+      )
+    ).toBe(false);
+  });
+
+  it('decides marks and exclusions from the latest interval of a pair', () => {
+    const older = new Date('2026-11-22T10:00:00Z');
+    const health = computeHealth(
+      inputs({
+        businessServices: [bs('reporting', ['x'], { criticality: 'TIER_3' })],
+        incidents: [incident('i1', 'other', 'MEDIUM')],
+        impactRows: [
+          {
+            incidentId: 'i1',
+            businessServiceId: 'reporting',
+            source: 'MANUAL',
+            excluded: true,
+            createdById: 'u1',
+            startedAt: older,
+          },
+          {
+            incidentId: 'i1',
+            businessServiceId: 'reporting',
+            source: 'MANUAL',
+            excluded: false,
+            createdById: 'u2',
+            startedAt: NOW,
+          },
+        ],
+      })
+    );
+    expect(health.get('reporting')!.reasons[0]).toMatchObject({ kind: 'MANUAL', markedById: 'u2' });
   });
 
   it('gives the sources a single incident contributes', () => {
