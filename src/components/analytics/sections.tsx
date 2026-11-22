@@ -139,7 +139,7 @@ export async function KpiSection({ context }: { context: AnalyticsContext }) {
   const result = await load(context, 'kpis');
   if ('error' in result) {
     return (
-      <div className="rounded-lg border bg-card p-4 shadow-sm">
+      <div className="rounded-lg border bg-card p-4 shadow-xs">
         <SectionError title="Key metrics" errorCode={result.error} />
       </div>
     );
@@ -246,7 +246,7 @@ export async function KpiSection({ context }: { context: AnalyticsContext }) {
               {tile.href ? (
                 <Link
                   href={tile.href}
-                  className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="block rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {body}
                 </Link>

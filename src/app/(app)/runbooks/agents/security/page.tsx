@@ -220,7 +220,7 @@ export default async function RunbookFleetSecurityPage() {
                   </div>
 
                   <div className="pt-2">
-                    <SubmitButton className="w-full h-9 text-xs font-semibold rounded-xl shadow-xs cursor-pointer">
+                    <SubmitButton className="w-full h-9 text-xs font-semibold rounded-xl shadow-2xs cursor-pointer">
                       Save remediation budgets
                     </SubmitButton>
                   </div>

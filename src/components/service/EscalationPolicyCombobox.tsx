@@ -71,7 +71,7 @@ export default function EscalationPolicyCombobox({
             data-testid="escalation-policy-trigger"
             disabled={disabled}
             className={cn(
-              'w-full h-9 justify-between font-normal text-xs bg-background shadow-xs hover:bg-accent/40 px-3',
+              'w-full h-9 justify-between font-normal text-xs bg-background shadow-2xs hover:bg-accent/40 px-3',
               !selectedPolicy && 'text-muted-foreground'
             )}
           >
@@ -95,7 +95,7 @@ export default function EscalationPolicyCombobox({
         </PopoverTrigger>
 
         <PopoverContent
-          className="w-[var(--radix-popover-trigger-width)] min-w-[320px] p-0 shadow-lg border"
+          className="w-(--radix-popover-trigger-width) min-w-[320px] p-0 shadow-lg border"
           align="start"
         >
           <Command className="rounded-xl">

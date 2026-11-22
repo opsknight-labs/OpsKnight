@@ -192,7 +192,7 @@ function HelpTip({ children }: { children: React.ReactNode }) {
             role="button"
             tabIndex={0}
             aria-label="Layer help"
-            className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Info className="h-3 w-3" />
           </span>
@@ -332,13 +332,13 @@ export default function LayerCard({
       <Card
         id={`layer-${layer.id}`}
         className={cn(
-          'overflow-hidden border-l-4 shadow-sm transition-shadow hover:shadow-md',
+          'overflow-hidden border-l-4 shadow-xs transition-shadow hover:shadow-md',
           color.border
         )}
       >
         <div className={cn('flex items-start justify-between gap-3 p-3', color.light)}>
           <div className="flex items-start gap-3 min-w-0 flex-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/70 shadow-sm ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.08]">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/70 shadow-xs ring-1 ring-inset ring-black/4 dark:ring-white/8">
               <Layers className={cn('h-4 w-4', color.text)} />
             </div>
             <div className="min-w-0 flex-1">
@@ -482,7 +482,7 @@ export default function LayerCard({
                 onClick={() => setIsExpanded(value => !value)}
                 aria-expanded={isExpanded}
                 aria-controls={`layer-responders-${layer.id}`}
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-xs text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Users className="h-3.5 w-3.5 shrink-0" />
                 <span className="font-medium text-foreground">Responders</span>

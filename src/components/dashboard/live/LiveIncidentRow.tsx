@@ -168,7 +168,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
   const compact = density === 'compact' && !tv;
   const isNew = Date.parse(incident.createdAt) > now - 5 * 60_000;
   const iconBtnClass = cn(
-    'inline-flex shrink-0 items-center justify-center rounded-md border border-border bg-card text-xs text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+    'inline-flex shrink-0 items-center justify-center rounded-md border border-border bg-card text-xs text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
     compact ? 'h-6 w-6 p-0' : 'h-7 w-7 p-0'
   );
   const actionIconClass = compact ? 'h-3 w-3 shrink-0' : 'h-3.5 w-3.5 shrink-0';
@@ -204,7 +204,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
       title="Assign to me (m)"
       aria-label={`Assign ${incident.title} to me`}
       className={cn(
-        'inline-flex w-fit items-center gap-1 rounded-md border border-dashed border-ink-300 text-muted-foreground outline-none transition-colors duration-150 hover:border-ink-400 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-ink-300',
+        'inline-flex w-fit items-center gap-1 rounded-md border border-dashed border-ink-300 text-muted-foreground outline-hidden transition-colors duration-150 hover:border-ink-400 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-ink-300',
         compact ? 'h-5 px-1.5 text-2xs leading-none' : 'px-2 py-0.5 text-2xs font-medium'
       )}
     >
@@ -238,9 +238,9 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
       className={cn(
         'group relative cursor-pointer border-l-[3px] transition-colors duration-150',
         incident.status === 'OPEN'
-          ? cn(toneClasses('critical').borderLeft, 'bg-status-critical/[0.02]')
+          ? cn(toneClasses('critical').borderLeft, 'bg-status-critical/2')
           : incident.sla.warning === 'APPROACHING' || incident.sla.warning === 'BREACHED'
-            ? cn(toneClasses('elevated').borderLeft, 'bg-status-elevated/[0.02]')
+            ? cn(toneClasses('elevated').borderLeft, 'bg-status-elevated/2')
             : 'border-l-transparent',
         'hover:bg-muted/40 focus-within:bg-muted/40',
         highlighted ? 'bg-primary/[0.07]' : '',
@@ -280,7 +280,7 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
               <span
                 title="No priority set"
                 aria-label="No priority"
-                className="inline-flex h-5 min-w-[2.25rem] items-center justify-center rounded-md border border-dashed border-border px-1.5 font-mono text-2xs text-muted-foreground"
+                className="inline-flex h-5 min-w-9 items-center justify-center rounded-md border border-dashed border-border px-1.5 font-mono text-2xs text-muted-foreground"
               >
                 —
               </span>
@@ -302,10 +302,10 @@ export const LiveIncidentRow = memo(function LiveIncidentRow({
             onFocus={() => onFocusRow(index)}
             title={incident.title}
             className={cn(
-              'rounded-sm font-semibold text-foreground outline-none',
+              'rounded-sm font-semibold text-foreground outline-hidden',
               tv
                 ? 'block truncate text-[1.15em]'
-                : 'line-clamp-2 break-words text-sm leading-5 [@container(min-width:40rem)]:block [@container(min-width:40rem)]:truncate',
+                : 'line-clamp-2 wrap-break-word text-sm leading-5 [@container(min-width:40rem)]:block [@container(min-width:40rem)]:truncate',
               'hover:underline hover:underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring'
             )}
           >

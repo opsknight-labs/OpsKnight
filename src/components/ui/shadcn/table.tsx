@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
     <div
-      className="relative w-full overflow-auto rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative w-full overflow-auto rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       // A labelled table can scroll sideways on a phone: keep that scroll reachable by keyboard.
       {...(props['aria-label']
         ? { role: 'region', tabIndex: 0, 'aria-label': props['aria-label'] }
@@ -39,7 +39,7 @@ const TableFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <tfoot
     ref={ref}
-    className={cn('border-t bg-muted/50 font-medium [&>tr]:last:border-b-0', className)}
+    className={cn('border-t bg-muted/50 font-medium last:[&>tr]:border-b-0', className)}
     {...props}
   />
 ));
@@ -66,7 +66,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      'h-10 px-3 md:px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0',
+      'h-10 px-3 md:px-4 text-left align-middle font-medium text-muted-foreground has-[[role=checkbox]]:pr-0',
       className
     )}
     {...props}
@@ -81,7 +81,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      'px-3 py-2.5 md:px-4 md:py-3 align-middle [&:has([role=checkbox])]:pr-0',
+      'px-3 py-2.5 md:px-4 md:py-3 align-middle has-[[role=checkbox]]:pr-0',
       className
     )}
     {...props}

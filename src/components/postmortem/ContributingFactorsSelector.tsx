@@ -148,7 +148,7 @@ function ContributingFactorsSelector({
             className={cn(
               'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition-all cursor-pointer select-none',
               isSelected
-                ? cn(config.style, 'ring-2 ring-primary/20 shadow-xs')
+                ? cn(config.style, 'ring-2 ring-primary/20 shadow-2xs')
                 : 'bg-card text-muted-foreground border-ink-200 hover:border-ink-300 hover:text-foreground'
             )}
           >

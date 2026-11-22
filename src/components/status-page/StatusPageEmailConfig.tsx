@@ -145,7 +145,7 @@ export default function StatusPageEmailConfig({
                     isDisabled
                       ? 'opacity-50 cursor-not-allowed bg-muted/20 border-border/50'
                       : isSelected
-                        ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20 shadow-xs'
+                        ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20 shadow-2xs'
                         : 'border-border/80 bg-card hover:border-border hover:bg-muted/30'
                   }`}
                 >

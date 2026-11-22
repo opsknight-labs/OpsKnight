@@ -49,9 +49,9 @@ function variantClass(variant: ButtonVariant): string {
   switch (variant) {
     case 'primary':
     case 'danger':
-      return 'shadow-sm hover:shadow-md';
+      return 'shadow-xs hover:shadow-md';
     case 'secondary':
-      return 'bg-card shadow-xs hover:border-ink-300 hover:bg-muted';
+      return 'bg-card shadow-2xs hover:border-ink-300 hover:bg-muted';
     case 'link':
       return 'underline';
     default:

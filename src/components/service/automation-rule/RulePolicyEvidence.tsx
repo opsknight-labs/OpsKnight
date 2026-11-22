@@ -107,7 +107,7 @@ export function RulePolicyEvidence({ checks }: { checks: RulePolicyRow[] }) {
                   <PolicyStatusBadge status={check.status} />
                 </TableCell>
                 <TableCell
-                  className="max-w-[12rem] truncate font-medium text-xs"
+                  className="max-w-48 truncate font-medium text-xs"
                   title={check.agent}
                 >
                   {check.agent}

@@ -135,7 +135,7 @@ export default function AuditLogTable({
                               {log.actor?.id ? (
                                 <Link
                                   href={`/users/${log.actor.id}`}
-                                  className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  className="rounded-sm hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                   {actorName}
                                 </Link>
@@ -162,7 +162,7 @@ export default function AuditLogTable({
                             <Link
                               href={entityHref}
                               title={log.entityId ?? undefined}
-                              className="inline-flex max-w-full items-center gap-1 rounded-sm font-mono text-xs text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              className="inline-flex max-w-full items-center gap-1 rounded-sm font-mono text-xs text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                             >
                               <span className="truncate">{log.entityId}</span>
                               <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />

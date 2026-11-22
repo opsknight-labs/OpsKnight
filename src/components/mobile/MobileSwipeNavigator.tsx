@@ -185,12 +185,12 @@ export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorP
       ]}
       {showHint && (
         <div
-          className="mobile-swipe-hint pointer-events-none absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[color:var(--border)] bg-[color:var(--bg-surface)] px-4 py-2 text-[11px] font-semibold text-[color:var(--text-secondary)] shadow-sm backdrop-blur opacity-90"
+          className="mobile-swipe-hint pointer-events-none absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full border border-(--border) bg-(--bg-surface) px-4 py-2 text-[11px] font-semibold text-(--text-secondary) shadow-xs backdrop-blur-sm opacity-90"
           aria-hidden="true"
         >
-          <span className="text-[color:var(--text-muted)]">←</span>
+          <span className="text-(--text-muted)">←</span>
           <span>Swipe to switch tabs</span>
-          <span className="text-[color:var(--text-muted)]">→</span>
+          <span className="text-(--text-muted)">→</span>
         </div>
       )}
     </div>

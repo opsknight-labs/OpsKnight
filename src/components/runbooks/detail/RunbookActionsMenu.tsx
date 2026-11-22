@@ -49,7 +49,7 @@ export function RunbookActionsMenu({
             variant="outline"
             size="sm"
             aria-label="More runbook actions"
-            className="h-9 w-9 p-0 rounded-xl border border-zinc-700/80 bg-zinc-800/80 hover:bg-zinc-700 text-slate-200 hover:text-white shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-primary/40 data-[state=open]:border-zinc-500 data-[state=open]:bg-zinc-700"
+            className="h-9 w-9 p-0 rounded-xl border border-zinc-700/80 bg-zinc-800/80 hover:bg-zinc-700 text-slate-200 hover:text-white shadow-2xs transition-colors focus-visible:ring-2 focus-visible:ring-primary/40 data-[state=open]:border-zinc-500 data-[state=open]:bg-zinc-700"
           >
             <MoreHorizontal className="h-4 w-4 text-slate-200" aria-hidden="true" />
           </Button>

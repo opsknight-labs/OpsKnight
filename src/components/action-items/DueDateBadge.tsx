@@ -90,7 +90,7 @@ function DueDateBadge({
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/80 shadow-sm animate-pulse dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30',
+          'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/80 shadow-xs animate-pulse dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30',
           className
         )}
         title={`Due on ${formattedDate}`}

@@ -886,11 +886,11 @@ export default function SquireLauncher({
     <div
       className={
         fullscreen
-          ? `fixed print:hidden ${open ? 'inset-0 z-[70]' : 'bottom-24 right-4 z-50'}`
+          ? `fixed print:hidden ${open ? 'inset-0 z-70' : 'bottom-24 right-4 z-50'}`
           : dock.docked && open
             ? DOCK_WRAPPER_CLASS
             : // Floating, the panel clears the desktop status bar like everything else pinned to the bottom.
-              `fixed z-40 print:hidden ${open ? 'inset-0 sm:inset-auto sm:bottom-[calc(var(--status-bar-height,0px)_+_1rem)]' : 'bottom-4'} ${side === 'left' ? 'left-0 sm:left-4' : 'right-0 sm:right-4'}`
+              `fixed z-40 print:hidden ${open ? 'inset-0 sm:inset-auto sm:bottom-[calc(var(--status-bar-height,0px)+1rem)]' : 'bottom-4'} ${side === 'left' ? 'left-0 sm:left-4' : 'right-0 sm:right-4'}`
       }
       data-side={side}
       data-presentation={fullscreen ? 'fullscreen' : dock.docked && open ? 'docked' : 'panel'}
@@ -912,7 +912,7 @@ export default function SquireLauncher({
           aria-expanded={false}
           aria-controls={panelId}
           // An open right-side sheet (Insights inspector) owns that corner; the launcher steps aside until it closes.
-          className={`flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-lg transition hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 lg:[html[data-squire-bar=on]_&]:hidden ${side === 'left' ? '' : '[body:has([data-sheet-side=right][data-state=open])_&]:hidden'}`}
+          className={`flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-lg transition hover:bg-accent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 lg:[html[data-squire-bar=on]_&]:hidden ${side === 'left' ? '' : '[body:has([data-sheet-side=right][data-state=open])_&]:hidden'}`}
         >
           <SquireAvatar
             kind={avatar}
@@ -940,10 +940,10 @@ export default function SquireLauncher({
           // z-50 keeps the panel (and its send button) above the status-bar companion in the same layer.
           className={
             fullscreen
-              ? 'relative z-50 flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]'
+              ? 'relative z-50 flex h-dvh w-screen min-w-0 flex-col overflow-hidden bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]'
               : dock.docked
                 ? `${DOCK_PANEL_CLASS} z-50`
-                : `relative z-50 flex h-[100dvh] w-screen min-w-0 flex-col overflow-hidden bg-card sm:h-[min(42.5rem,calc(100dvh_-_var(--status-bar-height,0px)_-_2rem))] sm:rounded-2xl sm:border sm:border-border sm:shadow-xl ${expanded ? 'sm:w-[min(45rem,calc(100vw-2rem))]' : 'sm:w-[min(26.25rem,calc(100vw-2rem))]'} motion-safe:transition-[width] motion-safe:duration-200`
+                : `relative z-50 flex h-dvh w-screen min-w-0 flex-col overflow-hidden bg-card sm:h-[min(42.5rem,calc(100dvh-var(--status-bar-height,0px)-2rem))] sm:rounded-2xl sm:border sm:border-border sm:shadow-xl ${expanded ? 'sm:w-[min(45rem,calc(100vw-2rem))]' : 'sm:w-[min(26.25rem,calc(100vw-2rem))]'} motion-safe:transition-[width] motion-safe:duration-200`
           }
         >
           <SquireHeader
@@ -1023,7 +1023,7 @@ export default function SquireLauncher({
                 <input
                   aria-label="Search loaded conversations"
                   placeholder="Search loaded chats…"
-                  className="min-h-11 min-w-0 flex-1 bg-transparent outline-none"
+                  className="min-h-11 min-w-0 flex-1 bg-transparent outline-hidden"
                   value={historySearch}
                   onChange={event => setHistorySearch(event.target.value)}
                 />
@@ -1198,7 +1198,7 @@ export default function SquireLauncher({
                         key={suggestion}
                         type="button"
                         onClick={() => void send(suggestion)}
-                        className="min-h-11 rounded-full border border-border bg-card px-3 py-1 text-left text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
+                        className="min-h-11 rounded-full border border-border bg-card px-3 py-1 text-left text-xs transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
                       >
                         {suggestion}
                       </button>

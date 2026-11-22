@@ -32,7 +32,7 @@ export default function WallboardLargestGroupTile({
         <p className="min-w-0 text-sm">
           <Link
             href={`/incidents/${encodeURIComponent(group.parentId)}`}
-            className="line-clamp-2 break-words font-medium underline-offset-2 hover:underline"
+            className="line-clamp-2 wrap-break-word font-medium underline-offset-2 hover:underline"
           >
             {group.parentTitle}
           </Link>

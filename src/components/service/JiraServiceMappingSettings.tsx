@@ -83,7 +83,7 @@ export default function JiraServiceMappingSettings({
         : ['HIGH'];
 
   return (
-    <Card className="rounded-xl border border-border/80 bg-card/90 shadow-xs">
+    <Card className="rounded-xl border border-border/80 bg-card/90 shadow-2xs">
       <CardHeader className="px-3.5 py-2.5 border-b border-border/60 bg-muted/20">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="flex items-center gap-2.5">

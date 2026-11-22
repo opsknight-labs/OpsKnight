@@ -48,7 +48,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
   const mode = status?.mode ?? 'DISABLED';
 
   return (
-    <header className="overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-xs">
+    <header className="overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-2xs">
       <div className="flex flex-col gap-3 p-3.5 sm:p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <div
@@ -136,7 +136,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
               </NativeSelect>
               <Button
                 size="sm"
-                className="h-9 gap-1.5 px-3.5 text-xs font-medium shadow-xs transition-all w-full sm:w-auto"
+                className="h-9 gap-1.5 px-3.5 text-xs font-medium shadow-2xs transition-all w-full sm:w-auto"
                 disabled={busy || !!publishBlockedReason}
                 aria-describedby={publishBlockedReason ? hintId : undefined}
                 onClick={onPublish}

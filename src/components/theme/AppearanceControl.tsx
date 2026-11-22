@@ -88,7 +88,7 @@ export default function AppearanceControl({
             title={size === 'xs' ? label : undefined}
             className={cn(
               'inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
               'disabled:cursor-not-allowed disabled:opacity-60',
               size === 'xs'
                 ? 'h-6 w-7'
@@ -96,7 +96,7 @@ export default function AppearanceControl({
                   ? 'min-h-8 px-2 text-xs'
                   : 'min-h-9 px-3 text-sm',
               active
-                ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
+                ? 'bg-card text-foreground shadow-xs ring-1 ring-border'
                 : 'text-muted-foreground hover:text-foreground',
               optionClassName
             )}

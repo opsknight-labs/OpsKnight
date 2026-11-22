@@ -33,7 +33,7 @@ export default function OneTimeSecretBanner({
     <div
       role="region"
       aria-label={title}
-      className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 space-y-4 shadow-sm animate-in fade-in-0 duration-200"
+      className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 space-y-4 shadow-xs animate-in fade-in-0 duration-200"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-bold text-emerald-700 dark:text-emerald-400">

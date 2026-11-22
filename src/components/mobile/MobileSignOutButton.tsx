@@ -37,7 +37,7 @@ export default function MobileSignOutButton({ icon, label, description }: Props)
       type="button"
       onClick={handleSignOut}
       disabled={isSigningOut}
-      className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left text-destructive transition-colors hover:bg-destructive/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left text-destructive transition-colors hover:bg-destructive/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
         {icon}

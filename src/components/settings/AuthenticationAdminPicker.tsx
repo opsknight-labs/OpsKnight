@@ -60,7 +60,7 @@ export default function AuthenticationAdminPicker({
     return (
       <div className="space-y-2 text-sm">
         <p className="font-medium">{label}</p>
-        <p className="break-words rounded-md bg-muted/40 p-3">
+        <p className="wrap-break-word rounded-md bg-muted/40 p-3">
           {selected
             ? `${selected.name ? selected.name + ' · ' : ''}${selected.email}`
             : 'No eligible administrator selected'}
@@ -93,7 +93,7 @@ export default function AuthenticationAdminPicker({
       <label className="block space-y-2 text-sm">
         <span className="font-medium">{label}</span>
         <select
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           value={value}
           onChange={event => onChange(event.target.value)}
           disabled={disabled}

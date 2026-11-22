@@ -136,7 +136,7 @@ function SubmitButton({ disabled, isDirty }: { disabled: boolean; isDirty: boole
       type="submit"
       disabled={disabled || pending || !isDirty}
       size="sm"
-      className="h-9 px-4 text-xs font-semibold gap-1.5 shadow-sm"
+      className="h-9 px-4 text-xs font-semibold gap-1.5 shadow-xs"
     >
       {pending ? (
         <>
@@ -346,7 +346,7 @@ export default function ChatOpsSettingsPage({
       <WarRoomProviderStatus slack={providerStatus.slack} teams={providerStatus.teams} />
 
       {/* Global War Room Policy Section */}
-      <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-6">
+      <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
@@ -616,7 +616,7 @@ export default function ChatOpsSettingsPage({
                       disabled={!isAdmin}
                       className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-all flex items-center gap-1.5 ${
                         isSelected
-                          ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                          ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
                           : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/80'
                       }`}
                     >
@@ -647,7 +647,7 @@ export default function ChatOpsSettingsPage({
                       disabled={!isAdmin}
                       className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-all flex items-center gap-1.5 ${
                         isSelected
-                          ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                          ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
                           : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/80'
                       }`}
                     >
@@ -715,7 +715,7 @@ export default function ChatOpsSettingsPage({
       </div>
 
       {/* Video Collaboration Section */}
-      <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+      <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">

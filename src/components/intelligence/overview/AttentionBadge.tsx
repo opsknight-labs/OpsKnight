@@ -30,7 +30,7 @@ export default async function AttentionBadge({ actor }: { actor: AuthorizationAc
       href="/intelligence"
       aria-label={label}
       title={label}
-      className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-300 transition-colors after:absolute after:-inset-1 hover:bg-slate-800/80 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-300 transition-colors after:absolute after:-inset-1 hover:bg-slate-800/80 hover:text-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Inbox className="h-5 w-5" aria-hidden="true" />
       <span

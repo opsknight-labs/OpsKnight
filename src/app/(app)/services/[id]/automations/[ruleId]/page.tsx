@@ -320,7 +320,7 @@ export default async function AutomationRulePage({
               <Button
                 asChild
                 size="sm"
-                className="h-9 px-3.5 gap-2 rounded-xl font-semibold shadow-xs"
+                className="h-9 px-3.5 gap-2 rounded-xl font-semibold shadow-2xs"
               >
                 <a href="#run-now">
                   <Play className="h-4 w-4" aria-hidden />
@@ -332,7 +332,7 @@ export default async function AutomationRulePage({
               asChild
               size="sm"
               variant="outline"
-              className="h-9 px-3.5 gap-2 rounded-xl border-white/20 bg-white/5 hover:bg-white/10 text-white font-semibold shadow-xs"
+              className="h-9 px-3.5 gap-2 rounded-xl border-white/20 bg-white/5 hover:bg-white/10 text-white font-semibold shadow-2xs"
             >
               <Link href={configureHref}>
                 <Settings2 className="h-4 w-4" aria-hidden />
@@ -357,7 +357,7 @@ export default async function AutomationRulePage({
       {/* Modernized Safety & Verification Pillars */}
       <section
         aria-label="What the evidence establishes"
-        className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/70 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs space-y-3"
+        className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/70 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-2xs space-y-3"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
@@ -493,7 +493,7 @@ export default async function AutomationRulePage({
           className="order-first space-y-4 lg:sticky lg:top-16 lg:order-last lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto lg:pb-4"
         >
           {/* Compact At a glance Card */}
-          <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs overflow-hidden">
+          <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs overflow-hidden">
             <div className="flex items-center justify-between border-b border-border/60 px-4 py-3 bg-muted/20">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20 shadow-2xs">
@@ -534,7 +534,7 @@ export default async function AutomationRulePage({
           </div>
 
           {/* Compact Lifecycle Stepper Card */}
-          <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs overflow-hidden">
+          <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs overflow-hidden">
             <div className="flex items-center justify-between border-b border-border/60 px-4 py-3 bg-muted/20">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 shadow-2xs">
@@ -574,7 +574,7 @@ export default async function AutomationRulePage({
             description="Work through these in order. The first two steps never run anything."
           >
             <details className="group rounded-xl border border-border/80 dark:border-border/60 bg-muted/20 text-xs overflow-hidden shadow-2xs [&_summary::-webkit-details-marker]:hidden">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                 <span className="inline-flex items-center gap-2">
                   <Info className="h-4 w-4 text-primary" aria-hidden />
                   <span>Execution & Verification Guardrails</span>
@@ -829,7 +829,7 @@ export default async function AutomationRulePage({
               </div>
 
               {readiness.eligibleAgents === 0 && (
-                <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/[0.05] px-3 py-2 text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed">
+                <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" />
                   <span>
                     No healthy online agents currently match this fleet target. Dispatches to this

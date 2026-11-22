@@ -112,8 +112,8 @@ export default function SsoButton({
         'rounded-lg text-sm font-medium border select-none cursor-pointer',
         'transition-all duration-150 transform',
         'active:scale-[0.995] disabled:opacity-50 disabled:cursor-not-allowed',
-        'border-input bg-card text-foreground shadow-xs hover:bg-muted hover:shadow-sm',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+        'border-input bg-card text-foreground shadow-2xs hover:bg-muted hover:shadow-xs',
+        'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
       )}
     >
       {loading ? (

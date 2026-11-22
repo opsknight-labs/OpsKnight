@@ -97,7 +97,7 @@ export default async function PostmortemsPage({
           canCreate && resolvedIncidentsWithoutPostmortems.length > 0 ? (
             <Button
               asChild
-              className="gap-2 shadow-sm font-semibold bg-white text-zinc-950 hover:bg-zinc-100"
+              className="gap-2 shadow-xs font-semibold bg-white text-zinc-950 hover:bg-zinc-100"
             >
               <Link href="/postmortems/create">
                 <Plus className="h-4 w-4" />

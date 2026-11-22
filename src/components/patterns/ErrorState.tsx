@@ -123,7 +123,7 @@ export default function ErrorState({
 
         {details && (
           <details className="group mt-6 w-full text-left">
-            <summary className="mb-2 cursor-pointer select-none rounded-sm text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <summary className="mb-2 cursor-pointer select-none rounded-sm text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
               Technical details
             </summary>
             <pre className="max-h-[300px] overflow-auto rounded-sm border border-border bg-muted p-4 font-mono text-xs leading-relaxed text-muted-foreground">

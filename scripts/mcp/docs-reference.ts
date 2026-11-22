@@ -915,6 +915,7 @@ const ROLE_LABEL: Record<(typeof APP_ROLES)[number], string> = {
   RESPONDER: 'Responder',
   AUDITOR: 'Auditor',
   USER: 'User',
+  STAKEHOLDER: 'Stakeholder',
 };
 
 function scopeArea(scope: string) {

@@ -13,7 +13,7 @@ const head = 'h-9 px-3 text-left text-xs font-medium text-muted-foreground white
 const cell = 'px-3 py-2.5 align-middle text-sm font-normal';
 const row = 'border-t border-border transition-colors hover:bg-muted/50';
 const link =
-  'font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 function Subheading({ id, children }: { id: string; children: ReactNode }) {
   return (

@@ -433,7 +433,7 @@ export default async function BusinessServiceOverviewPage({
                       href={entry.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="inline-flex items-center gap-1 font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {entry.label}
                       <ExternalLink className="h-3 w-3" aria-hidden />

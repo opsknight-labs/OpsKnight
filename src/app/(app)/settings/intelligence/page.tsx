@@ -380,7 +380,7 @@ export default async function IntelligenceSettingsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="break-words text-xs text-muted-foreground">{item.failureSummary}</p>
+                  <p className="wrap-break-word text-xs text-muted-foreground">{item.failureSummary}</p>
                 </div>
                 {canManage && <ReplayForm id={item.id} />}
               </li>

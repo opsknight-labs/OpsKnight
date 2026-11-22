@@ -45,7 +45,7 @@ type Props = {
 };
 
 const authFieldClass =
-  'h-11 min-h-11 2xl:h-12 pl-12 rounded-xl bg-card text-base sm:text-sm 2xl:text-base shadow-xs hover:border-ring/50 transition-colors';
+  'h-11 min-h-11 2xl:h-12 pl-12 rounded-xl bg-card text-base sm:text-sm 2xl:text-base shadow-2xs hover:border-ring/50 transition-colors';
 
 function plainMessage(detail: string): AuthMessage {
   return { title: 'Couldn’t sign you in', detail, action: '' };
@@ -248,7 +248,7 @@ export default function LoginClient({
         {showPasswordSet && !error && (
           <div
             role="status"
-            className="mb-6 p-3 rounded-lg border border-status-ok/30 bg-status-ok-soft/30 shadow-xs flex items-start gap-3"
+            className="mb-6 p-3 rounded-lg border border-status-ok/30 bg-status-ok-soft/30 shadow-2xs flex items-start gap-3"
           >
             <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-status-ok/15 text-status-ok mt-0.5">
               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -265,7 +265,7 @@ export default function LoginClient({
               type="button"
               data-icon-button
               onClick={() => setShowPasswordSet(false)}
-              className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border border-input/70 bg-muted hover:bg-accent text-foreground transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border border-input/70 bg-muted hover:bg-accent text-foreground transition-all cursor-pointer shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Dismiss message"
               title="Dismiss"
             >
@@ -280,7 +280,7 @@ export default function LoginClient({
             role="alert"
             aria-live="assertive"
             className={cn(
-              'mb-6 p-3 rounded-lg border shadow-xs flex items-start gap-3 transition-all',
+              'mb-6 p-3 rounded-lg border shadow-2xs flex items-start gap-3 transition-all',
               error.tone === 'notice'
                 ? 'border-status-elevated/30 bg-status-elevated-soft/40'
                 : 'border-destructive/30 bg-destructive/5',
@@ -337,7 +337,7 @@ export default function LoginClient({
               data-icon-button
               onClick={dismissError}
               className={cn(
-                "relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2",
+                "relative shrink-0 flex h-6 w-6 min-h-0 min-w-0 p-0 after:absolute after:-inset-2.5 after:content-[''] items-center justify-center rounded-full border transition-all cursor-pointer shadow-2xs focus-visible:outline-hidden focus-visible:ring-2",
                 error.tone === 'notice'
                   ? 'border-status-elevated/30 bg-status-elevated/15 hover:bg-status-elevated/25 text-status-elevated-deep focus-visible:ring-status-elevated/50'
                   : 'border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-destructive focus-visible:ring-destructive/50'
@@ -473,7 +473,7 @@ export default function LoginClient({
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="absolute right-3 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                   aria-pressed={showPassword}
                   aria-controls="login-password"
@@ -497,7 +497,7 @@ export default function LoginClient({
                       !isSubmitting && !isSuccess && setRememberMeOverride(!rememberMe)
                     }
                     disabled={!hydrated || isSubmitting || isSuccess}
-                    className="flex items-center gap-2.5 cursor-pointer select-none group focus:outline-none disabled:opacity-50"
+                    className="flex items-center gap-2.5 cursor-pointer select-none group focus:outline-hidden disabled:opacity-50"
                   >
                     {/* Custom checkbox — focus ring shown on the box itself for keyboard users */}
                     <span
@@ -570,7 +570,7 @@ export default function LoginClient({
                 'group relative w-full h-11 2xl:h-12 px-4 rounded-lg font-semibold text-sm 2xl:text-base transition-all duration-150 flex items-center justify-center gap-2 mt-3 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.995]',
                 isSuccess
                   ? 'bg-status-ok text-white shadow-md'
-                  : 'bg-primary hover:bg-primary/90 text-primary-foreground border border-primary shadow-sm hover:shadow'
+                  : 'bg-primary hover:bg-primary/90 text-primary-foreground border border-primary shadow-xs hover:shadow-sm'
               )}
             >
               {isSuccess ? (

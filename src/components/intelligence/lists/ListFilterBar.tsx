@@ -32,7 +32,7 @@ export interface ListChipField {
 }
 
 const controlClass =
-  'h-11 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground transition-colors duration-150 hover:border-ink-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9';
+  'h-11 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground transition-colors duration-150 hover:border-ink-300 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:h-9';
 
 /**
  * Filter card for the alerts and changes lists, in the console's FilterBar look. It is a plain GET form,

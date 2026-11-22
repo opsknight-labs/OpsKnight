@@ -642,7 +642,7 @@ export function UserEmail({ user, showMeta = false }: { user: DirectoryUser; sho
     <span className="flex min-w-0 items-center gap-1" title={meta || undefined}>
       <span className="truncate">{user.email}</span>
       {showMeta && meta && (
-        <span className="hidden min-w-0 shrink-[4] truncate text-muted-foreground/80 xl:inline">
+        <span className="hidden min-w-0 shrink-4 truncate text-muted-foreground/80 xl:inline">
           · {meta}
         </span>
       )}
@@ -652,7 +652,7 @@ export function UserEmail({ user, showMeta = false }: { user: DirectoryUser; sho
         aria-label={`Copy email address for ${user.name}`}
         title="Copy email address"
         className={cn(
-          'shrink-0 cursor-pointer rounded p-0.5 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'shrink-0 cursor-pointer rounded p-0.5 hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
           REVEAL_ON_HOVER
         )}
       >
@@ -692,7 +692,7 @@ export function UserTeams({
             title={label ? 'Assign a team' : 'Add to another team'}
             className={cn(
               'inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
               !label && REVEAL_ON_HOVER
             )}
           >
@@ -753,7 +753,7 @@ export function UserCard({ selected, onSelect, ...props }: UserCardProps) {
       className={cn(
         'group relative flex flex-col gap-2.5 rounded-lg border bg-card p-3 text-card-foreground transition-colors',
         selected
-          ? 'border-primary bg-primary/[0.03] ring-1 ring-primary/30'
+          ? 'border-primary bg-primary/3 ring-1 ring-primary/30'
           : 'border-border/70 hover:border-border hover:bg-muted/30'
       )}
     >
@@ -782,7 +782,7 @@ export function UserCard({ selected, onSelect, ...props }: UserCardProps) {
           <div className="flex min-w-0 items-center gap-1.5">
             <Link
               href={`/users/${user.id}`}
-              className="truncate rounded-sm text-sm font-medium text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="truncate rounded-sm text-sm font-medium text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               {user.name}
             </Link>

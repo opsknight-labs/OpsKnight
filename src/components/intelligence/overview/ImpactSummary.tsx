@@ -182,7 +182,7 @@ function NoiseStatus({
       {canManage && (
         <Link
           href="/settings/intelligence/noise-controls"
-          className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
+          className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
         >
           Review noise controls
           <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -324,7 +324,7 @@ export default function ImpactSummary({
                 )
               }
               empty={item.value === NO_VALUE}
-              valueClassName="break-words"
+              valueClassName="wrap-break-word"
               meta={
                 <>
                   <DeltaBadge delta={item.delta ?? null} />

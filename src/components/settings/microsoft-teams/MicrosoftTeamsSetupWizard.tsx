@@ -184,7 +184,7 @@ export default function MicrosoftTeamsSetupWizard({
   return (
     <div className="space-y-6">
       {/* Wizard Progress Stepper Header */}
-      <div className="rounded-xl border bg-card p-4 sm:p-5 shadow-sm">
+      <div className="rounded-xl border bg-card p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -212,7 +212,7 @@ export default function MicrosoftTeamsSetupWizard({
                 onClick={() => setActiveStep(step.num)}
                 className={`flex items-center gap-3 p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
                   isActive
-                    ? 'border-primary bg-primary/5 shadow-xs ring-1 ring-primary/20'
+                    ? 'border-primary bg-primary/5 shadow-2xs ring-1 ring-primary/20'
                     : step.done
                       ? 'border-emerald-500/30 bg-emerald-500/5 hover:bg-muted/30'
                       : 'border-border bg-card/60 hover:bg-muted/30'
@@ -243,7 +243,7 @@ export default function MicrosoftTeamsSetupWizard({
 
       {/* STEP 1: Azure App Registration */}
       {activeStep === 1 && (
-        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -504,7 +504,7 @@ export default function MicrosoftTeamsSetupWizard({
 
       {/* STEP 2: Azure Bot Service & Messaging Endpoint */}
       {activeStep === 2 && (
-        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -604,7 +604,7 @@ export default function MicrosoftTeamsSetupWizard({
 
       {/* STEP 3: Teams App Package & Sideloading */}
       {activeStep === 3 && (
-        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -748,7 +748,7 @@ export default function MicrosoftTeamsSetupWizard({
 
       {/* STEP 4: Consent, RSC Verification & Live Test */}
       {activeStep === 4 && (
-        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">

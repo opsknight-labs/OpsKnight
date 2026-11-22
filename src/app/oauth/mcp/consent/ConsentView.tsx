@@ -92,12 +92,12 @@ export default function ConsentView({
         <AuthBrand />
         <section
           aria-labelledby="mcp-consent-title"
-          className="space-y-6 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-7 min-[1440px]:p-9"
+          className="space-y-6 rounded-2xl border border-border bg-card p-5 shadow-xs sm:p-7 min-[1440px]:p-9"
         >
           <div className="space-y-1.5">
             <h1
               id="mcp-consent-title"
-              className="flex items-center gap-2 break-words font-display font-bold tracking-tight text-foreground"
+              className="flex items-center gap-2 wrap-break-word font-display font-bold tracking-tight text-foreground"
             >
               {/* A brand logo only for a metadata host an administrator trusts (SEC-6); a chosen
                   name, or an untrusted publisher, gets the generic icon. */}
@@ -117,7 +117,7 @@ export default function ConsentView({
               {returnHost !== null ? (
                 <span>
                   Returns to{' '}
-                  <code className="rounded bg-muted px-1 py-px font-mono text-xs [overflow-wrap:anywhere] text-foreground">
+                  <code className="rounded bg-muted px-1 py-px font-mono text-xs wrap-anywhere text-foreground">
                     {returnAddress ?? returnHost}
                   </code>
                 </span>
@@ -129,12 +129,12 @@ export default function ConsentView({
                 <span className="inline-flex items-center gap-1 font-medium text-status-ok-deep">
                   <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
                   Identified by{' '}
-                  <code className="font-mono [overflow-wrap:anywhere]">{identity.host}</code>
+                  <code className="font-mono wrap-anywhere">{identity.host}</code>
                 </span>
               ) : identity.kind === 'metadata' ? (
                 <span className="text-muted-foreground">
                   Published by{' '}
-                  <code className="font-mono [overflow-wrap:anywhere] text-foreground">
+                  <code className="font-mono wrap-anywhere text-foreground">
                     {identity.host}
                   </code>
                 </span>
@@ -148,7 +148,7 @@ export default function ConsentView({
             </p>
             <p className="text-sm leading-relaxed text-muted-foreground">
               Signed in as{' '}
-              <strong className="font-semibold [overflow-wrap:anywhere] text-foreground">
+              <strong className="font-semibold wrap-anywhere text-foreground">
                 {signedInAs}
               </strong>{' '}
               ({roleLabel}). The assistant acts as you and can only use the permissions you allow
@@ -178,14 +178,14 @@ export default function ConsentView({
               {identity.kind === 'metadata' ? (
                 <span>
                   This assistant is published by{' '}
-                  <strong className="[overflow-wrap:anywhere]">{identity.host}</strong> but sends
-                  you to <strong className="[overflow-wrap:anywhere]">{returnHost}</strong>. Only
+                  <strong className="wrap-anywhere">{identity.host}</strong> but sends
+                  you to <strong className="wrap-anywhere">{returnHost}</strong>. Only
                   continue if you just started this connection yourself and recognise both.
                 </span>
               ) : (
                 <span>
                   This assistant named itself and sends you to the website{' '}
-                  <strong className="[overflow-wrap:anywhere]">{returnHost}</strong>. Only continue
+                  <strong className="wrap-anywhere">{returnHost}</strong>. Only continue
                   if you just started this connection yourself and recognise that address.
                 </span>
               )}

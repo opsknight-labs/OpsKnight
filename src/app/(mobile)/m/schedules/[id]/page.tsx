@@ -77,13 +77,13 @@ export default async function MobileScheduleDetailPage({ params }: PageProps) {
       {/* Schedule Header */}
       <MobileCard padding="lg">
         <div className="space-y-2">
-          <h1 className="text-lg font-bold text-[color:var(--text-primary)]">{schedule.name}</h1>
-          <p className="text-xs text-[color:var(--text-muted)]">
+          <h1 className="text-lg font-bold text-(--text-primary)">{schedule.name}</h1>
+          <p className="text-xs text-(--text-muted)">
             📅 {schedule.layers.length} layer{schedule.layers.length !== 1 ? 's' : ''} • 👥{' '}
             {totalParticipants} participant{totalParticipants !== 1 ? 's' : ''}
           </p>
           {schedule.timeZone && (
-            <p className="text-[11px] text-[color:var(--text-muted)]">
+            <p className="text-[11px] text-(--text-muted)">
               🌍 Timezone: {schedule.timeZone}
             </p>
           )}
@@ -118,17 +118,17 @@ export default async function MobileScheduleDetailPage({ params }: PageProps) {
 
       {/* Layers Section */}
       <div className="flex flex-col gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-(--text-muted)">
           Rotation Layers
         </h3>
         <div className="flex flex-col gap-3">
           {schedule.layers.map((layer, index) => (
             <MobileCard key={layer.id} padding="md">
               <div className="mb-3">
-                <div className="text-sm font-semibold text-[color:var(--text-primary)]">
+                <div className="text-sm font-semibold text-(--text-primary)">
                   {layer.name || `Layer ${index + 1}`}
                 </div>
-                <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">
+                <div className="mt-1 text-[11px] text-(--text-muted)">
                   ⏱️ {layer.rotationLengthHours}h rotation • {layer.users.length} participants
                 </div>
               </div>
@@ -138,9 +138,9 @@ export default async function MobileScheduleDetailPage({ params }: PageProps) {
                 {layer.users.map((layerUser, userIndex) => (
                   <div
                     key={layerUser.id}
-                    className="flex items-center gap-2 rounded-lg bg-[color:var(--bg-secondary)] px-2.5 py-2"
+                    className="flex items-center gap-2 rounded-lg bg-(--bg-secondary) px-2.5 py-2"
                   >
-                    <span className="w-6 text-[10px] font-semibold text-[color:var(--text-muted)]">
+                    <span className="w-6 text-[10px] font-semibold text-(--text-muted)">
                       #{userIndex + 1}
                     </span>
                     <UserAvatar
@@ -151,7 +151,7 @@ export default async function MobileScheduleDetailPage({ params }: PageProps) {
                       size="sm"
                       aria-hidden
                     />
-                    <span className="text-sm text-[color:var(--text-primary)]">
+                    <span className="text-sm text-(--text-primary)">
                       {layerUser.user.name || layerUser.user.email}
                     </span>
                   </div>

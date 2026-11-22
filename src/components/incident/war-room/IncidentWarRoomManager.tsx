@@ -63,17 +63,17 @@ export function IncidentWarRoomManager({
         <SheetContent
           side={sheetSide}
           className={cn(
-            'w-full sm:max-w-md flex flex-col p-0 bg-zinc-50 dark:bg-zinc-950 text-foreground border-l border-zinc-200 dark:border-zinc-800 shadow-2xl [&>button]:z-50 [&>button]:cursor-pointer [&>button]:text-zinc-400 [&>button]:hover:text-white [&>button]:top-4 [&>button]:right-4.5 [&>button]:rounded-md [&>button]:p-1.5 [&>button]:hover:bg-white/10 [&>button]:transition-colors overflow-hidden',
+            'w-full sm:max-w-md flex flex-col p-0 bg-zinc-50 dark:bg-zinc-950 text-foreground border-l border-zinc-200 dark:border-zinc-800 shadow-2xl [&>button]:z-50 [&>button]:cursor-pointer [&>button]:text-zinc-400 hover:[&>button]:text-white [&>button]:top-4 [&>button]:right-4.5 [&>button]:rounded-md [&>button]:p-1.5 hover:[&>button]:bg-white/10 [&>button]:transition-colors overflow-hidden',
             presentation === 'mobile' && 'max-h-[85vh] rounded-t-2xl'
           )}
         >
           {/* Header styled identically to TopbarNotifications with gradient & sheen */}
-          <div className="relative px-5 pt-4 pb-3 bg-gradient-to-b from-[#18181b] via-[#121216] to-[#09090b] text-white border-b border-zinc-800/80 shadow-2xs shrink-0">
+          <div className="relative px-5 pt-4 pb-3 bg-linear-to-b from-[#18181b] via-[#121216] to-[#09090b] text-white border-b border-zinc-800/80 shadow-2xs shrink-0">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.06),transparent_60%)] pointer-events-none" />
             <SheetHeader className="p-0 space-y-0 text-left">
               <div className="flex items-center justify-between pr-12">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 border border-zinc-700/60 shadow-xs backdrop-blur-md shrink-0">
+                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 border border-zinc-700/60 shadow-2xs backdrop-blur-md shrink-0">
                     <Users className="h-4 w-4 text-white" aria-hidden="true" />
                   </div>
                   <div className="flex items-center gap-2 min-w-0">

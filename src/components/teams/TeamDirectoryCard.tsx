@@ -105,7 +105,7 @@ export default function TeamDirectoryCard({ team }: TeamDirectoryCardProps) {
       href={`/teams/${team.id}`}
       aria-labelledby={nameId}
       aria-describedby={`${leadId} ${detailsId}`}
-      className="group flex flex-col gap-3 rounded-lg border border-border bg-card p-3.5 shadow-2xs transition-colors duration-150 hover:border-primary/40 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="group flex flex-col gap-3 rounded-lg border border-border bg-card p-3.5 shadow-2xs transition-colors duration-150 hover:border-primary/40 hover:bg-muted/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       {/* Row 1: identity + lead */}
       <div className="flex items-start gap-2.5">

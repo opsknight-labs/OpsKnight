@@ -53,7 +53,7 @@ export default function CreateServiceForm({
 
   return (
     <Card className="border-primary/20 shadow-lg relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 to-primary" />
+      <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-primary/40 to-primary" />
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div className="space-y-1">

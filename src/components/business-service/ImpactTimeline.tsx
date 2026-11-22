@@ -96,7 +96,7 @@ export default function ImpactTimeline({
                   {showIncidents ? (
                     <Link
                       href={`/incidents/${entry.incidentId}`}
-                      className="font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {entry.incidentTitle}
                     </Link>

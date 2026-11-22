@@ -324,7 +324,7 @@ export default function ApiExplorerPanel({
   return (
     <div className="space-y-6">
       {/* 1. Header & Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-card border border-border/80 p-3.5 rounded-2xl shadow-2xs">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -447,7 +447,7 @@ export default function ApiExplorerPanel({
             return (
               <Card
                 key={key}
-                className={`border-border/80 shadow-xs overflow-hidden border-l-4 ${methodStyle.border}`}
+                className={`border-border/80 shadow-2xs overflow-hidden border-l-4 ${methodStyle.border}`}
               >
                 <div
                   onClick={() => toggleEndpoint(key)}

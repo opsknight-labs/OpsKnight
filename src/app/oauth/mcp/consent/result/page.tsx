@@ -25,7 +25,7 @@ export default async function McpConsentResult({
         <AuthBrand />
         <section
           role="alert"
-          className="space-y-3 rounded-2xl border border-border bg-card p-6 shadow-sm"
+          className="space-y-3 rounded-2xl border border-border bg-card p-6 shadow-xs"
         >
           <h1 className="font-display text-xl font-bold tracking-tight">{title}</h1>
           <p className="text-sm text-muted-foreground">{body}</p>
@@ -43,7 +43,7 @@ export default async function McpConsentResult({
         </section>
         <Link
           href="/settings/integrations/mcp"
-          className="inline-block rounded text-sm font-medium text-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-block rounded text-sm font-medium text-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           Back to OpsKnight
         </Link>

@@ -36,7 +36,7 @@ export default function TeamLinkedPolicies({ policies, className }: TeamLinkedPo
     <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-3', className)}>
       {policies.map(policy => (
         <Link key={policy.id} href={`/policies/${policy.id}`} className="group">
-          <Card className="overflow-hidden border-border/70 shadow-2xs hover:border-primary/40 hover:shadow-xs transition-all">
+          <Card className="overflow-hidden border-border/70 shadow-2xs hover:border-primary/40 hover:shadow-2xs transition-all">
             <CardContent className="p-3.5 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">

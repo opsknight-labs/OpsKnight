@@ -189,7 +189,7 @@ export default function AuthenticationRolesWorkspace() {
       {hasBroadAdministratorRule(configuration.roleMapping) && (
         <div
           role="note"
-          className="space-y-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-900 shadow-xs dark:text-amber-100"
+          className="space-y-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-900 shadow-2xs dark:text-amber-100"
         >
           <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200">
             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -227,7 +227,7 @@ export default function AuthenticationRolesWorkspace() {
         )}
       </div>
 
-      <div className="space-y-3 rounded-xl border bg-card p-4 shadow-xs sm:p-5">
+      <div className="space-y-3 rounded-xl border bg-card p-4 shadow-2xs sm:p-5">
         <div className="flex items-center gap-1">
           <h3 className="text-sm font-semibold text-foreground">Profile details from SSO</h3>
           <HelpHint label="About profile details">
@@ -273,7 +273,7 @@ export default function AuthenticationRolesWorkspace() {
         )}
       </div>
 
-      <div className="space-y-4 rounded-xl border bg-muted/20 p-4 shadow-xs sm:p-5">
+      <div className="space-y-4 rounded-xl border bg-muted/20 p-4 shadow-2xs sm:p-5">
         <div className="flex items-center gap-2 border-b pb-2">
           <Sparkles className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-bold text-foreground">Try your rules</h3>
@@ -346,7 +346,7 @@ export default function AuthenticationRolesWorkspace() {
         </AuthenticationActionGuard>
 
         {claimResult && (
-          <div className="space-y-2 rounded-xl border bg-card p-4 text-xs shadow-xs" role="status">
+          <div className="space-y-2 rounded-xl border bg-card p-4 text-xs shadow-2xs" role="status">
             <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
               {claimResult.outcome === 'REJECT' ? (
                 <XCircle className="h-4 w-4 text-destructive" />

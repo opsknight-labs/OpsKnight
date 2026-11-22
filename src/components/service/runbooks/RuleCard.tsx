@@ -87,14 +87,14 @@ export function ArchivedRuleCard({
   binding: ServiceRunbookBinding;
 }) {
   return (
-    <article className="bg-card group relative overflow-hidden rounded-xl border border-dashed border-border/80 bg-card/60 backdrop-blur-xs p-3.5 sm:p-4 shadow-xs hover:border-border transition-all">
+    <article className="bg-card group relative overflow-hidden rounded-xl border border-dashed border-border/80 bg-card/60 backdrop-blur-xs p-3.5 sm:p-4 shadow-2xs hover:border-border transition-all">
       <div className="flex flex-wrap items-start justify-between gap-2.5">
         <div className="flex min-w-0 items-start gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 border border-border/70 text-muted-foreground shadow-2xs">
             <Archive className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0">
-            <h3 className="break-words text-sm sm:text-base font-bold text-foreground">
+            <h3 className="wrap-break-word text-sm sm:text-base font-bold text-foreground">
               {binding.name || binding.runbook.name}
             </h3>
             <p className="mt-0.5 text-xs text-muted-foreground">Rule detached · Archived history</p>
@@ -164,7 +164,7 @@ export function RuleCard({
   const readinessView = binding.readiness ? readinessPresentation(binding.readiness.state) : null;
 
   return (
-    <article className="bg-card group relative overflow-hidden rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border hover:shadow-md transition-all duration-200">
+    <article className="bg-card group relative overflow-hidden rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs hover:border-border hover:shadow-md transition-all duration-200">
       <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1', accent)} />
       <div className="space-y-2.5 p-3 sm:p-3.5 pl-3.5 sm:pl-4">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
@@ -191,7 +191,7 @@ export function RuleCard({
               <h3 className="text-sm font-bold leading-snug">
                 <Link
                   href={rulePath}
-                  className="break-words text-foreground hover:text-primary transition-colors focus-visible:underline"
+                  className="wrap-break-word text-foreground hover:text-primary transition-colors focus-visible:underline"
                 >
                   {binding.name || binding.runbook.name}
                 </Link>
@@ -216,7 +216,7 @@ export function RuleCard({
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <div className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/30 px-2 py-0.5 text-muted-foreground text-[11px] shadow-2xs">
             <Server className="h-3 w-3 text-primary shrink-0" />
-            <span className="min-w-0 break-words">
+            <span className="min-w-0 wrap-break-word">
               Target: {presentation.target} · Trigger: {presentation.trigger}
             </span>
           </div>
@@ -389,7 +389,7 @@ export function RuleCard({
       </div>
 
       <details className="group/manage border-t border-border/60 [&_summary::-webkit-details-marker]:hidden">
-        <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-2 px-3 sm:px-3.5 py-1.5 pl-3.5 sm:pl-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+        <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-2 px-3 sm:px-3.5 py-1.5 pl-3.5 sm:pl-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
           Manage rule
           <ChevronDown
             className="h-3.5 w-3.5 transition-transform group-open/manage:rotate-180"
@@ -619,7 +619,7 @@ function RuleConfigureSheet({
               }}
             />
           </SheetGroup>
-          <div className="sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center justify-between gap-2 border-t bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+          <div className="sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center justify-between gap-2 border-t bg-background/95 px-6 py-3 backdrop-blur-sm supports-backdrop-filter:bg-background/85">
             <p className="text-xs text-muted-foreground">
               {automatic
                 ? 'Saving pauses this Automatic rule.'

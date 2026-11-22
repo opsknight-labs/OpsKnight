@@ -90,7 +90,7 @@ function LabelChips({ labels, max = 3 }: { labels: unknown; max?: number }) {
       {chips.slice(0, max).map(([key, value]) => (
         <span
           key={key}
-          className="max-w-[10rem] truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+          className="max-w-40 truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
         >
           {key}={value}
         </span>
@@ -130,7 +130,7 @@ export function AgentFleetTable({
 
   return (
     <div>
-      <div className="hidden overflow-x-auto rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs lg:block">
+      <div className="hidden overflow-x-auto rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs lg:block">
         <table className="w-full text-left text-xs">
           <caption className="sr-only">Agent fleet</caption>
           <thead className="border-b border-border/60 bg-muted/30 text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -176,7 +176,7 @@ export function AgentFleetTable({
                           event.stopPropagation();
                           setSelectedId(agent.id);
                         }}
-                        className="truncate rounded-sm text-sm font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="truncate rounded-sm text-sm font-semibold text-foreground hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {agent.name}
                       </button>
@@ -232,7 +232,7 @@ export function AgentFleetTable({
                       </span>
                     </span>
                   </td>
-                  <td className="max-w-[12rem] truncate px-4 py-3" title={poolSummary(agent)}>
+                  <td className="max-w-48 truncate px-4 py-3" title={poolSummary(agent)}>
                     {poolSummary(agent)}
                   </td>
                   <td className="px-4 py-3 text-right" onClick={event => event.stopPropagation()}>
@@ -259,13 +259,13 @@ export function AgentFleetTable({
           return (
             <li
               key={agent.id}
-              className="space-y-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-xs transition-all hover:border-primary/40 hover:shadow-md"
+              className="space-y-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-5 shadow-2xs transition-all hover:border-primary/40 hover:shadow-md"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <StatusDot status={agent.effectiveStatus} />
-                    <h3 className="truncate !text-sm !leading-snug font-semibold text-foreground">
+                    <h3 className="truncate text-sm! leading-snug! font-semibold text-foreground">
                       {agent.name}
                     </h3>
                   </div>
@@ -318,7 +318,7 @@ export function AgentFleetTable({
                 </p>
               ))}
               {agent.lastError && (
-                <p className="break-words rounded-lg border border-destructive/20 bg-destructive/5 p-2.5 font-mono text-[11px] text-destructive">
+                <p className="wrap-break-word rounded-lg border border-destructive/20 bg-destructive/5 p-2.5 font-mono text-[11px] text-destructive">
                   {agent.lastError}
                 </p>
               )}

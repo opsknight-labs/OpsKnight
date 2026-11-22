@@ -430,7 +430,7 @@ export default function NotificationOperations({
   return (
     <div className="space-y-0">
       {/* Filters & Operations Table Card */}
-      <Card className="border-border/80 shadow-xs bg-card overflow-hidden">
+      <Card className="border-border/80 shadow-2xs bg-card overflow-hidden">
         <CardHeader className="p-4 sm:p-5 pb-3 border-b border-border/60">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div>

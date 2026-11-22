@@ -132,7 +132,7 @@ export function ExecutionDetailDrawer({
 
         <section
           aria-label="Progress"
-          className="space-y-3 rounded-xl border bg-card p-4 shadow-xs"
+          className="space-y-3 rounded-xl border bg-card p-4 shadow-2xs"
         >
           {execution.totalSteps > 0 ? (
             <ExecutionProgressBar
@@ -184,7 +184,7 @@ export function ExecutionDetailDrawer({
         </section>
 
         <KeyValueGrid
-          className="rounded-xl border bg-card p-4 shadow-xs"
+          className="rounded-xl border bg-card p-4 shadow-2xs"
           items={[
             { label: 'Service', value: execution.service?.name || 'No service' },
             {

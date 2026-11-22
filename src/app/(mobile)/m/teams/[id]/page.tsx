@@ -65,15 +65,15 @@ export default async function MobileTeamDetailPage({ params }: PageProps) {
         </Link>
 
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-lg font-bold text-white dark:from-zinc-200 dark:to-zinc-50 dark:text-zinc-900">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-slate-700 to-slate-900 text-lg font-bold text-white dark:from-zinc-200 dark:to-zinc-50 dark:text-zinc-900">
             {team.name.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-lg font-bold text-[color:var(--text-primary)]">{team.name}</h1>
+            <h1 className="text-lg font-bold text-(--text-primary)">{team.name}</h1>
             {team.description && (
-              <p className="mt-1 text-xs text-[color:var(--text-muted)]">{team.description}</p>
+              <p className="mt-1 text-xs text-(--text-muted)">{team.description}</p>
             )}
-            <div className="mt-2 text-[11px] text-[color:var(--text-muted)]">
+            <div className="mt-2 text-[11px] text-(--text-muted)">
               👥 {team.members.length} member{team.members.length !== 1 ? 's' : ''}
             </div>
           </div>
@@ -84,7 +84,7 @@ export default async function MobileTeamDetailPage({ params }: PageProps) {
       <div className="flex flex-col gap-3">
         {/* Team Members */}
         <div className="flex flex-col gap-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-(--text-muted)">
             Members
           </h3>
           <div className="flex flex-col gap-2">
@@ -100,10 +100,10 @@ export default async function MobileTeamDetailPage({ params }: PageProps) {
                     aria-hidden
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-[color:var(--text-primary)]">
+                    <div className="truncate text-sm font-semibold text-(--text-primary)">
                       {member.user.name || 'Unknown'}
                     </div>
-                    <div className="truncate text-[11px] text-[color:var(--text-muted)]">
+                    <div className="truncate text-[11px] text-(--text-muted)">
                       {member.role || 'Member'}
                     </div>
                   </div>

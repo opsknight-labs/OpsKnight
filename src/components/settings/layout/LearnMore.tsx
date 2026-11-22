@@ -17,7 +17,7 @@ export function LearnMore({
 }) {
   return (
     <details className={cn('group/learn-more text-sm', className)}>
-      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-md text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8 [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-md text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8 [&::-webkit-details-marker]:hidden">
         <ChevronRight
           className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-open/learn-more:rotate-90 motion-reduce:transition-none"
           aria-hidden="true"

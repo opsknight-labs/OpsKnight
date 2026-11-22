@@ -249,7 +249,7 @@ export default function StatusDashboardManager({
                     <Link
                       href={`/status-dashboard/${dashboard.slug}`}
                       onClick={() => close(false)}
-                      className="min-w-0 flex-1 truncate text-sm font-medium hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="min-w-0 flex-1 truncate text-sm font-medium hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {dashboard.name}
                     </Link>

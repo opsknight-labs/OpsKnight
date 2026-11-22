@@ -151,7 +151,7 @@ export default function DashboardShareModal({
                 type="text"
                 readOnly
                 value={getShareUrl()}
-                className="flex-1 bg-muted/50 border border-input rounded-md px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary select-all"
+                className="flex-1 bg-muted/50 border border-input rounded-md px-3 py-2 text-xs font-mono text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary select-all"
                 onClick={e => (e.target as HTMLInputElement).select()}
               />
               <Button

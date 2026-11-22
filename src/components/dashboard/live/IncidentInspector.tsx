@@ -98,7 +98,7 @@ export function IncidentInspector({
     <section
       data-testid="incident-inspector"
       aria-label={`Incident details for ${incident.title}`}
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xs"
     >
       {/* Header */}
       <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
@@ -117,7 +117,7 @@ export function IncidentInspector({
               <RelativeTime date={incident.createdAt} now={now} />
             </span>
           </div>
-          <h2 className="mt-1.5 text-sm font-semibold leading-snug text-foreground break-words">
+          <h2 className="mt-1.5 text-sm font-semibold leading-snug text-foreground wrap-break-word">
             {incident.title}
           </h2>
         </div>
@@ -125,7 +125,7 @@ export function IncidentInspector({
           <Link
             href={`/incidents/${incident.id}`}
             title="Open incident full page"
-            className="rounded-md p-1 text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-md p-1 text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ExternalLink className="h-4 w-4" aria-hidden />
             <span className="sr-only">Open incident details</span>
@@ -135,7 +135,7 @@ export function IncidentInspector({
             onClick={onClose}
             title="Close inspector (Esc)"
             data-testid="inspector-close"
-            className="rounded-md p-1 text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-md p-1 text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="h-4 w-4" aria-hidden />
             <span className="sr-only">Close inspector</span>
@@ -152,7 +152,7 @@ export function IncidentInspector({
             disabled={busy !== null}
             data-testid="inspector-ack"
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold outline-none transition-colors duration-150 hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
+              'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold outline-hidden transition-colors duration-150 hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
               toneClasses('elevated').soft
             )}
           >
@@ -173,7 +173,7 @@ export function IncidentInspector({
             onClick={() => onAssignSelf(incident)}
             disabled={busy !== null}
             data-testid="inspector-assign-me"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
           >
             {busy === 'assign' ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -188,7 +188,7 @@ export function IncidentInspector({
         )}
         <Link
           href={`/incidents/${incident.id}`}
-          className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
         >
           View Full Details
           <ArrowRight className="h-3 w-3" aria-hidden />

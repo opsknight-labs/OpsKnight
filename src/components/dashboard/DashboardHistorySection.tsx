@@ -111,7 +111,7 @@ function useNearViewport<T extends Element>(rootMargin = '400px') {
 }
 
 /** The one dashboard card chrome (same as the shadcn Card and FilterBar). */
-const card = 'rounded-lg border border-border bg-card shadow-sm';
+const card = 'rounded-lg border border-border bg-card shadow-xs';
 /** Card title row: the shared section-header style used across the dashboard. */
 const cardHeader = 'mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2';
 
@@ -338,7 +338,7 @@ function FlowChart({
             width={slot}
             height={height}
             fill="transparent"
-            className="hover:fill-foreground/[0.04]"
+            className="hover:fill-foreground/4"
           >
             <title>{`${formatTrendBucket(point.key, point.label)}: ${point.count} created · ${point.resolveCount} resolved`}</title>
           </rect>
@@ -430,7 +430,7 @@ function ActivityTimeline() {
               aria-checked={filter === option.key}
               onClick={() => setFilter(option.key)}
               className={cn(
-                'rounded-full border px-2.5 py-0.5 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
+                'rounded-full border px-2.5 py-0.5 text-xs font-medium outline-hidden transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
                 filter === option.key
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -456,7 +456,7 @@ function ActivityTimeline() {
           {filter === 'all' ? (
             <Link
               href="/incidents"
-              className="mt-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             >
               View incidents
             </Link>
@@ -464,7 +464,7 @@ function ActivityTimeline() {
             <button
               type="button"
               onClick={() => setFilter('all')}
-              className="mt-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             >
               Show all activity
             </button>
@@ -479,7 +479,7 @@ function ActivityTimeline() {
                 <li key={item.id} role="listitem">
                   <Link
                     href={`/incidents/${item.incidentId}`}
-                    className="group flex items-center gap-2.5 rounded-md border border-border bg-card px-2.5 py-1.5 outline-none transition-colors duration-150 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+                    className="group flex items-center gap-2.5 rounded-md border border-border bg-card px-2.5 py-1.5 outline-hidden transition-colors duration-150 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span
                       className={cn(
@@ -709,9 +709,9 @@ export default function DashboardHistorySection() {
                 data-testid={`period-${range}`}
                 onClick={() => setQuery({ range })}
                 className={cn(
-                  'h-full rounded-sm px-3 tabular-nums outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
+                  'h-full rounded-sm px-3 tabular-nums outline-hidden transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
                   query.range === range
-                    ? 'bg-card text-foreground shadow-xs'
+                    ? 'bg-card text-foreground shadow-2xs'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
@@ -721,14 +721,14 @@ export default function DashboardHistorySection() {
           </div>
           <Link
             href={`/insights?range=${query.range}d`}
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground outline-none transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             Full analytics
             <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
           </Link>
         </div>
       </div>
-      <div ref={ref} className="min-h-[22rem]">
+      <div ref={ref} className="min-h-88">
         {visible ? <InsightsContent /> : <InsightsSkeleton />}
       </div>
     </section>

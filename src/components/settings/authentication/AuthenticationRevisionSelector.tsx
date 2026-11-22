@@ -189,7 +189,7 @@ export default function AuthenticationRevisionSelector({
         value={selected?.id ?? ''}
         disabled={pending}
         onChange={event => select(event.target.value)}
-        className="block h-11 w-full min-w-0 truncate rounded-xl border border-input bg-background px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+        className="block h-11 w-full min-w-0 truncate rounded-xl border border-input bg-background px-3 text-sm shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
       >
         {data.revisions.length === 0 && (
           <option value="" disabled>

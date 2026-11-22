@@ -34,7 +34,7 @@ function DetailSection({
   return (
     <section
       aria-labelledby={id}
-      className="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
     >
       <header className="border-b border-border px-4 py-3 sm:px-5">
         <h2 id={id} className="font-display text-base font-semibold tracking-tight">
@@ -139,7 +139,7 @@ export default async function AlertReferencePage({ params }: { params: Promise<{
                   value: (
                     <Link
                       href={`/services/${listed.serviceId}`}
-                      className="underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {listed.serviceName}
                     </Link>

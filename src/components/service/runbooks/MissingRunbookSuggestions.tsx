@@ -45,7 +45,7 @@ export function MissingRunbookList({
           />
           {suggestion.steps.length > 0 ? (
             <details className="group">
-              <summary className="flex min-h-11 cursor-pointer items-center text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <summary className="flex min-h-11 cursor-pointer items-center text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                 {suggestion.template ? `“${suggestion.template}”: ` : ''}
                 {suggestion.steps.length} draft {suggestion.steps.length === 1 ? 'step' : 'steps'}{' '}
                 from {suggestion.notes.length} notes you can read
@@ -69,7 +69,7 @@ export function MissingRunbookList({
                   <p className="font-medium text-foreground">What responders wrote</p>
                   <ul className="mt-1 space-y-1">
                     {suggestion.notes.slice(0, 3).map((note, index) => (
-                      <li key={index} className="break-words">
+                      <li key={index} className="wrap-break-word">
                         “{note.replace(/\s+/g, ' ').slice(0, 200)}”
                       </li>
                     ))}

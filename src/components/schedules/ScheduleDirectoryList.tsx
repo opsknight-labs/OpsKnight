@@ -392,7 +392,7 @@ export default function ScheduleDirectoryList({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-xs">
         <DirectoryHeader
           title="Schedule directory"
           summary={`Showing ${from}–${to} of ${shownTotal}`}

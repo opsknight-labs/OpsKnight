@@ -106,7 +106,7 @@ export function ControlCenterOverview({
       {/* Primary Metrics Grid (No percentage meters or synthetic scores!) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Card 1: Runtime Controls */}
-        <Card className="border-border/70 shadow-sm">
+        <Card className="border-border/70 shadow-xs">
           <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Runtime Controls
@@ -167,7 +167,7 @@ export function ControlCenterOverview({
         </Card>
 
         {/* Card 2: Durable Evidence Integrity */}
-        <Card className="border-border/70 shadow-sm">
+        <Card className="border-border/70 shadow-xs">
           <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Evidence Ledger
@@ -207,7 +207,7 @@ export function ControlCenterOverview({
         </Card>
 
         {/* Card 3: Framework Mappings */}
-        <Card className="border-border/70 shadow-sm">
+        <Card className="border-border/70 shadow-xs">
           <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Frameworks Mapped

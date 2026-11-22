@@ -148,7 +148,7 @@ export function ControlsView({
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value as ComplianceEvaluationStatus | 'ALL')}
             aria-label="Filter controls by status"
-            className="h-9 px-3 py-1 rounded-lg border bg-background/80 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 px-3 py-1 rounded-lg border bg-background/80 text-xs font-medium text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
           >
             <option value="ALL">All Statuses</option>
             <option value="IMPLEMENTED">Implemented</option>

@@ -135,7 +135,7 @@ function Tile({ tile, linkTiles }: { tile: StatusBoardTile; linkTiles: boolean }
     </>
   );
   const frame =
-    'relative flex h-full min-w-0 flex-col gap-2 rounded-lg border bg-card p-4 pl-5 shadow-sm';
+    'relative flex h-full min-w-0 flex-col gap-2 rounded-lg border bg-card p-4 pl-5 shadow-xs';
   return (
     <li>
       {linkTiles ? (
@@ -144,7 +144,7 @@ function Tile({ tile, linkTiles }: { tile: StatusBoardTile; linkTiles: boolean }
           aria-label={`${tile.name}: ${BS_STATUS_META[health.status].label}`}
           className={cn(
             frame,
-            'transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            'transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             toneClasses(tone).hoverBorder
           )}
         >

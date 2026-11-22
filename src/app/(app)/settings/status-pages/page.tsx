@@ -106,7 +106,7 @@ export default async function StatusPagesControlCenter() {
             return (
               <li
                 key={page.id}
-                className="flex flex-col justify-between overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+                className="flex flex-col justify-between overflow-hidden rounded-lg border border-border bg-card shadow-xs"
               >
                 <div className="space-y-4 p-4 md:p-5">
                   <div className="flex items-start justify-between gap-3">
@@ -118,7 +118,7 @@ export default async function StatusPagesControlCenter() {
                         <h2 className="truncate text-base font-semibold text-foreground">
                           <Link
                             href={manageHref}
-                            className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="rounded-sm hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             {page.name}
                           </Link>
@@ -161,7 +161,7 @@ export default async function StatusPagesControlCenter() {
                         href={publicHref}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex shrink-0 items-center gap-1 rounded-sm text-xs font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-sm text-xs font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         Visit
                         <ExternalLink className="h-3 w-3" aria-hidden="true" />

@@ -191,7 +191,7 @@ export default async function ScheduleLoadPanel({
   if (!load) return null;
   return (
     <Card
-      className="overflow-hidden border-border/70 shadow-sm"
+      className="overflow-hidden border-border/70 shadow-xs"
       aria-labelledby="schedule-load-title"
     >
       <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-6">

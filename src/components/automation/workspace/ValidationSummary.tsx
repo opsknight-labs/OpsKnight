@@ -26,7 +26,7 @@ export const ValidationSummary = memo(function ValidationSummary({
   return (
     <section
       aria-labelledby={headingId}
-      className={cn('rounded-xl border p-3 sm:p-3.5 shadow-xs', noticeClasses.error)}
+      className={cn('rounded-xl border p-3 sm:p-3.5 shadow-2xs', noticeClasses.error)}
     >
       <h3 id={headingId} className="flex items-center gap-2 text-xs font-semibold">
         <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -42,7 +42,7 @@ export const ValidationSummary = memo(function ValidationSummary({
               key={`${issue.code}-${issue.ruleId ?? ''}-${index}`}
               className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
             >
-              <span className="min-w-0 break-words font-medium">{issue.message}</span>
+              <span className="min-w-0 wrap-break-word font-medium">{issue.message}</span>
               {ruleName !== undefined && issue.ruleId && (
                 <Button
                   variant="outline"

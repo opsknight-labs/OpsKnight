@@ -85,9 +85,9 @@ export function FilterChips({
                 aria-current={active ? 'true' : undefined}
                 scroll={false}
                 className={cn(
-                  'inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                   active
-                    ? 'bg-background text-foreground shadow-xs ring-1 ring-border'
+                    ? 'bg-background text-foreground shadow-2xs ring-1 ring-border'
                     : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'
                 )}
               >
@@ -196,7 +196,7 @@ export function Pagination({
   const start = total === 0 ? 0 : Math.min((page - 1) * pageSize + 1, total);
   const end = Math.min(page * pageSize, total);
   const linkClass =
-    'inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+    'inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
   const disabledClass =
     'inline-flex h-8 items-center justify-center gap-1 rounded-md border border-border/60 px-2.5 text-xs font-medium text-muted-foreground/60';
   return (
@@ -309,7 +309,7 @@ export function ResponsiveTable({
                 className={cn(
                   // Inner spans carry the type size and edge inset: topbar.css forces th/td padding and
                   // font size with !important on 1024–1600px screens.
-                  'h-9 px-4 text-left align-middle first:*:ml-2 last:*:mr-2',
+                  'h-9 px-4 text-left align-middle *:first:ml-2 *:last:mr-2',
                   column.className
                 )}
               >
@@ -370,7 +370,7 @@ export function ResponsiveCell({
       role="cell"
       data-label={label}
       className={cn(
-        'min-w-0 align-middle md:border-b-0 md:px-4 md:py-3 md:first:*:ml-2 md:last:*:mr-2',
+        'min-w-0 align-middle md:border-b-0 md:px-4 md:py-3 md:*:first:ml-2 md:*:last:mr-2',
         primary
           ? 'col-span-2'
           : 'before:mb-0.5 before:block before:text-2xs before:font-semibold before:uppercase before:tracking-wider before:text-muted-foreground before:content-[attr(data-label)] md:before:hidden',

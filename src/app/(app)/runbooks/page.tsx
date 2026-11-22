@@ -185,7 +185,7 @@ export default async function RunbooksPage({
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-2xs"
               title={`All runbook library and execution timestamps reflect your profile timezone: ${userTimeZone}`}
             >
               <Clock className="h-3 w-3 text-ink-400" aria-hidden="true" />
@@ -301,7 +301,7 @@ export default async function RunbooksPage({
         />
 
         {/* Enterprise Execution Guarantee Callout */}
-        <div className="relative overflow-hidden rounded-xl border border-zinc-200/90 dark:border-zinc-800/80 bg-gradient-to-r from-zinc-50/90 via-white to-zinc-50/70 dark:from-zinc-900/60 dark:via-zinc-900/40 dark:to-zinc-900/60 p-4 sm:p-5 shadow-xs transition-colors">
+        <div className="relative overflow-hidden rounded-xl border border-zinc-200/90 dark:border-zinc-800/80 bg-linear-to-r from-zinc-50/90 via-white to-zinc-50/70 dark:from-zinc-900/60 dark:via-zinc-900/40 dark:to-zinc-900/60 p-4 sm:p-5 shadow-2xs transition-colors">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5 min-w-0">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-inset ring-emerald-500/25">

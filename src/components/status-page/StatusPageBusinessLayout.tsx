@@ -74,7 +74,7 @@ export default function StatusPageBusinessLayout({
               aria-checked={active}
               onClick={() => onLayoutChange(option.value)}
               className={cn(
-                'flex min-h-20 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'flex min-h-20 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                 active
                   ? 'border-primary bg-primary/5 ring-1 ring-primary'
                   : 'border-border hover:border-foreground/30 hover:bg-muted/40'

@@ -54,10 +54,10 @@ export function computeSuccessRate(statuses: string[]) {
 }
 
 const panelLinkClass =
-  'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 const rowLinkClass =
-  'flex items-center justify-between gap-3 px-5 py-3.5 text-sm transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none';
+  'flex items-center justify-between gap-3 px-5 py-3.5 text-sm transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-hidden';
 
 export function RunbookOverview({
   runbookId,

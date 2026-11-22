@@ -38,7 +38,7 @@ export function AliasEditor({
               key={alias}
               className="flex items-center gap-2 px-2.5 py-1.5 transition-colors hover:bg-muted/20"
             >
-              <span className="min-w-[4rem] text-center font-mono text-xs font-semibold px-2 py-0.5 rounded bg-muted/70 border border-border/50 text-foreground shrink-0 break-all">
+              <span className="min-w-16 text-center font-mono text-xs font-semibold px-2 py-0.5 rounded bg-muted/70 border border-border/50 text-foreground shrink-0 break-all">
                 {alias}
               </span>
               <ArrowRight

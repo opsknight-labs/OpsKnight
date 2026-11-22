@@ -694,7 +694,7 @@ export default function ScimSettingsSection({
               return (
                 <li
                   key={row.id}
-                  className={`p-3 space-y-1 break-words ${attention ? 'bg-amber-500/5' : ''}`}
+                  className={`p-3 space-y-1 wrap-break-word ${attention ? 'bg-amber-500/5' : ''}`}
                 >
                   <p className="font-medium text-sm flex items-center gap-2">
                     {row.label}

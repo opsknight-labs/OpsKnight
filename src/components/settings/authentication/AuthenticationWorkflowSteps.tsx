@@ -93,7 +93,7 @@ export default function AuthenticationWorkflowSteps() {
   return (
     <nav
       aria-label="Single sign-on setup progress"
-      className="min-w-0 rounded-xl border bg-card p-3 sm:p-4 shadow-xs"
+      className="min-w-0 rounded-xl border bg-card p-3 sm:p-4 shadow-2xs"
     >
       <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <p className="text-xs font-semibold text-foreground">
@@ -116,7 +116,7 @@ export default function AuthenticationWorkflowSteps() {
               type="button"
               onClick={() => setActiveTab(step.target)}
               aria-current={step.state === 'current' ? 'step' : undefined}
-              className="group flex w-full min-w-0 flex-col items-start gap-1.5 rounded-lg p-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="group flex w-full min-w-0 flex-col items-start gap-1.5 rounded-lg p-1 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span
                 className={`h-1 w-full rounded-full ${

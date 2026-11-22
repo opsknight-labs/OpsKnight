@@ -184,7 +184,7 @@ export default function McpApprovalsSection({
               const who = personLabel(row.requester);
               return (
                 <ResponsiveRow key={row.id}>
-                  <ResponsiveCell label="Request" primary className="md:max-w-[22rem]">
+                  <ResponsiveCell label="Request" primary className="md:max-w-88">
                     <div className="flex min-w-0 items-center">
                       {bulk && (
                         <input
@@ -280,8 +280,8 @@ export default function McpApprovalsSection({
                         aria-label={`${row.status === 'pending' ? 'Review' : 'View'} ${row.title} requested by ${who}`}
                         className={
                           row.status === 'pending'
-                            ? 'inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:w-auto'
-                            : 'inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-auto'
+                            ? 'inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:w-auto'
+                            : 'inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:w-auto'
                         }
                       >
                         {row.status === 'pending' ? 'Review' : 'View'}

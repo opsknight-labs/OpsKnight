@@ -104,7 +104,7 @@ export default function MobileServiceMaintenance({
               <p className="text-[13px] font-bold">
                 In maintenance until <MobileTime value={active.endsAt} format="short" />
               </p>
-              <p className="mt-0.5 break-words text-[12px] font-semibold">{active.title}</p>
+              <p className="mt-0.5 wrap-break-word text-[12px] font-semibold">{active.title}</p>
               <p className="mt-0.5 text-[11px]">
                 {active.heldCount} alert{active.heldCount === 1 ? '' : 's'} held · nobody is paged
               </p>
@@ -172,7 +172,7 @@ export default function MobileServiceMaintenance({
               <p className="text-[13px] font-bold text-foreground">
                 Maintenance starts <MobileTime value={next.startsAt} format="short" />
               </p>
-              <p className="mt-0.5 break-words text-[12px] text-muted-foreground">{next.title}</p>
+              <p className="mt-0.5 wrap-break-word text-[12px] text-muted-foreground">{next.title}</p>
             </div>
           ) : (
             <p className="text-[12px] text-muted-foreground">No maintenance scheduled.</p>

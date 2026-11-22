@@ -137,7 +137,7 @@ function MobileRow({ row }: { row: CatalogRow }) {
       <div className="flex min-w-0 items-center justify-between gap-2">
         <Link
           href={href(row)}
-          className="truncate font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="truncate font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           {row.name}
         </Link>
@@ -169,7 +169,7 @@ function Card({ row }: { row: CatalogRow }) {
         <h3 className="truncate text-sm font-semibold">
           <Link
             href={href(row)}
-            className="hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           >
             {row.name}
           </Link>
@@ -264,7 +264,7 @@ export default function CatalogDirectory({
   return (
     <section
       aria-label="Business service directory"
-      className="overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm"
+      className="overflow-hidden rounded-lg border bg-card text-card-foreground shadow-xs"
     >
       <DirectoryHeader
         title="Business service directory"

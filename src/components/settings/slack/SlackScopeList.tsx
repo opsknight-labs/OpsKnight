@@ -64,7 +64,7 @@ export function SlackScopeList({
   const isHealthy = missingRequired.length === 0;
 
   return (
-    <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+    <div className="rounded-lg border bg-card shadow-xs overflow-hidden">
       <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
         <CollapsibleTrigger asChild>
           <Button

@@ -30,7 +30,7 @@ export function SectionCard({
     <section
       aria-labelledby={id}
       className={cn(
-        'flex min-w-0 flex-col rounded-lg border bg-card text-card-foreground shadow-sm',
+        'flex min-w-0 flex-col rounded-lg border bg-card text-card-foreground shadow-xs',
         className
       )}
     >
@@ -66,7 +66,7 @@ export function SectionSkeleton({
     <div
       role="status"
       aria-label={`Loading ${title}`}
-      className={cn('min-w-0 rounded-lg border bg-card shadow-sm', className)}
+      className={cn('min-w-0 rounded-lg border bg-card shadow-xs', className)}
     >
       <div className="border-b px-4 py-3 sm:px-5">
         <Skeleton className="h-5 w-40" />

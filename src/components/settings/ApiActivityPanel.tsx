@@ -44,7 +44,7 @@ export type ApiActivityFilterValues = {
 };
 
 const SELECT_CLASS =
-  'h-9 text-xs rounded-md border border-input bg-background px-2 min-w-[150px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'h-9 text-xs rounded-md border border-input bg-background px-2 min-w-[150px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 function activityHref(filters: ApiActivityFilterValues, cursor?: string | null): string {
   const params = new URLSearchParams({ tab: 'activity' });
@@ -81,7 +81,7 @@ export default function ApiActivityPanel({
     <div className="space-y-6">
       <form
         method="get"
-        className="flex flex-col gap-3 bg-card border border-border/80 p-3.5 rounded-2xl shadow-xs"
+        className="flex flex-col gap-3 bg-card border border-border/80 p-3.5 rounded-2xl shadow-2xs"
         aria-label="Filter API activity"
       >
         <input type="hidden" name="tab" value="activity" />
@@ -173,7 +173,7 @@ export default function ApiActivityPanel({
           }
         />
       ) : (
-        <Card className="border-border/80 shadow-xs overflow-hidden">
+        <Card className="border-border/80 shadow-2xs overflow-hidden">
           <CardHeader className="pb-3 px-4 sm:px-5 border-b border-border/60">
             <div className="flex items-center justify-between">
               <div>

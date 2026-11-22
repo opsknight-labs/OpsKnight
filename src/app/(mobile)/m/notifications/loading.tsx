@@ -4,7 +4,7 @@ import MobileCard from '@/components/mobile/MobileCard';
 const NotificationSkeleton = () => (
   <MobileCard className="p-4">
     <div className="flex items-start gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[color:var(--bg-secondary)]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-(--bg-secondary)">
         <Skeleton width="18px" height="18px" borderRadius="6px" />
       </div>
       <div className="flex flex-1 flex-col gap-2">

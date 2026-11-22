@@ -86,8 +86,8 @@ export default function GlobalIncidentBanner() {
         className={cn(
           'h-0.5 w-full',
           isCritical
-            ? 'bg-gradient-to-r from-rose-300 via-rose-100 to-rose-300 dark:from-rose-500 dark:via-red-400 dark:to-rose-500'
-            : 'bg-gradient-to-r from-amber-300 via-amber-100 to-amber-300 dark:from-amber-500 dark:via-orange-400 dark:to-amber-500'
+            ? 'bg-linear-to-r from-rose-300 via-rose-100 to-rose-300 dark:from-rose-500 dark:via-red-400 dark:to-rose-500'
+            : 'bg-linear-to-r from-amber-300 via-amber-100 to-amber-300 dark:from-amber-500 dark:via-orange-400 dark:to-amber-500'
         )}
       />
 
@@ -115,7 +115,7 @@ export default function GlobalIncidentBanner() {
 
             <span
               className={cn(
-                'px-1.5 py-0.5 rounded text-[11px] font-black uppercase tracking-wider leading-none shadow-xs border',
+                'px-1.5 py-0.5 rounded text-[11px] font-black uppercase tracking-wider leading-none shadow-2xs border',
                 isCritical
                   ? 'bg-black/20 dark:bg-rose-500/20 text-white dark:text-rose-200 border-white/25 dark:border-rose-400/30'
                   : 'bg-black/20 dark:bg-amber-500/20 text-white dark:text-amber-200 border-white/25 dark:border-amber-400/30'
@@ -196,8 +196,8 @@ export default function GlobalIncidentBanner() {
           <Link
             href={`/incidents/${currentIncident.id}`}
             className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1 rounded-md font-semibold text-xs transition-all border shadow-xs shrink-0',
-              'bg-white/15 hover:bg-white/25 active:bg-white/30 text-white border-white/30 hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white/60'
+              'inline-flex items-center gap-1.5 px-3 py-1 rounded-md font-semibold text-xs transition-all border shadow-2xs shrink-0',
+              'bg-white/15 hover:bg-white/25 active:bg-white/30 text-white border-white/30 hover:border-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60'
             )}
           >
             <span>View</span>
@@ -209,8 +209,8 @@ export default function GlobalIncidentBanner() {
             type="button"
             onClick={dismissBanner}
             className={cn(
-              'inline-flex items-center justify-center h-7 w-7 rounded-md shrink-0 transition-all cursor-pointer shadow-xs border',
-              'bg-white/15 hover:bg-white/25 active:bg-white/30 text-white border-white/30 hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white/60'
+              'inline-flex items-center justify-center h-7 w-7 rounded-md shrink-0 transition-all cursor-pointer shadow-2xs border',
+              'bg-white/15 hover:bg-white/25 active:bg-white/30 text-white border-white/30 hover:border-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60'
             )}
             title="Dismiss banner (auto-dismisses in 12s, reopens if a new P1 or high-urgency incident occurs)"
             aria-label="Dismiss banner"
