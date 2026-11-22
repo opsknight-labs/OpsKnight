@@ -248,6 +248,28 @@ export function capOutput(value: unknown): unknown {
   return `${UNTRUSTED_DATA_PREAMBLE}\n${bounded}`;
 }
 
+/** One slow lookup (a stuck backend, a heavy query) must not hold the whole answer. */
+export const TOOL_DEADLINE_MS = 20_000;
+const TOOL_TIMED_OUT =
+  'This lookup took too long and was stopped. Answer from what you already have and say this one timed out.';
+
+export class ToolDeadlineError extends Error {
+  constructor() {
+    super('Tool deadline exceeded');
+    this.name = 'ToolDeadlineError';
+  }
+}
+
+export function withToolDeadline<T>(work: Promise<T>, ms = TOOL_DEADLINE_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new ToolDeadlineError()), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undefined {
   if (!definitions || definitions.length === 0) return undefined;
   const set: ToolSet = {};
@@ -262,8 +284,9 @@ function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undef
           inputSchema,
           execute: async (input: unknown) => {
             try {
-              return capOutput(await execute(input));
-            } catch {
+              return capOutput(await withToolDeadline(execute(input)));
+            } catch (error) {
+              if (error instanceof ToolDeadlineError) return TOOL_TIMED_OUT;
               // The model sees a neutral failure; details stay with the tool's own logging.
               return 'The tool failed or you are not permitted to use it.';
             }

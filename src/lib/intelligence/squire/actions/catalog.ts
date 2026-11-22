@@ -254,7 +254,8 @@ export interface SquireProposal {
   kind: 'WRITE' | 'NAVIGATE';
   title: string;
   detail: string;
-  incidentId: string;
+  /** The incident the action is about; absent for an operation-catalog change (operations.ts). */
+  incidentId?: string;
   expiresAt: string;
   /** The turn read third-party text (alerts, notes, payloads) before proposing this. */
   untrustedContext?: boolean;

@@ -43,6 +43,7 @@ import {
   type ResolvedPageContext,
 } from './deterministic';
 import { aboutUserLines, viewingLine } from './about';
+import { buildOperationProposal, PROPOSE_OPERATION_TOOL } from './operations';
 import { readDialogueState, writeDialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
@@ -84,6 +85,9 @@ const TOOL_LABELS: Record<string, string> = {
   get_status_page: 'Reading the status page',
   get_problem_outcomes: 'Checking past outcomes for this problem',
   search_product_docs: 'Searching the OpsKnight docs',
+  find_operations: 'Looking for the right operation',
+  describe_operation: 'Checking what the operation needs',
+  read_operation: 'Reading from OpsKnight',
   ...OBSERVABILITY_TOOL_LABELS,
   ...INCIDENT_TOOL_LABELS,
   get_automation_decision: 'Checking why automation routed it',
@@ -315,8 +319,13 @@ export async function* streamSquire(
             if (label) yield { type: 'tool', label };
           } else if (event.type === 'tool-call') {
             const action = actionForTool(event.call.name);
-            if (!action || proposals >= MAX_PROPOSALS) continue;
-            const proposal = await buildProposal(actor, action, event.call.input).catch(() => null);
+            const operation = event.call.name === PROPOSE_OPERATION_TOOL.name;
+            if ((!action && !operation) || proposals >= MAX_PROPOSALS) continue;
+            const proposal = await (
+              operation
+                ? buildOperationProposal(actor, event.call.input)
+                : buildProposal(actor, action!, event.call.input)
+            ).catch(() => null);
             if (proposal) {
               proposals += 1;
               yield {

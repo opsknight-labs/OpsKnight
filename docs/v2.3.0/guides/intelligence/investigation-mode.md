@@ -63,6 +63,12 @@ complete.
 - **Ranked hypotheses**, most likely first, each with a confidence (the model's estimate, not proof) and
   links to the evidence that supports it. Only sources read during this answer can be cited; an
   explanation that cited nothing it read is left out and counted.
+- An **evidence level** for each hypothesis: speculation, matches a past pattern, supported by evidence,
+  validated by system state, or validated with alternatives ruled out. The model is asked to try to
+  disprove its leading hypothesis first.
+- **Ruled out**: hypotheses the evidence contradicts, kept (struck through) so you can see what was
+  checked.
+- **Result: inconclusive** at the top when nothing read so far establishes a cause.
 - **Next checks** to confirm or rule out the top hypotheses.
 
 The assistant never changes anything during an investigation. To act, ask for the action afterwards and

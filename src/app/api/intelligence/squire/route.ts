@@ -178,6 +178,7 @@ export async function POST(request: NextRequest) {
           event.type === 'proposal' &&
           event.proposal.kind === 'WRITE' &&
           event.proposal.receiptId &&
+          event.proposal.incidentId &&
           actions.length < 2
         )
           actions.push({

@@ -42,7 +42,7 @@ const followUpSchema = z
     kind: z.enum(['WRITE', 'NAVIGATE']),
     title: z.string().max(200),
     detail: z.string().max(2_000),
-    incidentId: z.string().max(64),
+    incidentId: z.string().max(64).optional(),
     expiresAt: z.string().datetime(),
     href: z.string().startsWith('/').max(256).optional(),
     preview: z
@@ -59,7 +59,7 @@ const resultSchema = z.discriminatedUnion('ok', [
     .object({
       ok: z.literal(true),
       message: z.string().max(2_000),
-      href: z.string().startsWith('/incidents/').max(256),
+      href: z.string().startsWith('/').max(256),
       followUp: followUpSchema.optional(),
     })
     .strict(),
@@ -82,7 +82,11 @@ export async function readSquireActionOutcome(
   const receipt = await prisma.squireActionReceipt.findFirst({
     where: { id, userId: actor.id, createdAt: { gte: new Date(now.getTime() - 86_400_000) } },
   });
-  if (!receipt?.incidentId || !(await readIncidentForActor(actor, receipt.incidentId))) return null;
+  if (!receipt) return null;
+  // An operation-catalog change has no incident; the receipt is owner-scoped like every other.
+  if (receipt.incidentId) {
+    if (!(await readIncidentForActor(actor, receipt.incidentId))) return null;
+  } else if (!receipt.action.startsWith('operation:')) return null;
   let status = ACTION_OUTCOME_STATES.find(state => state === receipt.status) ?? 'UNKNOWN';
   // A crashed executor cannot leave the UI claiming "still running" forever. This is informational:
   // lookup never changes the receipt, resumes work or authorizes a second mutation.

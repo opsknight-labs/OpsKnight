@@ -405,6 +405,53 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     },
   },
   {
+    id: 'operation-maintenance-window',
+    category: 'proposal-wanted',
+    question: 'Create a maintenance window for $service on 1 December, 09:00 to 10:00 UTC',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      { tool: 'find_operations', input: { query: 'create maintenance window' } },
+      { tool: 'describe_operation', input: { operationId: 'createMaintenanceWindow' } },
+      {
+        tool: 'propose_operation',
+        input: {
+          operationId: 'createMaintenanceWindow',
+          args: {
+            body: {
+              title: 'Planned work',
+              serviceIds: ['$service'],
+              startsAt: '2026-12-01T09:00:00Z',
+              endsAt: '2026-12-01T10:00:00Z',
+            },
+          },
+        },
+      },
+      { say: 'Here is the maintenance window to confirm.' },
+    ],
+    expect: {
+      mode: 'ai',
+      toolLabels: ['Looking for the right operation', 'Checking what the operation needs'],
+      toolSaw: ['createMaintenanceWindow', 'serviceIds'],
+      proposals: ['run_operation'],
+    },
+  },
+  {
+    id: 'operation-read',
+    category: 'tool-choice',
+    question: 'Show me the service record',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'read_operation',
+        input: { operationId: 'getService', args: { path: { id: '$service' } } },
+      },
+      { say: 'Here it is.' },
+    ],
+    expect: { mode: 'ai', toolLabels: ['Reading from OpsKnight'], toolSaw: ['$service'] },
+  },
+  {
     id: 'tool-metrics',
     category: 'tool-choice',
     question: 'How full is the connection pool?',

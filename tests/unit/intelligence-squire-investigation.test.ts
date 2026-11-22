@@ -22,7 +22,19 @@ import type { SquireInvestigationStep } from '@/lib/intelligence/squire/contract
 type Plan = { thought: string; calls: Array<{ tool: string; input: string }>; done: boolean };
 type Diagnosis = {
   summary: string;
-  hypotheses: Array<{ title: string; explanation: string; confidence: number; evidence: string[] }>;
+  hypotheses: Array<{
+    title: string;
+    explanation: string;
+    confidence: number;
+    support?:
+      | 'speculation'
+      | 'pattern_match'
+      | 'supported'
+      | 'validated'
+      | 'alternatives_ruled_out'
+      | 'contradicted';
+    evidence: string[];
+  }>;
   nextChecks: string[];
 };
 
@@ -434,6 +446,59 @@ describe('rendering', () => {
     expect(shown).toBe(1);
     expect(text).toContain('Evidence: A b(c) (person)');
     expect(text).toContain('confidence 20% (low)');
+  });
+
+  it('keeps ruled-out hypotheses apart, labels evidence strength and says when nothing is established', () => {
+    const ledger: EvidenceEntry[] = [
+      { handle: 'h1', kind: 'change', id: 'c1', label: 'Deploy 42', href: '/changes/c1' },
+      { handle: 'h2', kind: 'alert', id: 'a1', label: 'DB CPU', href: '/alerts/a1' },
+    ];
+    const { text } = renderDiagnosis(
+      {
+        summary: 'Deploy 42 is the likely trigger.',
+        hypotheses: [
+          {
+            title: 'Bad deploy',
+            explanation: 'Errors began two minutes after Deploy 42.',
+            confidence: 0.8,
+            support: 'validated',
+            evidence: ['h1'],
+          },
+          {
+            title: 'Database saturation',
+            explanation: 'CPU stayed under 40% throughout.',
+            confidence: 0.1,
+            support: 'contradicted',
+            evidence: ['h2'],
+          },
+        ],
+        nextChecks: [],
+      },
+      ledger,
+      { steps: 2, reads: 2 }
+    );
+    expect(text).toContain('confidence 80% (high, validated by system state)');
+    expect(text).toContain('### Ruled out');
+    expect(text).toContain('~~Database saturation~~');
+    expect(text).not.toContain('inconclusive');
+    const weak = renderDiagnosis(
+      {
+        summary: 'Unclear.',
+        hypotheses: [
+          {
+            title: 'Maybe DNS',
+            explanation: 'x',
+            confidence: 0.3,
+            support: 'speculation',
+            evidence: ['h2'],
+          },
+        ],
+        nextChecks: [],
+      },
+      ledger,
+      { steps: 1, reads: 1 }
+    );
+    expect(weak.text).toContain('**Result: inconclusive.**');
   });
 });
 

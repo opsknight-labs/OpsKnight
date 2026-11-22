@@ -336,6 +336,12 @@ export class SquireEvidenceRegistry {
         break;
       // Public product documentation: no workspace record to verify or cite.
       case 'search_product_docs':
+      case 'find_operations':
+      case 'describe_operation':
+        return { data: result };
+      // A generic read: shown to the model, but its rows are not citable evidence, so the answer stays unverified.
+      case 'read_operation':
+        this.complete = false;
         return { data: result };
       default:
         this.complete = false;

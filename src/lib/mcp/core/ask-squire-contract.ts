@@ -62,6 +62,17 @@ export const ASK_SQUIRE_SENSITIVE_TOOLS = ['get_alert_payload', 'search_knowledg
 // get_change_diff) reach external backends whose logs can hold customer personal data. No MCP scope
 // covers them, so they are deliberately in none of the lists above and never run over MCP.
 
+/**
+ * Squire's generic operation-catalog tools. An MCP client reaches the same catalog directly, under the
+ * MCP policy's capability controls; through ask_squire they would sidestep those, so they never run over
+ * MCP.
+ */
+export const ASK_SQUIRE_EXCLUDED_TOOLS = [
+  'find_operations',
+  'describe_operation',
+  'read_operation',
+] as const;
+
 /** The Squire read tools an MCP turn may use, given the connection's scopes and the MCP policy. */
 export function askSquireAllowedTools(
   scopes: readonly string[],

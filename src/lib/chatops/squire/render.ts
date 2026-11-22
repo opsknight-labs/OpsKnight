@@ -31,7 +31,7 @@ export interface ChatSquireProposal {
   kind: 'WRITE' | 'NAVIGATE';
   title: string;
   detail: string;
-  incidentId: string;
+  incidentId?: string;
   expiresAt: string;
   href?: string;
   untrustedContext?: boolean;
@@ -205,7 +205,7 @@ export function renderSlackAnswer(
     }`;
     blocks.push({ type: 'section', text: { type: 'mrkdwn', text: detail } });
     const link = appLink(
-      proposal.href ?? `/incidents/${encodeURIComponent(proposal.incidentId)}`,
+      proposal.href ?? `/incidents/${encodeURIComponent(proposal.incidentId ?? '')}`,
       options.baseUrl
     );
     const value = squireButtonValue(proposal.token, options.ownerUserId);
@@ -311,7 +311,7 @@ export function renderTeamsAnswer(
         ],
       });
       const link = appLink(
-        proposal.href ?? `/incidents/${encodeURIComponent(proposal.incidentId)}`,
+        proposal.href ?? `/incidents/${encodeURIComponent(proposal.incidentId ?? '')}`,
         options.baseUrl
       );
       if (confirmableInChat(proposal))

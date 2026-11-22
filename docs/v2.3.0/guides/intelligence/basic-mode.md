@@ -47,6 +47,7 @@ Basic mode tolerates everyday phrasing. Typos in common words are corrected (“
 - **Breakdowns:** “incidents by team this week”, “by urgency”, “per day”, “per hour”. Team counts are incident assignment, not service ownership. Reports include mean time to acknowledge and to resolve over a bounded sample of up to 5,000 incidents.
 - **Paging:** lists show five at a time; say **show more** (or press the chip) for the next five. “top 10 noisiest services” or “show 20 incidents” changes the page size, up to 20.
 - **People and teams:** “incidents assigned to Alice Smith”, “what is assigned to @alice”, “incidents for the payments team”.
+- **Small talk and how-to:** greetings, thanks and "who are you" get a short reply, and a greeting in front of a question ("hey, my open incidents") greets and answers it. "How do I…" questions and anything Squire cannot match are answered from the OpsKnight docs, with a link to the guide.
 - **Page context:** on a service, team or schedule page, “this service”, “who is on call here” and “open incidents” use that page. On an alert page, the alert’s incident is the context.
 
 ## Actions you confirm

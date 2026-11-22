@@ -1,6 +1,6 @@
 ---
 title: Confirm actions the assistant suggests
-description: Turn on extended assistant actions and confirm escalations, urgency changes, snoozes, watchers, Jira issues, status updates and runbook runs from Squire.
+description: Turn on extended assistant actions and confirm escalations, urgency changes, snoozes, watchers, Jira issues, status updates, runbook runs and changes beyond incidents (overrides, maintenance windows, services) from Squire.
 type: how-to
 product_area: intelligence
 audience: [responder, administrator]
@@ -15,6 +15,8 @@ verification:
       src/lib/intelligence/squire/actions,
       src/components/squire/SquireProposalCard.tsx,
       tests/integration/intelligence/squire-extended-actions.test.ts,
+      src/lib/intelligence/squire/operations.ts,
+      tests/integration/intelligence/squire-operations.test.ts,
     ]
 ---
 
@@ -65,4 +67,24 @@ Without AI (basic mode), on an incident page you can ask for the simple ones dir
   If the result is unknown (for example the connection dropped while paging), check the incident before
   asking for another card.
 
-Suppression rules and maintenance windows are not yet available as assistant actions.
+## Changes beyond incidents
+
+With extended actions on, Squire can also suggest changes outside an incident, such as adding a schedule
+override, creating a maintenance window, renaming a service or setting its escalation policy, tagging an
+incident, editing a postmortem, or updating an SLO, a dashboard or a status page. It finds the operation in
+the same reviewed API catalog the MCP server uses, and you get a card with:
+
+- what the change is, and a **before → after** line for each field it sets (where the current value can
+  be read);
+- **Apply change**, which runs that API operation once, as you: the same validation, role checks and
+  audit as if you had called the API yourself;
+- **Open in OpsKnight**, to review the record first.
+
+Only operations your role already allows are offered. Credentials, webhook and integration settings,
+notification delivery, sensitive reads and every high-risk operation (deletes, credential rotation, user
+administration) are never reachable from Squire. These cards can only be confirmed in the web app, not
+from Slack or Teams.
+
+Squire can also read through the same catalog (for example a schedule's overrides or a maintenance
+window) when no dedicated lookup exists. Those reads use your permissions and the same field allowlist and
+redaction as MCP.

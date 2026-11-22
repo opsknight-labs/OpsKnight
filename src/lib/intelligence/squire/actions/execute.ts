@@ -34,6 +34,7 @@ import {
   type SquireActionInput,
 } from './catalog';
 import { buildProposal, openProposal, type OpenedProposal } from './proposals';
+import { executeOperationProposal, openOperationProposal } from '../operations';
 import { isExtendedSquireAction, type ExtendedSquireActionName } from './catalog-extended';
 import { checkExtendedPreconditions, extendedActionsAvailable } from './extended';
 import {
@@ -62,6 +63,12 @@ export async function executeSquireAction(
   channel?: SquireConfirmChannel
 ): Promise<SquireActionResult> {
   if (actor.apiKey || actor.status !== 'ACTIVE') return failed('Sign in to confirm this action.');
+  // A change from the operation catalog (operations.ts) has its own sealed shape and runner.
+  const operation = await openOperationProposal(token, actor.id);
+  if (operation)
+    return channel
+      ? failed(CHAT_UNCONFIRMABLE_MESSAGE)
+      : executeOperationProposal(actor, operation);
   const proposal = await openProposal(token, actor.id);
   if (!proposal) return failed('This suggestion has expired. Ask again for a fresh one.');
   if (SQUIRE_ACTION_KIND[proposal.action] !== 'WRITE')

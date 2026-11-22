@@ -88,6 +88,20 @@ Squire knows the page you opened it on: an incident, service, team, schedule, ru
 
 The line under the panel header says what the conversation is about: **Discussing this incident**, **this service**, **this team**, **this runbook**, **this schedule**, **this alert** or **this change**, or **General conversation** on any other page.
 
+The conversation follows you. When you open another page and ask again, the same chat continues and a
+divider such as **Now on this service** marks where the page changed; "this" then means the new page.
+Earlier questions stay in the thread, labelled with the page they were asked on. If you lose access to a
+page, the turns asked there are hidden from the thread and from the assistant. **New chat** starts over
+whenever you like.
+
+A reload reopens the conversation you had open in that tab (when saved conversations are on). If an
+answer is cut off by a reload, a closed tab or a dropped connection, the part already written is saved and
+marked as interrupted; it is not used as context for later answers. An answer that stops arriving for 45
+seconds is shown as stalled so you can ask again.
+
+In AI mode Squire also knows your first name (when the provider is allowed personal data), your role and
+teams, and what your role can and cannot do, so it can say who to ask when something needs another role.
+
 ## Dock Squire beside the page
 
 On a desktop-width window (1024 px and wider) the panel can sit beside the page instead of on top of it.

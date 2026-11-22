@@ -44,6 +44,7 @@ import { buildObservabilityTools, OBSERVABILITY_TOOL_DATA_CLASS } from './tools-
 import { buildIncidentTools, INCIDENT_TOOL_DATA_CLASS } from './tools-incident';
 import { buildKnowledgeTools, KNOWLEDGE_TOOL_DATA_CLASS } from './tools-knowledge';
 import { buildDocsTool } from './docs';
+import { buildOperationTools, PROPOSE_OPERATION_TOOL } from './operations';
 import { AUTOMATION_TOOL_DATA_CLASS, buildAutomationTools } from './tools-automation';
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
@@ -69,6 +70,9 @@ export const SQUIRE_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = {
   get_status_page: 'PUBLIC',
   get_problem_outcomes: 'INTERNAL',
   search_product_docs: 'PUBLIC',
+  find_operations: 'PUBLIC',
+  describe_operation: 'PUBLIC',
+  read_operation: 'PERSONAL',
   // Observability connector tools (logs are Personal; the rest Internal).
   ...OBSERVABILITY_TOOL_DATA_CLASS,
   // Incident-response tools (tools-incident.ts) declare their own classes.
@@ -815,6 +819,10 @@ export function buildSquireTools(
   tools.push(...buildAutomationTools(actor));
   // Product documentation for how-to questions.
   tools.push(buildDocsTool());
+  // The reviewed operation catalog: reads for everyone, changes (as confirmable cards) when extended
+  // actions are on.
+  tools.push(...buildOperationTools(actor));
+  if (options.extendedActions) tools.push(PROPOSE_OPERATION_TOOL);
 
   for (const name of SQUIRE_ACTION_NAMES) {
     if (!options.personal && name === 'reassign_incident') continue;
@@ -860,6 +868,13 @@ export function buildSquireTools(
  * are always on offer.
  */
 const READ_FAMILIES: Array<{ tools: Set<string>; words: RegExp; intents?: Set<string> }> = [
+  {
+    // The operation catalog: schedules, maintenance, SLOs, dashboards and any change beyond incidents.
+    tools: new Set(['find_operations', 'describe_operation', 'read_operation']),
+    // Bounded, literal alternatives over a message capped by the request schema.
+    words:
+      /\b(schedules?|overrides?|maintenance|slos?|objectives?|dashboards?|reports?|teams?|polic(?:y|ies)|postmortems?|status ?pages?|custom fields?|tags?|watchers?|roles?|templates?|business services?|runbooks?|services?|create|update|edit|change|rename|archive|publish|add|remove|set|cover|swap)\b/,
+  },
   {
     tools: new Set([
       'query_metrics',

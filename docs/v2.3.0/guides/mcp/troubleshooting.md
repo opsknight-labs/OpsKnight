@@ -73,6 +73,7 @@ This page lists 110 MCP codes and 26 log events found in the source.
 | <a id="MCP_INVALID_SUBSCRIPTION"></a>`MCP_INVALID_SUBSCRIPTION` | subscriptions/listen received more than five URIs or a non-string URI. | Subscribe to at most five opsknight:// URIs per stream. |
 | <a id="MCP_UNAVAILABLE"></a>`MCP_UNAVAILABLE` | An unexpected server error. The error text ends with a Reference (the request id). | Retry. Administrators search the log for mcp.tool.unexpected_error with that requestId. |
 | <a id="MCP_OPERATION_UNAVAILABLE"></a>`MCP_OPERATION_UNAVAILABLE` | Unknown operationId, or the operation is not available through this tool. | Use search_capabilities to find one. |
+| <a id="MCP_INVALID_RESOURCE_ID"></a>`MCP_INVALID_RESOURCE_ID` | A resource id or opsknight:// URI is malformed. | Use an id returned by a list or search. |
 | <a id="MCP_INVALID_ARGUMENTS"></a>`MCP_INVALID_ARGUMENTS` | The arguments do not match the operation schema. The hint names the path and rule. | Call describe_operation and correct the arguments. |
 | <a id="MCP_CAPABILITY_DISABLED"></a>`MCP_CAPABILITY_DISABLED` | An administrator turned this tool, operation or domain off under Exposed capabilities. | Do not retry. Ask an administrator if you need it. |
 | <a id="MCP_DOMAIN_REJECTED"></a>`MCP_DOMAIN_REJECTED` | OpsKnight refused the operation for a business reason. The error carries a domainCode from the application error registry and, for invalid input, the failing fields. | Read domainCode and fields in the error text or its `_meta` (`io.opsknight/error`), correct the input and retry. |
@@ -84,7 +85,6 @@ This page lists 110 MCP codes and 26 log events found in the source.
 | <a id="MCP_INVALID_PAGE_SIZE"></a>`MCP_INVALID_PAGE_SIZE` | query.limit is outside 1 to 50. | Use a limit from 1 to 50 and follow nextCursor for more. |
 | <a id="MCP_SCOPE_NOT_GRANTED"></a>`MCP_SCOPE_NOT_GRANTED` | The role allows the operation, but this connection was not granted the permission it needs. The hint names the missing scopes. | Reconnect and tick the named permission on the consent page (the administrator ceiling must include it). |
 | <a id="MCP_OPERATION_DISABLED"></a>`MCP_OPERATION_DISABLED` | Changes or sensitive reads are turned off in Access policy. | An administrator turns on reviewed actions or sensitive reads under Access policy → Reviewed actions. |
-| <a id="MCP_INVALID_RESOURCE_ID"></a>`MCP_INVALID_RESOURCE_ID` | A resource id or opsknight:// URI is malformed. | Use an id returned by a list or search. |
 | <a id="MCP_INVALID_QUERY"></a>`MCP_INVALID_QUERY` | A query parameter value is an object or array where a scalar is required. | Send a string, number or boolean. |
 | <a id="MCP_EMPTY_DOMAIN_RESULT"></a>`MCP_EMPTY_DOMAIN_RESULT` | An operation returned no body where one was expected. | Retry; report it if it repeats. |
 | <a id="MCP_DUPLICATE_STEP"></a>`MCP_DUPLICATE_STEP` | Two execute_plan steps share an id. | Give every step a unique id. |

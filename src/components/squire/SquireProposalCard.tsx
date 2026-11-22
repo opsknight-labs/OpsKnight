@@ -13,7 +13,8 @@ export type SquireProposalView = {
   kind: 'WRITE' | 'NAVIGATE';
   title: string;
   detail: string;
-  incidentId: string;
+  /** Absent for a change outside an incident (schedules, services, maintenance…). */
+  incidentId?: string;
   expiresAt: string;
   href?: string;
   /** The assistant read alerts, notes or other third-party text before suggesting this. */
@@ -242,12 +243,24 @@ export default function SquireProposalCard({
           Check that content yourself before confirming.
         </p>
       )}
-      <Link
-        href={`/incidents/${encodeURIComponent(proposal.incidentId)}`}
-        className="inline-block text-xs font-medium text-foreground underline underline-offset-2"
-      >
-        View incident
-      </Link>
+      {proposal.incidentId ? (
+        <Link
+          href={`/incidents/${encodeURIComponent(proposal.incidentId)}`}
+          className="inline-block text-xs font-medium text-foreground underline underline-offset-2"
+        >
+          View incident
+        </Link>
+      ) : (
+        proposal.href &&
+        proposal.href !== '/' && (
+          <Link
+            href={proposal.href}
+            className="inline-block text-xs font-medium text-foreground underline underline-offset-2"
+          >
+            Open in OpsKnight
+          </Link>
+        )
+      )}
       {state.phase === 'done' || state.phase === 'failed' || state.phase === 'unknown' ? (
         <div className="space-y-2">
           <p

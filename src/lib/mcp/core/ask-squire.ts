@@ -79,7 +79,7 @@ export function squireAnswerForMcp(answer: SquireSurfaceAnswer) {
       };
     }),
     suggestedActions: answer.proposals.map(proposal => {
-      const url = web(proposal.href ?? `/incidents/${encodeURIComponent(proposal.incidentId)}`);
+      const url = web(proposal.href ?? `/incidents/${encodeURIComponent(proposal.incidentId ?? '')}`);
       return {
         title: projectMcpData(proposal.title),
         detail: projectMcpData(proposal.detail),

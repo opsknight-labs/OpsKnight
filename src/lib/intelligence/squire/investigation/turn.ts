@@ -16,6 +16,7 @@ import type { SquireEvent } from '../contract';
 import type { EligibleConnection } from '../../connectors/service';
 import type { SquireEvidenceRegistry } from '../evidence';
 import { buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from '../tools';
+import { OPERATION_READ_TOOLS } from '../operations';
 import { INVESTIGATION_LIMITS, runInvestigation, standardFirstReads } from './engine';
 
 const CHUNK = 48;
@@ -77,7 +78,13 @@ export async function* streamInvestigation(input: {
       ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
       return input.evidence.observe(name, toolInput, result);
     },
-  }).filter(tool => tool.kind === 'READ' && (!input.readTools || input.readTools.has(tool.name)));
+  }).filter(
+    tool =>
+      tool.kind === 'READ' &&
+      // Diagnosis stays on purpose-built reads: generic catalog lookups only add noise and tokens.
+      !OPERATION_READ_TOOLS.has(tool.name) &&
+      (!input.readTools || input.readTools.has(tool.name))
+  );
   const [planner, diagnoser] = await Promise.all([
     portFor('CLASSIFY', input.dataClass, input.chatPort),
     portFor('DIAGNOSE', input.dataClass, input.chatPort),
@@ -117,7 +124,10 @@ export async function* streamInvestigation(input: {
     }
   } catch {
     // Nothing was read and the planner is unavailable: answer the ordinary way (the model, with tools).
-    yield { type: 'notice', text: 'A step-by-step investigation could not start. Answering directly.' };
+    yield {
+      type: 'notice',
+      text: 'A step-by-step investigation could not start. Answering directly.',
+    };
     yield* input.fallback();
     return;
   }
