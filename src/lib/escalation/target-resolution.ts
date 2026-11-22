@@ -6,8 +6,8 @@
  *
  * Two rules matter more than anything else here:
  *
- * 1. Only `ACTIVE`, pageable users are eligible. An invited-but-not-onboarded or a
- *    disabled account, or a stakeholder, must never be paged or made an incident's owner.
+ * 1. Only `ACTIVE` users are eligible. An invited-but-not-onboarded or a
+ *    disabled account must never be paged or made an incident's owner.
  * 2. Infrastructure failures are thrown, never flattened into an empty
  *    recipient list. "The database was unreachable" and "nobody is on call"
  *    lead to opposite escalation decisions, so they must stay distinguishable.
@@ -22,7 +22,6 @@ import {
   type OverrideInput,
 } from '../oncall';
 import { isValidTimeZone, startOfDayInTimeZone, startOfNextDayInTimeZone } from '../timezone';
-import { isPageableRole } from '../authorization';
 
 export type EscalationTargetResolution =
   | { outcome: 'RESOLVED'; userIds: string[]; targetName: string }
@@ -57,6 +56,13 @@ async function infrastructureGuarded<T>(what: string, load: () => Promise<T>): P
   }
 }
 
+/** Stakeholders follow status but are never paged, whatever target they appear in. */
+function pageable(
+  user: { status?: string | null; role?: string | null } | null | undefined
+): boolean {
+  return user?.status === 'ACTIVE' && user.role !== 'STAKEHOLDER';
+}
+
 /** Deterministic ordering so repeated resolutions of one target agree. */
 function stableUserIds(userIds: Iterable<string>): string[] {
   return [...new Set(userIds)].sort();
@@ -84,10 +90,10 @@ async function resolveUserTarget(targetId: string): Promise<EscalationTargetReso
       code: 'TARGET_INACTIVE',
     };
   }
-  if (!isPageableRole(user.role)) {
+  if (!pageable(user)) {
     return {
       outcome: 'INVALID_TARGET',
-      reason: 'Target user is a stakeholder; stakeholders are never paged',
+      reason: 'Target user is a stakeholder, who is never paged',
       code: 'TARGET_INVALID',
     };
   }
@@ -122,9 +128,7 @@ async function resolveTeamTarget(
 
   const targetName = team.name || 'Unknown Team';
   const eligible = stableUserIds(
-    team.members
-      .filter(member => member.user?.status === 'ACTIVE' && isPageableRole(member.user.role))
-      .map(member => member.userId)
+    team.members.filter(member => pageable(member.user)).map(member => member.userId)
   );
 
   if (notifyOnlyTeamLead) {
@@ -163,7 +167,7 @@ async function resolveScheduleTarget(
           where: {
             start: { lte: atTime },
             end: { gt: atTime },
-            user: { status: 'ACTIVE' },
+            user: { status: 'ACTIVE', role: { not: 'STAKEHOLDER' } },
           },
           include: { user: true },
         },
@@ -184,13 +188,7 @@ async function resolveScheduleTarget(
     return { outcome: 'NO_ELIGIBLE_RESPONDERS', targetName };
   }
 
-  // Membership writes reject stakeholders; this covers someone made a stakeholder while on call.
-  const stakeholders = new Set(
-    [...schedule.layers.flatMap(layer => layer.users), ...schedule.overrides]
-      .filter(entry => entry.user && !isPageableRole(entry.user.role))
-      .map(entry => entry.userId)
-  );
-  const userIds = effectiveOnCallUserIds(schedule, atTime).filter(id => !stakeholders.has(id));
+  const userIds = effectiveOnCallUserIds(schedule, atTime);
   return userIds.length > 0
     ? { outcome: 'RESOLVED', userIds, targetName }
     : { outcome: 'NO_ELIGIBLE_RESPONDERS', targetName };
@@ -220,6 +218,7 @@ type ScheduleLayerRow = {
       avatarUrl?: string | null;
       gender?: string | null;
       status?: string | null;
+      role?: string | null;
     } | null;
   }>;
 };
@@ -276,7 +275,7 @@ function effectiveOnCallUserIds(schedule: ScheduleForCoverage, atTime: Date): st
       restrictions: (layer.restrictions ?? null) as LayerRestrictions | null,
       priority: layerPriorityOf(layer),
       users: layer.users
-        .filter(entry => entry.user?.status === 'ACTIVE')
+        .filter(entry => pageable(entry.user))
         .map((entry, index) => ({
           userId: entry.userId,
           position: entry.position ?? index,
