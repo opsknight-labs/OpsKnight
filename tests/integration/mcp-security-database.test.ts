@@ -313,7 +313,10 @@ describe('MCP PostgreSQL security and replay boundaries', () => {
     const ctx = await context(f);
     await db.mcpPolicy.update({ where: { id: 'default' }, data: { requestsPerMinute: 600 } });
     const service = await createTestService('Protected health projection');
-    // Capacity already consumed by another replica must still protect this process.
+    // Capacity already consumed by another replica must still protect this process. The limiter counts
+    // in fixed minute windows: do not seed one and call in the next.
+    const untilNextWindow = 60000 - (Date.now() % 60000);
+    if (untilNextWindow < 10000) await new Promise(r => setTimeout(r, untilNextWindow + 50));
     const window = Math.floor(Date.now() / 60000);
     await db.rateLimit.create({
       data: {
