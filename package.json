@@ -54,6 +54,7 @@
     "test:ci:db": "npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 --reporter=default --reporter=junit --outputFile=reports/junit-db.xml",
     "test:authorization": "vitest run -c vitest.unit.config.ts tests/lib/rbac-read-guards.test.ts tests/architecture/rbac-page-guards.test.ts",
     "seed:dashboard": "ts-node --project tsconfig.script.json scripts/dev/seed-dashboard-live.ts",
+    "seed:incident-demo": "ts-node --project tsconfig.script.json scripts/dev/seed-incident-demo.ts",
     "load:dashboard": "ts-node --project tsconfig.script.json scripts/dev/load-dashboard-live.ts",
     "certify:dashboard:replicas": "ts-node --project tsconfig.script.json scripts/dev/certify-dashboard-replicas.ts",
     "test:e2e:dashboard": "playwright test -c playwright.dashboard.config.ts",
