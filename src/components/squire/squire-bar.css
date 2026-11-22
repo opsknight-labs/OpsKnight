@@ -196,6 +196,11 @@
 .sqbar-paper:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
 .sqbar-scroll.open { pointer-events: auto; }
 .sqbar-scroll.open .sqbar-paper { transform: none; opacity: 1; }
+/* Motion off (setting or system): the scroll simply fades in, no unrolling. */
+.sqbar-scroll.still .sqbar-paper { transform: none; transition: opacity 160ms; }
+@media (prefers-reduced-motion: reduce) {
+  .sqbar-paper { transform: none; transition: opacity 160ms; }
+}
 
 /* A note: a small letter with a reply or two, ending at his right edge. */
 .sqbar-paper.sqbar-letter {
@@ -225,7 +230,7 @@
   border-radius: 999px;
   background: transparent;
   color: #6b4f22;
-  font: 600 0.75rem/1 var(--font-family-sans, Inter, sans-serif);
+  font: 600 0.75rem/1 var(--font-family-sans);
   text-decoration: none;
   cursor: pointer;
 }

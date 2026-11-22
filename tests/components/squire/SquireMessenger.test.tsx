@@ -196,6 +196,8 @@ describe('Squire on the status bar', () => {
     });
     expect(screen.getByRole('status')).toHaveTextContent("Hail! I'm Pip");
     expect(document.querySelector('.sqbar-scroll.open')).not.toBeNull();
+    // Motion off: the scroll fades in instead of unrolling.
+    expect(document.querySelector('.sqbar-scroll.still')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show me' }));
     expect(onOpen).toHaveBeenCalledTimes(1);
     expect(window.localStorage.getItem('opsknight.squire.delivered')).toContain('intro');

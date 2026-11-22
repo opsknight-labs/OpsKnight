@@ -466,7 +466,7 @@ export default function SquireBarCompanion({
         </button>
       </div>
       <div
-        className={`sqbar-scroll${scrollOpen ? ' open' : ''}`}
+        className={`sqbar-scroll${scrollOpen ? ' open' : ''}${animated ? '' : ' still'}`}
         aria-hidden={!scrollOpen}
         style={{
           // A note's card ends at his right edge, so it never runs off the end of the bar.
