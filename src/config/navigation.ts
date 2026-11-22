@@ -13,6 +13,7 @@ import {
   ClipboardList,
   BarChart,
   Workflow,
+  Boxes,
   Sparkles,
   BellRing,
   GitCommitHorizontal,
@@ -105,6 +106,12 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     href: '/services',
     label: 'Services',
     icon: Server,
+    section: 'MAIN',
+  },
+  {
+    href: '/services/business',
+    label: 'Business services',
+    icon: Boxes,
     section: 'MAIN',
   },
   {

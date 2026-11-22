@@ -53,9 +53,15 @@ describe('role capability matrix', () => {
     for (const capability of Object.values(CAPABILITIES)) {
       expect(hasCapability('ADMIN', capability)).toBe(true);
     }
-    for (const role of ['USER', 'AUDITOR', 'RESPONDER'] as AppRole[]) {
+    for (const role of ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER'] as AppRole[]) {
       expect(hasCapability(role, CAPABILITIES.ADMIN_MANAGE)).toBe(false);
       expect(hasCapability(role, CAPABILITIES.ACCESS_REVIEW_MANAGE)).toBe(false);
+    }
+  });
+
+  it('keeps Stakeholder off incidents and paging', () => {
+    for (const capability of getRoleCapabilities('STAKEHOLDER')) {
+      expect(capability).not.toMatch(/incident|manage|edit|execute|approve|create|schedule/);
     }
   });
 
@@ -344,14 +350,24 @@ describe('page access registry', () => {
     ['/runbooks/agents/secrets', ['ADMIN']],
     ['/settings/security-compliance', ['AUDITOR', 'ADMIN']],
     ['/settings/integrations/slack', ['ADMIN']],
-    ['/settings/integrations/mcp', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/settings/integrations/mcp', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/incidents', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/incidents/create', ['RESPONDER', 'ADMIN']],
     ['/system-logs', ['ADMIN']],
-    ['/settings/access', ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/settings/access', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
     ['/settings/access/admin', ['ADMIN']],
+    ['/services/business', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/services/business/abc', ['RESPONDER', 'ADMIN']],
+    ['/services/business/abc/edit', ['RESPONDER', 'ADMIN']],
+    ['/services/business/new', ['RESPONDER', 'ADMIN']],
+    ['/services/business/setup', ['RESPONDER', 'ADMIN']],
+    ['/services/graph', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/status-dashboard', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
+    ['/status-dashboard/payments', ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN']],
   ])('%s is open to %j', (route, allowed) => {
-    const open = ROLE_ORDER.filter(role => canAccessPath(route, getRoleCapabilities(role)));
+    const open = (['STAKEHOLDER', ...ROLE_ORDER] as AppRole[]).filter(role =>
+      canAccessPath(route, getRoleCapabilities(role))
+    );
     expect(open).toEqual(allowed);
   });
 
@@ -364,6 +380,9 @@ describe('page access registry', () => {
     expect(labels('AUDITOR')).toContain('/audit');
     expect(labels('RESPONDER')).not.toContain('/audit');
     expect(labels('ADMIN')).toContain('/events');
+    expect(labels('USER')).toContain('/services/business');
+    expect(labels('STAKEHOLDER')).toContain('/services/business');
+    expect(labels('STAKEHOLDER')).not.toContain('/incidents');
     expect(getAuthorizedNavItems(null)).toEqual([]);
     // Legacy role-string callers still work.
     expect(getAuthorizedNavItems('AUDITOR').map(item => item.href)).toContain('/audit');

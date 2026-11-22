@@ -110,6 +110,10 @@ exports[`role capability matrix > matches the reviewed snapshot (any change here
     "user.notification_preferences",
     "user.read.all",
   ],
+  "STAKEHOLDER": [
+    "service.read.scoped",
+    "user.notification_preferences",
+  ],
   "USER": [
     "incident.acknowledge.scoped",
     "incident.escalate.scoped",

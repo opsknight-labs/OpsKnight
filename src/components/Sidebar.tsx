@@ -33,6 +33,7 @@ import BrandLockup from '@/components/layout/BrandLockup';
 import { APP_VERSION } from '@/lib/constants';
 import {
   NavItemConfig,
+  NAVIGATION_ITEMS,
   getNavSectionConfig,
   NavSectionKey,
   getAuthorizedNavItems,
@@ -144,8 +145,14 @@ export default function Sidebar({
 
   const isActive = (path: string) => {
     if (path === '/' && pathname === '/') return true;
-    if (path !== '/' && pathname.startsWith(path)) return true;
-    return false;
+    if (path === '/' || !pathname.startsWith(path)) return false;
+    // A more specific entry (Business services under Services) owns its own subtree.
+    return !NAVIGATION_ITEMS.some(
+      item =>
+        item.href.length > path.length &&
+        item.href.startsWith(path) &&
+        pathname.startsWith(item.href)
+    );
   };
 
   // Centralized filtered and grouped items
