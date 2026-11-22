@@ -3,20 +3,23 @@ import { Boxes } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccess } from '@/lib/access/server';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
-import { BUSINESS_SERVICE_SELECT, businessServiceReadWhere } from '@/lib/business-services/commands';
+import {
+  BUSINESS_SERVICE_SELECT,
+  businessServiceReadWhere,
+} from '@/lib/business-services/commands';
 import { PageHeader } from '@/components/patterns';
 import BusinessServiceForm from '@/components/service/BusinessServiceForm';
 import BusinessServiceStatusPill, {
   worstServiceStatus,
 } from '@/components/service/BusinessServiceStatusPill';
-import { loadBusinessServiceFormOptions } from '../form-options';
+import { loadBusinessServiceFormOptions } from '../../form-options';
 
 export default async function EditBusinessServicePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePageAccess('/services/business/[id]');
+  await requirePageAccess('/services/business/[id]/edit');
   const { id } = await params;
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
@@ -40,7 +43,7 @@ export default async function EditBusinessServicePage({
     <div className="mx-auto w-full max-w-[1200px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <PageHeader
         eyebrow="Service catalog"
-        title={item.name}
+        title={`Edit ${item.name}`}
         icon={Boxes}
         badges={
           <BusinessServiceStatusPill
@@ -50,7 +53,8 @@ export default async function EditBusinessServicePage({
         breadcrumbs={[
           { label: 'Services', href: '/services' },
           { label: 'Business services', href: '/services/business' },
-          { label: item.name },
+          { label: item.name, href: `/services/business/${item.id}` },
+          { label: 'Edit' },
         ]}
         description="Changes apply to status pages that show this business service on their next publish."
       />
