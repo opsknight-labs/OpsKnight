@@ -138,10 +138,30 @@ if (!manifestPath) {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const staticRoot = path.join(root, '.next');
   // No route's eagerly loaded chunks (nor the shared root files) may carry the graph libraries.
+  // App routes list theirs in each page_client-reference-manifest.js (client component chunks);
+  // next/dynamic imports and web workers are not in those lists.
   const eager = new Set([
     ...(manifest.rootMainFiles ?? []),
     ...Object.values(manifest.pages ?? {}).flat(),
   ]);
+  const appServer = path.join(staticRoot, 'server/app');
+  const referenceManifests = [];
+  const walk = dir => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name === 'page_client-reference-manifest.js') referenceManifests.push(full);
+    }
+  };
+  walk(appServer);
+  globalThis.__RSC_MANIFEST = {};
+  for (const file of referenceManifests) require(file);
+  for (const routeManifest of Object.values(globalThis.__RSC_MANIFEST)) {
+    for (const module of Object.values(routeManifest.clientModules ?? {})) {
+      for (const chunk of module.chunks ?? []) if (chunk.endsWith('.js')) eager.add(chunk);
+    }
+  }
   const graphChunks = [...eager].filter(asset => {
     const assetPath = path.join(staticRoot, asset);
     if (!asset.endsWith('.js') || !fs.existsSync(assetPath)) return false;
