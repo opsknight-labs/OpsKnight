@@ -7,7 +7,7 @@ import {
   toElkGraph,
   type LayoutRequest,
 } from '@/components/service-graph/layout';
-import { formatGraphFocus, nodesWithinHops, parseGraphFocus } from '@/lib/service-graph/focus';
+import { formatGraphFocus, parseGraphFocus } from '@/lib/service-graph/focus';
 
 /** A realistic service estate: teams of services, each depending on a few earlier services. */
 function estate(count: number, teams: number, grouped: boolean): LayoutRequest {
@@ -75,16 +75,5 @@ describe('graph focus', () => {
     expect(parseGraphFocus('svc:../etc')).toBeNull();
     expect(parseGraphFocus(undefined)).toBeNull();
     expect(formatGraphFocus({ kind: 'bs', id: 'q' })).toBe('bs:q');
-  });
-
-  it('walks both directions up to the hop limit and stops at the node budget', () => {
-    const edges = [
-      { from: 'a', to: 'b' },
-      { from: 'c', to: 'b' },
-      { from: 'c', to: 'd' },
-    ];
-    expect(nodesWithinHops(edges, ['a'], 2)).toEqual(new Set(['a', 'b', 'c']));
-    expect(nodesWithinHops(edges, ['b'], 1)).toEqual(new Set(['a', 'b', 'c']));
-    expect(nodesWithinHops(edges, ['a'], 3, 2).size).toBe(2);
   });
 });

@@ -12,7 +12,7 @@ import {
 } from '@/lib/business-services/contract';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { findServicesInMaintenance } from '@/lib/service-maintenance/windows';
-import { nodesWithinHops, type GraphFocus } from '@/lib/service-graph/focus';
+import { type GraphFocus } from '@/lib/service-graph/focus';
 import { publicStatusForIncidentUrgency } from '@/lib/status-pages/status-presentation';
 import { MAX_DEPENDENCIES } from './service';
 
@@ -147,31 +147,55 @@ export async function getServiceGraphForActor(
   let truncated: boolean;
   const focusBusinessServiceIds = new Set<string>();
   if (focus) {
-    // Walk only edges whose both ends the actor can read.
-    const [scopedEdges, seeds] = await Promise.all([
-      client.serviceDependency.findMany({
-        where: { status: { in: edgeStatuses }, upstream: services, downstream: services },
-        take: MAX_DEPENDENCIES,
-        select: edgeSelect,
-      }),
-      focusSeeds(client, focus, services, businessServices, focusBusinessServiceIds),
-    ]);
-    const reach = nodesWithinHops(
-      scopedEdges.map(edge => ({ from: edge.upstreamServiceId, to: edge.downstreamServiceId })),
-      seeds,
-      hops,
-      MAX_FOCUS_NODES + 1
+    // Walk outwards from the focus one hop at a time, reading only edges that touch the frontier
+    // and whose both ends the actor can read, so a large org never hides the focus's neighbours.
+    const seeds = await focusSeeds(
+      client,
+      focus,
+      services,
+      businessServices,
+      focusBusinessServiceIds
     );
-    truncated = reach.size > MAX_FOCUS_NODES;
+    const reach = new Set(seeds);
+    let frontier = [...reach];
+    truncated = false;
+    for (let depth = 0; depth < hops && frontier.length && reach.size <= MAX_FOCUS_NODES; depth++) {
+      const found = await client.serviceDependency.findMany({
+        where: {
+          status: { in: edgeStatuses },
+          upstream: services,
+          downstream: services,
+          OR: [{ upstreamServiceId: { in: frontier } }, { downstreamServiceId: { in: frontier } }],
+        },
+        take: MAX_DEPENDENCIES + 1,
+        select: { upstreamServiceId: true, downstreamServiceId: true },
+      });
+      if (found.length > MAX_DEPENDENCIES) truncated = true;
+      const next: string[] = [];
+      for (const edge of found.slice(0, MAX_DEPENDENCIES))
+        for (const id of [edge.upstreamServiceId, edge.downstreamServiceId])
+          if (!reach.has(id)) {
+            reach.add(id);
+            next.push(id);
+          }
+      frontier = next;
+    }
+    if (reach.size > MAX_FOCUS_NODES) truncated = true;
     rows = await client.service.findMany({
       where: { AND: [{ id: { in: [...reach].slice(0, MAX_FOCUS_NODES) } }, services] },
       orderBy: { name: 'asc' },
       select: { id: true, name: true, teamId: true, team: { select: { name: true } } },
     });
-    const ids = new Set(rows.map(row => row.id));
-    edges = scopedEdges.filter(
-      edge => ids.has(edge.upstreamServiceId) && ids.has(edge.downstreamServiceId)
-    );
+    const ids = rows.map(row => row.id);
+    edges = await client.serviceDependency.findMany({
+      where: {
+        status: { in: edgeStatuses },
+        upstreamServiceId: { in: ids },
+        downstreamServiceId: { in: ids },
+      },
+      take: MAX_DEPENDENCIES,
+      select: edgeSelect,
+    });
   } else {
     const all = await client.service.findMany({
       where: services,
