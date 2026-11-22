@@ -23,6 +23,7 @@ import {
   Pause,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { FIELD_SELECT_CLASS, FIELD_VALUE_CLASS } from '@/components/incident/field-styles';
 import { incidentStatusTone, urgencyTone } from '@/lib/design/status-palette';
 import { toneClasses } from '@/components/patterns/status-tone';
 import SeverityBadge from '@/components/patterns/SeverityBadge';
@@ -104,6 +105,7 @@ export default function IncidentHeader({
     });
   };
 
+  const urgencyLabel = incident.urgency.charAt(0) + incident.urgency.slice(1).toLowerCase();
   const currentVisibility = incident.visibility || 'PUBLIC';
   const isPrivate = currentVisibility === 'PRIVATE';
 
@@ -115,9 +117,6 @@ export default function IncidentHeader({
     toneClasses(urgencyTone(incident.urgency)).solid,
     incident.urgency === 'HIGH' && 'motion-safe:animate-pulse'
   );
-
-  const SELECTOR_BASE_CLASS =
-    'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-semibold whitespace-nowrap bg-background border border-border/80 text-foreground shadow-2xs transition-all max-w-full select-none hover:bg-muted/40 hover:border-border';
 
   const durationText = incident.resolvedAt
     ? `Resolved in ${formatDuration(incident.createdAt, incident.resolvedAt)}`
@@ -182,9 +181,9 @@ export default function IncidentHeader({
                 aria-label={`Urgency: ${incident.urgency}`}
                 className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-ring rounded-md [&>svg]:hidden group"
               >
-                <div className={cn(SELECTOR_BASE_CLASS, 'cursor-pointer group')}>
+                <div className={FIELD_SELECT_CLASS}>
                   <span className={cn('h-2 w-2 rounded-full shrink-0', urgencyDot)} />
-                  <span>{incident.urgency}</span>
+                  <span>{urgencyLabel}</span>
                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0 ml-auto" />
                 </div>
               </SelectTrigger>
@@ -197,9 +196,9 @@ export default function IncidentHeader({
               </SelectContent>
             </Select>
           ) : (
-            <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+            <div className={FIELD_VALUE_CLASS}>
               <span className={cn('h-2 w-2 rounded-full shrink-0', urgencyDot)} />
-              <span>{incident.urgency}</span>
+              <span>{urgencyLabel}</span>
             </div>
           )}
         </div>
@@ -226,7 +225,7 @@ export default function IncidentHeader({
                 aria-label={`Visibility: ${isPrivate ? 'Private' : 'Public'}`}
                 className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-ring rounded-md [&>svg]:hidden group"
               >
-                <div className={cn(SELECTOR_BASE_CLASS, 'cursor-pointer group')}>
+                <div className={FIELD_SELECT_CLASS}>
                   {isPrivate ? (
                     <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   ) : (
@@ -252,7 +251,7 @@ export default function IncidentHeader({
               </SelectContent>
             </Select>
           ) : (
-            <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+            <div className={FIELD_VALUE_CLASS}>
               {isPrivate ? (
                 <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               ) : (
@@ -274,10 +273,10 @@ export default function IncidentHeader({
               Service
             </span>
           </div>
-          <div className="flex min-w-0 items-center gap-1 max-w-full">
+          <div className="flex h-8 min-w-0 max-w-full items-center gap-1">
             <TruncatedText
               text={incident.service.name}
-              className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors"
+              className="text-sm font-medium text-foreground group-hover:text-primary transition-colors"
             />
             <ArrowUpRight className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
           </div>
@@ -316,10 +315,10 @@ export default function IncidentHeader({
                 Incident policy
               </span>
             </div>
-            <div className="flex min-w-0 items-center gap-1 max-w-full">
+            <div className="flex h-8 min-w-0 max-w-full items-center gap-1">
               <TruncatedText
                 text={incident.incidentPolicy.name}
-                className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors"
+                className="text-sm font-medium text-foreground group-hover:text-primary transition-colors"
               />
               <ArrowUpRight className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
             </div>
@@ -351,7 +350,7 @@ export default function IncidentHeader({
             if (incident.status === 'RESOLVED') {
               return (
                 <div
-                  className={cn(SELECTOR_BASE_CLASS, 'cursor-default text-foreground/80')}
+                  className={cn(FIELD_VALUE_CLASS, 'text-foreground/80')}
                   title="Escalation ended upon resolution"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 dark:text-emerald-400" />
@@ -365,8 +364,8 @@ export default function IncidentHeader({
               return (
                 <div
                   className={cn(
-                    SELECTOR_BASE_CLASS,
-                    'cursor-default text-indigo-700 dark:text-indigo-400'
+                    FIELD_VALUE_CLASS,
+                    ' text-indigo-700 dark:text-indigo-400'
                   )}
                   title="Escalation paused while incident is snoozed/suppressed"
                 >
@@ -386,8 +385,8 @@ export default function IncidentHeader({
               return (
                 <div
                   className={cn(
-                    SELECTOR_BASE_CLASS,
-                    'cursor-default text-emerald-800 dark:text-emerald-400'
+                    FIELD_VALUE_CLASS,
+                    ' text-emerald-800 dark:text-emerald-400'
                   )}
                   title="Escalation stopped because incident was acknowledged"
                 >
@@ -415,8 +414,8 @@ export default function IncidentHeader({
               return (
                 <div
                   className={cn(
-                    SELECTOR_BASE_CLASS,
-                    'cursor-default text-rose-800 dark:text-rose-400'
+                    FIELD_VALUE_CLASS,
+                    ' text-rose-800 dark:text-rose-400'
                   )}
                   title="All escalation policy steps have been exhausted"
                 >
@@ -440,7 +439,7 @@ export default function IncidentHeader({
                 Opened
               </span>
             </div>
-            <span className="text-xs font-semibold text-foreground">
+            <span className="flex h-8 items-center text-sm font-medium text-foreground">
               <RelativeTime date={incident.createdAt} />
             </span>
             <span className="text-2xs text-muted-foreground">

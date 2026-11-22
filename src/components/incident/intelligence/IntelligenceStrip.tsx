@@ -30,6 +30,7 @@ export default function IntelligenceStrip({
   chips,
   freshness,
   touch = false,
+  bare = false,
 }: {
   incidentId: string;
   chips: StripChip[];
@@ -37,6 +38,8 @@ export default function IntelligenceStrip({
   touch?: boolean;
   /** Present only while analysis is unfinished, failed or unverifiable. */
   freshness: IncidentAnalysisState | null;
+  /** Inside another card (the AI briefing): no border or background of its own. */
+  bare?: boolean;
 }) {
   if (chips.length === 0 && !freshness) return null;
   const chipClass = touch ? CHIP_CLASS : `${CHIP_CLASS} sm:min-h-7`;
@@ -46,7 +49,11 @@ export default function IntelligenceStrip({
   return (
     <div
       data-testid="intelligence-strip"
-      className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-card px-2.5 py-1 text-card-foreground"
+      className={
+        bare
+          ? 'flex min-w-0 items-center gap-2'
+          : 'flex min-w-0 items-center gap-2 rounded-xl border border-border bg-card px-2.5 py-1 text-card-foreground'
+      }
     >
       {chips.length > 0 && (
         <nav

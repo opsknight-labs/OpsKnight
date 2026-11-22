@@ -17,6 +17,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Check, ChevronDown, Users as UsersIcon, User, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { FIELD_SELECT_CLASS, FIELD_VALUE_CLASS } from '@/components/incident/field-styles';
 import TruncatedText from '@/components/patterns/TruncatedText';
 
 type AssigneeSectionProps = {
@@ -181,12 +182,10 @@ export default function AssigneeSection({
 
   // Header Variant - Button Trigger
   if (variant === 'header') {
-    const SELECTOR_BASE_CLASS =
-      'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-semibold bg-background border border-border/80 text-foreground shadow-2xs transition-all max-w-full select-none';
 
     if (!canManage) {
       return (
-        <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+        <div className={FIELD_VALUE_CLASS}>
           {team ? (
             <>
               <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0 dark:text-indigo-400" />
@@ -220,10 +219,7 @@ export default function AssigneeSection({
         <PopoverTrigger asChild>
           <button
             type="button"
-            className={cn(
-              SELECTOR_BASE_CLASS,
-              'hover:bg-muted/40 hover:border-border cursor-pointer group'
-            )}
+            className={FIELD_SELECT_CLASS}
             aria-label={`Change assignee (currently ${team?.name ?? assignee?.name ?? "unassigned"})`}
           >
             {team ? (

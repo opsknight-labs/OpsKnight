@@ -14,6 +14,8 @@ type IncidentDescriptionCardProps = {
   canManage: boolean;
   onUpdateDescription?: (newDescription: string) => Promise<void>;
   className?: string;
+  /** Rendered inside the card under the description, e.g. the incident context from the alert. */
+  footer?: ReactNode;
 };
 
 // Check if string is raw JSON
@@ -409,6 +411,7 @@ export function IncidentDescriptionCard({
   canManage,
   onUpdateDescription,
   className,
+  footer,
 }: IncidentDescriptionCardProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -589,6 +592,7 @@ export function IncidentDescriptionCard({
           </div>
         )}
       </div>
+      {footer && <div className="border-t border-border/70 px-3.5 py-3">{footer}</div>}
     </div>
   );
 }

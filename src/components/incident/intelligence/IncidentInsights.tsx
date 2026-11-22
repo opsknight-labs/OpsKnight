@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { ComponentProps } from 'react';
-import { BookOpen, Layers } from 'lucide-react';
+import { BookOpen, Layers, Sparkles } from 'lucide-react';
 import {
   buildStripChips,
   incidentInsightsForRequest,
@@ -27,13 +27,18 @@ import IntelligenceStrip from './IntelligenceStrip';
 
 type Presentation = 'desktop' | 'mobile';
 
-/** The strip under the command bar and the inspector it opens. */
+/**
+ * The strip under the command bar (or, as variant "card", the AI briefing card beside the description)
+ * and the inspector it opens.
+ */
 export default async function IncidentInsights({
   incidentId,
   presentation = 'desktop',
+  variant = 'strip',
 }: {
   incidentId: string;
   presentation?: Presentation;
+  variant?: 'strip' | 'card';
 }) {
   const insights = await incidentInsightsForRequest(incidentId);
   if (!insights) return null;
@@ -43,6 +48,100 @@ export default async function IncidentInsights({
   const routePrefix = presentation === 'mobile' ? '/m' : '';
   const assistant =
     presentation === 'mobile' ? insights.squire.mobileEnabled : insights.squire.enabled;
+  const inspector = (
+    <InsightsInspectorHost sections={sections} presentation={presentation}>
+      <InsightsSections
+        insights={insights}
+        sections={sections}
+        routePrefix={routePrefix}
+        assistantName={assistant ? insights.squire.name : undefined}
+        recurrence={actor && <IncidentRecurrence incidentId={incidentId} actor={actor} />}
+      />
+    </InsightsInspectorHost>
+  );
+
+  if (variant === 'card') {
+    const briefing = insights.proactive?.briefing ?? null;
+    const chips = buildStripChips(insights);
+    const freshness = showsFreshnessDot(insights.analysis) ? insights.analysis : null;
+    // Off: say so in one line instead of disappearing (only intelligence managers reach this, see the caller).
+    if (insights.mode === 'OFF')
+      return (
+        <>
+          <section
+            aria-labelledby="ai-briefing-heading"
+            className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-card px-3.5 py-2.5 text-card-foreground"
+          >
+            <h2
+              id="ai-briefing-heading"
+              className="flex items-center gap-2 text-xs font-semibold text-muted-foreground"
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              AI briefing is off for this service
+            </h2>
+            <Link
+              href="/settings/intelligence"
+              className="shrink-0 text-xs font-semibold text-primary underline-offset-2 hover:underline"
+            >
+              Turn on
+            </Link>
+          </section>
+          {inspector}
+        </>
+      );
+    // Nothing to say yet: keep the inspector reachable but show no card.
+    if (!briefing && chips.length === 0 && !freshness) return inspector;
+    const headline = briefing ? (briefing.ai?.headline ?? briefing.headline) : null;
+    const currentState = briefing?.ai?.currentState ?? null;
+    return (
+      <>
+        <section
+          aria-labelledby="ai-briefing-heading"
+          className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-2xs"
+        >
+          <header className="flex items-center justify-between gap-2 border-b border-border/70 bg-muted/20 px-3.5 py-1.5">
+            <h2
+              id="ai-briefing-heading"
+              className="flex items-center gap-2 text-xs font-semibold text-foreground"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              AI briefing
+            </h2>
+            {briefing && (
+              <span className="text-2xs text-muted-foreground">
+                {briefing.ai ? 'Written with AI' : 'Basic mode'}
+              </span>
+            )}
+          </header>
+          <div className="space-y-2.5 px-3.5 py-3">
+            {headline ? (
+              <div className="space-y-1">
+                <p className="text-sm font-medium leading-snug text-foreground">{headline}</p>
+                {currentState && (
+                  <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+                    {currentState}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No briefing yet. What the analysis found so far:
+              </p>
+            )}
+            <IntelligenceStrip
+              incidentId={incidentId}
+              chips={chips}
+              freshness={freshness}
+              touch={presentation === 'mobile'}
+              bare
+            />
+          </div>
+        </section>
+        {inspector}
+      </>
+    );
+  }
+
   return (
     <>
       {insights.mode !== 'OFF' && (
@@ -53,15 +152,7 @@ export default async function IncidentInsights({
           touch={presentation === 'mobile'}
         />
       )}
-      <InsightsInspectorHost sections={sections} presentation={presentation}>
-        <InsightsSections
-          insights={insights}
-          sections={sections}
-          routePrefix={routePrefix}
-          assistantName={assistant ? insights.squire.name : undefined}
-          recurrence={actor && <IncidentRecurrence incidentId={incidentId} actor={actor} />}
-        />
-      </InsightsInspectorHost>
+      {inspector}
     </>
   );
 }

@@ -418,10 +418,10 @@ export default async function IncidentDetailScreen({
     </div>
   ) : null;
 
-  const contextContent = responseTimeline ? (
-    <IncidentContextCard context={responseTimeline.context} />
+  const contextContent =
+    responseTimeline && responseTimeline.context.visibility !== 'HIDDEN' ? (
+    <IncidentContextCard context={responseTimeline.context} embedded />
   ) : null;
-  const hasContextCard = !!responseTimeline && responseTimeline.context.visibility !== 'HIDDEN';
 
   // Assignee and incident-role pickers offer only people who may be paged (no stakeholders).
   const pageableUsers = users.filter(candidate => isPageableRole(candidate.role));
@@ -793,7 +793,7 @@ export default async function IncidentDetailScreen({
       />
 
       {/* Intelligence: one row of chips, and the inspector they open. Silent when there is nothing to say. */}
-      {showInsightsInspector && (
+      {showInsightsInspector && presentation === 'mobile' && (
         <Suspense fallback={null}>
           <IncidentInsights incidentId={incident.id} presentation={presentation} />
         </Suspense>
@@ -856,6 +856,9 @@ export default async function IncidentDetailScreen({
             <section className="rounded-xl border border-border/80 bg-card p-3.5 text-card-foreground">
               <h2 className="text-xs font-semibold">Incident Description</h2>
               <p className="mt-1 text-xs text-muted-foreground">Alert details are restricted.</p>
+              {contextContent && (
+                <div className="mt-3 border-t border-border/70 pt-3">{contextContent}</div>
+              )}
             </section>
           ) : (
             <IncidentDescriptionCard
@@ -863,6 +866,7 @@ export default async function IncidentDetailScreen({
               description={incident.description}
               canManage={canManageIncident}
               onUpdateDescription={handleUpdateDescription}
+              footer={contextContent}
             />
           )}
 
@@ -902,18 +906,6 @@ export default async function IncidentDetailScreen({
 
         {presentation === 'mobile' ? (
           <>
-            {hasContextCard && (
-              <details className="group overflow-hidden rounded-xl border border-border bg-card">
-                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
-                  <span>Incident context</span>
-                  <ChevronDown
-                    className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
-                    aria-hidden="true"
-                  />
-                </summary>
-                <div className="border-t border-border p-2">{contextContent}</div>
-              </details>
-            )}
             <details className="group overflow-hidden rounded-xl border border-border bg-card lg:hidden">
               <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
                 <span>People, fields &amp; links</span>
@@ -929,7 +921,6 @@ export default async function IncidentDetailScreen({
               </div>
             </details>
             <aside className="hidden min-w-0 space-y-4 lg:block lg:col-span-4 lg:space-y-5 2xl:col-span-3">
-              {contextContent}
               {watchersContent}
               {customFieldsContent}
               {quickLinksContent}
@@ -937,7 +928,12 @@ export default async function IncidentDetailScreen({
           </>
         ) : (
           <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
-            {contextContent}
+            {/* AI briefing sits beside the description: what is going on, next to what the alert said. */}
+            {showInsightsInspector && (
+              <Suspense fallback={null}>
+                <IncidentInsights incidentId={incident.id} presentation={presentation} variant="card" />
+              </Suspense>
+            )}
             {watchersContent}
             {customFieldsContent}
             {quickLinksContent}
