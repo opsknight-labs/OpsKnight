@@ -97,4 +97,52 @@ describe('ServiceHealthV3 business layouts', () => {
     expect(within(list).getByText('Checkout')).toBeInTheDocument();
     expect(within(list).queryByText('Browsing')).not.toBeInTheDocument();
   });
+
+  it('re-opens a row that becomes affected on a live refresh, even after the visitor closed it', () => {
+    const props = {
+      services,
+      layout: 'BUSINESS_EXPANDABLE' as const,
+      timeZone: 'UTC',
+      groupByRegion: false,
+      showUptimeHistory: false,
+      showMetrics: false,
+    };
+    const { rerender } = render(<ServiceHealthV3 {...props} businessServices={businessServices} />);
+    const browsing = screen.getByRole('button', { name: /Browsing/ });
+    fireEvent.click(browsing);
+    fireEvent.click(browsing);
+    expect(browsing).toHaveAttribute('aria-expanded', 'false');
+    rerender(
+      <ServiceHealthV3
+        {...props}
+        businessServices={businessServices.map(item =>
+          item.id === 'browse'
+            ? { ...item, status: 'DEGRADED', statusSince: '2026-11-22T10:00:00.000Z' }
+            : item
+        )}
+      />
+    );
+    expect(screen.getByRole('button', { name: /Browsing/ })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    const since = document.querySelector('time[datetime="2026-11-22T10:00:00.000Z"]');
+    expect(since?.parentElement?.textContent).toMatch(/since/);
+  });
+
+  it('keeps members out of view when the page hides them', () => {
+    render(
+      <ServiceHealthV3
+        services={services}
+        businessServices={[{ ...businessServices[0], showMembers: false }]}
+        layout="BUSINESS_EXPANDABLE"
+        timeZone="UTC"
+        groupByRegion={false}
+        showUptimeHistory={false}
+        showMetrics={false}
+      />
+    );
+    expect(screen.queryByRole('button', { name: /Checkout/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Services in Checkout' })).not.toBeInTheDocument();
+  });
 });
