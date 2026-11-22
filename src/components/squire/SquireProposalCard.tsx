@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ExternalLink, X } from 'lucide-react';
+import { toneClasses } from '@/components/patterns/status-tone';
 
 export type SquireProposalView = {
   token: string;
@@ -33,6 +34,15 @@ const IMPACT_NOTICE: Record<NonNullable<SquireProposalView['impact']>, string> =
   PUBLIC: 'This is visible to anyone who can see the status page.',
   AUTOMATION: 'This starts automation. Its own approval steps still apply.',
 };
+
+// Bordered-card actions, right-aligned: 44 px on phones, compact in the desktop panel.
+const PRIMARY =
+  'inline-flex min-h-11 items-center gap-1 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:min-h-8';
+const SECONDARY =
+  'inline-flex min-h-11 items-center gap-1 rounded-md border border-border bg-card px-3 text-xs font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:min-h-8';
+
+// The confirm handler reads the clock at click time; the compiler's purity check cannot tell it from render.
+const nowMs = () => Date.now();
 
 type State =
   | { phase: 'idle' | 'running' | 'recovering' | 'dismissed' }
@@ -149,9 +159,9 @@ export default function SquireProposalCard({
       !reviewContextValid ||
       state.phase !== 'idle' ||
       !Number.isFinite(expiresAt) ||
-      expiresAt <= Date.now()
+      expiresAt <= nowMs()
     ) {
-      setClock(Date.now());
+      setClock(nowMs());
       return;
     }
     attempted.current = true;
@@ -197,19 +207,23 @@ export default function SquireProposalCard({
     <div
       role="group"
       aria-label={`Suggested action: ${proposal.title}`}
-      className="mt-2 rounded-md border border-border bg-card p-3 text-foreground"
+      className="space-y-2 rounded-xl border border-border bg-card p-3 text-foreground"
     >
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Suggested action{proposal.step ? ` · ${proposal.step}` : ''}
-      </p>
-      <p className="mt-1 font-medium">{proposal.title}</p>
-      <p className="mt-1 whitespace-pre-wrap break-words text-xs text-foreground/80">
-        {proposal.detail}
-      </p>
+      <div>
+        <p className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold">{proposal.title}</span>
+          <span className="shrink-0 text-2xs text-muted-foreground">
+            Suggested action{proposal.step ? ` · ${proposal.step}` : ''}
+          </span>
+        </p>
+        <p className="mt-0.5 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+          {proposal.detail}
+        </p>
+      </div>
       {proposal.preview && proposal.preview.length > 0 && (
         <dl
           aria-label="What will happen"
-          className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md bg-muted/50 p-2 text-xs"
+          className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg bg-muted/50 p-2 text-xs"
         >
           {proposal.preview.map(item => (
             <div key={item.label} className="contents">
@@ -220,25 +234,25 @@ export default function SquireProposalCard({
         </dl>
       )}
       {proposal.impact && (
-        <p className="mt-2 text-xs font-medium text-foreground">{IMPACT_NOTICE[proposal.impact]}</p>
+        <p className="text-xs font-medium text-foreground">{IMPACT_NOTICE[proposal.impact]}</p>
       )}
       {proposal.untrustedContext && (
-        <p className="mt-2 rounded-md border border-amber-300/60 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200">
+        <p className={`rounded-lg border p-2 text-xs ${toneClasses('elevated').soft}`}>
           Suggested after reading alerts, notes or other text written outside this conversation.
           Check that content yourself before confirming.
         </p>
       )}
       <Link
         href={`/incidents/${encodeURIComponent(proposal.incidentId)}`}
-        className="mt-2 inline-block text-xs font-medium text-primary underline underline-offset-2"
+        className="inline-block text-xs font-medium text-foreground underline underline-offset-2"
       >
         View incident
       </Link>
       {state.phase === 'done' || state.phase === 'failed' || state.phase === 'unknown' ? (
-        <div>
+        <div className="space-y-2">
           <p
             role="status"
-            className={`mt-2 text-xs font-medium ${state.phase === 'done' ? 'text-emerald-700 dark:text-emerald-400' : state.phase === 'unknown' ? 'text-amber-700 dark:text-amber-400' : 'text-destructive'}`}
+            className={`text-xs font-medium ${toneClasses(state.phase === 'done' ? 'ok' : state.phase === 'unknown' ? 'elevated' : 'critical').text}`}
           >
             {state.message}
           </p>
@@ -248,7 +262,7 @@ export default function SquireProposalCard({
           {state.phase !== 'done' && proposal.receiptId && (
             <button
               type="button"
-              className="mt-2 rounded-md border px-3 py-1.5 text-xs hover:bg-accent"
+              className={SECONDARY}
               onClick={() => {
                 setState({ phase: 'recovering' });
                 void checkResult();
@@ -259,46 +273,56 @@ export default function SquireProposalCard({
           )}
         </div>
       ) : proposal.kind === 'NAVIGATE' && proposal.href ? (
-        <div className="mt-2 flex items-center gap-2">
-          <Link
-            href={proposal.href}
-            className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
-          >
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-            Open
-          </Link>
+        <div className="flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={() => setState({ phase: 'dismissed' })}
-            className="rounded-md px-3 py-1.5 text-xs hover:bg-accent"
+            className={SECONDARY}
           >
             Dismiss
           </button>
+          <Link href={proposal.href} className={PRIMARY}>
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            Open
+          </Link>
         </div>
       ) : !reviewContextValid && state.phase === 'idle' ? (
-        <p role="status" className="mt-2 text-xs text-foreground/80">
+        <p role="status" className="text-xs text-muted-foreground">
           Return to the original conversation context before confirming this suggestion.
         </p>
       ) : expired && state.phase === 'idle' ? (
-        <div className="mt-2 space-y-2">
-          <p role="status" className="text-xs text-foreground/80">
+        <div className="space-y-2">
+          <p role="status" className="text-xs text-muted-foreground">
             This suggestion has expired. Ask Squire for a fresh one.
           </p>
           <button
             type="button"
             onClick={() => setState({ phase: 'dismissed' })}
-            className="rounded-md px-3 py-1.5 text-xs hover:bg-accent"
+            className={SECONDARY}
           >
             Dismiss
           </button>
         </div>
       ) : (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <time dateTime={proposal.expiresAt} className="mr-auto text-xs text-muted-foreground">
+            Confirm before{' '}
+            {new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </time>
+          <button
+            type="button"
+            onClick={() => setState({ phase: 'dismissed' })}
+            disabled={state.phase === 'running' || state.phase === 'recovering'}
+            className={SECONDARY}
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            Dismiss
+          </button>
           <button
             type="button"
             onClick={() => void confirm()}
             disabled={state.phase === 'running' || state.phase === 'recovering'}
-            className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+            className={PRIMARY}
           >
             <Check className="h-3.5 w-3.5" aria-hidden="true" />
             {state.phase === 'recovering'
@@ -307,19 +331,6 @@ export default function SquireProposalCard({
                 ? 'Working…'
                 : (proposal.confirmLabel ?? 'Confirm')}
           </button>
-          <button
-            type="button"
-            onClick={() => setState({ phase: 'dismissed' })}
-            disabled={state.phase === 'running' || state.phase === 'recovering'}
-            className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs hover:bg-accent"
-          >
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
-            Dismiss
-          </button>
-          <time dateTime={proposal.expiresAt} className="w-full text-xs text-muted-foreground">
-            Confirm before{' '}
-            {new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </time>
         </div>
       )}
     </div>

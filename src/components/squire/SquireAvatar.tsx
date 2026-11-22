@@ -64,10 +64,11 @@ export default function SquireAvatar({
 }: {
   kind: SquireAvatarKind;
   animated?: boolean;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
   state?: SquireState;
 }) {
-  const box = size === 'md' ? 'h-8 w-8' : kind === 'SQUIRE' ? 'h-7 w-7' : 'h-5 w-5';
+  const box =
+    size === 'md' ? 'h-8 w-8' : size === 'xs' ? 'h-6 w-6' : kind === 'SQUIRE' ? 'h-7 w-7' : 'h-5 w-5';
   if (kind === 'ICON') {
     return (
       <Sparkles

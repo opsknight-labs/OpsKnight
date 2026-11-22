@@ -299,7 +299,7 @@ describe('investigation steps in the dialog', () => {
     await waitFor(() => expect(progress).toHaveTextContent('Answer complete'));
     // Folded once the answer is in: the heading stays reachable, the step inside does not.
     expect(list).not.toHaveAttribute('open');
-    expect(screen.getByText(/Investigation · 1 step · 1 read/)).toBeInTheDocument();
+    expect(screen.getByText('Checked 1 source in 1 step')).toBeInTheDocument();
     const after = focusableWithin(dialog);
     expect(after).toContain(heading);
     expect(after).not.toContain(screen.getByLabelText('Step 1: Check recent changes (done)'));
@@ -329,7 +329,7 @@ describe('availability states', () => {
     render(<SquireLauncher name="Pip" aiEnabled />);
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
     expect(screen.queryByTestId('squire-availability')).toBeNull();
-    expect(screen.getByText('AI enabled')).toBeInTheDocument();
+    expect(screen.queryByText('Basic mode')).toBeNull();
   });
 
   it('shows a rate limit with a countdown from Retry-After, then allows a retry', async () => {
@@ -401,7 +401,7 @@ describe('availability states', () => {
     expect(notice()).toHaveTextContent('Daily AI budget reached');
     expect(notice()).toHaveTextContent('An administrator can raise it');
     expect(within(notice()).queryByRole('button')).toBeNull();
-    expect(screen.getByText('Budget reached · basic mode')).toBeInTheDocument();
+    expect(within(notice()).getByText('Budget reached')).toBeInTheDocument();
   });
 
   it('treats a quota without a limit (an older server) as the budget, and links admins to it', async () => {
@@ -435,7 +435,8 @@ describe('availability states', () => {
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
     await ask('help');
     await waitFor(() => expect(notice()).toHaveAttribute('data-state', 'basic'));
-    expect(notice()).toHaveTextContent('Basic mode · AI unavailable');
+    expect(within(notice()).getByText('Basic mode')).toBeInTheDocument();
+    expect(notice()).toHaveTextContent('AI unavailable');
 
     fetchMock.mockResolvedValueOnce(
       streamOf([

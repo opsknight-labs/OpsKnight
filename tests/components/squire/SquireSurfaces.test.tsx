@@ -65,6 +65,14 @@ const briefingFor = (incidentId: string) => ({
   ],
 });
 
+/** The display controls live in the header's More menu (a Radix menu opens on pointer down). */
+const openMore = () =>
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: 'mouse',
+  });
+
 const fetchMock = vi.fn();
 let desktop = true;
 const html = () => document.documentElement;
@@ -106,8 +114,13 @@ describe('docked display', () => {
     expect(html()).toHaveClass(DOCK_CLASS);
     expect(dialog).not.toHaveAttribute('aria-modal');
     // Docked has one fixed place: the floating-only controls step aside.
-    expect(screen.queryByRole('button', { name: 'Expand chat' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Move Pip to the/ })).not.toBeInTheDocument();
+    openMore();
+    expect(screen.getByRole('menuitem', { name: 'Float Pip over the page' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Expand chat' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Move Pip to the/ })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    // Escape inside the menu only closes the menu.
+    expect(screen.getByRole('dialog', { name: /Pip/ })).toBeInTheDocument();
     // A hand-off default is not a stored preference.
     expect(window.localStorage.getItem(DISPLAY_KEY)).toBeNull();
 
@@ -129,15 +142,15 @@ describe('docked display', () => {
     );
     expect(presentation(container)).toBe('panel');
     expect(html().style.getPropertyValue(DOCK_WIDTH_VARIABLE)).toBe('');
-    expect(screen.getByRole('button', { name: 'Expand chat' })).toBeInTheDocument();
+    openMore();
+    expect(screen.getByRole('menuitem', { name: 'Expand chat' })).toBeInTheDocument();
   });
 
   it('remembers an explicit choice, which then wins over the incident default', async () => {
     const first = render(<SquireLauncher name="Pip" />);
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
-    const toggle = screen.getByRole('button', { name: 'Dock Pip beside the page' });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(toggle);
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Dock Pip beside the page' }));
     expect(presentation(first.container)).toBe('docked');
     expect(window.localStorage.getItem(DISPLAY_KEY)).toBe('docked');
     expect(html().style.getPropertyValue(DOCK_WIDTH_VARIABLE)).toBe(DOCK_WIDTH);
@@ -148,7 +161,8 @@ describe('docked display', () => {
     const second = render(<SquireLauncher name="Pip" />);
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
     expect(presentation(second.container)).toBe('docked');
-    fireEvent.click(screen.getByRole('button', { name: 'Float Pip over the page' }));
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Float Pip over the page' }));
     expect(presentation(second.container)).toBe('panel');
     expect(window.localStorage.getItem(DISPLAY_KEY)).toBe('floating');
     second.unmount();
@@ -169,7 +183,9 @@ describe('docked display', () => {
     await screen.findByRole('dialog');
     expect(presentation(narrow.container)).toBe('panel');
     expect(html().style.getPropertyValue(DOCK_WIDTH_VARIABLE)).toBe('');
-    expect(screen.queryByRole('button', { name: /Dock Pip|Float Pip/ })).not.toBeInTheDocument();
+    openMore();
+    expect(screen.getByRole('menuitem', { name: 'Expand chat' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Dock Pip|Float Pip/ })).not.toBeInTheDocument();
     narrow.unmount();
 
     desktop = true;
@@ -178,7 +194,8 @@ describe('docked display', () => {
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
     expect(presentation(mobile.container)).toBe('fullscreen');
     expect(html().style.getPropertyValue(DOCK_WIDTH_VARIABLE)).toBe('');
-    expect(screen.queryByRole('button', { name: /Dock Pip|Float Pip/ })).not.toBeInTheDocument();
+    // Full screen has no display controls at all, so there is no More menu.
+    expect(screen.queryByRole('button', { name: 'More actions' })).not.toBeInTheDocument();
   });
 });
 
@@ -261,19 +278,20 @@ describe('hand-offs and deep links', () => {
 
 describe('context chip', () => {
   it.each([
-    ['/', 'General conversation'],
-    ['/incidents/inc_1', 'Discussing this incident'],
-    ['/services/svc_1', 'Discussing this service'],
-    ['/teams/t_1', 'Discussing this team'],
-    ['/runbooks/rb_1', 'Discussing this runbook'],
-    ['/schedules/s_1', 'Discussing this schedule'],
-    ['/m/services/svc_1', 'Discussing this service'],
-    ['/services/new', 'General conversation'],
-  ])('%s shows "%s"', (path, label) => {
+    ['/', 'General'],
+    ['/incidents/inc_1', '#INC_1'],
+    ['/services/svc_1', 'This service'],
+    ['/teams/t_1', 'This team'],
+    ['/runbooks/rb_1', 'This runbook'],
+    ['/schedules/s_1', 'This schedule'],
+    ['/m/services/svc_1', 'This service'],
+    ['/services/new', 'General'],
+  ])('%s shows "%s" in the header', (path, label) => {
     nav.pathname = path;
     render(<SquireLauncher name="Pip" />);
     fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
-    expect(screen.getByText(label)).toBeInTheDocument();
+    const header = screen.getByRole('dialog').querySelector('header')!;
+    expect(within(header).getByText(label)).toBeInTheDocument();
   });
 });
 
