@@ -5,7 +5,7 @@ import MobileTeamsClient from '@/components/mobile/MobileTeamsClient';
 import { appRoutes } from '@/lib/app-routes';
 import { incidentReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import { getRequestActorContext } from '@/lib/request-actor-context';
-import { requirePageAccess } from '@/lib/access/server';
+import { requirePageAccess, redirectWithoutIncidentRead } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +15,7 @@ export default async function MobileTeamsPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   await requirePageAccess('/m/teams');
+  await redirectWithoutIncidentRead();
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/teams'));
 

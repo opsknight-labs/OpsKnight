@@ -12,7 +12,7 @@ import IncidentAutomationCard from '@/components/automation/IncidentAutomationCa
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
-import { CAPABILITIES } from '@/lib/authorization';
+import { CAPABILITIES, isPageableRole } from '@/lib/authorization';
 import { resolveEffectivePolicyForRequest } from '@/lib/intelligence/settings/service';
 import { getAiSettings } from '@/lib/intelligence/ai/settings';
 import { loadIncidentStatusUpdate } from '@/lib/intelligence/helpers/status-draft-loader';
@@ -28,6 +28,7 @@ import {
 } from '@/lib/rbac';
 import IncidentRoles, { type IncidentRoleSlot } from '@/components/incident/detail/IncidentRoles';
 import IncidentImpacts from '@/components/incident/detail/IncidentImpacts';
+import NotifyStakeholdersButton from '@/components/incident/detail/NotifyStakeholdersButton';
 import { impactedBusinessServicesForIncident } from '@/lib/business-services/commands';
 import { INCIDENT_ROLES } from '@/lib/incidents/roles';
 import { loadIncidentRoleAccess } from '@/lib/incidents/role-access';
@@ -422,6 +423,9 @@ export default async function IncidentDetailScreen({
   ) : null;
   const hasContextCard = !!responseTimeline && responseTimeline.context.visibility !== 'HIDDEN';
 
+  // Assignee and incident-role pickers offer only people who may be paged (no stakeholders).
+  const pageableUsers = users.filter(candidate => isPageableRole(candidate.role));
+
   const postmortemContent = (
     <IncidentPostmortemTabContent
       incidentId={id}
@@ -505,7 +509,7 @@ export default async function IncidentDetailScreen({
   const rolesContent = (
     <IncidentRoles
       roles={roleSlots}
-      users={users}
+      users={pageableUsers}
       currentUserId={user.id}
       onSetRole={handleSetRole}
       presentation={presentation}
@@ -678,6 +682,12 @@ export default async function IncidentDetailScreen({
                   impacts={impactedBusinessServices}
                   canEdit={canManageIncident}
                 />
+                {(canManageIncident || canAddIncidentNote) && (
+                  <NotifyStakeholdersButton
+                    incidentId={incident.id}
+                    businessServices={impactedBusinessServices.filter(impact => !impact.excluded)}
+                  />
+                )}
               </div>
             </div>
             <div className="mt-3.5 border-t border-border/70 pt-3">{rolesContent}</div>
@@ -786,7 +796,7 @@ export default async function IncidentDetailScreen({
           <div className="border-t border-border p-2">
             <IncidentHeader
               incident={incident}
-              users={users}
+              users={pageableUsers}
               teams={teams}
               canManage={canManageIncident}
               routePrefix={routePrefix}
@@ -796,7 +806,7 @@ export default async function IncidentDetailScreen({
       ) : (
         <IncidentHeader
           incident={incident}
-          users={users}
+          users={pageableUsers}
           teams={teams}
           canManage={canManageIncident}
           routePrefix={routePrefix}

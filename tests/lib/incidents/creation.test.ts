@@ -242,7 +242,7 @@ describe('incident creation domain engine', () => {
   });
 
   it('validates assignment references only when a new incident will actually be created', async () => {
-    tx.user.findUnique.mockResolvedValue({ name: 'On Call', status: 'ACTIVE' });
+    tx.user.findUnique.mockResolvedValue({ name: 'On Call', status: 'ACTIVE', role: 'USER' });
 
     await applyIncidentCreation(asTransactionClient(tx), {
       ...baseInput(),
@@ -251,7 +251,7 @@ describe('incident creation domain engine', () => {
 
     expect(tx.user.findUnique).toHaveBeenCalledWith({
       where: { id: 'user-2' },
-      select: { name: true, status: true },
+      select: { name: true, status: true, role: true },
     });
     expect(tx.incident.create).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPublicBusinessServices,
+  expandAffectedServiceIds,
   mergeHistorySegments,
 } from '@/lib/status-pages/business-services';
+import { activeStatusOverride } from '@/lib/status-pages/status-override';
+import { classifyStatusPageChange } from '@/lib/status-pages/publication-policy';
 import type { PublicStatusService } from '@/lib/status-pages/public-contract';
 import { publicStatusPageSnapshotSchema } from '@/lib/status-pages/public-contract-schema';
 
@@ -135,6 +138,25 @@ describe('buildPublicBusinessServices', () => {
     expect(group.statusSince).toBe('2026-11-20T00:00:00.000Z');
   });
 
+  it('shows an admin override instead of the computed status, without a since line', () => {
+    const [group] = buildPublicBusinessServices(
+      [
+        {
+          id: 'b1',
+          name: 'Checkout',
+          memberServiceIds: ['api', 'db'],
+          statusOverride: 'MAINTENANCE',
+          showMembers: false,
+        },
+      ],
+      services
+    );
+    expect(group).toMatchObject({ status: 'MAINTENANCE', showMembers: false });
+    expect(group.statusSince).toBeUndefined();
+    // Members are still listed so incident cards and history keep working.
+    expect(group.memberServiceIds).toEqual(['api', 'db']);
+  });
+
   it('drops a business service with no published member instead of calling it healthy', () => {
     expect(
       buildPublicBusinessServices([{ id: 'b3', name: 'Ghost', memberServiceIds: ['x'] }], services)
@@ -195,5 +217,78 @@ describe('public contract', () => {
         page: { ...grouped.page, serviceLayout: 'TREE' },
       }).success
     ).toBe(false);
+  });
+});
+
+describe('activeStatusOverride', () => {
+  const now = new Date('2026-11-22T12:00:00Z');
+  it('applies a known status until it lapses', () => {
+    expect(
+      activeStatusOverride({ statusOverride: 'MAJOR_OUTAGE', statusOverrideUntil: null }, now)
+    ).toBe('MAJOR_OUTAGE');
+    expect(
+      activeStatusOverride(
+        { statusOverride: 'MAJOR_OUTAGE', statusOverrideUntil: '2026-11-22T13:00:00Z' },
+        now
+      )
+    ).toBe('MAJOR_OUTAGE');
+    expect(
+      activeStatusOverride(
+        { statusOverride: 'MAJOR_OUTAGE', statusOverrideUntil: new Date('2026-11-22T12:00:00Z') },
+        now
+      )
+    ).toBeNull();
+  });
+  it('ignores unset, UNKNOWN and unrecognised values', () => {
+    expect(activeStatusOverride({ statusOverride: null, statusOverrideUntil: null }, now)).toBeNull();
+    expect(
+      activeStatusOverride({ statusOverride: 'UNKNOWN', statusOverrideUntil: null }, now)
+    ).toBeNull();
+    expect(activeStatusOverride({ statusOverride: 'BROKEN', statusOverrideUntil: null }, now)).toBeNull();
+  });
+});
+
+describe('expandAffectedServiceIds', () => {
+  const members = new Map([
+    ['checkout', ['api', 'db']],
+    ['empty', []],
+  ]);
+  it('adds the members of named business services, once each', () => {
+    expect(expandAffectedServiceIds(['db', 'cdn'], ['checkout'], members)).toEqual([
+      'db',
+      'cdn',
+      'api',
+    ]);
+  });
+  it('keeps an unscoped update unscoped and never widens a memberless one', () => {
+    expect(expandAffectedServiceIds(null, null, members)).toBeNull();
+    expect(expandAffectedServiceIds([], [], members)).toBeNull();
+    expect(expandAffectedServiceIds(null, ['empty'], members)).toEqual([]);
+    expect(expandAffectedServiceIds(null, ['unknown'], members)).toEqual([]);
+  });
+});
+
+describe('classifyStatusPageChange business-service presentation', () => {
+  const current = {
+    businessServiceMappings: [
+      { businessServiceId: 'b1', displayName: null, showOnPage: true, showMembers: true },
+    ],
+  };
+  it('treats hiding a business service or its members as tightening', () => {
+    const result = classifyStatusPageChange({
+      current,
+      patch: {},
+      businessServiceConfigs: { b1: { showMembers: false } },
+    });
+    expect(result.classes).toContain('PRIVACY_TIGHTENING');
+  });
+  it('treats a rename as presentation and an unchanged flag as no change', () => {
+    const rename = classifyStatusPageChange({
+      current,
+      patch: {},
+      businessServiceConfigs: { b1: { displayName: 'Payments', showOnPage: true } },
+    });
+    expect(rename.classes).toEqual(['PRESENTATION']);
+    expect(rename.changedFields).toContain('businessServiceConfigs');
   });
 });

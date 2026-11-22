@@ -272,6 +272,7 @@ export function UserActionsMenu({
                   { role: 'RESPONDER', label: 'Responder' },
                   { role: 'AUDITOR', label: 'Auditor' },
                   { role: 'USER', label: 'User' },
+                  { role: 'STAKEHOLDER', label: 'Stakeholder' },
                 ].map(r => (
                   <DropdownMenuItem
                     key={r.role}

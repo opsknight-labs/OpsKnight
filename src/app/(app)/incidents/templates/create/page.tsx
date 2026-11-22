@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { PAGEABLE_USER_WHERE } from '@/lib/authorization';
 import Link from 'next/link';
 import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
@@ -25,7 +26,7 @@ export default async function CreateTemplatePage({
   const [services, users] = await Promise.all([
     prisma.service.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     prisma.user.findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', ...PAGEABLE_USER_WHERE },
       orderBy: { name: 'asc' },
       select: { id: true, name: true },
     }),

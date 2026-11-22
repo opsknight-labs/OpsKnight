@@ -13,7 +13,7 @@ import { serializeJiraIssueReference } from '@/lib/jira-references';
 import { recurredActionItemIds } from '@/lib/intelligence/helpers/action-item-suggest-loader';
 import { formatActionItemDueDate } from '@/lib/action-items';
 import { parsePageParam, calculatePaginationBounds, parseEnumValue } from '@/lib/pagination-parser';
-import { requirePageAccess } from '@/lib/access/server';
+import { requirePageAccess, redirectWithoutIncidentRead } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +33,7 @@ export default async function ActionItemsPage({
   }>;
 }) {
   await requirePageAccess('/action-items');
+  await redirectWithoutIncidentRead();
   const session = await getServerSession(await getAuthOptions());
   if (!session) redirect('/login');
 

@@ -157,6 +157,7 @@ export default function UserFilters({ teams }: UserFiltersProps) {
                 <SelectItem value="RESPONDER">Responder</SelectItem>
                 <SelectItem value="AUDITOR">Auditor</SelectItem>
                 <SelectItem value="USER">User</SelectItem>
+                <SelectItem value="STAKEHOLDER">Stakeholder</SelectItem>
               </SelectContent>
             </Select>
           </FilterField>

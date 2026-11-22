@@ -194,6 +194,9 @@ export default function UserEditModal({
                   <SelectItem value="RESPONDER">Responder (Incident Access)</SelectItem>
                   <SelectItem value="USER">User (Member View)</SelectItem>
                   <SelectItem value="AUDITOR">Auditor (Read-Only)</SelectItem>
+                  <SelectItem value="STAKEHOLDER">
+                    Stakeholder (Business Impact, Never Paged)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

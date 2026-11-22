@@ -2501,7 +2501,7 @@
           },
           "role": {
             "type": "string",
-            "enum": ["ADMIN", "RESPONDER", "AUDITOR", "USER"]
+            "enum": ["ADMIN", "RESPONDER", "AUDITOR", "USER", "STAKEHOLDER"]
           },
           "roleSource": {
             "type": "string",
@@ -4477,19 +4477,219 @@
                 "name": {
                   "type": "string"
                 },
+                "displayName": {
+                  "type": ["string", "null"]
+                },
                 "order": {
                   "type": "integer"
                 },
                 "showOnPage": {
                   "type": "boolean"
+                },
+                "showMembers": {
+                  "type": "boolean"
+                },
+                "statusOverride": {
+                  "type": ["string", "null"],
+                  "enum": [
+                    "OPERATIONAL",
+                    "DEGRADED",
+                    "PARTIAL_OUTAGE",
+                    "MAJOR_OUTAGE",
+                    "MAINTENANCE",
+                    null
+                  ]
+                },
+                "statusOverrideUntil": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
                 }
               },
-              "required": ["businessServiceId", "name", "order", "showOnPage"],
+              "required": [
+                "businessServiceId",
+                "name",
+                "displayName",
+                "order",
+                "showOnPage",
+                "showMembers",
+                "statusOverride",
+                "statusOverrideUntil"
+              ],
               "additionalProperties": false
             }
           }
         },
         "required": ["statusPageId", "serviceLayout", "businessServices"],
+        "additionalProperties": false
+      },
+      "BusinessServiceSupporting": {
+        "type": "object",
+        "properties": {
+          "businessServiceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "supportingBusinessServiceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "maxItems": 100
+          }
+        },
+        "required": ["businessServiceId", "supportingBusinessServiceIds"],
+        "additionalProperties": false
+      },
+      "BusinessServiceImportResult": {
+        "type": "object",
+        "properties": {
+          "applied": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "create": {
+                "type": "integer"
+              },
+              "update": {
+                "type": "integer"
+              },
+              "unchanged": {
+                "type": "integer"
+              },
+              "invalid": {
+                "type": "integer"
+              }
+            },
+            "required": ["create", "update", "unchanged", "invalid"],
+            "additionalProperties": false
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "action": {
+                  "type": "string",
+                  "enum": ["create", "update", "unchanged"]
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "membersAdded": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "membersRemoved": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["line", "name", "action", "fields", "membersAdded", "membersRemoved"],
+              "additionalProperties": false
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": ["line", "message"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["applied", "summary", "changes", "issues"],
+        "additionalProperties": false
+      },
+      "StatusPageBusinessServiceOverride": {
+        "type": "object",
+        "properties": {
+          "statusPageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "businessServiceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": ["string", "null"],
+            "enum": [
+              "OPERATIONAL",
+              "DEGRADED",
+              "PARTIAL_OUTAGE",
+              "MAJOR_OUTAGE",
+              "MAINTENANCE",
+              null
+            ]
+          },
+          "until": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        },
+        "required": ["statusPageId", "businessServiceId", "status", "until"],
+        "additionalProperties": false
+      },
+      "StakeholderNotification": {
+        "type": "object",
+        "properties": {
+          "incidentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "businessServices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": ["id", "name"],
+              "additionalProperties": false
+            }
+          },
+          "recipientCount": {
+            "type": "integer"
+          },
+          "emailCount": {
+            "type": "integer"
+          }
+        },
+        "required": ["incidentId", "businessServices", "recipientCount", "emailCount"],
         "additionalProperties": false
       },
       "StatusPagePublicationState": {
@@ -28377,7 +28577,7 @@
                   },
                   "role": {
                     "type": "string",
-                    "enum": ["ADMIN", "RESPONDER", "AUDITOR", "USER"]
+                    "enum": ["ADMIN", "RESPONDER", "AUDITOR", "USER", "STAKEHOLDER"]
                   }
                 },
                 "required": [
@@ -29829,7 +30029,7 @@
                       },
                       "role": {
                         "type": "string",
-                        "enum": ["ADMIN", "RESPONDER", "AUDITOR", "USER"]
+                        "enum": ["ADMIN", "RESPONDER", "AUDITOR", "USER", "STAKEHOLDER"]
                       }
                     },
                     "required": ["operation", "role"]
@@ -36179,7 +36379,7 @@
                   },
                   "businessServiceConfigs": {
                     "type": "object",
-                    "description": "Optional, keyed by business service id: displayName (null clears) and showOnPage. Absent fields stay as they are.",
+                    "description": "Optional, keyed by business service id: displayName (null clears), showOnPage and showMembers. Absent fields stay as they are.",
                     "additionalProperties": {
                       "type": "object",
                       "properties": {
@@ -36188,6 +36388,9 @@
                           "maxLength": 200
                         },
                         "showOnPage": {
+                          "type": "boolean"
+                        },
+                        "showMembers": {
                           "type": "boolean"
                         }
                       },
@@ -36298,6 +36501,536 @@
         "x-required-scope": "status-pages:write",
         "x-idempotency": "required",
         "x-concurrency": "etag"
+      }
+    },
+    "/business-services/{id}/supporting": {
+      "put": {
+        "tags": ["Services"],
+        "summary": "Set the business services this one depends on",
+        "description": "Replaces the set. Responder or Admin. Rejected with VALIDATION_FAILED when an added dependency would create a cycle.\n\nRequires API scope `services:write` (Services manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "businessServiceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "maxItems": 100
+                  }
+                },
+                "required": ["businessServiceIds"],
+                "additionalProperties": false
+              },
+              "example": {
+                "businessServiceIds": ["bsv_234567"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BusinessServiceSupporting"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "setSupportingBusinessServices",
+        "x-required-scope": "services:write",
+        "x-idempotency": "supported",
+        "x-concurrency": "none"
+      }
+    },
+    "/business-services/import": {
+      "post": {
+        "tags": ["Services"],
+        "summary": "Import business services from CSV, YAML or a Backstage catalog",
+        "description": "At most 1000 business services and 2 MB. Pass ?dryRun=true for the diff only. A real run applies every row in one transaction, or nothing when any row has an issue. Rows match existing business services by name; blank fields are left unchanged.\n\nRequires API scope `services:write` (Services manage).",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "format": {
+                    "type": "string",
+                    "enum": ["csv", "yaml", "backstage"]
+                  },
+                  "content": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2097152
+                  }
+                },
+                "required": ["format", "content"],
+                "additionalProperties": false
+              },
+              "example": {
+                "format": "csv",
+                "content": "name,criticality,owner_team,members\nCheckout,TIER_0,Payments,checkout-api;payments-api"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BusinessServiceImportResult"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "importBusinessServices",
+        "x-required-scope": "services:write",
+        "x-idempotency": "supported",
+        "x-concurrency": "none"
+      }
+    },
+    "/status-pages/{id}/business-services/{businessServiceId}/override": {
+      "put": {
+        "tags": ["Status Pages"],
+        "summary": "Pin or clear a business service status on a status page",
+        "description": "A component-group override shown instead of the computed status until `until` (default and maximum 30 days ahead). `status: null` clears it. Applies immediately and is audited.\n\nRequires API scope `status-pages:write` (Status pages manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "businessServiceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": ["string", "null"],
+                    "enum": [
+                      "OPERATIONAL",
+                      "DEGRADED",
+                      "PARTIAL_OUTAGE",
+                      "MAJOR_OUTAGE",
+                      "MAINTENANCE",
+                      null
+                    ]
+                  },
+                  "until": {
+                    "type": ["string", "null"],
+                    "format": "date-time"
+                  }
+                },
+                "required": ["status"],
+                "additionalProperties": false
+              },
+              "example": {
+                "status": "MAINTENANCE",
+                "until": "2026-11-23T06:00:00Z"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StatusPageBusinessServiceOverride"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "setStatusPageBusinessServiceOverride",
+        "x-required-scope": "status-pages:write",
+        "x-idempotency": "supported",
+        "x-concurrency": "none"
+      }
+    },
+    "/incidents/{id}/stakeholder-notify": {
+      "post": {
+        "tags": ["Incidents"],
+        "summary": "Send a stakeholder update for an incident",
+        "description": "Email and in-app update to followers and subscribed teams of the business services the incident impacts. Never pages. At most 3 per incident every 10 minutes. Requires note access to the incident.\n\nRequires API scope `incidents:write` (Incidents manage).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "type": "string",
+                    "enum": ["investigating", "identified", "monitoring", "resolved"]
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "businessServiceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "maxItems": 100
+                  }
+                },
+                "required": ["phase", "message"],
+                "additionalProperties": false
+              },
+              "example": {
+                "phase": "identified",
+                "message": "We found the cause and are rolling back. Next update in 30 minutes."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StakeholderNotification"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "notifyIncidentStakeholders",
+        "x-required-scope": "incidents:write",
+        "x-idempotency": "supported",
+        "x-concurrency": "none"
       }
     },
     "/business-services/{id}/incidents": {

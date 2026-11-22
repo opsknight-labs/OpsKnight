@@ -86,12 +86,15 @@ export interface NavItemConfig {
   shortcut?: string;
   badgeKey?: 'incidents';
   releaseStage?: 'Beta';
+  /** The page is built around incidents and sends people without incident read elsewhere. */
+  needsIncidentRead?: true;
 }
 
 export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
   // ── MAIN ──────────────────────────────────────────────────────────────────
   {
     href: '/',
+    needsIncidentRead: true,
     label: 'Dashboard',
     icon: LayoutDashboard,
     section: 'MAIN',
@@ -105,6 +108,7 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
   },
   {
     href: '/services',
+    needsIncidentRead: true,
     label: 'Services',
     icon: Server,
     section: 'MAIN',
@@ -160,6 +164,7 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
   },
   {
     href: '/action-items',
+    needsIncidentRead: true,
     label: 'Action Items',
     icon: ListTodo,
     section: 'RELIABILITY',
@@ -180,6 +185,7 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
   },
   {
     href: '/teams',
+    needsIncidentRead: true,
     label: 'Teams',
     icon: Users,
     section: 'ON_CALL',
@@ -231,7 +237,11 @@ export function getAuthorizedNavItems(
   if (!access) return [];
   const capabilities =
     typeof access === 'string' ? (isAppRole(access) ? getRoleCapabilities(access) : []) : access;
-  return NAVIGATION_ITEMS.filter(item => canAccessPath(item.href, capabilities));
+  // Stakeholders (no incident read) would only be redirected from these, so they are hidden.
+  const readsIncidents = canAccessPath('/incidents', capabilities);
+  return NAVIGATION_ITEMS.filter(
+    item => canAccessPath(item.href, capabilities) && (readsIncidents || !item.needsIncidentRead)
+  );
 }
 
 /**

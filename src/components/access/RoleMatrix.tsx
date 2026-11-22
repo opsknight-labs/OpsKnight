@@ -15,7 +15,7 @@ import {
 } from '@/lib/access/catalog';
 import { cn } from '@/lib/utils';
 
-const ROLES: AppRole[] = ['USER', 'AUDITOR', 'RESPONDER', 'ADMIN'];
+const ROLES: AppRole[] = ['STAKEHOLDER', 'USER', 'AUDITOR', 'RESPONDER', 'ADMIN'];
 
 /** Capabilities shown in the matrix, grouped. Purely personal ones are hidden as noise. */
 const HIDDEN: ReadonlySet<Capability> = new Set(['user.notification_preferences'] as Capability[]);

@@ -1,6 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { z } from 'zod/v3';
+import { ASSIGNABLE_ROLES } from '@/lib/authorization';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
@@ -25,7 +26,7 @@ export const invitationCreateInput = invitationReviewInput
       .email()
       .max(320)
       .transform(value => value.toLowerCase()),
-    role: z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']),
+    role: z.enum(ASSIGNABLE_ROLES),
   })
   .strict();
 export const invitationRenewInput = invitationReviewInput

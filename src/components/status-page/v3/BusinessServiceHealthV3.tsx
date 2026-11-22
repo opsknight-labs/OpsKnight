@@ -7,6 +7,7 @@ import type {
 } from '@/lib/status-pages/public-contract';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
+import { formatDateTime } from '@/lib/timezone';
 import ServiceHistoryV3 from './ServiceHistoryV3';
 
 type RowDisplay = {
@@ -124,16 +125,18 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
   const presentation = statusPresentation(item.status);
   const affected = item.status !== 'OPERATIONAL';
   const row = asHistoryRow(item);
+  // Members stay out of view when the page shows only the business service.
+  const canExpand = expandable && item.showMembers !== false;
   return (
     <div
       role="listitem"
       className={`status-v3-service status-service-card status-v3-business${affected ? ' status-v3-service--affected' : ''}`}
       data-status={presentation.token}
-      data-expanded={expandable ? String(open) : undefined}
+      data-expanded={canExpand ? String(open) : undefined}
     >
       <div className="status-v3-service__head">
         <div className="status-v3-service__lead">
-          {expandable ? (
+          {canExpand ? (
             <button
               type="button"
               className="status-v3-business__toggle"
@@ -186,6 +189,14 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
       </div>
 
       {item.description && <p className="status-v3-service__desc">{item.description}</p>}
+      {affected && item.statusSince && (
+        <p className="status-v3-service__desc" suppressHydrationWarning>
+          {presentation.label} since{' '}
+          <time dateTime={item.statusSince}>
+            {formatDateTime(item.statusSince, display.timeZone, { format: 'short', hour12: true })}
+          </time>
+        </p>
+      )}
 
       {((display.showUptimeHistory && item.history) || (display.showMetrics && item.uptime)) && (
         <ServiceHistoryV3
@@ -198,7 +209,7 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
         />
       )}
 
-      {expandable && (
+      {canExpand && (
         <div
           id={panelId}
           className="status-v3-business__members"

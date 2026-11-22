@@ -75,6 +75,21 @@ async function affectedServicesBelongToPage(
   return count === serviceIds.length;
 }
 
+async function affectedBusinessServicesBelongToPage(
+  statusPageId: string,
+  businessServiceIds: string[] | null,
+  tx: Pick<typeof prisma, 'statusPageBusinessService'> = prisma
+) {
+  if (!businessServiceIds?.length) return true;
+  const count = await tx.statusPageBusinessService.count({
+    where: { statusPageId, businessServiceId: { in: businessServiceIds } },
+  });
+  return count === businessServiceIds.length;
+}
+
+const jsonIds = (ids: string[] | null) =>
+  ids === null ? Prisma.JsonNull : (ids as Prisma.InputJsonValue);
+
 function effectiveNotificationTiming(
   notificationTiming: AnnouncementNotificationTiming | undefined,
   notifySubscribers?: boolean
@@ -116,11 +131,18 @@ export async function POST(req: NextRequest) {
       publishOption,
       notificationTiming,
       incidentId,
+      affectedBusinessServiceIds,
     } = parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
+    const normalizedBusinessServiceIds = normalizeAffectedServiceIds(affectedBusinessServiceIds);
 
     if (!(await affectedServicesBelongToPage(statusPageId, normalizedAffectedServiceIds))) {
       return jsonError('Affected services must belong to this status page.', 400);
+    }
+    if (
+      !(await affectedBusinessServicesBelongToPage(statusPageId, normalizedBusinessServiceIds))
+    ) {
+      return jsonError('Affected business services must be on this status page.', 400);
     }
     // Private incidents never reach a public page (status drafts never offer them either).
     if (
@@ -167,10 +189,8 @@ export async function POST(req: NextRequest) {
           notificationTiming: timing,
           isActive: active,
           incidentId: incidentId ?? null,
-          affectedServiceIds:
-            normalizedAffectedServiceIds === null
-              ? Prisma.JsonNull
-              : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
+          affectedServiceIds: jsonIds(normalizedAffectedServiceIds),
+          affectedBusinessServiceIds: jsonIds(normalizedBusinessServiceIds),
         },
       });
       const generation =
@@ -239,8 +259,10 @@ export async function PATCH(req: NextRequest) {
       publishOption,
       publishAt,
       notificationTiming,
+      affectedBusinessServiceIds,
     } = parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
+    const normalizedBusinessServiceIds = normalizeAffectedServiceIds(affectedBusinessServiceIds);
 
     const result = await prisma.$transaction(async tx => {
       await lockAnnouncementMutation(tx, statusPageId, id);
@@ -263,6 +285,16 @@ export async function PATCH(req: NextRequest) {
         !(await affectedServicesBelongToPage(statusPageId, normalizedAffectedServiceIds, tx))
       ) {
         throw new AnnouncementInputError('Affected services must belong to this status page.');
+      }
+      if (
+        affectedBusinessServiceIds !== undefined &&
+        !(await affectedBusinessServicesBelongToPage(
+          statusPageId,
+          normalizedBusinessServiceIds,
+          tx
+        ))
+      ) {
+        throw new AnnouncementInputError('Affected business services must be on this status page.');
       }
 
       const effectiveStart = startDate ? parseDate(startDate, 'startDate') : existing.startDate;
@@ -319,7 +351,8 @@ export async function PATCH(req: NextRequest) {
       const startAffectsNotification = startDate !== undefined && timing === 'AT_START';
       const publishAffectsNotification =
         (publishAt !== undefined || publishOption !== undefined) && timing === 'ON_PUBLISH';
-      const eligibilityChanged = affectedServiceIds !== undefined;
+      const eligibilityChanged =
+        affectedServiceIds !== undefined || affectedBusinessServiceIds !== undefined;
       const contentMutation =
         title !== undefined ||
         message !== undefined ||
@@ -361,12 +394,10 @@ export async function PATCH(req: NextRequest) {
           ...(nextTimeMode !== undefined ? { timeMode: nextTimeMode } : {}),
           ...(nextAllDay !== undefined ? { allDay: nextAllDay } : {}),
           ...(affectedServiceIds !== undefined
-            ? {
-                affectedServiceIds:
-                  normalizedAffectedServiceIds === null
-                    ? Prisma.JsonNull
-                    : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
-              }
+            ? { affectedServiceIds: jsonIds(normalizedAffectedServiceIds) }
+            : {}),
+          ...(affectedBusinessServiceIds !== undefined
+            ? { affectedBusinessServiceIds: jsonIds(normalizedBusinessServiceIds) }
             : {}),
         },
       });

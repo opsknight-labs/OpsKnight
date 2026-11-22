@@ -7,6 +7,7 @@ import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
+import { isPageableRole } from '@/lib/authorization';
 import {
   executeIncidentLifecycleBatch,
   executeIncidentLifecycleTargetBatch,
@@ -143,6 +144,9 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
     const assignee = await prisma.user.findFirst({ where: { id: assigneeId, status: 'ACTIVE' } });
     if (!assignee) {
       return { success: false, error: 'Assignee not found' };
+    }
+    if (!isPageableRole(assignee.role)) {
+      return { success: false, error: 'Stakeholders cannot be assigned to incidents.' };
     }
 
     const user = await getCurrentUser();

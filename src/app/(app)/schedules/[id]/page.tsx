@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
+import { PAGEABLE_USER_WHERE } from '@/lib/authorization';
 import { assertCanViewSchedule, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { enabledOpsInsightAreas } from '@/lib/intelligence/ops-insights/contract';
 import { getIntelligenceSettings } from '@/lib/intelligence/settings/service';
@@ -149,7 +150,7 @@ export default async function ScheduleDetailPage({
   ] = await Promise.all([
     canMutate
       ? prisma.user.findMany({
-          where: { status: 'ACTIVE' },
+          where: { status: 'ACTIVE', ...PAGEABLE_USER_WHERE },
           select: {
             id: true,
             name: true,

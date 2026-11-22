@@ -62,7 +62,7 @@ export type StatusPageConfigurationChange = {
   >;
   /** Business services to show, in display order; their member services are mapped too. */
   businessServiceIds?: string[];
-  /** Display name and visibility per business service (requires businessServiceIds). */
+  /** Per-business-service presentation; only the fields given change. */
   businessServiceConfigs?: StatusPageBusinessServiceConfigs;
   expectedUpdatedAt?: string;
   expectedRevision?: number;
@@ -180,28 +180,36 @@ export async function applyStatusPageConfigurationChange(
           select: { serviceId: true, showOnPage: true, displayName: true, order: true },
         });
 
-  const businessServiceMappings =
-    businessServiceIds === undefined
+  const currentBusinessServiceRows =
+    businessServiceIds === undefined && businessServiceConfigs === undefined
       ? undefined
       : await prisma.statusPageBusinessService.findMany({
           where: { statusPageId: pageId },
           orderBy: { order: 'asc' },
-          select: { businessServiceId: true, displayName: true, showOnPage: true },
+          select: {
+            businessServiceId: true,
+            displayName: true,
+            showOnPage: true,
+            showMembers: true,
+          },
         });
-  const currentBusinessServiceIds = businessServiceMappings?.map(row => row.businessServiceId);
+  const currentBusinessServiceIds =
+    businessServiceIds === undefined
+      ? undefined
+      : currentBusinessServiceRows?.map(row => row.businessServiceId);
 
   const classification = classifyStatusPageChange({
     current: {
       ...(current as unknown as StatusPageClassifierState),
       serviceMappings,
       businessServiceIds: currentBusinessServiceIds,
-      businessServiceMappings,
+      businessServiceMappings: currentBusinessServiceRows,
     },
     patch,
     serviceIds,
     serviceConfigs,
     businessServiceIds,
-    businessServiceConfigs: businessServiceIds === undefined ? undefined : businessServiceConfigs,
+    businessServiceConfigs,
   });
 
   // A save that changes nothing must not disturb a working page.
@@ -316,12 +324,14 @@ export async function applyStatusPageConfigurationChange(
         });
         for (const [order, businessServiceId] of businessServiceIds.entries()) {
           const config = Reflect.get(businessServiceConfigs ?? {}, businessServiceId) as
-            { displayName?: string | null; showOnPage?: boolean } | undefined;
+            | { displayName?: string | null; showOnPage?: boolean; showMembers?: boolean }
+            | undefined;
           const presentation = {
             ...(config?.displayName !== undefined
               ? { displayName: config.displayName?.trim() || null }
               : {}),
             ...(config?.showOnPage !== undefined ? { showOnPage: config.showOnPage } : {}),
+            ...(config?.showMembers !== undefined ? { showMembers: config.showMembers } : {}),
           };
           await tx.statusPageBusinessService.upsert({
             where: { statusPageId_businessServiceId: { statusPageId: pageId, businessServiceId } },
@@ -345,6 +355,23 @@ export async function applyStatusPageConfigurationChange(
               viaBusinessService: true,
             })),
             skipDuplicates: true,
+          });
+      }
+      // Presentation-only saves (no mapping rewrite) update the existing rows in place.
+      for (const [businessServiceId, config] of Object.entries(
+        businessServiceIds === undefined ? (businessServiceConfigs ?? {}) : {}
+      )) {
+        const data = {
+          ...(config.displayName !== undefined
+            ? { displayName: config.displayName?.trim() || null }
+            : {}),
+          ...(config.showOnPage !== undefined ? { showOnPage: config.showOnPage } : {}),
+          ...(config.showMembers !== undefined ? { showMembers: config.showMembers } : {}),
+        };
+        if (Object.keys(data).length)
+          await tx.statusPageBusinessService.updateMany({
+            where: { statusPageId: pageId, businessServiceId },
+            data,
           });
       }
 
@@ -403,7 +430,8 @@ export async function applyStatusPageConfigurationChange(
             failClosed: classification.failClosed,
             section: section ?? null,
             serviceMappingsChanged: serviceIds !== undefined,
-            businessServiceMappingsChanged: businessServiceIds !== undefined,
+            businessServiceMappingsChanged:
+              businessServiceIds !== undefined || businessServiceConfigs !== undefined,
             expectedUpdatedAt: expectedUpdatedAt || current.updatedAt.toISOString(),
           },
         },

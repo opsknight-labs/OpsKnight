@@ -1209,7 +1209,40 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               },
               { firstLink: resolution.identityCreated }
             );
-            if (resolvedRole.changed) {
+            // Stakeholders are never paged: someone still on call keeps their role (and signs in).
+            const stakeholderBlockers = resolvedRole.changed
+              ? await import('@/lib/users/stakeholder-role-guard').then(guard =>
+                  guard.stakeholderConversionBlockers(
+                    targetUser.id,
+                    targetUser.role,
+                    resolvedRole.role
+                  )
+                )
+              : null;
+            if (stakeholderBlockers) {
+              logger.warn(
+                '[Auth] OIDC stakeholder role skipped; the user still has paging duties',
+                {
+                  component: 'auth:signIn',
+                  userId: targetUser.id,
+                  previousRole: targetUser.role,
+                  duties: stakeholderBlockers,
+                  event: 'OIDC_STAKEHOLDER_ROLE_SKIPPED',
+                }
+              );
+              const { dedupedSecurityEvent } = await import('@/lib/auth-control/security-events');
+              await dedupedSecurityEvent(
+                `oidc-stakeholder-skipped:${targetUser.id}`,
+                24 * 60 * 60 * 1000,
+                'auth.oidc.stakeholder_role_skipped',
+                targetUser.id,
+                {
+                  userId: targetUser.id,
+                  previousRole: targetUser.role,
+                  duties: stakeholderBlockers,
+                }
+              ).catch(() => undefined);
+            } else if (resolvedRole.changed) {
               if (resolvedRole.role !== targetUser.role) updateData.role = resolvedRole.role;
               if (resolvedRole.roleSource !== targetUser.roleSource)
                 updateData.roleSource = resolvedRole.roleSource;
@@ -1270,8 +1303,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
             if (Object.keys(updateData).length > 0) {
               const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
-              const mappedRole = updateData.role as
-                'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | undefined;
+              const mappedRole = updateData.role as OidcRole | undefined;
               const mappedRoleSource = updateData.roleSource as 'OIDC' | 'MANUAL' | undefined;
               const mappedStatus = updateData.status as 'ACTIVE' | undefined;
               delete updateData.role;

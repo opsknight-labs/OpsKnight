@@ -6,12 +6,13 @@
  * Resource policies (team membership, assignment, visibility) are evaluated by
  * the server after the role grants the relevant scoped capability.
  */
+import type { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 
 export const APP_ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER', 'STAKEHOLDER'] as const;
 export type AppRole = (typeof APP_ROLES)[number];
-/** Roles an admin, identity provider or access request can assign. STAKEHOLDER is not, yet. */
-export const ASSIGNABLE_ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as const;
+/** Roles an administrator or identity provider can assign. */
+export const ASSIGNABLE_ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER', 'STAKEHOLDER'] as const;
 export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 export const CAPABILITIES = {
@@ -296,8 +297,9 @@ const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.REPORT_READ,
 ]);
 
-// Business-impact audience: never reads incidents or gets paged. Deliberately minimal until the
-// stakeholder views (status dashboard, business-service read) define their own permissions.
+// Business-impact audience: the status dashboard (open to everyone signed in), business services
+// in their teams (follow them for impact updates) and their own profile and notification
+// preferences. Never reads incidents and is never paged: see isPageableRole.
 const STAKEHOLDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.USER_NOTIFICATION_PREFERENCES,
   CAPABILITIES.SERVICE_READ_SCOPED,
@@ -317,6 +319,31 @@ export function isAppRole(value: unknown): value is AppRole {
 
 export function isAssignableRole(value: unknown): value is AssignableRole {
   return typeof value === 'string' && ASSIGNABLE_ROLES.some(role => role === value);
+}
+
+/**
+ * Whether people with this role may be paged: escalation targets, on-call layers and overrides,
+ * team escalation recipients and incident assignees. Stakeholders never are.
+ */
+export function isPageableRole(role: string): boolean {
+  return role !== 'STAKEHOLDER';
+}
+
+/** Prisma filter for people who may be paged (see isPageableRole), for target pickers. */
+export const PAGEABLE_USER_WHERE = {
+  role: { not: 'STAKEHOLDER' },
+} as const satisfies Prisma.UserWhereInput;
+
+/**
+ * The one guard for anything that pages someone or makes them responsible for an incident:
+ * escalation targets, on-call layers and overrides, incident assignees and incident roles.
+ */
+export function assertPageableUser(user: { role: string; name?: string | null }): void {
+  if (isPageableRole(user.role)) return;
+  throw new AppError({
+    code: 'VALIDATION_FAILED',
+    userMessage: `${user.name || 'This person'} is a stakeholder. Stakeholders are never paged, so they cannot be on call, an escalation target, or assigned to an incident.`,
+  });
 }
 
 export function getRoleCapabilities(role: AppRole): readonly Capability[] {
@@ -402,7 +429,10 @@ export const ROLE_DESCRIPTIONS = new Map<AppRole, string>([
     'USER',
     'Access to incidents and services in your teams, plus incidents assigned to or watched by you. Can acknowledge, update, escalate and resolve those incidents. Team owners and team admins can manage their own teams.',
   ],
-  ['STAKEHOLDER', 'Business-impact view only: services in your teams. Never paged.'],
+  [
+    'STAKEHOLDER',
+    'Business-impact view only: the status dashboard and business services in your teams, which they can follow for impact updates. No incident access. Never paged.',
+  ],
 ]);
 
 export class AuthorizationError extends AppError {

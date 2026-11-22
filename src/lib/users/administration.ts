@@ -1,5 +1,7 @@
+import { assertCanBecomeStakeholder } from '@/lib/users/stakeholder-role-guard';
 import 'server-only';
 import { z } from 'zod/v3';
+import { ASSIGNABLE_ROLES } from '@/lib/authorization';
 import type { Prisma } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
@@ -14,7 +16,7 @@ export const userAdministrationInput = z.discriminatedUnion('operation', [
   z
     .object({
       operation: z.literal('set-role'),
-      role: z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']),
+      role: z.enum(ASSIGNABLE_ROLES),
     })
     .strict(),
   z.object({ operation: z.literal('deactivate') }).strict(),
@@ -81,6 +83,7 @@ export async function administerUser(
       (input.operation === 'deactivate' && target.status === 'DISABLED')
     )
       return tx.user.findUniqueOrThrow({ where: { id: userId }, select: userAdministrationSelect });
+    if (input.operation === 'set-role') await assertCanBecomeStakeholder([userId], input.role, tx);
     if (input.operation === 'reactivate' && target.status !== 'DISABLED')
       throw new AppError({
         code: 'VALIDATION_FAILED',

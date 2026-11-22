@@ -13,6 +13,11 @@ export const ROLE_OPTIONS: Array<{ value: Rules[number]['role']; label: string; 
   { value: 'RESPONDER', label: 'Responder', hint: 'Handle incidents and on-call' },
   { value: 'AUDITOR', label: 'Auditor', hint: 'Read-only access to everything' },
   { value: 'USER', label: 'User', hint: 'Basic access' },
+  {
+    value: 'STAKEHOLDER',
+    label: 'Stakeholder',
+    hint: 'Status dashboard and business services only; never paged',
+  },
 ];
 
 /** Claims most providers use for groups or roles; the rest come from real sign-ins. */

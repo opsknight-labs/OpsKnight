@@ -228,19 +228,20 @@ export const StatusPageSettingsSchema = z
       .max(200)
       .optional()
       .transform(ids => (ids ? Array.from(new Set(ids)) : ids)),
-    /** Display name and visibility per business service; applies with businessServiceIds. */
+    serviceLayout: z.enum(['FLAT', 'BUSINESS', 'BUSINESS_EXPANDABLE']).optional(),
+    /** Per-business-service presentation on this page, keyed by business service id. */
     businessServiceConfigs: z
       .record(
         z
           .object({
             displayName: z.string().trim().max(200).optional().nullable(),
             showOnPage: z.boolean().optional(),
+            showMembers: z.boolean().optional(),
           })
           .strict()
       )
       .refine(value => Object.keys(value).length <= 200, 'At most 200 business services.')
       .optional(),
-    serviceLayout: z.enum(['FLAT', 'BUSINESS', 'BUSINESS_EXPANDABLE']).optional(),
     serviceConfigs: z
       .record(
         z.object({
@@ -343,6 +344,8 @@ export const StatusAnnouncementCreateSchema = z
     isActive: z.boolean().optional(),
     notifySubscribers: z.boolean().optional(),
     affectedServiceIds: z.array(z.string().min(1)).optional().nullable(),
+    /** Business services the update names; their members count as affected. */
+    affectedBusinessServiceIds: z.array(z.string().min(1)).max(200).optional().nullable(),
     timeMode: z.enum(['EXACT', 'ALL_DAY']).optional().default('EXACT'),
     allDay: z.boolean().optional(),
     publishOption: z.enum(['NOW', 'AT_START']).optional().default('NOW'),
@@ -437,6 +440,8 @@ export const StatusAnnouncementPatchSchema = z
       .nullable(),
     isActive: z.boolean().optional(),
     affectedServiceIds: z.array(z.string().min(1)).optional().nullable(),
+    /** Business services the update names; their members count as affected. */
+    affectedBusinessServiceIds: z.array(z.string().min(1)).max(200).optional().nullable(),
     timeMode: z.enum(['EXACT', 'ALL_DAY']).optional(),
     allDay: z.boolean().optional(),
     publishOption: z.enum(['NOW', 'AT_START']).optional(),

@@ -903,6 +903,38 @@
     "requiredHeaders": ["Idempotency-Key", "If-Match"],
     "bodyRequired": true
   },
+  "setSupportingBusinessServices": {
+    "method": "PUT",
+    "path": "/business-services/{id}/supporting",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "importBusinessServices": {
+    "method": "POST",
+    "path": "/business-services/import",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "setStatusPageBusinessServiceOverride": {
+    "method": "PUT",
+    "path": "/status-pages/{id}/business-services/{businessServiceId}/override",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "notifyIncidentStakeholders": {
+    "method": "POST",
+    "path": "/incidents/{id}/stakeholder-notify",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
   "listStatusPageServices": {
     "method": "GET",
     "path": "/status-pages/{id}/services",
