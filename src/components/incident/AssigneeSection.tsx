@@ -189,7 +189,7 @@ export default function AssigneeSection({
           {team ? (
             <>
               <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0 dark:text-indigo-400" />
-              <span className="truncate max-w-[110px]">{team.name}</span>
+              <span className="truncate max-w-48" title={team.name}>{team.name}</span>
             </>
           ) : assignee ? (
             <>
@@ -202,7 +202,7 @@ export default function AssigneeSection({
                 className="border-border/80 shrink-0 h-4 w-4 text-[9px]"
                 aria-hidden
               />
-              <span className="truncate max-w-[110px]">{assignee.name}</span>
+              <span className="truncate max-w-48" title={assignee.name}>{assignee.name}</span>
             </>
           ) : (
             <>
@@ -223,12 +223,12 @@ export default function AssigneeSection({
               SELECTOR_BASE_CLASS,
               'hover:bg-muted/40 hover:border-border cursor-pointer group'
             )}
-            title="Change Assignee"
+            title={`Change assignee: ${team?.name ?? assignee?.name ?? "unassigned"}`}
           >
             {team ? (
               <>
                 <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0 dark:text-indigo-400" />
-                <span className="truncate max-w-[110px]">{team.name}</span>
+                <span className="truncate max-w-48" title={team.name}>{team.name}</span>
               </>
             ) : assignee ? (
               <>
@@ -241,7 +241,7 @@ export default function AssigneeSection({
                   className="border-border/80 shrink-0 h-4 w-4 text-[9px]"
                   aria-hidden
                 />
-                <span className="truncate max-w-[110px]">{assignee.name}</span>
+                <span className="truncate max-w-48" title={assignee.name}>{assignee.name}</span>
               </>
             ) : (
               <>

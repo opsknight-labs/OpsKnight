@@ -625,7 +625,7 @@ export default async function IncidentDetailScreen({
       ) : (
         <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xs">
           <div className={`h-1 w-full bg-linear-to-r ${statusGradient}`} />
-          <div className="grid gap-3 p-3.5 sm:px-4.5 sm:py-4 xl:grid-cols-[minmax(0,1fr)_minmax(24rem,31rem)] xl:gap-5">
+          <div className="p-3.5 sm:px-4.5 sm:py-4">
             <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
               <ListReturnLink
                 href={backHref}
@@ -648,7 +648,7 @@ export default async function IncidentDetailScreen({
                   <AlertCircle className="h-4.5 w-4.5" />
                 )}
               </div>
-              <div className="min-w-0 flex-1 space-y-2">
+              <div className="min-w-0 flex-1 space-y-3">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 pt-0.5">
                     <h1
@@ -682,7 +682,8 @@ export default async function IncidentDetailScreen({
                     <IncidentGroupLine incidentId={incident.id} />
                   </Suspense>
                 )}
-                <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+                {/* Response row: SLA, impact and roles, right under the title. */}
+                <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2.5">
                   <IncidentSLABadges sla={incidentSla} className="pt-0" />
                   <IncidentImpacts
                     incidentId={id}
@@ -695,13 +696,20 @@ export default async function IncidentDetailScreen({
                       businessServices={impactedBusinessServices.filter(impact => !impact.excluded)}
                     />
                   )}
+                  <div className="min-w-0">{rolesContent}</div>
                 </div>
               </div>
             </div>
-            <div className="border-t border-border/70 pt-3 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
-              {rolesContent}
-            </div>
           </div>
+          {/* Details band along the bottom of the card: boxed fields, 4 × 2. */}
+          <IncidentHeader
+            incident={incident}
+            users={pageableUsers}
+            teams={teams}
+            canManage={canManageIncident}
+            routePrefix={routePrefix}
+            embedded
+          />
         </section>
       )}
 
@@ -794,7 +802,7 @@ export default async function IncidentDetailScreen({
       {/* Escalation Execution Health: Compact status strip or alert banner */}
       <EscalationExecutionHealth health={escalationHealth} />
 
-      {presentation === 'mobile' ? (
+      {presentation === 'mobile' && (
         <details className="group overflow-hidden rounded-xl border border-border bg-card">
           <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
             <span>Incident details &amp; assignment</span>
@@ -813,14 +821,6 @@ export default async function IncidentDetailScreen({
             />
           </div>
         </details>
-      ) : (
-        <IncidentHeader
-          incident={incident}
-          users={pageableUsers}
-          teams={teams}
-          canManage={canManageIncident}
-          routePrefix={routePrefix}
-        />
       )}
 
       {presentation === 'mobile' && (

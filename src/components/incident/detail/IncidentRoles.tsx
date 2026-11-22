@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus, UserCheck, UserMinus } from 'lucide-react';
+import { Loader2, Plus, UserCheck, UserMinus, Users } from 'lucide-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/shadcn/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Button } from '@/components/ui/shadcn/button';
@@ -52,15 +52,19 @@ export default function IncidentRoles({
   const stacked = presentation === 'mobile';
 
   return (
-    <section aria-label="Incident roles">
-      <ul
-        className={cn(
-          'grid grid-cols-2 gap-2',
-          presentation !== 'mobile' && 'lg:grid-cols-4 xl:grid-cols-2'
-        )}
-      >
+    <section
+      aria-label="Incident roles"
+      className={cn(!stacked && 'flex flex-wrap items-center gap-x-2 gap-y-1.5')}
+    >
+      {!stacked && (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Roles
+        </span>
+      )}
+      <ul className={cn(stacked ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap gap-1.5')}>
         {visible.map(role => (
-          <li key={role.roleKey} className="min-w-0">
+          <li key={role.roleKey} className={cn('min-w-0', !stacked && 'max-w-60')}>
             <RoleSlot
               role={role}
               users={users}
@@ -78,16 +82,20 @@ export default function IncidentRoles({
               title={folded.map(role => role.label).join(', ')}
               aria-label={`Show more roles: ${folded.map(role => role.label).join(', ')}`}
               className={cn(
-                'flex w-full min-w-0 items-center gap-2 rounded-lg border border-dashed border-border/80 pl-1.5 pr-2.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
-                stacked ? 'h-11' : 'h-9'
+                'flex w-full min-w-0 items-center gap-1.5 border border-dashed border-border/80 text-left text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+                stacked ? 'h-11 rounded-lg pl-1.5 pr-2.5' : 'h-7 rounded-md px-2'
               )}
             >
-              <span
-                aria-hidden
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border"
-              >
-                <Plus className="h-3 w-3" />
-              </span>
+              {stacked ? (
+                <span
+                  aria-hidden
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border"
+                >
+                  <Plus className="h-3 w-3" />
+                </span>
+              ) : (
+                <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              )}
               <span className="truncate">
                 {folded.length} more {folded.length === 1 ? 'role' : 'roles'}
               </span>
@@ -146,13 +154,17 @@ function RoleSlot({
           className="shrink-0"
           aria-hidden
         />
-      ) : (
+      ) : stacked ? (
         <span
           aria-hidden
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground"
         >
           {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
         </span>
+      ) : isPending ? (
+        <Loader2 aria-hidden className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+      ) : (
+        <Plus aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       )}
       {/* One line: role, then holder. Why the role exists lives in the hover card and the picker. */}
       <span
@@ -161,13 +173,19 @@ function RoleSlot({
           stacked ? 'flex-col' : 'items-baseline gap-1.5'
         )}
       >
-        <span className="shrink-0 text-2xs font-semibold text-muted-foreground">
+        <span
+          className={cn(
+            'shrink-0 text-muted-foreground',
+            !holder && !stacked ? 'text-xs font-medium' : 'text-2xs font-semibold'
+          )}
+        >
           {role.shortLabel}
         </span>
         <span
           className={cn(
             'truncate text-xs',
-            holder ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'
+            holder ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground',
+            !holder && !stacked && 'sr-only'
           )}
         >
           {holder
@@ -189,8 +207,8 @@ function RoleSlot({
   );
 
   const slotClass = cn(
-    'flex w-full min-w-0 items-center gap-2 rounded-lg border pl-1.5 pr-2.5 text-left transition-colors',
-    stacked ? 'h-11' : 'h-9',
+    'flex w-full min-w-0 items-center border text-left transition-colors',
+    stacked ? 'h-11 gap-2 rounded-lg pl-1.5 pr-2.5' : cn('h-7 gap-1.5 rounded-md pr-2', holder ? 'pl-0.5' : 'pl-2'),
     holder ? 'border-border bg-background' : 'border-dashed border-border/80 bg-muted/20'
   );
 
