@@ -30,7 +30,13 @@ const reasons: ImpactReason[] = [
     viaServiceId: 'web',
     depth: 2,
   },
-  { kind: 'NESTED', status: 'MAJOR_OUTAGE', childBusinessServiceId: 'payments', depth: 1 },
+  {
+    kind: 'NESTED',
+    status: 'MAJOR_OUTAGE',
+    childBusinessServiceId: 'payments',
+    depth: 1,
+    incidentId: 'i3',
+  },
 ];
 
 const { engine } = createFakeBusinessServiceEngine({
@@ -157,6 +163,29 @@ describe('business-service overview', () => {
     expect(
       screen.getByRole('link', { name: 'Card auth failing for EU customers' })
     ).toHaveAttribute('href', '/incidents/i1');
+  });
+
+  it('renders an interval whose incident is withheld without a title or link', () => {
+    render(
+      <ImpactTimeline
+        window={window}
+        showIncidents
+        entries={[
+          {
+            incidentId: null,
+            incidentTitle: null,
+            urgency: null,
+            source: 'DEPENDENCY',
+            excluded: false,
+            startedAt: new Date(now.getTime() - DAY),
+            endedAt: new Date(now.getTime() - DAY + 30 * 60_000),
+          },
+        ]}
+      />
+    );
+    const list = screen.getByRole('list', { name: 'Recent impacts' });
+    expect(list).toHaveTextContent('Incident · Via a dependency');
+    expect(within(list).queryByRole('link')).toBeNull();
   });
 
   it('shows stakeholders incident counts only', () => {

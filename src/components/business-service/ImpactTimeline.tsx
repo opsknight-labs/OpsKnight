@@ -23,8 +23,8 @@ function minutesLabel(minutes: number) {
 
 /**
  * Impact strip over a window: one bar per impact interval, coloured by incident urgency (excluded ones
- * hatched grey), then the most recent impacts as a list. `showIncidents` off (stakeholders) leaves out
- * titles and links: only when, how long and how serious.
+ * grey), then the most recent impacts as a list. `showIncidents` off (stakeholders) leaves out titles and
+ * links; so does an interval whose incident the engine withheld (null fields): only when and how long.
  */
 export default function ImpactTimeline({
   entries,
@@ -56,14 +56,14 @@ export default function ImpactTimeline({
           aria-label={summary}
           className="relative h-8 overflow-hidden rounded-md border bg-muted/50"
         >
-          {entries.map(entry => {
+          {entries.map((entry, index) => {
             const start = Math.max(entry.startedAt.getTime(), from);
             const end = Math.min((entry.endedAt ?? now).getTime(), window.to.getTime());
             const left = ((start - from) / span) * 100;
             const width = Math.max(((end - start) / span) * 100, 0.6);
             return (
               <span
-                key={`${entry.incidentId}-${entry.startedAt.toISOString()}`}
+                key={index}
                 className={cn(
                   'absolute inset-y-1 rounded-sm',
                   entry.excluded
@@ -84,16 +84,16 @@ export default function ImpactTimeline({
 
       {recent.length > 0 && (
         <ol className="divide-y divide-border rounded-md border" aria-label="Recent impacts">
-          {recent.map(entry => {
+          {recent.map((entry, index) => {
             const minutes = ((entry.endedAt ?? now).getTime() - entry.startedAt.getTime()) / 60_000;
             return (
               <li
-                key={`${entry.incidentId}-${entry.startedAt.toISOString()}`}
+                key={index}
                 className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm"
               >
-                <SeverityBadge urgency={entry.urgency} size="xs" />
+                {entry.urgency && <SeverityBadge urgency={entry.urgency} size="xs" />}
                 <span className="min-w-0 flex-1 truncate">
-                  {showIncidents ? (
+                  {showIncidents && entry.incidentId && entry.incidentTitle ? (
                     <Link
                       href={`/incidents/${entry.incidentId}`}
                       className="font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
