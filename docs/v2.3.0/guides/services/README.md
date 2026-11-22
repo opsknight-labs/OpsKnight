@@ -29,7 +29,9 @@ Pause paging during planned work with
 [maintenance windows](./maintenance-windows), one-off or recurring.
 
 Group services into what customers rely on with
-[business services](./business-services).
+[business services](./business-services). Set one up step by step or import many with
+[import and set up business services](./business-service-import), and keep business people
+informed with [stakeholder updates](../stakeholders).
 
 Page on fast error-budget spend for an availability objective with
 [SLO burn-rate alerts](../slo-burn-alerts).
