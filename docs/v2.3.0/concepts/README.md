@@ -21,6 +21,7 @@ in [Guides](../guides/); exact contracts belong in
 
 - [Incidents](./incidents)
 - [Services](./services)
+- [Business service health](./business-service-health)
 - [Teams](./teams)
 - [On-call schedules](./schedules)
 - [Escalation policies](./escalation-policies)

@@ -32,7 +32,8 @@ export type EventSideEffect =
   | 'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION'
   | 'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION'
   | 'INCIDENT_UPDATE_SERVICE_NOTIFICATION'
-  | 'INCIDENT_UPDATE_WEBHOOK';
+  | 'INCIDENT_UPDATE_WEBHOOK'
+  | 'BUSINESS_SERVICE_IMPACT';
 
 export type EventSideEffectLane =
   | 'ORDINARY_DISPATCH'
@@ -44,7 +45,8 @@ export type EventSideEffectLane =
   | 'SERVICE_NOTIFICATION'
   | 'NOTIFICATION'
   | 'STATUS_PAGE'
-  | 'INTEGRATION';
+  | 'INTEGRATION'
+  | 'BUSINESS_SERVICE';
 
 export interface LifecycleSideEffectContext {
   command: IncidentLifecycleCommand;
@@ -96,6 +98,7 @@ export function getEventSideEffects(action: EventOutboxAction): readonly EventSi
         'TRIGGER_SERVICE_NOTIFICATION',
         'TRIGGER_STATUS_PAGE',
         'TRIGGER_WAR_ROOM',
+        'BUSINESS_SERVICE_IMPACT',
       ];
     case 'resolved':
     case 'acknowledged':
@@ -124,6 +127,8 @@ export function getIncidentCreationSideEffects(
   ];
   if (input.source === 'REST_API') effects.unshift('TRIGGER_WEBHOOK');
   if (input.source === 'WEB' || input.source === 'MOBILE') effects.push('TRIGGER_JIRA');
+  // Business impact history is ordinary work: it never runs on, or delays, the paging path.
+  effects.push('BUSINESS_SERVICE_IMPACT');
   return effects;
 }
 
@@ -144,6 +149,7 @@ export function getLifecycleSideEffects(
   }
   effects.add('LIFECYCLE_STATUS_PAGE');
   effects.add('LIFECYCLE_WEBHOOK');
+  effects.add('BUSINESS_SERVICE_IMPACT');
   if (input.source === 'CHATOPS') {
     if (input.status === 'ACKNOWLEDGED') effects.add('LIFECYCLE_WAR_ROOM_TOPIC');
     if (input.status === 'RESOLVED') effects.add('LIFECYCLE_WAR_ROOM_ARCHIVE');
@@ -206,6 +212,8 @@ export function getEventSideEffectLane(effect: EventSideEffect): EventSideEffect
       return 'STATUS_PAGE';
     case 'TRIGGER_JIRA':
       return 'INTEGRATION';
+    case 'BUSINESS_SERVICE_IMPACT':
+      return 'BUSINESS_SERVICE';
   }
 }
 

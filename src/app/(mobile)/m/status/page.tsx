@@ -21,9 +21,8 @@ import { getRequestActorContext } from '@/lib/request-actor-context';
 import { getInternalOperationalStatusSnapshot } from '@/lib/status/internal-operational-status-snapshot';
 import { logger } from '@/lib/logger';
 import { requirePageAccess } from '@/lib/access/server';
-import prisma from '@/lib/prisma';
-import { businessServiceReadWhere } from '@/lib/business-services/commands';
-import { worstServiceStatus } from '@/components/service/BusinessServiceStatusPill';
+import { listBusinessServices } from '@/lib/business-services/contract';
+import { STATUS_PRESENTATION } from '@/lib/status-pages/status-presentation';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +35,7 @@ function statusMeta(status: string) {
       dot: 'bg-rose-500',
     };
   }
-  if (status === 'PARTIAL_OUTAGE') {
+  if (status === 'PARTIAL_OUTAGE' || status === 'DEGRADED') {
     return {
       label: 'Degraded performance',
       Icon: AlertTriangle,
@@ -97,29 +96,16 @@ export default async function MobileStatusPage() {
   const overall = statusMeta(snapshot.overallStatus);
   const OverallIcon = overall.Icon;
   const impactedServices = snapshot.services.filter(service => service.status !== 'OPERATIONAL');
-  const statusByService = new Map(snapshot.services.map(service => [service.id, service.status]));
-  const businessServices = (
-    await prisma.businessService.findMany({
-      where: businessServiceReadWhere(context.actor),
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, members: { select: { serviceId: true } } },
+  // shortcut: the first 100 by name; the full catalog lives on /services/business.
+  const businessServices = (await listBusinessServices({ limit: 100 }, context.actor)).items.map(
+    item => ({
+      id: item.id,
+      name: item.name,
+      status: item.health.status,
+      affected: item.health.impactedMemberCount,
+      total: item.memberCount,
     })
-  ).flatMap(item => {
-    const statuses = item.members.flatMap(member => {
-      const status = statusByService.get(member.serviceId);
-      return status ? [status] : [];
-    });
-    if (!statuses.length) return [];
-    return [
-      {
-        id: item.id,
-        name: item.name,
-        status: worstServiceStatus(statuses),
-        affected: statuses.filter(status => status !== 'OPERATIONAL').length,
-        total: statuses.length,
-      },
-    ];
-  });
+  );
 
   return (
     <div className="responsive-page space-y-5">
@@ -238,9 +224,11 @@ export default async function MobileStatusPage() {
                         {item.name}
                       </span>
                       <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                        {item.affected > 0
-                          ? `${item.affected} of ${item.total} services affected`
-                          : 'Operational'}
+                        {item.status === 'OPERATIONAL'
+                          ? 'Operational'
+                          : item.affected > 0
+                            ? `${item.affected} of ${item.total} services affected`
+                            : STATUS_PRESENTATION[item.status].label}
                       </span>
                     </span>
                   </li>

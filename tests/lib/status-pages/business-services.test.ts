@@ -74,6 +74,15 @@ describe('mergeHistorySegments', () => {
   });
 });
 
+const history = (
+  segments: Array<[string, string, 'PARTIAL_OUTAGE' | 'DEGRADED']>
+): PublicStatusService['history'] => ({
+  rangeStart: '2026-08-24T00:00:00.000Z',
+  rangeEnd: '2026-11-22T00:00:00.000Z',
+  coverage: 'COMPLETE',
+  segments: segments.map(([startAt, endAt, status]) => ({ startAt, endAt, status })),
+});
+
 describe('buildPublicBusinessServices', () => {
   const services = [
     service('api', {
@@ -81,12 +90,19 @@ describe('buildPublicBusinessServices', () => {
       statusSince: '2026-11-21T10:00:00.000Z',
       activeIncidentCount: 2,
       uptime: { days30: window(98.5, { grade: 'BELOW_TARGET' }), days90: window(99.2) },
+      history: history([
+        ['2026-11-21T00:00:00.000Z', '2026-11-21T12:00:00.000Z', 'PARTIAL_OUTAGE'],
+      ]),
     }),
     service('db', { statusSince: '2026-11-20T00:00:00.000Z' }),
-    service('cdn', { status: 'DEGRADED', statusSince: '2026-11-21T09:00:00.000Z' }),
+    service('cdn', {
+      status: 'DEGRADED',
+      statusSince: '2026-11-21T09:00:00.000Z',
+      history: history([['2026-11-21T06:00:00.000Z', '2026-11-21T18:00:00.000Z', 'DEGRADED']]),
+    }),
   ];
 
-  it('takes the worst member status, weakest uptime and summed incidents', () => {
+  it('takes the worst member status, union-of-downtime uptime and summed incidents', () => {
     const [checkout] = buildPublicBusinessServices(
       [{ id: 'b1', name: 'Checkout', memberServiceIds: ['api', 'db', 'cdn'] }],
       services
@@ -100,12 +116,12 @@ describe('buildPublicBusinessServices', () => {
       activeIncidentCount: 2,
       impactedServiceCount: 2,
     });
+    // api down 00:00-12:00 and cdn 06:00-18:00 overlap: 18 h of downtime in 90 days, not 24 h.
     expect(checkout.uptime?.days30).toEqual({
-      percentage: 98.5,
+      percentage: (1 - 18 / (90 * 24)) * 100,
       incidentCount: 3,
       measuredDays: 90,
       complete: true,
-      grade: 'BELOW_TARGET',
     });
     expect(checkout.history?.coverage).toBe('COMPLETE');
   });

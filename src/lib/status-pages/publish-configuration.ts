@@ -17,6 +17,7 @@ import {
 import { StatusPageAdminError } from '@/lib/status-pages/admin';
 import {
   classifyStatusPageChange,
+  type StatusPageBusinessServiceConfigs,
   type StatusPageChangeClassification,
   type StatusPageClassifierState,
 } from '@/lib/status-pages/publication-policy';
@@ -61,6 +62,8 @@ export type StatusPageConfigurationChange = {
   >;
   /** Business services to show, in display order; their member services are mapped too. */
   businessServiceIds?: string[];
+  /** Display name and visibility per business service (requires businessServiceIds). */
+  businessServiceConfigs?: StatusPageBusinessServiceConfigs;
   expectedUpdatedAt?: string;
   expectedRevision?: number;
   /** Settings section that produced the patch, recorded for audit only. */
@@ -87,6 +90,42 @@ const SYNC_PUBLISH_BUDGET_MS = Number(process.env.STATUS_PAGE_SYNC_PUBLISH_BUDGE
 const MAX_LAST_ERROR_LENGTH = 500;
 
 /**
+ * Rows published only through business services (`viaBusinessService`) follow the page's
+ * business services: once none of them contains the service, the row goes, unless this same
+ * save lists the service directly, which makes it a direct selection. Direct rows never move.
+ */
+async function reconcileBusinessServiceRows(
+  tx: Prisma.TransactionClient,
+  pageId: string,
+  serviceIds: readonly string[] | undefined
+) {
+  const covered = new Set(
+    (
+      await tx.businessServiceMember.findMany({
+        where: { businessService: { statusPages: { some: { statusPageId: pageId } } } },
+        select: { serviceId: true },
+      })
+    ).map(member => member.serviceId)
+  );
+  const orphaned = (
+    await tx.statusPageService.findMany({
+      where: { statusPageId: pageId, viaBusinessService: true },
+      select: { id: true, serviceId: true },
+    })
+  ).filter(row => !covered.has(row.serviceId));
+  if (!orphaned.length) return;
+  const direct = new Set(serviceIds ?? []);
+  const keep = orphaned.filter(row => direct.has(row.serviceId)).map(row => row.id);
+  const drop = orphaned.filter(row => !direct.has(row.serviceId)).map(row => row.id);
+  if (keep.length)
+    await tx.statusPageService.updateMany({
+      where: { id: { in: keep } },
+      data: { viaBusinessService: false },
+    });
+  if (drop.length) await tx.statusPageService.deleteMany({ where: { id: { in: drop } } });
+}
+
+/**
  * Apply a settings change and republish the public page as one operation.
  *
  * The ordering is the entire point of this function:
@@ -110,6 +149,7 @@ export async function applyStatusPageConfigurationChange(
     serviceIds,
     serviceConfigs,
     businessServiceIds,
+    businessServiceConfigs,
     expectedUpdatedAt,
     section,
   } = change;
@@ -140,27 +180,28 @@ export async function applyStatusPageConfigurationChange(
           select: { serviceId: true, showOnPage: true, displayName: true, order: true },
         });
 
-  const currentBusinessServiceIds =
+  const businessServiceMappings =
     businessServiceIds === undefined
       ? undefined
-      : (
-          await prisma.statusPageBusinessService.findMany({
-            where: { statusPageId: pageId },
-            orderBy: { order: 'asc' },
-            select: { businessServiceId: true },
-          })
-        ).map(row => row.businessServiceId);
+      : await prisma.statusPageBusinessService.findMany({
+          where: { statusPageId: pageId },
+          orderBy: { order: 'asc' },
+          select: { businessServiceId: true, displayName: true, showOnPage: true },
+        });
+  const currentBusinessServiceIds = businessServiceMappings?.map(row => row.businessServiceId);
 
   const classification = classifyStatusPageChange({
     current: {
       ...(current as unknown as StatusPageClassifierState),
       serviceMappings,
       businessServiceIds: currentBusinessServiceIds,
+      businessServiceMappings,
     },
     patch,
     serviceIds,
     serviceConfigs,
     businessServiceIds,
+    businessServiceConfigs: businessServiceIds === undefined ? undefined : businessServiceConfigs,
   });
 
   // A save that changes nothing must not disturb a working page.
@@ -274,10 +315,18 @@ export async function applyStatusPageConfigurationChange(
           where: { statusPageId: pageId, businessServiceId: { notIn: businessServiceIds } },
         });
         for (const [order, businessServiceId] of businessServiceIds.entries()) {
+          const config = Reflect.get(businessServiceConfigs ?? {}, businessServiceId) as
+            { displayName?: string | null; showOnPage?: boolean } | undefined;
+          const presentation = {
+            ...(config?.displayName !== undefined
+              ? { displayName: config.displayName?.trim() || null }
+              : {}),
+            ...(config?.showOnPage !== undefined ? { showOnPage: config.showOnPage } : {}),
+          };
           await tx.statusPageBusinessService.upsert({
             where: { statusPageId_businessServiceId: { statusPageId: pageId, businessServiceId } },
-            create: { statusPageId: pageId, businessServiceId, order },
-            update: { order },
+            create: { statusPageId: pageId, businessServiceId, order, ...presentation },
+            update: { order, ...presentation },
           });
         }
         // A business service is shown through its members, so they are published with it.
@@ -293,9 +342,14 @@ export async function applyStatusPageConfigurationChange(
             data: [...new Set(members.map(member => member.serviceId))].map(serviceId => ({
               statusPageId: pageId,
               serviceId,
+              viaBusinessService: true,
             })),
             skipDuplicates: true,
           });
+      }
+
+      if (businessServiceIds !== undefined || serviceIds !== undefined) {
+        await reconcileBusinessServiceRows(tx, pageId, serviceIds);
       }
 
       if (classification.classes.includes('ROUTING')) {

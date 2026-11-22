@@ -41,6 +41,8 @@ export type ImpactReason =
       status: BsStatus;
       childBusinessServiceId: string;
       depth: number;
+      /** The child's worst incident that is not unmarked for this (parent) business service. */
+      incidentId: string;
     }
   | { kind: 'MANUAL'; status: BsStatus; incidentId: string; markedById: string | null }
   | { kind: 'MAINTENANCE'; status: 'MAINTENANCE'; maintenanceWindowId: string };
@@ -67,6 +69,8 @@ export type BusinessServiceListFilter = {
 
 export type BusinessServiceListParams = {
   filter?: BusinessServiceListFilter;
+  /** name (default) or newest first. */
+  sort?: 'name' | 'newest';
   /** Opaque keyset cursor from the previous page. */
   cursor?: string | null;
   limit?: number;
@@ -89,10 +93,11 @@ export type BusinessServiceListPage = {
 
 export type TimeWindow = { from: Date; to: Date };
 
+/** One impact interval. Incident fields are null when the reader cannot see that incident. */
 export type ImpactTimelineEntry = {
-  incidentId: string;
-  incidentTitle: string;
-  urgency: IncidentUrgency;
+  incidentId: string | null;
+  incidentTitle: string | null;
+  urgency: IncidentUrgency | null;
   source: ImpactSource;
   excluded: boolean;
   startedAt: Date;

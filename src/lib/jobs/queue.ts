@@ -1456,6 +1456,13 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           await markJobCompleted(job.id, claimAttempt, job.claimToken);
           return true;
         }
+        if (payloadValue(job.payload, 'task') === 'BUSINESS_SERVICE_IMPACT_RECONCILE') {
+          const { processBusinessServiceImpactReconcile } =
+            await import('../business-services/impacts');
+          await processBusinessServiceImpactReconcile();
+          await markJobCompleted(job.id, claimAttempt, job.claimToken);
+          return true;
+        }
         if (payloadValue(job.payload, 'task') === 'STATUS_PAGE_PUBLICATION_RETRY') {
           const { processStatusPagePublicationRetry } =
             await import('../status-pages/publication-jobs');
