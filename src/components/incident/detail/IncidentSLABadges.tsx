@@ -48,7 +48,7 @@ export default function IncidentSLABadges({ sla, className }: IncidentSLABadgesP
   return (
     <div className={cn('flex flex-wrap items-center gap-x-2 gap-y-1.5 pt-1.5', className)}>
       {/* Same quiet label style as "Impacts" beside it, so the chips carry the signal. */}
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
         <Timer className="h-3.5 w-3.5 shrink-0" aria-hidden />
         SLA
       </span>

@@ -512,7 +512,6 @@ export default async function IncidentDetailScreen({
       users={pageableUsers}
       currentUserId={user.id}
       onSetRole={handleSetRole}
-      presentation={presentation}
       showAllRoles={incident.priority === 'P1' || incident.priority === 'P2'}
     />
   );
@@ -545,56 +544,46 @@ export default async function IncidentDetailScreen({
       }
     >
       {presentation === 'mobile' ? (
-        <section className="rounded-xl border border-border bg-card p-3.5 text-card-foreground shadow-none">
-          {/* The mobile header already has the back arrow; a second "Back to Incidents" here repeated it. */}
-          <div className="mb-2.5 flex items-center justify-end gap-2 border-b border-border/70 pb-2">
-            <div className="flex shrink-0 items-center gap-1">
-              <CopyButton text={id} label="ID" className="h-7 px-2 text-[10px]" />
-              <CopyButton
-                text={`${appUrl}/incidents/${id}`}
-                icon="link"
-                label="Link"
-                className="h-7 px-2 text-[10px]"
-              />
-            </div>
-          </div>
-
-          <div className="flex min-w-0 items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
+        <section className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
+          <div className={`h-1 w-full bg-linear-to-r ${statusGradient}`} />
+          {/* The mobile header already has the back arrow, so the card starts with status and title. */}
+          <div className="space-y-3 p-3.5">
+            <div className="flex min-w-0 items-center justify-between gap-2">
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <IncidentStatusBadge status={incident.status} />
                 <IncidentUrgencyBadge urgency={incident.urgency} />
                 {incident.priority && (
-                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-bold">
+                  <Badge variant="outline" className="h-5 px-1.5 text-2xs font-bold">
                     {incident.priority}
                   </Badge>
                 )}
               </div>
-              <h1 className="mt-2 wrap-break-word text-base font-bold leading-snug tracking-tight text-foreground">
-                {incident.title}
-              </h1>
-              {showIntelligence && (
-                <Suspense fallback={null}>
-                  <IncidentGroupLine incidentId={incident.id} presentation="mobile" />
-                </Suspense>
-              )}
+              <div className="flex shrink-0 items-center">
+                <CopyButton text={id} label="ID" className="h-9 px-2 text-xs" />
+                <CopyButton
+                  text={`${appUrl}/incidents/${id}`}
+                  icon="link"
+                  label="Link"
+                  className="h-9 px-2 text-xs"
+                />
+              </div>
             </div>
-          </div>
-
-          <div className="mt-3">
-            <IncidentSLABadges sla={incidentSla} />
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border/70 pt-3 text-[11px]">
-            <div className="min-w-0">
-              <span className="block text-muted-foreground">Service</span>
-              <span className="mt-0.5 block truncate font-semibold text-foreground">
-                {incident.service.name}
+            <h1 className="wrap-break-word text-lg font-bold leading-snug tracking-tight text-foreground">
+              {incident.title}
+            </h1>
+            {showIntelligence && (
+              <Suspense fallback={null}>
+                <IncidentGroupLine incidentId={incident.id} presentation="mobile" />
+              </Suspense>
+            )}
+            <IncidentSLABadges sla={incidentSla} className="pt-0" />
+            <div className="flex min-w-0 items-center gap-x-4 gap-y-1 border-t border-border/70 pt-3 text-xs">
+              <span className="min-w-0 truncate">
+                <span className="text-muted-foreground">Service </span>
+                <span className="font-semibold text-foreground">{incident.service.name}</span>
               </span>
-            </div>
-            <div className="min-w-0">
-              <span className="block text-muted-foreground">Assigned to</span>
-              <span className="mt-0.5 flex min-w-0 items-center gap-1.5 font-semibold text-foreground">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0 text-muted-foreground">Assigned</span>
                 {incident.assignee && (
                   <UserAvatar
                     userId={incident.assignee.id}
@@ -605,22 +594,16 @@ export default async function IncidentDetailScreen({
                     aria-hidden
                   />
                 )}
-                <span className="truncate">{incident.assignee?.name || 'Unassigned'}</span>
+                <span className="truncate font-semibold text-foreground">
+                  {incident.assignee?.name || 'Unassigned'}
+                </span>
               </span>
             </div>
+            {impactedBusinessServices.some(impact => !impact.excluded) && (
+              <IncidentImpacts incidentId={id} impacts={impactedBusinessServices} linkable={false} />
+            )}
+            {rolesContent}
           </div>
-
-          {impactedBusinessServices.some(impact => !impact.excluded) && (
-            <div className="mt-3">
-              <IncidentImpacts
-                incidentId={id}
-                impacts={impactedBusinessServices}
-                linkable={false}
-              />
-            </div>
-          )}
-
-          <div className="mt-3 border-t border-border/70 pt-3">{rolesContent}</div>
         </section>
       ) : (
         <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xs">

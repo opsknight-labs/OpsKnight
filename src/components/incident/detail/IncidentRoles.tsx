@@ -28,7 +28,6 @@ type IncidentRolesProps = {
   users: IncidentPickerUser[];
   currentUserId: string;
   onSetRole: (roleKey: IncidentRoleKey, userId: string | null) => Promise<unknown>;
-  presentation?: 'desktop' | 'mobile';
   /** Major incidents (P1/P2) show every role up front; others start with the commander only. */
   showAllRoles?: boolean;
 };
@@ -39,7 +38,6 @@ export default function IncidentRoles({
   users,
   currentUserId,
   onSetRole,
-  presentation = 'desktop',
   showAllRoles = false,
 }: IncidentRolesProps) {
   const [expanded, setExpanded] = useState(showAllRoles);
@@ -49,28 +47,24 @@ export default function IncidentRoles({
     : roles.filter(role => role.roleKey === 'COMMANDER' || role.holder);
   const folded = roles.filter(role => !visible.includes(role));
   const canFill = folded.some(role => role.canAssignOthers || role.canTakeSelf);
-  const stacked = presentation === 'mobile';
 
   return (
     <section
       aria-label="Incident roles"
-      className={cn(!stacked && 'flex flex-wrap items-center gap-x-2 gap-y-1.5')}
+      className="flex flex-wrap items-center gap-x-2 gap-y-1.5"
     >
-      {!stacked && (
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          Roles
-        </span>
-      )}
-      <ul className={cn(stacked ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap gap-1.5')}>
+      <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
+        <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        Roles
+      </span>
+      <ul className="flex flex-wrap gap-1.5">
         {visible.map(role => (
-          <li key={role.roleKey} className={cn('min-w-0', !stacked && 'max-w-60')}>
+          <li key={role.roleKey} className="min-w-0 max-w-60">
             <RoleSlot
               role={role}
               users={users}
               currentUserId={currentUserId}
               onSetRole={onSetRole}
-              stacked={stacked}
             />
           </li>
         ))}
@@ -81,21 +75,9 @@ export default function IncidentRoles({
               onClick={() => setExpanded(true)}
               title={folded.map(role => role.label).join(', ')}
               aria-label={`Show more roles: ${folded.map(role => role.label).join(', ')}`}
-              className={cn(
-                'flex w-full min-w-0 items-center gap-1.5 border border-dashed border-border/80 text-left text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
-                stacked ? 'h-11 rounded-lg pl-1.5 pr-2.5' : 'h-7 rounded-md px-2'
-              )}
+              className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md border border-dashed border-border/80 px-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {stacked ? (
-                <span
-                  aria-hidden
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border"
-                >
-                  <Plus className="h-3 w-3" />
-                </span>
-              ) : (
-                <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              )}
+              <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
               <span className="truncate">
                 {folded.length} more {folded.length === 1 ? 'role' : 'roles'}
               </span>
@@ -112,14 +94,11 @@ function RoleSlot({
   users,
   currentUserId,
   onSetRole,
-  stacked = false,
 }: {
   role: IncidentRoleSlot;
   users: IncidentPickerUser[];
   currentUserId: string;
   onSetRole: IncidentRolesProps['onSetRole'];
-  /** Phones: role above holder so names are not cut off in a half-width chip. */
-  stacked?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -154,13 +133,6 @@ function RoleSlot({
           className="shrink-0"
           aria-hidden
         />
-      ) : stacked ? (
-        <span
-          aria-hidden
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground"
-        >
-          {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-        </span>
       ) : isPending ? (
         <Loader2 aria-hidden className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
       ) : (
@@ -168,15 +140,12 @@ function RoleSlot({
       )}
       {/* One line: role, then holder. Why the role exists lives in the hover card and the picker. */}
       <span
-        className={cn(
-          'flex min-w-0 flex-1 text-left leading-tight',
-          stacked ? 'flex-col' : 'items-baseline gap-1.5'
-        )}
+        className="flex min-w-0 flex-1 items-baseline gap-1.5 text-left leading-tight"
       >
         <span
           className={cn(
             'shrink-0 text-muted-foreground',
-            !holder && !stacked ? 'text-xs font-medium' : 'text-2xs font-semibold'
+            holder ? 'text-2xs font-semibold' : 'text-xs font-medium'
           )}
         >
           {role.shortLabel}
@@ -185,7 +154,7 @@ function RoleSlot({
           className={cn(
             'truncate text-xs',
             holder ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground',
-            !holder && !stacked && 'sr-only'
+            !holder && 'sr-only'
           )}
         >
           {holder
@@ -208,7 +177,8 @@ function RoleSlot({
 
   const slotClass = cn(
     'flex w-full min-w-0 items-center border text-left transition-colors',
-    stacked ? 'h-11 gap-2 rounded-lg pl-1.5 pr-2.5' : cn('h-7 gap-1.5 rounded-md pr-2', holder ? 'pl-0.5' : 'pl-2'),
+    'h-7 gap-1.5 rounded-md pr-2',
+    holder ? 'pl-0.5' : 'pl-2',
     holder ? 'border-border bg-background' : 'border-dashed border-border/80 bg-muted/20'
   );
 
