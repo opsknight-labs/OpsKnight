@@ -289,7 +289,7 @@ export default function MicrosoftTeamsIntegrationPage({
   return (
     <div className="space-y-6">
       {/* Top Level Summary Card */}
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm">
+      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3.5">
             <div className="h-12 w-12 rounded-xl bg-muted border border-border flex items-center justify-center shrink-0">
@@ -407,7 +407,7 @@ export default function MicrosoftTeamsIntegrationPage({
 
         {/* SUB-PAGE 2: Channel Routing & Destinations */}
         <DetailTabContent value="destinations" className="space-y-4">
-          <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold">Service Destinations</h3>
@@ -557,7 +557,7 @@ export default function MicrosoftTeamsIntegrationPage({
         {/* SUB-PAGE 4: Health & Permissions */}
         <DetailTabContent value="health" className="space-y-4">
           {/* Integration Health Card */}
-          <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-primary" /> Integration Health Overview
@@ -648,7 +648,7 @@ export default function MicrosoftTeamsIntegrationPage({
                 <div className="font-semibold">
                   Last Provider Error: {health.lastErrorCode ?? 'UNKNOWN'}
                 </div>
-                <div className="text-muted-foreground break-words">
+                <div className="text-muted-foreground wrap-break-word">
                   {health.lastErrorMessage ?? 'No details available.'}
                 </div>
                 <div className="text-2xs text-muted-foreground">
@@ -659,7 +659,7 @@ export default function MicrosoftTeamsIntegrationPage({
           </div>
 
           {/* Installations & Permissions List */}
-          <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-3">
+          <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Installed Teams & Graph RSC Permissions</h3>
               <Badge variant="outline" className="text-2xs">
@@ -727,7 +727,7 @@ export default function MicrosoftTeamsIntegrationPage({
           </div>
 
           {/* Raw Diagnostics Drill-Down (No secrets) */}
-          <details className="rounded-xl border bg-card p-4 shadow-sm text-xs">
+          <details className="rounded-xl border bg-card p-4 shadow-xs text-xs">
             <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
               Drill down — raw diagnostic state (tokens redacted)
             </summary>

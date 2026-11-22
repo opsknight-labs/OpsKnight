@@ -315,7 +315,7 @@ export default async function PolicyDetailPage({
   const settingsContent = (
     <div className="space-y-6">
       {/* General Information Card */}
-      <Card className="overflow-hidden border-border/70 shadow-xs">
+      <Card className="overflow-hidden border-border/70 shadow-2xs">
         <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
@@ -349,7 +349,7 @@ export default async function PolicyDetailPage({
                 />
               </div>
               <div className="flex justify-end pt-2">
-                <Button type="submit" size="sm" className="text-xs font-medium shadow-xs">
+                <Button type="submit" size="sm" className="text-xs font-medium shadow-2xs">
                   Save Policy Changes
                 </Button>
               </div>
@@ -371,7 +371,7 @@ export default async function PolicyDetailPage({
           deletePolicyAction={deletePolicy}
         />
       ) : (
-        <Card className="overflow-hidden border-border/70 shadow-xs">
+        <Card className="overflow-hidden border-border/70 shadow-2xs">
           <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
             <div className="flex items-center gap-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-muted-foreground ring-1 ring-inset ring-border/40">

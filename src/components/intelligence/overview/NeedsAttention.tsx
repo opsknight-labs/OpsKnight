@@ -236,13 +236,13 @@ function ProbeGroup({
               <Link
                 href={resolveHref(row.item.href)}
                 data-attention-item={row.item.kind}
-                className="flex min-h-11 items-center gap-3 px-4 py-2 transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
+                className="flex min-h-11 items-center gap-3 px-4 py-2 transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-x-3 sm:flex-row sm:items-baseline">
-                  <span className="min-w-0 break-words text-sm font-medium text-foreground">
+                  <span className="min-w-0 wrap-break-word text-sm font-medium text-foreground">
                     {row.item.title}
                   </span>
-                  <span className="min-w-0 break-words text-xs text-muted-foreground">
+                  <span className="min-w-0 wrap-break-word text-xs text-muted-foreground">
                     {row.item.detail}
                   </span>
                 </span>
@@ -259,7 +259,7 @@ function ProbeGroup({
         <Link
           href={resolveHref(more.item.href)}
           data-attention-item={more.item.kind}
-          className="flex min-h-11 items-center gap-1 px-4 pb-2 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-9 sm:px-5"
+          className="flex min-h-11 items-center gap-1 px-4 pb-2 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-9 sm:px-5"
         >
           {more.item.title}
           <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

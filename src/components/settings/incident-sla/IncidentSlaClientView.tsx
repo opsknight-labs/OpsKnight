@@ -191,7 +191,7 @@ export default function IncidentSlaClientView({
       />
 
       {/* Segmented Sub-View Switcher (Modern Pill Style) */}
-      <div className="bg-card border border-border/70 p-1 rounded-xl inline-flex gap-1 shadow-xs overflow-x-auto max-w-full">
+      <div className="bg-card border border-border/70 p-1 rounded-xl inline-flex gap-1 shadow-2xs overflow-x-auto max-w-full">
         {SUB_TABS.map(tab => {
           const isActive = activeTab === tab.id;
           const Icon = tab.icon;
@@ -204,7 +204,7 @@ export default function IncidentSlaClientView({
               className={cn(
                 'flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all select-none whitespace-nowrap',
                 isActive
-                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  ? 'bg-primary text-primary-foreground shadow-2xs'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               )}
             >
@@ -256,7 +256,7 @@ export default function IncidentSlaClientView({
         {activeTab === 'semantics' && (
           <div className="space-y-6">
             {/* SLA Semantics Card */}
-            <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 p-5 space-y-4 shadow-xs">
+            <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 p-5 space-y-4 shadow-2xs">
               <div className="flex items-center gap-3 border-b border-border/60 pb-3.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
                   <CheckCircle2 className="h-4 w-4" />
@@ -300,7 +300,7 @@ export default function IncidentSlaClientView({
 
             {/* Concepts Grid */}
             <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 p-4 space-y-2 shadow-xs">
+              <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 p-4 space-y-2 shadow-2xs">
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500 shrink-0 border border-rose-500/20">
                     <ShieldAlert className="h-3.5 w-3.5" />
@@ -313,7 +313,7 @@ export default function IncidentSlaClientView({
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 p-4 space-y-2 shadow-xs">
+              <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 p-4 space-y-2 shadow-2xs">
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 shrink-0 border border-amber-500/20">
                     <Activity className="h-3.5 w-3.5" />
@@ -326,7 +326,7 @@ export default function IncidentSlaClientView({
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 p-4 space-y-2 shadow-xs">
+              <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 p-4 space-y-2 shadow-2xs">
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500 shrink-0 border border-blue-500/20">
                     <SlidersHorizontal className="h-3.5 w-3.5" />

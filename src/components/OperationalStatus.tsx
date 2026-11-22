@@ -192,7 +192,7 @@ export default function OperationalStatus({
             />
             <span
               className={cn(
-                'relative inline-flex rounded-full h-2 w-2 shadow-xs',
+                'relative inline-flex rounded-full h-2 w-2 shadow-2xs',
                 currentTheme.dotBg
               )}
             />
@@ -230,7 +230,7 @@ export default function OperationalStatus({
         sideOffset={8}
         align="start"
         className={cn(
-          'w-72 max-w-[calc(100vw-2rem)] p-4 border border-border shadow-xl bg-popover text-popover-foreground z-[1050] rounded-xl'
+          'w-72 max-w-[calc(100vw-2rem)] p-4 border border-border shadow-xl bg-popover text-popover-foreground z-1050 rounded-xl'
         )}
       >
         <div className="flex items-center gap-2.5 mb-3">

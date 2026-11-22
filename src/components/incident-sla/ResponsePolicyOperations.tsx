@@ -146,7 +146,7 @@ export default function ResponsePolicyOperations({
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       {showOperations && (
-        <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs flex flex-col justify-between">
+        <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs flex flex-col justify-between">
           <div>
             <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
               <div className="flex items-center gap-3">
@@ -302,7 +302,7 @@ export default function ResponsePolicyOperations({
       )}
 
       {showOperations && (
-        <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs flex flex-col justify-between">
+        <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs flex flex-col justify-between">
           <div>
             <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
               <div className="flex items-center gap-3">
@@ -398,7 +398,7 @@ export default function ResponsePolicyOperations({
           </div>
         </Card>
       )}
-      <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs lg:col-span-2">
+      <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-2xs lg:col-span-2">
         <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">

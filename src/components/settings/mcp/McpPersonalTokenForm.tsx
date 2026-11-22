@@ -159,7 +159,7 @@ export default function McpPersonalTokenForm({
               id="mcp-pat-expiry"
               name="expiresInDays"
               defaultValue={String(defaultDays)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               aria-invalid={Boolean(fieldError('expiresInDays'))}
               aria-describedby={fieldError('expiresInDays') ? ids.expiry : undefined}
             >

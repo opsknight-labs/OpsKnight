@@ -9,7 +9,7 @@ export default async function EmergencyLoginPage() {
   const policy = await getAuthenticationPolicy();
   return (
     <main className="mx-auto max-w-lg space-y-6 p-6 sm:py-12">
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8 space-y-5">
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-xs sm:p-8 space-y-5">
         <div className="flex items-center justify-between">
           <div className="rounded-xl bg-primary/10 p-3">
             <Shield className="h-6 w-6 text-primary" />

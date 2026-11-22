@@ -42,7 +42,7 @@ export default async function CreateTemplatePage({
         title="Create Incident Template"
         subtitle="Configure reusable defaults for common outage scenarios to dispatch responders with zero lag."
         icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-xs">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-2xs">
             <LayoutTemplate className="h-6 w-6 text-rose-500" />
           </div>
         }

@@ -194,7 +194,7 @@ export default function ScheduleActivityFeed({
   timeZone: string;
 }) {
   return (
-    <Card className="overflow-hidden border-border/70 shadow-sm">
+    <Card className="overflow-hidden border-border/70 shadow-xs">
       <CardHeader className="border-b bg-muted/20 px-5 py-4 sm:px-6">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">

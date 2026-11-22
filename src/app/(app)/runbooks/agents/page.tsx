@@ -179,7 +179,7 @@ export default async function RunbookAgentsPage({
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-xs"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-300 font-medium tabular-nums shadow-2xs"
             title={`Fleet evaluated at ${formatDateTime(now, userTimeZone, { format: 'time', includeTimeZone: true })} (${userTimeZone})`}
           >
             <Clock className="h-3 w-3 text-ink-400" aria-hidden="true" />
@@ -246,7 +246,7 @@ export default async function RunbookAgentsPage({
               {fleet.deadLetterDepth > 0 && (
                 <Link
                   href="/runbooks/agents?attention=1"
-                  className="inline-flex items-center gap-1 rounded-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex items-center gap-1 rounded-sm font-medium text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Review Agents needing attention
                   <ArrowRight className="h-3 w-3" aria-hidden="true" />
@@ -270,7 +270,7 @@ export default async function RunbookAgentsPage({
               </div>
               <Link
                 href="/runbooks/agents"
-                className="rounded-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded-sm font-medium text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Show all agents
               </Link>

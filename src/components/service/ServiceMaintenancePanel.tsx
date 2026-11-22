@@ -440,7 +440,7 @@ function ScheduleDialog({
                       aria-pressed={weekdays.has(day)}
                       onClick={() => toggleWeekday(day)}
                       className={cn(
-                        'h-8 min-w-11 rounded-md border px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        'h-8 min-w-11 rounded-md border px-2 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                         weekdays.has(day)
                           ? 'border-primary bg-primary text-primary-foreground'
                           : 'bg-background text-muted-foreground hover:bg-muted'
@@ -790,7 +790,7 @@ function ScheduleRow({
             </Badge>
           )}
         </div>
-        <p className="break-words text-sm text-muted-foreground">{schedule.summary}</p>
+        <p className="wrap-break-word text-sm text-muted-foreground">{schedule.summary}</p>
         <p className="text-xs text-muted-foreground">
           {schedule.paused
             ? 'No upcoming occurrences while paused'

@@ -109,7 +109,7 @@ export default function CleanupPreview({
   };
 
   return (
-    <div className="rounded-lg border border-border/70 bg-card p-6 shadow-xs space-y-6">
+    <div className="rounded-lg border border-border/70 bg-card p-6 shadow-2xs space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">

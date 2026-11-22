@@ -107,7 +107,7 @@ export default function ActivityTimeline({
         return (
           <div key={item.id} className="relative group">
             {/* Timeline Dot Indicator */}
-            <div className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary ring-2 ring-primary/20 group-hover:scale-125 transition-transform" />
+            <div className="absolute left-[-21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary ring-2 ring-primary/20 group-hover:scale-125 transition-transform" />
 
             <div className="rounded-xl border border-border bg-card p-3.5 sm:p-4 shadow-2xs space-y-2.5 transition-colors hover:border-border/80">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

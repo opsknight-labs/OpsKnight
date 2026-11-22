@@ -189,7 +189,7 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
               aria-label={`Incident: ${incident.title}`}
               className={cn(
                 'group relative rounded-2xl border bg-card text-card-foreground transition-all duration-150 overflow-hidden',
-                'hover:shadow-md hover:-translate-y-[1px]',
+                'hover:shadow-md hover:-translate-y-px',
                 'focus-within:ring-2 focus-within:ring-primary/20',
                 'border-border',
                 getStatusHoverBorder(incidentStatus),
@@ -227,7 +227,7 @@ function IncidentList({ incidents, serviceId, serviceName }: IncidentListProps) 
               {/* Loading overlay */}
               {navigatingId === incident.id && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/70 backdrop-blur-[1px] rounded-2xl">
-                  <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 shadow-sm">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 shadow-xs">
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     <span className="text-sm font-medium text-primary">Opening...</span>
                   </div>

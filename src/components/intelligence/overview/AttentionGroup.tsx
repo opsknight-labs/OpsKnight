@@ -30,14 +30,14 @@ export default function AttentionGroup({
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => setOpen(value => !value)}
-        className="flex min-h-11 w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
+        className="flex min-h-11 w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
       >
         <span className="min-w-0 flex-1 space-y-1">
           <span className="flex flex-wrap items-center gap-2">
             {badge}
-            <span className="min-w-0 break-words text-sm font-medium text-foreground">{title}</span>
+            <span className="min-w-0 wrap-break-word text-sm font-medium text-foreground">{title}</span>
           </span>
-          <span className="line-clamp-2 break-words text-sm text-muted-foreground">
+          <span className="line-clamp-2 wrap-break-word text-sm text-muted-foreground">
             {description}
           </span>
         </span>

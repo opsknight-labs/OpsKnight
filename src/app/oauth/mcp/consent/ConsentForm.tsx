@@ -20,7 +20,7 @@ type Props = {
 };
 
 const checkboxClass =
-  'mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-input accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-input accent-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 export default function ConsentForm({
   action,
@@ -166,7 +166,7 @@ function DecisionButtons({
     // On phones a long list keeps the decision in reach.
     <div
       aria-busy={pending}
-      className="sticky bottom-0 -mx-5 flex flex-col-reverse gap-3 border-t border-border bg-card/95 px-5 py-3 backdrop-blur sm:static sm:mx-0 sm:flex-row sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none sm:dark:bg-transparent"
+      className="sticky bottom-0 -mx-5 flex flex-col-reverse gap-3 border-t border-border bg-card/95 px-5 py-3 backdrop-blur-sm sm:static sm:mx-0 sm:flex-row sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none sm:dark:bg-transparent"
     >
       <button
         name="decision"
@@ -174,7 +174,7 @@ function DecisionButtons({
         type="submit"
         formNoValidate
         disabled={pending}
-        className="inline-flex items-center justify-center rounded-xl border border-input bg-card font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center justify-center rounded-xl border border-input bg-card font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pending && !allowing ? 'Cancelling…' : 'Cancel'}
       </button>
@@ -185,7 +185,7 @@ function DecisionButtons({
           type="submit"
           disabled={count === 0 || pending}
           aria-describedby={count === 0 ? hintId : undefined}
-          className="inline-flex items-center justify-center rounded-xl bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-xl bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {allowing ? 'Connecting…' : 'Allow'}
         </button>

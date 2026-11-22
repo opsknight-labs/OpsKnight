@@ -748,7 +748,7 @@ export default function McpCapabilityControlsPanel({
                         aria-controls={regionId}
                         disabled={filtering}
                         onClick={() => toggleExpanded(group.domain)}
-                        className="ml-0 flex min-w-0 grow items-center gap-2 rounded-md p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+                        className="ml-0 flex min-w-0 grow items-center gap-2 rounded-md p-0 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
                       >
                         <ChevronDown
                           className={cn(
@@ -874,7 +874,7 @@ export default function McpCapabilityControlsPanel({
                                         </Pill>
                                       )}
                                     </span>
-                                    <span className="block break-words text-xs text-muted-foreground">
+                                    <span className="block wrap-break-word text-xs text-muted-foreground">
                                       {capability.kind === 'operation' && capability.tool && (
                                         <>
                                           <span className="font-mono">{capability.id}</span>

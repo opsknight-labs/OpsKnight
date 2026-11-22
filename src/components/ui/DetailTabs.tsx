@@ -113,7 +113,7 @@ function SectionPicker({
           <button
             type="button"
             aria-label={`${label}: ${current.label}`}
-            className="flex h-10 w-full items-center gap-2 rounded-lg border border-border bg-card px-3 text-left text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-10 w-full items-center gap-2 rounded-lg border border-border bg-card px-3 text-left text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           >
             {current.icon && (
               <span className={cn(iconSlot, 'text-muted-foreground')}>{current.icon}</span>
@@ -128,7 +128,7 @@ function SectionPicker({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          className="w-[var(--radix-dropdown-menu-trigger-width)] max-w-[calc(100vw-2rem)]"
+          className="w-(--radix-dropdown-menu-trigger-width) max-w-[calc(100vw-2rem)]"
         >
           <DropdownMenuRadioGroup value={value} onValueChange={onSelect}>
             {tabs.map(tab => (
@@ -203,7 +203,7 @@ function ScrollableTabList({
       <div
         ref={scrollerRef}
         onScroll={updateFade}
-        className="overflow-x-auto rounded-lg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="overflow-x-auto rounded-lg scrollbar-none [&::-webkit-scrollbar]:hidden"
       >
         <TabsList
           aria-label={label}
@@ -219,7 +219,7 @@ function ScrollableTabList({
               disabled={tab.disabled}
               className={cn(
                 'group h-9 shrink-0 gap-2 rounded-md px-3 py-0 text-sm font-medium text-muted-foreground',
-                'hover:text-foreground data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border',
+                'hover:text-foreground data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:ring-1 data-[state=active]:ring-border',
                 layout === 'grid' && 'flex-1'
               )}
             >
@@ -237,13 +237,13 @@ function ScrollableTabList({
       {fade.left && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 w-10 rounded-l-lg bg-gradient-to-r from-muted to-transparent"
+          className="pointer-events-none absolute inset-y-0 left-0 w-10 rounded-l-lg bg-linear-to-r from-muted to-transparent"
         />
       )}
       {fade.right && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-lg bg-gradient-to-l from-muted to-transparent"
+          className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-lg bg-linear-to-l from-muted to-transparent"
         />
       )}
     </div>

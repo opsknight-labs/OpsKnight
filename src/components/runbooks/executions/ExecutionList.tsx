@@ -62,7 +62,7 @@ export function ExecutionList({
       </div>
 
       {executions.length > 0 ? (
-        <div className="overflow-hidden lg:rounded-2xl lg:border lg:border-border/80 dark:lg:border-border/60 lg:bg-card/90 dark:lg:bg-card/50 lg:backdrop-blur-xs lg:shadow-xs">
+        <div className="overflow-hidden lg:rounded-2xl lg:border lg:border-border/80 dark:lg:border-border/60 lg:bg-card/90 dark:lg:bg-card/50 lg:backdrop-blur-xs lg:shadow-2xs">
           <div
             aria-hidden="true"
             className={cn(

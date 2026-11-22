@@ -41,7 +41,7 @@ export default function PostSummaryAsNoteButton({
           type="button"
           onClick={post}
           disabled={pending}
-          className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 sm:min-h-8"
+          className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 sm:min-h-8"
         >
           {pending ? (
             <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden="true" />

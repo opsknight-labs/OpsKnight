@@ -75,7 +75,7 @@ export default async function VersionComparePage({
           ]}
           title={`${runbook.name} · Version comparison`}
         />
-        <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-8 shadow-xs">
+        <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-8 shadow-2xs">
           <EmptyHint
             icon={GitCompare}
             title="Nothing to compare yet"
@@ -84,7 +84,7 @@ export default async function VersionComparePage({
               <Button
                 asChild
                 size="sm"
-                className="h-8 gap-1.5 rounded-xl bg-foreground text-background hover:bg-foreground/90 font-medium shadow-xs text-xs"
+                className="h-8 gap-1.5 rounded-xl bg-foreground text-background hover:bg-foreground/90 font-medium shadow-2xs text-xs"
               >
                 <Link href={`/runbooks/${id}`}>
                   <ArrowLeft className="h-3.5 w-3.5" />
@@ -186,7 +186,7 @@ export default async function VersionComparePage({
       {/* Version Selector Card */}
       <section
         aria-label="Choose versions"
-        className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-xs"
+        className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-2xs"
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <form className="flex flex-col gap-3 sm:flex-row sm:items-center flex-wrap">
@@ -206,7 +206,7 @@ export default async function VersionComparePage({
                   id="base-select"
                   name="base"
                   defaultValue={selection.data.base}
-                  className="h-9 w-full sm:min-w-48 appearance-none rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 pl-3 pr-8 py-1.5 text-xs font-medium text-foreground shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
+                  className="h-9 w-full sm:min-w-48 appearance-none rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 pl-3 pr-8 py-1.5 text-xs font-medium text-foreground shadow-2xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
                 >
                   {versionOptions}
                 </select>
@@ -262,7 +262,7 @@ export default async function VersionComparePage({
                   id="next-select"
                   name="next"
                   defaultValue={selection.data.next}
-                  className="h-9 w-full sm:min-w-48 appearance-none rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 pl-3 pr-8 py-1.5 text-xs font-medium text-foreground shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
+                  className="h-9 w-full sm:min-w-48 appearance-none rounded-xl border border-input/80 dark:border-border/70 bg-background/80 hover:bg-accent/40 pl-3 pr-8 py-1.5 text-xs font-medium text-foreground shadow-2xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
                 >
                   {versionOptions}
                 </select>
@@ -278,7 +278,7 @@ export default async function VersionComparePage({
               <Button
                 type="submit"
                 size="sm"
-                className="h-9 w-full sm:w-auto rounded-xl text-xs font-medium shadow-xs gap-1.5 justify-center"
+                className="h-9 w-full sm:w-auto rounded-xl text-xs font-medium shadow-2xs gap-1.5 justify-center"
               >
                 <GitCompare className="h-3.5 w-3.5" aria-hidden="true" />
                 Compare versions

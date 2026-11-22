@@ -121,7 +121,7 @@ export function RuleLifecycleStepper(props: RuleLifecycleInput) {
               <span
                 aria-hidden="true"
                 className={cn(
-                  'absolute left-[11px] top-6 -bottom-0 w-0.5 rounded-full',
+                  'absolute left-[11px] top-6 bottom-0 w-0.5 rounded-full',
                   step.state === 'done' ? 'bg-emerald-500/40' : 'bg-border/70 dark:bg-border/50'
                 )}
               />

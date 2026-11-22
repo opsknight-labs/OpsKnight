@@ -291,7 +291,7 @@ export default function StatusPageServicesManager<TFormData extends ServicesForm
           <div className="relative flex-1 max-w-md">
             <input
               type="text"
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
               placeholder={`Search ${allServices.length} services by name or region...`}
               value={searchQuery}
               onChange={e => {
@@ -326,7 +326,7 @@ export default function StatusPageServicesManager<TFormData extends ServicesForm
                     setSelectedRegionFilter(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground font-medium focus:outline-hidden focus:ring-1 focus:ring-primary"
                 >
                   <option value="ALL">All Regions ({allServices.length})</option>
                   {uniqueRegions.map(reg => (
@@ -703,7 +703,7 @@ export default function StatusPageServicesManager<TFormData extends ServicesForm
                     setPageSize(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="bg-background border border-border/80 rounded px-2 py-0.5 text-xs text-foreground font-medium focus:outline-none"
+                  className="bg-background border border-border/80 rounded px-2 py-0.5 text-xs text-foreground font-medium focus:outline-hidden"
                 >
                   <option value={15}>15</option>
                   <option value={25}>25</option>
@@ -861,7 +861,7 @@ function ServicesTableView({
                         updateServiceConfig(service.id, { displayName: e.target.value })
                       }
                       placeholder={service.name}
-                      className="w-full max-w-xs px-2.5 py-1 text-xs bg-background border border-border/80 rounded-md placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full max-w-xs px-2.5 py-1 text-xs bg-background border border-border/80 rounded-md placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-1 focus:ring-primary"
                     />
                   ) : (
                     <button
@@ -889,7 +889,7 @@ function ServicesTableView({
                             order: parseInt(e.target.value) || 0,
                           })
                         }
-                        className="w-16 px-2 py-1 text-xs bg-background border border-border/80 rounded-md focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                        className="w-16 px-2 py-1 text-xs bg-background border border-border/80 rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary font-mono"
                       />
                     </div>
                   ) : (
@@ -1039,7 +1039,7 @@ function ServicesCardView({
                         updateServiceConfig(service.id, { displayName: e.target.value })
                       }
                       placeholder={service.name}
-                      className="w-full px-2.5 py-1 text-xs bg-background border border-border/80 rounded-md placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full px-2.5 py-1 text-xs bg-background border border-border/80 rounded-md placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-1 focus:ring-primary"
                     />
                   </div>
 
@@ -1055,7 +1055,7 @@ function ServicesCardView({
                           order: parseInt(e.target.value) || 0,
                         })
                       }
-                      className="w-full px-2.5 py-1 text-xs bg-background border border-border/80 rounded-md focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                      className="w-full px-2.5 py-1 text-xs bg-background border border-border/80 rounded-md focus:outline-hidden focus:ring-1 focus:ring-primary font-mono"
                     />
                   </div>
                 </div>

@@ -29,7 +29,7 @@ export function FleetSubNav({ canManageSecrets }: { canManageSecrets: boolean })
               href={section.href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'relative -mb-px flex items-center gap-2 rounded-t-md border-b-2 px-3 pb-2.5 pt-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                'relative -mb-px flex items-center gap-2 rounded-t-md border-b-2 px-3 pb-2.5 pt-2 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                 active
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'

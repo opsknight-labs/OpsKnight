@@ -133,7 +133,7 @@ export function StatusPageManager({
               <Label htmlFor="sp-slug" className="text-xs font-semibold">
                 URL Slug <span className="text-destructive">*</span>
               </Label>
-              <div className="flex rounded-md shadow-xs">
+              <div className="flex rounded-md shadow-2xs">
                 <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-xs font-mono">
                   /status/
                 </span>

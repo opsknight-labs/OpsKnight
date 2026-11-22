@@ -433,7 +433,7 @@ export default function PrivacyRequestDetailDialog({
                             step.status === 'complete'
                               ? toneClasses('ok').soft
                               : step.status === 'current'
-                                ? 'border-primary bg-primary text-primary-foreground shadow-xs ring-2 ring-primary/20'
+                                ? 'border-primary bg-primary text-primary-foreground shadow-2xs ring-2 ring-primary/20'
                                 : step.status === 'error'
                                   ? toneClasses('critical').soft
                                   : 'border-muted-foreground/30 bg-muted/80 text-muted-foreground'
@@ -470,7 +470,7 @@ export default function PrivacyRequestDetailDialog({
             </div>
 
             {/* Subject & Request Details Card */}
-            <div className="space-y-3 rounded-lg border bg-card p-3.5 text-sm shadow-xs">
+            <div className="space-y-3 rounded-lg border bg-card p-3.5 text-sm shadow-2xs">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">

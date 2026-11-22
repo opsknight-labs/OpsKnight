@@ -34,7 +34,7 @@ export default async function TemplatesPage() {
         title="Incident Templates"
         subtitle="Standardize incident triage with pre-configured titles, severities, runbooks, and service routing."
         icon={
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-xs">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-2xs">
             <LayoutTemplate className="h-6 w-6 text-rose-500" aria-hidden="true" />
           </div>
         }
@@ -58,7 +58,7 @@ export default async function TemplatesPage() {
         actions={
           canManageTemplates && (
             <Link href="/incidents/templates/create">
-              <Button className="bg-white hover:bg-zinc-100 text-zinc-900 font-semibold shadow-xs transition-all cursor-pointer">
+              <Button className="bg-white hover:bg-zinc-100 text-zinc-900 font-semibold shadow-2xs transition-all cursor-pointer">
                 <Plus className="w-4 h-4 mr-1.5" />
                 Create Template
               </Button>

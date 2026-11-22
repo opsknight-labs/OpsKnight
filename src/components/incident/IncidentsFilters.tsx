@@ -382,7 +382,7 @@ export default function IncidentsFilters({
               </Button>
             </PopoverTrigger>
             <PopoverContent
-              className="w-[var(--radix-popover-trigger-width)] min-w-[220px] p-0 shadow-lg"
+              className="w-(--radix-popover-trigger-width) min-w-[220px] p-0 shadow-lg"
               align="start"
             >
               <Command>

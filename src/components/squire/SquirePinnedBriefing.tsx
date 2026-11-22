@@ -42,7 +42,7 @@ function Row({ href, title, detail }: { href?: string; title: string; detail: st
       {href ? (
         <Link
           href={href}
-          className="flex min-h-11 flex-col justify-center rounded-md px-2 py-1 hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="flex min-h-11 flex-col justify-center rounded-md px-2 py-1 hover:bg-accent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           {body}
         </Link>
@@ -126,7 +126,7 @@ export default function SquirePinnedBriefing({
       asChild
     >
       <section aria-label="Incident briefing" className="border-b border-border bg-muted/20">
-        <CollapsibleTrigger className="group flex min-h-11 w-full items-center gap-2 px-4 text-left text-xs hover:bg-accent/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2">
+        <CollapsibleTrigger className="group flex min-h-11 w-full items-center gap-2 px-4 text-left text-xs hover:bg-accent/50 focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2">
           <Pin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="font-medium">Incident briefing</span>
           <span className="min-w-0 truncate text-muted-foreground">{counts.join(' · ')}</span>

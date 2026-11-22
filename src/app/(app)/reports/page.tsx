@@ -126,7 +126,7 @@ export default async function ReportsPage() {
         actions={
           <Button
             asChild
-            className="gap-2 shadow-sm font-semibold bg-background text-foreground hover:bg-background/90"
+            className="gap-2 shadow-xs font-semibold bg-background text-foreground hover:bg-background/90"
           >
             <Link href="/reports/executive/new">
               <Plus className="h-4 w-4" />

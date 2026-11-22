@@ -78,7 +78,7 @@ export default function OverrideCoverSuggestions({
                 aria-pressed={picked}
                 onClick={() => onPick(candidate.userId)}
                 className={cn(
-                  'flex min-h-11 w-full items-center justify-between gap-3 rounded-md border px-3 py-1.5 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'flex min-h-11 w-full items-center justify-between gap-3 rounded-md border px-3 py-1.5 text-left text-sm transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                   picked ? 'border-primary bg-primary/5' : 'bg-background hover:border-primary/50'
                 )}
               >

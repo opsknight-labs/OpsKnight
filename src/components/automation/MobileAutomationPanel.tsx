@@ -14,7 +14,7 @@ export default function MobileAutomationPanel({
   return (
     <section
       aria-label="Automation status"
-      className="space-y-2 rounded-xl border bg-card p-3 text-card-foreground shadow-sm"
+      className="space-y-2 rounded-xl border bg-card p-3 text-card-foreground shadow-xs"
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold">
@@ -28,7 +28,7 @@ export default function MobileAutomationPanel({
       </div>
       <p className="text-xs text-muted-foreground">{modePresentation(mode).summary}</p>
       <Link
-        className="inline-flex min-h-11 items-center gap-1 rounded-md text-sm font-semibold underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex min-h-11 items-center gap-1 rounded-md text-sm font-semibold underline underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         href={`/m/services/${serviceId}/automation`}
       >
         View automation

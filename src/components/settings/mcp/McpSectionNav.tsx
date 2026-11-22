@@ -38,9 +38,9 @@ export default function McpSectionNav({
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'group inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-xs font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:px-3',
+                  'group inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-xs font-medium transition-all duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:px-3',
                   active
-                    ? 'border-primary/50 bg-background font-semibold text-foreground shadow-xs ring-2 ring-primary/15'
+                    ? 'border-primary/50 bg-background font-semibold text-foreground shadow-2xs ring-2 ring-primary/15'
                     : 'border-transparent text-muted-foreground hover:border-border hover:bg-background hover:text-foreground'
                 )}
               >

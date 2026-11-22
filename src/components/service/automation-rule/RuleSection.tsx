@@ -35,7 +35,7 @@ export function RuleSection({
       id={id}
       aria-labelledby={headingId}
       className={cn(
-        'scroll-mt-20 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs hover:border-border transition-colors',
+        'scroll-mt-20 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs hover:border-border transition-colors',
         className
       )}
     >
@@ -87,13 +87,13 @@ export function RuleActionTile({
       {!last && (
         <span
           aria-hidden="true"
-          className="absolute left-[17px] top-9 -bottom-0 w-0.5 bg-border/70 dark:bg-border/50"
+          className="absolute left-[17px] top-9 bottom-0 w-0.5 bg-border/70 dark:bg-border/50"
         />
       )}
       <span
         aria-hidden="true"
         className={cn(
-          'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ring-4 ring-background shadow-xs z-10 transition-colors',
+          'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ring-4 ring-background shadow-2xs z-10 transition-colors',
           tone === 'warning'
             ? 'bg-amber-500/10 text-amber-700 border border-amber-500/30 dark:text-amber-300'
             : 'bg-card text-primary border border-primary/30'
@@ -103,8 +103,8 @@ export function RuleActionTile({
       </span>
       <div
         className={cn(
-          'min-w-0 flex-1 space-y-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-xs hover:border-border transition-colors',
-          tone === 'warning' && 'border-amber-500/40 bg-amber-500/[0.04]'
+          'min-w-0 flex-1 space-y-3.5 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-4 sm:p-5 shadow-2xs hover:border-border transition-colors',
+          tone === 'warning' && 'border-amber-500/40 bg-amber-500/4'
         )}
       >
         <div className="flex items-start gap-3">
@@ -153,7 +153,7 @@ export function RuleSectionNav({
   return (
     <nav
       aria-label="Rule evidence sections"
-      className="sticky top-0 z-20 -mx-1 overflow-x-auto rounded-2xl border border-border/80 dark:border-border/60 bg-background/95 p-1.5 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-background/80"
+      className="sticky top-0 z-20 -mx-1 overflow-x-auto rounded-2xl border border-border/80 dark:border-border/60 bg-background/95 p-1.5 shadow-2xs backdrop-blur-sm supports-backdrop-filter:bg-background/80"
     >
       <ul className="flex min-w-max gap-1">
         {RULE_SECTIONS.map(section => {
@@ -163,7 +163,7 @@ export function RuleSectionNav({
             <li key={section.id}>
               <a
                 href={`#${section.id}`}
-                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:bg-muted hover:text-foreground hover:shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:bg-muted hover:text-foreground hover:shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Icon className="h-3.5 w-3.5 opacity-70" />
                 <span>{section.label}</span>

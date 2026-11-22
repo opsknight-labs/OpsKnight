@@ -447,7 +447,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
               size="sm"
               onClick={handleRefresh}
               disabled={isPending}
-              className="text-xs font-semibold h-8 gap-1.5 shadow-sm"
+              className="text-xs font-semibold h-8 gap-1.5 shadow-xs"
             >
               <RefreshCw className={cn('h-3.5 w-3.5', isPending && 'animate-spin')} />
               {isPending ? 'Running...' : 'Re-run Diagnostics'}
@@ -1051,7 +1051,7 @@ function HealthCheckCard({
             {check.details.map((detail, idx) => (
               <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
                 <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 mt-1.5 shrink-0" />
-                <span className="leading-relaxed break-words font-mono text-2xs text-muted-foreground/90">
+                <span className="leading-relaxed wrap-break-word font-mono text-2xs text-muted-foreground/90">
                   {detail}
                 </span>
               </div>
@@ -1300,7 +1300,7 @@ function DiagnosticInspectorModal({
                     className="flex items-start gap-2 text-xs font-mono text-muted-foreground bg-muted/20 p-2 rounded border border-border/40"
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-primary/70 mt-1.5 shrink-0" />
-                    <span className="leading-snug break-words text-2xs text-foreground/90">
+                    <span className="leading-snug wrap-break-word text-2xs text-foreground/90">
                       {fact}
                     </span>
                   </div>

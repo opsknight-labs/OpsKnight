@@ -536,7 +536,7 @@ export default async function ApiKeysSettingsPage({
               }}
             />
           ) : (
-            <Card className="border-border/80 shadow-xs">
+            <Card className="border-border/80 shadow-2xs">
               <CardHeader className="pb-3 border-b border-border/60">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
@@ -580,7 +580,7 @@ export default async function ApiKeysSettingsPage({
               }}
             />
           ) : (
-            <Card className="border-border/80 shadow-xs">
+            <Card className="border-border/80 shadow-2xs">
               <CardHeader className="pb-3 border-b border-border/60">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">

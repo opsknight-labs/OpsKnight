@@ -35,7 +35,7 @@ export function StatusPageSectionCard({
   return (
     <Card
       className={cn(
-        'status-page-config-card bg-card text-card-foreground border border-border shadow-xs rounded-xl overflow-hidden transition-all',
+        'status-page-config-card bg-card text-card-foreground border border-border shadow-2xs rounded-xl overflow-hidden transition-all',
         className
       )}
     >

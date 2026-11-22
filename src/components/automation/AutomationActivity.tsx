@@ -27,7 +27,7 @@ function VersionComparison({ active, snapshot }: { active: Snapshot; snapshot: S
   return (
     <div className="space-y-2.5 border-t border-border/60 pt-3 text-xs">
       <details className="rounded-lg border border-border/70 bg-background/50">
-        <summary className="cursor-pointer rounded-lg px-3 py-2 font-medium hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary">
+        <summary className="cursor-pointer rounded-lg px-3 py-2 font-medium hover:bg-muted/30 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary">
           Full policy ({snapshot.rules.length} rules, {snapshot.fields.length} context fields)
         </summary>
         <ul className="space-y-1.5 border-t border-border/60 bg-muted/10 px-3 py-2.5 text-[11px] font-mono">
@@ -62,7 +62,7 @@ function VersionComparison({ active, snapshot }: { active: Snapshot; snapshot: S
                 <li
                   key={index}
                   className={cn(
-                    'flex items-start gap-2.5 break-words px-3 py-2 text-foreground/90 border-l-2',
+                    'flex items-start gap-2.5 wrap-break-word px-3 py-2 text-foreground/90 border-l-2',
                     isAdded
                       ? 'border-l-emerald-500 bg-emerald-500/5'
                       : isRemoved
@@ -176,14 +176,14 @@ export const AutomationActivity = memo(function AutomationActivity({
                   className={cn(
                     'absolute left-[7px] top-4.5 h-2.5 w-2.5 rounded-full ring-4 transition-all',
                     isActive
-                      ? 'bg-emerald-500 ring-emerald-500/20 shadow-xs'
+                      ? 'bg-emerald-500 ring-emerald-500/20 shadow-2xs'
                       : 'bg-muted-foreground/40 ring-background'
                   )}
                 />
 
                 <div
                   className={cn(
-                    'overflow-hidden rounded-xl border bg-card p-3.5 transition-all shadow-xs',
+                    'overflow-hidden rounded-xl border bg-card p-3.5 transition-all shadow-2xs',
                     isActive
                       ? 'border-emerald-500/40 ring-1 ring-emerald-500/20'
                       : 'border-border/80 hover:border-border'
@@ -292,7 +292,7 @@ export const AutomationActivity = memo(function AutomationActivity({
       {data.versionTotal > 0 && (
         <nav
           aria-label="Version pages"
-          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/80 bg-card p-2 text-xs shadow-xs"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/80 bg-card p-2 text-xs shadow-2xs"
         >
           <Button
             size="sm"

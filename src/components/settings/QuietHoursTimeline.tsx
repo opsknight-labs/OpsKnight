@@ -174,7 +174,7 @@ export default function QuietHoursTimeline({
         {currentPercent !== null && (
           <div
             style={{ left: `${currentPercent}%` }}
-            className="absolute top-0 bottom-4 w-0.5 bg-primary shadow-sm z-10 pointer-events-none transition-all duration-500"
+            className="absolute top-0 bottom-4 w-0.5 bg-primary shadow-xs z-10 pointer-events-none transition-all duration-500"
           >
             <div className="absolute -top-1 -left-1 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background animate-pulse" />
             <span className="absolute -bottom-4 -left-3 text-2xs font-mono font-semibold text-primary whitespace-nowrap bg-card px-1 rounded">

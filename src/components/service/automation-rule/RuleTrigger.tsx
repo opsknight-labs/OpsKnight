@@ -65,7 +65,7 @@ export function RuleTrigger({ triggers }: { triggers: RuleTriggerView[] }) {
             )}
           </div>
           {trigger.conditions.length === 0 ? (
-            <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/[0.05] p-3 text-xs text-muted-foreground shadow-2xs">
+            <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground shadow-2xs">
               <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" aria-hidden />
               <div className="space-y-0.5">
                 <p className="font-semibold text-amber-700 dark:text-amber-400">

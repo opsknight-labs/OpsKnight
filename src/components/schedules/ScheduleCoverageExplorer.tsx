@@ -27,7 +27,7 @@ export default function ScheduleCoverageExplorer({
 }: ScheduleCoverageExplorerProps) {
   return (
     <Card
-      className="overflow-hidden border-border/70 shadow-sm"
+      className="overflow-hidden border-border/70 shadow-xs"
       aria-labelledby="coverage-explorer-title"
     >
       <Tabs defaultValue="timeline" className="w-full">
@@ -67,10 +67,10 @@ export default function ScheduleCoverageExplorer({
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <TabsContent value="timeline" className="mt-0 focus-visible:outline-none">
+          <TabsContent value="timeline" className="mt-0 focus-visible:outline-hidden">
             {timeline}
           </TabsContent>
-          <TabsContent value="calendar" className="mt-0 focus-visible:outline-none">
+          <TabsContent value="calendar" className="mt-0 focus-visible:outline-hidden">
             {calendar}
           </TabsContent>
         </CardContent>

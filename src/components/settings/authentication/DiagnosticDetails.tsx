@@ -35,7 +35,7 @@ export default function DiagnosticDetails({
         if (!open && !working) onClose();
       }}
     >
-      <DialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto [overflow-wrap:anywhere]">
+      <DialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto wrap-anywhere">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold">{item.title}</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
@@ -47,7 +47,7 @@ export default function DiagnosticDetails({
           {item.details.map((entry, index) => (
             <div key={`${entry.label}-${index}`}>
               <dt className="text-xs font-medium text-muted-foreground">{entry.label}</dt>
-              <dd className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-xs bg-background/60 p-2 rounded border border-border/50">
+              <dd className="mt-1 whitespace-pre-wrap wrap-anywhere font-mono text-xs bg-background/60 p-2 rounded border border-border/50">
                 {entry.value}
               </dd>
             </div>
@@ -66,7 +66,7 @@ export default function DiagnosticDetails({
             <ol className="space-y-3 border-l-2 border-primary/30 pl-4 text-xs sm:text-sm">
               {item.timeline.map((entry, index) => (
                 <li key={`${entry.label}-${index}`} className="relative">
-                  <div className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-primary" />
+                  <div className="absolute left-[-21px] top-1.5 h-2 w-2 rounded-full bg-primary" />
                   <p className="font-semibold text-foreground">{entry.label}</p>
                   <time className="text-xs text-muted-foreground" dateTime={entry.at}>
                     {new Date(entry.at).toLocaleString()}

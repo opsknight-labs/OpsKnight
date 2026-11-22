@@ -37,7 +37,7 @@ export default function ScheduleExportMenu({
           size="sm"
           className={
             className ||
-            'h-8.5 gap-1.5 border-border/80 bg-background/80 text-xs font-medium backdrop-blur-sm hover:bg-muted/80 shadow-2xs'
+            'h-8.5 gap-1.5 border-border/80 bg-background/80 text-xs font-medium backdrop-blur-xs hover:bg-muted/80 shadow-2xs'
           }
         >
           <Calendar className="h-3.5 w-3.5 text-primary" />

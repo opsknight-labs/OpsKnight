@@ -7,9 +7,9 @@ import {
 } from '@/lib/intelligence/changes/service-mapping';
 
 const fieldClass =
-  'h-11 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9';
+  'h-11 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:h-9';
 const buttonClass =
-  'inline-flex h-11 items-center rounded-md border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9';
+  'inline-flex h-11 items-center rounded-md border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:h-9';
 
 type Option = { id: string; name: string };
 
@@ -56,7 +56,7 @@ export default async function ChangeMappingSection() {
   return (
     <section
       aria-labelledby="change-mapping-heading"
-      className="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-xs"
     >
       <header className="flex items-start gap-3 border-b border-border px-4 py-3 sm:px-5">
         <span
@@ -94,7 +94,7 @@ export default async function ChangeMappingSection() {
                   className="flex flex-wrap items-end justify-between gap-3 py-3 text-sm"
                 >
                   <div className="min-w-0 space-y-0.5">
-                    <p className="break-words font-medium">
+                    <p className="wrap-break-word font-medium">
                       {group.component ?? 'No component label'}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -113,7 +113,7 @@ export default async function ChangeMappingSection() {
                       <label htmlFor={id} className="sr-only">
                         Service for {group.component}
                       </label>
-                      <div className="min-w-[12rem] flex-1">
+                      <div className="min-w-48 flex-1">
                         <ServiceSelect id={id} services={services} />
                       </div>
                       <button type="submit" className={buttonClass}>
@@ -137,7 +137,7 @@ export default async function ChangeMappingSection() {
             action={mapChangeValueAction}
             className="flex flex-wrap items-end gap-3 border-t border-border pt-3"
           >
-            <div className="min-w-[12rem] flex-1 space-y-1">
+            <div className="min-w-48 flex-1 space-y-1">
               <label
                 htmlFor="map-integration"
                 className="block text-xs font-medium text-muted-foreground"
@@ -166,7 +166,7 @@ export default async function ChangeMappingSection() {
                 })}
               </select>
             </div>
-            <div className="min-w-[10rem] flex-1 space-y-1">
+            <div className="min-w-40 flex-1 space-y-1">
               <label
                 htmlFor="map-value"
                 className="block text-xs font-medium text-muted-foreground"
@@ -175,7 +175,7 @@ export default async function ChangeMappingSection() {
               </label>
               <input id="map-value" name="value" required maxLength={128} className={fieldClass} />
             </div>
-            <div className="min-w-[12rem] flex-1 space-y-1">
+            <div className="min-w-48 flex-1 space-y-1">
               <label
                 htmlFor="map-service"
                 className="block text-xs font-medium text-muted-foreground"

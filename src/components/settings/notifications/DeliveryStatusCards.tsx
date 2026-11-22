@@ -108,7 +108,7 @@ export default function DeliveryStatusCards({ stats, activeStatus, onStatusChang
             // Total always resets; every other card toggles its own filter.
             onClick={() => onStatusChange(status === 'all' || active ? 'all' : status)}
             className={cn(
-              'rounded-lg border p-4 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              'rounded-lg border p-4 text-left shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               active
                 ? recipe.soft
                 : cn('border-border bg-card hover:bg-muted/50', recipe.hoverBorder),

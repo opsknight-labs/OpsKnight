@@ -79,7 +79,7 @@ export default function AuthenticationAccessWorkspace() {
         </p>
       </header>
 
-      <div className="space-y-4 rounded-xl border bg-card p-4 shadow-xs sm:p-5">
+      <div className="space-y-4 rounded-xl border bg-card p-4 shadow-2xs sm:p-5">
         <h3 className="text-sm font-semibold text-foreground">New people</h3>
         <label className="flex cursor-pointer items-start gap-2.5 text-sm">
           <input
@@ -133,7 +133,7 @@ export default function AuthenticationAccessWorkspace() {
         </label>
       </div>
 
-      <div className="space-y-4 rounded-xl border bg-card p-4 shadow-xs sm:p-5">
+      <div className="space-y-4 rounded-xl border bg-card p-4 shadow-2xs sm:p-5">
         <div className="flex items-center gap-1">
           <h3 className="text-sm font-semibold text-foreground">
             People who already have an account
@@ -275,7 +275,7 @@ export default function AuthenticationAccessWorkspace() {
       </div>
 
       {data.linkingRequests.length > 0 && (
-        <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 shadow-xs sm:p-5">
+        <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 shadow-2xs sm:p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Inbox className="h-4 w-4" />
             Waiting for your approval ({data.linkingRequestCount})

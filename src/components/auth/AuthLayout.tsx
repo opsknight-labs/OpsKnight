@@ -14,8 +14,8 @@ interface AuthLayoutProps {
 
 export function AuthLayout({ children, showAnimation = true, isSuccess = false }: AuthLayoutProps) {
   return (
-    <div className="relative min-h-[100dvh] lg:h-[100dvh] w-full overflow-hidden bg-[hsl(var(--auth-panel-bg))] font-sans selection:bg-destructive/20">
-      <div className="flex min-h-[100dvh] w-full flex-col lg:h-full lg:flex-row">
+    <div className="relative min-h-dvh lg:h-dvh w-full overflow-hidden bg-[hsl(var(--auth-panel-bg))] font-sans selection:bg-destructive/20">
+      <div className="flex min-h-dvh w-full flex-col lg:h-full lg:flex-row">
         {showAnimation && (
           <section className="relative hidden h-full overflow-hidden border-r border-[hsl(var(--auth-panel-border))] lg:flex lg:w-1/2">
             <LoginAnimation resolved={isSuccess} />
@@ -59,7 +59,7 @@ export function AuthLayout({ children, showAnimation = true, isSuccess = false }
             href="https://opsknight.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 py-3 text-center text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex items-center justify-center gap-1.5 py-3 text-center text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           >
             <svg
               className="h-3.5 w-3.5 text-muted-foreground"

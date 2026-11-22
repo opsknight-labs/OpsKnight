@@ -819,10 +819,10 @@ export default function IncidentsListTable({
   const headerTitle = title ?? 'Incident list';
 
   return (
-    <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
+    <div className="rounded-2xl border border-border bg-card shadow-2xs overflow-hidden">
       {/* Sticky Command Bar (Bulk Actions) */}
       {!readOnly && (selectedCount > 0 || bulkAction) && (
-        <div className="sticky top-0 z-20 border-b border-white/15 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
+        <div className="sticky top-0 z-20 border-b border-white/15 bg-linear-to-r from-primary to-primary/80 text-primary-foreground">
           <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="text-sm font-semibold">{selectedCount} selected</div>
@@ -834,7 +834,7 @@ export default function IncidentsListTable({
                 <div className="flex items-center gap-2">
                   <select
                     onChange={e => e.target.value && handleBulkAction('reassign', e.target.value)}
-                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-sm"
+                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
                     aria-label="Select assignee for bulk reassignment"
                     defaultValue=""
                   >
@@ -857,7 +857,7 @@ export default function IncidentsListTable({
                 <div className="flex items-center gap-2">
                   <select
                     onChange={e => handleBulkAction('priority', e.target.value)}
-                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-sm"
+                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
                     aria-label="Select priority for bulk update"
                     defaultValue=""
                   >
@@ -884,7 +884,7 @@ export default function IncidentsListTable({
                       const mins = Number(e.target.value);
                       if (mins) handleBulkAction('snooze', mins);
                     }}
-                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-sm"
+                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
                     aria-label="Select snooze duration"
                     defaultValue=""
                   >
@@ -908,7 +908,7 @@ export default function IncidentsListTable({
                 <div className="flex items-center gap-2">
                   <select
                     onChange={e => e.target.value && handleBulkAction('urgency', e.target.value)}
-                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-sm"
+                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
                     aria-label="Select urgency"
                     defaultValue=""
                   >
@@ -929,7 +929,7 @@ export default function IncidentsListTable({
                 <div className="flex items-center gap-2">
                   <select
                     onChange={e => e.target.value && handleBulkAction('status', e.target.value)}
-                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-sm"
+                    className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
                     aria-label="Select status"
                     defaultValue=""
                   >
@@ -1202,14 +1202,14 @@ export default function IncidentsListTable({
                   }}
                   className={cn(
                     'group relative rounded-2xl border bg-card transition-all duration-150 overflow-hidden',
-                    'hover:shadow-md hover:-translate-y-[1px]',
+                    'hover:shadow-md hover:-translate-y-px',
                     'focus-within:ring-2 focus-within:ring-primary/20',
                     'border-border',
                     statusTone(incidentStatus).hoverBorder,
                     isSelected && 'ring-1 ring-primary/30 border-primary/50 bg-primary/5',
-                    isFocused && 'ring-2 ring-primary/60 border-primary/70 shadow-sm bg-accent/25',
+                    isFocused && 'ring-2 ring-primary/60 border-primary/70 shadow-xs bg-accent/25',
                     isNewlyIncoming &&
-                      'ring-2 ring-emerald-500/70 bg-emerald-500/[0.08] shadow-sm shadow-emerald-500/20 animate-pulse',
+                      'ring-2 ring-emerald-500/70 bg-emerald-500/8 shadow-xs shadow-emerald-500/20 animate-pulse',
                     navigatingId === incident.id && 'opacity-70 pointer-events-none'
                   )}
                   onClick={e => {
@@ -1246,7 +1246,7 @@ export default function IncidentsListTable({
                   {/* Loading overlay */}
                   {navigatingId === incident.id && (
                     <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/70 backdrop-blur-[1px] rounded-2xl">
-                      <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 shadow-sm">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 shadow-xs">
                         <Loader2 className="h-4 w-4 animate-spin text-primary" />
                         <span className="text-sm font-medium text-primary">Opening...</span>
                       </div>

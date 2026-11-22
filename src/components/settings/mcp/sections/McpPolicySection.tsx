@@ -9,7 +9,7 @@ import { MCP_MAX_OPERATIONS } from '@/lib/mcp/core/budget';
 
 const checkboxClass = 'mt-0.5 h-4 w-4 shrink-0 accent-primary';
 const textareaClass =
-  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 export type McpPolicyValues = {
   enabled: boolean;
@@ -95,7 +95,7 @@ function CheckRow({
   disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/[0.03] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40 has-checked:border-primary/40 has-checked:bg-primary/3 has-disabled:cursor-not-allowed has-disabled:opacity-60">
       <input
         type="checkbox"
         name={name}
@@ -380,7 +380,7 @@ export default function McpPolicySection({
       </PolicyGroup>
 
       <details className="group border-t border-border">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-4 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
           <span className="flex flex-col">
             <span>Advanced</span>
             <span className="text-xs font-normal text-muted-foreground">

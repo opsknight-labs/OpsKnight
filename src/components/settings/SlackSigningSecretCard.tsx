@@ -74,7 +74,7 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+    <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
         <div className="flex items-center gap-3">
           <div

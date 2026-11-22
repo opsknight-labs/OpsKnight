@@ -80,7 +80,7 @@ function NoteCard({
 
         <div
           className={cn(
-            'p-3 rounded-xl border text-xs leading-relaxed break-words transition-colors shadow-2xs',
+            'p-3 rounded-xl border text-xs leading-relaxed wrap-break-word transition-colors shadow-2xs',
             isResolution
               ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/80 dark:border-amber-800/60 text-foreground'
               : 'bg-card border-border/70 text-foreground'

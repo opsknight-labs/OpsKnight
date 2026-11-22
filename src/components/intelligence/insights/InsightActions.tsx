@@ -28,7 +28,7 @@ import type {
 } from '@/lib/intelligence/ops-insights/contract';
 
 const control =
-  'inline-flex min-h-11 items-center rounded-md border border-border px-3 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 sm:min-h-9';
+  'inline-flex min-h-11 items-center rounded-md border border-border px-3 text-xs font-medium hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 sm:min-h-9';
 
 export interface InsightActionsProps {
   id: string;
@@ -64,11 +64,11 @@ function EvidenceFacts({ evidence }: { evidence: OpsInsightEvidence }) {
       {evidence.examples && evidence.examples.length > 0 && (
         <ul className="space-y-1 border-t border-border pt-2">
           {evidence.examples.map(example => (
-            <li key={`${example.label}:${example.href ?? ''}`} className="break-words">
+            <li key={`${example.label}:${example.href ?? ''}`} className="wrap-break-word">
               {example.href ? (
                 <Link
                   href={example.href}
-                  className="underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {example.label}
                 </Link>

@@ -52,7 +52,7 @@ type Draft = {
 
 const FIELD_LABEL = 'text-xs font-semibold text-foreground';
 const CONTROL =
-  'min-h-[44px] h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20';
+  'min-h-[44px] h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-xs outline-hidden transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20';
 const DRAFT_KEY = 'incident-create-draft';
 const DRAFT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
@@ -351,7 +351,7 @@ export default function MobileCreateIncidentClient({
       ) : null}
 
       {templates.length > 0 ? (
-        <section className="rounded-2xl border border-border bg-card p-3.5 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-3.5 shadow-xs">
           <div className="mb-2 flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <LayoutTemplate className="h-4 w-4" aria-hidden="true" />

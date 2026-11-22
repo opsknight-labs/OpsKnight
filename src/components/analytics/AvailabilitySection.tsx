@@ -76,7 +76,7 @@ export async function AvailabilitySection({ context }: { context: AnalyticsConte
           </ul>
           {result.data.length > VISIBLE && (
             <details className="group">
-              <summary className="mt-2 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <summary className="mt-2 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                 <span className="group-open:hidden">Show all {result.data.length} services</span>
                 <span className="hidden group-open:inline">Show fewer</span>
               </summary>

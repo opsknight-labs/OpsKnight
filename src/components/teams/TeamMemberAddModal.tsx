@@ -80,7 +80,7 @@ export default function TeamMemberAddModal({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="single" className="mt-4 focus-visible:outline-none">
+          <TabsContent value="single" className="mt-4 focus-visible:outline-hidden">
             <TeamMemberForm
               teamId={teamId}
               availableUsers={availableUsers}
@@ -90,7 +90,7 @@ export default function TeamMemberAddModal({
             />
           </TabsContent>
 
-          <TabsContent value="bulk" className="mt-4 focus-visible:outline-none">
+          <TabsContent value="bulk" className="mt-4 focus-visible:outline-hidden">
             <BulkTeamMemberActions
               teamId={teamId}
               availableUsers={availableUsers}

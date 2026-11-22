@@ -75,7 +75,7 @@ export default function LayerRestrictionsFields({
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <CalendarRange className="h-4 w-4" />
@@ -103,7 +103,7 @@ export default function LayerRestrictionsFields({
         </CollapsibleTrigger>
 
         <CollapsibleContent forceMount className="data-[state=closed]:hidden">
-          <div className="space-y-5 border-t bg-muted/[0.12] p-4">
+          <div className="space-y-5 border-t bg-muted/12 p-4">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -151,7 +151,7 @@ export default function LayerRestrictionsFields({
                     aria-label={day.label}
                     aria-pressed={selectedDays.includes(day.value)}
                     className={cn(
-                      'h-10 rounded-lg border text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+                      'h-10 rounded-lg border text-sm font-semibold transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
                       selectedDays.includes(day.value)
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground'
@@ -180,7 +180,7 @@ export default function LayerRestrictionsFields({
                   onChange={event => onStartHourChange(event.target.value)}
                   disabled={disabled}
                   aria-label="Coverage starts at"
-                  className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Start time</option>
                   {Array.from({ length: 24 }, (_, hour) => (
@@ -196,7 +196,7 @@ export default function LayerRestrictionsFields({
                   onChange={event => onEndHourChange(event.target.value)}
                   disabled={disabled}
                   aria-label="Coverage ends at"
-                  className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">End time</option>
                   {Array.from({ length: 24 }, (_, hour) => (

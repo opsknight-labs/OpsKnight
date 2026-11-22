@@ -48,7 +48,7 @@ export function SheetJumpNav({
   return (
     <nav
       aria-label={label}
-      className="sticky top-0 z-20 -mx-6 -mt-6 mb-6 overflow-x-auto border-b bg-background/95 px-6 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+      className="sticky top-0 z-20 -mx-6 -mt-6 mb-6 overflow-x-auto border-b bg-background/95 px-6 py-2 backdrop-blur-sm supports-backdrop-filter:bg-background/85"
     >
       <ul className="flex min-w-max gap-1">
         {items.map(item => (
@@ -61,7 +61,7 @@ export function SheetJumpNav({
                   ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }
               className={cn(
-                'rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                 item.tone === 'danger' && 'hover:text-destructive'
               )}
             >

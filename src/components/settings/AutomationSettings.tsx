@@ -196,7 +196,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
   return (
     <section
       aria-label="Global automation settings"
-      className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm"
+      className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-xs"
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
         <div className="min-w-0 space-y-1">
@@ -292,7 +292,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
               }}
               onBlur={() => setShowRetentionError(true)}
               className={cn(
-                'h-11 max-w-[10rem] sm:h-10',
+                'h-11 max-w-40 sm:h-10',
                 invalid && 'border-destructive focus-visible:ring-destructive'
               )}
             />
@@ -333,7 +333,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
                 max={max}
                 step={step}
                 value={Object.entries(readiness).find(([name]) => name === key)?.[1]}
-                className="max-w-[12rem]"
+                className="max-w-48"
                 onChange={event => {
                   setReadiness(previous => ({ ...previous, [key]: Number(event.target.value) }));
                   edited();

@@ -435,7 +435,7 @@ export default function StepEditor({
 
         {depth === 1 && (
           <details className="group rounded-lg text-xs text-muted-foreground">
-            <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm font-medium text-foreground/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-sm font-medium text-foreground/80 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
               <ChevronRight
                 className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
                 aria-hidden="true"
@@ -635,14 +635,14 @@ function NestedChecks({
             return (
               <li
                 key={identities.at(index) ?? check.key}
-                className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs transition-all hover:border-primary/40"
+                className="rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs transition-all hover:border-primary/40"
               >
                 <details
                   open={issueCount > 0 || expandedChecks?.has(check.key) || undefined}
                   onToggle={event => onToggleCheck?.(check.key, event.currentTarget.open)}
                   className="group"
                 >
-                  <summary className="flex cursor-pointer select-none items-center justify-between gap-2 rounded-xl px-3.5 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <summary className="flex cursor-pointer select-none items-center justify-between gap-2 rounded-xl px-3.5 py-3 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                     <span className="flex min-w-0 items-center gap-2">
                       <ChevronRight
                         className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"

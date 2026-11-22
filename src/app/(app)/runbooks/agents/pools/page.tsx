@@ -146,7 +146,7 @@ export default async function RunbookAgentPoolsPage({
             title="Create Agent pool"
             description="Choose target semantics explicitly."
             trigger={
-              <Button className="gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-xs">
+              <Button className="gap-1.5 bg-white text-zinc-950 hover:bg-zinc-100 font-semibold shadow-2xs">
                 <Plus className="h-4 w-4" />
                 <span>Create pool</span>
               </Button>
@@ -204,7 +204,7 @@ export default async function RunbookAgentPoolsPage({
         >
           <div aria-labelledby="pool-members-title" className="space-y-4">
             {members.length > 0 ? (
-              <div className="overflow-x-auto rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-xs">
+              <div className="overflow-x-auto rounded-xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs shadow-2xs">
                 <Table>
                   <TableCaption className="sr-only">Members of {selected.name}</TableCaption>
                   <TableHeader>
@@ -319,7 +319,7 @@ export default async function RunbookAgentPoolsPage({
                 key={pool.id}
                 aria-label={pool.name}
                 className={cn(
-                  'flex flex-col rounded-2xl border border-border/80 dark:border-border/60 bg-card backdrop-blur-xs shadow-xs transition-all duration-200 hover:border-primary/40 hover:shadow-md',
+                  'flex flex-col rounded-2xl border border-border/80 dark:border-border/60 bg-card backdrop-blur-xs shadow-2xs transition-all duration-200 hover:border-primary/40 hover:shadow-md',
                   isSelected && 'border-primary/50 ring-2 ring-primary/20 shadow-md'
                 )}
               >
@@ -329,7 +329,7 @@ export default async function RunbookAgentPoolsPage({
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
                         <Network className="h-4 w-4" aria-hidden="true" />
                       </span>
-                      <h2 className="break-words !text-sm !leading-snug font-semibold">
+                      <h2 className="wrap-break-word text-sm! leading-snug! font-semibold">
                         {pool.name}
                       </h2>
                     </div>
@@ -398,7 +398,7 @@ export default async function RunbookAgentPoolsPage({
                           <li key={binding.service.id}>
                             <Link
                               href={`/services/${binding.service.id}?tab=runbooks`}
-                              className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-card px-2 py-0.5 text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-card px-2 py-0.5 text-xs transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                             >
                               <Server aria-hidden="true" className="h-3 w-3" />
                               {binding.service.name}
@@ -412,7 +412,7 @@ export default async function RunbookAgentPoolsPage({
                   </div>
                   {canManage && (
                     <details className="group rounded-xl border border-border/60 bg-muted/20 px-3.5 py-2.5">
-                      <summary className="cursor-pointer rounded-sm text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <summary className="cursor-pointer rounded-sm text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                         Dynamic label selector
                       </summary>
                       <ActionForm action={updateSchedulingLabelsAction} className="mt-2 space-y-2">

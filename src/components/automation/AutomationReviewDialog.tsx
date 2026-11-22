@@ -236,7 +236,7 @@ export function AutomationReviewDialog({
               {changes.length ? (
                 <ul className="divide-y rounded-md border">
                   {changes.map((change, index) => (
-                    <li className="break-words px-3 py-2" key={index}>
+                    <li className="wrap-break-word px-3 py-2" key={index}>
                       {change}
                     </li>
                   ))}
@@ -254,7 +254,7 @@ export function AutomationReviewDialog({
               : `${snapshot.fields.length} context fields · ${snapshot.rules.length} rules`}
           </p>
           <details className="rounded-md border">
-            <summary className="cursor-pointer rounded-md px-3 py-2 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <summary className="cursor-pointer rounded-md px-3 py-2 font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
               Inspect complete ordered behavior
             </summary>
             <ol className="space-y-2 border-t p-3">

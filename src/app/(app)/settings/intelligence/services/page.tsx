@@ -127,7 +127,7 @@ export default async function IntelligenceServicesPage({
             {rows.map(row => (
               <li key={row.serviceId}>
                 <details className="group/service">
-                  <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                  <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                     <span className="flex min-w-0 items-center gap-2">
                       <ChevronRight
                         className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 group-open/service:rotate-90 motion-reduce:transition-none"

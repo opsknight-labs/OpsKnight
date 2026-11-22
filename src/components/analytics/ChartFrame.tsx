@@ -7,9 +7,9 @@ import { cn } from '@/lib/utils';
 /** One option of a small segmented control (Chart/Table, a measure picker); 44px tall on phones. */
 export function segmentClass(active: boolean) {
   return cn(
-    'inline-flex h-11 items-center gap-1 rounded-sm px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-7',
+    'inline-flex h-11 items-center gap-1 rounded-sm px-2 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:h-7',
     active
-      ? 'bg-background text-foreground shadow-sm'
+      ? 'bg-background text-foreground shadow-xs'
       : 'text-muted-foreground hover:text-foreground'
   );
 }

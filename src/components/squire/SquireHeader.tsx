@@ -24,7 +24,7 @@ import {
 
 /** Header icon buttons: 44 px on phones and in the full-screen presentation, compact in the desktop panel. */
 export const squireIconButton = (fullscreen: boolean) =>
-  `inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${fullscreen ? 'h-11 w-11' : 'h-11 w-11 sm:h-8 sm:w-8'}`;
+  `inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${fullscreen ? 'h-11 w-11' : 'h-11 w-11 sm:h-8 sm:w-8'}`;
 
 /**
  * One row: avatar, name, what the conversation is about, then New chat, History, More and Close. The

@@ -51,7 +51,7 @@ export default function ScheduleCoveragePreview({ effectiveShifts, timeZone, max
   );
 
   return (
-    <Card className="flex flex-col justify-between overflow-hidden border-border/70 shadow-sm">
+    <Card className="flex flex-col justify-between overflow-hidden border-border/70 shadow-xs">
       <div>
         {/* Compact Header */}
         <CardHeader className="border-b bg-muted/20 px-4 py-2.5 sm:px-5">

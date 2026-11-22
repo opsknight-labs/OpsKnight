@@ -291,9 +291,9 @@ export default function TemplateCreateForm({ services, action }: TemplateCreateF
           {/* Main Form Fields (Left 7 Cols) */}
           <div className="lg:col-span-7 space-y-6">
             {/* Card 1: Template Metadata */}
-            <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-xs overflow-hidden">
+            <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xs overflow-hidden">
               {/* Top Accent Gradient Bar */}
-              <div className="h-1 w-full bg-gradient-to-r from-rose-500 via-orange-400 to-amber-400" />
+              <div className="h-1 w-full bg-linear-to-r from-rose-500 via-orange-400 to-amber-400" />
 
               <div className="p-5 sm:p-6 space-y-5">
                 <div className="flex items-center gap-2.5 pb-2 border-b border-border/70">
@@ -446,7 +446,7 @@ export default function TemplateCreateForm({ services, action }: TemplateCreateF
             </div>
 
             {/* Card 2: Pre-Configured Incident Defaults */}
-            <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-xs p-5 sm:p-6 space-y-5">
+            <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xs p-5 sm:p-6 space-y-5">
               <div className="flex items-center gap-2.5 pb-2 border-b border-border/70">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary">
                   <FileText className="h-4 w-4" />
@@ -519,7 +519,7 @@ export default function TemplateCreateForm({ services, action }: TemplateCreateF
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent
-                        className="w-[var(--radix-popover-trigger-width)] p-0"
+                        className="w-(--radix-popover-trigger-width) p-0"
                         align="start"
                       >
                         <Command>
@@ -740,7 +740,7 @@ export default function TemplateCreateForm({ services, action }: TemplateCreateF
             </div>
 
             {/* Bottom Actions Card */}
-            <div className="rounded-2xl border border-border/80 bg-card p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
+            <div className="rounded-2xl border border-border/80 bg-card p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-2xs">
               <Link href="/incidents/templates">
                 <Button
                   variant="ghost"
@@ -754,7 +754,7 @@ export default function TemplateCreateForm({ services, action }: TemplateCreateF
               <Button
                 type="submit"
                 disabled={isPending}
-                className="font-semibold text-xs h-9 px-5 shadow-xs cursor-pointer"
+                className="font-semibold text-xs h-9 px-5 shadow-2xs cursor-pointer"
               >
                 {isPending ? (
                   <>
@@ -774,7 +774,7 @@ export default function TemplateCreateForm({ services, action }: TemplateCreateF
           {/* Sticky Sidebar Preview (Right 5 Cols) */}
           <div className="lg:col-span-5 space-y-5 lg:sticky lg:top-6">
             {/* Live Template Picker Chip Preview */}
-            <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-xs p-5 space-y-3.5">
+            <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xs p-5 space-y-3.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -813,7 +813,7 @@ export default function TemplateCreateForm({ services, action }: TemplateCreateF
             </div>
 
             {/* Simulated Incident Card Preview */}
-            <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-xs p-5 space-y-3.5">
+            <div className="rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xs p-5 space-y-3.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="flex h-6 w-6 items-center justify-center rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400">

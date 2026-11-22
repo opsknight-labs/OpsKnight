@@ -4,7 +4,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center justify-center gap-1 rounded-md border px-2.5 py-0.5 text-[11px] font-bold leading-4 tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  'inline-flex items-center justify-center gap-1 rounded-md border px-2.5 py-0.5 text-[11px] font-bold leading-4 tracking-wide transition-colors focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2',
   {
     variants: {
       variant: {
@@ -14,14 +14,14 @@ const badgeVariants = cva(
         destructive:
           'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline: 'border-border text-foreground bg-transparent',
-        neutral: 'border-transparent bg-slate-700 text-white shadow-sm',
-        info: 'border-transparent bg-gradient-to-r from-status-info-deep to-status-info text-white shadow-sm',
+        neutral: 'border-transparent bg-slate-700 text-white shadow-xs',
+        info: 'border-transparent bg-linear-to-r from-status-info-deep to-status-info text-white shadow-xs',
         success:
-          'border-transparent bg-gradient-to-r from-status-ok-deep to-status-ok text-white shadow-sm',
+          'border-transparent bg-linear-to-r from-status-ok-deep to-status-ok text-white shadow-xs',
         warning:
-          'border-transparent bg-gradient-to-r from-status-elevated-deep to-status-elevated text-white shadow-sm',
-        danger: 'border-transparent bg-gradient-to-r from-status-critical-deep to-status-critical text-white shadow-sm',
-        shift: 'border-transparent bg-gradient-to-r from-status-shift-deep to-status-shift text-white shadow-sm',
+          'border-transparent bg-linear-to-r from-status-elevated-deep to-status-elevated text-white shadow-xs',
+        danger: 'border-transparent bg-linear-to-r from-status-critical-deep to-status-critical text-white shadow-xs',
+        shift: 'border-transparent bg-linear-to-r from-status-shift-deep to-status-shift text-white shadow-xs',
         // Sidebar variants - solid colors with white text for dark backgrounds
         'sidebar-danger': 'border-status-critical bg-status-critical text-white',
         'sidebar-info': 'border-status-info bg-status-info text-white',

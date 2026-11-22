@@ -23,7 +23,7 @@ const variantStyles = new Map<NonNullable<MobileCardProps['variant']>, string>([
   ['default', ''],
   ['elevated', 'shadow-md'],
   ['outlined', 'shadow-none'],
-  ['gradient', 'bg-gradient-to-br from-card to-muted/40'],
+  ['gradient', 'bg-linear-to-br from-card to-muted/40'],
 ]);
 
 export default function MobileCard({

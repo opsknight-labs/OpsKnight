@@ -210,7 +210,7 @@ export function EncryptionMigrationPanel({
   return (
     <div className="space-y-6">
       {/* Scope Disclaimer Alert */}
-      <div className="rounded-lg border border-border/70 bg-card p-4 shadow-xs">
+      <div className="rounded-lg border border-border/70 bg-card p-4 shadow-2xs">
         <div className="flex items-start gap-3">
           <div className="rounded-lg bg-primary/10 p-2 text-primary">
             <Key className="h-5 w-5" />
@@ -252,7 +252,7 @@ export function EncryptionMigrationPanel({
       {/* Top 2-Column: Keyring Overview & Key Retirement Readiness */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Card 1: Keyring Overview */}
-        <div className="rounded-lg border border-border/70 bg-card p-5 shadow-xs space-y-4">
+        <div className="rounded-lg border border-border/70 bg-card p-5 shadow-2xs space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Key className="h-4 w-4 text-primary" />
@@ -303,7 +303,7 @@ export function EncryptionMigrationPanel({
         </div>
 
         {/* Card 2: Key Retirement Readiness Assessment */}
-        <div className="rounded-lg border border-border/70 bg-card p-5 shadow-xs space-y-4">
+        <div className="rounded-lg border border-border/70 bg-card p-5 shadow-2xs space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-primary" />
@@ -374,7 +374,7 @@ export function EncryptionMigrationPanel({
       {activeRun && (activeRun.status === 'RUNNING' || activeRun.status === 'PENDING') && (
         <div
           className={cn(
-            'rounded-lg border p-4 shadow-xs space-y-3',
+            'rounded-lg border p-4 shadow-2xs space-y-3',
             activeRun.isOrphaned
               ? 'border-status-elevated-border/30 bg-status-elevated-soft dark:border-status-elevated/35 dark:bg-status-elevated/15'
               : 'border-primary/40 bg-primary/5'
@@ -455,7 +455,7 @@ export function EncryptionMigrationPanel({
       )}
 
       {/* Control Actions Bar */}
-      <div className="rounded-lg border border-border/70 bg-card p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+      <div className="rounded-lg border border-border/70 bg-card p-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
         <div>
           <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider">
             Controlled Migration Operations
@@ -570,7 +570,7 @@ export function EncryptionMigrationPanel({
       )}
 
       {/* Recent Runs History */}
-      <div className="rounded-lg border border-border/70 bg-card shadow-xs overflow-hidden">
+      <div className="rounded-lg border border-border/70 bg-card shadow-2xs overflow-hidden">
         <div className="px-5 py-4 border-b border-border/60 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-primary" />

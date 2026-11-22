@@ -310,7 +310,7 @@ function ServiceCard({
           {/* Stretched link: the whole card opens the service. */}
           <Link
             href={`/services/${service.id}`}
-            className="block truncate text-sm font-semibold text-foreground after:absolute after:inset-0 after:content-[''] hover:text-primary focus-visible:outline-none"
+            className="block truncate text-sm font-semibold text-foreground after:absolute after:inset-0 after:content-[''] hover:text-primary focus-visible:outline-hidden"
           >
             {service.name}
           </Link>
@@ -419,7 +419,7 @@ export default function ServicesListTable({
     : services.length;
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-xs">
       <DirectoryHeader
         title="Service directory"
         summary={`Showing ${showingFrom}–${showingTo} of ${totalItems}`}

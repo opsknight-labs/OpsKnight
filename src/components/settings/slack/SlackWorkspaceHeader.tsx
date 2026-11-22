@@ -25,7 +25,7 @@ export function SlackWorkspaceHeader({
   onReplaceWorkspace,
 }: SlackWorkspaceHeaderProps) {
   return (
-    <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-sm">
+    <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         {/* Left: Logo and Info */}
         <div className="flex items-center gap-4 min-w-0">

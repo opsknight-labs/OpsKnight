@@ -56,7 +56,7 @@ export default function GetStartedChecklist({ steps }: { steps: OnboardingStep[]
           type="button"
           onClick={dismiss}
           aria-label="Dismiss get started checklist"
-          className="rounded-sm p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="rounded-sm p-1 text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -66,7 +66,7 @@ export default function GetStartedChecklist({ steps }: { steps: OnboardingStep[]
           <li key={step.id}>
             <Link
               href={step.href}
-              className="flex items-center gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span
                 aria-hidden="true"

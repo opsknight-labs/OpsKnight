@@ -53,7 +53,7 @@ const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 const item =
   'inline-flex h-5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm px-1.5 transition-colors';
 const interactive =
-  'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+  'hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 const icon = 'size-3.5 shrink-0';
 
 const subscribeOnline = (notify: () => void) => {

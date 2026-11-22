@@ -68,7 +68,7 @@ function Metric({
       title={title}
       data-icon-button
       className={cn(
-        'group relative block min-w-0 bg-card px-3 py-2.5 text-left outline-none transition-colors duration-150',
+        'group relative block min-w-0 bg-card px-3 py-2.5 text-left outline-hidden transition-colors duration-150',
         'hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
         active && 'bg-muted shadow-[inset_0_-2px_0_hsl(var(--ui-foreground))]',
         groupDivider && 'xl:border-l xl:border-border'
@@ -233,7 +233,7 @@ export default function LiveCommandStrip({
       data-testid="command-center"
       aria-label="Command center"
       // Same always-dark band as PageHeader; `dark` keeps `dark:` variants (status pairs) on.
-      className="ok-inverse-surface dark rounded-xl border border-border bg-card px-4 py-3.5 text-card-foreground shadow-sm sm:px-5 sm:py-4"
+      className="ok-inverse-surface dark rounded-xl border border-border bg-card px-4 py-3.5 text-card-foreground shadow-xs sm:px-5 sm:py-4"
     >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
@@ -297,7 +297,7 @@ export default function LiveCommandStrip({
                       data-icon-button
                       onClick={() => setQuery({ ...reset, ...fragment.patch })}
                       className={cn(
-                        'rounded-sm p-0 font-medium decoration-1 underline-offset-4 outline-none hover:underline focus-visible:underline',
+                        'rounded-sm p-0 font-medium decoration-1 underline-offset-4 outline-hidden hover:underline focus-visible:underline',
                         fragment.tone === 'rose'
                           ? cn(toneClasses('critical').text, 'font-semibold')
                           : fragment.tone === 'amber'
@@ -335,9 +335,9 @@ export default function LiveCommandStrip({
                 data-icon-button
                 onClick={() => setQuery({ scope })}
                 className={cn(
-                  'h-full whitespace-nowrap rounded-sm px-2.5 outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
+                  'h-full whitespace-nowrap rounded-sm px-2.5 outline-hidden transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring',
                   query.scope === scope
-                    ? 'bg-card text-foreground shadow-xs'
+                    ? 'bg-card text-foreground shadow-2xs'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
@@ -357,7 +357,7 @@ export default function LiveCommandStrip({
               }
             }}
             title="Full-screen operations command console for office TVs and NOC screens"
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Monitor className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span className="hidden sm:inline">Operations Console</span>

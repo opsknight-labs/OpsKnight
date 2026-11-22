@@ -240,7 +240,7 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
               asChild
               variant="outline"
               size="sm"
-              className="bg-zinc-800/80 text-white border-zinc-700 hover:bg-zinc-700 text-xs gap-1.5 h-8 shadow-xs"
+              className="bg-zinc-800/80 text-white border-zinc-700 hover:bg-zinc-700 text-xs gap-1.5 h-8 shadow-2xs"
             >
               <Link href="/runbooks/agents">
                 <ArrowLeft className="h-3.5 w-3.5" />
@@ -251,7 +251,7 @@ export default async function AgentLifecyclePage({ params }: { params: Promise<{
               asChild
               variant="outline"
               size="sm"
-              className="bg-zinc-800/80 text-white border-zinc-700 hover:bg-zinc-700 text-xs gap-1.5 h-8 shadow-xs"
+              className="bg-zinc-800/80 text-white border-zinc-700 hover:bg-zinc-700 text-xs gap-1.5 h-8 shadow-2xs"
             >
               <Link href="/runbooks/agents/pools">
                 <Network className="h-3.5 w-3.5 text-primary" />

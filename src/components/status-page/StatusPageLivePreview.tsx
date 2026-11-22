@@ -421,7 +421,7 @@ function StatusPageLivePreview({
                 className={cn(
                   'inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-all duration-150',
                   isActive
-                    ? 'bg-background text-foreground shadow-xs font-semibold'
+                    ? 'bg-background text-foreground shadow-2xs font-semibold'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
                 title={device.label}

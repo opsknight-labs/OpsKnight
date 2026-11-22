@@ -163,7 +163,7 @@ export default function KeyboardShortcuts({
             onClick={onClose}
             aria-label="Close dialog"
             title="Close (Esc)"
-            className="flex h-8.5 w-8.5 items-center justify-center rounded-lg bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 text-zinc-700 hover:text-zinc-950 border border-zinc-300/80 shadow-2xs transition-all duration-150 active:scale-95 cursor-pointer dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 dark:hover:text-white dark:border-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-8.5 w-8.5 items-center justify-center rounded-lg bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 text-zinc-700 hover:text-zinc-950 border border-zinc-300/80 shadow-2xs transition-all duration-150 active:scale-95 cursor-pointer dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 dark:hover:text-white dark:border-zinc-700 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <X className="h-5 w-5 shrink-0" strokeWidth={2.5} />
             <span className="sr-only">Close</span>

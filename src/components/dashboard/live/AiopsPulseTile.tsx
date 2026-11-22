@@ -25,7 +25,7 @@ export default function AiopsPulseTile({ pulse }: { pulse: AiopsPulse | null }) 
       <Link
         href="/intelligence"
         aria-label="AIOps pulse: open the AIOps overview"
-        className="block rounded-xl border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="block rounded-xl border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="mb-2 flex items-center gap-2">
           <span

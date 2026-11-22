@@ -60,7 +60,7 @@ export default function EscalationExecutionHealth({ health }: { health: Health |
       <details className="group" open={health.needsAttention}>
         <summary
           className={cn(
-            'flex cursor-pointer list-none items-center justify-between gap-2 px-3 select-none transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden',
+            'flex cursor-pointer list-none items-center justify-between gap-2 px-3 select-none transition-colors hover:bg-muted/30 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden',
             health.needsAttention ? 'min-h-9 py-2' : 'min-h-8 py-1.5'
           )}
         >
@@ -133,7 +133,7 @@ export default function EscalationExecutionHealth({ health }: { health: Health |
                     className="rounded-lg border border-border/70 bg-card p-2.5 text-xs transition-colors hover:border-border"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-1.5">
-                      <span className="min-w-0 break-words font-semibold text-foreground">
+                      <span className="min-w-0 wrap-break-word font-semibold text-foreground">
                         Step {step.stepNumber}
                         {step.targetLabel ? ` · ${step.targetLabel}` : ''}
                       </span>
@@ -159,7 +159,7 @@ export default function EscalationExecutionHealth({ health }: { health: Health |
                       </p>
                     )}
                     {step.error && (
-                      <p className="mt-1 break-words font-mono text-[11px] text-muted-foreground">
+                      <p className="mt-1 wrap-break-word font-mono text-[11px] text-muted-foreground">
                         {step.error}
                       </p>
                     )}

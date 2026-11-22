@@ -31,7 +31,7 @@ export default function AskSquireAbout({
         openSquire({ question: question.slice(0, MAX_QUESTION), evidence, incidentId })
       }
       aria-label={`Ask ${assistantName} about ${subject}`}
-      className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
+      className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
     >
       <MessageCircleQuestion className="h-3.5 w-3.5" aria-hidden="true" />
       Ask {assistantName}

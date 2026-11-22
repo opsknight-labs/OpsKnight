@@ -111,9 +111,9 @@ export function IncidentMeetingCard({ meeting, onAction, className }: IncidentMe
   return (
     <div
       className={cn(
-        'rounded-xl border border-border/80 bg-card p-4 shadow-sm text-xs space-y-3 transition-all',
-        meeting.state === 'READY' && 'border-emerald-500/30 bg-emerald-500/[0.02]',
-        meeting.state === 'FAILED' && 'border-red-500/30 bg-red-500/[0.02]',
+        'rounded-xl border border-border/80 bg-card p-4 shadow-xs text-xs space-y-3 transition-all',
+        meeting.state === 'READY' && 'border-emerald-500/30 bg-emerald-500/2',
+        meeting.state === 'FAILED' && 'border-red-500/30 bg-red-500/2',
         className
       )}
     >
@@ -221,7 +221,7 @@ export function IncidentMeetingCard({ meeting, onAction, className }: IncidentMe
             <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <div className="min-w-0 flex-1">
               <span className="font-semibold block">Configuration Required</span>
-              <span className="text-[10.5px] opacity-90 break-words">
+              <span className="text-[10.5px] opacity-90 wrap-break-word">
                 {meeting.lastErrorMessage}
               </span>
             </div>
@@ -234,7 +234,7 @@ export function IncidentMeetingCard({ meeting, onAction, className }: IncidentMe
           <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
             <span className="font-semibold block">Meeting creation failed</span>
-            <span className="text-[10.5px] opacity-90 break-words">
+            <span className="text-[10.5px] opacity-90 wrap-break-word">
               {meeting.lastErrorMessage || 'Unable to establish video bridge.'}
             </span>
           </div>

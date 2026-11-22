@@ -142,7 +142,7 @@ export default function TeamAssignServicesModal({
                         : 'border-muted-foreground/40'
                     )}
                   >
-                    {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
+                    {isSelected && <Check className="h-3 w-3 stroke-3" />}
                   </div>
                 </div>
               );

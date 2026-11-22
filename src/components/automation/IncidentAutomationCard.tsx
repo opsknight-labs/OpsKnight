@@ -59,7 +59,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
       <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 break-words text-xs font-semibold">
+      <dd className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 wrap-break-word text-xs font-semibold">
         {children}
       </dd>
     </div>
@@ -201,7 +201,7 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
             {route.label}
           </Chip>
         </div>
-        <div className="min-w-0 space-y-2 break-words p-2.5 sm:p-3">
+        <div className="min-w-0 space-y-2 wrap-break-word p-2.5 sm:p-3">
           <div className="rounded-lg border border-border/60 bg-muted/20 p-2 space-y-1">
             <p className="text-xs font-semibold text-foreground">
               {matchedRuleName
@@ -353,7 +353,7 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
           )}
           {sensitive && (
             <details className="group rounded-lg border border-border/70 bg-card">
-              <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-xs font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-xs font-semibold focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 View evaluation
                 <ChevronDown
                   className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180"

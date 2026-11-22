@@ -33,7 +33,7 @@ export function ErrorNotice({
     >
       <p className="flex min-w-0 gap-2">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="break-words">{message}</span>
+        <span className="wrap-break-word">{message}</span>
       </p>
       {onRetrySave && (
         <Button size="sm" variant="outline" className="h-10 sm:h-9" onClick={onRetrySave}>
@@ -57,9 +57,9 @@ export function UndoNotice({
   return (
     <div
       role="status"
-      className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3 text-sm shadow-sm"
+      className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3 text-sm shadow-xs"
     >
-      <span className="min-w-0 break-words">{label}</span>
+      <span className="min-w-0 wrap-break-word">{label}</span>
       <Button variant="outline" className="h-10 shrink-0" disabled={disabled} onClick={onUndo}>
         <Undo2 aria-hidden="true" />
         Undo

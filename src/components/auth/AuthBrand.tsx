@@ -58,7 +58,7 @@ export default function AuthBrand({
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        'inline-flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+        'inline-flex items-center gap-2.5 rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2',
         tone === 'onDark'
           ? 'focus-visible:ring-white focus-visible:ring-offset-transparent'
           : 'focus-visible:ring-ring focus-visible:ring-offset-background',

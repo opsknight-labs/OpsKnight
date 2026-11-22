@@ -38,7 +38,7 @@ function Tile({
     <section
       aria-labelledby={`${id}-title`}
       data-testid={id}
-      className="min-w-0 space-y-3 rounded-xl border border-border/70 bg-card p-4 shadow-xs"
+      className="min-w-0 space-y-3 rounded-xl border border-border/70 bg-card p-4 shadow-2xs"
     >
       <header className="flex items-center gap-2">
         <span
@@ -56,7 +56,7 @@ function Tile({
       {href && linkLabel && (
         <Link
           href={href}
-          className="inline-flex min-h-11 items-center text-xs font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+          className="inline-flex min-h-11 items-center text-xs font-medium underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
         >
           {linkLabel}
         </Link>
@@ -69,7 +69,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   return (
     <div className="min-w-0">
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="break-words text-xl font-semibold tabular-nums text-foreground">{value}</dd>
+      <dd className="wrap-break-word text-xl font-semibold tabular-nums text-foreground">{value}</dd>
       {hint && <dd className="text-xs text-muted-foreground">{hint}</dd>}
     </div>
   );
@@ -116,7 +116,7 @@ function AiUsage({ tile, canManage }: { tile: TeamAiUsageTile; canManage: boolea
           </div>
           <div aria-hidden="true" className="h-2 w-full rounded-r bg-muted">
             <div
-              className="h-2 rounded-r bg-[var(--overview-accent)]"
+              className="h-2 rounded-r bg-(--overview-accent)"
               style={{ width: `${Math.max(2, Math.min(100, tile.utilization * 100))}%` }}
             />
           </div>

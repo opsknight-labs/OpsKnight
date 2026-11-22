@@ -160,7 +160,7 @@ export default async function StatusPageWorkspacePage({
           },
         ]}
       />
-      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-xs">
         <StatusPageWorkspace
           key={statusPage.id}
           statusPage={formattedStatusPage}

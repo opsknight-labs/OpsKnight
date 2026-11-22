@@ -196,7 +196,7 @@ export default function AuthenticationRecoveryWorkspace() {
 
       {/* Self-service password access for a normally signed-in administrator */}
       {data.actor.kind === 'admin' && data.mode === 'SSO_REQUIRED' && (
-        <div className="space-y-3 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs text-sm">
+        <div className="space-y-3 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-2xs text-sm">
           <div className="flex items-center gap-2 border-b border-border/70 pb-3">
             <ShieldCheck className="h-4 w-4 text-primary" />
             <h3 className="font-semibold text-sm text-foreground">Password access recovery</h3>
@@ -212,7 +212,7 @@ export default function AuthenticationRecoveryWorkspace() {
 
       {/* Recovery Actor Mode Active Banner & Controls */}
       {data.actor.kind !== 'admin' && (
-        <div className="space-y-4 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs text-sm">
+        <div className="space-y-4 rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-2xs text-sm">
           <div className="flex items-center gap-2 border-b border-border/70 pb-3">
             <ShieldCheck className="h-4 w-4 text-primary" />
             <h3 className="font-semibold text-sm text-foreground">Recovery Session Actions</h3>
@@ -259,7 +259,7 @@ export default function AuthenticationRecoveryWorkspace() {
                   <button
                     type="button"
                     onClick={() => setShowReauthPassword(prev => !prev)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label={showReauthPassword ? 'Hide password' : 'Show password'}
                   >
                     {showReauthPassword ? (
@@ -450,7 +450,7 @@ function PasswordAccessRecovery() {
             <button
               type="button"
               onClick={() => setShowRestorePassword(prev => !prev)}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={showRestorePassword ? 'Hide password' : 'Show password'}
             >
               {showRestorePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

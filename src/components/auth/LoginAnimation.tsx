@@ -560,7 +560,7 @@ export default function LoginAnimation({
 
         {/* Shooting stars — more frequent, varied trajectories */}
         <span
-          className="absolute h-px w-28 rounded-full bg-gradient-to-r from-white to-transparent opacity-0"
+          className="absolute h-px w-28 rounded-full bg-linear-to-r from-white to-transparent opacity-0"
           style={{
             top: '14%',
             left: '72%',
@@ -570,7 +570,7 @@ export default function LoginAnimation({
           }}
         />
         <span
-          className="absolute h-px w-20 rounded-full bg-gradient-to-r from-white to-transparent opacity-0"
+          className="absolute h-px w-20 rounded-full bg-linear-to-r from-white to-transparent opacity-0"
           style={{
             top: '36%',
             left: '18%',
@@ -580,7 +580,7 @@ export default function LoginAnimation({
           }}
         />
         <span
-          className="absolute h-px w-32 rounded-full bg-gradient-to-r from-white/80 to-transparent opacity-0"
+          className="absolute h-px w-32 rounded-full bg-linear-to-r from-white/80 to-transparent opacity-0"
           style={{
             top: '8%',
             left: '45%',
@@ -590,7 +590,7 @@ export default function LoginAnimation({
           }}
         />
         <span
-          className="absolute h-px w-16 rounded-full bg-gradient-to-r from-white to-transparent opacity-0"
+          className="absolute h-px w-16 rounded-full bg-linear-to-r from-white to-transparent opacity-0"
           style={{
             top: '55%',
             left: '60%',
@@ -600,7 +600,7 @@ export default function LoginAnimation({
           }}
         />
         <span
-          className="absolute h-px w-24 rounded-full bg-gradient-to-r from-blue-100 to-transparent opacity-0"
+          className="absolute h-px w-24 rounded-full bg-linear-to-r from-blue-100 to-transparent opacity-0"
           style={{
             top: '25%',
             left: '10%',
@@ -921,12 +921,12 @@ export default function LoginAnimation({
       {/* Bottom tagline */}
       <div
         className={cn(
-          'absolute inset-x-0 bottom-0 z-20 p-8 lg:p-12 2xl:p-16 pt-24 bg-gradient-to-t from-[hsl(var(--auth-space))] via-[hsl(var(--auth-space)/0.85)] to-transparent',
+          'absolute inset-x-0 bottom-0 z-20 p-8 lg:p-12 2xl:p-16 pt-24 bg-linear-to-t from-[hsl(var(--auth-space))] via-[hsl(var(--auth-space)/0.85)] to-transparent',
           isBanner && 'hidden'
         )}
       >
         <div className="w-7 h-[2px] bg-red-600 mb-3" />
-        <h2 className="text-3xl lg:text-4xl 2xl:text-5xl min-[2000px]:text-6xl font-extrabold text-white tracking-tight leading-[1.2]">
+        <h2 className="text-3xl lg:text-4xl 2xl:text-5xl min-[2000px]:text-6xl font-extrabold text-white tracking-tight leading-tight">
           You are not <span className="text-red-500">the only one awake.</span>
         </h2>
         <p className="text-xs lg:text-sm 2xl:text-base auth-panel-text-muted mt-2 max-w-sm 2xl:max-w-md leading-relaxed">

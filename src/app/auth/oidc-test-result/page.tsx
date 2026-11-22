@@ -152,7 +152,7 @@ function Diagnostics({ diagnostics }: { diagnostics: OidcTestDiagnostics }) {
           <summary className="cursor-pointer text-muted-foreground">
             All claim names in the ID token ({diagnostics.claimNames.length})
           </summary>
-          <p className="mt-2 font-mono break-words text-muted-foreground">
+          <p className="mt-2 font-mono wrap-break-word text-muted-foreground">
             {diagnostics.claimNames.join(', ')}
           </p>
         </details>
@@ -174,7 +174,7 @@ export default async function OidcTestResultPage() {
 
   return (
     <main className="min-h-[80vh] flex items-center justify-center p-4 sm:p-6">
-      <div className="w-full max-w-xl min-w-0 rounded-2xl border bg-card p-5 sm:p-8 shadow-sm space-y-6">
+      <div className="w-full max-w-xl min-w-0 rounded-2xl border bg-card p-5 sm:p-8 shadow-xs space-y-6">
         <div className="flex items-center gap-3.5">
           <div
             className={`p-3 rounded-xl shrink-0 ${
@@ -215,7 +215,7 @@ export default async function OidcTestResultPage() {
             <>
               <Link
                 href={settingsUrl('policy', revisionId)}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-xs hover:bg-primary/90 transition-colors"
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-2xs hover:bg-primary/90 transition-colors"
               >
                 <ShieldCheck className="h-4 w-4" aria-hidden />
                 Continue to review and activate
@@ -233,7 +233,7 @@ export default async function OidcTestResultPage() {
             <>
               <Link
                 href={settingsUrl(view.fix?.step ?? 'connection', revisionId)}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-xs hover:bg-primary/90 transition-colors"
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-2xs hover:bg-primary/90 transition-colors"
               >
                 <Wrench className="h-4 w-4" aria-hidden />
                 {view.fix?.label ?? 'Return to the authentication console'}
