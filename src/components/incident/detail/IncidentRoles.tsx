@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Plus, UserCheck, UserMinus } from 'lucide-react';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/shadcn/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Button } from '@/components/ui/shadcn/button';
 import UserAvatar from '@/components/UserAvatar';
@@ -42,8 +43,8 @@ export default function IncidentRoles({
     <section aria-label="Incident roles">
       <ul
         className={cn(
-          'grid gap-2',
-          presentation === 'mobile' ? 'grid-cols-2' : 'grid-cols-2 lg:grid-cols-4'
+          'grid grid-cols-2 gap-2',
+          presentation !== 'mobile' && 'lg:grid-cols-4 xl:grid-cols-2'
         )}
       >
         {roles.map(role => (
@@ -53,6 +54,7 @@ export default function IncidentRoles({
               users={users}
               currentUserId={currentUserId}
               onSetRole={onSetRole}
+              stacked={presentation === 'mobile'}
             />
           </li>
         ))}
@@ -66,14 +68,18 @@ function RoleSlot({
   users,
   currentUserId,
   onSetRole,
+  stacked = false,
 }: {
   role: IncidentRoleSlot;
   users: IncidentPickerUser[];
   currentUserId: string;
   onSetRole: IncidentRolesProps['onSetRole'];
+  /** Phones: role above holder so names are not cut off in a half-width chip. */
+  stacked?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [hoverOpen, setHoverOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const holder = role.holder;
   const isMine = holder?.id === currentUserId;
@@ -112,14 +118,20 @@ function RoleSlot({
           {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
         </span>
       )}
-      <span className="flex min-w-0 flex-col text-left leading-tight">
-        <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {/* One line: role, then holder. Why the role exists lives in the hover card and the picker. */}
+      <span
+        className={cn(
+          'flex min-w-0 flex-1 text-left leading-tight',
+          stacked ? 'flex-col' : 'items-baseline gap-1.5'
+        )}
+      >
+        <span className="shrink-0 text-2xs font-semibold text-muted-foreground">
           {role.shortLabel}
         </span>
         <span
           className={cn(
             'truncate text-xs',
-            holder ? 'font-medium text-foreground' : 'text-muted-foreground'
+            holder ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'
           )}
         >
           {holder
@@ -141,34 +153,95 @@ function RoleSlot({
   );
 
   const slotClass = cn(
-    'flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border px-2.5 text-left transition-colors',
+    'flex w-full min-w-0 items-center gap-2 rounded-lg border pl-1.5 pr-2.5 text-left transition-colors',
+    stacked ? 'h-11' : 'h-9',
     holder ? 'border-border bg-background' : 'border-dashed border-border/80 bg-muted/20'
+  );
+
+  const details = (
+    <HoverCardContent align="start" className="w-72 p-0">
+      <div className="space-y-1 px-3 py-2.5">
+        <p className="text-xs font-semibold text-foreground">{role.label}</p>
+        <p className="text-xs leading-snug text-muted-foreground">{role.description}</p>
+      </div>
+      <div className="flex items-center gap-2.5 border-t border-border px-3 py-2.5">
+        {holder ? (
+          <>
+            <UserAvatar
+              userId={holder.id}
+              name={holder.name}
+              gender={holder.gender}
+              avatarUrl={holder.avatarUrl}
+              size="sm"
+              className="shrink-0"
+              aria-hidden
+            />
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate text-xs font-semibold text-foreground">
+                {holder.name}
+                {isMine ? ' (you)' : ''}
+              </span>
+              <span className="block truncate text-2xs text-muted-foreground">{holder.email}</span>
+            </span>
+          </>
+        ) : (
+          <span className="text-xs text-muted-foreground">Nobody holds this role yet.</span>
+        )}
+      </div>
+      {interactive && (
+        <p className="border-t border-border bg-muted/30 px-3 py-1.5 text-2xs text-muted-foreground">
+          {holder ? 'Click to change or clear' : canTake ? 'Click to take it or assign someone' : 'Click to assign someone'}
+        </p>
+      )}
+    </HoverCardContent>
   );
 
   if (!interactive) {
     return (
-      <div className={slotClass} title={role.description}>
-        {body}
-      </div>
+      <HoverCard openDelay={250} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <div className={slotClass} tabIndex={0}>
+            {body}
+          </div>
+        </HoverCardTrigger>
+        {details}
+      </HoverCard>
     );
   }
 
   const others = users.filter(user => user.id !== holder?.id);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          disabled={isPending}
-          aria-label={`${role.label}: ${holder ? holder.name : 'unassigned'}. Change`}
-          className={cn(
-            slotClass,
-            'hover:border-foreground/30 hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60'
-          )}
-        >
-          {body}
-        </button>
-      </PopoverTrigger>
+    <Popover
+      open={open}
+      onOpenChange={next => {
+        setOpen(next);
+        if (next) setHoverOpen(false);
+      }}
+    >
+      {/* Hover shows who holds the role and why it exists; it stays shut while the picker is open. */}
+      <HoverCard
+        open={hoverOpen && !open}
+        onOpenChange={setHoverOpen}
+        openDelay={250}
+        closeDelay={100}
+      >
+        <HoverCardTrigger asChild>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={isPending}
+              aria-label={`${role.label}: ${holder ? holder.name : 'unassigned'}. Change`}
+              className={cn(
+                slotClass,
+                'hover:border-foreground/30 hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60'
+              )}
+            >
+              {body}
+            </button>
+          </PopoverTrigger>
+        </HoverCardTrigger>
+        {details}
+      </HoverCard>
       <PopoverContent align="start" className="w-72 p-0" aria-label={`${role.label} role`}>
         <div className="border-b border-border px-3 py-2.5">
           <p className="text-xs font-semibold text-foreground">{role.label}</p>

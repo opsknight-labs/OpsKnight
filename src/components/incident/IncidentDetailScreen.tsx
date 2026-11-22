@@ -624,33 +624,16 @@ export default async function IncidentDetailScreen({
       ) : (
         <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xs">
           <div className={`h-1 w-full bg-linear-to-r ${statusGradient}`} />
-          <div className="p-3.5 sm:p-4.5">
-            <div className="mb-2.5 flex min-w-0 items-center justify-between gap-3">
+          <div className="grid gap-3 p-3.5 sm:px-4.5 sm:py-4 xl:grid-cols-[minmax(0,1fr)_minmax(24rem,31rem)] xl:gap-5">
+            <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
               <ListReturnLink
                 href={backHref}
-                className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                aria-label={backLabel}
+                title={backLabel}
+                className="mt-1.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                <span>{backLabel}</span>
+                <ArrowLeft className="h-4 w-4" aria-hidden />
               </ListReturnLink>
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Badge
-                  variant="outline"
-                  className="hidden font-mono text-[11px] text-muted-foreground sm:inline-flex border-border/80"
-                >
-                  #{id.slice(0, 8)}
-                </Badge>
-                <CopyButton text={id} label="ID" className="h-7 px-2 text-xs font-medium" />
-                <CopyButton
-                  text={`${appUrl}/incidents/${id}`}
-                  icon="link"
-                  label="Link"
-                  className="h-7 px-2 text-xs font-medium"
-                />
-              </div>
-            </div>
-
-            <div className="flex min-w-0 items-start gap-3 sm:gap-3.5">
               <div
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-xs sm:h-10 sm:w-10 ${statusGradient}`}
               >
@@ -664,33 +647,59 @@ export default async function IncidentDetailScreen({
                   <AlertCircle className="h-4.5 w-4.5" />
                 )}
               </div>
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <h1 className="min-w-0 wrap-break-word text-base font-bold leading-snug tracking-tight text-foreground sm:text-xl">
-                    {incident.title}
-                  </h1>
-                  <StatusBadge status={incident.status} live={incident.status === 'OPEN'} />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 pt-0.5">
+                    <h1
+                      className={`min-w-0 wrap-break-word text-lg font-bold leading-snug tracking-tight text-foreground ${
+                        // Long titles step down a size so they stay ~3 lines instead of 4+.
+                        incident.title.length > 80 ? 'sm:text-xl' : 'sm:text-2xl'
+                      }`}
+                    >
+                      {incident.title}
+                    </h1>
+                    <StatusBadge status={incident.status} live={incident.status === 'OPEN'} />
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Badge
+                      variant="outline"
+                      className="hidden border-border/80 font-mono text-xs text-muted-foreground sm:inline-flex"
+                    >
+                      #{id.slice(0, 8)}
+                    </Badge>
+                    <CopyButton text={id} label="ID" className="h-7 px-2 text-xs font-medium" />
+                    <CopyButton
+                      text={`${appUrl}/incidents/${id}`}
+                      icon="link"
+                      label="Link"
+                      className="h-7 px-2 text-xs font-medium"
+                    />
+                  </div>
                 </div>
                 {showIntelligence && (
                   <Suspense fallback={null}>
                     <IncidentGroupLine incidentId={incident.id} />
                   </Suspense>
                 )}
-                <IncidentSLABadges sla={incidentSla} />
-                <IncidentImpacts
-                  incidentId={id}
-                  impacts={impactedBusinessServices}
-                  canEdit={canManageIncident}
-                />
-                {(canManageIncident || canAddIncidentNote) && (
-                  <NotifyStakeholdersButton
-                    incidentId={incident.id}
-                    businessServices={impactedBusinessServices.filter(impact => !impact.excluded)}
+                <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+                  <IncidentSLABadges sla={incidentSla} className="pt-0" />
+                  <IncidentImpacts
+                    incidentId={id}
+                    impacts={impactedBusinessServices}
+                    canEdit={canManageIncident}
                   />
-                )}
+                  {(canManageIncident || canAddIncidentNote) && (
+                    <NotifyStakeholdersButton
+                      incidentId={incident.id}
+                      businessServices={impactedBusinessServices.filter(impact => !impact.excluded)}
+                    />
+                  )}
+                </div>
               </div>
             </div>
-            <div className="mt-3.5 border-t border-border/70 pt-3">{rolesContent}</div>
+            <div className="border-t border-border/70 pt-3 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+              {rolesContent}
+            </div>
           </div>
         </section>
       )}
