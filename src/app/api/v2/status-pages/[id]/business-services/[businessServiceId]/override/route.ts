@@ -19,11 +19,16 @@ export const PUT = defineV2Route({
   paramsSchema: Params,
   querySchema: z.object({}).strict(),
   bodySchema: StatusOverrideInputSchema,
-  handler: async ({ params, body, actor }) => ({
-    data: await setStatusPageBusinessServiceOverride(params.id, params.businessServiceId, body, {
-      actor,
-      source: 'API',
-    }),
+  idempotent: true,
+  handler: async ({ params, body, actor, tx }) => ({
+    data: await setStatusPageBusinessServiceOverride(
+      params.id,
+      params.businessServiceId,
+      body,
+      { actor, source: 'API' },
+      new Date(),
+      tx
+    ),
     headers: { 'Cache-Control': 'no-store' },
   }),
 });

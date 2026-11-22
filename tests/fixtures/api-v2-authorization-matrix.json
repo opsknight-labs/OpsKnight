@@ -47,6 +47,18 @@
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "PUT /business-services/{id}/supporting [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /business-services/import [services:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
   "GET /business-services [services:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -346,6 +358,12 @@
     "RESPONDER": "allow:global",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
+  },
+  "POST /incidents/{id}/stakeholder-notify [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "allow:resource"
   },
   "POST /incidents/{id}/suppress [incidents:write]": {
     "ADMIN": "allow:global",
@@ -1806,6 +1824,12 @@
     "USER": "deny:MISSING_CAPABILITY"
   },
   "POST /status-pages/{id}/assets [status-pages:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "PUT /status-pages/{id}/business-services/{businessServiceId}/override [status-pages:write]": {
     "ADMIN": "allow:global",
     "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",

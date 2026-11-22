@@ -82,6 +82,10 @@ const decisions: readonly ApiCapability[] = [
       'deleteBusinessService',
       'getStatusPageBusinessServices',
       'setStatusPageBusinessServices',
+      'setSupportingBusinessServices',
+      'importBusinessServices',
+      'setStatusPageBusinessServiceOverride',
+      'notifyIncidentStakeholders',
     ],
   },
   {

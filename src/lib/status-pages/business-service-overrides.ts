@@ -1,4 +1,5 @@
 import 'server-only';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { emitAuditEvent, type AuditEventSource } from '@/lib/audit';
@@ -32,7 +33,8 @@ export async function setStatusPageBusinessServiceOverride(
   businessServiceId: string,
   raw: unknown,
   context: { actor: AuthorizationActor; source?: AuditEventSource },
-  now = new Date()
+  now = new Date(),
+  client?: Prisma.TransactionClient
 ) {
   if (
     !authorize({ actor: context.actor, action: AUTHORIZATION_ACTIONS.STATUS_PAGE_MANAGE }).allowed
@@ -53,7 +55,7 @@ export async function setStatusPageBusinessServiceOverride(
       userMessage: `An override must end in the future and within ${MAX_OVERRIDE_DAYS} days.`,
       fields: [{ field: 'until', code: 'out_of_range', message: 'Out of range.' }],
     });
-  return prisma.$transaction(async tx => {
+  const run = async (tx: Prisma.TransactionClient) => {
     const row = await tx.statusPageBusinessService.findUnique({
       where: { statusPageId_businessServiceId: { statusPageId: pageId, businessServiceId } },
       select: { id: true, statusOverride: true, statusOverrideUntil: true },
@@ -91,7 +93,8 @@ export async function setStatusPageBusinessServiceOverride(
       status: updated.statusOverride,
       until: updated.statusOverrideUntil?.toISOString() ?? null,
     };
-  });
+  };
+  return client ? run(client) : prisma.$transaction(run);
 }
 
 /**

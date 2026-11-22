@@ -90,6 +90,20 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
     serviceLayout: 'BUSINESS_EXPANDABLE',
     businessServiceIds: ['bsv_123456'],
   },
+  'PUT /business-services/{id}/supporting': { businessServiceIds: ['bsv_234567'] },
+  'POST /business-services/import': {
+    format: 'csv',
+    content:
+      'name,criticality,owner_team,members\nCheckout,TIER_0,Payments,checkout-api;payments-api',
+  },
+  'PUT /status-pages/{id}/business-services/{businessServiceId}/override': {
+    status: 'MAINTENANCE',
+    until: '2026-11-23T06:00:00Z',
+  },
+  'POST /incidents/{id}/stakeholder-notify': {
+    phase: 'identified',
+    message: 'We found the cause and are rolling back. Next update in 30 minutes.',
+  },
   'POST /runbooks/{id}/executions/preview': { parameters: {} },
   'POST /runbooks/executions/{id}/cancel': {
     reason: 'Operator requested stop after investigation.',

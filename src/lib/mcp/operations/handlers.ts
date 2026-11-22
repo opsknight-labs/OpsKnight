@@ -924,6 +924,26 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
   ['updateSchedule', async () => (await import('@/app/api/v2/schedules/[id]/route')).PATCH],
   ['updateService', async () => (await import('@/app/api/v2/services/[id]/route')).PATCH],
   ['updateTeam', async () => (await import('@/app/api/v2/teams/[id]/route')).PATCH],
+  // Business services P4.
+  [
+    'setSupportingBusinessServices',
+    async () => (await import('@/app/api/v2/business-services/[id]/supporting/route')).PUT,
+  ],
+  [
+    'importBusinessServices',
+    async () => (await import('@/app/api/v2/business-services/import/route')).POST,
+  ],
+  [
+    'setStatusPageBusinessServiceOverride',
+    async () =>
+      (
+        await import('@/app/api/v2/status-pages/[id]/business-services/[businessServiceId]/override/route')
+      ).PUT,
+  ],
+  [
+    'notifyIncidentStakeholders',
+    async () => (await import('@/app/api/v2/incidents/[id]/stakeholder-notify/route')).POST,
+  ],
 ]);
 
 // Reads used only as impact previews for destructive approvals; never generic tools.

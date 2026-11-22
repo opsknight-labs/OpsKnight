@@ -27,6 +27,8 @@ export interface CatalogEntity {
   namespace: string;
   serviceId: string | null;
   dependsOn: string[];
+  /** Backstage `spec.system` (lower-cased name) for components; business-service import uses it. */
+  system?: string | null;
 }
 
 type Json = Record<string, unknown>;
@@ -73,6 +75,10 @@ function entityFrom(document: unknown): CatalogEntity | null {
         : 'default',
     serviceId: typeof annotated === 'string' && annotated.trim() ? annotated.trim() : null,
     dependsOn,
+    system:
+      typeof spec.system === 'string' && spec.system.trim()
+        ? spec.system.trim().toLowerCase()
+        : null,
   };
 }
 
