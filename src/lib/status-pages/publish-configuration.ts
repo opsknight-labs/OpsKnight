@@ -91,14 +91,12 @@ const MAX_LAST_ERROR_LENGTH = 500;
 
 /**
  * Rows published only through business services (`viaBusinessService`) follow the page's
- * business services: once none of them contains the service, the row goes, unless this same
- * save lists the service directly, which makes it a direct selection. Direct rows never move.
+ * business services: once none of them contains the service, the row goes. The settings UI
+ * resends every row on the page as `serviceIds`, so a listed id is not proof of a direct
+ * choice; an admin who wants the service shown re-adds it, which creates a direct row.
+ * Direct rows never move.
  */
-async function reconcileBusinessServiceRows(
-  tx: Prisma.TransactionClient,
-  pageId: string,
-  serviceIds: readonly string[] | undefined
-) {
+async function reconcileBusinessServiceRows(tx: Prisma.TransactionClient, pageId: string) {
   const covered = new Set(
     (
       await tx.businessServiceMember.findMany({
@@ -113,16 +111,8 @@ async function reconcileBusinessServiceRows(
       select: { id: true, serviceId: true },
     })
   ).filter(row => !covered.has(row.serviceId));
-  if (!orphaned.length) return;
-  const direct = new Set(serviceIds ?? []);
-  const keep = orphaned.filter(row => direct.has(row.serviceId)).map(row => row.id);
-  const drop = orphaned.filter(row => !direct.has(row.serviceId)).map(row => row.id);
-  if (keep.length)
-    await tx.statusPageService.updateMany({
-      where: { id: { in: keep } },
-      data: { viaBusinessService: false },
-    });
-  if (drop.length) await tx.statusPageService.deleteMany({ where: { id: { in: drop } } });
+  if (orphaned.length)
+    await tx.statusPageService.deleteMany({ where: { id: { in: orphaned.map(row => row.id) } } });
 }
 
 /**
@@ -349,7 +339,7 @@ export async function applyStatusPageConfigurationChange(
       }
 
       if (businessServiceIds !== undefined || serviceIds !== undefined) {
-        await reconcileBusinessServiceRows(tx, pageId, serviceIds);
+        await reconcileBusinessServiceRows(tx, pageId);
       }
 
       if (classification.classes.includes('ROUTING')) {
