@@ -240,6 +240,7 @@ export const StatusPageSettingsSchema = z
           })
           .strict()
       )
+      .refine(value => Object.keys(value).length <= 200, 'At most 200 business services.')
       .optional(),
     serviceConfigs: z
       .record(

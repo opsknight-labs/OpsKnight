@@ -482,6 +482,14 @@ async function runOnce() {
       logger.warn('[Cron] Flapping hold sweep failed', { error });
     }
 
+    // Business-service impact history: at most one reconcile job per minute (deterministic id).
+    try {
+      const { enqueueBusinessServiceImpactReconcile } = await import('./business-services/impacts');
+      await enqueueBusinessServiceImpactReconcile();
+    } catch (error) {
+      logger.warn('[Cron] Business-service impact reconcile enqueue failed', { error });
+    }
+
     // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
     const ownership = getSchedulerOwnership(schedulerProfile);
     const jobResult = ownership.backgroundJobs

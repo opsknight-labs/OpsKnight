@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Loader2, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import {
   createBusinessServiceAction,
   deleteBusinessServiceAction,
+  searchBusinessServiceOptionsAction,
   updateBusinessServiceAction,
 } from '@/app/(app)/services/business/actions';
 
@@ -41,7 +42,8 @@ const TIERS = ['Tier 1', 'Tier 2', 'Tier 3'];
 function MultiPicker({
   label,
   description,
-  options,
+  options: initialOptions,
+  kind,
   value,
   onChange,
   emptyText,
@@ -49,16 +51,44 @@ function MultiPicker({
   label: string;
   description: string;
   options: Option[];
+  /** Searches the server as the user types; the initial list is only the first page. */
+  kind: 'services' | 'users';
   value: string[];
   onChange: (next: string[]) => void;
   emptyText: string;
 }) {
   const [query, setQuery] = useState('');
+  const [options, setOptions] = useState(initialOptions);
   const selected = new Set(value);
+  useEffect(() => {
+    const needle = query.trim();
+    if (!needle) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      searchBusinessServiceOptionsAction(kind, needle)
+        .then(found => {
+          if (cancelled) return;
+          setOptions(current => {
+            const known = new Set(current.map(option => option.id));
+            return [...current, ...found.filter(option => !known.has(option.id))];
+          });
+        })
+        .catch(() => undefined);
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [kind, query]);
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return options
-      .filter(option => !needle || option.name.toLowerCase().includes(needle))
+      .filter(
+        option =>
+          !needle ||
+          option.name.toLowerCase().includes(needle) ||
+          !!option.hint?.toLowerCase().includes(needle)
+      )
       .sort((a, b) => Number(selected.has(b.id)) - Number(selected.has(a.id)));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sort on selection is intentional
   }, [options, query, value]);
@@ -164,8 +194,10 @@ export default function BusinessServiceForm({
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const set = <K extends keyof BusinessServiceFormValue>(key: K, next: BusinessServiceFormValue[K]) =>
-    setValue(current => ({ ...current, [key]: next }));
+  const set = <K extends keyof BusinessServiceFormValue>(
+    key: K,
+    next: BusinessServiceFormValue[K]
+  ) => setValue(current => ({ ...current, [key]: next }));
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -244,7 +276,10 @@ export default function BusinessServiceForm({
               <label htmlFor="bs-tier" className="text-sm font-semibold">
                 Tier
               </label>
-              <Select value={value.tier || 'none'} onValueChange={next => set('tier', next === 'none' ? '' : next)}>
+              <Select
+                value={value.tier || 'none'}
+                onValueChange={next => set('tier', next === 'none' ? '' : next)}
+              >
                 <SelectTrigger id="bs-tier">
                   <SelectValue placeholder="No tier" />
                 </SelectTrigger>
@@ -283,8 +318,9 @@ export default function BusinessServiceForm({
         </div>
         <MultiPicker
           label="Technical services"
-          description="Its status is the worst status among these services."
+          description="Open incidents on these services, and on what they depend on, set its status."
           options={services}
+          kind="services"
           value={value.memberServiceIds}
           onChange={next => set('memberServiceIds', next)}
           emptyText="No services match."
@@ -296,6 +332,7 @@ export default function BusinessServiceForm({
           label="Followers"
           description="People told in plain language when it is affected and when it recovers. In-app only; nobody is paged."
           options={users}
+          kind="users"
           value={value.followerUserIds}
           onChange={next => set('followerUserIds', next)}
           emptyText="No people match."
@@ -303,7 +340,10 @@ export default function BusinessServiceForm({
       </section>
 
       {error && (
-        <p role="alert" className="rounded-lg border border-status-critical-border/30 bg-status-critical-soft px-3 py-2 text-sm text-status-critical-deep dark:bg-status-critical/15 dark:text-rose-300">
+        <p
+          role="alert"
+          className="rounded-lg border border-status-critical-border/30 bg-status-critical-soft px-3 py-2 text-sm text-status-critical-deep dark:bg-status-critical/15 dark:text-rose-300"
+        >
           {error}
         </p>
       )}

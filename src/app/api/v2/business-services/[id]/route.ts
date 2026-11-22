@@ -12,11 +12,14 @@ import {
   deleteBusinessService,
   updateBusinessService,
 } from '@/lib/business-services/commands';
+import { getBusinessServiceHealth } from '@/lib/business-services/contract';
 
 const paramsSchema = z.object({ id: z.string().trim().min(1).max(100) }).strict();
 
 export const GET = defineV2Route({
   action: AUTHORIZATION_ACTIONS.SERVICE_READ,
+  // The handler filters to the actor's business services (businessServiceReadWhere).
+  scopedFilter: true,
   paramsSchema,
   querySchema: z.object({}).strict(),
   handler: async ({ actor, params }) => {
@@ -25,7 +28,11 @@ export const GET = defineV2Route({
       select: BUSINESS_SERVICE_SELECT,
     });
     if (!row) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
-    return { data: businessServiceDto(row), headers: { 'Cache-Control': 'no-store' } };
+    const health = await getBusinessServiceHealth([row.id], actor);
+    return {
+      data: businessServiceDto(row, health.get(row.id)),
+      headers: { 'Cache-Control': 'no-store' },
+    };
   },
 });
 
@@ -43,7 +50,7 @@ export const PATCH = defineV2Route({
     const updated = await updateBusinessService(params.id, body, { actor, source: 'API' }, tx);
     await logV2Audit({
       action: 'business_service.updated',
-      entityType: 'SERVICE',
+      entityType: 'BUSINESS_SERVICE',
       entityId: params.id,
       actorId: actor.id,
       apiKeyId: apiKey.id,
@@ -64,7 +71,7 @@ export const DELETE = defineV2Route({
     const result = await deleteBusinessService(params.id, { actor, source: 'API' }, tx);
     await logV2Audit({
       action: 'business_service.deleted',
-      entityType: 'SERVICE',
+      entityType: 'BUSINESS_SERVICE',
       entityId: params.id,
       actorId: actor.id,
       apiKeyId: apiKey.id,

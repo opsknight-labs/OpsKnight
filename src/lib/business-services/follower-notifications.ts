@@ -32,7 +32,8 @@ export function businessServiceUpdateText(
 }
 
 /**
- * Followers of a business service hear about public incidents on its member services in plain
+ * Followers of a business service hear about public incidents that impact it (direct, through a
+ * dependency or a supporting business service, or marked by a responder; never unmarked ones) in plain
  * language, at stakeholder cadence (start, pickup, resolution), in the app only: never paged.
  */
 export async function notifyBusinessServiceFollowers(input: {
@@ -47,11 +48,13 @@ export async function notifyBusinessServiceFollowers(input: {
   excludeUserIds?: readonly string[];
 }): Promise<number> {
   if (input.incident.visibility && input.incident.visibility !== 'PUBLIC') return 0;
+  const { incidentImpactViews } = await import('./impacts');
+  const impacted = [...(await incidentImpactViews(input.incident.id))]
+    .filter(([, view]) => !view.excluded)
+    .map(([id]) => id);
+  if (!impacted.length) return 0;
   const groups = await prisma.businessService.findMany({
-    where: {
-      members: { some: { serviceId: input.incident.serviceId } },
-      followers: { some: {} },
-    },
+    where: { id: { in: impacted }, followers: { some: {} } },
     select: { name: true, followers: { select: { userId: true } } },
     orderBy: { name: 'asc' },
   });

@@ -180,7 +180,9 @@ export type StatusPageClassifierState = Record<string, unknown> & {
   /** Business services currently shown, in order. */
   businessServiceIds?: readonly string[];
   /** Current per-business-service presentation, keyed by business service id. */
-  businessServiceMappings?: Readonly<Record<string, StatusPageBusinessServiceConfig>>;
+  businessServiceMappings?: ReadonlyArray<
+    { businessServiceId: string } & StatusPageBusinessServiceConfig
+  >;
 };
 
 /** Per-page presentation of one business service. */
@@ -189,6 +191,10 @@ export type StatusPageBusinessServiceConfig = {
   showOnPage?: boolean;
   showMembers?: boolean;
 };
+
+export type StatusPageBusinessServiceConfigs = Readonly<
+  Record<string, StatusPageBusinessServiceConfig>
+>;
 
 export type StatusPageRouteDelta = {
   /** Route keys that must resolve to this page once the change is published. */
@@ -278,7 +284,7 @@ export function classifyStatusPageChange(input: {
   >;
   /** Present only when the caller is rewriting the page's business-service mappings. */
   businessServiceIds?: readonly string[];
-  businessServiceConfigs?: Readonly<Record<string, StatusPageBusinessServiceConfig>>;
+  businessServiceConfigs?: StatusPageBusinessServiceConfigs;
 }): StatusPageChangeClassification {
   const { current, patch, serviceIds, serviceConfigs, businessServiceIds, businessServiceConfigs } =
     input;
@@ -413,8 +419,11 @@ export function classifyStatusPageChange(input: {
       note('businessServiceIds', 'PRESENTATION');
   }
 
+  const mappingById = new Map(
+    (current.businessServiceMappings ?? []).map(row => [row.businessServiceId, row])
+  );
   for (const [id, config] of Object.entries(businessServiceConfigs ?? {})) {
-    const was = current.businessServiceMappings?.[id];
+    const was = mappingById.get(id);
     if (!was) continue; // a newly added business service is already classified above
     for (const flag of ['showOnPage', 'showMembers'] as const) {
       if (config[flag] === undefined || config[flag] === (was[flag] !== false)) continue;

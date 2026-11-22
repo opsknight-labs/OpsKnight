@@ -10,6 +10,10 @@ import {
   authorize,
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
+import { serviceReadWhere, teamReadWhere } from '@/lib/authorization-filters';
+import type { BusinessServiceHealth, ImpactSource } from './contract';
+import { invalidateBusinessServiceHealth } from './health';
+import { wouldCreateSupportCycle } from './stats';
 
 const id = z.string().trim().min(1).max(100);
 
@@ -21,6 +25,20 @@ export const BusinessServiceInputSchema = z
     ownerTeamId: id.nullable().default(null),
     memberServiceIds: z.array(id).max(200).default([]),
     followerUserIds: z.array(id).max(500).default([]),
+    // Optional without defaults: a form that does not know them must not reset them on update.
+    criticality: z.enum(['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3']).nullable().optional(),
+    impactMinUrgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).nullable().optional(),
+    impactMaxPriority: z
+      .string()
+      .trim()
+      .regex(/^P[1-9]$/i)
+      .transform(value => value.toUpperCase())
+      .nullable()
+      .optional(),
+    /** Members that are shown but never escalate past degraded; a subset of memberServiceIds. */
+    nonCriticalServiceIds: z.array(id).max(200).optional(),
+    /** Business services this one depends on (they support it). Cycles are rejected. */
+    dependsOnBusinessServiceIds: z.array(id).max(50).optional(),
   })
   .strict();
 
@@ -31,13 +49,23 @@ export const BUSINESS_SERVICE_SELECT = {
   name: true,
   description: true,
   tier: true,
+  criticality: true,
+  impactMinUrgency: true,
+  impactMaxPriority: true,
   ownerTeamId: true,
   createdAt: true,
   updatedAt: true,
   ownerTeam: { select: { id: true, name: true } },
   members: {
     orderBy: { createdAt: 'asc' },
-    select: { service: { select: { id: true, name: true, status: true, teamId: true } } },
+    select: {
+      critical: true,
+      service: { select: { id: true, name: true, status: true, teamId: true } },
+    },
+  },
+  supportedBy: {
+    orderBy: { createdAt: 'asc' },
+    select: { child: { select: { id: true, name: true } } },
   },
   followers: {
     orderBy: { createdAt: 'asc' },
@@ -63,6 +91,25 @@ export function businessServiceReadWhere(
   };
 }
 
+/** The same rule as businessServiceReadWhere, for in-memory filtering of the health snapshot. */
+export function businessServiceReadScope(
+  actor: AuthorizationActor
+): { global: true } | { global: false; teamIds: ReadonlySet<string> } {
+  const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_READ });
+  if (!decision.allowed) {
+    throw new AppError({ code: 'AUTHORIZATION_DENIED', userMessage: 'Service access denied.' });
+  }
+  return decision.scope === 'global'
+    ? { global: true }
+    : { global: false, teamIds: new Set(actor.teamIds) };
+}
+
+/**
+ * Business services the actor may change: the manage permission (checked by the caller) applied
+ * to what the actor can see, so a scoped manager never edits or deletes beyond their scope.
+ */
+export const businessServiceWriteWhere = businessServiceReadWhere;
+
 export function assertCanManageBusinessServices(actor: AuthorizationActor, deleting = false) {
   const action = deleting
     ? AUTHORIZATION_ACTIONS.SERVICE_DELETE
@@ -77,35 +124,79 @@ export function assertCanManageBusinessServices(actor: AuthorizationActor, delet
   }
 }
 
+type ParsedInput = z.output<typeof BusinessServiceInputSchema>;
+
+/**
+ * Every reference must exist, and what the actor adds must be in their scope: new member
+ * services they can read, an owner team of their own, business services they can see.
+ * Members already on the business service may stay even when the actor cannot see them.
+ */
 async function assertReferencesExist(
   tx: Prisma.TransactionClient,
-  input: z.output<typeof BusinessServiceInputSchema>
+  input: ParsedInput,
+  actor: AuthorizationActor,
+  current?: { id: string; memberServiceIds: readonly string[]; ownerTeamId: string | null }
 ) {
-  const [services, users, team] = await Promise.all([
+  const existing = new Set(current?.memberServiceIds ?? []);
+  const added = input.memberServiceIds.filter(serviceId => !existing.has(serviceId));
+  const dependsOn = input.dependsOnBusinessServiceIds ?? [];
+  const [services, visibleAdded, users, team, dependencies] = await Promise.all([
     input.memberServiceIds.length
       ? tx.service.count({ where: { id: { in: input.memberServiceIds } } })
+      : 0,
+    added.length
+      ? tx.service.count({ where: { AND: [{ id: { in: added } }, serviceReadWhere(actor)] } })
       : 0,
     input.followerUserIds.length
       ? tx.user.count({ where: { id: { in: input.followerUserIds }, status: 'ACTIVE' } })
       : 0,
-    input.ownerTeamId ? tx.team.findUnique({ where: { id: input.ownerTeamId } }) : null,
+    input.ownerTeamId
+      ? tx.team.findFirst({
+          where: { AND: [{ id: input.ownerTeamId }, teamReadWhere(actor)] },
+          select: { id: true },
+        })
+      : null,
+    dependsOn.length
+      ? tx.businessService.count({
+          where: { AND: [{ id: { in: dependsOn } }, businessServiceReadWhere(actor)] },
+        })
+      : 0,
   ]);
-  if (services !== new Set(input.memberServiceIds).size)
-    throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'A member service was not found.' });
+  if (services !== new Set(input.memberServiceIds).size || visibleAdded !== new Set(added).size)
+    throw new AppError({
+      code: 'RESOURCE_NOT_FOUND',
+      userMessage: 'A member service was not found.',
+    });
   if (users !== new Set(input.followerUserIds).size)
     throw new AppError({
       code: 'RESOURCE_NOT_FOUND',
       userMessage: 'A follower is not an active user.',
     });
-  if (input.ownerTeamId && !team)
+  // An unchanged owner may stay even when the actor cannot see that team.
+  if (input.ownerTeamId && !team && input.ownerTeamId !== current?.ownerTeamId)
     throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Owner team not found.' });
+  if (dependencies !== new Set(dependsOn).size)
+    throw new AppError({
+      code: 'RESOURCE_NOT_FOUND',
+      userMessage: 'A supporting business service was not found.',
+    });
+  const members = new Set(input.memberServiceIds);
+  if ((input.nonCriticalServiceIds ?? []).some(serviceId => !members.has(serviceId)))
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      userMessage: 'Non-critical services must also be members.',
+    });
 }
 
 /**
  * Status pages show a business service through the technical services they publish, so every
  * page that maps the business service also maps its members (hidden members stay hidden).
  */
-async function syncStatusPageMembers(tx: Prisma.TransactionClient, businessServiceId: string) {
+async function syncStatusPageMembers(
+  tx: Prisma.TransactionClient,
+  businessServiceId: string,
+  removedServiceIds: readonly string[] = []
+) {
   const [pages, members] = await Promise.all([
     tx.statusPageBusinessService.findMany({
       where: { businessServiceId },
@@ -116,19 +207,83 @@ async function syncStatusPageMembers(tx: Prisma.TransactionClient, businessServi
       select: { serviceId: true },
     }),
   ]);
-  if (!pages.length || !members.length) return;
-  await tx.statusPageService.createMany({
-    data: pages.flatMap(page =>
-      members.map(member => ({ statusPageId: page.statusPageId, serviceId: member.serviceId }))
-    ),
-    skipDuplicates: true,
+  if (!pages.length) return;
+  const pageIds = pages.map(page => page.statusPageId);
+  if (members.length) {
+    await tx.statusPageService.createMany({
+      data: pageIds.flatMap(statusPageId =>
+        members.map(member => ({ statusPageId, serviceId: member.serviceId }))
+      ),
+      skipDuplicates: true,
+    });
+  }
+  if (!removedServiceIds.length) return;
+  // A dropped member leaves each page unless another business service on that page still has it.
+  const stillShown = await tx.statusPageBusinessService.findMany({
+    where: {
+      statusPageId: { in: pageIds },
+      businessServiceId: { not: businessServiceId },
+      businessService: { members: { some: { serviceId: { in: [...removedServiceIds] } } } },
+    },
+    select: {
+      statusPageId: true,
+      businessService: {
+        select: {
+          members: {
+            where: { serviceId: { in: [...removedServiceIds] } },
+            select: { serviceId: true },
+          },
+        },
+      },
+    },
   });
+  const keep = new Set(
+    stillShown.flatMap(row =>
+      row.businessService.members.map(member => `${row.statusPageId}:${member.serviceId}`)
+    )
+  );
+  for (const statusPageId of pageIds) {
+    const remove = removedServiceIds.filter(serviceId => !keep.has(`${statusPageId}:${serviceId}`));
+    if (remove.length)
+      await tx.statusPageService.deleteMany({ where: { statusPageId, serviceId: { in: remove } } });
+  }
+}
+
+async function replaceSupports(
+  tx: Prisma.TransactionClient,
+  businessServiceId: string,
+  childIds: readonly string[]
+) {
+  // One writer at a time, so two concurrent edges cannot close a cycle between them.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('business-service-support', 0))`;
+  await tx.businessServiceSupport.deleteMany({
+    where: { parentId: businessServiceId, childId: { notIn: [...childIds] } },
+  });
+  const existing = new Set(
+    (
+      await tx.businessServiceSupport.findMany({
+        where: { parentId: businessServiceId },
+        select: { childId: true },
+      })
+    ).map(row => row.childId)
+  );
+  for (const childId of childIds) {
+    if (existing.has(childId)) continue;
+    if (await wouldCreateSupportCycle(businessServiceId, childId, tx)) {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'That dependency would make a business service depend on itself.',
+      });
+    }
+    await tx.businessServiceSupport.create({ data: { parentId: businessServiceId, childId } });
+  }
 }
 
 async function replaceChildren(
   tx: Prisma.TransactionClient,
   businessServiceId: string,
-  input: z.output<typeof BusinessServiceInputSchema>
+  input: ParsedInput,
+  previousMemberIds: readonly string[] = []
 ) {
   await tx.businessServiceMember.deleteMany({
     where: { businessServiceId, serviceId: { notIn: input.memberServiceIds } },
@@ -137,6 +292,19 @@ async function replaceChildren(
     data: input.memberServiceIds.map(serviceId => ({ businessServiceId, serviceId })),
     skipDuplicates: true,
   });
+  if (input.nonCriticalServiceIds) {
+    await tx.businessServiceMember.updateMany({
+      where: { businessServiceId },
+      data: { critical: true },
+    });
+    if (input.nonCriticalServiceIds.length)
+      await tx.businessServiceMember.updateMany({
+        where: { businessServiceId, serviceId: { in: input.nonCriticalServiceIds } },
+        data: { critical: false },
+      });
+  }
+  if (input.dependsOnBusinessServiceIds)
+    await replaceSupports(tx, businessServiceId, input.dependsOnBusinessServiceIds);
   await tx.businessServiceFollower.deleteMany({
     where: { businessServiceId, userId: { notIn: input.followerUserIds } },
   });
@@ -144,7 +312,12 @@ async function replaceChildren(
     data: input.followerUserIds.map(userId => ({ businessServiceId, userId })),
     skipDuplicates: true,
   });
-  await syncStatusPageMembers(tx, businessServiceId);
+  const members = new Set(input.memberServiceIds);
+  await syncStatusPageMembers(
+    tx,
+    businessServiceId,
+    previousMemberIds.filter(serviceId => !members.has(serviceId))
+  );
 }
 
 function conflict(error: unknown): never {
@@ -178,6 +351,20 @@ async function audit(
   );
 }
 
+function columns(input: ParsedInput) {
+  return {
+    name: input.name,
+    description: input.description,
+    tier: input.tier,
+    ownerTeamId: input.ownerTeamId,
+    ...(input.criticality !== undefined ? { criticality: input.criticality } : {}),
+    ...(input.impactMinUrgency !== undefined ? { impactMinUrgency: input.impactMinUrgency } : {}),
+    ...(input.impactMaxPriority !== undefined
+      ? { impactMaxPriority: input.impactMaxPriority }
+      : {}),
+  };
+}
+
 export async function createBusinessService(
   raw: BusinessServiceInput,
   context: CommandContext,
@@ -186,17 +373,9 @@ export async function createBusinessService(
   assertCanManageBusinessServices(context.actor);
   const input = BusinessServiceInputSchema.parse(raw);
   const run = async (tx: Prisma.TransactionClient) => {
-    await assertReferencesExist(tx, input);
+    await assertReferencesExist(tx, input, context.actor);
     const created = await tx.businessService
-      .create({
-        data: {
-          name: input.name,
-          description: input.description,
-          tier: input.tier,
-          ownerTeamId: input.ownerTeamId,
-        },
-        select: { id: true },
-      })
+      .create({ data: columns(input), select: { id: true } })
       .catch(conflict);
     await replaceChildren(tx, created.id, input);
     await audit(tx, context, 'business_service.created', created.id, {
@@ -208,7 +387,9 @@ export async function createBusinessService(
       select: BUSINESS_SERVICE_SELECT,
     });
   };
-  return client ? run(client) : prisma.$transaction(run);
+  const result = await (client ? run(client) : prisma.$transaction(run));
+  invalidateBusinessServiceHealth();
+  return result;
 }
 
 export async function updateBusinessService(
@@ -220,39 +401,41 @@ export async function updateBusinessService(
   assertCanManageBusinessServices(context.actor);
   const run = async (tx: Prisma.TransactionClient) => {
     const current = await tx.businessService.findFirst({
-      where: { AND: [{ id }, businessServiceReadWhere(context.actor)] },
+      where: { AND: [{ id }, businessServiceWriteWhere(context.actor)] },
       select: BUSINESS_SERVICE_SELECT,
     });
     if (!current) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+    const currentMemberIds = current.members.map(member => member.service.id);
     const input = BusinessServiceInputSchema.parse({
       name: current.name,
       description: current.description,
       tier: current.tier,
       ownerTeamId: current.ownerTeamId,
-      memberServiceIds: current.members.map(member => member.service.id),
+      memberServiceIds: currentMemberIds,
       followerUserIds: current.followers.map(follower => follower.user.id),
       ...raw,
     });
-    await assertReferencesExist(tx, input);
-    await tx.businessService
-      .update({
-        where: { id },
-        data: {
-          name: input.name,
-          description: input.description,
-          tier: input.tier,
-          ownerTeamId: input.ownerTeamId,
-        },
-      })
-      .catch(conflict);
-    await replaceChildren(tx, id, input);
+    await assertReferencesExist(tx, input, context.actor, {
+      id,
+      memberServiceIds: currentMemberIds,
+      ownerTeamId: current.ownerTeamId,
+    });
+    if (input.dependsOnBusinessServiceIds?.includes(id))
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'A business service cannot depend on itself.',
+      });
+    await tx.businessService.update({ where: { id }, data: columns(input) }).catch(conflict);
+    await replaceChildren(tx, id, input, currentMemberIds);
     await audit(tx, context, 'business_service.updated', id, {
       name: input.name,
       memberServiceIds: input.memberServiceIds,
     });
     return tx.businessService.findUniqueOrThrow({ where: { id }, select: BUSINESS_SERVICE_SELECT });
   };
-  return client ? run(client) : prisma.$transaction(run);
+  const result = await (client ? run(client) : prisma.$transaction(run));
+  invalidateBusinessServiceHealth();
+  return result;
 }
 
 export async function deleteBusinessService(
@@ -263,12 +446,16 @@ export async function deleteBusinessService(
   assertCanManageBusinessServices(context.actor, true);
   const run = async (tx: Prisma.TransactionClient) => {
     // Pages showing it are marked dirty before the cascade removes their mapping rows.
-    const removed = await tx.businessService.deleteMany({ where: { id } });
+    const removed = await tx.businessService.deleteMany({
+      where: { AND: [{ id }, businessServiceWriteWhere(context.actor)] },
+    });
     if (!removed.count) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
     await audit(tx, context, 'business_service.deleted', id);
     return { id, deleted: true as const };
   };
-  return client ? run(client) : prisma.$transaction(run);
+  const result = await (client ? run(client) : prisma.$transaction(run));
+  invalidateBusinessServiceHealth();
+  return result;
 }
 
 /** Any reader may follow or unfollow a business service for themselves. */
@@ -297,35 +484,77 @@ export async function setBusinessServiceFollow(
   return { businessServiceId, following: follow };
 }
 
-/** Business services that contain any of the given technical services, for incident "Impacts". */
-export async function businessServicesForServices(serviceIds: readonly string[]) {
-  if (!serviceIds.length) return [];
-  return prisma.businessService.findMany({
-    where: { members: { some: { serviceId: { in: [...serviceIds] } } } },
-    select: { id: true, name: true, tier: true },
+export type IncidentBusinessServiceImpactView = {
+  id: string;
+  name: string;
+  source: ImpactSource;
+  /** A responder unmarked it; shown in the picker, never as a chip. */
+  excluded: boolean;
+  /** Still impacting now (open incident, open impact). */
+  active: boolean;
+};
+
+/**
+ * Business services an incident impacts, for the incident "Impacts" chips: recorded impact rows
+ * plus what the engine computes right now (the outbox effect may not have written them yet),
+ * filtered to business services the actor can see.
+ */
+export async function impactedBusinessServicesForIncident(
+  actor: AuthorizationActor,
+  incidentId: string
+): Promise<IncidentBusinessServiceImpactView[]> {
+  if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_READ }).allowed) return [];
+  const { incidentImpactViews } = await import('./impacts');
+  const views = await incidentImpactViews(incidentId);
+  if (!views.size) return [];
+  const visible = await prisma.businessService.findMany({
+    where: { AND: [{ id: { in: [...views.keys()] } }, businessServiceReadWhere(actor)] },
+    select: { id: true, name: true },
     orderBy: { name: 'asc' },
   });
+  return visible.map(service => ({ ...service, ...views.get(service.id)! }));
 }
 
 type BusinessServiceRow = Prisma.BusinessServiceGetPayload<{
   select: typeof BUSINESS_SERVICE_SELECT;
 }>;
 
-/** Public API shape: member status for at-a-glance health, follower names without emails. */
-export function businessServiceDto(row: BusinessServiceRow) {
+/**
+ * Public API shape: follower names without emails, and engine health when given. Member
+ * `status` is the technical service's own status, kept for compatibility; `health` is authoritative.
+ */
+export function businessServiceDto(row: BusinessServiceRow, health?: BusinessServiceHealth | null) {
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     tier: row.tier,
+    criticality: row.criticality,
+    impactMinUrgency: row.impactMinUrgency,
+    impactMaxPriority: row.impactMaxPriority,
     ownerTeam: row.ownerTeam,
-    members: row.members.map(({ service }) => ({
+    members: row.members.map(({ service, critical }) => ({
       id: service.id,
       name: service.name,
       status: service.status,
+      critical,
     })),
+    dependsOn: row.supportedBy.map(({ child }) => child),
     followers: row.followers.map(({ user }) => ({ id: user.id, name: user.name })),
+    health: health ? healthDto(health) : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+export function healthDto(health: BusinessServiceHealth) {
+  return {
+    status: health.status,
+    since: health.since,
+    reasons: health.reasons,
+    openIncidentCount: health.openIncidentCount,
+    memberCount: health.memberCount,
+    impactedMemberCount: health.impactedMemberCount,
+    computedAt: health.computedAt,
   };
 }

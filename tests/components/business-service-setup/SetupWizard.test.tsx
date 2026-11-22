@@ -134,7 +134,7 @@ describe('business-service import dialog', () => {
     fireEvent.change(box, { target: { value: 'name,members\nCheckout,checkout-api' } });
     fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }));
     expect(await screen.findByText('+ checkout-api')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Apply import' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply import' }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(importBusinessServicesAction).toHaveBeenLastCalledWith({
       format: 'csv',

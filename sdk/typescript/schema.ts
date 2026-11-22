@@ -881,11 +881,69 @@ export type BusinessService = {
   name: string;
   description: string | null;
   tier: string | null;
+  criticality: 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
+  impactMinUrgency: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+  impactMaxPriority: string | null;
   ownerTeam: { id: string; name: string } | null;
-  members: Array<{ id: string; name: string; status: string }>;
+  members: Array<{ id: string; name: string; status: string; critical: boolean }>;
+  dependsOn: Array<{ id: string; name: string }>;
   followers: Array<{ id: string; name: string }>;
+  health: {
+    status:
+      'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+    since: string | null;
+    reasons: Array<{
+      kind: 'DIRECT' | 'DEPENDENCY' | 'NESTED' | 'MANUAL' | 'MAINTENANCE';
+      status:
+        'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+      incidentId?: string;
+      serviceId?: string;
+      viaServiceId?: string;
+      childBusinessServiceId?: string;
+      depth?: number;
+      urgency?: 'LOW' | 'MEDIUM' | 'HIGH';
+      markedById?: string | null;
+      maintenanceWindowId?: string;
+    }>;
+    openIncidentCount: number;
+    memberCount: number;
+    impactedMemberCount: number;
+    computedAt: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
+};
+export type BusinessServiceIncident = {
+  id: string;
+  title: string;
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+  source: 'DIRECT' | 'DEPENDENCY' | 'NESTED' | 'MANUAL';
+  impactStartedAt: string;
+  impactEndedAt: string | null;
+};
+export type BusinessServiceImpactTimeline = {
+  businessServiceId: string;
+  window: { from: string; to: string };
+  impactMinutes: number;
+  uptimePercent: number;
+  incidentCount: number;
+  mttaMinutes: number | null;
+  mttrMinutes: number | null;
+  entries: Array<{
+    incidentId: string;
+    incidentTitle: string;
+    urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+    source: 'DIRECT' | 'DEPENDENCY' | 'NESTED' | 'MANUAL';
+    excluded: boolean;
+    startedAt: string;
+    endedAt: string | null;
+  }>;
+};
+export type IncidentBusinessServiceImpactChange = {
+  incidentId: string;
+  businessServiceId: string;
+  impacted: boolean;
+  changed: boolean;
 };
 export type BusinessServiceDeletion = { id: string; deleted: true };
 export type StatusPageBusinessServices = {
@@ -3116,7 +3174,18 @@ export interface OperationRequests {
     body: Record<string, never>;
   };
   getStatusPagePublicationJob: { params: { id: string; jobId: string } };
-  listBusinessServices: { query?: { limit?: number; cursor?: string } };
+  listBusinessServices: {
+    query?: {
+      limit?: number;
+      cursor?: string;
+      q?: string;
+      tier?: string;
+      status?: string;
+      ownerTeamId?: string;
+      impactedOnly?: 'true' | 'false';
+      sort?: 'newest' | 'name';
+    };
+  };
   createBusinessService: {
     headers: { 'Idempotency-Key': string };
     body: {
@@ -3126,6 +3195,11 @@ export interface OperationRequests {
       ownerTeamId?: string | null;
       memberServiceIds?: Array<string>;
       followerUserIds?: Array<string>;
+      criticality?: 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
+      impactMinUrgency?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+      impactMaxPriority?: string | null;
+      nonCriticalServiceIds?: Array<string>;
+      dependsOnBusinessServiceIds?: Array<string>;
     };
   };
   getBusinessService: { params: { id: string } };
@@ -3139,9 +3213,27 @@ export interface OperationRequests {
       ownerTeamId?: string | null;
       memberServiceIds?: Array<string>;
       followerUserIds?: Array<string>;
+      criticality?: 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
+      impactMinUrgency?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+      impactMaxPriority?: string | null;
+      nonCriticalServiceIds?: Array<string>;
+      dependsOnBusinessServiceIds?: Array<string>;
     };
   };
   deleteBusinessService: { params: { id: string }; headers: { 'Idempotency-Key': string } };
+  listBusinessServiceIncidents: { params: { id: string }; query?: { from?: string; to?: string } };
+  getBusinessServiceImpactTimeline: {
+    params: { id: string };
+    query?: { from?: string; to?: string };
+  };
+  markIncidentBusinessServiceImpact: {
+    params: { id: string; businessServiceId: string };
+    headers: { 'Idempotency-Key': string };
+  };
+  unmarkIncidentBusinessServiceImpact: {
+    params: { id: string; businessServiceId: string };
+    headers: { 'Idempotency-Key': string };
+  };
   getStatusPageBusinessServices: { params: { id: string } };
   setStatusPageBusinessServices: {
     params: { id: string };
@@ -4864,6 +4956,26 @@ export interface OperationResponses {
   >;
   deleteBusinessService: {
     data: BusinessServiceDeletion;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  listBusinessServiceIncidents: {
+    data: Array<BusinessServiceIncident>;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getBusinessServiceImpactTimeline: {
+    data: BusinessServiceImpactTimeline;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  markIncidentBusinessServiceImpact: {
+    data: IncidentBusinessServiceImpactChange;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  unmarkIncidentBusinessServiceImpact: {
+    data: IncidentBusinessServiceImpactChange;
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
@@ -6820,6 +6932,38 @@ export const OPERATIONS = {
   deleteBusinessService: {
     method: 'DELETE',
     path: '/business-services/{id}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: false,
+  },
+  listBusinessServiceIncidents: {
+    method: 'GET',
+    path: '/business-services/{id}/incidents',
+    kind: 'list',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  getBusinessServiceImpactTimeline: {
+    method: 'GET',
+    path: '/business-services/{id}/impact-timeline',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  markIncidentBusinessServiceImpact: {
+    method: 'PUT',
+    path: '/incidents/{id}/business-service-impacts/{businessServiceId}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: false,
+  },
+  unmarkIncidentBusinessServiceImpact: {
+    method: 'DELETE',
+    path: '/incidents/{id}/business-service-impacts/{businessServiceId}',
     kind: 'item',
     idempotency: 'required',
     requiredHeaders: ['Idempotency-Key'],

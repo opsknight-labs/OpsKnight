@@ -368,8 +368,8 @@ export const OPERATIONAL_METRICS = [
     kind: 'counter',
     labels: ['outcome', 'tool'],
     scope: 'counter',
-    // MCP_METRIC_OUTCOMES (16) x MCP_METRIC_TOOL_LABEL_LIMIT (64).
-    estimatedMaxSeries: 1024,
+    // MCP_METRIC_OUTCOMES (16) x MCP_METRIC_TOOL_LABEL_LIMIT (72).
+    estimatedMaxSeries: 1152,
   },
   {
     name: 'opsknight_mcp_in_flight',
@@ -425,8 +425,8 @@ export const OPERATIONAL_METRICS = [
     kind: 'histogram',
     labels: ['outcome', 'tool'],
     scope: 'counter',
-    // 12 bucket, sum and count series per MCP_TIMED_OUTCOMES (4) x MCP_METRIC_TOOL_LABEL_LIMIT (64).
-    estimatedMaxSeries: 3072,
+    // 12 bucket, sum and count series per MCP_TIMED_OUTCOMES (4) x MCP_METRIC_TOOL_LABEL_LIMIT (72).
+    estimatedMaxSeries: 3456,
     buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
   },
   {

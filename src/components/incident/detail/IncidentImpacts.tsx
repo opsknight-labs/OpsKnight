@@ -1,17 +1,87 @@
-import Link from 'next/link';
-import { Boxes } from 'lucide-react';
+'use client';
 
-/** "Impacts: Checkout, Payments" — business services that contain the incident's service. */
+import { useEffect, useState, useTransition } from 'react';
+import Link from 'next/link';
+import { Boxes, Plus, X } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/shadcn/command';
+import { notify } from '@/lib/toast';
+import {
+  searchIncidentDetailBusinessServices,
+  setIncidentDetailBusinessImpact,
+} from '@/components/incident/detail/actions';
+
+export type IncidentImpactChip = {
+  id: string;
+  name: string;
+  source: 'DIRECT' | 'DEPENDENCY' | 'NESTED' | 'MANUAL';
+  excluded: boolean;
+  active: boolean;
+};
+
+const REASON: Record<IncidentImpactChip['source'], string> = {
+  DIRECT: 'Its service is affected',
+  DEPENDENCY: 'A service it depends on is affected',
+  NESTED: 'A business service it relies on is affected',
+  MANUAL: 'Marked by a responder',
+};
+
+const chip =
+  'inline-flex h-6 items-center gap-1 rounded-md border border-border bg-muted/40 px-2 text-xs font-medium text-foreground';
+
+/** "Impacts: Checkout, Payments" with the reason for each; responders can add or remove one. */
 export default function IncidentImpacts({
-  businessServices,
+  incidentId,
+  impacts,
   linkable = true,
+  canEdit = false,
 }: {
-  businessServices: Array<{ id: string; name: string }>;
+  incidentId: string;
+  impacts: IncidentImpactChip[];
   linkable?: boolean;
+  canEdit?: boolean;
 }) {
-  if (!businessServices.length) return null;
-  const chip =
-    'inline-flex h-6 items-center gap-1 rounded-md border border-border bg-muted/40 px-2 text-xs font-medium text-foreground';
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [options, setOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const shown = impacts.filter(impact => !impact.excluded);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      searchIncidentDetailBusinessServices(query)
+        .then(rows => {
+          if (!cancelled) setOptions(rows);
+        })
+        .catch(() => undefined);
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [open, query]);
+
+  const change = (businessServiceId: string, impacted: boolean) =>
+    startTransition(async () => {
+      try {
+        await setIncidentDetailBusinessImpact(incidentId, businessServiceId, impacted);
+        setOpen(false);
+      } catch {
+        notify.error('Could not change the impacted business services.');
+      }
+    });
+
+  if (!shown.length && !canEdit) return null;
+  const marked = new Set(shown.map(impact => impact.id));
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -19,21 +89,83 @@ export default function IncidentImpacts({
         Impacts
       </span>
       <ul className="flex min-w-0 flex-wrap gap-1.5" aria-label="Affected business services">
-        {businessServices.map(service => (
-          <li key={service.id}>
-            {linkable ? (
-              <Link
-                href={`/services/business/${service.id}`}
-                className={`${chip} transition-colors hover:border-foreground/30 hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring`}
-              >
-                {service.name}
-              </Link>
-            ) : (
-              <span className={chip}>{service.name}</span>
-            )}
-          </li>
-        ))}
+        {shown.map(impact => {
+          const reason = REASON[impact.source] + (impact.active ? '' : ' (ended)');
+          return (
+            <li key={impact.id} className="inline-flex items-center gap-0.5">
+              {linkable ? (
+                <Link
+                  href={`/services/business/${impact.id}`}
+                  title={reason}
+                  className={`${chip} transition-colors hover:border-foreground/30 hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring`}
+                >
+                  {impact.name}
+                  <span className="sr-only">: {reason}</span>
+                </Link>
+              ) : (
+                <span className={chip} title={reason}>
+                  {impact.name}
+                  <span className="sr-only">: {reason}</span>
+                </span>
+              )}
+              {canEdit && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => change(impact.id, false)}
+                  aria-label={`Not impacting ${impact.name}`}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                >
+                  <X className="h-3 w-3" aria-hidden />
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
+      {canEdit && (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={pending}
+              className={`${chip} border-dashed text-muted-foreground hover:text-foreground disabled:opacity-50`}
+            >
+              <Plus className="h-3 w-3" aria-hidden />
+              Impacted business service
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-0" align="start">
+            <Command shouldFilter={false} className="rounded-lg">
+              <CommandInput
+                value={query}
+                onValueChange={setQuery}
+                placeholder="Search business services..."
+                className="h-8 border-none text-xs focus:ring-0"
+              />
+              <CommandList className="max-h-48">
+                <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">
+                  No business services found.
+                </CommandEmpty>
+                <CommandGroup className="p-1">
+                  {options
+                    .filter(option => !marked.has(option.id))
+                    .map(option => (
+                      <CommandItem
+                        key={option.id}
+                        value={option.id}
+                        onSelect={() => change(option.id, true)}
+                        className="cursor-pointer rounded-md py-1.5 text-xs"
+                      >
+                        {option.name}
+                      </CommandItem>
+                    ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   );
 }

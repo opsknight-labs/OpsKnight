@@ -313,3 +313,44 @@ export async function setIncidentDetailRole(
   revalidatePath(`/m/incidents/${parsedIncidentId}`);
   return { changed: result.changed };
 }
+
+const businessServiceIdSchema = z.string().trim().min(1).max(100);
+
+/** Marks (MANUAL) or unmarks (kept as an exclusion) a business service as impacted. */
+export async function setIncidentDetailBusinessImpact(
+  incidentIdValue: string,
+  businessServiceIdValue: string,
+  impacted: boolean
+) {
+  const parsedIncidentId = incidentId(incidentIdValue);
+  const actor = await getCurrentAuthorizationActor();
+  const { setIncidentImpactCommand } = await import('@/lib/business-services/impacts');
+  await setIncidentImpactCommand(
+    {
+      incidentId: parsedIncidentId,
+      businessServiceId: businessServiceIdSchema.parse(businessServiceIdValue),
+      impacted: z.boolean().parse(impacted),
+    },
+    actor
+  );
+  revalidatePath(`/incidents/${parsedIncidentId}`);
+  revalidatePath(`/m/incidents/${parsedIncidentId}`);
+}
+
+/** Business services the responder can see, for the "+ Impacted business service" picker. */
+export async function searchIncidentDetailBusinessServices(query: string) {
+  const actor = await getCurrentAuthorizationActor();
+  const { businessServiceReadWhere } = await import('@/lib/business-services/commands');
+  const needle = z.string().max(120).parse(query).trim();
+  return prisma.businessService.findMany({
+    where: {
+      AND: [
+        businessServiceReadWhere(actor),
+        needle ? { name: { contains: needle, mode: 'insensitive' } } : {},
+      ],
+    },
+    orderBy: { name: 'asc' },
+    take: 20,
+    select: { id: true, name: true },
+  });
+}

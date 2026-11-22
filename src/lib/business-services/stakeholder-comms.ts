@@ -160,14 +160,18 @@ export const NotifyStakeholdersInputSchema = z
 /** At most this many stakeholder updates per incident per window, so nobody is spammed. */
 export const STAKEHOLDER_NOTIFY_LIMIT = { count: 3, windowMs: 10 * 60_000 };
 
-/** Business services an incident impacts: engine impact rows, else its service's memberships. */
+/**
+ * Business services an incident impacts, from the engine's impact rows (unmarked ones left out).
+ * Only an incident with no rows at all (older than the backfill, or not yet reconciled) falls
+ * back to the business services that list its service as a critical member.
+ */
 async function impactedBusinessServices(incidentId: string, serviceId: string) {
   const impacts = await prisma.incidentBusinessServiceImpact.findMany({
-    where: { incidentId, excluded: false },
-    select: { businessService: { select: { id: true, name: true } } },
+    where: { incidentId },
+    select: { excluded: true, businessService: { select: { id: true, name: true } } },
   });
-  if (impacts.length) return impacts.map(row => row.businessService);
-  // shortcut: before the P1b impact writer has run, fall back to direct membership.
+  if (impacts.length)
+    return impacts.filter(row => !row.excluded).map(row => row.businessService);
   return prisma.businessService.findMany({
     where: { members: { some: { serviceId, critical: true } } },
     select: { id: true, name: true },

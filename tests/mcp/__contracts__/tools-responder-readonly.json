@@ -24,6 +24,42 @@
     "descriptionSha256": "39acdb8bdd74359b41cf5f256b8b0f1773096edcb6ab3de27dc71de6446af993"
   },
   {
+    "name": "business_service_get",
+    "title": "Get a business service",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "ba90a5e437ec76d5ab725982363c3f00f084c6f35086fe44ecfdc57f3f624ae7",
+    "descriptionSha256": "90ac1583eb2cbe0e97e8f0822fc0f85d2744e0bb45f96d7b99efb1fa4ad0628c"
+  },
+  {
+    "name": "business_service_health",
+    "title": "Business service health and uptime",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "a869d79d2008d4de3d5200c3f5c66d5dc79fa86797d17a526820e50d6583c4cc",
+    "descriptionSha256": "68dd1e2c5f50597ab569a6f5a1daf309c0dea2e891418a703e61565901673277"
+  },
+  {
+    "name": "business_service_incidents",
+    "title": "List incidents that impacted a business service",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "a869d79d2008d4de3d5200c3f5c66d5dc79fa86797d17a526820e50d6583c4cc",
+    "descriptionSha256": "6983fde7e68be49d556aecc8b25b7ce0617ffb5467dccc85291b0346b3e0e494"
+  },
+  {
     "name": "business_services_list",
     "title": "List business services",
     "annotations": {
@@ -32,8 +68,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "d7d42ff6bbed082fd54be4105d92961257d32d69941f22fd6d6d7e05700615e4",
-    "descriptionSha256": "5da7beb67e99ebff4660ddbea0a716f3a01056ff63c693b42b1e64d18a32d81a"
+    "inputSchemaSha256": "9b2609a3894f2aa68a7e70b68792260293cfdc6252696d6415d9ffe0fc3fe881",
+    "descriptionSha256": "a6ad85381f6d1058d1924e89c37ce3c88e231803042eeedf046305acb8ca7a7a"
   },
   {
     "name": "describe_operation",
@@ -388,7 +424,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "ba8bf1483f8ff8abfb5f2c2b61473f4717867c75ab2db9b2a868d1c67389328c",
+    "inputSchemaSha256": "4b06c458ddb85ee3c3555f1866eb44a367444db334142136ba19b2b13faabf66",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {

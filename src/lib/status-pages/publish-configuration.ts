@@ -17,8 +17,8 @@ import {
 import { StatusPageAdminError } from '@/lib/status-pages/admin';
 import {
   classifyStatusPageChange,
+  type StatusPageBusinessServiceConfigs,
   type StatusPageChangeClassification,
-  type StatusPageBusinessServiceConfig,
   type StatusPageClassifierState,
 } from '@/lib/status-pages/publication-policy';
 import { getStatusPageServingStore } from '@/lib/status-pages/serving-store';
@@ -63,7 +63,7 @@ export type StatusPageConfigurationChange = {
   /** Business services to show, in display order; their member services are mapped too. */
   businessServiceIds?: string[];
   /** Per-business-service presentation; only the fields given change. */
-  businessServiceConfigs?: Record<string, StatusPageBusinessServiceConfig>;
+  businessServiceConfigs?: StatusPageBusinessServiceConfigs;
   expectedUpdatedAt?: string;
   expectedRevision?: number;
   /** Settings section that produced the patch, recorded for audit only. */
@@ -167,9 +167,7 @@ export async function applyStatusPageConfigurationChange(
       ...(current as unknown as StatusPageClassifierState),
       serviceMappings,
       businessServiceIds: currentBusinessServiceIds,
-      businessServiceMappings: currentBusinessServiceRows
-        ? Object.fromEntries(currentBusinessServiceRows.map(row => [row.businessServiceId, row]))
-        : undefined,
+      businessServiceMappings: currentBusinessServiceRows,
     },
     patch,
     serviceIds,
@@ -289,10 +287,20 @@ export async function applyStatusPageConfigurationChange(
           where: { statusPageId: pageId, businessServiceId: { notIn: businessServiceIds } },
         });
         for (const [order, businessServiceId] of businessServiceIds.entries()) {
+          const config = Reflect.get(businessServiceConfigs ?? {}, businessServiceId) as
+            | { displayName?: string | null; showOnPage?: boolean; showMembers?: boolean }
+            | undefined;
+          const presentation = {
+            ...(config?.displayName !== undefined
+              ? { displayName: config.displayName?.trim() || null }
+              : {}),
+            ...(config?.showOnPage !== undefined ? { showOnPage: config.showOnPage } : {}),
+            ...(config?.showMembers !== undefined ? { showMembers: config.showMembers } : {}),
+          };
           await tx.statusPageBusinessService.upsert({
             where: { statusPageId_businessServiceId: { statusPageId: pageId, businessServiceId } },
-            create: { statusPageId: pageId, businessServiceId, order },
-            update: { order },
+            create: { statusPageId: pageId, businessServiceId, order, ...presentation },
+            update: { order, ...presentation },
           });
         }
         // A business service is shown through its members, so they are published with it.
@@ -312,7 +320,10 @@ export async function applyStatusPageConfigurationChange(
             skipDuplicates: true,
           });
       }
-      for (const [businessServiceId, config] of Object.entries(businessServiceConfigs ?? {})) {
+      // Presentation-only saves (no mapping rewrite) update the existing rows in place.
+      for (const [businessServiceId, config] of Object.entries(
+        businessServiceIds === undefined ? (businessServiceConfigs ?? {}) : {}
+      )) {
         const data = {
           ...(config.displayName !== undefined
             ? { displayName: config.displayName?.trim() || null }

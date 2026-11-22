@@ -67,6 +67,7 @@ export const PUT = defineV2Route({
     .object({
       serviceLayout: z.enum(['FLAT', 'BUSINESS', 'BUSINESS_EXPANDABLE']),
       businessServiceIds: z.array(z.string().trim().min(1).max(100)).max(200),
+      /** Optional display name and visibility per business service; absent fields stay. */
       businessServiceConfigs: z
         .record(
           z

@@ -29,6 +29,18 @@
     "AUDITOR": "allow:global",
     "USER": "deny:MISSING_CAPABILITY"
   },
+  "GET /business-services/{id}/impact-timeline [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
+  "GET /business-services/{id}/incidents [services:read]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "allow:global",
+    "USER": "allow:resource"
+  },
   "GET /business-services/{id} [services:read]": {
     "ADMIN": "allow:global",
     "RESPONDER": "allow:global",
@@ -232,6 +244,18 @@
     "RESPONDER": "allow:global",
     "AUDITOR": "allow:global",
     "USER": "allow:resource"
+  },
+  "PUT /incidents/{id}/business-service-impacts/{businessServiceId} [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
+  },
+  "DELETE /incidents/{id}/business-service-impacts/{businessServiceId} [incidents:write]": {
+    "ADMIN": "allow:global",
+    "RESPONDER": "allow:global",
+    "AUDITOR": "deny:MISSING_CAPABILITY",
+    "USER": "deny:MISSING_CAPABILITY"
   },
   "GET /incidents/{id}/custom-fields/{fieldId} [incidents:read]": {
     "ADMIN": "allow:global",

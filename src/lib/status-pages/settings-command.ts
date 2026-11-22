@@ -65,7 +65,10 @@ export async function saveStatusPageSection(
       where: { id: { in: input.businessServiceIds } },
     });
     if (count !== input.businessServiceIds.length)
-      throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Business service not found.' });
+      throw new AppError({
+        code: 'RESOURCE_NOT_FOUND',
+        userMessage: 'Business service not found.',
+      });
   }
   const patch: Record<string, unknown> = Object.fromEntries(
     Object.entries(input).filter(
@@ -77,8 +80,7 @@ export async function saveStatusPageSection(
           'serviceConfigs',
           'businessServiceIds',
           'businessServiceConfigs',
-        ].includes(key) &&
-        value !== undefined
+        ].includes(key) && value !== undefined
     )
   );
   if (input.branding !== undefined)

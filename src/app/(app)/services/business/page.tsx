@@ -3,13 +3,15 @@ import { Boxes, Plus } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccess } from '@/lib/access/server';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
-import { BUSINESS_SERVICE_SELECT, businessServiceReadWhere } from '@/lib/business-services/commands';
+import {
+  BUSINESS_SERVICE_SELECT,
+  businessServiceReadWhere,
+} from '@/lib/business-services/commands';
 import { PageHeader, EmptyState } from '@/components/patterns';
 import { Button } from '@/components/ui/shadcn/button';
 import BusinessServiceFollowButton from '@/components/service/BusinessServiceFollowButton';
-import BusinessServiceStatusPill, {
-  worstServiceStatus,
-} from '@/components/service/BusinessServiceStatusPill';
+import BusinessServiceStatusPill from '@/components/service/BusinessServiceStatusPill';
+import { getBusinessServiceHealth } from '@/lib/business-services/contract';
 
 export const revalidate = 0;
 
@@ -24,9 +26,14 @@ export default async function BusinessServicesPage() {
     orderBy: { name: 'asc' },
     select: BUSINESS_SERVICE_SELECT,
   });
+  const health = await getBusinessServiceHealth(
+    businessServices.map(item => item.id),
+    actor
+  );
+  const statusOf = (id: string) => health.get(id)?.status ?? 'OPERATIONAL';
   const canManage = permissions.isResponderOrAbove;
   const affected = businessServices.filter(
-    item => worstServiceStatus(item.members.map(member => member.service.status)) !== 'OPERATIONAL'
+    item => !['OPERATIONAL', 'UNKNOWN', 'MAINTENANCE'].includes(statusOf(item.id))
   ).length;
 
   return (
@@ -57,7 +64,7 @@ export default async function BusinessServicesPage() {
         <EmptyState
           icon={<Boxes className="h-6 w-6" aria-hidden />}
           title="No business services yet"
-          description="Name a capability customers depend on and pick the technical services behind it. Its status is the worst status among them."
+          description="Name a capability customers depend on and pick the technical services behind it. Its status follows open incidents on them and on what they depend on."
           action={
             canManage ? (
               <Button asChild size="sm">
@@ -69,7 +76,7 @@ export default async function BusinessServicesPage() {
       ) : (
         <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
           {businessServices.map(item => {
-            const status = worstServiceStatus(item.members.map(member => member.service.status));
+            const status = statusOf(item.id);
             const following = item.followers.some(follower => follower.user.id === actor.id);
             const shown = item.members.slice(0, 4);
             return (
@@ -126,7 +133,11 @@ export default async function BusinessServicesPage() {
                   )}
                 </ul>
                 <div className="flex items-center gap-2 lg:justify-end">
-                  <BusinessServiceFollowButton id={item.id} name={item.name} following={following} />
+                  <BusinessServiceFollowButton
+                    id={item.id}
+                    name={item.name}
+                    following={following}
+                  />
                   {canManage && (
                     <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                       <Link href={`/services/business/${item.id}`}>Edit</Link>
