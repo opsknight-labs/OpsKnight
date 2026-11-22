@@ -15,6 +15,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   BarChart,
   BookOpen,
+  Boxes,
   Calendar,
   CalendarClock,
   FilePlus,
@@ -24,6 +25,7 @@ import {
   ListTodo,
   Loader2,
   Monitor,
+  MonitorCheck,
   Moon,
   PieChart,
   Plus,
@@ -116,6 +118,22 @@ const NAVIGATE: Entry[] = [
     'infrastructure',
     'endpoints',
   ]),
+  nav(
+    'nav-business-services',
+    'Business services',
+    'What customers rely on, and its health',
+    '/services/business',
+    Boxes,
+    ['business', 'capability', 'customer', 'impact', 'catalog', 'tier']
+  ),
+  nav(
+    'nav-status-dashboard',
+    'Status dashboard',
+    'Internal status of every business service',
+    '/status-dashboard',
+    MonitorCheck,
+    ['status', 'dashboard', 'stakeholder', 'health', 'wallboard', 'outage']
+  ),
   nav('nav-schedules', 'Schedules', 'On-call shifts & rotations', '/schedules', Calendar, [
     'schedule',
     'oncall',

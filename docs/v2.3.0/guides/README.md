@@ -23,6 +23,7 @@ Browse by task area:
 - [Services](./services/), [service automation](./services/service-automation), and [teams](./teams/)
 - [Runbooks: authoring, incident response, Agents, pools, and secrets](./runbooks/)
 - [Notifications](./notifications/), [ChatOps](./chatops/), and [status pages](./status-pages/)
+- [Business services](./services/business-services) and the internal [status dashboard](./stakeholders/status-dashboard)
 - [Profile](./profile/), [identity](./identity/), [administration](./administration/), and [privacy](./privacy/)
 - [Postmortems](./postmortems/) and [Compliance Control Center](./compliance/)
 - [Analytics](./analytics/), [reports and dashboards](./reports/), and [mobile/PWA](./mobile/)

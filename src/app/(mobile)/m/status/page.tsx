@@ -21,8 +21,9 @@ import { getRequestActorContext } from '@/lib/request-actor-context';
 import { getInternalOperationalStatusSnapshot } from '@/lib/status/internal-operational-status-snapshot';
 import { logger } from '@/lib/logger';
 import { requirePageAccess } from '@/lib/access/server';
-import { listBusinessServices } from '@/lib/business-services/contract';
-import { STATUS_PRESENTATION } from '@/lib/status-pages/status-presentation';
+import { loadStatusBoard, orUnavailable } from '@/lib/business-services/dashboards';
+import HealthBadge from '@/components/business-service/HealthBadge';
+import { sortTiles } from '@/components/business-service/StatusBoard';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,16 +97,12 @@ export default async function MobileStatusPage() {
   const overall = statusMeta(snapshot.overallStatus);
   const OverallIcon = overall.Icon;
   const impactedServices = snapshot.services.filter(service => service.status !== 'OPERATIONAL');
-  // shortcut: the first 100 by name; the full catalog lives on /services/business.
-  const businessServices = (await listBusinessServices({ limit: 100 }, context.actor)).items.map(
-    item => ({
-      id: item.id,
-      name: item.name,
-      status: item.health.status,
-      affected: item.health.impactedMemberCount,
-      total: item.memberCount,
-    })
+  // Same read model as the console's status dashboard; hidden if health cannot be loaded.
+  const board = await orUnavailable(
+    loadStatusBoard(context.actor),
+    'mobile.status.boardUnavailable'
   );
+  const businessServices = sortTiles(board?.tiles ?? []);
 
   return (
     <div className="responsive-page space-y-5">
@@ -208,32 +205,28 @@ export default async function MobileStatusPage() {
           </h2>
           <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
             <ul>
-              {businessServices.map((item, index) => {
-                const meta = statusMeta(item.status);
-                return (
-                  <li
-                    key={item.id}
-                    className={`flex min-h-[52px] items-center gap-3 px-3.5 py-2.5 ${index > 0 ? 'border-t border-border/70' : ''}`}
-                  >
-                    <span
-                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`}
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] font-semibold text-foreground">
-                        {item.name}
-                      </span>
-                      <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                        {item.status === 'OPERATIONAL'
-                          ? 'Operational'
-                          : item.affected > 0
-                            ? `${item.affected} of ${item.total} services affected`
-                            : STATUS_PRESENTATION[item.status].label}
-                      </span>
+              {businessServices.map((item, index) => (
+                <li
+                  key={item.id}
+                  className={`flex min-h-[52px] items-center gap-3 px-3.5 py-2.5 ${index > 0 ? 'border-t border-border/70' : ''}`}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-foreground">
+                      {item.name}
                     </span>
-                  </li>
-                );
-              })}
+                    <span className="mt-0.5 block text-xs text-muted-foreground tabular-nums">
+                      {item.health.impactedMemberCount > 0
+                        ? `${item.health.impactedMemberCount} of ${item.health.memberCount} services impacted`
+                        : `${item.health.memberCount} services`}
+                    </span>
+                  </span>
+                  <HealthBadge
+                    status={item.health.status}
+                    since={item.health.since}
+                    className="shrink-0 justify-end text-right"
+                  />
+                </li>
+              ))}
             </ul>
           </Card>
         </section>

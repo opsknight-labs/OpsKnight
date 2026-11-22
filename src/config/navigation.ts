@@ -14,6 +14,7 @@ import {
   BarChart,
   Workflow,
   Boxes,
+  MonitorCheck,
   Sparkles,
   BellRing,
   GitCommitHorizontal,
@@ -112,6 +113,13 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     href: '/services/business',
     label: 'Business services',
     icon: Boxes,
+    section: 'MAIN',
+  },
+  {
+    // Open to every signed-in person (stakeholders included); the page filters what they see.
+    href: '/status-dashboard',
+    label: 'Status dashboard',
+    icon: MonitorCheck,
     section: 'MAIN',
   },
   {
