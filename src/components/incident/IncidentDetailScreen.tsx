@@ -28,6 +28,7 @@ import {
 } from '@/lib/rbac';
 import IncidentRoles, { type IncidentRoleSlot } from '@/components/incident/detail/IncidentRoles';
 import IncidentImpacts from '@/components/incident/detail/IncidentImpacts';
+import NotifyStakeholdersButton from '@/components/incident/detail/NotifyStakeholdersButton';
 import { businessServicesForServices } from '@/lib/business-services/commands';
 import { INCIDENT_ROLES } from '@/lib/incidents/roles';
 import { loadIncidentRoleAccess } from '@/lib/incidents/role-access';
@@ -670,6 +671,12 @@ export default async function IncidentDetailScreen({
                 )}
                 <IncidentSLABadges sla={incidentSla} />
                 <IncidentImpacts businessServices={impactedBusinessServices} />
+                {(canManageIncident || canAddIncidentNote) && (
+                  <NotifyStakeholdersButton
+                    incidentId={incident.id}
+                    businessServices={impactedBusinessServices}
+                  />
+                )}
               </div>
             </div>
             <div className="mt-3.5 border-t border-border/70 pt-3">{rolesContent}</div>
