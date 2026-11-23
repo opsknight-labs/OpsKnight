@@ -28,6 +28,49 @@ jobs:
   # Pull requests run only this file's light gate (static checks, unit, database
   # integration, build). Browser E2E lives in e2e.yml; heavy certification suites
   # run on main, or on a pull request labelled `ci:full`.
+  # Decides which expensive PR jobs a change can affect, so UI-only and docs-only PRs skip the
+  # database shards (about 70 of 109 machine-minutes). Unrecognised paths run everything.
+  changes:
+    name: Detect affected checks
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+      build: ${{ steps.detect.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          backend=true
+          build=true
+          # Only pull requests are narrowed; pushes, nightly and manual runs run everything,
+          # and so does any failed or empty diff.
+          if [ "$EVENT_NAME" = pull_request ] && changed="$(git diff --name-only "$BASE_SHA" HEAD)" && [ -n "$changed" ]; then
+            backend=false
+            build=false
+            while IFS= read -r f; do
+              case "$f" in
+                docs/*|plans/*|artifacts/*|reports/*|public/readme/*|*.md) ;;
+                .github/workflows/tests.yml|.github/actions/*) backend=true; build=true ;;
+                .github/*) ;;
+                src/components/*|public/*|tests/components/*|*.css|*.svg|*.png|*.jpg|*.jpeg|*.webp|*.gif|*.woff|*.woff2) build=true ;;
+                src/app/\(app\)/*page.tsx|src/app/\(app\)/*loading.tsx|src/app/\(app\)/*error.tsx|src/app/\(app\)/*layout.tsx) build=true ;;
+                src/app/\(mobile\)/*page.tsx|src/app/\(mobile\)/*loading.tsx|src/app/\(mobile\)/*error.tsx|src/app/\(mobile\)/*layout.tsx) build=true ;;
+                *) backend=true; build=true ;;
+              esac
+            done <<< "$changed"
+          fi
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "Affected: backend=$backend build=$build"
+
   static-validation:
     name: Static validation (L0 lint/typecheck/API clients)
     runs-on: ubuntu-latest
@@ -128,7 +171,8 @@ jobs:
   database-secret-scripts:
     name: Database secret operator scripts
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: changes
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.changes.outputs.backend != 'false'
     timeout-minutes: 10
     services:
       postgres:
@@ -166,7 +210,8 @@ jobs:
   build:
     name: Application build & budgets (canonical E2E artifact)
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: changes
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.changes.outputs.build != 'false'
     timeout-minutes: 15
     env:
       NEXTAUTH_URL: http://127.0.0.1:3100
@@ -193,7 +238,8 @@ jobs:
   ingestion-durability:
     name: Ingestion durability (isolated PostgreSQL)
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: changes
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.changes.outputs.backend != 'false'
     timeout-minutes: 20
     services:
       postgres:
@@ -230,7 +276,8 @@ jobs:
   db-integration:
     name: Database integration (L2, shard ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: changes
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.changes.outputs.backend != 'false'
     # The intelligence suites pushed the slowest shard past 20 minutes (shards are split by file count, not time).
     timeout-minutes: 30
     strategy:
@@ -330,6 +377,7 @@ jobs:
         db-integration,
         ingestion-durability,
         database-secret-scripts,
+        changes,
       ]
     if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     steps:
@@ -343,6 +391,7 @@ jobs:
           path: reports
 
       - name: Download db test reports
+        if: needs.changes.outputs.backend != 'false'
         uses: actions/download-artifact@v4
         with:
           pattern: junit-db-report-*
@@ -350,6 +399,7 @@ jobs:
           path: reports
 
       - name: Download ingestion test report
+        if: needs.changes.outputs.backend != 'false'
         uses: actions/download-artifact@v4
         with:
           name: junit-ingestion-report
@@ -373,6 +423,9 @@ jobs:
           INGESTION_STATUS: ${{ needs.ingestion-durability.result }}
           DB_SECRET_STATUS: ${{ needs.database-secret-scripts.result }}
           DB_SHARDS: '6'
+          CHANGES_STATUS: ${{ needs.changes.result }}
+          BACKEND: ${{ needs.changes.outputs.backend }}
+          BUILD: ${{ needs.changes.outputs.build }}
         run: |
           node - <<'NODE'
           const fs = require('fs');
@@ -408,6 +461,12 @@ jobs:
           };
 
           let gateStatus = 'failure';
+          // Jobs the change cannot affect are skipped on purpose; anything else must succeed.
+          const backend = process.env.BACKEND !== 'false';
+          const build = process.env.BUILD !== 'false';
+          const ranOk = (status, expected) => (expected ? status === 'success' : status === 'skipped');
+          const mark = (status, expected) =>
+            !expected ? '⏭️ Skipped (not affected)' : status === 'success' ? '✅ Passed' : '❌ Failed';
 
           try {
             if (!fs.existsSync('reports')) {
@@ -429,14 +488,14 @@ jobs:
             if (!fs.existsSync(unitPath)) {
               throw new Error(`${unitPath} is missing; unit test report artifact was not produced`);
             }
-            for (const dbPath of dbPaths) {
+            for (const dbPath of backend ? dbPaths : []) {
               if (!fs.existsSync(dbPath)) {
                 throw new Error(`${dbPath} is missing; every database shard must produce a report`);
               }
             }
 
             const unitCounts = parseXml(fs.readFileSync(unitPath, 'utf8'));
-            const dbCounts = dbPaths.map(dbPath => ({ path: dbPath, ...parseXml(fs.readFileSync(dbPath, 'utf8')) }));
+            const dbCounts = (backend ? dbPaths : []).map(dbPath => ({ path: dbPath, ...parseXml(fs.readFileSync(dbPath, 'utf8')) }));
 
             if (unitCounts.tests === 0) {
               throw new Error(`${unitPath} reports 0 tests; unit suite was empty or failed silently`);
@@ -464,12 +523,13 @@ jobs:
 
             const hasTests = totals.tests > 0;
             const passed = Math.max(0, totals.tests - totals.failures - totals.errors - totals.skipped);
-            const prereqsOk = process.env.STATIC_STATUS === 'success' &&
+            const prereqsOk = process.env.CHANGES_STATUS === 'success' &&
+                              process.env.STATIC_STATUS === 'success' &&
                               process.env.UNIT_STATUS === 'success' &&
-                              process.env.BUILD_STATUS === 'success' &&
-                              process.env.DB_STATUS === 'success' &&
-                              process.env.INGESTION_STATUS === 'success' &&
-                              process.env.DB_SECRET_STATUS === 'success';
+                              ranOk(process.env.BUILD_STATUS, build) &&
+                              ranOk(process.env.DB_STATUS, backend) &&
+                              ranOk(process.env.INGESTION_STATUS, backend) &&
+                              ranOk(process.env.DB_SECRET_STATUS, backend);
 
             const suiteOk = hasTests && (totals.failures === 0 && totals.errors === 0);
             gateStatus = (prereqsOk && suiteOk) ? 'success' : 'failure';
@@ -480,10 +540,10 @@ jobs:
             const prereqLines = [
               `- **Static validation (lint, typecheck & API clients)**: ${process.env.STATIC_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
               `- **Unit tests**: ${process.env.UNIT_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
-              `- **Application build & budgets**: ${process.env.BUILD_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
-              `- **Database integration (${dbShards.length} shards)**: ${process.env.DB_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
-              `- **Ingestion durability**: ${process.env.INGESTION_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
-              `- **Database secret operator scripts**: ${process.env.DB_SECRET_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
+              `- **Application build & budgets**: ${mark(process.env.BUILD_STATUS, build)}`,
+              `- **Database integration (${dbShards.length} shards)**: ${mark(process.env.DB_STATUS, backend)}`,
+              `- **Ingestion durability**: ${mark(process.env.INGESTION_STATUS, backend)}`,
+              `- **Database secret operator scripts**: ${mark(process.env.DB_SECRET_STATUS, backend)}`,
             ];
 
             for (const shard of dbShards) {
