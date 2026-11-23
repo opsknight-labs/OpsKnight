@@ -56,8 +56,8 @@ describe('AIOps overview navigation', () => {
     }
   });
 
-  it('is a top-level "Intelligence" entry, not part of the Analytics group', () => {
-    const item = NAVIGATION_ITEMS.find(entry => entry.href === '/intelligence');
-    expect(item).toMatchObject({ label: 'Intelligence', section: 'MAIN' });
+  it('leads the Insights group as "Intelligence"', () => {
+    const insights = NAVIGATION_ITEMS.filter(entry => entry.section === 'INSIGHTS');
+    expect(insights[0]).toMatchObject({ href: '/intelligence', label: 'Intelligence' });
   });
 });

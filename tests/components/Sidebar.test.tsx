@@ -7,6 +7,13 @@ import BrandLockup from '@/components/layout/BrandLockup';
 import SidebarTrigger from '@/components/layout/SidebarTrigger';
 
 const mockRealtimeMetrics = vi.hoisted(() => ({ current: null as { active?: number } | null }));
+const mockPathname = vi.hoisted(() => ({ current: '/' }));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
+  usePathname: () => mockPathname.current,
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 vi.mock('@/hooks/useRealtime', () => ({
   useRealtime: () => ({
@@ -57,6 +64,7 @@ const renderWithProvider = (ui: React.ReactElement) => {
 describe('Sidebar', () => {
   beforeEach(() => {
     mockRealtimeMetrics.current = null;
+    mockPathname.current = '/';
     mockMatchMedia(false);
     mockFetch();
     localStorage.clear();
@@ -120,14 +128,14 @@ describe('Sidebar', () => {
     });
   });
 
-  it('renders Event Logs and Audit Log only for ADMIN role', async () => {
+  it('renders Event logs and Audit log only for ADMIN role', async () => {
     const { unmount } = renderWithProvider(
       <Sidebar userName="Admin User" userEmail="admin@example.com" userRole="ADMIN" />
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Event Logs')).toBeInTheDocument();
-      expect(screen.getByText('Audit Log')).toBeInTheDocument();
+      expect(screen.getByText('Event logs')).toBeInTheDocument();
+      expect(screen.getByText('Audit log')).toBeInTheDocument();
     });
 
     unmount();
@@ -137,19 +145,19 @@ describe('Sidebar', () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryByText('Event Logs')).not.toBeInTheDocument();
-      expect(screen.queryByText('Audit Log')).not.toBeInTheDocument();
+      expect(screen.queryByText('Event logs')).not.toBeInTheDocument();
+      expect(screen.queryByText('Audit log')).not.toBeInTheDocument();
     });
   });
 
-  it('hides Event Logs and Audit Log for standard USER role', async () => {
+  it('hides Event logs and Audit log for standard USER role', async () => {
     renderWithProvider(
       <Sidebar userName="Regular User" userEmail="user@example.com" userRole="USER" />
     );
 
     await waitFor(() => {
-      expect(screen.queryByText('Event Logs')).not.toBeInTheDocument();
-      expect(screen.queryByText('Audit Log')).not.toBeInTheDocument();
+      expect(screen.queryByText('Event logs')).not.toBeInTheDocument();
+      expect(screen.queryByText('Audit log')).not.toBeInTheDocument();
     });
   });
 
@@ -190,5 +198,78 @@ describe('Sidebar', () => {
     );
 
     expect(screen.getByText('Public Status')).toBeInTheDocument();
+  });
+
+  it('groups pages by job, in order, with public status pages under Status', () => {
+    const { container } = renderWithProvider(
+      <Sidebar
+        userName="Alex Doe"
+        userEmail="alex@example.com"
+        userRole="ADMIN"
+        initialStatusPages={[
+          { id: 'status-1', name: 'Public Status', slug: 'public', isDefault: false },
+        ]}
+      />
+    );
+
+    const sections = [...container.querySelectorAll('[data-section]')].map(node =>
+      node.getAttribute('data-section')
+    );
+    expect(sections).toEqual([
+      'MAIN',
+      'RESPOND',
+      'CATALOG',
+      'STATUS',
+      'ON_CALL',
+      'LEARN',
+      'INSIGHTS',
+      'ORGANIZATION',
+    ]);
+    const status = container.querySelector('[data-section="STATUS"]')!;
+    expect(status.textContent).toContain('Status dashboard');
+    expect(status.textContent).toContain('Public Status');
+    expect(container.querySelector('[data-section="CATALOG"]')!.textContent).toContain(
+      'Service graph'
+    );
+  });
+
+  it('folds a section from its header and remembers it', async () => {
+    renderWithProvider(
+      <Sidebar userName="Alex Doe" userEmail="alex@example.com" userRole="ADMIN" />
+    );
+
+    const learn = screen.getByRole('button', { name: 'Learn' });
+    expect(learn).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(learn);
+
+    await waitFor(() => expect(screen.queryByText('Postmortems')).not.toBeInTheDocument());
+    expect(learn).toHaveAttribute('aria-expanded', 'false');
+    expect(JSON.parse(localStorage.getItem('opsknight:sidebar-folded-sections')!)).toEqual([
+      'LEARN',
+    ]);
+
+    fireEvent.click(learn);
+    await waitFor(() => expect(screen.getByText('Postmortems')).toBeInTheDocument());
+  });
+
+  it('keeps a folded section folded after a reload', () => {
+    localStorage.setItem('opsknight:sidebar-folded-sections', JSON.stringify(['LEARN']));
+    renderWithProvider(
+      <Sidebar userName="Alex Doe" userEmail="alex@example.com" userRole="ADMIN" />
+    );
+
+    expect(screen.queryByText('Postmortems')).not.toBeInTheDocument();
+    expect(screen.getByText('Schedules')).toBeInTheDocument();
+  });
+
+  it('never folds the section holding the current page', () => {
+    localStorage.setItem('opsknight:sidebar-folded-sections', JSON.stringify(['LEARN']));
+    mockPathname.current = '/postmortems/inc-1';
+    renderWithProvider(
+      <Sidebar userName="Alex Doe" userEmail="alex@example.com" userRole="ADMIN" />
+    );
+
+    expect(screen.getByText('Postmortems')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Learn' })).not.toBeInTheDocument();
   });
 });

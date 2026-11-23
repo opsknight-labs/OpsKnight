@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link, { useLinkStatus } from 'next/link';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
@@ -34,6 +34,7 @@ import { APP_VERSION } from '@/lib/constants';
 import {
   NavItemConfig,
   NAVIGATION_ITEMS,
+  NAV_SECTION_ORDER,
   getNavSectionConfig,
   NavSectionKey,
   getAuthorizedNavItems,
@@ -77,6 +78,34 @@ type SidebarProps = {
 };
 
 const NAV_SCROLL_KEY = 'opsknight:sidebar-scroll';
+const FOLDED_SECTIONS_KEY = 'opsknight:sidebar-folded-sections';
+const FOLDED_SECTIONS_EVENT = 'opsknight:sidebar-folded-sections';
+
+// Folded sections live in localStorage; read through useSyncExternalStore so the server render
+// (everything open) hydrates cleanly and other tabs follow along.
+function subscribeFolded(onChange: () => void) {
+  window.addEventListener('storage', onChange);
+  window.addEventListener(FOLDED_SECTIONS_EVENT, onChange);
+  return () => {
+    window.removeEventListener('storage', onChange);
+    window.removeEventListener(FOLDED_SECTIONS_EVENT, onChange);
+  };
+}
+function readFolded(): string {
+  try {
+    return localStorage.getItem(FOLDED_SECTIONS_KEY) ?? '';
+  } catch {
+    return ''; // Storage can be blocked; every section stays open.
+  }
+}
+function parseFolded(raw: string): ReadonlySet<string> {
+  try {
+    const value: unknown = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(value) ? value.filter(key => typeof key === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
 
 export default function Sidebar({
   userName = null,
@@ -116,6 +145,18 @@ export default function Sidebar({
   const statusPagesExpanded = statusPagesManuallyExpanded || onStatusPageRoute;
 
   const isDesktopCollapsed = !isMobile && isCollapsed;
+  const foldedRaw = useSyncExternalStore(subscribeFolded, readFolded, () => '');
+  const folded = useMemo(() => parseFolded(foldedRaw), [foldedRaw]);
+  const toggleSection = (key: NavSectionKey) => {
+    const next = new Set(folded);
+    if (!next.delete(key)) next.add(key);
+    try {
+      localStorage.setItem(FOLDED_SECTIONS_KEY, JSON.stringify([...next]));
+      window.dispatchEvent(new Event(FOLDED_SECTIONS_EVENT));
+    } catch {
+      // Ignore: folding is a convenience.
+    }
+  };
   const sidebarId = 'app-sidebar';
 
   // Close mobile drawer on route change
@@ -562,16 +603,31 @@ export default function Sidebar({
     );
   };
 
-  // Render a navigation section — injects dynamic Status Pages into RELIABILITY
+  // Render a navigation section; public status pages join the STATUS group.
   const renderSection = (sectionKey: NavSectionKey, items: NavItemConfig[]) => {
-    // For RELIABILITY, inject status pages item between Postmortems and Action Items
-    const isReliability = sectionKey === 'RELIABILITY';
-    const statusItem = isReliability ? renderStatusPagesItem() : null;
-    const hasContent = (items && items.length > 0) || (isReliability && statusItem !== null);
-
-    if (!hasContent) return null;
+    const statusItem = sectionKey === 'STATUS' ? renderStatusPagesItem() : null;
+    if (!items.length && !statusItem) return null;
 
     const sectionConfig = getNavSectionConfig(sectionKey);
+    const holdsCurrentPage =
+      items.some(item => isActive(item.href)) || (statusItem !== null && onStatusPageRoute);
+    // The icon rail has no headers, and the group holding the current page never folds.
+    const foldable = Boolean(sectionConfig.label) && !isDesktopCollapsed && !holdsCurrentPage;
+    const open = !foldable || !folded.has(sectionKey);
+    const listId = `nav-section-${sectionKey.toLowerCase()}`;
+    const heading = (
+      <>
+        {sectionConfig.dotClass && (
+          <span
+            aria-hidden="true"
+            className={cn('h-1.5 w-1.5 rounded-full shrink-0', sectionConfig.dotClass)}
+          />
+        )}
+        <span className="text-[10px] font-bold tracking-wider uppercase text-ink-400">
+          {sectionConfig.label}
+        </span>
+      </>
+    );
 
     return (
       <div
@@ -579,21 +635,38 @@ export default function Sidebar({
         className={cn('w-full', isDesktopCollapsed ? 'mb-2.5' : 'mb-3')}
         data-section={sectionKey}
       >
-        {!isDesktopCollapsed && sectionConfig?.label && (
-          <div className="flex items-center gap-1.5 mb-1.5 px-2">
-            {sectionConfig.dotClass && (
-              <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', sectionConfig.dotClass)} />
-            )}
-            <span className="text-[10px] font-bold tracking-wider uppercase text-ink-400">
-              {sectionConfig.label}
-            </span>
+        {!isDesktopCollapsed &&
+          sectionConfig.label &&
+          (foldable ? (
+            <button
+              type="button"
+              onClick={() => toggleSection(sectionKey)}
+              aria-expanded={open}
+              aria-controls={listId}
+              className="group/section flex w-full min-h-7 items-center gap-1.5 mb-1 px-2 rounded-md hover:bg-slate-800/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-500/40"
+            >
+              {heading}
+              <ChevronDown
+                aria-hidden="true"
+                className={cn(
+                  'ml-auto h-3 w-3 text-ink-400 opacity-0 transition-[transform,opacity] group-hover/section:opacity-100 group-focus-visible/section:opacity-100 motion-reduce:transition-none',
+                  !open && '-rotate-90 opacity-100'
+                )}
+              />
+            </button>
+          ) : (
+            <div className="flex min-h-7 items-center gap-1.5 mb-1 px-2">{heading}</div>
+          ))}
+
+        {open && (
+          <div
+            id={listId}
+            className={cn('flex flex-col gap-1', isDesktopCollapsed && 'items-center')}
+          >
+            {items.map(renderNavItem)}
+            {statusItem}
           </div>
         )}
-
-        <div className={cn('flex flex-col gap-1', isDesktopCollapsed && 'items-center')}>
-          {items.map(renderNavItem)}
-          {isReliability && statusItem}
-        </div>
       </div>
     );
   };
@@ -671,12 +744,7 @@ export default function Sidebar({
             isDesktopCollapsed ? 'py-3 px-2' : 'p-3'
           )}
         >
-          {/* Explicit per-section rendering — avoids dynamic key access (no object injection risk) */}
-          {renderSection('MAIN', groupedItems.MAIN)}
-          {renderSection('RELIABILITY', groupedItems.RELIABILITY)}
-          {renderSection('ON_CALL', groupedItems.ON_CALL)}
-          {renderSection('ANALYTICS', groupedItems.ANALYTICS)}
-          {renderSection('GOVERNANCE', groupedItems.GOVERNANCE)}
+          {NAV_SECTION_ORDER.map(key => renderSection(key, groupedItems.get(key) ?? []))}
         </nav>
 
         {/* Sidebar Footer Section */}
