@@ -293,7 +293,7 @@ export async function searchAdhocIncidentRunbooksAction(incidentId: string, quer
       ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
       ...(!canReadAll && incident.serviceId
         ? {
-            serviceAutomationRules: {
+            bindings: {
               some: {
                 serviceId: incident.serviceId,
                 enabled: true,

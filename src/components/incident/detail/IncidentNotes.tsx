@@ -64,6 +64,7 @@ export default function IncidentNotes({
 
   const [noteContent, setNoteContent] = useState('');
   const [isPreview, setIsPreview] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -207,15 +208,32 @@ export default function IncidentNotes({
     }
   };
 
+  // Collapsed to one line until someone writes; reading notes should not start under an editor.
+  const composing = isFocused || isPreview || Boolean(noteContent) || Boolean(submitError);
+
   return (
     <div className="space-y-4">
       {/* Add Note Form */}
       {canManage ? (
         <div className="group relative">
-          <form action={handleSubmit} className="space-y-2">
+          <form
+            action={handleSubmit}
+            className="space-y-2"
+            onFocus={() => setIsFocused(true)}
+            onBlur={event => {
+              // Collapse only when focus leaves the composer entirely.
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                setIsFocused(false);
+            }}
+          >
             <div className="relative rounded-xl border border-border/80 bg-card shadow-2xs transition-all focus-within:shadow-md focus-within:border-primary/50 overflow-hidden">
               {/* Toolbar */}
-              <div className="flex flex-wrap items-center justify-between gap-1 bg-muted/30 px-2 py-1.5 border-b border-border/60">
+              <div
+                className={cn(
+                  'flex flex-wrap items-center justify-between gap-1 bg-muted/30 px-2 py-1.5 border-b border-border/60',
+                  !composing && 'hidden'
+                )}
+              >
                 <div className="flex items-center gap-0.5">
                   <button
                     type="button"
@@ -350,15 +368,27 @@ export default function IncidentNotes({
                   name="content"
                   value={noteContent}
                   onChange={e => setNoteContent(e.target.value)}
-                  placeholder="Type a note (Markdown supported: **bold**, *italic*, `code`, [link](url))..."
+                  placeholder={
+                    composing
+                      ? 'Type a note (Markdown supported: **bold**, *italic*, `code`, [link](url))...'
+                      : 'Type a note for the team…'
+                  }
                   required
-                  rows={3}
-                  className="resize-none border-0 bg-transparent focus-visible:ring-0 p-3.5 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground"
+                  rows={composing ? 3 : 1}
+                  className={cn(
+                    'resize-none border-0 bg-transparent focus-visible:ring-0 p-3.5 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground',
+                    !composing && 'min-h-0 py-2.5'
+                  )}
                 />
               )}
 
               {/* Footer Row */}
-              <div className="flex items-center justify-between bg-muted/20 px-3 py-2 border-t border-border/60">
+              <div
+                className={cn(
+                  'flex items-center justify-between bg-muted/20 px-3 py-2 border-t border-border/60',
+                  !composing && 'hidden'
+                )}
+              >
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <span>Markdown formatting supported</span>
                 </div>

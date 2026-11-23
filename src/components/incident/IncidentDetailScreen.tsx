@@ -890,7 +890,6 @@ export default async function IncidentDetailScreen({
               incident={incident}
               resolutionNote={resolutionNote}
               postmortemStatus={postmortem?.status ?? null}
-            showPostmortem={incident.status === 'RESOLVED'}
               canManage={canManageIncident}
             />
           )}

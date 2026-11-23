@@ -830,53 +830,60 @@ export default function IncidentTimeline({
       ? [FILTERS[0], INTELLIGENCE_FILTER, ...FILTERS.slice(1)]
       : FILTERS;
 
+  // One row: the filters that have something in them, then the intelligence switch at its end.
   const intelligenceToggle = hasIntelligence ? (
-    <div id="timeline-intelligence" className="mb-2 flex scroll-mt-24 items-center">
-      <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-xs font-medium text-foreground sm:min-h-8">
-        <input
-          type="checkbox"
-          checked={showIntelligence}
-          onChange={event => setShowIntelligence(event.target.checked)}
-          className="h-4 w-4 rounded border-border accent-primary"
-        />
-        Show intelligence events
-        <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">
-          {intelligenceEvents.length}
-        </span>
-      </label>
-    </div>
+    <label
+      id="timeline-intelligence"
+      className="inline-flex h-6.5 scroll-mt-24 cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-border/80 px-2 text-xs font-medium text-muted-foreground transition-colors select-none hover:text-foreground has-checked:border-solid has-checked:text-foreground"
+    >
+      <input
+        type="checkbox"
+        checked={showIntelligence}
+        onChange={event => setShowIntelligence(event.target.checked)}
+        className="h-3.5 w-3.5 rounded border-border accent-primary"
+      />
+      Show intelligence events
+      <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">
+        {intelligenceEvents.length}
+      </span>
+    </label>
   ) : null;
 
   const filterChips = (
     <div className="flex flex-wrap gap-1.5 mb-2" role="group" aria-label="Filter timeline events">
-      {visibleFilters.map(filter => {
-        const count = filterCounts[filter.id] ?? 0;
-        return (
-          <button
-            key={filter.id}
-            type="button"
-            onClick={() => setActiveFilter(filter.id)}
-            aria-pressed={activeFilter === filter.id}
-            aria-label={filter.label}
-            className={cn(
-              'h-6.5 px-2.5 rounded-md text-xs font-medium transition-all select-none border focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring flex items-center gap-1.5',
-              activeFilter === filter.id
-                ? 'bg-foreground text-background border-foreground shadow-2xs font-semibold'
-                : 'bg-background text-muted-foreground border-border/80 hover:text-foreground hover:bg-muted/40'
-            )}
-          >
-            <span>{filter.label}</span>
-            <span
+      {visibleFilters
+        .filter(f => f.id === 'ALL' || f.id === activeFilter || (filterCounts[f.id] ?? 0) > 0)
+        .map(filter => {
+          const count = filterCounts[filter.id] ?? 0;
+          return (
+            <button
+              key={filter.id}
+              type="button"
+              onClick={() => setActiveFilter(filter.id)}
+              aria-pressed={activeFilter === filter.id}
+              aria-label={filter.label}
               className={cn(
-                'text-[10.5px] tabular-nums font-mono',
-                activeFilter === filter.id ? 'opacity-90 font-semibold' : 'text-muted-foreground/70'
+                'h-6.5 px-2.5 rounded-md text-xs font-medium transition-all select-none border focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring flex items-center gap-1.5',
+                activeFilter === filter.id
+                  ? 'bg-foreground text-background border-foreground shadow-2xs font-semibold'
+                  : 'bg-background text-muted-foreground border-border/80 hover:text-foreground hover:bg-muted/40'
               )}
             >
-              {count}
-            </span>
-          </button>
-        );
-      })}
+              <span>{filter.label}</span>
+              <span
+                className={cn(
+                  'text-[10.5px] tabular-nums font-mono',
+                  activeFilter === filter.id
+                    ? 'opacity-90 font-semibold'
+                    : 'text-muted-foreground/70'
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      {intelligenceToggle}
     </div>
   );
 
@@ -885,7 +892,6 @@ export default function IncidentTimeline({
       <div className="space-y-6">
         <div>
           {activityGraph}
-          {intelligenceToggle}
           {filterChips}
         </div>
         <div className="text-center py-12">
@@ -903,7 +909,6 @@ export default function IncidentTimeline({
     <div className="space-y-6">
       <div>
         {activityGraph}
-        {intelligenceToggle}
         {filterChips}
       </div>
       <div className="space-y-6 relative ml-2">

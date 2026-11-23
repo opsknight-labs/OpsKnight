@@ -5,15 +5,10 @@ import { resolvedApprovalPlan } from '@/components/runbooks/executions/approval-
 import { StepStatusIcon, stepTone } from '@/components/runbooks/executions/StepStatusIcon';
 import RunbookExecutionPreview from '@/components/runbooks/RunbookExecutionPreview';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
-import {
-  EmptyHint,
-  Pill,
-  SectionCard,
-  TONE_SURFACE,
-  type Tone,
-} from '@/components/runbooks/ui/primitives';
+import { Pill, SectionCard, TONE_SURFACE, type Tone } from '@/components/runbooks/ui/primitives';
 import {
   AlertTriangle,
+  ChevronDown,
   ChevronRight,
   Download,
   ExternalLink,
@@ -159,37 +154,41 @@ export default async function IncidentRunbooks({
   const budgetExhausted = budgets.some(item => item.limit > 0 && item.used >= item.limit);
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs p-4 sm:p-5 shadow-2xs transition-colors">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3.5 border-b border-border/60">
-          <div className="flex items-start gap-3 min-w-0">
-            <span
+      {/* One row: what this tab is, the unattended-automation limits in a line, and the way to run one. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          <h3 className="text-sm font-semibold text-foreground">Runbooks</h3>
+          <details className="group relative">
+            <summary
               className={cn(
-                'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-2xs',
+                'inline-flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md border px-2 text-xs font-medium select-none transition-colors hover:bg-muted/60 [&::-webkit-details-marker]:hidden',
                 budgetExhausted
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                  : 'border-primary/20 bg-primary/10 text-primary'
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                  : 'border-border bg-background text-foreground'
               )}
+              title="Limits on what automations may do on this incident without a person. Runs you start are not limited."
             >
               {budgetExhausted ? (
-                <ShieldAlert className="h-4 w-4" aria-hidden />
+                <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
               ) : (
-                <ShieldCheck className="h-4 w-4" aria-hidden />
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-status-ok" aria-hidden />
               )}
-            </span>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-bold tracking-tight text-foreground">
-                  Automation Safety & Remediation Budgets
-                </h3>
-                <Pill tone={budgetExhausted ? 'warning' : 'success'}>
-                  {budgetExhausted ? 'Budget exhausted' : 'Safeguards active'}
-                </Pill>
-              </div>
+              <span>{budgetExhausted ? 'Automatic budget used up' : 'Safeguards'}</span>
+              <span className="tabular-nums text-muted-foreground">
+                {budgets[0].used}/{budgets[0].limit} runs · {budgets[1].used}/{budgets[1].limit}{' '}
+                writes
+              </span>
+              <ChevronDown
+                className="h-3 w-3 text-muted-foreground transition-transform group-open:rotate-180"
+                aria-hidden
+              />
+            </summary>
+            <div className="absolute left-0 z-20 mt-1.5 w-[min(22rem,calc(100vw-3rem))] space-y-2.5 rounded-xl border border-border bg-popover p-3 shadow-lg">
               <p
                 className={cn(
-                  'mt-0.5 text-xs leading-relaxed',
+                  'text-xs leading-relaxed',
                   budgetExhausted
-                    ? 'text-amber-700 dark:text-amber-300 font-medium'
+                    ? 'font-medium text-amber-700 dark:text-amber-300'
                     : 'text-muted-foreground'
                 )}
               >
@@ -197,29 +196,29 @@ export default async function IncidentRunbooks({
                   ? 'An automated budget is used up. Further remediation steps require manual responder initiation.'
                   : 'Enforced limits for unattended automations on this incident. Manual responder executions are unrestricted.'}
               </p>
+              <AutomationSafetyMeter items={budgets} />
             </div>
-          </div>
-          {canExecute && (
-            <div className="w-full sm:w-auto shrink-0 flex items-center gap-2">
-              <AdhocRunbookLauncher incidentId={incidentId} />
-            </div>
-          )}
+          </details>
         </div>
-        <div className="pt-3.5">
-          <AutomationSafetyMeter items={budgets} />
-        </div>
+        {canExecute && <AdhocRunbookLauncher incidentId={incidentId} />}
       </div>
       {nothingYet && (
-        <EmptyHint
-          icon={Wrench}
-          title="No incident runbooks"
-          description={
-            canExecute
-              ? 'Nothing is suggested or attached to this incident’s service yet. Use “Run another runbook” to run any published runbook, or attach workflows to the service.'
-              : 'Attach published workflows to this incident’s service to offer diagnostics and recovery.'
-          }
-          className="bg-card"
-        />
+        <p className="flex items-start gap-2.5 rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+          <Wrench className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            <span className="font-medium text-foreground">No incident runbooks. </span>
+            {canExecute
+              ? 'Nothing is suggested or attached to this service yet. Run any published runbook above, or '
+              : 'Attach published workflows to this service to offer diagnostics and recovery. '}
+            <Link
+              href={`/services/${serviceId}?tab=runbooks`}
+              className="font-medium text-primary hover:underline"
+            >
+              {canExecute ? 'attach one to the service' : 'Open service runbooks'}
+            </Link>
+            .
+          </span>
+        </p>
       )}
       {!nothingYet && (
         <SectionCard

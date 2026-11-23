@@ -11,12 +11,18 @@
  *    incidents, two change events, similar / change / triage findings, an AI briefing
  *  - incident context: an automation version + LIVE decision with recognized / missing / unmapped fields
  *  - Jira (config if none, service → PAY mapping, PAY-412 / PAY-398 links), a READY Slack war room, 5 tags
+ *  - runbooks: published "Checkout API health check" (read-only, attached to the service) and
+ *    "Roll back checkout-api deploy" (approval + write), both control-plane only, for "Run another runbook"
  *
  * Direct Prisma writes for development only. Findings and the briefing use generation 1_000_000 so a
  * running intelligence worker treats its own (lower-generation) results as stale and keeps these.
  */
+// The runbook definition helpers import '@/…' paths; this script runs without -r tsconfig-paths/register.
+import 'tsconfig-paths/register';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { buildResponseContext } from '../../src/lib/automation/response-context';
+import { assertAuthoringDefinition } from '../../src/lib/runbooks/authoring-validation';
+import { computeDefinitionChecksum, parseRunbookDefinition } from '../../src/lib/runbooks/definition';
 
 const prisma = new PrismaClient();
 const DEMO = 'incident-demo:';
@@ -291,7 +297,87 @@ async function main() {
     await prisma.incidentTag.createMany({ data: [{ incidentId: incident.id, tagId: tag.id }], skipDuplicates: true });
   }
 
-  console.log(`Seeded demo data on "${incident.title}" (${incident.id}): payload description, ${alertRows.length} alerts, AI briefing, findings, context, 2 Jira links, Slack war room, ${tagNames.length} tags.`);
+  // 11. Two published, control-plane-only runbooks (no Agent) for the "Run another runbook" sheet.
+  // Steps point at example.invalid, so an accidental run cannot reach a real host.
+  const runbook = async (
+    slug: string, name: string, description: string, raw: unknown,
+    inputs: { key: string; label: string; defaultValue: string; description: string }[],
+  ) => {
+    const existing = await prisma.runbook.findUnique({ where: { slug } });
+    if (existing) return existing;
+    assertAuthoringDefinition(raw, inputs);
+    const definition = parseRunbookDefinition(raw, inputs);
+    return prisma.$transaction(async tx => {
+      const created = await tx.runbook.create({ data: { slug, name, description, createdById: admin.id, tags: ['checkout', 'payments'] } });
+      // Inputs are immutable once published (DB trigger): create the version as a draft with its inputs, then publish.
+      const version = await tx.runbookVersion.create({
+        data: {
+          runbookId: created.id, version: 1, state: 'DRAFT', createdById: admin.id,
+          definition: definition as unknown as Prisma.InputJsonValue,
+          checksum: computeDefinitionChecksum(definition),
+          inputs: { createMany: { data: inputs.map((input, sequence) => ({ ...input, type: 'STRING' as const, sequence })) } },
+        },
+      });
+      await tx.runbookVersion.update({ where: { id: version.id }, data: { state: 'PUBLISHED', publishedById: admin.id, publishedAt: new Date() } });
+      return tx.runbook.update({ where: { id: created.id }, data: { publishedVersionId: version.id } });
+    });
+  };
+  const healthCheck = await runbook(
+    'incident-demo-checkout-health-check',
+    'Checkout API health check',
+    'Read-only probe of the checkout endpoint, then a look at recent errors. Safe to run anytime.',
+    {
+      steps: [
+        {
+          key: 'probe_endpoint', name: 'Probe the checkout endpoint', type: 'HTTP', riskClass: 'READ_ONLY',
+          description: 'GET the health route and expect 200.',
+          config: { method: 'GET', url: 'https://checkout-api.example.invalid${{ inputs.endpoint }}/health', expectedStatus: 200 },
+          timeoutSeconds: 15,
+        },
+        {
+          key: 'review_errors', name: 'Review recent checkout errors', type: 'MANUAL', riskClass: 'READ_ONLY',
+          description: 'Open the checkout 5xx dashboard and note the top error and affected hosts in the timeline.',
+        },
+      ],
+    },
+    [{ key: 'endpoint', label: 'Endpoint', defaultValue: '/v1/checkout', description: 'Path to probe on checkout-api.' }],
+  );
+  await runbook(
+    'incident-demo-checkout-rollback',
+    'Roll back checkout-api deploy',
+    'Rolls checkout-api back to a known-good version after an approval, then checks it is healthy.',
+    {
+      steps: [
+        {
+          key: 'approve_rollback', name: 'Approve the rollback', type: 'APPROVAL', riskClass: 'READ_ONLY',
+          description: 'The incident commander confirms the target version before anything changes.',
+        },
+        {
+          key: 'trigger_rollback', name: 'Trigger the rollback', type: 'HTTP', riskClass: 'NON_IDEMPOTENT',
+          description: 'POST to the deploy API to roll checkout-api back.',
+          config: {
+            method: 'POST', url: 'https://deploy.example.invalid/v1/services/checkout-api/rollback',
+            headers: { 'content-type': 'application/json' },
+            body: { version: '${{ inputs.target_version }}' }, expectedStatus: 202,
+          },
+          timeoutSeconds: 30,
+        },
+        {
+          key: 'verify_health', name: 'Verify checkout is healthy', type: 'HTTP', riskClass: 'READ_ONLY',
+          config: { method: 'GET', url: 'https://checkout-api.example.invalid/v1/checkout/health', expectedStatus: 200 },
+          timeoutSeconds: 15,
+        },
+      ],
+    },
+    [{ key: 'target_version', label: 'Target version', defaultValue: 'v2.40.3', description: 'Last known-good checkout-api version.' }],
+  );
+  // The health check is attached to the incident's service (manual, latest published), so it is also a service runbook.
+  if (!(await prisma.serviceAutomationRule.findFirst({ where: { serviceId, runbookId: healthCheck.id } })))
+    await prisma.serviceAutomationRule.create({
+      data: { serviceId, runbookId: healthCheck.id, name: 'Checkout health check', createdById: admin.id },
+    });
+
+  console.log(`Seeded demo data on "${incident.title}" (${incident.id}): payload description, ${alertRows.length} alerts, AI briefing, findings, context, 2 Jira links, Slack war room, ${tagNames.length} tags, 2 published runbooks.`);
 }
 
 main()
