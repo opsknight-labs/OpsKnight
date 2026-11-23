@@ -419,6 +419,7 @@ export function IncidentDescriptionCard({
   const [editedText, setEditedText] = useState(description || '');
   const [isPending, startTransition] = useTransition();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showPayload, setShowPayload] = useState(false);
 
   const rawDescription = description?.trim() || '';
   const wholeJson = useMemo(() => tryParseJson(rawDescription), [rawDescription]);
@@ -539,8 +540,49 @@ export function IncidentDescriptionCard({
               </div>
             </div>
           </div>
+        ) : wholeJson && !showPayload ? (
+          // A raw alert payload: the verified context above already lifts its key fields, so the JSON is
+          // one row until someone wants the source.
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs">
+            <span className="flex items-center gap-1.5 font-medium text-foreground">
+              <Code2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+              Raw alert payload
+            </span>
+            <span className="tabular-nums text-muted-foreground">
+              JSON · {wholeJson.split('\n').length} lines
+            </span>
+            <span className="ml-auto flex items-center gap-1.5">
+              <CopyButton text={wholeJson} label="Copy JSON" className="h-7 px-2 text-xs" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPayload(true)}
+                className="h-7 gap-1 px-2.5 text-xs font-medium"
+                aria-expanded={false}
+              >
+                View
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            </span>
+          </div>
         ) : rawDescription ? (
           <div>
+            {wholeJson && (
+              <div className="mb-1.5 flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowPayload(false)}
+                  className="h-6 gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+                  aria-expanded
+                >
+                  Hide payload
+                  <ChevronUp className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              </div>
+            )}
             <div
               className={cn(
                 'text-xs text-foreground transition-all',
