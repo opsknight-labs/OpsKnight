@@ -5,6 +5,8 @@ import IncidentInsights, {
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
 import { readPayload } from '@/lib/payload-reader';
+import { catchUpKind, type CatchUpItem } from '@/lib/incidents/catch-up';
+import CatchUpStrip from '@/components/incident/detail/CatchUpStrip';
 import { baselineLabel, computeBaseline } from '@/lib/incidents/baseline';
 import IncidentAlertsView from '@/components/incident/detail/IncidentAlertsView';
 import IncidentCustomerCommsCard from '@/components/incident/detail/IncidentCustomerCommsCard';
@@ -540,6 +542,29 @@ export default async function IncidentDetailScreen({
     />
   );
 
+  // Compact rows for "Catch me up", from data the page already loaded (no extra queries).
+  const catchUpItems: CatchUpItem[] = [
+    ...events.map(event => ({
+      at: event.createdAt.toISOString(),
+      kind: catchUpKind(event.type, event.message),
+      text: event.message.slice(0, 160),
+    })),
+    ...incident.notes.map(note => ({
+      at: note.createdAt.toISOString(),
+      kind: 'note' as const,
+      text: note.content.slice(0, 160),
+    })),
+    ...incident.notifications.map(notification => ({
+      at: (notification.failedAt ?? notification.sentAt ?? notification.createdAt).toISOString(),
+      kind: notification.status === 'FAILED' ? ('page_failed' as const) : ('page' as const),
+      text: `${notification.channel} ${notification.status.toLowerCase()}`,
+    })),
+    ...alertRows.map(alert => ({
+      at: alert.createdAt.toISOString(),
+      kind: 'alert' as const,
+      text: 'Alert',
+    })),
+  ];
   const routePrefix = presentation === 'mobile' ? '/m' : '';
   const detailsProps = {
     incident,
@@ -782,6 +807,9 @@ export default async function IncidentDetailScreen({
           <div className="lg:hidden">{detailsBand}</div>
         </section>
       )}
+
+      {/* "Since you looked 2h ago: …" — remembered per incident in the viewer's browser; nothing on a first visit. */}
+      <CatchUpStrip incidentId={incident.id} items={catchUpItems} />
 
       {/* AI briefing: one compact card under the title card, so it is read first without pushing the rest down. */}
       {presentation !== 'mobile' && showInsightsInspector && (
