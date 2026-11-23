@@ -5,6 +5,7 @@ import IncidentInsights, {
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
 import { readPayload } from '@/lib/payload-reader';
+import IncidentAlertsView from '@/components/incident/detail/IncidentAlertsView';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import DedupRecurrenceChip from '@/components/incident/detail/DedupRecurrenceChip';
 import { ALERT_ACTIVITY_MAX_TIMES, summarizeAlertActivity } from '@/lib/incidents/alert-activity';
@@ -939,6 +940,11 @@ export default async function IncidentDetailScreen({
             activityContent={activityContent}
             automationContent={automationContent}
             responseContent={responseContent}
+            alertsContent={
+              alertActivity.total > 0 ? (
+                <IncidentAlertsView incidentId={incident.id} total={alertActivity.total} />
+              ) : undefined
+            }
             runbooksContent={
               canReadRunbooks ? (
                 <>

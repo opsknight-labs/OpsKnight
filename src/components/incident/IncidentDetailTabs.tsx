@@ -2,7 +2,15 @@
 
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
-import { History, FileText, Workflow, MessageSquareText, Route, ListTree } from 'lucide-react';
+import {
+  Bell,
+  History,
+  FileText,
+  Workflow,
+  MessageSquareText,
+  Route,
+  ListTree,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type IncidentDetailTabsProps = {
@@ -16,6 +24,8 @@ export type IncidentDetailTabsProps = {
   automationContent?: ReactNode;
   /** Response path (routing → paging → remediation → recovery); a view inside the Timeline tab. */
   responseContent?: ReactNode;
+  /** Every alert on the incident with its readable payload; a view inside the Timeline tab. */
+  alertsContent?: ReactNode;
   /** Runbooks for this incident; a section of the Automation tab. */
   runbooksContent?: ReactNode;
   postmortemContent?: ReactNode;
@@ -51,7 +61,12 @@ export function tabForAnchor(
           hasRunbooks: hasRunbooksOrOptions.hasRunbooks ?? false,
           hasAutomation: hasRunbooksOrOptions.hasAutomation ?? true,
         };
-  if (anchor.startsWith('timeline-') || anchor === 'incident-activity') return 'timeline';
+  if (
+    anchor.startsWith('timeline-') ||
+    anchor === 'incident-activity' ||
+    anchor === 'incident-alerts'
+  )
+    return 'timeline';
   if (anchor.startsWith('runbook-')) return opts.hasRunbooks ? 'automation' : null;
   if (anchor === 'response-activity') return 'timeline';
   if (anchor === 'automation-decision' || anchor.startsWith('automation-')) {
@@ -85,7 +100,7 @@ export function isIncidentTabAvailable(
 const TRIGGER_CLASS =
   'shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-colors select-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
 
-type TimelineView = 'events' | 'response';
+type TimelineView = 'events' | 'response' | 'alerts';
 
 export default function IncidentDetailTabs({
   defaultTab = 'notes',
@@ -94,6 +109,7 @@ export default function IncidentDetailTabs({
   timelineContent,
   automationContent,
   responseContent,
+  alertsContent,
   runbooksContent,
   postmortemContent,
   showPostmortem = true,
@@ -147,6 +163,7 @@ export default function IncidentDetailTabs({
       if (!target || !isAvailable(target)) return;
       setTab(target);
       if (anchor === 'response-activity') setTimelineView('response');
+      else if (anchor === 'incident-alerts') setTimelineView('alerts');
       else if (anchor.startsWith('timeline-') || anchor === 'incident-activity')
         setTimelineView('events');
       // Wait for the newly selected tab panel to mount before scrolling.
@@ -235,8 +252,9 @@ export default function IncidentDetailTabs({
           </TabsContent>
 
           <TabsContent value="timeline" className="mt-0 focus-visible:outline-hidden">
-            {hasResponse && (
+            {(hasResponse || alertsContent) && (
               <div
+                id="incident-alerts"
                 role="group"
                 aria-label="Timeline view"
                 className="mb-3 inline-flex rounded-lg border border-border/70 bg-muted/40 p-0.5 text-xs font-medium"
@@ -244,8 +262,11 @@ export default function IncidentDetailTabs({
                 {(
                   [
                     { id: 'events', label: 'Events', Icon: ListTree },
-                    { id: 'response', label: 'Response path', Icon: Route },
-                  ] as const
+                    ...(hasResponse
+                      ? [{ id: 'response', label: 'Response path', Icon: Route }]
+                      : []),
+                    ...(alertsContent ? [{ id: 'alerts', label: 'Alerts', Icon: Bell }] : []),
+                  ] as Array<{ id: TimelineView; label: string; Icon: typeof ListTree }>
                 ).map(({ id, label, Icon }) => (
                   <button
                     key={id}
@@ -255,7 +276,9 @@ export default function IncidentDetailTabs({
                     title={
                       id === 'events'
                         ? 'Every event, note and page, with the activity graph'
-                        : 'How the incident was routed, paged, remediated and recovered'
+                        : id === 'alerts'
+                          ? 'Every alert deduplicated into this incident, with its payload'
+                          : 'How the incident was routed, paged, remediated and recovered'
                     }
                     className={cn(
                       'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 transition-colors',
@@ -270,7 +293,11 @@ export default function IncidentDetailTabs({
                 ))}
               </div>
             )}
-            {hasResponse && timelineView === 'response' ? responseContent : timelineContent}
+            {hasResponse && timelineView === 'response'
+              ? responseContent
+              : alertsContent && timelineView === 'alerts'
+                ? alertsContent
+                : timelineContent}
           </TabsContent>
 
           {(hasAutomation || hasRunbooks) && (

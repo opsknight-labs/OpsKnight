@@ -373,6 +373,14 @@ function DedupSummary({ alerts, timeZone }: { alerts: AlertActivity | null; time
             </>
           )}
         </dl>
+        <div className="border-t border-border/60 px-3 py-2">
+          <a
+            href="#incident-alerts"
+            className="text-xs font-semibold text-foreground underline-offset-2 hover:underline"
+          >
+            View each alert and its payload →
+          </a>
+        </div>
         {alerts.truncated && (
           <p className="border-t border-border/60 px-3 py-2 text-muted-foreground">
             The graph shows the first {alerts.times.length} alerts; the total is exact.
