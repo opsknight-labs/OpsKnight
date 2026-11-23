@@ -197,19 +197,24 @@ const IMAGE_KEY = /image|snapshot|graph|chart|screenshot/;
 export function normalizeStatus(value: string): PayloadStatus | null {
   const v = value.trim().toLowerCase();
   if (
-    /^(firing|alerting|alarm|triggered|trigger|open|opened|problem|critical|down|active|fail|failed|failure|error|raised|new)$/.test(
+    /^(firing|fired|alerting|alarm|triggered|trigger|open|opened|problem|critical|down|active|activated|fail|failed|failure|error|raised|new|created|anomalous|unresolved|reopened|investigating|identified|degraded|trouble)$/.test(
       v
     )
   )
     return 'firing';
   if (
-    /^(resolved|resolve|ok|okay|recovered|recovery|closed|normal|up|cleared|clear|success|succeeded|inactive)$/.test(
+    /^(resolved|resolve|ok|okay|recovered|recovery|closed|normal|up|cleared|clear|success|succeeded|inactive|deactivated|merged)$/.test(
       v
     )
   )
     return 'resolved';
-  if (/^(acknowledged|ack|acked)$/.test(v)) return 'acknowledged';
-  if (/^(info|informational|notice|warning_cleared)$/.test(v)) return 'info';
+  if (/^(acknowledged|acknowledge|ack|acked|snoozed)$/.test(v)) return 'acknowledged';
+  if (
+    /^(info|informational|notice|warning_cleared|insufficient_data|upcoming|scheduled|canceled|cancelled)$/.test(
+      v
+    )
+  )
+    return 'info';
   return null;
 }
 
@@ -225,7 +230,12 @@ export function asTime(value: string | number | boolean): string | null {
     return ms > EPOCH_MIN && ms < EPOCH_MAX ? new Date(ms).toISOString() : null;
   }
   const s = String(value);
-  if (!/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s)) return null;
+  // ISO, or an RFC 2822 date ("Fri, 27 Jan 2023 06:02:51 GMT") — anything with a 4-digit year and a clock time.
+  if (
+    !/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s) &&
+    !(/\b\d{4}\b/.test(s) && /\d{1,2}:\d{2}/.test(s))
+  )
+    return null;
   const ms = Date.parse(s);
   return Number.isFinite(ms) && ms > EPOCH_MIN && ms < EPOCH_MAX
     ? new Date(ms).toISOString()

@@ -40,6 +40,29 @@ Do not act from an old provider message without confirming the current OpsKnight
 - **Description card:** the verified **Context** first, as key/value pills with a **Verified · automation vN** badge (a dashed pill is a field that is missing or whose value was not recognised; only recognised fields drive runbook triggers and Agent targeting), then the description or raw alert payload. When intelligence is on for the service and has something to report, the compact **AI briefing** card sits directly under the title card; **Open investigation** opens the **Investigation** panel (see [Use Intelligence suggestions](../intelligence/use-suggestions)).
 - **Tabs:** **Notes** (with the note count), **Timeline** (an **Events** list with an activity graph, or the **Response path** view), **Runbooks & automation** (runbooks first, then the automation decision and alert context; the tab is named **Automation** when you cannot read runbooks), and **Postmortem** once the incident is resolved. The tab bar stays in view while you scroll.
 
+### Read the alert payload
+
+When the incident's description is an alert payload, the **Description & Context** card shows it as a
+readable view instead of raw text. OpsKnight builds this view with fixed rules, not AI, so it works with AI
+turned off and the payload never leaves your OpsKnight:
+
+- **What fired:** the sending tool (for example Datadog, Grafana, Alertmanager, CloudWatch, Azure Monitor,
+  Google Cloud Monitoring, New Relic, Sentry, PagerDuty, Zabbix, Nagios, uptime checkers, GitHub or
+  Kubernetes), firing or resolved, the severity, the title, and the condition with the measured value and
+  threshold where the tool sends them.
+- **Query**, labelled with its language (PromQL, SQL, NRQL, LogQL, SPL, KQL or Datadog) when one is present.
+- **Where and when:** host, service, env, region and similar fields, and the start and resolve times in your
+  time zone.
+- **Message, links and tags:** the tool's own message, its links (dashboard, runbook, the alert in the
+  source tool; only `http` and `https` links are shown) and graph images, and the alert's tags.
+- **Other fields:** everything else, as readable paths such as **Monitor › Priority**.
+
+Payloads from tools without a dedicated reader are still read by key names and value shapes. JSON,
+ClickHouse-style values (`{'A':5400}`), XML, logfmt, form data, `Key: value` text, Markdown and plain text
+are all recognised, as is JSON nested inside a string. Credential-looking fields are masked before anything
+is shown. The **Raw alert payload** row below the view shows the format and size; **View raw** shows the
+payload as received and **Copy** copies it.
+
 ### Read the timeline
 
 The **Timeline** tab has two views. **Response path** shows routing, paging, remediation, verification and recovery as lanes. **Events** lists every event and shows an **Activity** graph above the list:

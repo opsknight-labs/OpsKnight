@@ -26,6 +26,23 @@ describe('format layer', () => {
     expect(parseAny('the disk is full').format).toBe('text');
   });
 
+  it('keeps free text in "Key: value" payloads', () => {
+    expect(
+      parseAny(
+        'Problem: Disk full\nHost: db-1\nAdditional Info:\nDISK CRITICAL - 98% used\nProblem started at 10:02'
+      ).data
+    ).toEqual({
+      Problem: 'Disk full',
+      Host: 'db-1',
+      'Additional Info': 'DISK CRITICAL - 98% used\nProblem started at 10:02',
+    });
+    expect(parseAny('[PROBLEM] db-1 is CRITICAL\nHost: db-1\nState: CRITICAL').data).toEqual({
+      Host: 'db-1',
+      State: 'CRITICAL',
+      text: '[PROBLEM] db-1 is CRITICAL',
+    });
+  });
+
   it('expands structure hidden inside string values', () => {
     const { data } = parseAny({ annotations: { values: "{'A':5400}", inner: '{"x":[1,2]}' } });
     expect(data).toEqual({ annotations: { values: { A: 5400 }, inner: { x: [1, 2] } } });
@@ -153,6 +170,37 @@ describe('source readers', () => {
     expect(view).toMatchObject({ title: 'p99 above 2s', status: 'firing', severity: 'critical' });
     expect(view.links.map(l => l.label)).toEqual(['Open in Prometheus', 'Alertmanager', 'Runbook']);
     expect(view.when).toEqual([{ label: 'Started', at: '2026-11-22T15:27:00.000Z' }]);
+  });
+
+  it('keeps a real Alertmanager v4 webhook (with fingerprint) on the Alertmanager reader', () => {
+    const view = readPayload({
+      version: '4',
+      receiver: 'opsknight',
+      status: 'resolved',
+      groupKey: '{}:{alertname="DiskFull"}',
+      alerts: [
+        {
+          status: 'resolved',
+          labels: { alertname: 'DiskFull', instance: 'db-1:9100' },
+          annotations: {},
+          startsAt: '2026-11-22T10:00:00Z',
+          endsAt: '2026-11-22T10:20:00Z',
+          fingerprint: '3c9b1f0d',
+          generatorURL: 'https://prom.example.com/graph',
+        },
+      ],
+      groupLabels: { alertname: 'DiskFull' },
+      commonLabels: { alertname: 'DiskFull' },
+      externalURL: 'https://am.example.com',
+    });
+    expect(view.source?.id).toBe('alertmanager');
+    expect(view.status).toBe('resolved');
+    expect(view.when.map(t => t.label)).toEqual(['Started', 'Resolved']);
+  });
+
+  it('reads RFC 2822 dates as times', () => {
+    const view = readPayload({ title: 'x', startTime: 'Fri, 27 Jan 2023 06:02:51 GMT' });
+    expect(view.when[0]?.at).toBe('2023-01-27T06:02:51.000Z');
   });
 
   it('reads a Grafana alert from a ClickHouse datasource, literals included', () => {

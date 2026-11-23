@@ -14,7 +14,12 @@ export const datadog: SourceReader = {
   detect: data =>
     isObj(data) &&
     (String(at(data, 'source') ?? '').toLowerCase() === 'datadog' ||
-      has(data, 'alert_type', 'event_type') ||
+      // alert_type + event_type alone is too common; Datadog also sends one of its own fields.
+      (has(data, 'alert_type', 'event_type') &&
+        (has(data, 'monitor') ||
+          has(data, 'alert_transition') ||
+          has(data, 'org') ||
+          has(data, 'query'))) ||
       (has(data, 'monitor') && (has(data, 'query') || has(data, 'alert_transition')))),
   read: data => {
     const value = str(data, 'value', 'alert_metric_value', 'metric_value');
@@ -116,13 +121,14 @@ export const alertmanager: SourceReader = {
 export const grafana: SourceReader = {
   id: 'grafana',
   name: 'Grafana',
+  // Not "fingerprint": every Alertmanager v4 webhook carries it. orgId or a Grafana-only URL field is distinctive.
   detect: data =>
     isObj(data) &&
     Array.isArray(at(data, 'alerts')) &&
     (has(data, 'orgId') ||
-      has(data, 'alerts.0.fingerprint') ||
       has(data, 'alerts.0.silenceURL') ||
       has(data, 'alerts.0.dashboardURL') ||
+      has(data, 'alerts.0.panelURL') ||
       has(data, 'alerts.0.valueString')),
   read: data => {
     const first = at(data, 'alerts.0');

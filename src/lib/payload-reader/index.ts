@@ -71,8 +71,8 @@ function merge(
   );
   const when = uniqBy(
     [...(specific.when ?? []), ...base.when]
-      .map(t => ({ label: t.label, at: asTime(t.at) ?? t.at }))
-      .filter(t => !Number.isNaN(Date.parse(t.at))),
+      .map(t => ({ label: t.label, at: asTime(t.at) }))
+      .filter((t): t is { label: string; at: string } => t.at !== null),
     t => t.label
   );
   const shown = new Set(

@@ -90,20 +90,41 @@ function tryKeyValue(text: string): Record<string, unknown> | undefined {
   const stack: Array<{ indent: number; node: Record<string, unknown> }> = [
     { indent: -1, node: root },
   ];
+  // A key with an empty value ("Additional Info:") takes the free text that follows it; other free text
+  // ("Problem started at 10:02 on 2026.11.22", "[PROBLEM] db-1 is CRITICAL") is kept under "text".
+  const loose: string[] = [];
+  let open: {
+    parent: Record<string, unknown>;
+    key: string;
+    child: Record<string, unknown>;
+  } | null = null;
   for (const line of lines) {
-    const match = line.match(/^(\s*)(?:-\s+)?([-\w .()/]{1,60}):\s*(.*)$/);
-    if (!match) continue;
+    const match = /^\s*https?:/.test(line)
+      ? null
+      : line.match(/^(\s*)(?:-\s+)?([-\w .()/]{1,60}):(?:\s+(.*))?$/);
+    if (!match) {
+      if (open && Object.keys(open.child).length === 0) {
+        const prev = open.parent[open.key];
+        open.parent[open.key] = typeof prev === 'string' ? `${prev}\n${line.trim()}` : line.trim();
+      } else loose.push(line.trim());
+      continue;
+    }
     const indent = match[1].length;
     while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
     const parent = stack[stack.length - 1].node;
     const key = match[2].trim();
-    const value = match[3].trim().replace(/^["']|["']$/g, '');
+    const value = (match[3] ?? '').trim().replace(/^["']|["']$/g, '');
     if (value === '') {
       const child: Record<string, unknown> = {};
       parent[key] = child;
       stack.push({ indent, node: child });
-    } else parent[key] = value;
+      open = { parent, key, child };
+    } else {
+      parent[key] = value;
+      open = null;
+    }
   }
+  if (loose.length && root.text === undefined) root.text = loose.join('\n');
   return Object.keys(root).length ? root : undefined;
 }
 
