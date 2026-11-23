@@ -1,10 +1,15 @@
 name: Tests
 
 on:
+  # Draft PRs skip CI; opening or marking ready runs it. Merges to develop are covered by the
+  # nightly run, so pushes only run on main (releases). Cuts Actions volume (org flagged 2026-11).
   pull_request:
     branches: [main, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [main, develop]
+    branches: [main]
+  schedule:
+    - cron: '17 21 * * *' # nightly on develop
   workflow_dispatch:
 
 permissions:
@@ -26,6 +31,7 @@ jobs:
   static-validation:
     name: Static validation (L0 lint/typecheck/API clients)
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -94,6 +100,7 @@ jobs:
   unit-tests:
     name: Unit tests (L1)
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -121,6 +128,7 @@ jobs:
   database-secret-scripts:
     name: Database secret operator scripts
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     timeout-minutes: 10
     services:
       postgres:
@@ -158,6 +166,7 @@ jobs:
   build:
     name: Application build & budgets (canonical E2E artifact)
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     timeout-minutes: 15
     env:
       NEXTAUTH_URL: http://127.0.0.1:3100
@@ -184,6 +193,7 @@ jobs:
   ingestion-durability:
     name: Ingestion durability (isolated PostgreSQL)
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     timeout-minutes: 20
     services:
       postgres:
@@ -220,6 +230,7 @@ jobs:
   db-integration:
     name: Database integration (L2, shard ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     # The intelligence suites pushed the slowest shard past 20 minutes (shards are split by file count, not time).
     timeout-minutes: 30
     strategy:
@@ -320,7 +331,7 @@ jobs:
         ingestion-durability,
         database-secret-scripts,
       ]
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     steps:
       - name: Checkout
         uses: actions/checkout@v7

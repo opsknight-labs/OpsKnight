@@ -2,7 +2,7 @@
 """Start the heavy suites once for everything merged to main since the last batch.
 
 Heavy suites do not run on every merge (that compute surge got the org flagged on
-2026-11-16). main-heavy.yml calls this every 6 hours. It diffs main against the
+2026-11-16). main-heavy.yml calls this once a day. It diffs main against the
 commit the last successful batch tested and dispatches each heavy workflow whose
 own pull_request `paths` filter matches; workflows without a filter run on any
 non-docs change.

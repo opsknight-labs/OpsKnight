@@ -68,4 +68,4 @@ feat/* fix/* ──PR (squash)──▶ develop ──release PR (merge commit)�
 
 ## Heavy suites and Actions budget
 
-Heavy suites run in 6-hourly batches on `develop` (`main-heavy.yml`), and on a PR once each time `ci:full` is added. Before a release, run **Main heavy batch** with `force`. See [`CI_TEST_INVENTORY.md`](CI_TEST_INVENTORY.md) and AGENTS.md section 8. The org was flagged once for Actions volume, so `actions-budget.yml` alerts above 1,200 minutes in 24 hours.
+Heavy suites run in a nightly batch on `develop` (`main-heavy.yml`), and on a PR once each time `ci:full` is added. Before a release, run **Main heavy batch** with `force`. See [`CI_TEST_INVENTORY.md`](CI_TEST_INVENTORY.md) and AGENTS.md section 8. The org was flagged once for Actions volume, so `actions-budget.yml` alerts above 1,200 minutes in 24 hours.

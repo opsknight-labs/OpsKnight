@@ -20,7 +20,7 @@ This document establishes the machine-readable inventory and classification of O
 
 Branching (Git Flow), image channels and the release/hotfix procedure are in [`RELEASING.md`](RELEASING.md).
 
-Pull requests run a light required gate. Heavy suites run on `develop` in 6-hourly batches (`main-heavy.yml` starts each suite whose paths changed since the last batch), on tags or `workflow_dispatch`, and on a pull request only when the **`ci:full`** label is added. "batch" below means the suite runs from `main-heavy.yml` on `develop`, not on every merge. "PR (`ci:full`)" below means the job is skipped on unlabelled pull requests. Path filters still apply when the label is present. The label is one-shot: the suites run on the `labeled` event only, not on later pushes, so remove and re-add it to run them again.
+Pull requests run a light required gate. Heavy suites run on `develop` in a nightly batch (`main-heavy.yml` starts each suite whose paths changed since the last batch), on tags or `workflow_dispatch`, and on a pull request only when the **`ci:full`** label is added. "batch" below means the suite runs from `main-heavy.yml` on `develop`, not on every merge. "PR (`ci:full`)" below means the job is skipped on unlabelled pull requests. Path filters still apply when the label is present. The label is one-shot: the suites run on the `labeled` event only, not on later pushes, so remove and re-add it to run them again.
 
 ```
 +------------------------------------------------------------------------------------------------------------------------------------------+
