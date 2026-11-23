@@ -1,11 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Layers } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import CopyButton from '@/components/common/CopyButton';
 import RelativeTime from '@/components/patterns/RelativeTime';
-import { bucketTimes, pickBucketMinutes, type AlertActivity } from '@/lib/incidents/alert-activity';
+import {
+  bucketCounts,
+  pickBucketMinutes,
+  type AlertActivity,
+} from '@/lib/incidents/alert-activity';
+import { loadAlertActivityAction } from '../alert-actions';
 import { formatDateTime } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 
@@ -46,7 +51,8 @@ function bucketLabel(minutes: number) {
 }
 
 export default function TimelineGraph({
-  alerts,
+  incidentId,
+  alertTotal,
   markers,
   onsetAt,
   endAt,
@@ -54,7 +60,9 @@ export default function TimelineGraph({
   timeZone,
   onJump,
 }: {
-  alerts: AlertActivity | null;
+  incidentId: string;
+  /** Alerts on the incident (the page's indexed COUNT); the graph data loads only when this is shown. */
+  alertTotal: number;
   markers: GraphMarker[];
   onsetAt: Date;
   /** Resolution time, or when the page was rendered while the incident is open. */
@@ -64,8 +72,26 @@ export default function TimelineGraph({
   onJump: (rowId: string) => void;
 }) {
   const [range, setRange] = useState<'onset' | 'all'>('onset');
+  const [alerts, setAlerts] = useState<AlertActivity | null>(null);
+  const [loading, setLoading] = useState(alertTotal > 0);
+  useEffect(() => {
+    if (alertTotal === 0) return;
+    let live = true;
+    // Aggregated per-minute counts, read only now that the graph is on screen.
+    loadAlertActivityAction(incidentId)
+      .then(data => live && setAlerts(data))
+      .catch(() => live && setAlerts(null))
+      .finally(() => live && setLoading(false));
+    return () => {
+      live = false;
+    };
+  }, [incidentId, alertTotal]);
   const view = useMemo(() => {
-    const alertMs = (alerts?.times ?? []).map(t => new Date(t).getTime());
+    const points = (alerts?.buckets ?? []).map(b => ({
+      ms: new Date(b.at).getTime(),
+      count: b.count,
+    }));
+    const alertMs = points.map(p => p.ms);
     const onset = new Date(onsetAt).getTime();
     const firstSignal = Math.min(onset, alertMs[0] ?? onset);
     const markerMs = markers.map(m => new Date(m.at).getTime());
@@ -91,7 +117,7 @@ export default function TimelineGraph({
     const pctOf = (t: number) => ((t - from) / span) * 100;
 
     const bucketMinutes = pickBucketMinutes(end - start);
-    const counts = bucketTimes(alertMs, start, end, bucketMinutes);
+    const counts = bucketCounts(points, start, end, bucketMinutes);
     const peak = Math.max(0, ...counts);
 
     const sorted = markers.map(m => ({ m, t: new Date(m.at).getTime() })).sort((a, b) => a.t - b.t);
@@ -126,7 +152,7 @@ export default function TimelineGraph({
 
   const bucketMs = view.bucketMinutes * 60_000;
   const tickFormat = view.span > 36 * 3600_000 ? 'short' : 'time';
-  const total = alerts?.total ?? 0;
+  const total = alerts?.total ?? alertTotal;
 
   return (
     <figure
@@ -182,7 +208,11 @@ export default function TimelineGraph({
               ))}
             </span>
           )}
-          <DedupSummary alerts={alerts} timeZone={timeZone} />
+          {loading ? (
+            <span className="inline-flex h-6 w-36 animate-pulse rounded-md bg-muted" aria-hidden />
+          ) : (
+            <DedupSummary alerts={alerts} timeZone={timeZone} />
+          )}
         </span>
       </figcaption>
 
@@ -338,7 +368,7 @@ function DedupSummary({ alerts, timeZone }: { alerts: AlertActivity | null; time
           </dd>
           <dt className="text-muted-foreground">Still firing</dt>
           <dd className="tabular-nums text-foreground">
-            {alerts.firing} of {alerts.truncated ? `${alerts.times.length} read` : total}
+            {alerts.firing} of {total}
           </dd>
           {alerts.fingerprints > 0 && (
             <>
@@ -381,11 +411,6 @@ function DedupSummary({ alerts, timeZone }: { alerts: AlertActivity | null; time
             View each alert and its payload →
           </a>
         </div>
-        {alerts.truncated && (
-          <p className="border-t border-border/60 px-3 py-2 text-muted-foreground">
-            The graph shows the first {alerts.times.length} alerts; the total is exact.
-          </p>
-        )}
       </PopoverContent>
     </Popover>
   );

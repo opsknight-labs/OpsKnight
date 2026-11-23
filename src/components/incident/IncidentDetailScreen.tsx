@@ -16,7 +16,6 @@ import IncidentCustomerCommsCard from '@/components/incident/detail/IncidentCust
 import IncidentRespondersCard from '@/components/incident/detail/IncidentRespondersCard';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import DedupRecurrenceChip from '@/components/incident/detail/DedupRecurrenceChip';
-import { ALERT_ACTIVITY_MAX_TIMES, summarizeAlertActivity } from '@/lib/incidents/alert-activity';
 import { CHAT_EVENT_DISPLAY_MAX, LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
 import { Suspense } from 'react';
 import UserAvatar from '@/components/UserAvatar';
@@ -313,7 +312,6 @@ export default async function IncidentDetailScreen({
     collaboration,
     escalationHealth,
     statusUpdate,
-    alertRows,
     alertTotal,
     previousOnKey,
     baselineRows,
@@ -329,13 +327,7 @@ export default async function IncidentDetailScreen({
     permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE)
       ? loadIncidentStatusUpdate(storedIncident).catch(() => null)
       : null,
-    // Alert arrivals for the Timeline activity graph and its dedup summary.
-    prisma.alert.findMany({
-      where: { incidentId: id },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: ALERT_ACTIVITY_MAX_TIMES,
-      select: { createdAt: true, status: true, severity: true, fingerprintHash: true },
-    }),
+    // One indexed COUNT: the Timeline graph reads its own aggregated data when it is shown.
     prisma.alert.count({ where: { incidentId: id } }),
     // The last earlier incident on the same dedup key the viewer may read: "first in 41 days".
     loadPreviousOnDedupKey(id, storedIncident.dedupKey ?? null, storedIncident.createdAt),
@@ -360,11 +352,6 @@ export default async function IncidentDetailScreen({
     storedIncident.createdAt,
     storedIncident.resolvedAt ?? null,
     pageRenderedAt.getTime()
-  );
-  const alertActivity = summarizeAlertActivity(
-    alertRows,
-    alertTotal,
-    storedIncident.dedupKey ?? null
   );
 
   // The access check above already ran; the viewer's capabilities drive lane redaction.
@@ -453,7 +440,7 @@ export default async function IncidentDetailScreen({
     totalNotesCount: totalNotesCount,
     totalNotificationsCount: totalNotificationsCount,
     totalActivityCount: totalActivityCount,
-    alertActivity,
+    alertTotal,
     renderedAt: new Date(),
   };
   // Intelligence events join the core timeline once read; until then (and on any failure) the core
@@ -562,11 +549,6 @@ export default async function IncidentDetailScreen({
       kind: notification.status === 'FAILED' ? ('page_failed' as const) : ('page' as const),
       text: `${notification.channel} ${notification.status.toLowerCase()}`,
     })),
-    ...alertRows.map(alert => ({
-      at: alert.createdAt.toISOString(),
-      kind: 'alert' as const,
-      text: 'Alert',
-    })),
   ];
   const summaryText = incidentSummaryText({
     title: incident.title,
@@ -576,7 +558,7 @@ export default async function IncidentDetailScreen({
     assigneeName: incident.assignee?.name ?? incident.team?.name ?? null,
     createdAt: incident.createdAt,
     now: pageRenderedAt,
-    alertTotal: alertActivity.total,
+    alertTotal: alertTotal,
     escalation: incident.escalationStatus
       ? ((
           { ESCALATING: 'escalating', COMPLETED: 'max step reached', PAUSED: 'paused' } as Record<
@@ -618,7 +600,7 @@ export default async function IncidentDetailScreen({
   const detailsPanel = <IncidentHeader {...detailsProps} panel />;
   const dedupChip = (
     <DedupRecurrenceChip
-      alertTotal={alertActivity.total}
+      alertTotal={alertTotal}
       hasDedupKey={Boolean(storedIncident.dedupKey)}
       createdAt={incident.createdAt}
       previous={previousOnKey}
@@ -1044,8 +1026,8 @@ export default async function IncidentDetailScreen({
             automationContent={automationContent}
             responseContent={responseContent}
             alertsContent={
-              alertActivity.total > 0 ? (
-                <IncidentAlertsView incidentId={incident.id} total={alertActivity.total} />
+              alertTotal > 0 ? (
+                <IncidentAlertsView incidentId={incident.id} total={alertTotal} />
               ) : undefined
             }
             runbooksContent={

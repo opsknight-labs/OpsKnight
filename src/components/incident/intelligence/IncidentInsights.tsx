@@ -283,9 +283,11 @@ export default async function IncidentInsights({
   // a bare freshness dot under the title card, so it shows only when there is something to open.
   const stripChips = insights.mode === 'OFF' ? [] : buildStripChips(insights);
   const stripFreshness = showsFreshnessDot(insights.analysis) ? insights.analysis : null;
+  // Desktop with no chips: show the dot only while analysis is under way or paused, never a lone "out of date".
   const showStrip =
     insights.mode !== 'OFF' &&
-    (stripChips.length > 0 || (variant === 'strip' && Boolean(stripFreshness)));
+    (stripChips.length > 0 ||
+      (Boolean(stripFreshness) && (variant === 'strip' || stripFreshness?.status !== 'STALE')));
   return (
     <>
       {showStrip && (

@@ -4,6 +4,8 @@ import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { assertCanViewIncident } from '@/lib/rbac';
 import { readPayload, type ReadablePayload } from '@/lib/payload-reader';
+import { countAlertsSince, readAlertActivity } from '@/lib/incidents/alert-activity-server';
+import type { AlertActivity } from '@/lib/incidents/alert-activity';
 
 const PAGE = 25;
 const idSchema = z.string().min(1).max(64);
@@ -56,4 +58,23 @@ export async function loadIncidentAlertsAction(
     })),
     nextCursor: rows.length > PAGE ? page[page.length - 1].id : null,
   };
+}
+
+/** The Timeline graph's data (per-minute counts and dedup facts), read only when the graph is shown. */
+export async function loadAlertActivityAction(incidentId: string): Promise<AlertActivity> {
+  const id = idSchema.parse(incidentId);
+  await assertCanViewIncident(id);
+  const incident = await prisma.incident.findUnique({ where: { id }, select: { dedupKey: true } });
+  return readAlertActivity(id, incident?.dedupKey ?? null);
+}
+
+/** "Catch me up": alerts that arrived since the viewer last looked (one indexed COUNT). */
+export async function countAlertsSinceAction(
+  incidentId: string,
+  sinceIso: string
+): Promise<number> {
+  const id = idSchema.parse(incidentId);
+  const since = new Date(z.string().datetime().parse(sinceIso));
+  await assertCanViewIncident(id);
+  return countAlertsSince(id, since);
 }

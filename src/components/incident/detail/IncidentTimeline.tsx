@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect } from 'react';
 import _TimelineEvent from '../TimelineEvent';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
-import type { AlertActivity } from '@/lib/incidents/alert-activity';
 import TimelineGraph, { type GraphMarker, type GraphMarkerKind } from './TimelineGraph';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -238,8 +237,8 @@ export type IncidentTimelineProps = {
    * the "Show intelligence events" toggle; absent or empty means the toggle is not rendered at all.
    */
   intelligenceEvents?: IntelligenceTimelineEvent[];
-  /** Alerts deduplicated into the incident, for the activity graph above the list. */
-  alertActivity?: AlertActivity | null;
+  /** How many alerts were deduplicated into the incident; the activity graph loads its own data. */
+  alertTotal?: number;
   /** When the page was rendered: the graph's right edge while the incident is open. */
   renderedAt?: Date;
 };
@@ -272,7 +271,7 @@ export default function IncidentTimeline({
   totalNotificationsCount,
   totalActivityCount,
   intelligenceEvents = EMPTY_INTELLIGENCE,
-  alertActivity = null,
+  alertTotal = 0,
   renderedAt,
 }: IncidentTimelineProps) {
   const { userTimeZone } = useTimezone();
@@ -836,7 +835,8 @@ export default function IncidentTimeline({
 
   const activityGraph = incidentCreatedAt ? (
     <TimelineGraph
-      alerts={alertActivity}
+      incidentId={incidentId ?? ''}
+      alertTotal={alertTotal}
       markers={graphMarkers}
       onsetAt={incidentCreatedAt}
       endAt={incidentResolvedAt ?? renderedAt ?? incidentCreatedAt}

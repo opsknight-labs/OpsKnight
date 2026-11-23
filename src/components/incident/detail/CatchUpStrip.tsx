@@ -9,6 +9,7 @@ import {
   type CatchUpSummary,
 } from '@/lib/incidents/catch-up';
 import RelativeTime from '@/components/patterns/RelativeTime';
+import { countAlertsSinceAction } from '../alert-actions';
 
 const KEY = (incidentId: string) => `opsknight.incident.seen.${incidentId}`;
 
@@ -43,13 +44,23 @@ export default function CatchUpStrip({
 
   useEffect(() => {
     const since = readSeen(incidentId);
-    // Read after mount (storage is browser-only), then remember this visit for next time.
-    if (since) {
-      const summary = summarizeSince(items, since);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- the summary depends on browser storage
-      if (summary.total > 0) setState({ since, summary });
-    }
     writeSeen(incidentId);
+    // Only on a revisit: what the page already has, plus one indexed count of alerts since then.
+    if (!since) return;
+    let live = true;
+    const base = summarizeSince(items, since);
+    countAlertsSinceAction(incidentId, since)
+      .catch(() => 0)
+      .then(alerts => {
+        if (!live) return;
+        const summary: CatchUpSummary = alerts
+          ? { ...base, total: base.total + alerts, counts: { ...base.counts, alert: alerts } }
+          : base;
+        if (summary.total > 0) setState({ since, summary });
+      });
+    return () => {
+      live = false;
+    };
     // Once per incident: a server refresh passes a new items array but is not a new visit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incidentId]);
