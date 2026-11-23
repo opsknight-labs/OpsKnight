@@ -6,7 +6,7 @@ import {
   type CatchUpItem,
 } from '@/lib/incidents/catch-up';
 
-const item = (minute: number, kind: CatchUpItem['kind'], text = kind): CatchUpItem => ({
+const item = (minute: number, kind: CatchUpItem['kind'], text: string = kind): CatchUpItem => ({
   at: new Date(Date.UTC(2026, 10, 23, 10, minute)).toISOString(),
   kind,
   text,

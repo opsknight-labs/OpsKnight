@@ -546,8 +546,8 @@ export default async function IncidentDetailScreen({
   const catchUpItems: CatchUpItem[] = [
     ...events.map(event => ({
       at: event.createdAt.toISOString(),
-      kind: catchUpKind(event.type, event.message),
-      text: event.message.slice(0, 160),
+      kind: catchUpKind(event.type ?? '', event.message ?? ''),
+      text: (event.message ?? '').slice(0, 160),
     })),
     ...incident.notes.map(note => ({
       at: note.createdAt.toISOString(),
