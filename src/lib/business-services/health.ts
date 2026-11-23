@@ -261,7 +261,7 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
     });
   }
 
-  type Own = { status: BsStatus; since: Date | null; reasons: ImpactReason[] };
+  type Own = { status: BsStatus; reasons: ImpactReason[] };
   const own = new Map<string, Own>();
   for (const bs of inputs.businessServices) {
     const reasons = [...(incidentReasons.get(bs.id)?.values() ?? [])];
@@ -275,14 +275,7 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
       });
     }
     reasons.sort(byWorst);
-    const status = reasons[0]?.status ?? 'OPERATIONAL';
-    let since: Date | null = null;
-    for (const reason of reasons) {
-      const incidentId = reasonIncidentId(reason);
-      const startedAt = incidentId ? incidentsById.get(incidentId)?.createdAt : undefined;
-      if (reason.status === status && startedAt && (!since || startedAt < since)) since = startedAt;
-    }
-    own.set(bs.id, { status, since, reasons });
+    own.set(bs.id, { status: reasons[0]?.status ?? 'OPERATIONAL', reasons });
   }
 
   const children = new Map<string, string[]>();
@@ -296,7 +289,6 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
   for (const bs of inputs.businessServices) {
     const mine = own.get(bs.id)!;
     const reasons = [...mine.reasons];
-    let since = mine.since;
     const visited = new Set([bs.id]);
     let frontier = [bs.id];
     for (let depth = 1; depth <= MAX_DEPTH && frontier.length; depth += 1) {
@@ -324,19 +316,21 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
             depth,
             incidentId,
           });
-          const startedAt = incidentsById.get(incidentId)?.createdAt;
-          if (rank(mine.status) < DEGRADED_RANK && startedAt && (!since || startedAt < since))
-            since = startedAt;
         }
       }
       frontier = next;
     }
     reasons.sort(byWorst);
     const status = reasons[0]?.status ?? 'OPERATIONAL';
+    // Since = the earliest incident behind the final status, own or nested alike.
+    let since: Date | null = null;
     const incidentIds = new Set<string>();
     for (const reason of reasons) {
-      const incidentId = reasonIncidentId(reason);
-      if (incidentId) incidentIds.add(incidentId);
+      const counted = reasonIncidentId(reason);
+      if (counted) incidentIds.add(counted);
+      const behind = 'incidentId' in reason ? reason.incidentId : null;
+      const startedAt = behind ? incidentsById.get(behind)?.createdAt : undefined;
+      if (reason.status === status && startedAt && (!since || startedAt < since)) since = startedAt;
     }
     result.set(bs.id, {
       businessServiceId: bs.id,
@@ -390,13 +384,13 @@ export type HealthSnapshot = {
 
 const FRESH_TTL_MS = 20_000;
 const STALE_TTL_MS = 5 * 60_000;
-// shortcut: caps an incident storm at the newest 5000 open incidents; page through them if storms grow larger.
-const MAX_OPEN_INCIDENTS = 5000;
+// Active incidents are read in pages so a storm never hides an older still-open incident.
+const INCIDENT_PAGE = 5000;
 let cached: HealthSnapshot | null = null;
 let inFlight: Promise<HealthSnapshot> | null = null;
 let epoch = 0;
 
-/** Structural inputs plus open incidents and open impact rows, in six queries. */
+/** Structural inputs plus open incidents (paged) and open impact rows. */
 export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> {
   const [
     { default: prisma },
@@ -424,12 +418,23 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
     }),
     prisma.businessServiceSupport.findMany({ select: { parentId: true, childId: true } }),
     loadActiveEdges(prisma),
-    prisma.incident.findMany({
-      where: { status: { in: activeIncidentStatuses() } },
-      orderBy: { createdAt: 'desc' },
-      take: MAX_OPEN_INCIDENTS,
-      select: { id: true, serviceId: true, urgency: true, priority: true, createdAt: true },
-    }),
+    (async () => {
+      const all = [];
+      for (let cursor: string | undefined; ;) {
+        const page = await prisma.incident.findMany({
+          where: {
+            status: { in: activeIncidentStatuses() },
+            ...(cursor ? { id: { gt: cursor } } : {}),
+          },
+          orderBy: { id: 'asc' },
+          take: INCIDENT_PAGE,
+          select: { id: true, serviceId: true, urgency: true, priority: true, createdAt: true },
+        });
+        all.push(...page);
+        if (page.length < INCIDENT_PAGE) return all;
+        cursor = page[page.length - 1].id;
+      }
+    })(),
     // Every row of an open incident: manual marks are open, exclusions are ended but still apply.
     prisma.incidentBusinessServiceImpact.findMany({
       where: { incident: { status: { in: activeIncidentStatuses() } } },

@@ -25,6 +25,8 @@ there is no separate mobile Analytics screen any more; `/m` links open `/analyti
 
 - [Use Analytics](./use-analytics.md): filters, ranges, comparison, timezones, metric definitions
   and the CSV export.
+- [Business impact report](./business-impact.md): uptime, incidents, MTTA/MTTR and impacted hours
+  per business service, with the member that hurt most.
 - Unchanged in 2.2.0: [Reports and dashboards](../reports/README.md) and the
   [metrics reference](../../reference/metrics.md).
 

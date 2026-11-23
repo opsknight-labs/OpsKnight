@@ -33,5 +33,8 @@ Group services into what customers rely on with
 [import and set up business services](./business-service-import), and keep business people
 informed with [stakeholder updates](../stakeholders).
 
+See how business services and technical services depend on each other, with live health, in the
+[service graph](./service-graph).
+
 Page on fast error-budget spend for an availability objective with
 [SLO burn-rate alerts](../slo-burn-alerts).

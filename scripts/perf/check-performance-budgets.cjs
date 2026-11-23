@@ -80,6 +80,42 @@ assertBudget(
   !/^import .*microsoft-teams\/delivery/m.test(serviceNotifications),
   'Microsoft Teams delivery must be loaded only when its channel is used'
 );
+// The service graph libraries load only on /services/graph: React Flow through next/dynamic, ELK in
+// a web worker. Any other runtime import would pull them into shared or route chunks.
+const GRAPH_LIBS = /^\s*import\s+(?!type\b)[^;]*from\s+['"](@xyflow\/react|elkjs)[^'"]*['"]/m;
+const GRAPH_LIB_OWNERS = new Set([
+  'src/components/service-graph/ServiceGraphCanvas.tsx',
+  'src/components/service-graph/layout.worker.ts',
+]);
+const graphLibImporters = ['src/app', 'src/components', 'src/lib', 'src/hooks']
+  .flatMap(dir => scanDirectoryForPattern(dir, GRAPH_LIBS))
+  .filter(file => !GRAPH_LIB_OWNERS.has(file));
+assertBudget(
+  graphLibImporters.length === 0,
+  `@xyflow/react and elkjs must stay behind the lazy service graph: ${graphLibImporters.join(', ')}`
+);
+const canvasImporters = ['src/app', 'src/components', 'src/lib', 'src/hooks']
+  .flatMap(dir =>
+    scanDirectoryForPattern(dir, /^\s*import\s+(?!type\b)[^;]*['"][^'"]*\/ServiceGraphCanvas['"]/m)
+  )
+  .filter(file => !file.endsWith('ServiceGraphCanvas.tsx'));
+assertBudget(
+  canvasImporters.length === 0,
+  `ServiceGraphCanvas must be loaded with next/dynamic only: ${canvasImporters.join(', ')}`
+);
+assertBudget(
+  /dynamic\(\(\) => import\('\.\/ServiceGraphCanvas'\), \{\s*ssr: false/.test(
+    read('src/components/service-graph/ServiceGraphExplorer.tsx')
+  ),
+  'ServiceGraphExplorer must load ServiceGraphCanvas with next/dynamic and ssr: false'
+);
+assertBudget(
+  /new Worker\(new URL\('\.\/layout\.worker\.ts', import\.meta\.url\)\)/.test(
+    read('src/components/service-graph/ServiceGraphCanvas.tsx')
+  ),
+  'ELK must run in the layout web worker'
+);
+
 assertBudget(size('src/app/globals.css') <= 96_000, 'legacy global CSS exceeds 96 KB');
 assertBudget(size('src/styles/index.css') <= 8_000, 'root CSS entry exceeds 8 KB');
 
@@ -101,6 +137,41 @@ if (!manifestPath) {
 } else {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const staticRoot = path.join(root, '.next');
+  // No route's eagerly loaded chunks (nor the shared root files) may carry the graph libraries.
+  // App routes list theirs in each page_client-reference-manifest.js (client component chunks);
+  // next/dynamic imports and web workers are not in those lists.
+  const eager = new Set([
+    ...(manifest.rootMainFiles ?? []),
+    ...Object.values(manifest.pages ?? {}).flat(),
+  ]);
+  const appServer = path.join(staticRoot, 'server/app');
+  const referenceManifests = [];
+  const walk = dir => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name === 'page_client-reference-manifest.js') referenceManifests.push(full);
+    }
+  };
+  walk(appServer);
+  globalThis.__RSC_MANIFEST = {};
+  for (const file of referenceManifests) require(file);
+  for (const routeManifest of Object.values(globalThis.__RSC_MANIFEST)) {
+    for (const module of Object.values(routeManifest.clientModules ?? {})) {
+      for (const chunk of module.chunks ?? []) if (chunk.endsWith('.js')) eager.add(chunk);
+    }
+  }
+  const graphChunks = [...eager].filter(asset => {
+    const assetPath = path.join(staticRoot, asset);
+    if (!asset.endsWith('.js') || !fs.existsSync(assetPath)) return false;
+    const source = fs.readFileSync(assetPath, 'utf8');
+    return source.includes('react-flow__') || source.includes('org.eclipse.elk');
+  });
+  assertBudget(
+    graphChunks.length === 0,
+    `React Flow or ELK reached an eagerly loaded chunk: ${graphChunks.join(', ')}`
+  );
   for (const [route, assets] of Object.entries(manifest.pages ?? {})) {
     const totals = { js: 0, css: 0 };
     for (const asset of assets) {
