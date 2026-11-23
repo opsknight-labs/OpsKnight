@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 import { beforeEach, expect, it } from 'vitest';
 import { indexIncident } from '@/lib/intelligence/jobs/indexer';
 import {
@@ -27,16 +27,22 @@ it('reads only new/edited payloads in a 5k-alert incident and repairs labels, or
       payload: { summary: 'Pool exhausted', custom_details: { env: 'prod' } },
     })),
   });
-  const client = new PrismaClient();
+  const client = createPrismaClient();
   let payloadRowsRead = 0;
-  client.$use(async (params, next) => {
-    const rows: unknown = await next(params);
-    if (params.model === 'Alert' && params.action === 'findMany' && Array.isArray(rows))
-      payloadRowsRead += rows.length;
-    return rows;
+  // Prisma 7 has no $use middleware; count rows through a query extension on a view of the client.
+  const counted = client.$extends({
+    query: {
+      alert: {
+        async findMany({ args, query }) {
+          const rows = await query(args);
+          payloadRowsRead += rows.length;
+          return rows;
+        },
+      },
+    },
   });
   const index = (force = false) =>
-    client.$transaction(tx => indexIncident(incident.id, tx, { force }), { timeout: 30000 });
+    counted.$transaction(tx => indexIncident(incident.id, tx as never, { force }), { timeout: 30000 });
   try {
     await index();
     expect(payloadRowsRead).toBe(5000);

@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import bcrypt from 'bcryptjs';
 
 /**
@@ -9,7 +9,7 @@ import bcrypt from 'bcryptjs';
  * incident page's "intelligence is off" note for managers. Named `*.intelligence-ui.spec.ts` so the
  * chromium project's existing pattern picks it up without touching playwright.config.ts.
  */
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const email = 'e2e-noise-builders@example.com';
 const password = 'Noise-Builders-E2E-Pass-5521!';
 const tag = `e2e-noise-${Date.now()}`;

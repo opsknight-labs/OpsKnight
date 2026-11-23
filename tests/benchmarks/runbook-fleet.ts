@@ -1,5 +1,4 @@
 /** Explicit local reference benchmark; never part of the ordinary CI test discovery. */
-import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { writeFile, mkdtemp } from 'node:fs/promises';
@@ -7,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateRunbookAgentMetadata } from '../../src/lib/runbooks/pool-commands';
 import prisma from '../../src/lib/prisma';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 async function main() {
   const url = new URL(process.env.DATABASE_URL ?? '');
@@ -17,7 +17,7 @@ async function main() {
     process.env.API_FLEET_BENCHMARK !== '1'
   )
     throw new Error('Explicit opt-in to the owned local reference database is required.');
-  const db = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
+  const db = createPrismaClient({ log: [{ emit: 'event', level: 'query' }] });
   let queries = 0;
   let advisoryStatementMs = 0;
   db.$on('query', event => {

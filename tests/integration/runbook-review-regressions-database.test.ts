@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '@prisma/client';
 import { mkdir, writeFile } from 'node:fs/promises';
 import {
   testPrisma,
@@ -23,6 +22,7 @@ import {
 import { getServiceRulePage } from '@/lib/runbooks/service-rule-page';
 import { getBindingReadiness } from '@/lib/runbooks/binding-readiness';
 import { reconcileRunbooks } from '@/lib/runbooks/reconciler';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 const actor = vi.hoisted(() => ({ id: '' }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/rbac', () => ({
@@ -53,7 +53,7 @@ const write = {
     },
   ],
 };
-const measured = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
+const measured = createPrismaClient({ log: [{ emit: 'event', level: 'query' }] });
 let queries = 0;
 measured.$on('query', () => queries++);
 afterAll(() => measured.$disconnect());
@@ -960,7 +960,7 @@ suite('second audit activation and minimum-pool contracts', () => {
     url.searchParams.set('pool_timeout', '2');
     const schedulers = Array.from(
       { length: 3 },
-      () => new PrismaClient({ datasources: { db: { url: url.toString() } } })
+      () => createPrismaClient({ url: url.toString() })
     );
     try {
       const acquired = await Promise.all(

@@ -682,3 +682,34 @@ it('gives concrete basic investigation checks and understands a follow-up withou
   expect(followup).not.toContain('invented-old-fact-canary');
   expect(model.requests).toHaveLength(0);
 });
+
+it('labels a general turn as general, never with the incident the conversation started on', async () => {
+  const admin = await setup({ ai: true, provider: true });
+  await db.aiSettings.update({ where: { id: 'default' }, data: { squireHistoryEnabled: true } });
+  const { mine } = await scopedWorld();
+  const { recordExchange } = await import('@/lib/intelligence/conversations/store');
+  const id = await recordExchange({
+    userId: admin.id,
+    incidentId: mine.id,
+    question: 'incident-question-canary',
+    answer: 'a1',
+    turn: { context: { kind: 'incident', id: mine.id } },
+  });
+  await recordExchange({
+    userId: admin.id,
+    conversationId: id,
+    question: 'general-question-canary',
+    answer: 'a2',
+    turn: { context: { kind: 'general', id: 'general' } },
+  });
+  model.script.push({ content: 'ok' }, { content: 'ok' });
+  await turn(admin.id, 'next', { conversationId: id, incidentId: mine.id });
+  expect(JSON.stringify(model.requests[0].body)).toContain(
+    '[Asked as a general question] general-question-canary'
+  );
+  await turn(admin.id, 'next', { conversationId: id });
+  const general = JSON.stringify(model.requests[1].body);
+  expect(general).toContain('general-question-canary');
+  expect(general).not.toContain('[Asked as a general question]');
+  expect(general).not.toMatch(/\[Asked while viewing incident [^\]]*\] general-question-canary/);
+});

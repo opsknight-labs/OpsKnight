@@ -287,13 +287,14 @@ describe('automatic investigations', () => {
     expect(model.requests).toHaveLength(0);
   });
 
-  it('does not gate on status-page visibility, but reads only what the owning team may open', async () => {
+  it('reads only what the owning team may open, so a private incident is not even a candidate', async () => {
     const { service, admin, high } = await setup({ ai: true });
     await enable(service.id, admin.id);
     await db.incident.update({ where: { id: high.id }, data: { visibility: 'PRIVATE' } });
-    // PUBLIC/PRIVATE is a status-page setting: the scan picks the incident like any other.
-    expect(await scanProactiveWork(budget)).toBe(1);
-    // The team-read identity still goes through incident authorization, which decides what it may open.
+    // The scan mirrors incidentReadWhere's team-shared rule (private incidents are shared only with their
+    // assignee and watchers), so the team-scoped reader is never queued for one every minute.
+    expect(await scanProactiveWork(budget)).toBe(0);
+    // A job for it anyway (queued earlier) is still refused at the access check.
     expect(await runProactiveJob(`INVESTIGATION:${high.id}`, 1, budget)).toBe('skipped');
     expect(await db.squireProactiveNote.count()).toBe(0);
     expect(model.requests).toHaveLength(0);

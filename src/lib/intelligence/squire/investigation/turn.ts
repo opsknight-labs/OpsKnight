@@ -76,6 +76,9 @@ export async function* streamInvestigation(input: {
   knowledge?: boolean;
   /** When set, the only read tools this turn may use (an MCP connection's scopes). */
   readTools?: ReadonlySet<string>;
+  /** When the answer is needed (epoch ms) or how long it may take: planning stops in time to conclude. */
+  deadlineAt?: number;
+  deadlineMs?: number;
 }): AsyncGenerator<SquireEvent> {
   const ranClasses: AiDataClass[] = [];
   const tools = buildSquireTools(input.actor, {
@@ -119,6 +122,8 @@ export async function* streamInvestigation(input: {
     ledger: input.evidence,
     envelope: capOutput,
     tokenCeiling: investigationCeiling(input.settings),
+    ...(input.deadlineAt !== undefined ? { deadlineAt: input.deadlineAt } : {}),
+    ...(input.deadlineMs !== undefined ? { deadlineMs: input.deadlineMs } : {}),
   });
   let outcome;
   const shown = new Set<string>();

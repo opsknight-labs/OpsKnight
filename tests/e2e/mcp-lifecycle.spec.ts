@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import { randomBytes } from 'node:crypto';
 import { e2eDigest as digest } from '../helpers/mcp-e2e-digest';
 
@@ -17,7 +17,7 @@ import { e2eDigest as digest } from '../helpers/mcp-e2e-digest';
 
 test.describe.configure({ mode: 'serial' });
 
-const db = new PrismaClient();
+const db = createPrismaClient();
 
 /** Everything this file creates, removed afterwards so later specs see the database they expect. */
 const created = {

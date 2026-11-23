@@ -1,6 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
-const db = new PrismaClient();
+const db = createPrismaClient();
 
 /**
  * The sign-in throttle (`auth:credentials:*`, 10 per 15 minutes per account) is stored in

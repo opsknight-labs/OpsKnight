@@ -61,8 +61,8 @@ spec:
               # A fresh bundled PostgreSQL image may still be pulling on install.
               # Probe connectivity before consuming the migration retry budget.
               node -e '
-                const { PrismaClient } = require("@prisma/client");
-                const db = new PrismaClient();
+                const { createPrismaClient } = require("./scripts/lib/db-runtime.cjs");
+                const db = createPrismaClient();
                 (async () => {
                   const deadline = Date.now() + 180000;
                   for (;;) {

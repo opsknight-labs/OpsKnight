@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import hkdf from '@panva/hkdf';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { EncryptJWT } from 'jose';
 import { hashTokenV2 } from '@/lib/api-keys';
 import { encrypt } from '@/lib/encryption';
@@ -26,6 +26,7 @@ import {
   SCALE_PROFILES,
   ScaleProfileName,
 } from '../fixtures/users';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 
 export interface LoadSeedManifest {
   generatedAt: string;
@@ -169,7 +170,7 @@ export async function runLoadSeed(options?: {
   const endpoints = options?.endpoints ?? DEFAULT_EMULATOR_ENDPOINTS;
   const scale = SCALE_PROFILES[scaleName];
 
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   try {
     for (let attempt = 1; attempt <= 15; attempt++) {
       try {

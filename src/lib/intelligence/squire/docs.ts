@@ -149,7 +149,10 @@ export async function searchProductDocs(query: string, limit = 3): Promise<DocsH
     }
     // A single shared word is noise for a multi-word question, and so are two common words that only
     // brush a section ("pizza delivery status" scores ~7.4; "acknowledge incident" ~8.7).
-    if (matched > 0 && (terms.length === 1 || matched >= 3 || (matched === 2 && score >= MIN_PAIR_SCORE)))
+    if (
+      matched > 0 &&
+      (terms.length === 1 || matched >= 3 || (matched === 2 && score >= MIN_PAIR_SCORE))
+    )
       scored.push({ unit, score });
   }
   scored.sort((a, z) => z.score - a.score);

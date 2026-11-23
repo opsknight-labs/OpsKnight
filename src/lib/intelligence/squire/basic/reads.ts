@@ -614,7 +614,9 @@ async function changes(ctx: Context): Promise<string> {
   const rows = await prisma.changeEvent.findMany({
     where: {
       AND: [
-        Object.keys(readable).length ? { OR: [{ serviceId: null, unmappedIntegrationId: null }, { service: readable }] } : {},
+        Object.keys(readable).length
+          ? { OR: [{ serviceId: null, unmappedIntegrationId: null }, { service: readable }] }
+          : {},
         ...(ctx.incident &&
         !ctx.query.terms.length &&
         !/\b(all services|workspace|across services|all postmortems|all follow[- ]?ups)\b/i.test(
@@ -824,7 +826,10 @@ async function responders(ctx: Context): Promise<string> {
 }
 
 async function oncall(ctx: Context): Promise<string> {
-  if (/\bnext (?:\d{1,3} )?(hours?|days?|weeks?|week|month|shift|on.?call)\b/i.test(ctx.message))
+  if (
+    /\bnext (week|month|shift|on.?call)\b/i.test(ctx.message) ||
+    /\bnext \d{1,3} (hours?|days?|weeks?)\b/i.test(ctx.message)
+  )
     return 'For future coverage, ask “Who is on call tomorrow?” or “Who is on call in 2 hours?”. Open Schedules to review a full future rotation.';
   const named =
     ctx.query.terms.length > 0 || Boolean(ctx.incident) || Boolean(ctx.options.contextService);

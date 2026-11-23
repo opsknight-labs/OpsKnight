@@ -19,8 +19,8 @@
  */
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
 import { assertLocalDashboardTarget } from './seed-dashboard-live';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 type Args = { a: string; b: string; pidA: number | null };
 
@@ -147,7 +147,7 @@ async function snapshot(
 async function main() {
   assertLocalDashboardTarget();
   const { a, b, pidA } = parseArgs(process.argv.slice(2));
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const runTag = randomUUID().slice(0, 8);
   const title = `Replica check ${runTag}`;
   try {

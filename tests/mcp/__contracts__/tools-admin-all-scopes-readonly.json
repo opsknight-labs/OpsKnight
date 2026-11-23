@@ -36,6 +36,18 @@
     "descriptionSha256": "90ac1583eb2cbe0e97e8f0822fc0f85d2744e0bb45f96d7b99efb1fa4ad0628c"
   },
   {
+    "name": "business_service_graph",
+    "title": "Business service dependency graph",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "6cf03aa2d7e541defd0f5a2b5042ff2ee1b549ec825f6fccf79b9f9f4556cb32",
+    "descriptionSha256": "8c2c379278cf4e4cbc65da6060fccd9cfe1343188d3b4f07b718e0c3fe059711"
+  },
+  {
     "name": "business_service_health",
     "title": "Business service health and uptime",
     "annotations": {
@@ -424,7 +436,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "4b06c458ddb85ee3c3555f1866eb44a367444db334142136ba19b2b13faabf66",
+    "inputSchemaSha256": "94da30515d8c6f475a2791a36e7f0e05ee8884f2bdb1e0c8b4a1d17b6f5e1b8e",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {

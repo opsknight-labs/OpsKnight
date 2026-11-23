@@ -835,6 +835,14 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'BusinessServiceImpactTimeline'
   ),
   op(
+    'get',
+    '/business-services/{id}/graph',
+    'getBusinessServiceGraph',
+    'services:read',
+    'item',
+    'BusinessServiceGraph'
+  ),
+  op(
     'put',
     '/incidents/{id}/business-service-impacts/{businessServiceId}',
     'markIncidentBusinessServiceImpact',

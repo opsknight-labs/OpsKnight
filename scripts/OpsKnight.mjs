@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
 import bcrypt from 'bcryptjs';
 import { resolveDatabaseUrl, getDatabaseDiagnostics } from './db-connection-resolver.mjs';
+const { createPrismaClient } = createRequire(import.meta.url)('./lib/db-runtime.cjs');
 
 function printHelp() {
     const lines = [
@@ -80,7 +81,7 @@ async function main() {
         throw new Error(`Invalid role: ${roleInput}`);
     }
 
-    const prisma = new PrismaClient({ datasourceUrl: databaseUrl });
+    const prisma = createPrismaClient({ url: databaseUrl });
 
     try {
         const existing = await prisma.user.findUnique({ where: { email } });

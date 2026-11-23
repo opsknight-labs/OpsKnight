@@ -517,9 +517,9 @@ describe('calendar questions end to end', () => {
 });
 
 describe('dialogue follow-ups from the adversarial review', () => {
-  const onScreen = (w: Awaited<ReturnType<typeof world>>, index = 2) => ({
-    id: w.incidents[index].id,
-    title: `Pool exhausted ${index + 1}`,
+  const onScreen = (w: Awaited<ReturnType<typeof world>>) => ({
+    id: w.incidents[2].id,
+    title: 'Pool exhausted 3',
     status: 'OPEN',
     urgency: 'HIGH',
     serviceName: 'Checkout API',

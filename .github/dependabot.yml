@@ -6,7 +6,8 @@ updates:
     target-branch: 'develop'
     schedule:
       interval: 'weekly'
-    open-pull-requests-limit: 10
+    # Each Dependabot PR runs CI; a small cap and one grouped PR keep Actions usage down.
+    open-pull-requests-limit: 2
     groups:
       dependencies:
         patterns:
@@ -17,3 +18,8 @@ updates:
     target-branch: 'develop'
     schedule:
       interval: 'monthly'
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns:
+          - '*'

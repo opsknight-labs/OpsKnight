@@ -3,13 +3,13 @@ import { automationReadinessPolicySchema } from '../../src/lib/automation/readin
 import { generateApiKey } from '@/lib/api-keys';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { automationLoadSnapshot } from '../load/fixtures/automation';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { checksum } from '@/lib/automation/cache';
 import { randomUUID } from 'node:crypto';
-const db = new PrismaClient();
+import { createPrismaClient } from '../../src/lib/db/create-client';
+const db = createPrismaClient();
 // Desktop browsers (Chromium, Firefox, WebKit) use desktop routes; device emulations use /m.
 const isDesktop = (info: { project: { use: { isMobile?: boolean } } }) =>
   !info.project.use.isMobile;

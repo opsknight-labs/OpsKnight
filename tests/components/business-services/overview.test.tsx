@@ -14,6 +14,8 @@ import {
 import { describeReason, memberStatuses, reasonIds } from '@/components/business-service/reasons';
 
 vi.mock('@/contexts/TimezoneContext', () => ({ useTimezone: () => ({ userTimeZone: 'UTC' }) }));
+// The mini graph is an async server component that reads the database; RTL renders the lists.
+vi.mock('@/components/business-service/DependencyMiniGraph', () => ({ default: () => null }));
 
 const actor: AuthorizationActor = { id: 'u1', role: 'STAKEHOLDER', status: 'ACTIVE', teamIds: [] };
 const DAY = 86_400_000;

@@ -220,7 +220,7 @@ export default function SquireLauncher({
   canManageAi?: boolean;
   /** Pin the incident briefing above a conversation about an incident (loaded from the briefing API). */
   pinBriefing?: boolean;
-  /** The person's upcoming on-call shifts (from the status bar), for heads-ups on Squire's scroll. */
+  /** The person's upcoming on-call shifts (from the status bar), for heads-ups in Squire's speech bubble. */
   shifts?: StatusBarShift[];
   /** For a friendlier greeting; only the first name is used. */
   userName?: string | null;
@@ -379,7 +379,7 @@ export default function SquireLauncher({
 
   // Closing only hides the panel: an answer in progress keeps arriving and is there when it is reopened.
   const close = useCallback(() => setOpen(false), []);
-  // An answer that finished while the panel was closed; Squire carries the news on his scroll.
+  // An answer that finished while the panel was closed; Squire brings the news in his speech bubble.
   const [answerReady, setAnswerReady] = useState<number | null>(null);
   const openRef = useRef(open);
   useEffect(() => {
@@ -1014,7 +1014,9 @@ export default function SquireLauncher({
                   ? undefined
                   : (conversation.incidentId ?? undefined),
             context: envelope?.context
-              ? `${envelope.context.kind}:${envelope.context.id}`
+              ? envelope.context.kind === 'general'
+                ? 'general'
+                : `${envelope.context.kind}:${envelope.context.id}`
               : conversation.incidentId
                 ? `incident:${conversation.incidentId}`
                 : 'general',
@@ -1115,14 +1117,16 @@ export default function SquireLauncher({
   }, [send]);
 
   const cheerUp = useCallback(() => {
-    if (tone === 'calm') setCheer(true);
+    if (tone !== 'calm') return false;
+    setCheer(true);
+    return true;
   }, [tone]);
   const runCommand = (command: SlashCommand) => {
     if (command.prompt) void send(command.prompt);
     else newChat();
   };
   const notes = useMemo(
-    () => buildNotes({ name, shortcut: shortcutLabel(), tone, shifts, now: clock, answerReady }),
+    () => buildNotes({ name, tone, shifts, now: clock, answerReady }),
     [name, tone, shifts, clock, answerReady]
   );
 
@@ -1206,6 +1210,10 @@ export default function SquireLauncher({
           name={name}
           open={open}
           onOpen={() => setOpen(true)}
+          onAsk={question => {
+            setOpen(true);
+            void send(question);
+          }}
           launcherState={busy || !online ? mascotState : 'idle'}
           animated={animated}
           notes={notes}

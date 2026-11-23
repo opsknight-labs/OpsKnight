@@ -4,9 +4,10 @@
  */
 
 import 'dotenv/config';
-import { PrismaClient, IncidentUrgency, IncidentStatus } from '@prisma/client';
+import { IncidentUrgency, IncidentStatus } from '@prisma/client';
+import { createPrismaClient } from '../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function main() {
   console.log('🌱 Seeding collaboration test scenarios...');

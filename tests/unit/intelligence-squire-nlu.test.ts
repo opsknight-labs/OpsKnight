@@ -629,7 +629,10 @@ describe('adversarial review regressions', () => {
   });
 
   it('treats "open" as unresolved and maps sev/priority N to a priority filter', () => {
-    expect(parseBasicQuery('open incidents', now)).toMatchObject({ status: undefined, active: true });
+    expect(parseBasicQuery('open incidents', now)).toMatchObject({
+      status: undefined,
+      active: true,
+    });
     expect(parseBasicQuery('incidents opened today', now).status).toBe('OPEN');
     expect(parseBasicQuery('sev 1 incidents', now).priority).toBe('P1');
     expect(parseBasicQuery('priority 2 incidents', now).priority).toBe('P2');
@@ -702,7 +705,12 @@ describe('adversarial review regressions', () => {
   });
 
   it('answers severity and urgency lists without asking which reading', () => {
-    for (const text of ['p1 incidents', 'incidents', 'high urgency incidents', 'checkout incidents?'])
+    for (const text of [
+      'p1 incidents',
+      'incidents',
+      'high urgency incidents',
+      'checkout incidents?',
+    ])
       expect(intent(text), text).toBe('SEARCH_INCIDENTS');
     expect(intent('incidents by team this week')).toBe('INCIDENT_STATS');
   });
@@ -737,13 +745,17 @@ describe('adversarial review regressions', () => {
       expect(routeIntent(normalizeMessage(text), false), text).not.toBe('GREETING');
     for (const text of ['hey 👋', 'hey squire!', 'good morning team', 'hi there'])
       expect(routeIntent(normalizeMessage(text), false), text).toBe('GREETING');
+    expect(routeIntent('morning briefing', false)).toBe('CATCH_UP');
     expect(routeIntent('cool, thanks', false)).toBe('THANKS');
     expect(routeIntent('ok great, thanks!', false)).toBe('THANKS');
     expect(stripGreeting('hey hi there, any open incidents?')).toEqual({
       greeted: true,
       rest: 'any open incidents?',
     });
-    expect(stripGreeting('Hey Knight! my queue', 'Knight')).toEqual({ greeted: true, rest: 'my queue' });
+    expect(stripGreeting('Hey Knight! my queue', 'Knight')).toEqual({
+      greeted: true,
+      rest: 'my queue',
+    });
     expect(stripGreeting("what's up with checkout?").greeted).toBe(false);
     expect(normalizeMessage("what's up with checkout?")).toBe('what is going on with checkout?');
     expect(intent('how is it going with the payments outage')).toBe('ACTIVE_INCIDENTS');

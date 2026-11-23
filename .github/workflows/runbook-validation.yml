@@ -99,7 +99,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          node-version: 22
           generate-prisma: 'true'
       - name: Apply migrations to isolated UI database
         run: npx prisma migrate deploy
@@ -144,7 +144,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          node-version: 22
           generate-prisma: 'true'
       - name: Apply all migrations
         run: npx prisma migrate deploy
@@ -204,7 +204,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          node-version: 22
           generate-prisma: 'true'
       - name: Install verified Kind tooling
         run: |
@@ -248,7 +248,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          node-version: 22
           generate-prisma: 'true'
       - name: Apply isolated database migrations
         run: npx prisma migrate deploy
@@ -286,7 +286,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          node-version: 22
           generate-prisma: 'true'
       - name: Apply isolated database migrations
         run: npx prisma migrate deploy
@@ -338,7 +338,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          node-version: 22
       - name: Build standalone native Agent artifacts with Node 24
         run: bash scripts/build-agent-artifacts.sh
       - name: Verify generated artifacts and SHA256SUMS

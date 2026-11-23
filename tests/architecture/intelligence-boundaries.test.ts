@@ -289,8 +289,10 @@ describe('intelligence architecture boundaries', () => {
     const chatDir = join(root, 'src/lib/chatops/squire');
     // The channel publisher writes only its own bookkeeping rows (checked below).
     const publisher = join(chatDir, 'publish.ts');
+    // The progress placeholder id is kept on its own chat intent row so a retry edits it (checked below).
+    const placeholder = join(chatDir, 'placeholder.ts');
     const surfaces = [
-      ...sourceFiles(chatDir).filter(file => file !== publisher),
+      ...sourceFiles(chatDir).filter(file => file !== publisher && file !== placeholder),
       join(root, 'src/lib/mcp/core/ask-squire.ts'),
       join(root, 'src/lib/mcp/core/ask-squire-contract.ts'),
       join(intelligenceDir, 'squire/surfaces.ts'),
@@ -317,6 +319,17 @@ describe('intelligence architecture boundaries', () => {
       ),
     ]).toEqual(['squireChannelMessage']);
     expect(publish).not.toMatch(/\$executeRaw|\$transaction|\.token\b/);
+    const placeholderSource = read(placeholder);
+    expect([
+      ...new Set(
+        [
+          ...placeholderSource.matchAll(
+            /\bprisma\.(\w+)\s*\.(?:create|update|upsert|delete)\w*\(/g
+          ),
+        ].map(match => match[1])
+      ),
+    ]).toEqual(['chatOpsIntent']);
+    expect(placeholderSource).not.toMatch(/\$executeRaw|\$transaction/);
     // MCP is read-only: it never imports the executor and never hands out a sealed token.
     const mcp = read(join(root, 'src/lib/mcp/core/ask-squire.ts'));
     expect(mcp).not.toMatch(/actions\/execute|executeSquireAction/);

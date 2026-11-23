@@ -29,7 +29,7 @@ const INTENT_ICONS: Array<[RegExp, LucideIcon]> = [
   [/services/i, Layers],
   [/^help$/i, CircleHelp],
 ];
-const iconFor = (text: string) =>
+export const iconFor = (text: string) =>
   INTENT_ICONS.find(([pattern]) => pattern.test(text))?.[1] ?? MessageSquare;
 
 function SuggestionList({

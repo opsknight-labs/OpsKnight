@@ -1,7 +1,7 @@
 /** Explicit, bounded historical-data rewrite. Backups and already downloaded output remain operator responsibilities. */
-import { PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { sanitizeCompressedArtifact } from '../src/lib/runbooks/artifact-safety';
+import { createPrismaClient } from '../src/lib/db/create-client';
 const argument = (name: string) =>
   process.argv
     .find(value => value.startsWith(`--${name}=`))
@@ -18,7 +18,7 @@ async function main() {
     throw new Error('Batch limit must be 1–100.');
   const after = argument('after');
   if (after && !/^[a-z0-9]+$/i.test(after)) throw new Error('Invalid artifact cursor.');
-  const db = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL });
+  const db = createPrismaClient({ url: process.env.DATABASE_URL });
   let rewritten = 0,
     unchanged = 0,
     rejected = 0;

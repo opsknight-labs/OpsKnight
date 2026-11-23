@@ -2,7 +2,10 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { CalendarClock, MessageSquareText } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
 import OpsKnightSquire, { type SquireState } from './OpsKnightSquire';
+import { iconFor } from './SquireEmptyState';
 import { isDelivered, markDelivered, type SquireNote } from './squire-messages';
 import { shortcutLabel } from './squire-voice';
 import './squire-bar.css';
@@ -10,12 +13,12 @@ import './squire-bar.css';
 /**
  * Squire on duty: on desktop the assistant sleeps in the status bar's right-hand corner and, only when
  * the person has been idle for a while, does a short round of a squire's duties (keeps watch with a
- * lantern, tends the shield, and once per session brings a message offering help) before going back to
+ * lantern, tends the shield, and once per session offers help in a speech bubble) before going back to
  * sleep. A round never starts while the chat is open, the tab is hidden, someone is typing or working,
  * or reduced motion is requested; at most a few rounds play per session. Hovering wakes him up.
  *
  * He is also the messenger: notes (a one-time introduction, on-call heads-ups, "your answer is ready")
- * arrive on his scroll even with motion off; with motion he steps out to deliver them. He rests awake and
+ * arrive in his speech bubble even with motion off; with motion he steps out to deliver them. He rests awake and
  * only dozes after a few quiet minutes, so a sleeping knight never reads as "switched off".
  */
 
@@ -53,6 +56,7 @@ export default function SquireBarCompanion({
   name,
   open,
   onOpen,
+  onAsk,
   launcherState,
   animated,
   notes = [],
@@ -63,6 +67,8 @@ export default function SquireBarCompanion({
   /** The chat panel is open: stay at the post, awake. */
   open: boolean;
   onOpen: () => void;
+  /** Open the chat and ask this question (the introduction's one-click questions). */
+  onAsk?: (question: string) => void;
   /** State the launcher reports (thinking while answering, alert on a high-urgency incident). */
   launcherState: SquireState;
   /** The administrator's "animate the assistant" setting. */
@@ -215,6 +221,8 @@ export default function SquireBarCompanion({
       // The first round of a session also brings a message offering help.
       if (rounds === 0) {
         setNote(null);
+        // Shield down while he talks, so the wave reads.
+        setShield(false);
         setPose('message');
         setMood('greeting');
         setScrollOpen(true);
@@ -236,7 +244,7 @@ export default function SquireBarCompanion({
     }
   }, [bar, home, open, motionAllowed, walkTo, wait, snapHome]);
 
-  /** Carry one note: step out (with motion), unroll the scroll, wait for a reply or the timeout, return. */
+  /** Carry one note: step out (with motion), show the bubble, wait for a reply or the timeout, return. */
   const deliver = useCallback(
     async (next: SquireNote) => {
       if (busy.current || home === null || open) return false;
@@ -252,6 +260,7 @@ export default function SquireBarCompanion({
           setFacing('right');
         }
         setNote(next);
+        setShield(false);
         setPose('message');
         setScrollOpen(true);
         // Delivered only once it is on screen; a note cut short on the way is offered again.
@@ -268,6 +277,7 @@ export default function SquireBarCompanion({
         if (cancelled.current) snapHome();
         else if (motionAllowed()) await walkTo(home);
         setFacing('right');
+        setShield(true);
         setPose('rest');
         busy.current = false;
         setNoteTick(tick => tick + 1);
@@ -478,62 +488,132 @@ export default function SquireBarCompanion({
       </div>
       {/* Always mounted, so screen readers hear each note when it arrives. */}
       <p role="status" className="sr-only">
-        {scrollOpen && note ? note.text : ''}
+        {scrollOpen && note ? [note.title, note.text].filter(Boolean).join('. ') : ''}
       </p>
       <div
         className={`sqbar-scroll${scrollOpen ? ' open' : ''}${animated ? '' : ' still'}`}
         aria-hidden={!scrollOpen}
+        // A note waits while the pointer or focus is on it (WCAG 2.2.1), so it is never timed out mid-read.
         onPointerEnter={() => (holding.current = true)}
         onPointerLeave={() => (holding.current = false)}
         onFocus={() => (holding.current = true)}
         onBlur={() => (holding.current = false)}
-        style={{
-          // A note's card ends at his right edge, so it never runs off the end of the bar.
-          transform: note
-            ? `translateX(${x + 50}px) translateX(-100%)`
-            : `translateX(${x + 22}px) translateX(-50%)`,
-        }}
+        // The bubble ends just past his right edge, so its tail points at him and it stays on the bar.
+        style={{ transform: `translateX(${x + 50}px) translateX(-100%)` }}
       >
-        {note ? (
-          <div className="sqbar-paper sqbar-letter">
-            <p>{note.text}</p>
-            <div className="sqbar-letter-actions">
-              <button type="button" onClick={dismiss} tabIndex={scrollOpen ? 0 : -1}>
-                {note.dismissLabel}
-              </button>
-              {note.action &&
-                ('open' in note.action ? (
-                  <button
-                    type="button"
-                    className="primary"
-                    onClick={onOpen}
-                    tabIndex={scrollOpen ? 0 : -1}
-                  >
-                    {note.action.label}
-                  </button>
+        <div
+          className={`sqbar-bubble ok-inverse-surface relative ${note?.asks ? 'w-76' : 'w-max max-w-76'} rounded-2xl border border-border bg-card px-4 pb-3 pt-5 text-card-foreground shadow-[0_18px_40px_-12px_rgb(0_0_0/0.55)]`}
+        >
+          {/* His pennant: the one heraldic touch, in his plume's crimson. */}
+          <span className="sqbar-pennant absolute -top-3 left-4 font-display text-xs font-semibold text-white">
+            {name}
+          </span>
+          <span
+            aria-hidden="true"
+            className="absolute -bottom-[7px] right-[22px] size-3 rotate-45 border-b border-r border-border bg-card"
+          />
+          {note?.asks ? (
+            <>
+              <p className="font-display text-base font-semibold leading-6">{note.title}</p>
+              <p className="mt-0.5 text-sm leading-5 text-muted-foreground">{note.text}</p>
+              <ul className="-mx-2 mt-2.5 space-y-0.5">
+                {note.asks.map(question => {
+                  const Icon = iconFor(question);
+                  return (
+                    <li key={question}>
+                      <button
+                        type="button"
+                        onClick={() => onAsk?.(question)}
+                        tabIndex={scrollOpen ? 0 : -1}
+                        className="flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+                      >
+                        <Icon className="size-4 shrink-0 text-rose-400" aria-hidden="true" />
+                        {question}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-2.5 flex items-center justify-between border-t border-border pt-2.5">
+                <span className="text-xs text-muted-foreground">
+                  <kbd className="rounded border border-border px-1 font-sans">
+                    {shortcutLabel()}
+                  </kbd>{' '}
+                  opens me anywhere
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={dismiss}
+                  tabIndex={scrollOpen ? 0 : -1}
+                >
+                  {note.dismissLabel}
+                </Button>
+              </div>
+            </>
+          ) : note ? (
+            <>
+              <p className="flex gap-2.5 text-sm leading-5">
+                {note.id.startsWith('ready:') ? (
+                  <MessageSquareText
+                    className="mt-0.5 size-4 shrink-0 text-rose-400"
+                    aria-hidden="true"
+                  />
                 ) : (
-                  <Link
-                    href={note.action.href}
-                    prefetch={false}
-                    className="primary"
-                    onClick={dismiss}
-                    tabIndex={scrollOpen ? 0 : -1}
-                  >
-                    {note.action.label}
-                  </Link>
-                ))}
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="sqbar-paper"
-            onClick={onOpen}
-            tabIndex={scrollOpen ? 0 : -1}
-          >
-            Need a hand, my knight? Click me and ask anything
-          </button>
-        )}
+                  <CalendarClock
+                    className="mt-0.5 size-4 shrink-0 text-rose-400"
+                    aria-hidden="true"
+                  />
+                )}
+                <span>{note.text}</span>
+              </p>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={dismiss}
+                  tabIndex={scrollOpen ? 0 : -1}
+                >
+                  {note.dismissLabel}
+                </Button>
+                {note.action &&
+                  ('open' in note.action ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={onOpen}
+                      tabIndex={scrollOpen ? 0 : -1}
+                    >
+                      {note.action.label}
+                    </Button>
+                  ) : (
+                    <Button asChild size="sm" variant="secondary">
+                      <Link
+                        href={note.action.href}
+                        prefetch={false}
+                        onClick={dismiss}
+                        tabIndex={scrollOpen ? 0 : -1}
+                      >
+                        {note.action.label}
+                      </Link>
+                    </Button>
+                  ))}
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpen}
+              tabIndex={scrollOpen ? 0 : -1}
+              className="block w-full rounded-lg text-left text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              Need a hand? Ask me anything.
+            </button>
+          )}
+        </div>
       </div>
     </>
   );

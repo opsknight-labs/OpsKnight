@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enqueueChatOpsIntent } from '@/lib/chatops/intents';
 import prisma from '@/lib/prisma';
+import { trustedSlackEmail, type SlackWorkspaceRef } from '@/lib/chatops/slash-commands';
 import { logger } from '@/lib/logger';
 import { verifySlackSignature } from '@/lib/slack-signature';
 import { normalizeError } from '@/lib/errors';
@@ -25,6 +26,7 @@ import {
  */
 async function resolveSlackActor(
   botToken: string | null,
+  workspace: SlackWorkspaceRef,
   slackUserId?: string,
   slackUserName?: string
 ): Promise<{ opsUser: { id: string; name: string } | null; displayName: string }> {
@@ -43,7 +45,8 @@ async function resolveSlackActor(
       );
       const userData = await userRes.json();
       if (userData.ok && userData.user) {
-        slackEmail = userData.user.profile?.email?.trim();
+        // Only a confirmed, non-guest member of this signed workspace maps to an OpsKnight account by email.
+        slackEmail = trustedSlackEmail(userData.user, workspace);
         slackRealName = (
           userData.user.profile?.real_name ||
           userData.user.real_name ||
@@ -84,6 +87,7 @@ type SlackActionPayload = {
   container?: { channel_id?: string };
   channel?: { id?: string };
   team?: { id?: string };
+  enterprise?: { id?: string } | null;
   __opsknightIntentId?: string;
   [key: string]: unknown;
 };
@@ -176,6 +180,10 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       const botToken = await getSlackBotToken(incident.serviceId);
       const { opsUser: actorUser, displayName: actorName } = await resolveSlackActor(
         botToken,
+        {
+          teamId: workspaceId,
+          enterpriseId: typeof payload.enterprise?.id === 'string' ? payload.enterprise.id : null,
+        },
         slackUserId,
         slackUserName
       );

@@ -89,6 +89,9 @@ export const TURN_CONTEXT_KINDS = [
   'postmortem',
   'escalation_policy',
   'status_page',
+  // A question asked with no page context. Explicit, so it is never mistaken for an older turn (which has no
+  // context at all and belongs to the conversation's incident).
+  'general',
 ] as const;
 export const turnContextSchema = z
   .object({ kind: z.enum(TURN_CONTEXT_KINDS), id: z.string().min(1).max(64) })

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { claimAgentAttempt } from '@/lib/runbooks/agent-claims';

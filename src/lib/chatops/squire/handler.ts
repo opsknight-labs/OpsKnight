@@ -1,5 +1,4 @@
 import 'server-only';
-import prisma from '@/lib/prisma';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -70,28 +69,7 @@ export { chatBaseUrl, isSquireChatOpsEnabled };
  */
 export const CHAT_CHANNEL_READ_TOOLS: ReadonlySet<string> = new Set(ASK_SQUIRE_CORE_TOOLS);
 
-/**
- * The progress message an earlier attempt of this queued answer already posted, so a retry edits it instead
- * of posting another. It lives on the intent row until the answer is recorded over it.
- */
-export async function recalledPlaceholder(intentId: string | undefined): Promise<string | null> {
-  if (!intentId) return null;
-  const row = await prisma.chatOpsIntent
-    .findUnique({ where: { id: intentId }, select: { responsePayload: true } })
-    .catch(() => null);
-  const value = (row?.responsePayload as { squirePlaceholder?: unknown } | null)?.squirePlaceholder;
-  return typeof value === 'string' && value ? value : null;
-}
-
-export async function rememberPlaceholder(intentId: string | undefined, id: string): Promise<void> {
-  if (!intentId) return;
-  await prisma.chatOpsIntent
-    .updateMany({
-      where: { id: intentId, status: 'EFFECT_PROCESSING' },
-      data: { responsePayload: { squirePlaceholder: id } },
-    })
-    .catch(() => undefined);
-}
+export { recalledPlaceholder, rememberPlaceholder } from './placeholder';
 
 /** Thread history passed to a chat turn: the newest messages that fit both bounds. */
 export const CHAT_HISTORY_LIMITS = { messages: 20, bytes: 8_192 } as const;

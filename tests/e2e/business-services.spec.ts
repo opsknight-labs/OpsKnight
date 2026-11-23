@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import bcrypt from 'bcryptjs';
 
 /**
@@ -8,7 +8,7 @@ import bcrypt from 'bcryptjs';
  * with axe at 1280 px and 390 px in light and dark.
  * Seeds its own users, team, service, business service and incident, and removes them afterwards.
  */
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const password = 'Business-E2E-Pass-7731!';
 const adminEmail = 'e2e-bs-admin@example.com';
 const stakeholderEmail = 'e2e-bs-stakeholder@example.com';

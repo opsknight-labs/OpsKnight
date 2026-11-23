@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
+const { createPrismaClient } = createRequire(import.meta.url)('../lib/db-runtime.cjs');
 const url = new URL(process.env.DATABASE_URL ?? 'http://invalid');
 assert.equal(url.pathname, '/enterprise_scim_test');
 assert.ok(['localhost', '127.0.0.1'].includes(url.hostname));
 const origin = new URL(process.env.SCIM_E2E_BASE_URL ?? 'http://localhost:3028');
 assert.ok(['localhost', '127.0.0.1'].includes(origin.hostname));
-const db = new PrismaClient();
+const db = createPrismaClient();
 const id = `http-capacity-${Date.now()}`;
 const token = randomBytes(32).toString('hex');
 async function request(path, options = {}) {

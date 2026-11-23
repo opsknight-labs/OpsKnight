@@ -100,7 +100,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ |  | 0 | 0 | 0 | 1 |
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ |  | 3 | 7 | 0 | 0 |
 | `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 4 |
-| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 11 | 2 | 0 | 3 |
+| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 12 | 2 | 0 | 3 |
 | `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 13 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |
 | `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  |  | 5 | 9 | 0 | 2 |
@@ -124,7 +124,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | action-items | 1 | 1 | 0 | 0 |
 | audit-exports | 3 | 0 | 0 | 3 |
 | audit-logs | 1 | 1 | 0 | 0 |
-| business-services | 9 | 4 | 2 | 3 |
+| business-services | 10 | 5 | 2 | 3 |
 | custom-fields | 5 | 2 | 3 | 0 |
 | dashboards | 10 | 4 | 5 | 1 |
 | escalation-policies | 8 | 5 | 3 | 0 |
@@ -146,7 +146,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | status-pages | 33 | 15 | 11 | 7 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 361 | 163 | 120 | 78 |
+| **All** | 362 | 164 | 120 | 78 |
 
 <details>
 <summary>Operations by area</summary>
@@ -178,6 +178,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `createBusinessService` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `deleteBusinessService` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `getBusinessService` | `business_service_get` |
+| `getBusinessServiceGraph` | `business_service_graph` |
 | `getBusinessServiceImpactTimeline` | `business_service_health` |
 | `importBusinessServices` | `operation_prepare`, then approval |
 | `listBusinessServiceIncidents` | `business_service_incidents` |

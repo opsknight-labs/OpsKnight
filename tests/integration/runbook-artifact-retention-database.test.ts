@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testPrisma, resetDatabase, createTestUser } from '../helpers/test-db';
 import { purgeExpiredRunbookArtifacts } from '@/lib/runbooks/artifact-cleanup';

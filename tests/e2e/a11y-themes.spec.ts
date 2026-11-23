@@ -1,10 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import bcrypt from 'bcryptjs';
 import { THEME_STORAGE_KEY } from '@/lib/theme-preference';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const email = process.env.E2E_ADMIN_EMAIL || 'e2e-a11y-themes@example.com';
 const password = process.env.E2E_ADMIN_PASSWORD || 'A11yThemes-Secure-Pass-417!';
 

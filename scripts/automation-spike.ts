@@ -1,8 +1,8 @@
-import { PrismaClient } from '@prisma/client';
 import { compileAutomation } from '../src/lib/automation/compiler';
 import { evaluateAutomation } from '../src/lib/automation/evaluator';
 import { extractContext } from '../src/lib/automation/context/extract';
-const prisma = new PrismaClient();
+import { createPrismaClient } from '../src/lib/db/create-client';
+const prisma = createPrismaClient();
 async function main() {
   const results = [];
   for (const count of [-1, 0, 25, 50, 100]) {

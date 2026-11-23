@@ -30,6 +30,8 @@ type Sample = {
   domainReads: number;
   sqlDurationMs: number;
   wallDurationMs: number;
+  /** Prisma 7 relation loads for a NULL foreign key; counted apart from the statement budget. */
+  emptyRelationLoads: number;
 };
 const profiles: {
   scenario: string;
@@ -56,13 +58,25 @@ const tables = (sql: string, names: readonly string[]) =>
 function observe(event: Prisma.QueryEvent) {
   if (!collecting) return;
   const sql = event.query;
-  collecting.statements++;
   collecting.sqlDurationMs += event.duration;
   const read = /^\s*(SELECT|WITH)\b/i.test(sql);
   const write = /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql);
   if (read) collecting.reads++;
   if (write) collecting.writes++;
   if (/^\s*(BEGIN|COMMIT|ROLLBACK|SET)\b/i.test(sql)) collecting.transactionStatements++;
+  // Prisma 7 loads an optional to-one relation even when its foreign key is NULL (for example
+  // an unassigned incident's assignee: `"User"."id" IN ($1)` with a null key). It is neither a
+  // domain statement nor an authentication read, so it is tallied separately.
+  // The key is either a NULL parameter or absent altogether (an empty key list); only the
+  // trailing OFFSET parameter remains.
+  const keys = (JSON.parse(event.params) as unknown[]).slice(0, -1);
+  const emptyRelationLoad =
+    read && / OFFSET \$\d+$/.test(sql) && /"id" IN \(/.test(sql) && keys.every(key => key === null);
+  if (emptyRelationLoad) {
+    collecting.emptyRelationLoads++;
+    return;
+  }
+  collecting.statements++;
   if (read && tables(sql, ['McpToken', 'McpGrant', 'McpClient', 'User', 'TeamMember']))
     collecting.authenticationReads++;
   else if (read && tables(sql, ['McpPolicy'])) collecting.policyReads++;
@@ -207,6 +221,7 @@ async function measured(
     domainReads: 0,
     sqlDurationMs: 0,
     wallDurationMs: 0,
+    emptyRelationLoads: 0,
   };
   const started = performance.now();
   collecting = sample;
@@ -216,11 +231,23 @@ async function measured(
     sample.wallDurationMs = Number((performance.now() - started).toFixed(2));
     // Prisma query events arrive from the engine asynchronously. Drain their
     // delivery after all awaited request work before switching sample buckets.
-    await new Promise(resolve => setTimeout(resolve, 25));
+    // Under CI load events lag the awaited work, so wait until none arrive for a full interval; a
+    // late write from this scenario must not land in the next one's bucket.
+    let seen = -1;
+    for (
+      let waited = 0;
+      waited < 2000 && seen !== sample.statements + sample.emptyRelationLoads;
+      waited += 50
+    ) {
+      seen = sample.statements + sample.emptyRelationLoads;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
     collecting = undefined;
     profiles.push({ scenario, requests, chargedOperations, sample });
   }
   expect(sample.statements).toBeGreaterThan(0);
+  // Each is a trivial primary-key lookup with a NULL key; bound them so they cannot grow unnoticed.
+  expect(sample.emptyRelationLoads).toBeLessThanOrEqual(4);
   expect(sample.statements).toBeLessThanOrEqual(statementBudgets.get(scenario)!);
   // Two single-statement authentications per request, plus one authority read per domain step.
   expect(sample.authenticationReads).toBeLessThanOrEqual(requests * 2 + chargedOperations);

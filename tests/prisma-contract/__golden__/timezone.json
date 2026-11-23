@@ -1,0 +1,190 @@
+{
+  "asiaKolkata": {
+    "modelReadTimestamp": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "modelFilterTimestamp": 1,
+    "rawReadTimestamp": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "rawFilterTimestampUncast": 0,
+    "rawFilterTimestampCastTz": 0,
+    "modelReadTimestamptz": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "modelFilterTimestamptz": 1,
+    "rawFilterTimestamptzUncast": 1,
+    "rawWriteTimestamptz": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-28T23:30:01.000Z"
+      }
+    },
+    "rawWriteTimestampColumn": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-29T05:00:01.000Z"
+      }
+    },
+    "modelReadDate": {
+      "t": "Date",
+      "v": "2026-10-28T00:00:00.000Z"
+    },
+    "rawDateFromInstantParam": {
+      "t": "Date",
+      "v": "2026-10-29T00:00:00.000Z"
+    },
+    "rawDateFilterByDay": 1,
+    "rawNowIsRecent": true,
+    "rawDateTruncDay": {
+      "t": "Date",
+      "v": "2026-10-28T18:30:00.000Z"
+    }
+  },
+  "asiaKolkataPgbouncer": {
+    "modelReadTimestamp": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "modelFilterTimestamp": 1,
+    "rawReadTimestamp": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "rawFilterTimestampUncast": 0,
+    "rawFilterTimestampCastTz": 0,
+    "modelReadTimestamptz": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "modelFilterTimestamptz": 1,
+    "rawFilterTimestamptzUncast": 1,
+    "rawWriteTimestamptz": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-28T23:30:01.000Z"
+      }
+    },
+    "rawWriteTimestampColumn": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-29T05:00:01.000Z"
+      }
+    },
+    "modelReadDate": {
+      "t": "Date",
+      "v": "2026-10-28T00:00:00.000Z"
+    },
+    "rawDateFromInstantParam": {
+      "t": "Date",
+      "v": "2026-10-29T00:00:00.000Z"
+    },
+    "rawDateFilterByDay": 1,
+    "rawNowIsRecent": true,
+    "rawDateTruncDay": {
+      "t": "Date",
+      "v": "2026-10-28T18:30:00.000Z"
+    }
+  },
+  "utc": {
+    "modelReadTimestamp": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "modelFilterTimestamp": 1,
+    "rawReadTimestamp": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "rawFilterTimestampUncast": 1,
+    "rawFilterTimestampCastTz": 1,
+    "modelReadTimestamptz": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "modelFilterTimestamptz": 1,
+    "rawFilterTimestamptzUncast": 1,
+    "rawWriteTimestamptz": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-28T23:30:01.000Z"
+      }
+    },
+    "rawWriteTimestampColumn": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-28T23:30:01.000Z"
+      }
+    },
+    "modelReadDate": {
+      "t": "Date",
+      "v": "2026-10-28T00:00:00.000Z"
+    },
+    "rawDateFromInstantParam": {
+      "t": "Date",
+      "v": "2026-10-28T00:00:00.000Z"
+    },
+    "rawDateFilterByDay": 1,
+    "rawNowIsRecent": true,
+    "rawDateTruncDay": {
+      "t": "Date",
+      "v": "2026-10-28T00:00:00.000Z"
+    }
+  },
+  "utcPgbouncer": {
+    "modelReadTimestamp": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "modelFilterTimestamp": 1,
+    "rawReadTimestamp": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "rawFilterTimestampUncast": 1,
+    "rawFilterTimestampCastTz": 1,
+    "modelReadTimestamptz": {
+      "t": "Date",
+      "v": "2026-10-28T23:30:00.123Z"
+    },
+    "modelFilterTimestamptz": 1,
+    "rawFilterTimestamptzUncast": 1,
+    "rawWriteTimestamptz": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-28T23:30:01.000Z"
+      }
+    },
+    "rawWriteTimestampColumn": {
+      "ok": true,
+      "value": {
+        "t": "Date",
+        "v": "2026-10-28T23:30:01.000Z"
+      }
+    },
+    "modelReadDate": {
+      "t": "Date",
+      "v": "2026-10-28T00:00:00.000Z"
+    },
+    "rawDateFromInstantParam": {
+      "t": "Date",
+      "v": "2026-10-28T00:00:00.000Z"
+    },
+    "rawDateFilterByDay": 1,
+    "rawNowIsRecent": true,
+    "rawDateTruncDay": {
+      "t": "Date",
+      "v": "2026-10-28T00:00:00.000Z"
+    }
+  }
+}

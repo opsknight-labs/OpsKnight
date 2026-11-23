@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { testPrisma as db, resetDatabase } from '../helpers/test-db';
 import {
@@ -8,6 +8,7 @@ import {
   resetProviderAdmissionForTests,
 } from '@/lib/provider-admission';
 import { resetCapacityResolverForTests } from '@/lib/notification-capacity/resolver';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 beforeEach(async () => {
   await resetDatabase();
@@ -77,13 +78,13 @@ it('does not oversubscribe a rate window when eight allocation snapshots overlap
   strings[0] = '/* automation-quota-race */ ' + strings[0];
   const query = Prisma.sql(strings, ...allocation!.values);
   const window = await db.providerQuotaWindow.findFirstOrThrow();
-  const gateClient = new PrismaClient();
+  const gateClient = createPrismaClient();
   // The default CI pool has five connections; this race requires eight statements
   // to establish their snapshots simultaneously, independently of the observer.
   const allocationUrl = new URL(process.env.DATABASE_URL!);
   allocationUrl.searchParams.set('connection_limit', '8');
-  const allocationClient = new PrismaClient({
-    datasources: { db: { url: allocationUrl.toString() } },
+  const allocationClient = createPrismaClient({
+    url: allocationUrl.toString(),
   });
   let releaseGate!: () => void;
   let announceGate!: () => void;

@@ -4,12 +4,12 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 const require = createRequire(new URL('../../package.json', import.meta.url));
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('./scripts/lib/db-runtime.cjs');
 
 const secret = process.env.API_KEY_SECRET;
 if (!secret) throw new Error('API_KEY_SECRET is required (must match the application).');
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const token = `ok_test_${randomBytes(32).toString('base64url')}`;
 const user = await prisma.user.create({
   data: {

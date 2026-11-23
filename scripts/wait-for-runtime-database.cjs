@@ -49,7 +49,7 @@ async function waitForRuntimeDatabase(
 }
 
 async function main() {
-  const { PrismaClient } = require('@prisma/client');
+  const { createPrismaClient } = require('./lib/db-runtime.cjs');
   const raw =
     process.env.OPSKNIGHT_PROCESS_ROLE === 'web'
       ? process.env.WEB_DATABASE_URL || process.env.DATABASE_URL
@@ -60,7 +60,7 @@ async function main() {
   url.searchParams.set('connect_timeout', '2');
   url.searchParams.set('pool_timeout', '2');
   url.searchParams.set('options', '-c statement_timeout=2000');
-  const prisma = new PrismaClient({ datasourceUrl: url.toString(), log: [] });
+  const prisma = createPrismaClient({ url: url.toString(), log: [] });
   try {
     await waitForRuntimeDatabase(prisma, {
       timeoutMs: Number(process.env.OPSKNIGHT_RUNTIME_DATABASE_READY_TIMEOUT_MS || 60_000),

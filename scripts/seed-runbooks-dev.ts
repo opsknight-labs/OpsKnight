@@ -4,17 +4,18 @@
  *
  * Usage: npm run seed:runbooks:dev   (requires `prisma db seed` first)
  */
-import { PrismaClient, type Prisma, type RunbookExecutionStatus } from '@prisma/client';
+import { type Prisma, type RunbookExecutionStatus } from '@prisma/client';
 import { computeDefinitionChecksum } from '@/lib/runbooks/definition';
 import { runbookTemplate, runbookTemplateInputs } from '@/lib/runbooks/builder';
 import type { RunbookDefinition } from '@/lib/runbooks/types';
 import type { RunbookInputInput } from '@/lib/runbooks/schemas';
+import { createPrismaClient } from '../src/lib/db/create-client';
 
 if (process.env.NODE_ENV === 'production') {
   throw new Error('seed-runbooks-dev must not run in production.');
 }
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000);
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 

@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node & dependencies
         uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          node-version: 22
           ignore-scripts: 'true'
           generate-prisma: 'false'
       - name: Generate source dependency inventory

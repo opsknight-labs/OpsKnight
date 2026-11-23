@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 import { beforeEach, expect, it } from 'vitest';
 import { backfillAlertShapes } from '@/lib/alerts/backfill';
 import {
@@ -64,21 +64,28 @@ it('skips a concurrently edited source and safely normalizes it on the next pass
   const alert = await db.alert.create({
     data: { serviceId: service.id, payload: { summary: 'Old warning', severity: 'warning' } },
   });
-  const client = new PrismaClient();
+  const client = createPrismaClient();
   let edited = false;
-  client.$use(async (params, next) => {
-    const result: unknown = await next(params);
-    if (params.model === 'Alert' && params.action === 'findMany' && !edited) {
-      edited = true;
-      await db.alert.update({
-        where: { id: alert.id },
-        data: { payload: { summary: 'New critical', severity: 'critical' } },
-      });
-    }
-    return result;
+  // Prisma 7 has no $use middleware; edit the row right after the scan query via a query extension.
+  const edited$ = client.$extends({
+    query: {
+      alert: {
+        async findMany({ args, query }) {
+          const result = await query(args);
+          if (!edited) {
+            edited = true;
+            await db.alert.update({
+              where: { id: alert.id },
+              data: { payload: { summary: 'New critical', severity: 'critical' } },
+            });
+          }
+          return result;
+        },
+      },
+    },
   });
   try {
-    expect(await backfillAlertShapes({}, client)).toMatchObject({
+    expect(await backfillAlertShapes({}, edited$ as never)).toMatchObject({
       scanned: 1,
       updated: 0,
       skipped: 1,

@@ -1,7 +1,7 @@
 import { startFakeModel, type FakeServer } from '../helpers/fake-model-server';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import bcrypt from 'bcryptjs';
 
 /**
@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs';
  * point and answers in basic mode (no AI provider). State is created directly and removed afterwards so
  * the assistant never appears in other specs that share this database.
  */
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const email = 'e2e-intelligence@example.com';
 const password = 'Intelligence-E2E-Pass-4417!';
 const tag = `e2e-intel-${Date.now()}`;

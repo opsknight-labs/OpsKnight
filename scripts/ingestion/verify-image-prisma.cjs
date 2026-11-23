@@ -2,12 +2,12 @@
 // Loading native Prisma first reproduces the instrumentation/handler boundary.
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
+const { createPrismaClient } = require('../lib/db-runtime.cjs');
 const database = new URL(process.env.DATABASE_URL || 'http://missing');
 assert.ok(database.pathname.startsWith('/ingestion_test'));
 assert.ok(['127.0.0.1', 'localhost', 'opsknight-ingestion-cert-db'].includes(database.hostname));
-const { PrismaClient } = require('@prisma/client');
 assert.equal(globalThis.prismaGlobal, undefined, 'Run this smoke check in a fresh Node process');
-const client = new PrismaClient();
+const client = createPrismaClient();
 globalThis.prismaGlobal = client;
 async function main() {
   require('/app/.next/server/app/api/integrations/uptimerobot/route.js');

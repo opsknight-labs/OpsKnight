@@ -1,0 +1,413 @@
+{
+  "queryRaw.anyArray": {
+    "ok": true,
+    "value": [
+      {
+        "t": "boolean",
+        "v": true
+      }
+    ]
+  },
+  "queryRaw.bigintCast": {
+    "ok": true,
+    "value": [
+      {
+        "t": "bigint",
+        "v": "9007199254740993"
+      }
+    ]
+  },
+  "queryRaw.bigintSelect": {
+    "ok": true,
+    "value": [
+      {
+        "t": "bigint",
+        "v": "9007199254740993"
+      }
+    ]
+  },
+  "queryRaw.booleanCase": {
+    "ok": true,
+    "value": [
+      {
+        "t": "string",
+        "v": "y"
+      }
+    ]
+  },
+  "queryRaw.booleanSelect": {
+    "ok": true,
+    "value": [
+      {
+        "t": "boolean",
+        "v": true
+      }
+    ]
+  },
+  "queryRaw.bytesLength": {
+    "ok": true,
+    "value": [
+      {
+        "t": "number",
+        "v": 3
+      }
+    ]
+  },
+  "queryRaw.bytesSelect": {
+    "ok": true,
+    "value": [
+      {
+        "t": "bytes",
+        "ctor": "Buffer",
+        "v": "0102ff"
+      }
+    ]
+  },
+  "queryRaw.dateCastDate": {
+    "ok": true,
+    "value": [
+      {
+        "t": "Date",
+        "v": "2026-10-28T00:00:00.000Z"
+      }
+    ]
+  },
+  "queryRaw.dateCastTimestamp": {
+    "ok": true,
+    "value": [
+      {
+        "t": "Date",
+        "v": "2026-10-28T10:11:12.345Z"
+      }
+    ]
+  },
+  "queryRaw.dateCastTimestamptz": {
+    "ok": true,
+    "value": [
+      {
+        "t": "Date",
+        "v": "2026-10-28T10:11:12.345Z"
+      }
+    ]
+  },
+  "queryRaw.dateCompareNow": {
+    "ok": true,
+    "value": [
+      {
+        "t": "boolean",
+        "v": true
+      }
+    ]
+  },
+  "queryRaw.dateEpoch": {
+    "ok": true,
+    "value": [
+      {
+        "t": "Decimal",
+        "v": "1793182272.345"
+      }
+    ]
+  },
+  "queryRaw.dateIntervalArithmetic": {
+    "ok": true,
+    "value": [
+      {
+        "t": "Date",
+        "v": "2026-10-28T11:11:12.345Z"
+      }
+    ]
+  },
+  "queryRaw.dateSelect": {
+    "ok": true,
+    "value": [
+      {
+        "t": "Date",
+        "v": "2026-10-28T10:11:12.345Z"
+      }
+    ]
+  },
+  "queryRaw.emptyFragment": {
+    "ok": true,
+    "value": [
+      {
+        "t": "bigint",
+        "v": "3"
+      }
+    ]
+  },
+  "queryRaw.enumCast": {
+    "ok": true,
+    "value": [
+      {
+        "t": "string",
+        "v": "RESPONDER"
+      }
+    ]
+  },
+  "queryRaw.floatSelect": {
+    "ok": true,
+    "value": [
+      {
+        "t": "Decimal",
+        "v": "1.5"
+      }
+    ]
+  },
+  "queryRaw.intArithmetic": {
+    "ok": true,
+    "value": [
+      {
+        "t": "bigint",
+        "v": "6"
+      }
+    ]
+  },
+  "queryRaw.intArrayCast": {
+    "ok": true,
+    "value": [
+      {
+        "t": "array",
+        "v": [
+          {
+            "t": "number",
+            "v": 1
+          },
+          {
+            "t": "number",
+            "v": 2
+          }
+        ]
+      }
+    ]
+  },
+  "queryRaw.intSelect": {
+    "ok": true,
+    "value": [
+      {
+        "t": "bigint",
+        "v": "5"
+      }
+    ]
+  },
+  "queryRaw.joinInList": {
+    "ok": true,
+    "value": [
+      {
+        "t": "boolean",
+        "v": true
+      }
+    ]
+  },
+  "queryRaw.joinValues": {
+    "ok": true,
+    "value": [
+      {
+        "t": "array",
+        "v": [
+          {
+            "t": "number",
+            "v": 1
+          },
+          {
+            "t": "number",
+            "v": 2
+          },
+          {
+            "t": "number",
+            "v": 3
+          }
+        ]
+      }
+    ]
+  },
+  "queryRaw.jsonObjectCast": {
+    "ok": true,
+    "value": [
+      {
+        "t": "object",
+        "v": {
+          "a": 1,
+          "b": [true]
+        }
+      }
+    ]
+  },
+  "queryRaw.jsonObjectParam": {
+    "ok": true,
+    "value": [
+      {
+        "t": "object",
+        "v": {
+          "a": 1
+        }
+      }
+    ]
+  },
+  "queryRaw.jsonPathParam": {
+    "ok": true,
+    "value": [
+      {
+        "t": "string",
+        "v": "7"
+      }
+    ]
+  },
+  "queryRaw.limitParam": {
+    "ok": true,
+    "value": [
+      {
+        "t": "number",
+        "v": 1
+      },
+      {
+        "t": "number",
+        "v": 2
+      }
+    ]
+  },
+  "queryRaw.nestedFragments": {
+    "ok": true,
+    "value": [
+      {
+        "t": "array",
+        "v": [
+          {
+            "t": "number",
+            "v": 2
+          },
+          {
+            "t": "number",
+            "v": 3
+          }
+        ]
+      }
+    ]
+  },
+  "queryRaw.nullCastIsNull": {
+    "ok": true,
+    "value": [
+      {
+        "t": "boolean",
+        "v": true
+      }
+    ]
+  },
+  "queryRaw.nullCoalesce": {
+    "ok": true,
+    "value": [
+      {
+        "t": "string",
+        "v": "fallback"
+      }
+    ]
+  },
+  "queryRaw.nullIsNull": {
+    "ok": false,
+    "error": {
+      "sqlState": "42P18",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "queryRaw.nullSelect": {
+    "ok": true,
+    "value": [
+      {
+        "t": "null"
+      }
+    ]
+  },
+  "queryRaw.rawIdentifier": {
+    "ok": true,
+    "value": [
+      {
+        "t": "bigint",
+        "v": "8"
+      }
+    ]
+  },
+  "queryRaw.stringConcat": {
+    "ok": true,
+    "value": [
+      {
+        "t": "string",
+        "v": "ab"
+      }
+    ]
+  },
+  "queryRaw.stringSelect": {
+    "ok": true,
+    "value": [
+      {
+        "t": "string",
+        "v": "text"
+      }
+    ]
+  },
+  "queryRaw.textArrayCast": {
+    "ok": true,
+    "value": [
+      {
+        "t": "array",
+        "v": [
+          {
+            "t": "string",
+            "v": "a"
+          },
+          {
+            "t": "string",
+            "v": "b"
+          }
+        ]
+      }
+    ]
+  },
+  "queryRaw.unnestOrdinality": {
+    "ok": true,
+    "value": [
+      {
+        "t": "array",
+        "v": [
+          {
+            "t": "string",
+            "v": "x"
+          },
+          {
+            "t": "string",
+            "v": "y"
+          }
+        ]
+      }
+    ]
+  },
+  "unsafe.arrayParam": {
+    "ok": true,
+    "value": {
+      "t": "number",
+      "v": 3
+    }
+  },
+  "unsafe.castInts": {
+    "ok": true,
+    "value": {
+      "t": "number",
+      "v": 3
+    }
+  },
+  "unsafe.dateParam": {
+    "ok": true,
+    "value": {
+      "t": "Date",
+      "v": "2026-10-28T10:11:12.345Z"
+    }
+  },
+  "unsafe.untypedString": {
+    "ok": true,
+    "value": {
+      "t": "string",
+      "v": "x"
+    }
+  }
+}

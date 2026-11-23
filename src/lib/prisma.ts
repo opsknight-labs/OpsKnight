@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from './db/create-client';
 import {
   configureIntelligenceLanePrismaDatasource,
   configurePrismaDatasource,
@@ -23,6 +23,7 @@ import type {} from './database-workload';
  *
  * Configure via DATABASE_URL query params or environment variables:
  * DATABASE_URL="postgresql://...?connection_limit=10&pool_timeout=30"
+ * The URL is translated to node-postgres pool settings by src/lib/db/pg-config.ts.
  */
 
 const prismaClientSingleton = (workload: 'primary' | 'mcp' | 'intelligence' = 'primary') => {
@@ -50,14 +51,14 @@ const prismaClientSingleton = (workload: 'primary' | 'mcp' | 'intelligence' = 'p
             transactionPooler
           );
 
-  const client = new PrismaClient({
+  const client = createPrismaClient({
+    url: datasourceUrl,
+    applicationName: workload === 'mcp' ? `opsknight-${role}-mcp` : `opsknight-${role}`,
     log: [
       { emit: 'stdout', level: 'error' },
       { emit: 'stdout', level: 'warn' },
       { emit: 'event', level: 'query' },
     ],
-    // Datasource configuration can be overridden via env
-    datasourceUrl,
   });
   const slowQueryMs = Math.max(
     1,

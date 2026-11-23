@@ -450,4 +450,310 @@ export const BASIC_CASES: readonly SquireBasicEvalCase[] = [
     expectIntent: 'CATCH_UP',
     mustContain: ['no on-call shift', 'Only data you can read'],
   },
+  // Adversarial review (~310 inputs): each case below failed before its fix.
+  {
+    id: 'review-keywords-weekday',
+    question: 'find incidents since monday',
+    expectIntent: 'SEARCH_INCIDENTS',
+    mustContain: ['Pool exhausted'],
+    mustNotContain: ['keywords: monday'],
+  },
+  {
+    id: 'review-keywords-filler',
+    question: 'show me anything going on with checkout',
+    expectIntent: 'ACTIVE_INCIDENTS',
+    mustContain: ['Pool exhausted'],
+  },
+  {
+    id: 'review-invalid-date',
+    question: 'incidents on 2026-02-30',
+    expectIntent: 'SEARCH_INCIDENTS',
+    mustContain: ['not a date'],
+  },
+  {
+    id: 'review-open-is-unresolved',
+    question: 'list open incidents',
+    expectIntent: 'ACTIVE_INCIDENTS',
+    mustContain: ['unresolved (OPEN or ACKNOWLEDGED)'],
+  },
+  { id: 'review-p1-no-ask', question: 'p1 incidents', expectIntent: 'SEARCH_INCIDENTS' },
+  { id: 'review-bare-incidents', question: 'incidents', expectIntent: 'SEARCH_INCIDENTS' },
+  {
+    id: 'review-high-urgency-no-ask',
+    question: 'high urgency incidents',
+    expectIntent: 'SEARCH_INCIDENTS',
+    mustContain: ['Pool exhausted'],
+  },
+  {
+    id: 'review-subject-kept',
+    question: 'checkout incidents?',
+    expectIntent: 'SEARCH_INCIDENTS',
+    mustContain: ['keywords: checkout'],
+  },
+  // Chips after the question that offered them.
+  {
+    id: 'chip-only-high',
+    question: 'list open incidents',
+    expectIntent: 'ACTIVE_INCIDENTS',
+    then: {
+      question: 'Only high urgency',
+      expectIntent: 'ACTIVE_INCIDENTS',
+      mustContain: ['Pool exhausted'],
+    },
+  },
+  {
+    id: 'chip-last-24h',
+    question: 'list open incidents',
+    expectIntent: 'ACTIVE_INCIDENTS',
+    then: {
+      question: 'Only the last 24 hours',
+      expectIntent: 'ACTIVE_INCIDENTS',
+      mustContain: ['Pool exhausted'],
+    },
+  },
+  {
+    id: 'chip-group-by-service',
+    question: 'list open incidents',
+    expectIntent: 'ACTIVE_INCIDENTS',
+    then: {
+      question: 'Group them by service',
+      expectIntent: 'INCIDENT_STATS',
+      mustContain: ['Checkout API'],
+    },
+  },
+  {
+    id: 'chip-break-down-team',
+    question: 'How many incidents this week?',
+    expectIntent: 'INCIDENT_STATS',
+    then: {
+      question: 'Break it down by team',
+      expectIntent: 'INCIDENT_STATS',
+      mustContain: ['### By team'],
+    },
+  },
+  {
+    id: 'chip-compare',
+    question: 'How many incidents this week?',
+    expectIntent: 'INCIDENT_STATS',
+    then: { question: 'Compare with the previous period', expectIntent: 'INCIDENT_STATS' },
+  },
+  {
+    id: 'chip-only-overdue',
+    question: 'Show overdue action items',
+    expectIntent: 'FOLLOWUPS',
+    then: {
+      question: 'Only overdue items',
+      expectIntent: 'FOLLOWUPS',
+      mustContain: ['Increase pool visibility'],
+    },
+  },
+  {
+    id: 'chip-incidents-after-changes',
+    question: 'Recent deployments for Checkout API',
+    expectIntent: 'RECENT_CHANGES',
+    then: {
+      question: 'And incidents in the past 24 hours?',
+      expectIntent: 'SEARCH_INCIDENTS',
+      mustContain: ['Pool exhausted'],
+    },
+  },
+  {
+    id: 'chip-show-me-more',
+    question: 'list open incidents',
+    expectIntent: 'ACTIVE_INCIDENTS',
+    then: {
+      question: 'show me more',
+      expectIntent: 'ACTIVE_INCIDENTS',
+      mustContain: ['Showing 6'],
+    },
+  },
+  {
+    id: 'paging-keeps-person',
+    question: 'incidents assigned to Eval Responder',
+    expectIntent: 'SEARCH_INCIDENTS',
+    then: { question: 'load more', expectIntent: 'SEARCH_INCIDENTS', mustContain: ['Showing 6'] },
+  },
+  // Assignment to "me", and not to whoever "my" names.
+  {
+    id: 'assign-to-me',
+    question: 'assign this to me',
+    onIncident: true,
+    expectIntent: 'RESPONDERS',
+    expectProposal: 'reassign_incident',
+  },
+  {
+    id: 'assign-me-slash',
+    question: '/assign me',
+    onIncident: true,
+    expectIntent: 'RESPONDERS',
+    expectProposal: 'reassign_incident',
+  },
+  {
+    id: 'assign-named-from-my-team',
+    question: 'assign this to Bob from my team',
+    onIncident: true,
+    expectIntent: 'RESPONDERS',
+    mustContain: ['“Bob”'],
+    forbidProposal: true,
+  },
+  // List questions that start with an action verb never become cards.
+  ...(
+    [
+      ['escalated incidents this week', 'SEARCH_INCIDENTS'],
+      ['close incidents older than a week', 'SEARCH_INCIDENTS'],
+      ['resolve time this week', 'INCIDENT_STATS'],
+      ['link to the runbook for redis', 'RUNBOOKS'],
+      ['log of the incident', 'SEARCH_INCIDENTS'],
+      ['lower urgency incidents this week', 'SEARCH_INCIDENTS'],
+    ] as const
+  ).map(([question, expectIntent]) => ({
+    id: `no-card-${question.split(' ').slice(0, 2).join('-')}`,
+    question,
+    onIncident: true,
+    expectIntent,
+    forbidProposal: true,
+  })),
+  // Data questions are not product guidance.
+  {
+    id: 'data-priority-of-incident',
+    question: 'what is the priority of this incident',
+    onIncident: true,
+    expectIntent: 'INCIDENT_SUMMARY',
+  },
+  {
+    id: 'data-history-of-incident',
+    question: 'what is the history of this incident',
+    onIncident: true,
+    expectIntent: 'TIMELINE',
+  },
+  {
+    id: 'data-escalation-policy',
+    question: 'what is the escalation policy for Checkout API',
+    expectIntent: 'SERVICE_HEALTH',
+    mustContain: ['Checkout API'],
+  },
+  {
+    id: 'data-average-resolution',
+    question: 'how long does it take to resolve incidents on average',
+    expectIntent: 'INCIDENT_STATS',
+  },
+  {
+    id: 'data-help-find-runbooks',
+    question: 'help me find database runbooks',
+    expectIntent: 'RUNBOOK_SEARCH',
+    mustContain: ['do not have permission'],
+  },
+  // The incident on screen.
+  {
+    id: 'incident-status',
+    question: 'what is the status of this incident',
+    onIncident: true,
+    expectIntent: 'INCIDENT_SUMMARY',
+  },
+  {
+    id: 'incident-is-resolved',
+    question: 'is it resolved?',
+    onIncident: true,
+    expectIntent: 'INCIDENT_SUMMARY',
+  },
+  {
+    id: 'incident-who-resolved',
+    question: 'who resolved it',
+    onIncident: true,
+    expectIntent: 'TIMELINE',
+  },
+  {
+    id: 'incident-page-search-person',
+    question: 'show incidents assigned to Eval Responder',
+    onIncident: true,
+    expectIntent: 'SEARCH_INCIDENTS',
+    mustContain: ['Pool exhausted'],
+  },
+  // Greetings.
+  {
+    id: 'greeting-then-question',
+    question: 'hey oncall?',
+    expectIntent: 'ON_CALL',
+    mustContain: ['Hi!'],
+  },
+  { id: 'greeting-hi-incidents', question: 'hi incidents', expectIntent: 'SEARCH_INCIDENTS' },
+  {
+    id: 'greeting-stacked',
+    question: 'hey hey hi there, my open incidents',
+    expectIntent: 'WORK_QUEUE',
+    mustContain: ['Hi! '],
+    mustNotContain: ['Hi! Hi!'],
+  },
+  { id: 'greeting-emoji', question: 'hey 👋', expectIntent: 'GREETING' },
+  { id: 'thanks-compound', question: 'cool, thanks', expectIntent: 'THANKS' },
+  {
+    id: 'whats-up-with-subject',
+    question: "what's up with checkout?",
+    expectIntent: 'ACTIVE_INCIDENTS',
+    mustContain: ['Pool exhausted'],
+    mustNotContain: ['Hi!'],
+  },
+  // Pending clarifications.
+  {
+    id: 'pending-cancel',
+    question: 'who owns pay',
+    expectIntent: 'SERVICE_HEALTH',
+    expectClarification: true,
+    then: { question: 'never mind', expectIntent: 'UNKNOWN', mustContain: ['dropped'] },
+  },
+  {
+    id: 'pending-number',
+    question: 'who owns pay',
+    expectIntent: 'SERVICE_HEALTH',
+    expectClarification: true,
+    then: { question: '2', expectIntent: 'SERVICE_HEALTH', mustContain: ['Payments Worker'] },
+  },
+  {
+    id: 'pending-new-question',
+    question: 'who owns pay',
+    expectIntent: 'SERVICE_HEALTH',
+    expectClarification: true,
+    then: { question: 'my queue', expectIntent: 'WORK_QUEUE', mustContain: ['Your incident work'] },
+  },
+  // Durations and windows.
+  {
+    id: 'catch-up-slash-since',
+    question: '/catchup since monday',
+    expectIntent: 'CATCH_UP',
+    mustContain: ['Catch-up since'],
+  },
+  {
+    id: 'catch-up-slash-on-incident',
+    question: '/catchup',
+    onIncident: true,
+    expectIntent: 'CATCH_UP',
+  },
+  {
+    id: 'oncall-next-days',
+    question: 'who is on call for the next 3 days',
+    expectIntent: 'ON_CALL',
+    mustContain: ['For future coverage'],
+  },
+  // Slots.
+  {
+    id: 'team-not-a-verb',
+    question: 'which team owns Checkout API',
+    expectIntent: 'SERVICE_HEALTH',
+    mustNotContain: ['No team matching'],
+  },
+  { id: 'slash-on-call-alias', question: '/on-call', expectIntent: 'ON_CALL' },
+  {
+    id: 'ack-other-incident',
+    question: '/ack INC-42',
+    onIncident: true,
+    expectIntent: 'RESPONDERS',
+    mustContain: ['is not it'],
+    forbidProposal: true,
+  },
+  {
+    id: 'docs-weak-match',
+    question: 'pizza delivery status',
+    expectIntent: 'SERVICE_HEALTH',
+    mustNotContain: ['From the OpsKnight docs'],
+  },
 ];

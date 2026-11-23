@@ -2,7 +2,8 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { BarChart3, Download } from 'lucide-react';
+import Link from 'next/link';
+import { BarChart3, Boxes, Download } from 'lucide-react';
 import AnalyticsAsk from '@/components/analytics/AnalyticsAsk';
 import AnalyticsFilters from '@/components/analytics/AnalyticsFilters';
 import AnalyticsFreshness from '@/components/analytics/AnalyticsFreshness';
@@ -115,6 +116,18 @@ export default async function AnalyticsPage({
         title="Analytics"
         description="How your services and responders are performing, and where to improve."
         icon={BarChart3}
+        secondaryActions={
+          <Link
+            href="/insights/business-impact"
+            className={cn(
+              'inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors',
+              pageHeaderActionClass
+            )}
+          >
+            <Boxes className="h-4 w-4" aria-hidden />
+            Business impact
+          </Link>
+        }
         primaryAction={
           canExport ? (
             <a

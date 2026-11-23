@@ -7,8 +7,9 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { PrismaClient } = require('@prisma/client');
 const { NextRequest } = require('next/server');
+const { createPrismaClient } = require('../lib/db-runtime.cjs');
+const { checkoutTaggedSchema, legacyPrisma } = require('../lib/legacy-prisma.cjs');
 
 const root = process.cwd();
 const baseline =
@@ -16,48 +17,23 @@ const baseline =
 if (!/^[a-f0-9]{40}$/.test(baseline)) throw new Error('Baseline must be a full commit hash');
 if (process.env.OPSKNIGHT_INGESTION_MODE)
   throw new Error('Upgrade fixture requires no ingestion mode override');
-const env = { ...process.env, PRISMA_GENERATE_SKIP_AUTOINSTALL: 'true' };
+const env = { ...process.env };
 const temp = fs.mkdtempSync(path.join(root, '.ingestion-upgrade-'));
 let old;
-const current = new PrismaClient();
+const current = createPrismaClient();
 function run(command, args, extra = {}) {
   execFileSync(command, args, { cwd: root, env: { ...env, ...extra }, stdio: 'inherit' });
-}
-function prisma(args) {
-  run(process.execPath, [path.join(root, 'node_modules/prisma/build/index.js'), ...args]);
 }
 
 async function main() {
   const existing =
     await current.$queryRaw`SELECT count(*)::int AS count FROM pg_tables WHERE schemaname = current_schema()`;
   assert.equal(existing[0].count, 0, 'Use a newly created empty isolated database');
-  const files = execFileSync(
-    'git',
-    ['ls-tree', '-r', '--name-only', baseline, 'prisma/schema.prisma', 'prisma/migrations'],
-    { encoding: 'utf8' }
-  )
-    .trim()
-    .split('\n');
-  for (const file of files) {
-    if (!/^prisma\/[A-Za-z0-9_./-]+$/.test(file) || file.includes('..'))
-      throw new Error('Invalid baseline path');
-    const target = path.join(temp, file);
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, execFileSync('git', ['show', `${baseline}:${file}`]));
-  }
-  const schema = path.join(temp, 'prisma/schema.prisma');
-  prisma(['migrate', 'deploy', '--schema', schema]);
-  const client = path.join(temp, 'baseline-client');
-  const original = fs.readFileSync(schema, 'utf8');
-  assert.match(original, /generator client\s*\{[^}]*\}/);
-  fs.writeFileSync(
-    schema,
-    original.replace(
-      /generator client\s*\{[^}]*\}/,
-      `generator client {\n provider = "prisma-client-js"\n output = ${JSON.stringify(client)}\n}`
-    )
-  );
-  prisma(['generate', '--schema', schema]);
+  // The baseline is migrated and seeded by the Prisma release it shipped with.
+  const schema = checkoutTaggedSchema(root, baseline, temp);
+  const legacy = legacyPrisma(root, baseline);
+  legacy.run(['migrate', 'deploy', '--schema', schema], env);
+  const client = legacy.generateClient(schema, env);
   const { PrismaClient: OldClient } = require(client);
   old = new OldClient();
   const suffix = randomUUID();

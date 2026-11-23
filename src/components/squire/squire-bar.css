@@ -146,98 +146,35 @@
 }
 .sqbar-glow.on { opacity: 1; }
 
-/* The message scroll, unrolled in 3D above him. */
+/* His speech bubble, above him. Colours come from the theme (see the JSX); only placement and motion live here. */
 .sqbar-scroll {
   position: fixed;
   left: 0;
   bottom: calc(var(--status-bar-height, 1.75rem) + 52px);
   z-index: 42;
-  perspective: 500px;
   pointer-events: none;
 }
-.sqbar-paper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
-  border: 0;
-  border-radius: 4px;
-  white-space: nowrap;
-  cursor: pointer;
-  color: #3f2d14;
-  font: 600 0.8125rem/1.2 var(--font-family-display, 'Space Grotesk', Inter, sans-serif);
-  background: linear-gradient(180deg, #fbf3df 0%, #f3e4bf 55%, #e6d2a1 100%);
-  box-shadow: 0 10px 18px -10px rgb(60 40 10 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.7);
-  transform-origin: 50% 100%;
-  transform: rotateX(-88deg) scaleX(0.15);
-  opacity: 0;
-  transition: transform 520ms cubic-bezier(0.2, 1.2, 0.3, 1), opacity 160ms;
-}
-.sqbar-paper::before,
-.sqbar-paper::after {
-  content: '';
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 7px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, #b78a45, #e8c983 45%, #9c7236);
-}
-.sqbar-paper::before { left: -4px; }
-.sqbar-paper::after { right: -4px; }
-.sqbar-paper kbd {
-  font: 0.6875rem ui-monospace, monospace;
-  border: 1px solid #c9a96a;
-  border-radius: 4px;
-  padding: 0 4px;
-  color: #6b4f22;
-}
-.sqbar-paper:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
 .sqbar-scroll.open { pointer-events: auto; }
-.sqbar-scroll.open .sqbar-paper { transform: none; opacity: 1; }
-/* Motion off (setting or system): the scroll simply fades in, no unrolling. */
-.sqbar-scroll.still .sqbar-paper { transform: none; transition: opacity 160ms; }
+.sqbar-bubble {
+  /* Grows out of the tail, which sits above his head. */
+  transform-origin: calc(100% - 28px) 100%;
+  transform: translateY(6px) scale(0.94);
+  opacity: 0;
+  transition: transform 220ms cubic-bezier(0.2, 1.3, 0.4, 1), opacity 160ms;
+}
+.sqbar-scroll.open .sqbar-bubble { transform: none; opacity: 1; }
+/* Swallowtail pennant pinned to the bubble's top edge; fixed artwork colours, like the mascot. */
+.sqbar-pennant {
+  padding: 3px 16px 3px 10px;
+  background: linear-gradient(180deg, #e11d48, #9f1239);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 50%, 100% 100%, 0 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25);
+}
+/* Motion off (setting or system): the bubble simply fades in. */
+.sqbar-scroll.still .sqbar-bubble { transform: none; transition: opacity 160ms; }
 @media (prefers-reduced-motion: reduce) {
-  .sqbar-paper { transform: none; transition: opacity 160ms; }
+  .sqbar-bubble { transform: none; transition: opacity 160ms; }
 }
-
-/* A note: a small letter with a reply or two, ending at his right edge. */
-.sqbar-paper.sqbar-letter {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  width: max-content;
-  max-width: 18rem;
-  padding: 10px 14px;
-  white-space: normal;
-  cursor: default;
-  font-weight: 500;
-  line-height: 1.4;
-}
-.sqbar-letter p { margin: 0; }
-.sqbar-letter-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-.sqbar-letter-actions > * {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid #c9a96a;
-  border-radius: 999px;
-  background: transparent;
-  color: #6b4f22;
-  font: 600 0.75rem/1 var(--font-family-sans);
-  text-decoration: none;
-  cursor: pointer;
-}
-.sqbar-letter-actions > *:hover { background: rgb(201 169 106 / 0.25); }
-.sqbar-letter-actions > .primary { border-color: #6b4f22; background: #6b4f22; color: #fbf3df; }
-.sqbar-letter-actions > .primary:hover { background: #57401b; }
-.sqbar-letter-actions > *:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
 
 /* An answer finished while the chat was closed. */
 .sqbar-dot {

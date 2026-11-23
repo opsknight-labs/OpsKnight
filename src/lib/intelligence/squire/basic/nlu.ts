@@ -257,9 +257,10 @@ export function normalizeMessage(message: string): string {
   text = text.replace(/^(?:what is up|how is it going) with\b/, 'what is going on with');
   // A bare duration ("24h") is a look-back window, except in a snooze ("snooze 2h"), a future window ("in
   // 2 hours", "next 3 days") or a decimal ("1.5h"), which keep their own meaning.
-  const bare = !/^(?:please |pls |ok |can you |could you |go ahead and )?(?:snooze|pause|silence|mute)\b/.test(
-    text
-  );
+  const bare =
+    !/^(?:please |pls |ok |can you |could you |go ahead and )?(?:snooze|pause|silence|mute)\b/.test(
+      text
+    );
   text = text
     .replace(/\b(?:last|past) (\d{1,3})\s?h(?:rs?|ours?)?\b/g, 'past $1 hours')
     .replace(/\b(?:last|past) (\d{1,3})\s?d(?:ays?)?\b/g, 'past $1 days')
@@ -511,7 +512,7 @@ const INCIDENT_FEATURES: ReadonlyArray<[SquireIntent, ReadonlyArray<[RegExp, num
     'RESPONDERS',
     [
       [
-        /\b(who is (working|on this|handling|assigned)|assignee|responders?|who owns this|escalat(ed|ion status))\b/,
+        /\b(who is (working|on this|handling|assigned)|assignee|responders?|who owns this|escalat(ed|ion status))\b(?! incidents)/,
         3,
       ],
     ],

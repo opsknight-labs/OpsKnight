@@ -5,7 +5,7 @@ inputs:
   node-version:
     description: 'Node.js version to set up'
     required: false
-    default: '20'
+    default: '22'
   install-deps:
     description: 'Whether to execute npm ci'
     required: false

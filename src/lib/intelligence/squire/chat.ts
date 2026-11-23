@@ -933,6 +933,7 @@ async function priorTurns(
       const context =
         message.envelope?.context ??
         (saved.incidentId ? { kind: 'incident' as const, id: saved.incidentId } : null);
+      if (context?.kind === 'general') return here ? '[Asked as a general question] ' : '';
       if (!context || `${context.kind}:${context.id}` === here) return '';
       return context.kind === 'incident'
         ? `[Asked while viewing incident /incidents/${context.id}] `

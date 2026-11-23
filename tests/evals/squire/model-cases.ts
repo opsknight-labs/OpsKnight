@@ -262,6 +262,8 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
   {
     id: 'tool-automation-decision',
     category: 'tool-choice',
+    // Automation reads need automation:read, which the plain USER responder does not have.
+    asAdmin: true,
     question: 'Why did automation route this incident here?',
     script: [
       { tool: 'get_automation_decision', input: { incidentId: '$incident' } },
@@ -272,6 +274,8 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
   {
     id: 'tool-automation-rule',
     category: 'tool-choice',
+    // Automation reads need automation:read, which the plain USER responder does not have.
+    asAdmin: true,
     question: 'What does the "Critical to P1" rule on this service do?',
     script: [
       {

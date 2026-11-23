@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getBindingReadiness } from '@/lib/runbooks/binding-readiness';
 import { pauseServiceRule, duplicateServiceRule } from '@/lib/runbooks/bindings';

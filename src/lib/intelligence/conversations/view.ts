@@ -74,6 +74,8 @@ export async function getConversationForActor(
   const contextOf = (message: (typeof saved.messages)[number]): SourceIdentity | null => {
     const context = message.envelope?.context;
     if (!context) return saved.incidentId ? { kind: 'incident', id: saved.incidentId } : null;
+    // A general question (asked with no page) is about no record: nothing to re-check, no incident fallback.
+    if (context.kind === 'general') return null;
     return RECHECKED_CONTEXTS.has(context.kind)
       ? { kind: context.kind as SourceIdentity['kind'], id: context.id }
       : null;

@@ -11,6 +11,7 @@ import {
 import { enqueueAutomationNotification } from './jobs';
 import { getAutomationSettings, getIngestionAutomationConfig } from './settings';
 import { Prisma, type AutomationMode } from '@prisma/client';
+import { isDriverAdapterError } from '@/lib/db/errors';
 import type { EventPayload } from '@/lib/events';
 import { logger } from '@/lib/logger';
 import {
@@ -309,7 +310,8 @@ export async function prepareAutomation(
     if (
       error instanceof Prisma.PrismaClientKnownRequestError ||
       error instanceof Prisma.PrismaClientUnknownRequestError ||
-      error instanceof Prisma.PrismaClientInitializationError
+      error instanceof Prisma.PrismaClientInitializationError ||
+      isDriverAdapterError(error)
     )
       throw error;
     const reason = error instanceof Error ? error.message : 'VERSION_INVALID';
@@ -344,7 +346,8 @@ export async function prepareAutomation(
         if (
           snapshotError instanceof Prisma.PrismaClientKnownRequestError ||
           snapshotError instanceof Prisma.PrismaClientUnknownRequestError ||
-          snapshotError instanceof Prisma.PrismaClientInitializationError
+          snapshotError instanceof Prisma.PrismaClientInitializationError ||
+          isDriverAdapterError(snapshotError)
         )
           throw snapshotError;
         runtime.responderPolicy = undefined;
@@ -442,7 +445,8 @@ export async function prepareAutomation(
       if (
         candErr instanceof Prisma.PrismaClientKnownRequestError ||
         candErr instanceof Prisma.PrismaClientUnknownRequestError ||
-        candErr instanceof Prisma.PrismaClientInitializationError
+        candErr instanceof Prisma.PrismaClientInitializationError ||
+        isDriverAdapterError(candErr)
       )
         throw candErr;
 

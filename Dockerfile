@@ -2,7 +2,7 @@
 
 # Shared, digest-pinned OS packages prevent independently drifting package levels
 # and duplicate repository fetches in the dependency, builder and runtime stages.
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS base
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS base
 COPY scripts/docker/install-alpine-packages.sh /usr/local/bin/opsknight-install-alpine-packages
 RUN sh /usr/local/bin/opsknight-install-alpine-packages libc6-compat openssl openssl-dev curl && \
     mkdir -p /usr/local/share/opsknight && \
@@ -66,8 +66,10 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
 # Copy application source
 COPY . .
 
-# Generate Prisma Client
-RUN npx prisma generate
+# Generate Prisma Client and fetch the schema engine used by `migrate deploy` at startup,
+# so containers never download engines at run time (air-gapped installations).
+RUN node node_modules/prisma/build/index.js generate && \
+    node node_modules/prisma/build/index.js version
 
 # Set a dummy DATABASE_URL for build time only (Prisma requires it for validation)
 # This will be overridden by the actual DATABASE_URL at runtime
@@ -89,7 +91,14 @@ ENV OPSKNIGHT_BUILD_LOW_MEMORY=$OPSKNIGHT_BUILD_LOW_MEMORY
 ENV RAYON_NUM_THREADS=$BUILD_RAYON_THREADS
 ENV NODE_OPTIONS="--max-old-space-size=${BUILD_NODE_MAX_OLD_SPACE_SIZE}"
 ARG SKIP_BUILD_TYPECHECK=false
-ENV SKIP_BUILD_TYPECHECK=${SKIP_BUILD_TYPECHECK}
+# Type-check as its own step, then compile with Next's in-build check disabled. Running both
+# in one process tree doubled peak memory (the Prisma 7 model types need more than 6 GB of heap).
+ARG BUILD_TYPECHECK_MAX_OLD_SPACE_SIZE=10240
+RUN if [ "$SKIP_BUILD_TYPECHECK" != "true" ]; then \
+      NODE_OPTIONS="--max-old-space-size=${BUILD_TYPECHECK_MAX_OLD_SPACE_SIZE}" \
+        node node_modules/typescript/lib/tsc.js --noEmit --incremental false; \
+    fi
+ENV SKIP_BUILD_TYPECHECK=true
 RUN npm run build
 # Compile helper scripts for production (where ts-node is not available)
 RUN npm run build:scripts
@@ -118,6 +127,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 
@@ -131,8 +141,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/LICENSES ./LICENSES
 # Copy base node_modules first
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
-# Then copy Prisma-specific files (must be AFTER base node_modules to avoid being overwritten)
-# This ensures Prisma CLI and client are available for migrations
+# Then copy Prisma-specific files (must be AFTER base node_modules to avoid being overwritten).
+# The Prisma CLI and its dependencies are production dependencies (installed above); the
+# builder adds the generated client and the schema engine downloaded during generation.
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma

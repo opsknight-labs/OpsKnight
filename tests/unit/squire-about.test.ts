@@ -12,11 +12,11 @@ describe('what Squire is told about the person and the page', () => {
 
   it('includes a first name only when given and lists teams', () => {
     expect(aboutUserLines({ role: 'RESPONDER', teams: ['Core', 'Payments'] })).toEqual(
-      expect.arrayContaining(['- Role: Responder. Teams: Core, Payments.'])
+      expect.arrayContaining(['- Role: Responder. Teams: "Core", "Payments".'])
     );
     expect(aboutUserLines({ role: 'USER', teams: [] }).join('\n')).not.toContain('First name');
     expect(aboutUserLines({ role: 'USER', firstName: 'Ana', teams: [] })).toContain(
-      '- First name: Ana'
+      '- First name: "Ana"'
     );
   });
 

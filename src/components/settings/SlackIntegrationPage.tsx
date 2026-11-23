@@ -39,7 +39,6 @@ import SlackSigningSecretCard from '@/components/settings/SlackSigningSecretCard
 import SlackManifestCard from '@/components/settings/SlackManifestCard';
 import { toneClasses } from '@/components/patterns';
 import { cn } from '@/lib/utils';
-import { getBaseUrl } from '@/lib/env-validation';
 import { SLACK_REQUIRED_BOT_SCOPES, SLACK_OPTIONAL_BOT_SCOPES } from '@/lib/slack/app-manifest';
 
 interface SlackIntegration {
@@ -439,7 +438,7 @@ export default function SlackIntegrationPage({
       ? appUrl
       : clientOrigin && !clientOrigin.includes('localhost')
         ? clientOrigin
-        : appUrl || getBaseUrl();
+        : appUrl || process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'http://localhost:3000';
   const eventEndpoints = useMemo(
     () => [
       {

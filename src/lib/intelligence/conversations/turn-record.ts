@@ -74,7 +74,7 @@ export class SquireTurnRecorder {
         ...(completion === 'INTERRUPTED' ? { verified: false } : {}),
         context: input.incidentId
           ? { kind: 'incident', id: input.incidentId }
-          : request.pageContext,
+          : (request.pageContext ?? { kind: 'general', id: 'general' }),
         completion,
         citations: this.citations,
         actions: this.actions,

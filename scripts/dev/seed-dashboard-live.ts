@@ -16,8 +16,9 @@
  * These are direct Prisma writes. They still bump the realtime change feed (statement trigger),
  * but realtime certification must create/update incidents through the application workflows.
  */
-import { PrismaClient, type IncidentStatus, type IncidentUrgency } from '@prisma/client';
+import { type IncidentStatus, type IncidentUrgency } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 export const DASHBOARD_FIXTURE_PREFIX = 'dashboard-live:';
 export const DASHBOARD_FIXTURE_USERS = {
@@ -125,7 +126,7 @@ export function buildAlphaIncidents(
 async function main(): Promise<void> {
   assertLocalDashboardTarget();
   const { scenario, count } = parseDashboardSeedArgs(process.argv.slice(2));
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   try {
     const password = process.env.DASHBOARD_FIXTURE_PASSWORD ?? 'Password123!';
     const passwordHash = await bcrypt.hash(password, 10);

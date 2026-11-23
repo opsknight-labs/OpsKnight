@@ -1,0 +1,117 @@
+{
+  "direct.bare": {
+    "ok": true,
+    "value": {
+      "statementTimeout": "0",
+      "jit": "on",
+      "timeZone": "Etc/UTC",
+      "searchPath": "\"$user\", public",
+      "currentSchema": "public",
+      "dateStyle": "ISO, MDY",
+      "clientEncoding": "UTF8",
+      "extraFloatDigits": "1"
+    }
+  },
+  "direct.configured": {
+    "ok": true,
+    "value": {
+      "statementTimeout": "30s",
+      "jit": "off",
+      "timeZone": "Etc/UTC",
+      "searchPath": "\"$user\", public",
+      "currentSchema": "public",
+      "dateStyle": "ISO, MDY",
+      "clientEncoding": "UTF8",
+      "extraFloatDigits": "1"
+    }
+  },
+  "direct.connectionLimit3.maxBackends": 3,
+  "direct.operatorOptions": {
+    "ok": true,
+    "value": {
+      "statementTimeout": "1234ms",
+      "jit": "on",
+      "timeZone": "Etc/UTC",
+      "searchPath": "\"$user\", public",
+      "currentSchema": "public",
+      "dateStyle": "ISO, MDY",
+      "clientEncoding": "UTF8",
+      "extraFloatDigits": "1"
+    }
+  },
+  "direct.poolSize2.maxBackends": 2,
+  "direct.schemaPublic": {
+    "ok": true,
+    "value": {
+      "statementTimeout": "0",
+      "jit": "on",
+      "timeZone": "Etc/UTC",
+      "searchPath": "\"public\"",
+      "currentSchema": "public",
+      "dateStyle": "ISO, MDY",
+      "clientEncoding": "UTF8",
+      "extraFloatDigits": "1"
+    }
+  },
+  "directTz.configured": {
+    "ok": true,
+    "value": {
+      "statementTimeout": "30s",
+      "jit": "off",
+      "timeZone": "Asia/Kolkata",
+      "searchPath": "\"$user\", public",
+      "currentSchema": "public",
+      "dateStyle": "ISO, MDY",
+      "clientEncoding": "UTF8",
+      "extraFloatDigits": "1"
+    }
+  },
+  "pgbouncer.afterFailure": {
+    "failed": {
+      "ok": false,
+      "error": {
+        "sqlState": "57014",
+        "retryable": false,
+        "httpMapping": "DATABASE_UNAVAILABLE",
+        "escalation": "RETRYABLE_FAILURE",
+        "uniqueFields": null
+      }
+    },
+    "allHealthy": true
+  },
+  "pgbouncer.configured": {
+    "ok": true,
+    "value": {
+      "statementTimeout": "0",
+      "jit": "on",
+      "timeZone": "Etc/UTC",
+      "searchPath": "\"$user\", public",
+      "currentSchema": "public",
+      "dateStyle": "ISO, MDY",
+      "clientEncoding": "UTF8",
+      "extraFloatDigits": "1"
+    }
+  },
+  "pgbouncer.poolsAfterLoad": {
+    "serverActive": 0,
+    "clientWaiting": 0
+  },
+  "pgbouncer.preparedStatementSafety": "all-ok",
+  "pgbouncer.transactionAffinity": {
+    "ok": true,
+    "value": true
+  },
+  "pgbouncerTz.configured": {
+    "ok": true,
+    "value": {
+      "statementTimeout": "0",
+      "jit": "on",
+      "timeZone": "Asia/Kolkata",
+      "searchPath": "\"$user\", public",
+      "currentSchema": "public",
+      "dateStyle": "ISO, MDY",
+      "clientEncoding": "UTF8",
+      "extraFloatDigits": "1"
+    }
+  }
+}

@@ -66,7 +66,10 @@ const THANKS = new RegExp(`^${THANKS_WORD}(?:[\\s!.,]+${THANKS_WORD})*[^a-z0-9]*
  * Removes every leading greeting ("hey hi there, …"), and the assistant's configured name after one, in a
  * single left-to-right pass. `rest` is what is left to answer; empty when the message only greets.
  */
-export function stripGreeting(message: string, name = 'Squire'): { greeted: boolean; rest: string } {
+export function stripGreeting(
+  message: string,
+  name = 'Squire'
+): { greeted: boolean; rest: string } {
   const lower = message.toLowerCase();
   const own = name.trim().toLowerCase();
   let at = lower.length - lower.trimStart().length;
@@ -118,7 +121,7 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
     !/\b(health|status|owner|owns|on[- ]?call|assigned|assignee|priority|severity|urgency|history|timeline|escalation polic(?:y|ies)) (of|for|to|on) (?!(?:an?|incidents|each|every|new)\b)/.test(
       text
     ) &&
-    !/\b(average|on average|avg|mttr|mtta|mean time|how long (?:does|do|did) it (?:usually )?take)\b/.test(
+    !/\b(average|on average|avg|mttr|mtta|mean time|how long (?:does|do|did) it (?:usually )?take|(?:resolve|resolution|ack|acknowledge) times?)\b/.test(
       text
     ) &&
     !/^(?:please )?(?:help me |can you |could you )?(?:find|search|show|list)\b/.test(text)
@@ -126,7 +129,7 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
     return 'GUIDANCE';
   // A shift hand-off for the person asking: "catch me up", "what did I miss", "since my last shift".
   if (
-    /\b(catch(?:ing)? me up|catch[- ]?up|what (?:did|have) i miss(?:ed)?|while i was (?:away|out|off|asleep)|since my (?:last )?shift|what happened overnight|shift hand-?off summary)\b/.test(
+    /\b(catch(?:ing)? me up|catch[- ]?up|what (?:did|have) i miss(?:ed)?|while i was (?:away|out|off|asleep)|since my (?:last )?shift|what happened overnight|shift hand-?off summary|(?:morning|daily|shift) briefing)\b/.test(
       text
     )
   )
@@ -139,10 +142,12 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
   )
     return 'ALERT_STATS';
   if (
-    /\b(how many|number of|count|statistics|stats|analytics|trend|noisiest|noisy|most incidents?|mttr|mean time|average.*(resolution|resolve)|(?:resolve|resolution|acknowledge).*\baverage|how long (?:does|do|did) it (?:usually )?take)\b/.test(
+    /\b(how many|number of|count|statistics|stats|analytics|trend|noisiest|noisy|most incidents?|mttr|mean time|average.*(resolution|resolve)|(?:resolve|resolution|acknowledge).*\baverage|how long (?:does|do|did) it (?:usually )?take|(?:resolve|resolution|ack|acknowledge) times?)\b/.test(
       text
     ) &&
-    /\b(incidents?|outages?|services?|noisy|noisiest|mttr|mean time|resolution)\b/.test(text) &&
+    /\b(incidents?|outages?|services?|noisy|noisiest|mttr|mean time|resolution|(?:resolve|ack|acknowledge) times?)\b/.test(
+      text
+    ) &&
     !/\b(how many|count|number of) services?\b/.test(text)
   )
     return 'INCIDENT_STATS';
@@ -204,7 +209,7 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
     const matched = incidentIntents(text);
     if (matched.length) return matched[0];
     if (
-      /\b(summar(?:y|i[sz]e)|overview|brief|status|priority|severity|urgency|tell me about|explain this|describe|what is this|what's this)\b/.test(
+      /\b(summar(?:y|i[sz]e)|overview|brief|status|(?:priority|severity|urgency) (?:of|for) (?:this|that|it|the incident|inc)|what is the (?:priority|severity|urgency)|tell me about|explain this|describe|what is this|what's this)\b/.test(
         text
       ) ||
       /\bsummari[sz]e\b/.test(text)

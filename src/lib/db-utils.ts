@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 import { logger } from './logger';
+import { toPrismaClientError } from './db/errors';
 import { postgresSqlState } from './postgres-error';
 import { isExplicitTransactionRetry } from './transaction-retry';
 
@@ -15,8 +16,9 @@ const TRANSACTION_MAX_WAIT_MS = Number(process.env.OPSKNIGHT_TX_MAX_WAIT_MS ?? 2
 // Exponential backoff delays for retries (ms)
 const RETRY_DELAYS = [20, 50, 100, 200, 400];
 
-export function isRetryableTransactionError(error: unknown): boolean {
-  if (!error) return false;
+export function isRetryableTransactionError(rawError: unknown): boolean {
+  if (!rawError) return false;
+  const error = toPrismaClientError(rawError);
   if (isExplicitTransactionRetry(error)) return true;
   const state = postgresSqlState(error);
   if (state) return state === '40001' || state === '40P01';

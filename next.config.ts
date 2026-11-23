@@ -115,14 +115,21 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
   distDir: process.env.BUILD_DIR || '.next',
   output: 'standalone',
-  // Instrumentation and handlers share a native Prisma client. Bundling a
+  // Instrumentation and handlers share one Prisma client and driver pool. Bundling a
   // second SQL-tag implementation breaks nested Prisma.sql fragment identity.
   // ExcelJS's archive reader has optional S3 adapters. Native loading keeps
   // those adapters lazy for the local XLSX export path.
-  serverExternalPackages: ['@prisma/client', '.prisma/client', 'exceljs'],
+  serverExternalPackages: [
+    '@prisma/client',
+    '.prisma/client',
+    '@prisma/adapter-pg',
+    '@prisma/driver-adapter-utils',
+    'pg',
+    'exceljs',
+  ],
   outputFileTracingRoot: path.join(__dirname),
   // Instrumentation reads authentication policy before any request. Ensure the
-  // generated Prisma client and native engine exist in the standalone artifact.
+  // generated Prisma client and its query compiler exist in the standalone artifact.
   outputFileTracingIncludes: { '/*': ['./node_modules/.prisma/client/**/*'] },
   experimental: {
     // Enables forbidden()/unauthorized() so denied pages render a real 403 access page.

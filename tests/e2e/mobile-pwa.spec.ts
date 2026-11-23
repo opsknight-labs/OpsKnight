@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const FIXTURE_EMAIL = 'mobile-pwa-fixture@example.invalid';
 const FIXTURE_PASSWORD = 'Mobile-pwa-harbor-472!';
 

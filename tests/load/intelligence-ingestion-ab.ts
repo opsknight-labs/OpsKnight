@@ -41,6 +41,7 @@ import { dirname, resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { monitorEventLoopDelay, performance, PerformanceObserver } from 'node:perf_hooks';
 import prisma from '../../src/lib/prisma';
+import { poolWaitingCount } from '../../src/lib/db/create-client';
 import { processEvent, type EventPayload } from '../../src/lib/events';
 import {
   DEFAULT_POLICY_DEFINITION,
@@ -224,16 +225,10 @@ interface PoolSnapshot {
   waitSumMs: number;
 }
 
+// Prisma 7 has no query-wait histogram; wait totals are reported as zero and only the peak
+// waiting-query count (samplePoolWaiting) is measured.
 async function poolSnapshot(): Promise<PoolSnapshot> {
-  try {
-    const metrics = await prisma.$metrics.json();
-    const histogram = metrics.histograms.find(
-      metric => metric.key === 'prisma_client_queries_wait_histogram_ms'
-    )?.value;
-    return { waitCount: histogram?.count ?? 0, waitSumMs: histogram?.sum ?? 0 };
-  } catch {
-    return { waitCount: 0, waitSumMs: 0 };
-  }
+  return { waitCount: 0, waitSumMs: 0 };
 }
 
 type QueryEvent = { duration: number; query: string };
@@ -255,13 +250,7 @@ function listenToPrimaryStatements() {
 async function samplePoolWaiting(stop: { done: boolean }) {
   let peak = 0;
   while (!stop.done) {
-    try {
-      const metrics = await prisma.$metrics.json();
-      const waiting = metrics.gauges.find(g => g.key === 'prisma_client_queries_wait')?.value ?? 0;
-      peak = Math.max(peak, waiting);
-    } catch {
-      // Metrics unavailable: report zero rather than invent pressure.
-    }
+    peak = Math.max(peak, poolWaitingCount(prisma) ?? 0);
     await new Promise(resolve => setTimeout(resolve, 5));
   }
   return peak;

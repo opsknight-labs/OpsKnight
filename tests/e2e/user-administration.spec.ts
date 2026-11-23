@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { generateApiKey } from '@/lib/api-keys';
-const db = new PrismaClient();
+import { createPrismaClient } from '../../src/lib/db/create-client';
+const db = createPrismaClient();
 test.afterAll(async () => db.$disconnect());
 test('administrator UI and REST share role, deactivation and reactivation outcomes', async ({
   page,

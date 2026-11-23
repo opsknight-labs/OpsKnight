@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import bcrypt from 'bcryptjs';
 
 /**
@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs';
  * tiles. A responder sees the same tab without the admin actions, and no tab at all on a service where
  * every engine is off. State is created directly and removed afterwards.
  */
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const password = 'Service-Surfaces-E2E-7719!';
 const adminEmail = 'e2e-svcintel-admin@example.com';
 const responderEmail = 'e2e-svcintel-responder@example.com';

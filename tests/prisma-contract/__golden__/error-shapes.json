@@ -1,0 +1,413 @@
+{
+  "connect.authFailed": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "connect.recoversAfterTermination": true,
+  "connect.refusedModel": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "connect.refusedRaw": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "connect.terminatedNextQuery": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "connect.unknownDatabase": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "model.deleteMissing": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "RESOURCE_NOT_FOUND",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "model.findUniqueOrThrowMissing": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "RESOURCE_NOT_FOUND",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "model.foreignKey": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "RESOURCE_CONFLICT",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "model.serializationFailure": {
+    "failures": 1,
+    "failure": {
+      "ok": false,
+      "error": {
+        "sqlState": null,
+        "retryable": true,
+        "httpMapping": "TRANSIENT_CONFLICT",
+        "escalation": "RETRYABLE_FAILURE",
+        "uniqueFields": null
+      }
+    }
+  },
+  "model.uniqueComposite": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": true,
+      "httpMapping": "RESOURCE_CONFLICT",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": ["teamId", "userId"]
+    }
+  },
+  "model.uniqueCreateMany": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": true,
+      "httpMapping": "RESOURCE_CONFLICT",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": ["name"]
+    }
+  },
+  "model.uniqueEmail": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": true,
+      "httpMapping": "RESOURCE_CONFLICT",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": ["email"]
+    }
+  },
+  "model.uniqueInTransaction": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": true,
+      "httpMapping": "RESOURCE_CONFLICT",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": ["name"]
+    }
+  },
+  "model.updateMissing": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "RESOURCE_NOT_FOUND",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "pool.queryWhileExhausted": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "pool.recoversAfterRelease": {
+    "ok": true,
+    "value": "ok"
+  },
+  "pool.transactionMaxWait": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": true,
+      "httpMapping": "unmapped",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.deadlock": {
+    "failures": 1,
+    "failure": {
+      "ok": false,
+      "error": {
+        "sqlState": "40P01",
+        "retryable": true,
+        "httpMapping": "TRANSIENT_CONFLICT",
+        "escalation": "RETRYABLE_FAILURE",
+        "uniqueFields": null
+      }
+    }
+  },
+  "raw.foreignKey": {
+    "ok": false,
+    "error": {
+      "sqlState": "23503",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.invalidInput": {
+    "ok": false,
+    "error": {
+      "sqlState": "22P02",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.missingTable": {
+    "ok": false,
+    "error": {
+      "sqlState": "42P01",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raise.22P02": {
+    "ok": false,
+    "error": {
+      "sqlState": "22P02",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raise.23503": {
+    "ok": false,
+    "error": {
+      "sqlState": "23503",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raise.23505": {
+    "ok": false,
+    "error": {
+      "sqlState": "23505",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raise.40001": {
+    "ok": false,
+    "error": {
+      "sqlState": "40001",
+      "retryable": true,
+      "httpMapping": "TRANSIENT_CONFLICT",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raise.40P01": {
+    "ok": false,
+    "error": {
+      "sqlState": "40P01",
+      "retryable": true,
+      "httpMapping": "TRANSIENT_CONFLICT",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raise.55P03": {
+    "ok": false,
+    "error": {
+      "sqlState": "55P03",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raise.57014": {
+    "ok": false,
+    "error": {
+      "sqlState": "57014",
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raise.P0001": {
+    "ok": false,
+    "error": {
+      "sqlState": "P0001",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raiseInTransaction.22P02": {
+    "ok": false,
+    "error": {
+      "sqlState": "22P02",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raiseInTransaction.23503": {
+    "ok": false,
+    "error": {
+      "sqlState": "23503",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raiseInTransaction.23505": {
+    "ok": false,
+    "error": {
+      "sqlState": "23505",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raiseInTransaction.40001": {
+    "ok": false,
+    "error": {
+      "sqlState": "40001",
+      "retryable": true,
+      "httpMapping": "TRANSIENT_CONFLICT",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raiseInTransaction.40P01": {
+    "ok": false,
+    "error": {
+      "sqlState": "40P01",
+      "retryable": true,
+      "httpMapping": "TRANSIENT_CONFLICT",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raiseInTransaction.55P03": {
+    "ok": false,
+    "error": {
+      "sqlState": "55P03",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raiseInTransaction.57014": {
+    "ok": false,
+    "error": {
+      "sqlState": "57014",
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.raiseInTransaction.P0001": {
+    "ok": false,
+    "error": {
+      "sqlState": "P0001",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.statementTimeout": {
+    "ok": false,
+    "error": {
+      "sqlState": "57014",
+      "retryable": false,
+      "httpMapping": "DATABASE_UNAVAILABLE",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.syntax": {
+    "ok": false,
+    "error": {
+      "sqlState": "42601",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "raw.uniqueEmail": {
+    "ok": false,
+    "error": {
+      "sqlState": "23505",
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "tx.timeout": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": true,
+      "httpMapping": "unmapped",
+      "escalation": "RETRYABLE_FAILURE",
+      "uniqueFields": null
+    }
+  }
+}

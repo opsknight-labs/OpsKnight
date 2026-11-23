@@ -142,8 +142,8 @@ export async function investigateIncident(
     verifiedHash: '',
     observability,
     knowledge,
-    // TODO(squire-deadline): pass `deadline` once streamInvestigation accepts a deadline option, so a slow run
-    // concludes from what it read instead of being aborted by the job budget (and retried from scratch).
+    // A slow run concludes from what it read instead of being aborted by the job budget (and retried).
+    ...(deadline !== undefined ? { deadlineAt: deadline } : {}),
     finish: async () => ({ type: 'done' }),
     // The planner could not start: no ordinary chat answer here, the next scan may try again.
     fallback: async function* () {},

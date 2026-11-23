@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterAll, beforeEach, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {

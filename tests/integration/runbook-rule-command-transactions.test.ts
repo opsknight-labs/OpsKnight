@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, expect, it } from 'vitest';
 import {
   createRunbook,

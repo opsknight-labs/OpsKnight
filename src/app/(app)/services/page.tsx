@@ -19,7 +19,7 @@ import ServicesFilters from '@/components/service/ServicesFilters';
 import CreateServiceForm from '@/components/service/CreateServiceForm';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
-import { Server, AlertTriangle, XCircle, CheckCircle2, Boxes } from 'lucide-react';
+import { Server, AlertTriangle, XCircle, CheckCircle2, Boxes, Network } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
@@ -438,12 +438,20 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
         tag="Infrastructure Directory"
         title="Services"
         actions={
-          <Button asChild size="sm" className={`gap-1.5 ${pageHeaderActionClass}`}>
-            <Link href="/services/business">
-              <Boxes className="h-3.5 w-3.5" aria-hidden />
-              Business services
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" className={`gap-1.5 ${pageHeaderActionClass}`}>
+              <Link href="/services/graph">
+                <Network className="h-3.5 w-3.5" aria-hidden />
+                Service graph
+              </Link>
+            </Button>
+            <Button asChild size="sm" className={`gap-1.5 ${pageHeaderActionClass}`}>
+              <Link href="/services/business">
+                <Boxes className="h-3.5 w-3.5" aria-hidden />
+                Business services
+              </Link>
+            </Button>
+          </div>
         }
         icon={
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">

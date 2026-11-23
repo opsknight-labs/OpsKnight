@@ -857,7 +857,9 @@ export async function planBasicTurn(
     } else if (
       // "Group them by service" after a list is a breakdown of that list, not a service lookup.
       /^(group|break|split|compare)\b/i.test(raw) &&
-      ['SEARCH_INCIDENTS', 'ACTIVE_INCIDENTS', 'WORK_QUEUE', 'INCIDENT_STATS'].includes(before.intent)
+      ['SEARCH_INCIDENTS', 'ACTIVE_INCIDENTS', 'WORK_QUEUE', 'INCIDENT_STATS'].includes(
+        before.intent
+      )
     )
       intent = 'INCIDENT_STATS';
   }
@@ -1399,7 +1401,10 @@ async function resolveNames(
     } else if (people.length > 1)
       return {
         // Stored without the name: the pick supplies the person by id.
-        question: resolvedQuestion.replace(slots.person.toLowerCase(), '').replace(/\s+/g, ' ').trim(),
+        question: resolvedQuestion
+          .replace(slots.person.toLowerCase(), '')
+          .replace(/\s+/g, ' ')
+          .trim(),
         notes,
         clarify: {
           kind: 'person',
