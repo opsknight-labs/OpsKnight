@@ -5,6 +5,9 @@ import IncidentInsights, {
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
 import { readPayload } from '@/lib/payload-reader';
+import IncidentLiveRefresh from '@/components/incident/IncidentLiveRefresh';
+import CardSkeleton from '@/components/incident/detail/CardSkeleton';
+import { getCachedOrFetch } from '@/lib/realtime-cache';
 import FollowControl from '@/components/incident/detail/FollowControl';
 import { incidentSummaryText } from '@/lib/incidents/summary-text';
 import IncidentShortcuts from '@/components/incident/IncidentShortcuts';
@@ -331,20 +334,25 @@ export default async function IncidentDetailScreen({
     prisma.alert.count({ where: { incidentId: id } }),
     // The last earlier incident on the same dedup key the viewer may read: "first in 41 days".
     loadPreviousOnDedupKey(id, storedIncident.dedupKey ?? null, storedIncident.createdAt),
-    // The service's usual response times: its recent resolved incidents (bounded).
-    prisma.incident
-      .findMany({
-        where: {
-          serviceId: storedIncident.serviceId,
-          id: { not: id },
-          status: 'RESOLVED',
-          resolvedAt: { not: null },
-          createdAt: { gte: new Date(pageRenderedAt.getTime() - 90 * 86_400_000) },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-        select: { createdAt: true, acknowledgedAt: true, resolvedAt: true },
-      })
+    // The service's usual response times: its recent resolved incidents (bounded), cached per service for
+    // 10 minutes so busy incidents and live refreshes do not re-read them.
+    getCachedOrFetch(
+      `incident-baseline:${storedIncident.serviceId}`,
+      () =>
+        prisma.incident.findMany({
+          where: {
+            serviceId: storedIncident.serviceId,
+            status: 'RESOLVED',
+            resolvedAt: { not: null },
+            createdAt: { gte: new Date(pageRenderedAt.getTime() - 90 * 86_400_000) },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          select: { createdAt: true, acknowledgedAt: true, resolvedAt: true },
+        }),
+      10 * 60_000
+    )
+      .then(entry => entry.data)
       .catch(() => []),
   ]);
   const serviceBaseline = baselineLabel(
@@ -836,6 +844,8 @@ export default async function IncidentDetailScreen({
 
       {/* A, R, W, T, S on the incident page (listed in the ? shortcuts overlay). */}
       <IncidentShortcuts summary={summaryText} />
+      {/* Refreshes when someone else changes this incident: shared realtime connection, throttled. */}
+      <IncidentLiveRefresh incidentId={incident.id} />
 
       {/* "Since you looked 2h ago: …" — remembered per incident in the viewer's browser; nothing on a first visit. */}
       <CatchUpStrip incidentId={incident.id} items={catchUpItems} />
@@ -1075,11 +1085,11 @@ export default async function IncidentDetailScreen({
           <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
             <div className="hidden lg:block">{detailsPanel}</div>
             {/* Who was paged, how, did it arrive, who acknowledged; escalation now; on call. */}
-            <Suspense fallback={null}>
+            <Suspense fallback={<CardSkeleton title="Responders" rows={4} />}>
               <IncidentRespondersCard incidentId={id} viewerId={user.id} />
             </Suspense>
             {/* What customers were told, and when the next update is due. */}
-            <Suspense fallback={null}>
+            <Suspense fallback={<CardSkeleton title="Customer updates" rows={2} />}>
               <IncidentCustomerCommsCard
                 incident={{
                   id,

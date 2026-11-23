@@ -12,6 +12,7 @@ import { getOnCallNow } from '@/lib/oncall-now';
 import { formatDurationShort } from '@/lib/mobile-time';
 import { INCIDENT_ROLES } from '@/lib/incidents/roles';
 import type { ToneKey } from '@/components/patterns/status-tone';
+import { getCachedOrFetch } from '@/lib/realtime-cache';
 
 /**
  * "Is anyone on it?" for the incident page: who was paged and how each page landed, where
@@ -494,6 +495,10 @@ async function stepLabels(steps: PolicyStep[]): Promise<string[]> {
  * (assertCanViewIncident); `scheduleWhere` is the viewer's schedule read filter, or null when they
  * may not read schedules. Never throws: null means "render nothing".
  */
+/** Short caches: an incident's route and its on-call change rarely; times shift by at most this much. */
+const ROUTING_CACHE_MS = 30_000;
+const ON_CALL_CACHE_MS = 30_000;
+
 export async function loadIncidentResponders(input: {
   incidentId: string;
   viewerId: string;
@@ -558,19 +563,27 @@ export async function loadIncidentResponders(input: {
         orderBy: { stepIndex: 'asc' },
         take: STEP_ATTEMPT_LIMIT,
       }),
-      resolveIncidentResponderRouting(incidentId, incident.serviceId).catch(async error => {
-        logger.warn('incident.responders.routing_unavailable', { incidentId, error });
-        // Display only: fall back to the policy the page links (pinned id, else the service's) for
-        // step names and on-call. The engine itself refuses this fallback.
-        const policyId =
-          incident.automationDecision?.escalationPolicyId ?? incident.service.escalationPolicyId;
-        const policy = policyId
-          ? await prisma.escalationPolicy
-              .findUnique({ where: { id: policyId }, include: responderPolicyInclude })
-              .catch(() => null)
-          : null;
-        return policy ? ({ type: 'DEFAULT_POLICY', policy } satisfies ResponderRouting) : null;
-      }),
+      // The route barely changes during an incident: cached briefly per incident (live refreshes and
+      // several viewers share one resolution).
+      getCachedOrFetch(
+        `incident-responders-routing:${incidentId}:${incident.escalationGeneration}`,
+        () => resolveIncidentResponderRouting(incidentId, incident.serviceId),
+        ROUTING_CACHE_MS
+      )
+        .then(entry => entry.data)
+        .catch(async error => {
+          logger.warn('incident.responders.routing_unavailable', { incidentId, error });
+          // Display only: fall back to the policy the page links (pinned id, else the service's) for
+          // step names and on-call. The engine itself refuses this fallback.
+          const policyId =
+            incident.automationDecision?.escalationPolicyId ?? incident.service.escalationPolicyId;
+          const policy = policyId
+            ? await prisma.escalationPolicy
+                .findUnique({ where: { id: policyId }, include: responderPolicyInclude })
+                .catch(() => null)
+            : null;
+          return policy ? ({ type: 'DEFAULT_POLICY', policy } satisfies ResponderRouting) : null;
+        }),
     ]);
 
     const steps = routing?.policy?.steps ?? [];
@@ -601,14 +614,23 @@ export async function loadIncidentResponders(input: {
       !routing || !input.scheduleWhere
         ? null
         : scheduleIds.length
-          ? getOnCallNow({
-              userId: input.viewerId,
-              readWhere: { AND: [input.scheduleWhere, { id: { in: scheduleIds } }] },
-              scope: 'all',
-              limit: ON_CALL_SCHEDULE_LIMIT,
-              now,
-            })
-              .then(result => ({ scheduleCount: scheduleIds.length, schedules: result.schedules }))
+          ? // Keyed by viewer too: what a viewer may read of a schedule depends on who they are.
+            getCachedOrFetch(
+              `incident-responders-oncall:${input.viewerId}:${[...scheduleIds].sort().join(',')}`,
+              () =>
+                getOnCallNow({
+                  userId: input.viewerId,
+                  readWhere: { AND: [input.scheduleWhere, { id: { in: scheduleIds } }] },
+                  scope: 'all',
+                  limit: ON_CALL_SCHEDULE_LIMIT,
+                  now,
+                }),
+              ON_CALL_CACHE_MS
+            )
+              .then(({ data: result }) => ({
+                scheduleCount: scheduleIds.length,
+                schedules: result.schedules,
+              }))
               .catch(error => {
                 logger.warn('incident.responders.on_call_unavailable', { incidentId, error });
                 return null;
