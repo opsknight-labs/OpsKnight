@@ -5,7 +5,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
+const { createPrismaClient } = createRequire(import.meta.url)('../lib/db-runtime.cjs');
 
 const url = new URL(process.env.DATABASE_URL ?? 'http://invalid');
 assert.equal(url.pathname, '/enterprise_scim_test');
@@ -14,8 +15,8 @@ const stamp = randomBytes(6).toString('hex');
 const schema = `scim_deploy_${stamp}`;
 url.searchParams.set('schema', schema);
 url.searchParams.set('connection_limit', '8');
-const client = new PrismaClient({ datasources: { db: { url: url.toString() } } });
-const control = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+const client = createPrismaClient({ url: url.toString() });
+const control = createPrismaClient({ url: url.toString() });
 const temp = mkdtempSync(join(tmpdir(), 'scim-deploy-'));
 const schemaPath = join(temp, 'schema.prisma');
 const migration = '20261023010000_user_canonical_email_reservation';
@@ -23,8 +24,19 @@ const event = `scim_pause_${stamp}`;
 const lockKey = Number.parseInt(stamp.slice(0, 7), 16);
 const children = new Set();
 const pending = [];
+const configPath = join(temp, 'prisma.config.mjs');
+// Prisma 7 reads the schema, migrations and URL from a config file; keep the fixture isolated.
+writeFileSync(
+  configPath,
+  `export default ${JSON.stringify({
+    schema: schemaPath,
+    migrations: { path: join(temp, 'migrations') },
+    datasource: { url: url.toString() },
+  })};\n`
+);
+const cli = join(process.cwd(), 'node_modules', 'prisma', 'build', 'index.js');
 function command(args) {
-  const child = spawn('npx', ['prisma', ...args, '--schema', schemaPath], {
+  const child = spawn(process.execPath, [cli, ...args, '--config', configPath], {
     env: { ...process.env, DATABASE_URL: url.toString() },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -118,7 +130,6 @@ try {
     schemaPath,
     `datasource db {
  provider = "postgresql"
- url = env("DATABASE_URL")
 }
 model User {
  id String @id

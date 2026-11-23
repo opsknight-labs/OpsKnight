@@ -2,9 +2,9 @@
 // queries and an interactive transaction in flight. On `crash` it throws an uncaught error; it never
 // answers `stop`, so the host must kill it with those queries still running. In a worker thread either
 // ending aborted the whole process (the query engine calls back into the destroyed thread).
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('../../../scripts/lib/db-runtime.cjs');
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const send = message => process.connected && process.send(message);
 process.on('disconnect', () => process.exit(0));
 

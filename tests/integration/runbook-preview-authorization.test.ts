@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';

@@ -40,7 +40,7 @@ export async function updateProfile(
     const avatarFile = formData.get('avatar') as File | null;
     const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
-    let avatarUpload: { data: Buffer; mimeType: string; url: string } | null = null;
+    let avatarUpload: { data: Buffer<ArrayBuffer>; mimeType: string; url: string } | null = null;
     if (avatarFile && avatarFile.size > 0) {
       if (!ALLOWED_MIME_TYPES.has(avatarFile.type)) {
         return { error: 'Invalid file type. Please upload a PNG, JPEG, WebP, or GIF image.' };

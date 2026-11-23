@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Integration Tests for Complete Notification Flow (REAL SETUP)
  *

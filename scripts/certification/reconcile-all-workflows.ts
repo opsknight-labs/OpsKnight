@@ -3,8 +3,8 @@ dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || undefined, override: fal
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto, { randomBytes } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
 import { API_CAPABILITY_CATALOG } from '../../src/lib/api-v2/capability-catalog';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -17,8 +17,8 @@ function requireEnv(name: string): string {
 }
 
 const DATABASE_URL = requireEnv('DATABASE_URL');
-const prisma = new PrismaClient({
-  datasources: { db: { url: DATABASE_URL } },
+const prisma = createPrismaClient({
+  url: DATABASE_URL,
 });
 
 interface WorkflowReconciliationEntry {

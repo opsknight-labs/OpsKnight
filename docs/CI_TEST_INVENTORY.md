@@ -69,7 +69,7 @@ PR gate. This foundation check is separate from full noise-layer ingestion certi
 Standardizes setup for workflows using the shared CI actions:
 
 1. [`.github/actions/setup-node`](../.github/actions/setup-node/action.yml)
-   - Standardizes Node 20.x setup.
+   - Standardizes Node 22.x setup.
    - Leverages GitHub `npm` cache (`~/.npm`).
    - Executes deterministic `npm ci --legacy-peer-deps` with `HUSKY=0`.
    - Optionally executes `npx prisma generate` with cached client.

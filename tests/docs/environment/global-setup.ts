@@ -1,7 +1,8 @@
-import { PrismaClient, type Role } from '@prisma/client';
+import { type Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { hashTokenV2 } from '../../../src/lib/api-keys';
 import { DOCS_ADMIN, DOCS_API_KEY, DOCS_FIXTURES, DOCS_RESPONDER, DOCS_VIEWER } from '../fixtures/constants';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 
 export default async function globalSetup() {
   const databaseUrl = process.env.DOCS_DATABASE_URL || process.env.DATABASE_URL;
@@ -9,7 +10,7 @@ export default async function globalSetup() {
     throw new Error('Documentation journeys require an isolated database URL containing "opsknight_docs".');
   }
   process.env.DATABASE_URL = databaseUrl;
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   try {
     const legacyEmails = [
       ['docs-admin@example.test', DOCS_ADMIN.email],

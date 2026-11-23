@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const databaseUrl = process.env.DATABASE_URL!;
 const BOOTSTRAP_CONFIG_KEY = 'auth.bootstrap.authorization';
 

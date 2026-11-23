@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { generateApiKey } from '@/lib/api-keys';
 import { Client } from '../../sdk/typescript/client';
-const db = new PrismaClient();
+import { createPrismaClient } from '../../src/lib/db/create-client';
+const db = createPrismaClient();
 test.afterAll(async () => db.$disconnect());
 test('REST removal and administrator UI share subscriber consent and audit behavior', async ({
   page,

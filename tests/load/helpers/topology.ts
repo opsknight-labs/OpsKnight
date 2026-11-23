@@ -10,6 +10,7 @@ import { startContinuousTelemetryCollector, TelemetrySample } from './metrics';
 import { runLoadSeed } from './seed';
 import { CorrectnessInvariantReport, verifyLoadCertificationResults } from './verify-results';
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 
 const execFileAsync = promisify(execFile);
 
@@ -2034,7 +2035,7 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
 
       const scenarioRecords: ScenarioExecutionRecord[] = [];
       const queueSnapshots: QueueSnapshot[] = [];
-      const hostPrisma = new PrismaClient();
+      const hostPrisma = createPrismaClient();
       const levels = opts.levelsOverride ?? topology.defaultLoadLevels;
       const scenariosToRun = topology.scenarios.filter(s => {
         if (opts.scenariosFilter && !opts.scenariosFilter.includes(s)) return false;

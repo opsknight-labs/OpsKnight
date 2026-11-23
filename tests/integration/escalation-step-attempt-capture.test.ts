@@ -27,8 +27,11 @@ async function measure<T>(run: () => Promise<T>): Promise<{ result: T; sql: stri
   const result = await run();
   await new Promise(resolve => setTimeout(resolve, 50));
   // Only the transaction itself: a pool health check ("SELECT 1") can land in the window.
-  const begin = statements.indexOf('BEGIN');
-  return { result, sql: statements.slice(begin, statements.indexOf('COMMIT', begin) + 1) };
+  // Prisma 7's driver adapter reports the transaction's statements but not its BEGIN, so the window
+  // starts at BEGIN when it is reported and otherwise at the first statement after the reset.
+  const begin = Math.max(0, statements.indexOf('BEGIN'));
+  const commit = statements.indexOf('COMMIT', begin);
+  return { result, sql: statements.slice(begin, commit === -1 ? undefined : commit + 1) };
 }
 
 async function commitFixture() {

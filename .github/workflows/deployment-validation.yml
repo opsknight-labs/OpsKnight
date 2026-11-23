@@ -59,7 +59,7 @@ jobs:
       - name: Set up Node and dependencies for CSI contract tests
         uses: ./.github/actions/setup-node
         with:
-          node-version: 20
+          node-version: 22
           generate-prisma: 'true'
 
       - name: Validate external secrets deployment contracts

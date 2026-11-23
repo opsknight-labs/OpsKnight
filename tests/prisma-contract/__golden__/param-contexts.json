@@ -1,0 +1,473 @@
+{
+  "arrayLengthParam": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "number",
+          "v": 2
+        }
+      }
+    ]
+  },
+  "bigintColumnCompare": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "1"
+        }
+      }
+    ]
+  },
+  "booleanColumnCompare": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "1"
+        }
+      }
+    ]
+  },
+  "caseParamResult": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "42"
+        }
+      }
+    ]
+  },
+  "coalesceDateColumn": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "Date",
+          "v": "2026-10-28T20:00:00.000Z"
+        }
+      }
+    ]
+  },
+  "coalesceParamFirst": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "Date",
+          "v": "2026-10-28T20:00:00.000Z"
+        }
+      }
+    ]
+  },
+  "dateTruncParam": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "Date",
+          "v": "2026-10-28T20:00:00.000Z"
+        }
+      }
+    ]
+  },
+  "extractEpochParam": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "Decimal",
+          "v": "1793217600"
+        }
+      }
+    ]
+  },
+  "generateSeriesDates": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "13"
+        }
+      }
+    ]
+  },
+  "greatestDateColumn": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "Date",
+          "v": "2026-10-28T20:00:00.000Z"
+        }
+      }
+    ]
+  },
+  "greatestTimestampColumn": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "Date",
+          "v": "2026-10-28T20:00:00.000Z"
+        }
+      }
+    ]
+  },
+  "insertSelectNumber": {
+    "ok": true,
+    "value": [
+      {
+        "rate": {
+          "t": "number",
+          "v": 11
+        },
+        "tokens": {
+          "t": "number",
+          "v": 9.75
+        },
+        "updatedAt": {
+          "t": "Date",
+          "v": "2026-10-28T20:00:00.000Z"
+        }
+      }
+    ]
+  },
+  "intArithmeticColumn": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "5"
+        }
+      }
+    ]
+  },
+  "intDivisionParams": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "3"
+        }
+      }
+    ]
+  },
+  "intervalFromParam": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "boolean",
+          "v": true
+        }
+      }
+    ]
+  },
+  "intervalMultiply": {
+    "ok": false,
+    "error": {
+      "sqlState": null,
+      "retryable": false,
+      "httpMapping": "unmapped",
+      "escalation": "TERMINAL_FAILURE",
+      "uniqueFields": null
+    }
+  },
+  "isDistinctFromNull": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "1"
+        }
+      }
+    ]
+  },
+  "jsonbBuildBoolean": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "object",
+          "v": {
+            "b": true
+          }
+        }
+      }
+    ]
+  },
+  "jsonbBuildDate": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "object",
+          "v": {
+            "d": "2026-10-28T08:00:00+00:00"
+          }
+        }
+      }
+    ]
+  },
+  "jsonbBuildNull": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "object",
+          "v": {
+            "z": null
+          }
+        }
+      }
+    ]
+  },
+  "jsonbBuildNumber": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "object",
+          "v": {
+            "f": 1.5,
+            "n": 5
+          }
+        }
+      }
+    ]
+  },
+  "jsonbBuildString": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "object",
+          "v": {
+            "s": "x"
+          }
+        }
+      }
+    ]
+  },
+  "jsonbContainsParam": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "boolean",
+          "v": true
+        }
+      }
+    ]
+  },
+  "jsonbPathText": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "string",
+          "v": "{\"b\": 7}"
+        }
+      }
+    ]
+  },
+  "leastParams": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "3"
+        }
+      }
+    ]
+  },
+  "likeParam": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "boolean",
+          "v": true
+        }
+      }
+    ]
+  },
+  "limitOffsetParams": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "array",
+          "v": [
+            {
+              "t": "number",
+              "v": 3
+            },
+            {
+              "t": "number",
+              "v": 4
+            },
+            {
+              "t": "number",
+              "v": 5
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "makeIntervalMs": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "boolean",
+          "v": true
+        }
+      }
+    ]
+  },
+  "nowMinusParamMs": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "boolean",
+          "v": true
+        }
+      }
+    ]
+  },
+  "numericArithmeticColumn": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "number",
+          "v": 3.75
+        }
+      }
+    ]
+  },
+  "stringConcatNumber": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "string",
+          "v": "n=5"
+        }
+      }
+    ]
+  },
+  "timestampColumnUncast": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "1"
+        }
+      }
+    ]
+  },
+  "toJsonbNumber": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "number",
+          "v": 7
+        }
+      }
+    ]
+  },
+  "unnestDateArray": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "array",
+          "v": [
+            {
+              "t": "Date",
+              "v": "2026-10-28T08:00:00.000Z"
+            },
+            {
+              "t": "Date",
+              "v": "2026-10-28T20:00:00.000Z"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "unnestNumberArray": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "array",
+          "v": [
+            {
+              "t": "number",
+              "v": 1
+            },
+            {
+              "t": "number",
+              "v": 2
+            },
+            {
+              "t": "number",
+              "v": 3
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "valuesListDateCompareUncast": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "1"
+        }
+      }
+    ]
+  },
+  "valuesListDates": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "2"
+        }
+      }
+    ]
+  },
+  "valuesListTyped": {
+    "ok": true,
+    "value": [
+      {
+        "v": {
+          "t": "bigint",
+          "v": "1"
+        }
+      }
+    ]
+  }
+}

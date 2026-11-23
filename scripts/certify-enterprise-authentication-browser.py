@@ -49,11 +49,11 @@ try:
  for key in ['SKIP_ENV_VALIDATION','ALLOW_INSECURE_SECRETS']:env.pop(key,None)
  if args.postgres_bin:
   bootstrap_env={**env,'DATABASE_URL':url.replace('/enterprise_sso_test','/postgres')}
-  subprocess.run(['node','-e',"const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.$executeRawUnsafe('CREATE DATABASE enterprise_sso_test').catch(e=>{console.error(e.code||e.name);process.exitCode=1}).finally(()=>p.$disconnect());"],cwd=root,env=bootstrap_env,check=True)
+  subprocess.run(['node','-e',"const {createPrismaClient}=require('./scripts/lib/db-runtime.cjs');const p=createPrismaClient();p.$executeRawUnsafe('CREATE DATABASE enterprise_sso_test').catch(e=>{console.error(e.code||e.name);process.exitCode=1}).finally(()=>p.$disconnect());"],cwd=root,env=bootstrap_env,check=True)
 
  subprocess.run(['npx','prisma','migrate','deploy'],cwd=root,env=env,check=True,stdout=subprocess.DEVNULL)
  subprocess.run(['node','scripts/prepare-authentication-diagnostics.cjs'],cwd=root,env=env,check=True,stdout=subprocess.DEVNULL)
- seed=r'''const {PrismaClient}=require('@prisma/client');const bcrypt=require('bcryptjs');const p=new PrismaClient();(async()=>{
+ seed=r'''const {createPrismaClient}=require('./scripts/lib/db-runtime.cjs');const bcrypt=require('bcryptjs');const p=createPrismaClient();(async()=>{
 await p.systemSettings.create({data:{id:'default',appUrl:'https://localhost:32615'}});
 await p.authenticationPolicy.create({data:{id:'default',mode:'PASSWORD_ONLY',legacySnapshot:{}}});
 await p.user.create({data:{id:'browser-secondary-user',email:'browser-secondary@example.test',name:'Browser Secondary',role:'USER',status:'ACTIVE',passwordHash:await bcrypt.hash('Local certification browser passphrase October 2026',12)}});

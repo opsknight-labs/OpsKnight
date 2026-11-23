@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import http from 'node:http';
 import { expect, test, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 const PORT = '3100';
 
@@ -52,7 +52,7 @@ function rawHttpRequest(
   });
 }
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const databaseUrl =
   process.env.DATABASE_URL ||
   'postgresql://postgres:postgres@127.0.0.1:5432/opsknight_e2e?schema=public';

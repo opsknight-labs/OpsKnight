@@ -14,16 +14,9 @@ const mockPrisma = {
   $disconnect: vi.fn(),
 };
 
-// Mock PrismaClient constructor - use function syntax for Vitest 4.x
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const MockPrismaClient = vi.fn().mockImplementation(function (this: any) {
-  Object.assign(this, mockPrisma);
-  return this;
-});
-
-// Mock @prisma/client
-vi.mock('@prisma/client', () => ({
-  PrismaClient: MockPrismaClient,
+// The recovery script builds its client through the OpsKnight database factory.
+vi.mock('../../src/lib/db/create-client', () => ({
+  createPrismaClient: () => mockPrisma,
 }));
 
 describe('Auto Recovery Migration System', () => {

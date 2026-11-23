@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_EMULATOR_ENDPOINTS } from '../fixtures/notification-providers';
 import { captureHostPressure } from './automation-host-pressure';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 
 const execFileAsync = promisify(execFile);
 
@@ -335,7 +336,7 @@ export async function startContinuousTelemetryCollector(options: {
 }): Promise<{
   stop: () => Promise<TelemetrySample[]>;
 }> {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const samples: TelemetrySample[] = [];
   const intervalMs = options.intervalMs ?? 5_000;
   const jsonlPath = path.join(options.outputDir, 'metrics-timeseries.jsonl');
@@ -374,7 +375,7 @@ export async function startContinuousTelemetryCollector(options: {
 }
 
 if (require.main === module) {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const topology = process.env.LOAD_TOPOLOGY || 'manual';
   const stage = process.env.LOAD_STAGE || 'snapshot';
   const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:3000';

@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Standalone CommonJS installer packaged in the production image. */
 // Online diagnostic indexes and resumable historical projection; use a direct PostgreSQL connection.
 'use strict';
+const { createPrismaClient } = require('./lib/db-runtime.cjs');
 
-const { PrismaClient } = require('@prisma/client');
+
 
 const databaseUrl = new URL(process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL);
 databaseUrl.searchParams.set('connection_limit', '1');
-const prisma = new PrismaClient({ datasourceUrl: databaseUrl.toString() });
+const prisma = createPrismaClient({ url: databaseUrl.toString() });
 const LOCK_ID = 1762184303;
 
 async function ensureIndex(name, ddl) {

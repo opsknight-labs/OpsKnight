@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { submitPolicyCheck } from '@/lib/runbooks/policy-checks';
 import { beforeEach, expect, it } from 'vitest';
 import Ajv2020 from 'ajv/dist/2020';

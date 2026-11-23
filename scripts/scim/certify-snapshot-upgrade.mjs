@@ -1,6 +1,7 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- Only a generated temporary baseline schema is read/written. */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,19 +41,11 @@ try {
   }
   const baselinePath = join(temp, 'schema.prisma');
   writeFileSync(baselinePath, execFileSync('git', ['show', '326f21685:prisma/schema.prisma']));
-  const ddl = execFileSync(
-    'npx',
-    [
-      'prisma',
-      'migrate',
-      'diff',
-      '--from-empty',
-      '--to-schema-datamodel',
-      baselinePath,
-      '--script',
-    ],
-    { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }
-  );
+  // The baseline schema predates Prisma 7 (it declares the datasource url), so the DDL comes from
+  // the CLI that release shipped with.
+  const ddl = createRequire(import.meta.url)('../lib/legacy-prisma.cjs')
+    .legacyPrisma(process.cwd(), '326f21685')
+    .emptyToSchemaScript(baselinePath);
   const hash = createHash('sha256').update(randomBytes(32)).digest('hex');
   sql(
     baselineDb,

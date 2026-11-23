@@ -1,0 +1,96 @@
+{
+  "readCommitted.raise.23505": {
+    "attempts": 1,
+    "result": {
+      "ok": false,
+      "error": {
+        "sqlState": "23505",
+        "retryable": false,
+        "httpMapping": "unmapped",
+        "escalation": "TERMINAL_FAILURE",
+        "uniqueFields": null
+      }
+    }
+  },
+  "readCommitted.raise.40001": {
+    "attempts": 2,
+    "result": {
+      "ok": true,
+      "value": "ok"
+    }
+  },
+  "readCommitted.raise.40P01": {
+    "attempts": 2,
+    "result": {
+      "ok": true,
+      "value": "ok"
+    }
+  },
+  "readCommitted.raise.57014": {
+    "attempts": 1,
+    "result": {
+      "ok": false,
+      "error": {
+        "sqlState": "57014",
+        "retryable": false,
+        "httpMapping": "DATABASE_UNAVAILABLE",
+        "escalation": "TERMINAL_FAILURE",
+        "uniqueFields": null
+      }
+    }
+  },
+  "serializable.raise.23505": {
+    "attempts": 1,
+    "result": {
+      "ok": false,
+      "error": {
+        "sqlState": "23505",
+        "retryable": false,
+        "httpMapping": "unmapped",
+        "escalation": "TERMINAL_FAILURE",
+        "uniqueFields": null
+      }
+    }
+  },
+  "serializable.raise.40001": {
+    "attempts": 2,
+    "result": {
+      "ok": true,
+      "value": "ok"
+    }
+  },
+  "serializable.raise.40P01": {
+    "attempts": 2,
+    "result": {
+      "ok": true,
+      "value": "ok"
+    }
+  },
+  "serializable.raise.57014": {
+    "attempts": 1,
+    "result": {
+      "ok": false,
+      "error": {
+        "sqlState": "57014",
+        "retryable": false,
+        "httpMapping": "DATABASE_UNAVAILABLE",
+        "escalation": "TERMINAL_FAILURE",
+        "uniqueFields": null
+      }
+    }
+  },
+  "serializable.realConflict": {
+    "results": [
+      {
+        "ok": true,
+        "value": "ok"
+      },
+      {
+        "ok": true,
+        "value": "ok"
+      }
+    ],
+    "retried": true,
+    "finalTokens": [1, 2]
+  }
+}

@@ -8,7 +8,7 @@
  *
  *   node scripts/repair-invalid-indexes.cjs [--dry-run]
  */
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('./lib/db-runtime.cjs');
 const { resolveDatabaseUrl } = require('./db-connection-resolver.cjs');
 
 const dryRun = process.argv.includes('--dry-run');
@@ -20,7 +20,7 @@ if (!rawDatabaseUrl) {
 const databaseUrl = new URL(rawDatabaseUrl);
 // REINDEX CONCURRENTLY and SET need the same backend; a one-connection pool guarantees that.
 databaseUrl.searchParams.set('connection_limit', '1');
-const prisma = new PrismaClient({ datasourceUrl: databaseUrl.toString() });
+const prisma = createPrismaClient({ url: databaseUrl.toString() });
 
 const LEFTOVER = /_cc(?:new|old)\d*$/;
 const SAFE_NAME = /^[A-Za-z0-9_]+$/;

@@ -7,7 +7,6 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { PrismaClient } from '@prisma/client';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { configureAutomationLoadProfile, provisionAutomationProviderCapacity } from './automation';
 import { kubernetesRecoveryTargets, requireRecoveryTarget } from './automation-recovery';
@@ -18,6 +17,7 @@ import { collectSingleTelemetrySample } from './metrics';
 import { captureAutomationTimings, summarizeAutomationTimings } from './automation-timings';
 import type { LoadSeedManifest } from './seed';
 import { controlledK6Launch, controlledK6Target } from './automation-k6';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 type CertificationSummary = {
   metrics: {
     iterations: { count: number };
@@ -57,7 +57,7 @@ type CertificationResult = {
 };
 
 const exec = promisify(execFile);
-const db = new PrismaClient({ transactionOptions: { maxWait: 30_000, timeout: 30_000 } });
+const db = createPrismaClient({ transactionOptions: { maxWait: 30_000, timeout: 30_000 } });
 const composeArgs = [
   'compose',
   '-p',

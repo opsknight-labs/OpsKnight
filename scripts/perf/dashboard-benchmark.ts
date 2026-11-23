@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
 import { calculateSLAMetrics } from '../../src/lib/sla-server';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 const EXPECTED_INCIDENTS = 1084;
 const ITERATIONS = 10;
@@ -13,7 +13,7 @@ function percentile(values: number[], fraction: number): number {
 }
 
 async function main() {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   try {
     const incidentCount = await prisma.incident.count({ where: { serviceId } });
     if (incidentCount !== EXPECTED_INCIDENTS) {

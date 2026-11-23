@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 import { expect, it } from 'vitest';
 import { getPrismaPoolWaitCount } from '@/lib/prisma-pool-pressure';
 
@@ -7,7 +7,7 @@ it('observes real waiting queries while the only pool connection is occupied', a
   if (!url.pathname.endsWith('_test')) throw new Error('Dedicated test DB required');
   url.searchParams.set('connection_limit', '1');
   url.searchParams.set('pool_timeout', '5');
-  const client = new PrismaClient({ datasourceUrl: url.toString() });
+  const client = createPrismaClient({ url: url.toString() });
   let ready!: () => void;
   let release!: () => void;
   const acquired = new Promise<void>(resolve => {

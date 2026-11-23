@@ -14,7 +14,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   try {
     const assetId = new URL(_req.url).searchParams.get('asset');
     if (assetId) {
-      const assets = await prisma.$queryRaw<Array<{ data: Buffer; contentType: string }>>`
+      const assets = await prisma.$queryRaw<Array<{ data: Uint8Array; contentType: string }>>`
         SELECT "data", "contentType" FROM "StatusPageAsset"
         WHERE "id" = ${assetId} AND "statusPageId" = ${statusPageId}
       `;

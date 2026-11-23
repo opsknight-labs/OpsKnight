@@ -1,7 +1,12 @@
 import { Prisma } from '@prisma/client';
+import { rawSqlState } from '@/lib/db/errors';
 
 /** Extract machine SQLSTATE only; never classify by database message prose. */
 export function postgresSqlState(error: unknown): string | null {
+  // Prisma 7 driver adapters report raw-SQL failures as P2010 with the SQLSTATE in
+  // meta.driverAdapterError; the branches below handle the Prisma 5 engine shapes.
+  const adapterState = rawSqlState(error);
+  if (adapterState) return adapterState;
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     const state = error.meta?.code ?? error.meta?.database_code;
     return typeof state === 'string' && /^[0-9A-Z]{5}$/.test(state) ? state : null;

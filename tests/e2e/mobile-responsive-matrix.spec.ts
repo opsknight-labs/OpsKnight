@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import {
   assertResponsiveIntegrity,
   assertSingleLineLabels,
 } from '../lib/assert-responsive-integrity';
 import { VIEWPORT_MATRIX } from '../lib/responsive-viewport-matrix';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const FIXTURE_EMAIL = 'mobile-matrix-fixture@example.invalid';
 const FIXTURE_PASSWORD = 'Mobile-matrix-harbor-472!';
 

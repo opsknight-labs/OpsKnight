@@ -1,50 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { createPrismaClient } from '@/lib/db/create-client';
 import { getPrismaPoolWaitCount } from '@/lib/prisma-pool-pressure';
 import { evaluateLanePause } from '@/lib/intelligence/jobs/backpressure';
 
 describe('database capacity protection', () => {
-  it('reads the engine gauge without issuing SQL', async () => {
-    const client = {
-      $metrics: {
-        json: vi.fn().mockResolvedValue({
-          gauges: [
-            { key: 'prisma_pool_connections_busy', value: 20 },
-            { key: 'prisma_client_queries_wait', value: 3 },
-          ],
-        }),
-      },
-    };
-    expect(await getPrismaPoolWaitCount(client)).toBe(3);
-    expect(client.$metrics.json).toHaveBeenCalledOnce();
+  it('reads the pg pool waiting count without issuing SQL', async () => {
+    const client = createPrismaClient({ url: 'postgresql://u:p@127.0.0.1:1/db' });
+    // No connection has been opened yet, so nothing is waiting; the reader never touches the database.
+    expect(await getPrismaPoolWaitCount(client)).toBe(0);
   });
 
-  it('keeps unavailable, missing and invalid observations distinct from zero waiting', async () => {
-    for (const value of [undefined, -1, NaN, Infinity]) {
-      const client = {
-        $metrics: {
-          json: async () => ({
-            gauges: value === undefined ? [] : [{ key: 'prisma_client_queries_wait', value }],
-          }),
-        },
-      };
-      expect(await getPrismaPoolWaitCount(client)).toBeNull();
-    }
-    expect(
-      await getPrismaPoolWaitCount({
-        $metrics: {
-          json: async () => {
-            throw new Error('private');
-          },
-        },
-      })
-    ).toBeNull();
-    expect(
-      await getPrismaPoolWaitCount({
-        $metrics: {
-          json: async () => ({ gauges: [{ key: 'prisma_client_queries_wait', value: 0 }] }),
-        },
-      })
-    ).toBe(0);
+  it('keeps clients it cannot observe distinct from zero waiting', async () => {
+    expect(await getPrismaPoolWaitCount({})).toBeNull();
+    expect(await getPrismaPoolWaitCount(createPrismaClient({ url: '' }))).toBeNull();
   });
 
   it('pauses on contention and requires two consecutive measured quiet samples', () => {

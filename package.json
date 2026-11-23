@@ -48,6 +48,8 @@
     "test:unit": "vitest run -c vitest.unit.config.ts",
     "test:int": "vitest run -c vitest.int.config.ts --no-file-parallelism",
     "test:squire:eval": "vitest run -c vitest.squire-eval.config.ts",
+    "test:prisma-contract": "vitest run -c vitest.contract.config.ts",
+    "test:prisma-contract:record": "PRISMA_CONTRACT_MODE=record vitest run -c vitest.contract.config.ts",
     "test:ci:unit": "npx vitest run -c vitest.unit.config.ts --reporter=default --reporter=junit --outputFile=reports/junit-unit.xml",
     "test:ci:db": "npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 --reporter=default --reporter=junit --outputFile=reports/junit-db.xml",
     "test:authorization": "vitest run -c vitest.unit.config.ts tests/lib/rbac-read-guards.test.ts tests/architecture/rbac-page-guards.test.ts",
@@ -59,7 +61,7 @@
     "perf:budgets": "node scripts/perf/check-performance-budgets.cjs",
     "OpsKnight": "node ./scripts/OpsKnight.mjs",
     "ops": "node ./scripts/OpsKnight.mjs",
-    "build:scripts": "tsc scripts/auto-recover-migrations.ts --rootDir . --outDir scripts/dist --module commonjs --target es2020 --esModuleInterop --skipLibCheck && node scripts/build-intelligence-lane-thread.mjs",
+    "build:scripts": "node scripts/build-script-bundles.mjs && node scripts/build-intelligence-lane-thread.mjs",
     "backfill:action-items": "ts-node --project tsconfig.script.json scripts/backfill-action-items.ts",
     "backfill:oncall-coverage": "ts-node --transpile-only -r tsconfig-paths/register --project tsconfig.script.json scripts/backfill-oncall-coverage.ts",
     "certify:collaboration": "npm run certify:collaboration:preflight",
@@ -175,7 +177,9 @@
     "@modelcontextprotocol/server": "2.4.0",
     "@node-oauth/oauth2-server": "5.3.1",
     "@opentelemetry/api": "^1.9.1",
-    "@prisma/client": "^5.22.0",
+    "@prisma/adapter-pg": "7.3.0",
+    "@prisma/client": "7.3.0",
+    "@prisma/driver-adapter-utils": "7.3.0",
     "@radix-ui/react-alert-dialog": "^1.1.24",
     "@radix-ui/react-avatar": "^1.2.7",
     "@radix-ui/react-checkbox": "^1.3.12",
@@ -219,7 +223,8 @@
     "next-themes": "^0.4.6",
     "node-cron": "^4.6.0",
     "openid-client": "5.7.1",
-    "pg": "^8.23.1",
+    "pg": "8.23.1",
+    "prisma": "7.3.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-hook-form": "^7.90.0",
@@ -256,9 +261,9 @@
     "@testing-library/react": "^16.3.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/file-saver": "^2.0.7",
-    "@types/node": "^20",
+    "@types/node": "^22.20.5",
     "@types/node-cron": "^3.0.11",
-    "@types/pg": "^8.23.1",
+    "@types/pg": "8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
@@ -270,7 +275,7 @@
     "aria-query": "^5.3.2",
     "cssnano": "^7.1.9",
     "dotenv": "^17.4.2",
-    "esbuild": "^0.28.2",
+    "esbuild": "0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "eslint-plugin-jsx-a11y": "^6.10.2",
@@ -283,7 +288,6 @@
     "jsdom": "^27.3.0",
     "postcss": "^8.5.29",
     "prettier": "^3.9.10",
-    "prisma": "^5.22.0",
     "react-email": "^6.11.6",
     "tailwindcss": "^4.3.5",
     "tailwindcss-animate": "^1.0.7",
@@ -296,9 +300,6 @@
   },
   "bin": {
     "OpsKnight": "./scripts/OpsKnight.mjs"
-  },
-  "prisma": {
-    "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
   },
   "overrides": {
     "fast-xml-parser": "^5.3.4",
@@ -318,9 +319,14 @@
     "unzipper": "^0.12.3",
     "filelist": {
       "minimatch": "^11.0.1"
-    }
+    },
+    "@prisma/dev": "0.24.17",
+    "effect": "^3.20.0",
+    "mysql2": "^3.24.4",
+    "valibot": "^1.4.2",
+    "deepmerge-ts": "^8.0.2"
   },
   "engines": {
-    "node": ">=20 <21"
+    "node": ">=22.12 <23"
   }
 }

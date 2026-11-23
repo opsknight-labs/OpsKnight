@@ -1,0 +1,162 @@
+{
+  "model.filterHas": 1,
+  "model.filterHasSome": 2,
+  "model.filterIsEmpty": 1,
+  "model.push": {
+    "t": "array",
+    "v": [
+      {
+        "t": "string",
+        "v": "PUSH"
+      }
+    ]
+  },
+  "model.read": [
+    {
+      "t": "array",
+      "v": [
+        {
+          "t": "string",
+          "v": "EMAIL"
+        },
+        {
+          "t": "string",
+          "v": "SLACK"
+        }
+      ]
+    },
+    {
+      "t": "array",
+      "v": []
+    },
+    {
+      "t": "array",
+      "v": [
+        {
+          "t": "string",
+          "v": "MICROSOFT_TEAMS"
+        }
+      ]
+    }
+  ],
+  "raw.arrayAggEnumColumn": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "string",
+          "v": "USER"
+        },
+        {
+          "t": "string",
+          "v": "ADMIN"
+        }
+      ]
+    }
+  },
+  "raw.column": {
+    "ok": true,
+    "value": [
+      {
+        "t": "array",
+        "v": [
+          {
+            "t": "string",
+            "v": "EMAIL"
+          },
+          {
+            "t": "string",
+            "v": "SLACK"
+          }
+        ]
+      },
+      {
+        "t": "array",
+        "v": [
+          {
+            "t": "string",
+            "v": "PUSH"
+          }
+        ]
+      },
+      {
+        "t": "array",
+        "v": [
+          {
+            "t": "string",
+            "v": "MICROSOFT_TEAMS"
+          }
+        ]
+      }
+    ]
+  },
+  "raw.emptyEnumArray": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": []
+    }
+  },
+  "raw.joinedEnumList": {
+    "ok": true,
+    "value": {
+      "t": "bigint",
+      "v": "2"
+    }
+  },
+  "raw.paramAny": {
+    "ok": true,
+    "value": {
+      "t": "bigint",
+      "v": "1"
+    }
+  },
+  "raw.paramOverlap": {
+    "ok": true,
+    "value": {
+      "t": "bigint",
+      "v": "1"
+    }
+  },
+  "raw.unnestDistinct": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "string",
+          "v": "EMAIL"
+        },
+        {
+          "t": "string",
+          "v": "PUSH"
+        },
+        {
+          "t": "string",
+          "v": "SLACK"
+        },
+        {
+          "t": "string",
+          "v": "MICROSOFT_TEAMS"
+        }
+      ]
+    }
+  },
+  "raw.updateWithParam": {
+    "ok": true,
+    "value": {
+      "t": "array",
+      "v": [
+        {
+          "t": "string",
+          "v": "VOICE"
+        },
+        {
+          "t": "string",
+          "v": "WEBHOOK"
+        }
+      ]
+    }
+  }
+}

@@ -1,6 +1,6 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
 import { testPrisma, resetDatabase } from '../helpers/test-db';
 import { purgeExpiredAgentNonces, NONCE_PURGE_BATCH_SIZE } from '@/lib/runbooks/nonce-cleanup';
 import { agentSignaturePayload, authenticateAgentRequest, sha256 } from '@/lib/runbooks/agent-auth';
@@ -9,6 +9,7 @@ import {
   clearRuntimeOperationalMetrics,
   runtimeOperationalMetrics,
 } from '@/lib/metrics/operational/registry';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 const suite = process.env.VITEST_USE_REAL_DB === '1' ? describe : describe.skip;
 const keys = generateKeyPairSync('ed25519', {
@@ -135,8 +136,8 @@ suite('isolated bounded Agent nonce maintenance', () => {
     });
     const url = new URL(process.env.DATABASE_URL!);
     url.searchParams.set('connection_limit', '1');
-    const maintenance = new PrismaClient({ datasourceUrl: url.toString() });
-    const recovery = new PrismaClient({ datasourceUrl: url.toString() });
+    const maintenance = createPrismaClient({ url: url.toString() });
+    const recovery = createPrismaClient({ url: url.toString() });
     await testPrisma.$executeRawUnsafe(
       `CREATE FUNCTION rbe_slow_nonce_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(3); RETURN OLD; END $$`
     );

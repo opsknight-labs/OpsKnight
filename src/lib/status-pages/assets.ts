@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 
-export function isValidStatusPageLogoBytes(mime: string, buffer: Buffer) {
+export function isValidStatusPageLogoBytes(mime: string, bytes: Uint8Array) {
+  // Prisma returns bytea as Uint8Array; take a zero-copy Buffer view for its parsing helpers.
+  const buffer = Buffer.isBuffer(bytes)
+    ? bytes
+    : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (!buffer.length || buffer.length > 2 * 1024 * 1024) return false;
   return (
     (mime === 'image/png' && buffer.length >= 45 &&

@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 import bcrypt from 'bcryptjs';
 
 /**
@@ -9,7 +9,7 @@ import bcrypt from 'bcryptjs';
  * in dark mode. The inbox, the section drill-downs, the alerts and changes lists they lead to and the
  * mobile AIOps page are covered by the same seeded state, which is created directly and removed afterwards.
  */
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const password = 'Overview-E2E-Pass-5521!';
 const adminEmail = 'e2e-overview-admin@example.com';
 const responderEmail = 'e2e-overview-responder@example.com';

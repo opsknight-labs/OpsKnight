@@ -1,3 +1,4 @@
+import { toPrismaClientError, uniqueConstraintFields } from '@/lib/db/errors';
 import { AppError, type AppErrorCode, type ErrorField } from '@/lib/errors';
 
 export type PrismaErrorInfo = {
@@ -31,7 +32,8 @@ function readStringArray(value: unknown): string[] {
  * does not inspect exception messages, so database wording can never control
  * application semantics.
  */
-export function getPrismaErrorInfo(error: unknown): PrismaErrorInfo | undefined {
+export function getPrismaErrorInfo(rawError: unknown): PrismaErrorInfo | undefined {
+  const error = toPrismaClientError(rawError);
   if (!error || typeof error !== 'object') return undefined;
 
   const candidate = error as { code?: unknown; meta?: unknown };
@@ -43,7 +45,10 @@ export function getPrismaErrorInfo(error: unknown): PrismaErrorInfo | undefined 
     candidate.meta && typeof candidate.meta === 'object'
       ? (candidate.meta as Record<string, unknown>)
       : undefined;
-  const fields = readStringArray(meta?.target);
+  const target = readStringArray(meta?.target);
+  // Prisma 5 reported unique fields as meta.target; Prisma 7 adapters report the constraint.
+  const fields =
+    target.length || candidate.code !== 'P2002' ? target : uniqueConstraintFields(error);
 
   return { code: candidate.code, fields };
 }

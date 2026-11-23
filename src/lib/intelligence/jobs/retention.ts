@@ -2,6 +2,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { postgresSqlState } from '@/lib/postgres-error';
 import { logger } from '@/lib/logger';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { withDbBudget } from './db-budget';
@@ -64,11 +65,9 @@ type Retention = Pick<
   | 'maxDbMs'
 >;
 
-/** PostgreSQL undefined_table, as Prisma surfaces it from raw SQL. */
+/** PostgreSQL undefined_table (SQLSTATE 42P01), independent of the Prisma engine's error shape. */
 function isMissingRelation(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
-  const meta = error.meta as { code?: unknown } | undefined;
-  return error.code === 'P2010' && meta?.code === '42P01';
+  return postgresSqlState(error) === '42P01';
 }
 
 const NOTHING: RetentionResult = {

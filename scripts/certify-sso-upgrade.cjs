@@ -5,9 +5,10 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const { encode } = require('next-auth/jwt');
+const { createPrismaClient } = require('./lib/db-runtime.cjs');
+const { checkoutTaggedSchema, legacyPrisma } = require('./lib/legacy-prisma.cjs');
 
 async function main() {
   const url = new URL(process.env.DATABASE_URL);
@@ -19,54 +20,27 @@ async function main() {
   if (!/^[a-f0-9]{40}$/.test(baseline)) throw new Error('Use a full baseline commit hash.');
   const root = process.cwd();
   const temp = fs.mkdtempSync(path.join(root, '.sso-upgrade-'));
-  let db = new PrismaClient();
+  let db = createPrismaClient();
   try {
     const tables =
       await db.$queryRaw`SELECT to_regclass('public."AuthenticationPolicy"')::text AS name`;
     if (tables[0]?.name)
       throw new Error('Fixture is already upgraded; use a new disposable database.');
-    const files = execFileSync(
-      'git',
-      ['ls-tree', '-r', '--name-only', baseline, 'prisma/schema.prisma', 'prisma/migrations'],
-      { encoding: 'utf8' }
-    )
-      .trim()
-      .split('\n');
-    for (const file of files) {
-      if (!file.startsWith('prisma/') || file.includes('..'))
-        throw new Error('Invalid baseline path.');
-      const target = path.join(temp, file);
-      // eslint-disable-next-line security/detect-non-literal-fs-filename -- Validated repository-relative baseline path inside our private temporary directory.
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      // eslint-disable-next-line security/detect-non-literal-fs-filename -- Same validated temporary baseline path.
-      fs.writeFileSync(target, execFileSync('git', ['show', `${baseline}:${file}`]));
-    }
+    // The baseline is migrated and seeded by the Prisma release it shipped with.
+    const baselineSchema = checkoutTaggedSchema(root, baseline, temp);
+    const legacy = legacyPrisma(root, baseline);
     const run = args => {
       const result = spawnSync('npx', args, {
         cwd: root,
-        env: { ...process.env, PRISMA_GENERATE_SKIP_AUTOINSTALL: 'true' },
+        env: process.env,
         stdio: 'inherit',
       });
       if (result.status !== 0) throw new Error('Upgrade certification command failed.');
     };
-    run(['prisma', 'migrate', 'deploy', '--schema', path.join(temp, 'prisma/schema.prisma')]);
+    legacy.run(['migrate', 'deploy', '--schema', baselineSchema]);
     // Seed through the published schema's client: selecting id alone does not prevent
     // a newer client from inserting defaults for columns absent from the old database.
-    const baselineSchema = path.join(temp, 'prisma/schema.prisma');
-    const baselineClient = path.join(temp, 'baseline-client');
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- Fixed schema path inside this process's private temporary directory.
-    const schema = fs.readFileSync(baselineSchema, 'utf8');
-    const generator = /generator client\s*\{[^}]*\}/;
-    if (!generator.test(schema)) throw new Error('Published schema has no client generator.');
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- Same private baseline schema; never modifies the working schema.
-    fs.writeFileSync(
-      baselineSchema,
-      schema.replace(
-        generator,
-        `generator client {\n  provider = "prisma-client-js"\n  output = ${JSON.stringify(baselineClient)}\n}`
-      )
-    );
-    run(['prisma', 'generate', '--schema', baselineSchema]);
+    const baselineClient = legacy.generateClient(baselineSchema);
     await db.$disconnect();
     // eslint-disable-next-line security/detect-non-literal-require -- Client generated above from the validated published schema in our private directory.
     const { PrismaClient: BaselinePrismaClient } = require(baselineClient);

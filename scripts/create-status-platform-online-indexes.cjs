@@ -1,5 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
+
 const { resolveDatabaseUrl } = require('./db-connection-resolver.cjs');
+const { createPrismaClient } = require('./lib/db-runtime.cjs');
 
 const rawDatabaseUrl = resolveDatabaseUrl({ preferDirect: true });
 if (!rawDatabaseUrl) {
@@ -12,8 +13,8 @@ const databaseUrl = new URL(rawDatabaseUrl);
 // A dedicated one-connection Prisma pool provides that guarantee during startup.
 databaseUrl.searchParams.set('connection_limit', '1');
 
-const prisma = new PrismaClient({
-  datasourceUrl: databaseUrl.toString(),
+const prisma = createPrismaClient({
+  url: databaseUrl.toString(),
 });
 
 const INSTALL_LOCK_ID = 1448233807;

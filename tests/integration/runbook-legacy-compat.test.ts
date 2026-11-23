@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import {

@@ -1,11 +1,12 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import {
   getStoredActionItemId,
   normalizeLegacyActionItems,
   parseActionItemDueDate,
 } from '../src/lib/action-items';
+import { createPrismaClient } from '../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 type Options = {
   apply: boolean;

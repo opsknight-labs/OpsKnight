@@ -3,16 +3,17 @@
  * Creates rich multi-version runbooks (v1, v2, v3, Draft, Published, Retired, Archived),
  * live running agents, realistic service bindings, and multi-state execution logs.
  */
-import { PrismaClient, type Prisma, type RunbookExecutionStatus } from '@prisma/client';
+import { type Prisma, type RunbookExecutionStatus } from '@prisma/client';
 import { computeDefinitionChecksum } from '@/lib/runbooks/definition';
 import type { RunbookDefinition, RunbookStepDefinition } from '@/lib/runbooks/types';
 import type { RunbookInputInput } from '@/lib/runbooks/schemas';
+import { createPrismaClient } from '../src/lib/db/create-client';
 
 if (process.env.NODE_ENV === 'production') {
   throw new Error('seed-enterprise-runbooks must not run in production.');
 }
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000);
 const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3600_000);
 const daysAgo = (days: number) => new Date(Date.now() - days * 86400_000);

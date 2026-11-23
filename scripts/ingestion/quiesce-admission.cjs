@@ -18,8 +18,8 @@ module.exports = async function quiesceAdmission(options = {}) {
   const createClient =
     options.createClient ||
     (datasourceUrl => {
-      const { PrismaClient } = require('@prisma/client');
-      return new PrismaClient({ datasourceUrl });
+      const { createPrismaClient } = require('../lib/db-runtime.cjs');
+      return createPrismaClient({ url: datasourceUrl });
     });
   // One diagnostic connection fits within the topology's reserved capacity.
   const clientUrl = new URL(url);

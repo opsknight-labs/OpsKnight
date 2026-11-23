@@ -1,3 +1,4 @@
+// @vitest-environment node
 /* eslint-disable security/detect-object-injection -- lookup key is a fixed literal, a typed enum value or a gated internal name, never a raw request-controlled name */
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Prisma, RunbookInputType } from '@prisma/client';

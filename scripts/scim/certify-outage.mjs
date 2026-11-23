@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
+const { createPrismaClient } = createRequire(import.meta.url)('../lib/db-runtime.cjs');
 const url = new URL(process.env.DATABASE_URL ?? 'http://invalid');
 if (url.pathname !== '/enterprise_scim_test' || !['localhost', '127.0.0.1'].includes(url.hostname))
   throw new Error('Use the local isolated enterprise_scim_test database.');
@@ -21,7 +22,7 @@ if (
   origins.some(origin => !['localhost', '127.0.0.1'].includes(new URL(origin).hostname))
 )
   throw new Error('Supply at least two local disposable app replicas.');
-const db = new PrismaClient();
+const db = createPrismaClient();
 const connectorId = `outage-cert-${Date.now()}`;
 const token = randomBytes(32).toString('hex');
 let stopped = false;

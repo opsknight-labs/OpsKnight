@@ -2,6 +2,25 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import prisma, { disconnectPrisma } from '@/lib/prisma';
 import { withMcpDatabase } from '@/lib/database-workload';
+import { mapDatabaseError } from '@/lib/api-v2/database-errors';
+import { isAppError } from '@/lib/errors';
+import { postgresSqlState } from '@/lib/postgres-error';
+
+/** Rejection reason, classified through OpsKnight's Prisma-version-independent helpers. */
+async function classifiedRejection(operation: Promise<unknown>) {
+  const error = await operation.then(
+    () => {
+      throw new Error('expected the database operation to fail');
+    },
+    (reason: unknown) => reason
+  );
+  const mapped = mapDatabaseError(error);
+  return {
+    prismaCode: (error as { code?: unknown }).code,
+    sqlState: postgresSqlState(error),
+    publicCode: isAppError(mapped) ? mapped.code : null,
+  };
+}
 
 beforeAll(() => {
   const url = new URL(process.env.DATABASE_URL ?? '');
@@ -67,21 +86,20 @@ describe('real MCP PostgreSQL isolation', () => {
       expect(active).toBe(2);
       const primary = await prisma.$queryRaw<{ value: number }[]>`SELECT 1::int AS value`;
       expect(primary[0].value).toBe(1);
-      await expect(withMcpDatabase(() => prisma.$queryRaw`SELECT 1`)).rejects.toMatchObject({
-        code: 'P2024',
-      });
+      // Prisma 5 reported pool exhaustion as P2024; with driver adapters it is a pool timeout.
+      // Both are a retryable "database unavailable" for callers.
+      expect(
+        await classifiedRejection(withMcpDatabase(() => prisma.$queryRaw`SELECT 1`))
+      ).toMatchObject({ publicCode: 'DATABASE_UNAVAILABLE' });
     } finally {
       await settled;
     }
   });
 
   it('PostgreSQL cancels a query beyond the MCP SQL deadline and the pool recovers', async () => {
-    await expect(withMcpDatabase(() => prisma.$queryRaw`SELECT pg_sleep(6)`)).rejects.toMatchObject(
-      {
-        code: 'P2010',
-        meta: { code: '57014' },
-      }
-    );
+    expect(
+      await classifiedRejection(withMcpDatabase(() => prisma.$queryRaw`SELECT pg_sleep(6)`))
+    ).toEqual({ prismaCode: 'P2010', sqlState: '57014', publicCode: 'DATABASE_UNAVAILABLE' });
     const rows = await withMcpDatabase(
       () => prisma.$queryRaw<{ value: number }[]>`SELECT 1::int AS value`
     );
@@ -111,13 +129,15 @@ describe('real MCP PostgreSQL isolation', () => {
     const settled = Promise.allSettled([holder]);
     try {
       await Promise.race([started, holder]);
-      await expect(
-        withMcpDatabase(() =>
-          prisma.$transaction(
-            tx => tx.$queryRaw`SELECT pg_advisory_xact_lock(${lock}::bigint)::text`
+      expect(
+        await classifiedRejection(
+          withMcpDatabase(() =>
+            prisma.$transaction(
+              tx => tx.$queryRaw`SELECT pg_advisory_xact_lock(${lock}::bigint)::text`
+            )
           )
         )
-      ).rejects.toMatchObject({ code: 'P2010', meta: { code: '55P03' } });
+      ).toMatchObject({ prismaCode: 'P2010', sqlState: '55P03' });
     } finally {
       release();
       await settled;

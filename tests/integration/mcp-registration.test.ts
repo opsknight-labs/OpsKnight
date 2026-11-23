@@ -439,6 +439,10 @@ describe('automatic MCP client registration', () => {
     const previous = process.env.TRUST_PROXY_HEADERS;
     process.env.TRUST_PROXY_HEADERS = 'true';
     try {
+      // The limiter counts in fixed 60 s windows; a run that straddles a minute boundary starts a
+      // fresh window and would not be limited. Start the sequence early in a window.
+      const left = 60000 - (Date.now() % 60000);
+      if (left < 20000) await new Promise(resolve => setTimeout(resolve, left + 50));
       for (let i = 0; i < 10; i++)
         expect((await register(request(metadata, '198.51.100.10'))).status).toBe(201);
       for (let i = 0; i < 5; i++)

@@ -1,14 +1,15 @@
 'use strict';
-const { PrismaClient } = require('@prisma/client');
+
 const bcrypt = require('bcryptjs');
 const { createHash } = require('node:crypto');
+const { createPrismaClient } = require('../lib/db-runtime.cjs');
 const url = new URL(process.env.DATABASE_URL ?? '');
 if (
   url.pathname !== '/opsknight_mcp_browser_test' ||
   !['localhost', '127.0.0.1'].includes(url.hostname)
 )
   throw new Error('Only the dedicated local MCP browser database may be seeded');
-const db = new PrismaClient();
+const db = createPrismaClient();
 (async () => {
   const origin = process.env.MCP_E2E_BASE_URL ?? 'http://localhost:3042';
   if (!['localhost', '127.0.0.1'].includes(new URL(origin).hostname))

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 const INCIDENT_COUNT = 1084;
 if (process.env.PERF_SEED_CONFIRM !== String(INCIDENT_COUNT)) {
@@ -6,7 +6,7 @@ if (process.env.PERF_SEED_CONFIRM !== String(INCIDENT_COUNT)) {
 }
 
 async function main() {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const runId = crypto.randomUUID();
   const now = Date.now();
   try {

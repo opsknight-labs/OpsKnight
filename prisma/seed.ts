@@ -1,14 +1,10 @@
 import 'dotenv/config';
-import {
-  PrismaClient,
-  IncidentUrgency as PrismaIncidentUrgency,
-  IncidentEventType,
-  type Prisma,
-} from '@prisma/client';
+import { IncidentUrgency as PrismaIncidentUrgency, IncidentEventType, type Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { createPrismaClient } from '../src/lib/db/create-client';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 const seedConfig = {
   teams: 6,

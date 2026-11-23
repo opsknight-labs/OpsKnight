@@ -11,7 +11,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('./lib/db-runtime.cjs');
+
 
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'prisma', 'migrations');
 const REPORTS_DIR = path.join(__dirname, '..', 'reports');
@@ -92,7 +93,7 @@ async function checkMigrationHealth() {
 
   const { resolveDatabaseUrl } = require('./db-connection-resolver.cjs');
   const dbUrl = resolveDatabaseUrl();
-  const prisma = new PrismaClient(dbUrl ? { datasourceUrl: dbUrl } : undefined);
+  const prisma = createPrismaClient({ url: dbUrl || undefined });
   const warnings = [];
   const errors = [];
 

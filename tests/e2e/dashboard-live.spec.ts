@@ -9,7 +9,7 @@ import {
   type Page,
   type TestInfo,
 } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 /**
  * Live Incidents dashboard certification. Observers are a scoped "Dashboard Alpha" responder;
@@ -22,7 +22,7 @@ const ALPHA = { email: 'dashboard-alpha@example.local', password: 'Password123!'
 const EMPTY = { email: 'dashboard-empty@example.local', password: 'Password123!' };
 const LATENCY_BUDGET_MS = Number(process.env.LIVE_LATENCY_BUDGET_MS || 2_000);
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 function assertIsolatedDatabase() {
   const url = new URL(process.env.DATABASE_URL || 'postgresql://invalid');

@@ -1,5 +1,6 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- All files are confined to a generated temporary directory. */
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,11 +16,11 @@ const temp = mkdtempSync(join(tmpdir(), 'opsknight-scim-upgrade-'));
 try {
   const schemaPath = join(temp, 'schema.prisma');
   writeFileSync(schemaPath, execFileSync('git', ['show', `${baseline}:prisma/schema.prisma`]));
-  const ddl = execFileSync(
-    'npx',
-    ['prisma', 'migrate', 'diff', '--from-empty', '--to-schema-datamodel', schemaPath, '--script'],
-    { encoding: 'utf8' }
-  );
+  // The baseline schema predates Prisma 7 (it declares the datasource url), so the DDL comes from
+  // the CLI that release shipped with.
+  const ddl = createRequire(import.meta.url)('../lib/legacy-prisma.cjs')
+    .legacyPrisma(process.cwd(), baseline)
+    .emptyToSchemaScript(schemaPath);
   const migrations = [
     '20261021100000_scim_identity_lifecycle',
     '20261021150000_scim_provenance_guards',

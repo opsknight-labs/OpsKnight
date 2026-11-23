@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { PrismaClient } from '@prisma/client';
 import { DEFAULT_EMULATOR_ENDPOINTS } from '../fixtures/notification-providers';
+import { createPrismaClient } from '../../../src/lib/db/create-client';
 
 export interface CorrectnessInvariantReport {
   passed: boolean;
@@ -68,7 +68,7 @@ export async function verifyLoadCertificationResults(options?: {
     options?.controlBaseUrl ?? DEFAULT_EMULATOR_ENDPOINTS.controlBaseUrl;
   const waitForDrainMs = options?.waitForDrainMs ?? Number(process.env.LOAD_DRAIN_WAIT_MS ?? 15_000);
 
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   try {
     if (waitForDrainMs > 0) {
       const deadline = Date.now() + waitForDrainMs;

@@ -1,9 +1,6 @@
 import 'server-only';
+import { poolWaitingCount } from '@/lib/db/create-client';
 import prisma from './prisma';
-
-interface MetricsReader {
-  $metrics: { json(): Promise<{ gauges: Array<{ key: string; value: number }> }> };
-}
 
 /**
  * Engine-local observation: never borrows a connection from the pool being measured. It always reads
@@ -11,15 +8,10 @@ interface MetricsReader {
  * its own (the intelligence lane in a shared process), because that is the pool the lane protects.
  */
 export async function getPrismaPoolWaitCount(
-  client: MetricsReader = globalThis.prismaGlobal ?? prisma
+  client: object = globalThis.prismaGlobal ?? prisma
 ): Promise<number | null> {
-  try {
-    const { gauges } = await client.$metrics.json();
-    const waiting = gauges.find(metric => metric.key === 'prisma_client_queries_wait')?.value;
-    return typeof waiting === 'number' && Number.isFinite(waiting) && waiting >= 0 ? waiting : null;
-  } catch {
-    // Missing metrics are unknown, never a fabricated healthy measurement. Paging-lag protection
-    // remains active on clients/runtimes that do not expose engine metrics.
-    return null;
-  }
+  // Unknown (null) is never a fabricated healthy measurement: paging-lag protection stays active
+  // for clients that are not built by createPrismaClient.
+  const waiting = poolWaitingCount(client);
+  return waiting !== null && Number.isFinite(waiting) && waiting >= 0 ? waiting : null;
 }

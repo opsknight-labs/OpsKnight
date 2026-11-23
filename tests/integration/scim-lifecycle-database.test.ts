@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { getControlActor } from '@/lib/auth-control/actor';
@@ -27,6 +26,7 @@ import { groups } from '@/lib/scim/lifecycle/groups';
 import { preserveScimOwnedOidcFields } from '@/lib/scim/lifecycle/oidc-profile';
 import { reconcileTeam } from '@/lib/scim/lifecycle/membership';
 import { updateUserSecurityState } from '@/lib/users/admin-invariants';
+import { createPrismaClient } from '../../src/lib/db/create-client';
 
 const suite =
   process.env.SCIM_CERTIFICATION === '1' && process.env.VITEST_USE_REAL_DB === '1'
@@ -1261,7 +1261,7 @@ suite('SCIM PostgreSQL lifecycle certification', () => {
     );
   });
   it('enforces expiry/revocation using a separate database client', async () => {
-    const replica = new PrismaClient();
+    const replica = createPrismaClient();
     try {
       await replica.scimCredential.update({
         where: { id: 'cert-key-b' },

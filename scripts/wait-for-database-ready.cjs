@@ -3,8 +3,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { PrismaClient } = require('@prisma/client');
+
 const { pendingClassificationCount } = require('./backfill-automation-source-classification.cjs');
+const { createPrismaClient } = require('./lib/db-runtime.cjs');
 
 const REQUIRED_INDEXES = [
   'IngestionReceipt_claim_sequence_idx',
@@ -84,7 +85,7 @@ async function main() {
   const directUrl = resolveDatabaseUrl({ preferDirect: true });
   if (!directUrl) throw new Error('DATABASE_URL or DIRECT_DATABASE_URL is required.');
 
-  const prisma = new PrismaClient({ datasourceUrl: directUrl });
+  const prisma = createPrismaClient({ url: directUrl });
   const expectedMigrations = localMigrations();
   const deadline = Date.now() + timeoutMs;
   let attempt = 0;
