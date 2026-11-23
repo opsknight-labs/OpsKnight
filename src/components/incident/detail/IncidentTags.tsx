@@ -111,8 +111,8 @@ export default function IncidentTags({
     at => !tags.some(t => t.name.toLowerCase() === at.name.toLowerCase())
   );
 
-  // In 'bar' variant, show up to 3 tags directly, then "+N more" to keep bar sleek
-  const maxDirectTags = 3;
+  // In 'bar' variant, show up to 2 tags directly, then "+N more" to keep bar sleek
+  const maxDirectTags = 2;
   const visibleTags = variant === 'bar' ? tags.slice(0, maxDirectTags) : tags;
   const overflowTags = variant === 'bar' ? tags.slice(maxDirectTags) : [];
 
@@ -129,7 +129,7 @@ export default function IncidentTags({
           type="button"
           variant="outline"
           size="sm"
-          className="h-7 px-2.5 text-xs rounded-md border-dashed border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:border-slate-400 gap-1 font-medium shadow-2xs transition-all"
+          className="h-7 gap-1 rounded-md border-dashed border-border bg-background px-2.5 text-xs font-medium text-muted-foreground shadow-2xs transition-colors hover:text-foreground"
         >
           <Plus className="h-3 w-3" />
           <span>{tags.length === 0 ? 'Add Tag' : 'Tag'}</span>
@@ -191,9 +191,9 @@ export default function IncidentTags({
 
   return (
     <div className={cn('flex items-center gap-1.5 flex-wrap min-w-0', className)}>
-      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 select-none flex items-center gap-1 shrink-0">
-        <TagIcon className="h-3 w-3" />
-        Tags:
+      <span className="flex shrink-0 items-center text-muted-foreground select-none" title="Tags">
+        <TagIcon className="h-3.5 w-3.5" aria-hidden />
+        <span className="sr-only">Tags:</span>
       </span>
 
       {/* Visible Tags */}
@@ -203,7 +203,7 @@ export default function IncidentTags({
           <span
             key={tag.id}
             className={cn(
-              'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-semibold border transition-all shadow-2xs group shrink-0',
+              'group inline-flex h-7 shrink-0 items-center gap-1 rounded-md border pr-1 pl-2 text-xs font-semibold transition-colors',
               getTagClass(tag.name)
             )}
           >
@@ -217,7 +217,7 @@ export default function IncidentTags({
                 }}
                 disabled={isPending}
                 aria-label={`Remove tag ${tag.name}`}
-                className="opacity-50 hover:opacity-100 disabled:opacity-30 rounded hover:bg-black/10 dark:hover:bg-white/10 p-0.5 transition-opacity"
+                className="rounded p-0.5 opacity-50 transition-opacity hover:bg-black/10 hover:opacity-100 disabled:opacity-30 dark:hover:bg-white/10"
               >
                 {isRemoving ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -238,9 +238,10 @@ export default function IncidentTags({
               type="button"
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-xs font-semibold text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/80 shadow-2xs hover:bg-slate-100"
+              className="h-7 px-2 text-xs font-semibold text-muted-foreground border-border bg-background shadow-2xs hover:text-foreground"
             >
-              +{overflowTags.length} more
+              +{overflowTags.length}
+              <span className="sr-only"> more tags</span>
             </Button>
           </PopoverTrigger>
           <PopoverContent
@@ -265,6 +266,7 @@ export default function IncidentTags({
                       type="button"
                       onClick={() => handleRemoveTag(tag.id, tag.name)}
                       disabled={isPending}
+                      aria-label={`Remove tag ${tag.name}`}
                       className="opacity-50 hover:opacity-100 p-0.5"
                     >
                       <X className="h-3 w-3" />
@@ -278,7 +280,9 @@ export default function IncidentTags({
       )}
 
       {/* Empty State */}
-      {tags.length === 0 && !canManage && <span className="text-xs text-ink-400 italic">None</span>}
+      {tags.length === 0 && !canManage && (
+        <span className="text-xs text-muted-foreground italic">None</span>
+      )}
 
       {/* Add Tag Popover Trigger */}
       {addTagPopover}

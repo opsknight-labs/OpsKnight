@@ -10,6 +10,7 @@
  *  - intelligence: settings on + global SUGGEST policy (only if none exists), two precedent
  *    incidents, two change events, similar / change / triage findings, an AI briefing
  *  - incident context: an automation version + LIVE decision with recognized / missing / unmapped fields
+ *  - Jira (config if none, service → PAY mapping, PAY-412 / PAY-398 links), a READY Slack war room, 5 tags
  *
  * Direct Prisma writes for development only. Findings and the briefing use generation 1_000_000 so a
  * running intelligence worker treats its own (lower-generation) results as stale and keeps these.
@@ -245,7 +246,52 @@ async function main() {
   if (!(await prisma.incidentAutomationDecision.findUnique({ where: { incidentId: incident.id } })))
     await prisma.incidentAutomationDecision.create({ data: { incidentId: incident.id, ...decision } });
 
-  console.log(`Seeded demo data on "${incident.title}" (${incident.id}): payload description, ${alertRows.length} alerts, AI briefing, findings, context.`);
+  // 8. Jira: a workspace config (only if none exists), the service mapped to PAY, two linked issues.
+  // The token is a placeholder, not app-encrypted, so a Sync click fails locally instead of calling Atlassian.
+  await prisma.jiraConfig.upsert({
+    where: { id: 'default' },
+    create: { id: 'default', enabled: true, baseUrl: 'https://acme.atlassian.net', userEmail: 'jira-bot@acme.example', apiTokenEncrypted: 'demo-seed-placeholder', updatedBy: admin.id },
+    update: {},
+  });
+  await prisma.jiraServiceMapping.upsert({
+    where: { serviceId },
+    create: { serviceId, projectKey: 'PAY', incidentIssueType: 'Bug', actionItemIssueType: 'Task' },
+    update: { projectKey: 'PAY' },
+  });
+  const jiraIssue = (key: string, externalId: string, externalStatus: string, externalAssignee: string | null, m: number) =>
+    prisma.externalIssueLink.upsert({
+      where: { provider_externalKey: { provider: 'JIRA', externalKey: key } },
+      create: {
+        provider: 'JIRA', incidentId: incident.id, externalId, externalKey: key,
+        externalUrl: `https://acme.atlassian.net/browse/${key}`, externalStatus, externalAssignee,
+        syncState: 'SYNCED', lastSyncedAt: min(m), createdAt: min(m),
+      },
+      update: { incidentId: incident.id, actionItemId: null, externalStatus, externalAssignee, syncState: 'SYNCED', lastSyncedAt: min(m) },
+    });
+  await jiraIssue('PAY-398', '10398', 'To Do', null, 6);
+  await jiraIssue('PAY-412', '10412', 'In Progress', 'Ivy Brown', 14);
+
+  // 9. A ready Slack war room (fake channel; no Slack integration row, so nothing can call Slack).
+  const warRoom = {
+    state: 'READY' as const, health: 'HEALTHY' as const, membershipType: 'STANDARD' as const,
+    providerTenantId: 'T0DEMO', providerChannelId: 'C0DEMOCHK1', providerChannelName: 'inc-checkout-card-auth',
+    providerChannelUrl: 'https://acme.slack.com/archives/C0DEMOCHK1', plannedExternalName: 'inc-checkout-card-auth',
+    createdAt: min(3), readyAt: min(3), closedAt: null, archivedAt: null,
+  };
+  await prisma.incidentWarRoom.upsert({
+    where: { incidentId_provider_generation: { incidentId: incident.id, provider: 'SLACK', generation: 1 } },
+    create: { incidentId: incident.id, provider: 'SLACK', generation: 1, ...warRoom },
+    update: warRoom,
+  });
+
+  // 10. Tags, created the way addIncidentTag does (upsert the tag, skip an existing link).
+  const tagNames = ['payments', 'checkout', 'customer-facing', 'deploy-regression', 'us-east-1'];
+  for (const name of tagNames) {
+    const tag = await prisma.tag.upsert({ where: { name }, create: { name }, update: {} });
+    await prisma.incidentTag.createMany({ data: [{ incidentId: incident.id, tagId: tag.id }], skipDuplicates: true });
+  }
+
+  console.log(`Seeded demo data on "${incident.title}" (${incident.id}): payload description, ${alertRows.length} alerts, AI briefing, findings, context, 2 Jira links, Slack war room, ${tagNames.length} tags.`);
 }
 
 main()

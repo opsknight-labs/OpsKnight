@@ -418,10 +418,12 @@ export default async function IncidentDetailScreen({
     </div>
   ) : null;
 
+  const escalationInBand =
+    presentation !== 'mobile' && Boolean(escalationHealth) && !escalationHealth?.needsAttention;
   const contextContent =
     responseTimeline && responseTimeline.context.visibility !== 'HIDDEN' ? (
-    <IncidentContextCard context={responseTimeline.context} embedded />
-  ) : null;
+      <IncidentContextCard context={responseTimeline.context} embedded />
+    ) : null;
 
   // Assignee and incident-role pickers offer only people who may be paged (no stakeholders).
   const pageableUsers = users.filter(candidate => isPageableRole(candidate.role));
@@ -600,7 +602,11 @@ export default async function IncidentDetailScreen({
               </span>
             </div>
             {impactedBusinessServices.some(impact => !impact.excluded) && (
-              <IncidentImpacts incidentId={id} impacts={impactedBusinessServices} linkable={false} />
+              <IncidentImpacts
+                incidentId={id}
+                impacts={impactedBusinessServices}
+                linkable={false}
+              />
             )}
             {rolesContent}
           </div>
@@ -692,6 +698,11 @@ export default async function IncidentDetailScreen({
             canManage={canManageIncident}
             routePrefix={routePrefix}
             embedded
+            escalationHealth={
+              escalationInBand ? (
+                <EscalationExecutionHealth health={escalationHealth} variant="inline" />
+              ) : null
+            }
           />
         </section>
       )}
@@ -783,7 +794,11 @@ export default async function IncidentDetailScreen({
       )}
 
       {/* Escalation Execution Health: Compact status strip or alert banner */}
-      <EscalationExecutionHealth health={escalationHealth} />
+      {/* Healthy: one line under the Escalation field on desktop; the full panel when a step needs review, or on phones. */}
+      <EscalationExecutionHealth
+        health={escalationHealth}
+        className={escalationInBand ? 'sm:hidden' : undefined}
+      />
 
       {presentation === 'mobile' && (
         <details className="group overflow-hidden rounded-xl border border-border bg-card">
@@ -914,7 +929,11 @@ export default async function IncidentDetailScreen({
             {/* AI briefing sits beside the description: what is going on, next to what the alert said. */}
             {showInsightsInspector && (
               <Suspense fallback={null}>
-                <IncidentInsights incidentId={incident.id} presentation={presentation} variant="card" />
+                <IncidentInsights
+                  incidentId={incident.id}
+                  presentation={presentation}
+                  variant="card"
+                />
               </Suspense>
             )}
             {watchersContent}
