@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/shadcn/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Trash2,
   Check,
@@ -24,6 +23,7 @@ import {
   Plus,
   UserPlus,
   Bell,
+  BellOff,
   ChevronDown,
   ShieldAlert,
   Megaphone,
@@ -31,6 +31,7 @@ import {
 import UserAvatar from '@/components/UserAvatar';
 import IncidentUserPicker from './IncidentUserPicker';
 import { cn } from '@/lib/utils';
+import { FIELD_SELECT_CLASS } from '@/components/incident/field-styles';
 
 type Watcher = {
   id: string;
@@ -60,6 +61,7 @@ type IncidentWatchersProps = {
   className?: string;
 };
 
+// Roles are told apart by icon and label, not colour: amber/violet mean status and on-call on this page.
 function getRoleBadge(role: string) {
   const norm = (role || 'FOLLOWER').toUpperCase();
   switch (norm) {
@@ -69,8 +71,6 @@ function getRoleBadge(role: string) {
         subtitle: 'P1/P2 & Resolutions',
         cadence: 'Major outages (P1/P2) & Resolutions only',
         icon: ShieldAlert,
-        className:
-          'bg-amber-50 text-amber-800 border-amber-200/80 hover:bg-amber-100/70 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/80',
       };
     case 'STAKEHOLDER':
       return {
@@ -78,8 +78,6 @@ function getRoleBadge(role: string) {
         subtitle: 'Milestones (Trigger, Ack, Resolve)',
         cadence: 'Status milestones (Triggered, Ack, Resolved)',
         icon: Megaphone,
-        className:
-          'bg-purple-50 text-purple-700 border-purple-200/80 hover:bg-purple-100/70 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/80',
       };
     default:
       return {
@@ -87,11 +85,12 @@ function getRoleBadge(role: string) {
         subtitle: 'All operational updates',
         cadence: 'All lifecycle events & notes',
         icon: Bell,
-        className:
-          'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/70 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700',
       };
   }
 }
+
+// Compact (h-7) version of the Details card select, for the per-row role dropdown.
+const ROLE_SELECT_CLASS = cn(FIELD_SELECT_CLASS, 'h-7 gap-1 px-2 text-xs');
 
 export default function IncidentWatchers({
   watchers,
@@ -184,33 +183,35 @@ export default function IncidentWatchers({
   }
   const countsSummary = summaryParts.join(' · ') || `${watchers.length} Subscribed`;
 
+  const roleMenuItems = [
+    { value: 'FOLLOWER', label: 'Follower', icon: Bell, hint: 'All updates & lifecycle transitions' },
+    {
+      value: 'STAKEHOLDER',
+      label: 'Stakeholder',
+      icon: Megaphone,
+      hint: 'Milestones (Triggered, Ack, Resolve)',
+    },
+    {
+      value: 'EXEC',
+      label: 'Executive',
+      icon: ShieldAlert,
+      hint: 'Major outages (P1/P2) & Resolutions only',
+    },
+  ];
+
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-zinc-900 dark:border-zinc-800 transition-all',
+        'overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-2xs',
         className
       )}
     >
-      {/* Header: Clean, generous, NO clipping. Title has full room. */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-800/30 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">
-            <Bell className="h-4 w-4 shrink-0" />
-          </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200 whitespace-nowrap">
-              Subscribers
-            </h3>
-            <Badge
-              variant="secondary"
-              className="text-[10px] h-4.5 px-1.5 font-semibold text-slate-600 bg-slate-100 dark:bg-zinc-800 dark:text-zinc-400 shrink-0"
-            >
-              {watchers.length}
-            </Badge>
-          </div>
-        </div>
+      <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-muted/20 px-3 py-2">
+        <h2 className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+          Subscribers
+          <span className="font-normal tabular-nums text-muted-foreground">{watchers.length}</span>
+        </h2>
 
-        {/* Header Action: Only '+ Add' button. Clean & uncrowded. */}
         {canManage && (
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -219,32 +220,27 @@ export default function IncidentWatchers({
                 variant="outline"
                 size="sm"
                 title="Add teammate as subscriber"
-                className="h-7 px-2.5 text-xs font-semibold gap-1 border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 shadow-2xs shrink-0"
+                className="-my-1.5 h-7 shrink-0 gap-1 px-2 text-xs font-medium shadow-2xs"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Add</span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent
-              className="p-4 w-80 shadow-xl border-slate-200 dark:border-zinc-800 rounded-xl"
-              align="end"
-            >
+            <PopoverContent className="w-80 rounded-xl p-4 shadow-xl" align="end">
               <form onSubmit={handleAddSubmit} className="space-y-3.5">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-1.5">
-                    <UserPlus className="h-3.5 w-3.5 text-primary" />
-                    Subscribe Teammate
+                  <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+                    Subscribe teammate
                   </h4>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     Select a teammate and their notification cadence.
                   </p>
                 </div>
 
                 {/* Searchable User Combobox */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-500">
-                    Teammate
-                  </label>
+                  <label className="text-xs text-muted-foreground">Teammate</label>
                   <Popover open={userSearchOpen} onOpenChange={setUserSearchOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -252,7 +248,7 @@ export default function IncidentWatchers({
                         variant="outline"
                         role="combobox"
                         aria-expanded={userSearchOpen}
-                        className="w-full justify-between h-9 text-xs bg-background px-2.5 font-normal border-slate-200 dark:border-zinc-700"
+                        className="h-8 w-full justify-between bg-background px-2.5 text-xs font-normal"
                       >
                         {selectedUser ? (
                           <div className="flex items-center gap-2 overflow-hidden">
@@ -265,17 +261,17 @@ export default function IncidentWatchers({
                               className="shrink-0"
                               aria-hidden
                             />
-                            <span className="truncate font-semibold text-slate-900 dark:text-zinc-100">
+                            <span className="truncate font-medium text-foreground">
                               {selectedUser.name}
                             </span>
                           </div>
                         ) : (
-                          <span className="text-ink-400 truncate">Select teammate...</span>
+                          <span className="truncate text-muted-foreground">Select teammate...</span>
                         )}
                         <ChevronsUpDown className="ml-1.5 h-3.5 w-3.5 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="p-0 border shadow-md rounded-lg w-72" align="start">
+                    <PopoverContent className="w-72 rounded-lg border p-0 shadow-md" align="start">
                       <IncidentUserPicker
                         users={availableUsers}
                         selectedUserId={selectedUserId}
@@ -290,38 +286,36 @@ export default function IncidentWatchers({
 
                 {/* Role Selector with Notification Cadence Descriptions */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-ink-500">
-                    Subscriber Cadence
-                  </label>
+                  <label className="text-xs text-muted-foreground">Subscriber cadence</label>
                   <Select value={selectedRole} onValueChange={setSelectedRole}>
-                    <SelectTrigger className="w-full bg-background h-9 text-xs border-slate-200 dark:border-zinc-700">
+                    <SelectTrigger className="h-8 w-full bg-background text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="STAKEHOLDER" className="text-xs">
-                        <div className="font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 font-medium">
                           <Megaphone className="h-3 w-3" />
                           Stakeholder
                         </div>
-                        <div className="text-[10px] text-ink-500">
+                        <div className="text-2xs text-muted-foreground">
                           Milestones: Triggered, Ack&apos;d, Resolved
                         </div>
                       </SelectItem>
                       <SelectItem value="EXEC" className="text-xs">
-                        <div className="font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 font-medium">
                           <ShieldAlert className="h-3 w-3" />
                           Executive
                         </div>
-                        <div className="text-[10px] text-ink-500">
+                        <div className="text-2xs text-muted-foreground">
                           Major Outages (P1/P2) &amp; Resolutions only
                         </div>
                       </SelectItem>
                       <SelectItem value="FOLLOWER" className="text-xs">
-                        <div className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 font-medium">
                           <Bell className="h-3 w-3" />
                           Follower
                         </div>
-                        <div className="text-[10px] text-ink-500">
+                        <div className="text-2xs text-muted-foreground">
                           All lifecycle transitions &amp; updates
                         </div>
                       </SelectItem>
@@ -329,15 +323,14 @@ export default function IncidentWatchers({
                   </Select>
                 </div>
 
-                {/* Submit button */}
                 <Button
                   type="submit"
                   size="sm"
                   disabled={!selectedUserId || isPending}
-                  className="w-full font-semibold h-8 text-xs gap-1.5"
+                  className="h-8 w-full gap-1.5 text-xs font-medium"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
-                  <span>{isPending ? 'Subscribing...' : 'Subscribe Teammate'}</span>
+                  <span>{isPending ? 'Subscribing...' : 'Subscribe teammate'}</span>
                 </Button>
               </form>
             </PopoverContent>
@@ -345,74 +338,60 @@ export default function IncidentWatchers({
         )}
       </div>
 
-      {/* Dedicated Personal Subscription Row: Clear, uncrowded, high-contrast */}
-      {currentUserId && (
-        <div className="p-3 pb-0">
-          {isCurrentWatcher ? (
-            <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-900/50 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center shrink-0">
-                  <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-emerald-950 dark:text-emerald-200 leading-snug truncate">
-                    You are subscribed
-                  </p>
-                  <p className="text-[10px] text-emerald-700 dark:text-emerald-400 leading-snug truncate">
-                    Receiving updates as{' '}
-                    {getRoleBadge(currentWatcherRecord?.role || 'FOLLOWER').label}
-                  </p>
-                </div>
-              </div>
+      <div className="flex flex-col divide-y divide-border/50">
+        {/* Your own subscription: one compact row */}
+        {currentUserId && (
+          <div className="flex min-h-10 items-center justify-between gap-2 px-3 py-1.5">
+            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              {isCurrentWatcher ? (
+                <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <BellOff className="h-3.5 w-3.5 shrink-0" />
+              )}
+              <span className="truncate">
+                {isCurrentWatcher ? (
+                  <>
+                    You&apos;re subscribed as{' '}
+                    <span className="font-medium text-foreground">
+                      {getRoleBadge(currentWatcherRecord?.role || 'FOLLOWER').label}
+                    </span>
+                  </>
+                ) : (
+                  'You’re not subscribed'
+                )}
+              </span>
+            </span>
+            {isCurrentWatcher ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={handleSelfUnwatch}
                 disabled={isPending}
-                className="h-6 px-2 text-[11px] font-medium text-ink-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 shrink-0 dark:hover:text-rose-400"
+                className="h-7 shrink-0 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
               >
                 Unsubscribe
               </Button>
-            </div>
-          ) : (
-            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-zinc-800/40 border border-slate-200/70 dark:border-zinc-800 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-6 h-6 rounded-full bg-slate-200/70 dark:bg-zinc-700 flex items-center justify-center shrink-0">
-                  <Bell className="h-3.5 w-3.5 text-slate-500 dark:text-zinc-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 leading-snug truncate">
-                    Get incident updates
-                  </p>
-                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 leading-snug truncate">
-                    Subscribe yourself to notifications
-                  </p>
-                </div>
-              </div>
+            ) : (
               <Button
                 type="button"
+                variant="outline"
                 size="sm"
                 onClick={handleSelfWatch}
                 disabled={isPending}
-                className="h-7 px-2.5 text-xs font-semibold gap-1.5 shrink-0 shadow-2xs"
+                className="h-7 shrink-0 gap-1 px-2 text-xs font-medium shadow-2xs"
               >
-                <Bell className="h-3 w-3" />
+                <Bell className="h-3.5 w-3.5" />
                 Subscribe
               </Button>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
-      {/* Subscribed Teammates List or Empty State */}
-      <div className="p-3">
         {watchers.length === 0 ? (
-          <div className="text-center py-4 px-2 space-y-1.5">
-            <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-              No teammates subscribed yet
-            </p>
-            <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-1 max-w-[220px] mx-auto leading-relaxed">
+          <div className="space-y-1 px-3 py-4 text-center">
+            <p className="text-xs font-medium text-foreground">No teammates subscribed yet</p>
+            <p className="mx-auto max-w-[220px] text-xs text-muted-foreground">
               Add leads, executives, or team members who need visibility into this incident.
             </p>
             {canManage && (
@@ -422,191 +401,145 @@ export default function IncidentWatchers({
                   variant="outline"
                   size="sm"
                   onClick={() => setOpen(true)}
-                  className="h-7 px-3 text-xs font-semibold gap-1.5 bg-white dark:bg-zinc-800"
+                  className="h-7 gap-1 px-2 text-xs font-medium"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
-                  Add Teammate
+                  Add teammate
                 </Button>
               </div>
             )}
           </div>
         ) : (
-          <div className="space-y-1.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-ink-400 px-1 pb-0.5">
-              Subscribed Teammates ({watchers.length})
-            </div>
-            <div className="space-y-1">
-              {watchers.map(watcher => {
-                const roleInfo = getRoleBadge(watcher.role);
-                const RoleIcon = roleInfo.icon;
-                return (
-                  <div
-                    key={watcher.id}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-zinc-800/60 transition-colors group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <UserAvatar
-                        userId={watcher.user.id}
-                        name={watcher.user.name}
-                        gender={watcher.user.gender}
-                        avatarUrl={watcher.user.avatarUrl}
-                        size="sm"
-                        className="border border-slate-200 dark:border-zinc-700 shrink-0"
-                        aria-hidden
-                      />
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-semibold text-slate-900 dark:text-zinc-100 truncate leading-snug">
-                            {watcher.user.name}
-                          </span>
-                          {watcher.user.id === currentUserId && (
-                            <span className="text-[9px] px-1 py-0.2 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-semibold shrink-0">
-                              You
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 truncate leading-snug">
-                          {roleInfo.subtitle}
+          watchers.map(watcher => {
+            const roleInfo = getRoleBadge(watcher.role);
+            const RoleIcon = roleInfo.icon;
+            return (
+              <div
+                key={watcher.id}
+                className="group flex min-h-10 items-center justify-between gap-2 px-3 py-1.5 transition-colors hover:bg-muted/40"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <UserAvatar
+                    userId={watcher.user.id}
+                    name={watcher.user.name}
+                    gender={watcher.user.gender}
+                    avatarUrl={watcher.user.avatarUrl}
+                    size="xs"
+                    className="shrink-0"
+                    aria-hidden
+                  />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {watcher.user.name}
+                      </span>
+                      {watcher.user.id === currentUserId && (
+                        <span className="shrink-0 rounded bg-muted px-1 text-2xs font-medium text-muted-foreground">
+                          You
                         </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Inline Interactive Role Dropdown */}
-                      {canManage ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild disabled={isPending}>
-                            <button
-                              type="button"
-                              title={`Click to change role. Cadence: ${roleInfo.cadence}`}
-                              className={cn(
-                                'text-[10px] px-1.5 py-0 h-5 font-semibold rounded border inline-flex items-center gap-1 transition-all hover:ring-2 hover:ring-offset-0 cursor-pointer',
-                                roleInfo.className
-                              )}
-                            >
-                              <RoleIcon className="h-2.5 w-2.5 shrink-0" />
-                              <span>{roleInfo.label}</span>
-                              <ChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-56 p-1">
-                            <DropdownMenuItem
-                              onClick={() => handleUpdateRole(watcher.user.id, 'FOLLOWER')}
-                              className="flex flex-col items-start gap-0.5 cursor-pointer text-xs"
-                            >
-                              <div className="flex items-center justify-between w-full font-semibold">
-                                <span className="flex items-center gap-1.5">
-                                  <Bell className="h-3 w-3 text-ink-500" />
-                                  Follower
-                                </span>
-                                {watcher.role === 'FOLLOWER' && (
-                                  <Check className="h-3.5 w-3.5 text-primary" />
-                                )}
-                              </div>
-                              <span className="text-[10px] text-ink-400">
-                                All updates &amp; lifecycle transitions
-                              </span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleUpdateRole(watcher.user.id, 'STAKEHOLDER')}
-                              className="flex flex-col items-start gap-0.5 cursor-pointer text-xs"
-                            >
-                              <div className="flex items-center justify-between w-full font-semibold text-purple-700 dark:text-purple-300">
-                                <span className="flex items-center gap-1.5">
-                                  <Megaphone className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                                  Stakeholder
-                                </span>
-                                {watcher.role === 'STAKEHOLDER' && (
-                                  <Check className="h-3.5 w-3.5 text-primary" />
-                                )}
-                              </div>
-                              <span className="text-[10px] text-ink-400">
-                                Milestones (Triggered, Ack, Resolve)
-                              </span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleUpdateRole(watcher.user.id, 'EXEC')}
-                              className="flex flex-col items-start gap-0.5 cursor-pointer text-xs"
-                            >
-                              <div className="flex items-center justify-between w-full font-semibold text-amber-700 dark:text-amber-300">
-                                <span className="flex items-center gap-1.5">
-                                  <ShieldAlert className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                                  Executive
-                                </span>
-                                {watcher.role === 'EXEC' && (
-                                  <Check className="h-3.5 w-3.5 text-primary" />
-                                )}
-                              </div>
-                              <span className="text-[10px] text-ink-400">
-                                Major outages (P1/P2) &amp; Resolutions only
-                              </span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          title={`Cadence: ${roleInfo.cadence}`}
-                          className={cn(
-                            'text-[10px] px-1.5 py-0 h-5 font-semibold rounded inline-flex items-center gap-1',
-                            roleInfo.className
-                          )}
-                        >
-                          <RoleIcon className="h-2.5 w-2.5 shrink-0" />
-                          <span>{roleInfo.label}</span>
-                        </Badge>
-                      )}
-
-                      {/* Delete Watcher Button */}
-                      {canManage && (
-                        <form action={onRemoveWatcher}>
-                          <input type="hidden" name="watcherMemberId" value={watcher.id} />
-                          <Button
-                            type="submit"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Remove ${watcher.user.name}`}
-                            className="h-6 w-6 text-ink-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 dark:hover:text-rose-400"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </form>
                       )}
                     </div>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {roleInfo.subtitle}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-1">
+                  {canManage ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild disabled={isPending}>
+                        <button
+                          type="button"
+                          title={`Click to change role. Cadence: ${roleInfo.cadence}`}
+                          className={ROLE_SELECT_CLASS}
+                        >
+                          <RoleIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span>{roleInfo.label}</span>
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 p-1">
+                        {roleMenuItems.map(item => {
+                          const ItemIcon = item.icon;
+                          return (
+                            <DropdownMenuItem
+                              key={item.value}
+                              onClick={() => handleUpdateRole(watcher.user.id, item.value)}
+                              className="flex cursor-pointer flex-col items-start gap-0.5 text-xs"
+                            >
+                              <div className="flex w-full items-center justify-between font-medium">
+                                <span className="flex items-center gap-1.5">
+                                  <ItemIcon className="h-3 w-3 text-muted-foreground" />
+                                  {item.label}
+                                </span>
+                                {watcher.role === item.value && (
+                                  <Check className="h-3.5 w-3.5 text-primary" />
+                                )}
+                              </div>
+                              <span className="text-2xs text-muted-foreground">{item.hint}</span>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <span
+                      title={`Cadence: ${roleInfo.cadence}`}
+                      className="inline-flex h-7 items-center gap-1 text-xs font-medium text-foreground"
+                    >
+                      <RoleIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      {roleInfo.label}
+                    </span>
+                  )}
+
+                  {canManage && (
+                    <form action={onRemoveWatcher}>
+                      <input type="hidden" name="watcherMemberId" value={watcher.id} />
+                      <Button
+                        type="submit"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove ${watcher.user.name}`}
+                        className="h-7 w-7 rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-rose-50 hover:text-rose-700 focus:opacity-100 group-hover:opacity-100 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </form>
+                  )}
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 
-      {/* Sleek Cadence Micro-bar */}
-      <div className="border-t border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-800/20 px-3.5 py-2 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400">
-        <span className="text-[10px] font-medium tracking-wide truncate mr-2">{countsSummary}</span>
-        <div className="flex items-center gap-2.5 text-[10px] shrink-0">
+      {/* Cadence legend: one quiet line */}
+      <div className="flex items-center justify-between gap-2 border-t border-border/50 px-3 py-1.5 text-2xs text-muted-foreground">
+        <span className="truncate">{countsSummary}</span>
+        <span className="flex shrink-0 items-center gap-2">
           <span
-            className="inline-flex items-center gap-1 text-slate-600 dark:text-zinc-400 cursor-help"
+            className="inline-flex cursor-help items-center gap-0.5"
             title="Executive: Notified for P1/P2 major outages and resolutions"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            <span>Exec</span>
+            <ShieldAlert className="h-3 w-3" />
+            Exec
           </span>
           <span
-            className="inline-flex items-center gap-1 text-slate-600 dark:text-zinc-400 cursor-help"
+            className="inline-flex cursor-help items-center gap-0.5"
             title="Stakeholder: Notified for status milestones (Triggered, Ack, Resolved)"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-            <span>Stakeholder</span>
+            <Megaphone className="h-3 w-3" />
+            Stakeholder
           </span>
           <span
-            className="inline-flex items-center gap-1 text-slate-600 dark:text-zinc-400 cursor-help"
+            className="inline-flex cursor-help items-center gap-0.5"
             title="Follower: Notified for all lifecycle updates and notes"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-            <span>Follower</span>
+            <Bell className="h-3 w-3" />
+            Follower
           </span>
-        </div>
+        </span>
       </div>
     </div>
   );

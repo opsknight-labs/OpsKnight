@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Compass, Server, ShieldAlert, BarChart2, Users, ArrowUpRight } from 'lucide-react';
+import { Server, ShieldAlert, BarChart2, Users, ArrowUpRight, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type IncidentQuickLinksCardProps = {
@@ -27,6 +27,32 @@ export type IncidentQuickLinksCardProps = {
   routePrefix?: string;
 };
 
+function LinkRow({
+  href,
+  icon: Icon,
+  title,
+  subtitle,
+}: {
+  href: string;
+  icon: LucideIcon;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex min-h-10 items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-muted/40"
+    >
+      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-medium text-foreground">{title}</span>
+        <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
+      </span>
+      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+    </Link>
+  );
+}
+
 export default function IncidentQuickLinksCard({
   incidentPolicy,
   noEscalation,
@@ -39,121 +65,59 @@ export default function IncidentQuickLinksCard({
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-zinc-900 dark:border-zinc-800 transition-all',
+        'overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-2xs',
         className
       )}
     >
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-800/30 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">
-            <Compass className="h-4 w-4 shrink-0" />
-          </div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200 whitespace-nowrap">
-            Quick Links
-          </h3>
-        </div>
-        <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">Resources</span>
-      </div>
+      <h2 className="border-b border-border/70 bg-muted/20 px-3 py-2 text-xs font-semibold text-foreground">
+        Quick links
+      </h2>
 
-      {/* Links List */}
-      <div className="p-3 space-y-2">
-        {/* Service Catalog */}
-        <Link
+      <div className="flex flex-col divide-y divide-border/50">
+        <LinkRow
           href={`${routePrefix}/services/${service.id}`}
-          className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 hover:border-slate-200 dark:hover:border-zinc-700 transition-all text-left"
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-md bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-              <Server className="h-3.5 w-3.5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate group-hover:text-primary transition-colors">
-                {service.name}
-              </p>
-              <p className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">
-                Service Catalog · {service.slaTier || 'Standard Tier'}
-              </p>
-            </div>
-          </div>
-          <ArrowUpRight className="h-3.5 w-3.5 text-ink-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
-        </Link>
+          icon={Server}
+          title={service.name}
+          subtitle={`Service Catalog · ${service.slaTier || 'Standard Tier'}`}
+        />
 
-        {/* Escalation Policy */}
         {incidentPolicy && (
-          <Link
+          <LinkRow
             href={`${routePrefix}/policies/${incidentPolicy.id}`}
-            className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 hover:border-slate-200 dark:hover:border-zinc-700 transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-md bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <ShieldAlert className="h-3.5 w-3.5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate group-hover:text-primary transition-colors">
-                  {incidentPolicy.name}
-                </p>
-                <p className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">
-                  Incident policy{pinnedPolicy ? ' · Pinned route' : ' · Service routing'}
-                </p>
-              </div>
-            </div>
-            <ArrowUpRight className="h-3.5 w-3.5 text-ink-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
-          </Link>
+            icon={ShieldAlert}
+            title={incidentPolicy.name}
+            subtitle={`Incident policy${pinnedPolicy ? ' · Pinned route' : ' · Service routing'}`}
+          />
         )}
 
-        {noEscalation && <p className="px-2 text-xs">No personal escalation policy selected.</p>}
+        {noEscalation && (
+          <p className="px-3 py-2 text-xs text-muted-foreground">
+            No personal escalation policy selected.
+          </p>
+        )}
         {service.policy && (
           <Link
-            className="block px-2 py-2 text-xs underline"
+            className="block px-3 py-2 text-xs text-muted-foreground underline-offset-2 transition-colors hover:bg-muted/40 hover:text-foreground hover:underline"
             href={`${routePrefix}/policies/${service.policy.id}`}
           >
             Current service default: {service.policy.name}
           </Link>
         )}
 
-        {/* Analytics */}
-        <Link
+        <LinkRow
           href={`/insights?service=${encodeURIComponent(service.id)}`}
-          className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 hover:border-slate-200 dark:hover:border-zinc-700 transition-all text-left"
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-md bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-              <BarChart2 className="h-3.5 w-3.5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate group-hover:text-primary transition-colors">
-                Service analytics
-              </p>
-              <p className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">
-                MTTR &amp; Frequency Metrics
-              </p>
-            </div>
-          </div>
-          <ArrowUpRight className="h-3.5 w-3.5 text-ink-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
-        </Link>
+          icon={BarChart2}
+          title="Service analytics"
+          subtitle="MTTR & Frequency Metrics"
+        />
 
-        {/* Assigned Team */}
         {team && (
-          <Link
+          <LinkRow
             href={`${routePrefix}/teams/${team.id}`}
-            className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70 hover:border-slate-200 dark:hover:border-zinc-700 transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                <Users className="h-3.5 w-3.5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate group-hover:text-primary transition-colors">
-                  {team.name}
-                </p>
-                <p className="text-[10px] text-slate-400 dark:text-zinc-500 truncate">
-                  Team Members &amp; Schedule
-                </p>
-              </div>
-            </div>
-            <ArrowUpRight className="h-3.5 w-3.5 text-ink-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
-          </Link>
+            icon={Users}
+            title={team.name}
+            subtitle="Team Members & Schedule"
+          />
         )}
       </div>
     </div>
