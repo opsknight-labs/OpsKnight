@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect } from 'react';
 import _TimelineEvent from '../TimelineEvent';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
+import type { AlertActivity } from '@/lib/incidents/alert-activity';
+import TimelineGraph, { type GraphMarker, type GraphMarkerKind } from './TimelineGraph';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { loadOlderIncidentTimelineActivity } from './actions';
@@ -74,6 +76,36 @@ export function categorize(type: string, message: string): TimelineFilter {
   if (/triggered|created|resolved|acknowledged|snooz|suppress|reopen/i.test(message))
     return 'LIFECYCLE';
   return 'ALL';
+}
+
+const CHANGE_LIKE = new Set(['CHANGE', 'METRIC_ANOMALY', 'UPSTREAM_INCIDENT']);
+
+/** Which rows are key events on the activity graph, and how each is drawn. Null: list only. */
+function graphMarkerKind(row: {
+  type: string;
+  message: string;
+  intelligence?: IntelligenceTimelineEvent;
+}): GraphMarkerKind | null {
+  if (row.intelligence) return CHANGE_LIKE.has(row.intelligence.kind) ? 'change' : null;
+  if (row.type === 'CREATED') return 'trigger';
+  if (row.type === 'ACKNOWLEDGED') return 'ack';
+  if (row.type === 'RESOLVED' || row.type === 'MANUAL_RESOLVED' || row.type === 'AUTO_RESOLVED')
+    return 'resolved';
+  switch (categorize(row.type, row.message)) {
+    case 'ESCALATION':
+      return 'escalation';
+    case 'NOTES':
+      return 'note';
+    case 'RUNBOOKS':
+      return 'runbook';
+    case 'LIFECYCLE':
+      if (/triggered|created/i.test(row.message)) return 'trigger';
+      if (/acknowledged/i.test(row.message)) return 'ack';
+      if (/resolved/i.test(row.message)) return 'resolved';
+      return 'other';
+    default:
+      return null;
+  }
 }
 
 function formatNotificationChannel(channel: string): string {
@@ -205,6 +237,10 @@ export type IncidentTimelineProps = {
    * the "Show intelligence events" toggle; absent or empty means the toggle is not rendered at all.
    */
   intelligenceEvents?: IntelligenceTimelineEvent[];
+  /** Alerts deduplicated into the incident, for the activity graph above the list. */
+  alertActivity?: AlertActivity | null;
+  /** When the page was rendered: the graph's right edge while the incident is open. */
+  renderedAt?: Date;
 };
 
 const EMPTY_NOTES: Note[] = [];
@@ -235,6 +271,8 @@ export default function IncidentTimeline({
   totalNotificationsCount,
   totalActivityCount,
   intelligenceEvents = EMPTY_INTELLIGENCE,
+  alertActivity = null,
+  renderedAt,
 }: IncidentTimelineProps) {
   const { userTimeZone } = useTimezone();
   const [activeFilter, setActiveFilter] = useState<TimelineFilter>('ALL');
@@ -639,6 +677,29 @@ export default function IncidentTimeline({
       : timelineEvents.filter(e => categorize(e.type, e.message) === activeFilter);
   }, [timelineEvents, activeFilter]);
 
+  // Key events for the activity graph: what changed the incident's course, not every page sent.
+  const graphMarkers = useMemo(
+    () =>
+      timelineEvents.flatMap((row): GraphMarker[] => {
+        const kind = graphMarkerKind(row);
+        if (!kind) return [];
+        const label = row.message.split('\n')[0].slice(0, 140);
+        return [{ id: row.id, at: new Date(row.createdAt), kind, label }];
+      }),
+    [timelineEvents]
+  );
+
+  const jumpToRow = (rowId: string) => {
+    setActiveFilter('ALL');
+    // After the "All" list renders, the row is the hash target: it scrolls into view and highlights.
+    requestAnimationFrame(() => {
+      const hash = `#timeline-${rowId}`;
+      if (window.location.hash === hash)
+        document.getElementById(`timeline-${rowId}`)?.scrollIntoView({ block: 'center' });
+      else window.location.hash = hash;
+    });
+  };
+
   const filterCounts = useMemo(() => {
     const counts: Record<TimelineFilter, number> = {
       ALL: timelineEvents.length,
@@ -752,6 +813,18 @@ export default function IncidentTimeline({
     );
   }
 
+  const activityGraph = incidentCreatedAt ? (
+    <TimelineGraph
+      alerts={alertActivity}
+      markers={graphMarkers}
+      onsetAt={incidentCreatedAt}
+      endAt={incidentResolvedAt ?? renderedAt ?? incidentCreatedAt}
+      open={!incidentResolvedAt}
+      timeZone={userTimeZone}
+      onJump={jumpToRow}
+    />
+  ) : null;
+
   const visibleFilters =
     hasIntelligence && showIntelligence
       ? [FILTERS[0], INTELLIGENCE_FILTER, ...FILTERS.slice(1)]
@@ -811,6 +884,7 @@ export default function IncidentTimeline({
     return (
       <div className="space-y-6">
         <div>
+          {activityGraph}
           {intelligenceToggle}
           {filterChips}
         </div>
@@ -828,6 +902,7 @@ export default function IncidentTimeline({
   return (
     <div className="space-y-6">
       <div>
+        {activityGraph}
         {intelligenceToggle}
         {filterChips}
       </div>

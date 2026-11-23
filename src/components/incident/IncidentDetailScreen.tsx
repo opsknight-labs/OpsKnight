@@ -4,6 +4,7 @@ import IncidentInsights, {
   SuggestedRunbooks,
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
+import { ALERT_ACTIVITY_MAX_TIMES, summarizeAlertActivity } from '@/lib/incidents/alert-activity';
 import { CHAT_EVENT_DISPLAY_MAX, LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
 import { Suspense } from 'react';
 import UserAvatar from '@/components/UserAvatar';
@@ -293,19 +294,33 @@ export default async function IncidentDetailScreen({
 
   // Rendering an incident must not perform hidden Jira or provider network I/O.
   // Persisted state is refreshed by background webhooks or explicit sync actions.
-  const [jiraLinks, collaboration, escalationHealth, statusUpdate] = await Promise.all([
-    prisma.externalIssueLink.findMany({
-      where: { incidentId: id, provider: 'JIRA' },
-      orderBy: { createdAt: 'desc' },
-    }),
-    getIncidentCollaborationView({ incidentId: id, userId: user.id }),
-    // A health read failure must not block the incident page.
-    getEscalationExecutionHealth(id).catch(() => null),
-    // "Post status update": the status-page publish permission (admin), like the announcement API.
-    permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE)
-      ? loadIncidentStatusUpdate(storedIncident).catch(() => null)
-      : null,
-  ]);
+  const [jiraLinks, collaboration, escalationHealth, statusUpdate, alertRows, alertTotal] =
+    await Promise.all([
+      prisma.externalIssueLink.findMany({
+        where: { incidentId: id, provider: 'JIRA' },
+        orderBy: { createdAt: 'desc' },
+      }),
+      getIncidentCollaborationView({ incidentId: id, userId: user.id }),
+      // A health read failure must not block the incident page.
+      getEscalationExecutionHealth(id).catch(() => null),
+      // "Post status update": the status-page publish permission (admin), like the announcement API.
+      permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE)
+        ? loadIncidentStatusUpdate(storedIncident).catch(() => null)
+        : null,
+      // Alert arrivals for the Timeline activity graph and its dedup summary.
+      prisma.alert.findMany({
+        where: { incidentId: id },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: ALERT_ACTIVITY_MAX_TIMES,
+        select: { createdAt: true, status: true, severity: true, fingerprintHash: true },
+      }),
+      prisma.alert.count({ where: { incidentId: id } }),
+    ]);
+  const alertActivity = summarizeAlertActivity(
+    alertRows,
+    alertTotal,
+    storedIncident.dedupKey ?? null
+  );
 
   // The access check above already ran; the viewer's capabilities drive lane redaction.
   const responseTimeline = await getIncidentResponseTimeline(id, permissions, {
@@ -393,6 +408,8 @@ export default async function IncidentDetailScreen({
     totalNotesCount: totalNotesCount,
     totalNotificationsCount: totalNotificationsCount,
     totalActivityCount: totalActivityCount,
+    alertActivity,
+    renderedAt: new Date(),
   };
   // Intelligence events join the core timeline once read; until then (and on any failure) the core
   // timeline renders on its own.
