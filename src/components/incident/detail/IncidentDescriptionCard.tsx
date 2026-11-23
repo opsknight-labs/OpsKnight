@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import CopyButton from '@/components/common/CopyButton';
+import type { ReadablePayload } from '@/lib/payload-reader/types';
+import ReadablePayloadView from './ReadablePayloadView';
 import { FileText, Edit2, Check, X, Loader2, ChevronDown, ChevronUp, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +19,8 @@ type IncidentDescriptionCardProps = {
   /** Rendered inside the card under the description, e.g. the incident context from the alert. */
   /** Verified incident context, shown above the description. */
   context?: ReactNode;
+  /** The description read as an alert payload (server-built, no AI); shown instead of raw text when structured. */
+  readable?: ReadablePayload | null;
 };
 
 // Check if string is raw JSON
@@ -406,6 +410,17 @@ function parseMarkdown(text: string): ReactNode[] {
   return elements;
 }
 
+const FORMAT_LABEL: Record<ReadablePayload['format'], string> = {
+  json: 'JSON',
+  literal: 'Literal',
+  xml: 'XML',
+  logfmt: 'logfmt',
+  form: 'Form data',
+  kv: 'Key/value',
+  markdown: 'Markdown',
+  text: 'Text',
+};
+
 export function IncidentDescriptionCard({
   incidentId: _incidentId,
   description,
@@ -413,6 +428,7 @@ export function IncidentDescriptionCard({
   onUpdateDescription,
   className,
   context,
+  readable = null,
 }: IncidentDescriptionCardProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -423,6 +439,8 @@ export function IncidentDescriptionCard({
 
   const rawDescription = description?.trim() || '';
   const wholeJson = useMemo(() => tryParseJson(rawDescription), [rawDescription]);
+  const structured = Boolean(readable && !['text', 'markdown'].includes(readable.format));
+  const collapsible = Boolean(wholeJson) || structured;
   const isLong =
     !wholeJson && (rawDescription.split('\n').length > 18 || rawDescription.length > 1200);
 
@@ -540,35 +558,42 @@ export function IncidentDescriptionCard({
               </div>
             </div>
           </div>
-        ) : wholeJson && !showPayload ? (
-          // A raw alert payload: the verified context above already lifts its key fields, so the JSON is
-          // one row until someone wants the source.
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs">
-            <span className="flex items-center gap-1.5 font-medium text-foreground">
-              <Code2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-              Raw alert payload
-            </span>
-            <span className="tabular-nums text-muted-foreground">
-              JSON · {wholeJson.split('\n').length} lines
-            </span>
-            <span className="ml-auto flex items-center gap-1.5">
-              <CopyButton text={wholeJson} label="Copy JSON" className="h-7 px-2 text-xs" />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowPayload(true)}
-                className="h-7 gap-1 px-2.5 text-xs font-medium"
-                aria-expanded={false}
-              >
-                View
-                <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-              </Button>
-            </span>
+        ) : collapsible && !showPayload ? (
+          // A structured payload: its readable view first (no AI), the raw source one row below.
+          <div className="space-y-3">
+            {structured && readable && <ReadablePayloadView view={readable} />}
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs">
+              <span className="flex items-center gap-1.5 font-medium text-foreground">
+                <Code2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                Raw alert payload
+              </span>
+              <span className="tabular-nums text-muted-foreground">
+                {FORMAT_LABEL[readable?.format ?? 'json']} ·{' '}
+                {(wholeJson ?? rawDescription).split('\n').length} lines
+              </span>
+              <span className="ml-auto flex items-center gap-1.5">
+                <CopyButton
+                  text={wholeJson ?? rawDescription}
+                  label="Copy raw payload"
+                  className="h-7 px-2 text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowPayload(true)}
+                  className="h-7 gap-1 px-2.5 text-xs font-medium"
+                  aria-expanded={false}
+                >
+                  {structured ? 'View raw' : 'View'}
+                  <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              </span>
+            </div>
           </div>
         ) : rawDescription ? (
           <div>
-            {wholeJson && (
+            {collapsible && (
               <div className="mb-1.5 flex justify-end">
                 <Button
                   type="button"

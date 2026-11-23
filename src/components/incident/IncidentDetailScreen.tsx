@@ -4,6 +4,7 @@ import IncidentInsights, {
   SuggestedRunbooks,
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
+import { readPayload } from '@/lib/payload-reader';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import DedupRecurrenceChip from '@/components/incident/detail/DedupRecurrenceChip';
 import { ALERT_ACTIVITY_MAX_TIMES, summarizeAlertActivity } from '@/lib/incidents/alert-activity';
@@ -918,6 +919,7 @@ export default async function IncidentDetailScreen({
               canManage={canManageIncident}
               onUpdateDescription={handleUpdateDescription}
               context={contextContent}
+              readable={incident.description ? readPayload(incident.description) : null}
             />
           )}
 
