@@ -79,6 +79,8 @@ export type CustomerCommsPost = {
   at: string;
   title: string;
   firstLine: string;
+  /** The whole update, for the hover card (capped). */
+  message: string;
   href: string | null;
 };
 
@@ -209,6 +211,7 @@ export function shapeCustomerComms(
         at: post.createdAt.toISOString(),
         title: post.title,
         firstLine: firstLine(post.message),
+        message: post.message.trim().slice(0, 2000),
         href: post.statusPage.enabled ? publicUrl(post.statusPage) : null,
       };
     }),

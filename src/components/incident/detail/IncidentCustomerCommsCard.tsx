@@ -3,6 +3,7 @@ import { ExternalLink, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { toneClasses } from '@/components/patterns/status-tone';
 import { cn } from '@/lib/utils';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/shadcn/hover-card';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { formatRelativeShort } from '@/lib/mobile-time';
 import { formatDateTime } from '@/lib/timezone';
@@ -186,10 +187,54 @@ function PostRow({ post, timeZone }: { post: CustomerCommsPost; timeZone?: strin
           {formatRelativeShort(post.at, timeZone)}
         </time>
       </div>
-      <p className="mt-0.5 truncate text-xs font-medium text-foreground">{post.title}</p>
-      {post.firstLine && (
-        <p className="truncate text-2xs text-muted-foreground">{post.firstLine}</p>
-      )}
+      {/* Clamped in the row; hovering or focusing it shows the whole update. */}
+      <HoverCard openDelay={200} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <div tabIndex={0} className={cn('mt-0.5 min-w-0 cursor-default rounded-sm', FOCUS)}>
+            <p className="truncate text-xs font-medium text-foreground">{post.title}</p>
+            {post.firstLine && (
+              <p className="truncate text-2xs text-muted-foreground">{post.firstLine}</p>
+            )}
+          </div>
+        </HoverCardTrigger>
+        <HoverCardContent
+          align="start"
+          side="left"
+          className="w-96 max-w-[calc(100vw-2rem)] space-y-2 p-3"
+        >
+          <div className="flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
+            <span className="font-medium text-foreground">{post.kind}</span>
+            {post.lifecycle && (
+              <span className="rounded border border-border/80 bg-muted/40 px-1 leading-4">
+                {post.lifecycle}
+              </span>
+            )}
+            <span aria-hidden>·</span>
+            <span>{post.pageName}</span>
+            <span aria-hidden>·</span>
+            <time dateTime={post.at}>
+              {timeZone ? formatDateTime(post.at, timeZone, { format: 'datetime' }) : post.at}
+            </time>
+          </div>
+          <p className="text-sm font-semibold leading-snug text-foreground">{post.title}</p>
+          {post.message && (
+            <p className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-relaxed text-foreground/90">
+              {post.message}
+            </p>
+          )}
+          {post.href && (
+            <a
+              href={post.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              Open {post.pageName}
+              <ExternalLink className="h-3 w-3" aria-hidden />
+            </a>
+          )}
+        </HoverCardContent>
+      </HoverCard>
     </div>
   );
 }
