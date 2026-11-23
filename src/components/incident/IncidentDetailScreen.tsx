@@ -849,7 +849,7 @@ export default async function IncidentDetailScreen({
               description={incident.description}
               canManage={canManageIncident}
               onUpdateDescription={handleUpdateDescription}
-              footer={contextContent}
+              context={contextContent}
             />
           )}
 
