@@ -10,9 +10,9 @@ reader:
   task: Acknowledge an incident and verify ownership and escalation effects.
   evidence:
     [
-      docs/v2.3.0/assets/incident-detail.png,
-      docs/v2.3.0/assets/incident-acknowledged.png,
-      docs/v2.3.0/assets/incident-timeline.png,
+      docs/v2.3.0/assets/incident-detail-redesign.png,
+      docs/v2.3.0/assets/incident-acknowledged-redesign.png,
+      docs/v2.3.0/assets/incident-timeline-redesign.png,
     ]
 verification:
   level: test
@@ -30,7 +30,7 @@ verification:
 
 # Acknowledge an incident
 
-![Incident detail with response controls and timeline](/docs/v2.3.0/assets/incident-detail.png)
+![Incident detail with response controls and timeline](/docs/v2.3.0/assets/incident-detail-redesign.png)
 
 Acknowledgement tells OpsKnight that a responder has accepted the active response. It records response timing and completes the current escalation generation. It does not assign the incident, resolve the underlying problem, or make a private incident public.
 
@@ -60,7 +60,7 @@ OpsKnight applies lifecycle commands against the status you loaded. If another r
 
 ## Verify acknowledgement
 
-![Acknowledged incident with stopped escalation and recorded response timing](/docs/v2.3.0/assets/incident-acknowledged.png)
+![Acknowledged incident with stopped escalation and recorded response timing](/docs/v2.3.0/assets/incident-acknowledged-redesign.png)
 
 Confirm all of the following:
 
@@ -72,7 +72,7 @@ Confirm all of the following:
 
 Refresh the page once if the title card and the **Timeline** tab disagree. If the source page is correct but a Slack or Teams card is stale, treat that as a projection/delivery issue; do not acknowledge repeatedly.
 
-![Incident timeline after the acknowledgement transition](/docs/v2.3.0/assets/incident-timeline.png)
+![Incident timeline after the acknowledgement transition](/docs/v2.3.0/assets/incident-timeline-redesign.png)
 
 ## Acknowledge from another response channel
 

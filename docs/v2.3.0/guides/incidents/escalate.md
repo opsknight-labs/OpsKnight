@@ -8,7 +8,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Escalate an open incident from a supported Microsoft Teams card and verify the next policy action.
-  evidence: [docs/v2.3.0/assets/incident-detail.png]
+  evidence: [docs/v2.3.0/assets/incident-detail-redesign.png]
 verification:
   level: test
   verified_at: 2026-09-29
@@ -24,7 +24,7 @@ verification:
 
 # Escalate an incident
 
-![Incident detail with the active escalation state](/docs/v2.3.0/assets/incident-detail.png)
+![Incident detail with the active escalation state](/docs/v2.3.0/assets/incident-detail-redesign.png)
 
 Manual escalation asks OpsKnight to execute the current step of an open incident's escalation plan immediately. In 2.0, this action is exposed only by a capability-enabled Microsoft Teams Adaptive Card. The Web incident page is used to inspect the resulting state; it has no manual **Escalate** control. Standard Slack incident actions do not expose manual escalation.
 

@@ -8,7 +8,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Resolve an incident with evidence and handle a later recurrence through supported ingestion or API paths.
-  evidence: [docs/v2.3.0/assets/incident-acknowledged.png, docs/v2.3.0/assets/incident-timeline.png]
+  evidence: [docs/v2.3.0/assets/incident-acknowledged-redesign.png, docs/v2.3.0/assets/incident-timeline-redesign.png]
 verification:
   level: test
   verified_at: 2026-09-29
@@ -24,7 +24,7 @@ verification:
 
 # Resolve an incident
 
-![Incident response controls before resolution](/docs/v2.3.0/assets/incident-acknowledged.png)
+![Incident response controls before resolution](/docs/v2.3.0/assets/incident-acknowledged-redesign.png)
 
 Resolve an incident only after service health is restored or the triggering condition is conclusively no longer actionable. Resolution ends active response and escalation, but preserves the timeline, first-response measurements, and prior lifecycle history.
 

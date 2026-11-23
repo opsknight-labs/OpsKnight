@@ -96,6 +96,18 @@ assets:
     evidence: analytics/dashboard-edit.png
     sha256: 521544573961736cc259f0ac0dfdaed1d60b491d945c406e5986bc2a38c0b574
 manualAssets:
+  incident-acknowledged-redesign.png:
+    sha256: bbdf0db3f2e8a528590e26a2db1073a38b5389400328f9538486dce97267755d
+    provenance: Redesigned incident page captured from seeded local demo data (feat/incident-page-redesign, 2026-11-23).
+    classification: manual-product-example
+  incident-detail-redesign.png:
+    sha256: 5e50a9a4c97241737da5dd1ef6571852c4ffd6c86af83513e8e141570e3aefcd
+    provenance: Redesigned incident page captured from seeded local demo data (feat/incident-page-redesign, 2026-11-23).
+    classification: manual-product-example
+  incident-timeline-redesign.png:
+    sha256: a80fc541584bcb360b89c260a45c2141dc5f0770085db08d4f4c8a450d359a27
+    provenance: Redesigned incident page captured from seeded local demo data (feat/incident-page-redesign, 2026-11-23).
+    classification: manual-product-example
   authentication-invitation-email-desktop-dark.png:
     sha256: d0bb5d0eb88ac58fce462a4c773857e27021ac790d2f9373517c5ccacbaa11d8
     provenance: Enterprise SSO capture added for OpsKnight 2.1 identity verification.
