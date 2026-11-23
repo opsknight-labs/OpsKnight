@@ -23,6 +23,7 @@ import {
   INSIGHTS_WIDTH_KEY,
   type InsightsSectionId,
 } from '@/lib/intelligence/incident-ux/strip-contract';
+import { Sparkles } from 'lucide-react';
 import type { InsightsTarget } from './InsightsInspectorHost';
 
 const NARROW_QUERY = '(max-width: 639px)';
@@ -87,15 +88,30 @@ export default function IncidentInsightsInspector({
   const [width, setWidth] = useState<number | null>(readStoredWidth);
   const body = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+  // The step being read: the last section whose top has scrolled to (or past) the top of the panel body.
+  const [active, setActive] = useState<InsightsSectionId | null>(null);
+  const updateActive = useCallback(() => {
+    const container = body.current;
+    if (!container) return;
+    const top = container.getBoundingClientRect().top;
+    let current: InsightsSectionId | null = sections[0] ?? null;
+    for (const section of sections) {
+      const element = document.getElementById(`insights-${section}`);
+      if (element && element.getBoundingClientRect().top - top <= 56) current = section;
+    }
+    setActive(current);
+  }, [sections]);
 
   const reveal = useCallback((id: string) => {
     const element = document.getElementById(id);
     if (!element || !body.current?.contains(element)) return false;
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     element.scrollIntoView?.({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
+    const section = id.startsWith('insights-') ? (id.slice(9) as InsightsSectionId) : null;
+    if (section && sections.includes(section)) setActive(section);
     if (element.hasAttribute('tabindex')) element.focus({ preventScroll: true });
     return true;
-  }, []);
+  }, [sections]);
 
   useEffect(() => {
     if (!open) return;
@@ -160,7 +176,7 @@ export default function IncidentInsightsInspector({
             : // Above the page chrome (sidebar 30), below the assistant (40), which it must never cover.
               // A docked assistant owns the right edge (--squire-dock-width); the panel sits beside it.
               // Starts under the fixed app header (top-14, as the sidebar and dock) so its title and close stay visible.
-              'top-14 h-auto z-35 flex w-full flex-col gap-0 p-0 sm:max-w-xl lg:right-(--squire-dock-width,0px) motion-reduce:animate-none! motion-reduce:transition-none!'
+              'top-14 bottom-(--status-bar-height,0px) h-auto z-35 flex w-full flex-col gap-0 p-0 sm:max-w-xl lg:right-(--squire-dock-width,0px) motion-reduce:animate-none! motion-reduce:transition-none!'
         }
       >
         {!bottom && (
@@ -180,32 +196,62 @@ export default function IncidentInsightsInspector({
             className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize touch-none bg-transparent hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-hidden"
           />
         )}
-        <SheetHeader className="space-y-1 border-b border-border px-4 py-3 pr-14 text-left">
-          <SheetTitle className="text-base">Insights</SheetTitle>
-          <SheetDescription className="text-xs">
-            What intelligence found for this incident. Nothing here changes the incident on its own.
-          </SheetDescription>
+        <SheetHeader className="space-y-3 border-b border-border bg-muted/20 px-4 pt-3.5 pb-2 pr-14 text-left">
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background shadow-xs"
+            >
+              <Sparkles className="h-4.5 w-4.5" />
+            </span>
+            <div className="min-w-0 space-y-0.5">
+              <SheetTitle className="font-display text-base tracking-tight">Investigation</SheetTitle>
+              <SheetDescription className="text-xs leading-relaxed">
+                Leads from past incidents, changes and dependencies. Check before acting; nothing here
+                changes the incident on its own.
+              </SheetDescription>
+            </div>
+          </div>
           {sections.length > 1 && (
-            <nav aria-label="Insight sections" className="-mx-1 overflow-x-auto scrollbar-none">
-              <ul className="flex items-center gap-1 px-1 pt-1">
-                {sections.map(section => (
-                  <li key={section} className="shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => reveal(`insights-${section}`)}
-                      className={`inline-flex min-h-11 items-center rounded-full border border-border px-3 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${
-                        bottom ? '' : 'sm:min-h-8'
-                      }`}
-                    >
-                      {INSIGHTS_SECTION_LABEL.get(section)}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            <nav aria-label="Investigation steps" className="-mx-1 overflow-x-auto scrollbar-none">
+              <ol className="flex items-center gap-0.5 px-1">
+                {sections.map((section, index) => {
+                  const current = (active ?? sections[0]) === section;
+                  return (
+                    <li key={section} className="flex shrink-0 items-center">
+                      {index > 0 && <span aria-hidden="true" className="mx-0.5 h-px w-3 bg-border" />}
+                      <button
+                        type="button"
+                        onClick={() => reveal(`insights-${section}`)}
+                        aria-current={current ? 'step' : undefined}
+                        className={`group inline-flex min-h-11 items-center gap-1.5 rounded-md px-1.5 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${
+                          bottom ? '' : 'sm:min-h-8'
+                        } ${current ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`flex h-5 w-5 items-center justify-center rounded-full border text-2xs font-semibold tabular-nums transition-colors ${
+                            current
+                              ? 'border-foreground bg-foreground text-background'
+                              : 'border-border bg-background group-hover:border-foreground/40'
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+                        {INSIGHTS_SECTION_LABEL.get(section)}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
             </nav>
           )}
         </SheetHeader>
-        <div ref={body} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
+        <div
+          ref={body}
+          onScroll={updateActive}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+        >
           {children}
         </div>
       </SheetContent>

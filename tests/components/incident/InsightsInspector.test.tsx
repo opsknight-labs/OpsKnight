@@ -67,7 +67,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const inspector = () => screen.findByRole('dialog', { name: 'Insights' });
+const inspector = () => screen.findByRole('dialog', { name: 'Investigation' });
 
 describe('insights inspector', () => {
   it('renders nothing until opened, so server-rendered sections stay out of the page', () => {
@@ -204,7 +204,7 @@ describe('insights inspector', () => {
     render(<Page />);
     fireEvent.keyDown(document.body, { key: 'i' });
     await inspector();
-    const nav = screen.getByRole('navigation', { name: 'Insight sections' });
+    const nav = screen.getByRole('navigation', { name: 'Investigation steps' });
     fireEvent.click(screen.getByRole('button', { name: 'Related' }));
     expect(nav).toBeInTheDocument();
     expect(document.getElementById('insights-related')!.scrollIntoView).toHaveBeenCalled();
@@ -226,7 +226,7 @@ describe('insights inspector', () => {
     act(() => {
       window.dispatchEvent(new CustomEvent('squire:open', { detail: {} }));
     });
-    expect(screen.getByRole('dialog', { name: 'Insights' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Investigation' })).toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'i' });
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     desktop.unmount();

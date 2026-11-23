@@ -87,6 +87,7 @@ export function ProactiveNotes({
   routePrefix = '',
   action,
   assistantName = 'Squire',
+  bare = false,
 }: {
   incidentId: string;
   notes: ProactiveNotesView;
@@ -96,15 +97,19 @@ export function ProactiveNotes({
   action?: ReactNode;
   /** The configured assistant name (Settings → Assistant). */
   assistantName?: string;
+  /** Inside the inspector's trail: the step already has the heading and the action, so no own frame. */
+  bare?: boolean;
 }) {
   const { briefing, nudge, postmortemDraft, investigation, verification } = notes;
   // Unique per instance: the desktop inspector and the mobile sheet can both render the notes.
   const headingId = useId();
   return (
     <section
-      aria-labelledby={headingId}
-      className="space-y-4 rounded-lg border border-border bg-card p-4"
+      aria-labelledby={bare ? undefined : headingId}
+      aria-label={bare ? `${assistantName} notes` : undefined}
+      className={bare ? 'space-y-4' : 'space-y-4 rounded-lg border border-border bg-card p-4'}
     >
+      {!bare && (
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -114,6 +119,7 @@ export function ProactiveNotes({
         </div>
         {action}
       </div>
+      )}
 
       {nudge && (
         <div
@@ -208,10 +214,12 @@ export function ProactiveNotes({
       {briefing && (
         <div className="space-y-4 text-sm">
           <div className="space-y-1.5">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h4 className={LABEL}>Briefing</h4>
-              <span className="text-2xs text-muted-foreground">{modeLabel(briefing.mode)}</span>
-            </div>
+            {!bare && (
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h4 className={LABEL}>Briefing</h4>
+                <span className="text-2xs text-muted-foreground">{modeLabel(briefing.mode)}</span>
+              </div>
+            )}
             <p className="text-base font-semibold leading-snug text-foreground">
               {briefing.ai?.headline ?? briefing.headline}
             </p>
@@ -278,7 +286,7 @@ export function ProactiveNotes({
             )}
           </div>
 
-          {briefing.refs.changes.length > 0 && (
+          {!bare && briefing.refs.changes.length > 0 && (
             <div className="space-y-2">
               <h4 className={LABEL}>Changes before onset · link unconfirmed</h4>
               <ul className="divide-y divide-border/70 rounded-lg border border-border/70">
@@ -296,7 +304,7 @@ export function ProactiveNotes({
             </div>
           )}
 
-          {briefing.refs.similar.length > 0 && (
+          {!bare && briefing.refs.similar.length > 0 && (
             <div className="space-y-2">
               <h4 className={LABEL}>Similar incidents</h4>
               <ul className="divide-y divide-border/70 rounded-lg border border-border/70">

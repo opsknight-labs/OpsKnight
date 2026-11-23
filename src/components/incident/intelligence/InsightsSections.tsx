@@ -1,6 +1,14 @@
 import Link from 'next/link';
 import { Suspense, type ReactNode } from 'react';
-import { BookOpen, Compass, FileText, GitCommitHorizontal, History, Link2 } from 'lucide-react';
+import {
+  BookOpen,
+  Compass,
+  FileText,
+  GitCommitHorizontal,
+  History,
+  Link2,
+  Sparkles,
+} from 'lucide-react';
 import type { IncidentInsights } from '@/lib/intelligence/incident-ux/strip';
 import type { InsightsSectionId } from '@/lib/intelligence/incident-ux/strip-contract';
 import { isImpactEmpty } from '@/lib/intelligence/impact/view';
@@ -55,19 +63,33 @@ const quote = (text: string) => `"${text.length > 120 ? `${text.slice(0, 119)}鈥
 
 const ITEM_CLASS = 'scroll-mt-4 py-2 target:rounded-md target:bg-accent/60';
 
+/**
+ * One step of the investigation trail: a numbered node on a rail at the left (joined to the next step),
+ * the step title, an optional action and a note, then the content in one quiet block.
+ */
 function Section({
   id,
+  step,
   headingId,
   icon,
   title,
   note,
+  action,
+  bare = false,
   children,
 }: {
   id: InsightsSectionId;
-  headingId: string;
-  icon: ReactNode;
-  title: string;
+  /** Position in the trail (1-based), as shown in the inspector's step bar. */
+  step: number;
+  /** Omit headingId and title when the content brings its own heading (impact card, AI summary). */
+  headingId?: string;
+  icon?: ReactNode;
+  title?: string;
   note?: string;
+  /** Shown at the right of the title, e.g. "Ask Squire". */
+  action?: ReactNode;
+  /** Content brings its own layout: no surrounding block. */
+  bare?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -75,16 +97,36 @@ function Section({
       id={`insights-${id}`}
       aria-labelledby={headingId}
       tabIndex={-1}
-      className="scroll-mt-4 space-y-2 rounded-lg border border-border bg-card p-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+      className="group/step relative grid scroll-mt-4 grid-cols-[1.75rem_minmax(0,1fr)] gap-x-3 pb-7 last:pb-1 focus-visible:outline-hidden"
     >
-      <div className="space-y-1">
-        <h3 id={headingId} className="flex items-center gap-2 text-sm font-semibold">
-          {icon}
-          {title}
-        </h3>
-        {note && <p className="text-xs text-muted-foreground">{note}</p>}
+      <div className="relative flex justify-center" aria-hidden="true">
+        <span className="z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background font-display text-xs font-semibold tabular-nums text-foreground shadow-2xs group-focus-visible/step:ring-2 group-focus-visible/step:ring-ring">
+          {step}
+        </span>
+        <span className="absolute top-7 bottom-0 w-px bg-border group-last/step:hidden" />
       </div>
-      {children}
+      <div className="min-w-0 space-y-2.5 pt-0.5">
+        {title && (
+        <div className="space-y-0.5">
+          <div className="flex min-h-6 items-center justify-between gap-2">
+            <h3
+              id={headingId}
+              className="flex items-center gap-2 font-display text-sm font-semibold tracking-tight text-foreground"
+            >
+              {icon}
+              {title}
+            </h3>
+            {action}
+          </div>
+          {note && <p className="text-xs leading-relaxed text-muted-foreground">{note}</p>}
+        </div>
+        )}
+        {bare ? (
+          children
+        ) : (
+          <div className="rounded-xl border border-border/70 bg-card px-3.5 py-2.5">{children}</div>
+        )}
+      </div>
     </section>
   );
 }
@@ -106,6 +148,7 @@ export default function InsightsSections({
   recurrence?: ReactNode;
 }) {
   const { incidentId } = insights;
+  const stepOf = (id: InsightsSectionId) => sections.indexOf(id) + 1;
   const has = (id: InsightsSectionId) => sections.includes(id);
   const incidentHref = (id: string) => `${routePrefix}/incidents/${id}`;
   // `id` omitted means the whole section: the handle then carries the incident id (see squire-bus).
@@ -157,27 +200,37 @@ export default function InsightsSections({
       )}
 
       {has('briefing') && insights.proactive && (
-        <div
-          id="insights-briefing"
-          tabIndex={-1}
-          className="scroll-mt-4 focus-visible:outline-hidden"
+        <Section
+          id="briefing"
+          step={stepOf('briefing')}
+          headingId="briefing-step-heading"
+          icon={<Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+          title="Briefing"
+          note={
+            insights.proactive.briefing
+              ? `${insights.proactive.briefing.mode === 'AI' ? 'Written with AI' : 'Basic mode'} 路 check before acting. Changes and similar incidents are in their own steps below.`
+              : undefined
+          }
+          action={ask('this briefing', 'Summarise this incident', {
+            kind: 'briefing',
+            label: 'Briefing',
+          })}
+          bare
         >
           <ProactiveNotes
             incidentId={incidentId}
             assistantName={assistantName}
             notes={insights.proactive}
             routePrefix={routePrefix}
-            action={ask('this briefing', 'Summarise this incident', {
-              kind: 'briefing',
-              label: 'Briefing',
-            })}
+            bare
           />
-        </div>
+        </Section>
       )}
 
       {has('triage') && insights.triage && (
         <Section
           id="triage"
+          step={stepOf('triage')}
           headingId="triage-suggestions-heading"
           icon={<Compass className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
           title="Triage suggestions"
@@ -195,6 +248,7 @@ export default function InsightsSections({
       {has('similar') && insights.similar && (
         <Section
           id="similar"
+          step={stepOf('similar')}
           headingId="similar-incidents-heading"
           icon={<History className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
           title="Similar past incidents"
@@ -204,38 +258,48 @@ export default function InsightsSections({
               <li
                 key={item.incidentId}
                 id={`finding-${item.findingId}`}
-                className={`${ITEM_CLASS} flex flex-wrap items-start justify-between gap-2`}
+                className={`${ITEM_CLASS} space-y-1.5`}
               >
-                <div className="min-w-0 space-y-1">
+                <div className="flex items-start justify-between gap-3">
                   <Link
                     href={incidentHref(item.incidentId)}
-                    className="text-sm font-medium hover:underline"
+                    className="min-w-0 text-sm font-medium leading-snug hover:underline"
                   >
                     {item.title}
                   </Link>
-                  <p className="text-xs text-muted-foreground">
-                    {item.serviceName} 路 {formatDate(item.createdAt)} 路 {item.status.toLowerCase()}
-                    {item.minutesToResolve !== null &&
-                      ` 路 resolved in ${formatDuration(item.minutesToResolve)}`}
-                  </p>
-                  {item.resolutionSummary && (
-                    <p className="text-xs text-foreground/80">Fixed by: {item.resolutionSummary}</p>
-                  )}
+                  <span
+                    className="shrink-0 rounded-full border border-border bg-muted/50 px-1.5 text-2xs font-semibold tabular-nums text-muted-foreground"
+                    title="A ranking signal for ordering suggestions, not a probability"
+                  >
+                    {item.matchPercent}% match
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {item.serviceName} 路 {formatDate(item.createdAt)} 路 {item.status.toLowerCase()}
+                  {item.minutesToResolve !== null &&
+                    ` 路 resolved in ${formatDuration(item.minutesToResolve)}`}
                   {item.postmortem && (
-                    <p className="text-xs">
+                    <>
+                      {' 路 '}
                       <Link
                         href={item.postmortem.href}
-                        className="font-medium underline-offset-2 hover:underline"
+                        className="font-medium text-foreground underline-offset-2 hover:underline"
                       >
                         Postmortem
                       </Link>
-                    </p>
+                    </>
                   )}
-                  <details className="text-xs">
-                    <summary className="min-h-11 cursor-pointer py-3 font-medium sm:min-h-8 sm:py-2">
+                </p>
+                {item.resolutionSummary && (
+                  <p className="text-xs text-foreground/80">Fixed by: {item.resolutionSummary}</p>
+                )}
+                {/* One action row: why it matched on the left, the responder's actions on the right. */}
+                <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
+                  <details className="group/why text-xs open:basis-full">
+                    <summary className="flex min-h-11 cursor-pointer items-center py-2 font-medium text-muted-foreground hover:text-foreground sm:min-h-8">
                       Why this matched
                     </summary>
-                    <ul className="flex flex-wrap gap-1" aria-label="Why this matched">
+                    <ul className="flex flex-wrap gap-1 pb-1" aria-label="Why this matched">
                       {item.reasons.map(reason => (
                         <li key={reason} className="rounded-full bg-muted px-2 py-0.5 text-xs">
                           {reason}
@@ -243,19 +307,9 @@ export default function InsightsSections({
                       ))}
                     </ul>
                   </details>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span
-                    className="text-xs tabular-nums text-muted-foreground"
-                    title="A ranking signal for ordering suggestions, not a probability"
-                  >
-                    Match {item.matchPercent}%
-                  </span>
+                  <span className="flex-1" />
                   {insights.canGiveFeedback && (
-                    <MarkRelatedIncident
-                      incidentId={incidentId}
-                      otherIncidentId={item.incidentId}
-                    />
+                    <MarkRelatedIncident incidentId={incidentId} otherIncidentId={item.incidentId} />
                   )}
                   {insights.canGiveFeedback && (
                     <SimilarIncidentFeedback
@@ -277,11 +331,8 @@ export default function InsightsSections({
       )}
 
       {has('related') && (
-        <div
-          id="insights-related"
-          tabIndex={-1}
-          className="scroll-mt-4 space-y-3 focus-visible:outline-hidden"
-        >
+        <Section id="related" step={stepOf('related')} bare>
+        <div className="space-y-3">
           {insights.group && (
             <div className="space-y-1">
               <IncidentGroupView
@@ -365,6 +416,7 @@ export default function InsightsSections({
             </section>
           )}
         </div>
+        </Section>
       )}
 
       {recurrence && <Suspense fallback={null}>{recurrence}</Suspense>}
@@ -372,6 +424,7 @@ export default function InsightsSections({
       {has('why') && insights.response && (
         <Section
           id="why"
+          step={stepOf('why')}
           headingId="response-intelligence-heading"
           icon={
             <GitCommitHorizontal className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -486,6 +539,7 @@ export default function InsightsSections({
       {has('runbooks') && insights.response && (
         <Section
           id="runbooks"
+          step={stepOf('runbooks')}
           headingId="runbooks-that-worked-heading"
           icon={<BookOpen className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
           title="Runbooks that have worked here"
@@ -518,7 +572,7 @@ export default function InsightsSections({
       )}
 
       {has('impact') && insights.impact && !isImpactEmpty(insights.impact) && (
-        <div id="insights-impact" tabIndex={-1} className="scroll-mt-4 focus-visible:outline-hidden">
+        <Section id="impact" step={stepOf('impact')} bare>
           <ImpactCardBody
             view={insights.impact}
             action={ask(
@@ -527,13 +581,13 @@ export default function InsightsSections({
               { kind: 'impact', label: 'Impact' }
             )}
           />
-        </div>
+        </Section>
       )}
 
       {has('summary') && (
-        <div id="insights-summary" tabIndex={-1} className="scroll-mt-4 focus-visible:outline-hidden">
+        <Section id="summary" step={stepOf('summary')} bare>
           <IncidentAiSummary incidentId={incidentId} canPostNote={insights.canPostNote} />
-        </div>
+        </Section>
       )}
 
       {insights.mode !== 'OFF' && sections.length > 0 && (
