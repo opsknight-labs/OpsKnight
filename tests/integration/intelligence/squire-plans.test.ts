@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
-import { buildPlanProposal } from '@/lib/intelligence/squire/plans';
+import {
+  buildPlanProposal,
+  executePlanProposal,
+  openPlanProposal,
+} from '@/lib/intelligence/squire/plans';
 import { executeSquireAction } from '@/lib/intelligence/squire/actions/execute';
 import {
   createTestEscalationPolicy,
+  createTestIncident,
   createTestService,
   createTestTeam,
   createTestUser,
@@ -161,5 +166,88 @@ describe('Squire change plans', () => {
     // Switching extended actions off withdraws open cards too.
     expect((await executeSquireAction(admin, proposal!.token)).ok).toBe(false);
     expect(await db.service.count({ where: { name: 'Payments' } })).toBe(0);
+  });
+
+  it('keeps high-risk changes out of plans, and never lets a reference pick the target of an update', async () => {
+    const { admin, team, policy, service } = await world();
+    const create = createThenWindow(team.id, policy.id, 'x').steps[0];
+    // A delete always gets its own card.
+    expect(
+      await buildPlanProposal(admin, {
+        title: 'Create and delete',
+        steps: [create, { operationId: 'deleteService', args: { path: { id: service.id } } }],
+      })
+    ).toBeNull();
+    // An update whose target comes from an earlier step would show no real id on the card.
+    expect(
+      await buildPlanProposal(admin, {
+        title: 'Create and rename',
+        steps: [
+          create,
+          {
+            operationId: 'updateService',
+            args: { path: { id: { $from: '0', pointer: '/data/id' } }, body: { name: 'Renamed' } },
+          },
+        ],
+      })
+    ).toBeNull();
+    // The same update on a real id is fine.
+    expect(
+      await buildPlanProposal(admin, {
+        title: 'Create and rename',
+        steps: [
+          create,
+          {
+            operationId: 'updateService',
+            args: { path: { id: service.id }, body: { name: 'Checkout v2' } },
+          },
+        ],
+      })
+    ).not.toBeNull();
+  });
+
+  it('records the incident a plan changes on its receipt', async () => {
+    const { admin, service } = await world();
+    const incident = await createTestIncident('Checkout errors', service.id);
+    const proposal = await buildPlanProposal(admin, {
+      title: 'Rename and tag',
+      steps: [
+        {
+          operationId: 'updateService',
+          args: { path: { id: service.id }, body: { name: 'Checkout v2' } },
+        },
+        {
+          operationId: 'addIncidentTag',
+          args: { path: { id: incident.id }, body: { name: 'database' } },
+        },
+      ],
+    });
+    const result = await executeSquireAction(admin, proposal!.token);
+    expect(result.ok, result.message).toBe(true);
+    expect(
+      (await db.squireActionReceipt.findUniqueOrThrow({ where: { id: proposal!.receiptId! } }))
+        .incidentId
+    ).toBe(incident.id);
+  });
+
+  it('says a receipt that cannot be written was not recorded, and only a reused card was already used', async () => {
+    const { admin, team, policy } = await world();
+    const good = createThenWindow(team.id, policy.id, { $from: '0', pointer: '/data/id' });
+    const ghost = (await openPlanProposal(
+      (await buildPlanProposal(admin, good))!.token,
+      admin.id
+    ))!;
+    // No such person: the receipt fails on its foreign key, which is not "already used".
+    expect(await executePlanProposal({ ...admin, id: 'no-such-user' }, ghost)).toEqual({
+      ok: false,
+      message: expect.stringMatching(/could not be recorded/),
+    });
+    expect(await db.service.count({ where: { name: 'Payments' } })).toBe(0);
+    const proposal = await buildPlanProposal(admin, good);
+    expect((await executeSquireAction(admin, proposal!.token)).ok).toBe(true);
+    expect(await executeSquireAction(admin, proposal!.token)).toEqual({
+      ok: false,
+      message: expect.stringMatching(/already used/),
+    });
   });
 });

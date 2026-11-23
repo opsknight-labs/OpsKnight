@@ -71,6 +71,8 @@ export const ASK_SQUIRE_EXCLUDED_TOOLS = [
   'find_operations',
   'describe_operation',
   'read_operation',
+  // The person's own shift hand-off; an MCP client has getMyCatchUp under its own scopes.
+  'get_catch_up',
 ] as const;
 
 /** The Squire read tools an MCP turn may use, given the connection's scopes and the MCP policy. */

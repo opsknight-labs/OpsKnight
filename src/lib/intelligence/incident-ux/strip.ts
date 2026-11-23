@@ -278,7 +278,8 @@ export function insightsSections(insights: IncidentInsights): InsightsSectionId[
         (proactive.briefing ||
           proactive.nudge ||
           proactive.postmortemDraft ||
-          proactive.investigation)
+          proactive.investigation ||
+          proactive.verification)
       ),
     ],
     ['triage', Boolean(insights.triage?.suggestions.length)],
@@ -372,6 +373,14 @@ export function buildStripChips(insights: IncidentInsights): StripChip[] {
         label: `Impact: ${parts.join(', ')}`,
       });
   }
+
+  if (insights.proactive?.verification && !insights.proactive.verification.holding)
+    chips.push({
+      id: 'verification',
+      target: { section: 'briefing' },
+      tone: 'critical',
+      label: 'Fix not holding',
+    });
 
   if (insights.proactive?.briefing)
     chips.push({

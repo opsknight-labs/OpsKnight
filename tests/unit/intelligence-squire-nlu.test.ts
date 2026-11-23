@@ -7,9 +7,10 @@ import {
   normalizeMessage,
   parseSlashCommand,
 } from '@/lib/intelligence/squire/basic/nlu';
-import { parseBasicQuery, resolveDayKey } from '@/lib/intelligence/squire/basic/query';
+import { keywords, parseBasicQuery, resolveDayKey } from '@/lib/intelligence/squire/basic/query';
 import { suggestFollowUps } from '@/lib/intelligence/squire/basic/suggestions';
-import type { SquireIntent } from '@/lib/intelligence/squire/intents';
+import { productGuidance } from '@/lib/intelligence/squire/basic/guidance';
+import { routeIntent, stripGreeting, type SquireIntent } from '@/lib/intelligence/squire/intents';
 
 type Case = {
   text: string;
@@ -588,5 +589,176 @@ describe('answer-aware suggestions', () => {
     expect(
       suggestFollowUps({ intent: 'UNKNOWN', incident: null, mode: 'basic' }).length
     ).toBeLessThanOrEqual(4);
+  });
+});
+
+/** Findings from an adversarial review of basic mode (~310 inputs); each line reproduced the bug first. */
+describe('adversarial review regressions', () => {
+  const now = new Date('2026-11-23T12:00:00Z');
+  const intent = (text: string, onIncident = false) =>
+    classifyIntent(normalizeMessage(text), onIncident).intent;
+  const slots = (text: string) => extractSlots(normalizeMessage(text), text);
+
+  it('never turns time words, dates or filler into AND-ed search keywords', () => {
+    for (const text of [
+      'find incidents since monday',
+      'incidents on the weekend',
+      'any issues last night',
+      'incidents since 2026-11-01',
+      'incidents on 3rd nov',
+      'incidents between mon and wed',
+      'only high urgency incidents',
+      'give me anything like this seen before',
+      'show sev 1 incidents',
+    ])
+      expect(keywords(text), text).toEqual([]);
+    expect(keywords('show me anything going on with checkout')).toEqual(['checkout']);
+    expect(keywords('"since monday"')).toEqual(['since', 'monday']);
+  });
+
+  it('errors on a date that does not exist instead of dropping the filter', () => {
+    expect(parseBasicQuery('incidents since 2026-02-30', now).error).toContain('not a date');
+    expect(parseBasicQuery('incidents on 2026-02-30', now).error).toContain('not a date');
+    expect(parseBasicQuery('incidents on 30 feb', now).error).toContain('not a date');
+  });
+
+  it('reads only real month names as dates and keeps scanning past a non-date', () => {
+    expect(parseBasicQuery('marketing 5 incidents', now).error).toBeUndefined();
+    expect(parseBasicQuery('marketing 5 incidents', now).window).toBeUndefined();
+    expect(parseBasicQuery('show 5 incidents on 3 nov', now).window?.label).toContain('2026-11-03');
+  });
+
+  it('treats "open" as unresolved and maps sev/priority N to a priority filter', () => {
+    expect(parseBasicQuery('open incidents', now)).toMatchObject({ status: undefined, active: true });
+    expect(parseBasicQuery('incidents opened today', now).status).toBe('OPEN');
+    expect(parseBasicQuery('sev 1 incidents', now).priority).toBe('P1');
+    expect(parseBasicQuery('priority 2 incidents', now).priority).toBe('P2');
+    expect(slots('show sev 1 incidents').limit).toBeUndefined();
+    expect(slots('priority 1 incidents').limit).toBeUndefined();
+  });
+
+  it('keeps future and decimal durations out of look-back windows', () => {
+    expect(normalizeMessage('who is on call for the next 3 days')).not.toContain('past');
+    expect(normalizeMessage('who is on call in 2 hours')).toBe('who is on-call in 2 hours');
+    expect(normalizeMessage('snooze 1.5h')).toBe('snooze 1.5h');
+    expect(normalizeMessage('incidents in the last 24h')).toContain('past 24 hours');
+    expect(slots('snooze 1.5h').snoozeMinutes).toBe(90);
+    expect(slots('snooze for 2 weeks').snoozeMinutes).toBe(7 * 1440);
+    expect(slots('snooze 30').snoozeMinutes).toBe(30);
+    expect(slots('/snooze 2h'.replace('/snooze', 'snooze this incident')).snoozeMinutes).toBe(120);
+  });
+
+  it('maps me/myself to the actor and takes the assignee after "to"', () => {
+    for (const text of ['assign this to me', 'assign to me', 'assign me', 'assign this to myself'])
+      expect(slots(text), text).toMatchObject({ action: 'reassign', person: 'me' });
+    expect(slots('assign this to Bob from my team')).toMatchObject({ person: 'Bob' });
+    expect(slots("assign this to Alice O'Brien").person).toBe("Alice O'Brien");
+    expect(slots('my open incidents').person).toBe('me');
+  });
+
+  it('reads whole names, and an email address is not a handle', () => {
+    expect(slots('incidents assigned to José García').person).toBe('José García');
+    expect(slots('incidents assigned to Mary Ann Smith').person).toBe('Mary Ann Smith');
+    expect(slots('ping alice@example.com').person).toBeUndefined();
+    expect(slots('incidents for @alice.').person).toBe('alice');
+  });
+
+  it('does not read list questions as action verbs', () => {
+    for (const text of [
+      'escalated incidents this week',
+      'close incidents older than a week',
+      'resolve time this week',
+      'link to the runbook for redis',
+      'log of the incident',
+      'lower urgency incidents this week',
+      'snoozed incidents',
+      'assigned incidents',
+    ])
+      expect(slots(text).action, text).toBeUndefined();
+    expect(slots('acknowledge this').action).toBe('acknowledge');
+    expect(slots('escalate this incident').action).toBe('escalate');
+    expect(slots('lower the urgency').action).toBe('urgency');
+    expect(slots('resolve this: rolled back release 42').action).toBe('resolve');
+    expect(slots('add a note customer impact confirmed').action).toBe('note');
+  });
+
+  it('extracts team names without grabbing verbs or other words', () => {
+    expect(slots('which team owns checkout').team).toBeUndefined();
+    expect(slots('is my team on call').team).toBeUndefined();
+    expect(slots('incidents for checkout in the payments team').team).toBe('payments');
+    expect(slots('incidents for the payments api team').team).toBe('payments api');
+    expect(slots('incidents for team payments').team).toBe('payments');
+  });
+
+  it('recognises more ways of asking for the next page', () => {
+    for (const text of ['show me more', 'load more', 'more please', 'ok show more', 'next page'])
+      expect(slots(text).more, text).toBe(true);
+    expect(slots('more incidents for checkout').more).toBe(false);
+  });
+
+  it('accepts the on_call and on-call slash aliases', () => {
+    expect(parseSlashCommand('/on_call')).toEqual({ command: 'oncall', args: '' });
+    expect(parseSlashCommand('/on-call checkout')).toEqual({ command: 'oncall', args: 'checkout' });
+  });
+
+  it('answers severity and urgency lists without asking which reading', () => {
+    for (const text of ['p1 incidents', 'incidents', 'high urgency incidents', 'checkout incidents?'])
+      expect(intent(text), text).toBe('SEARCH_INCIDENTS');
+    expect(intent('incidents by team this week')).toBe('INCIDENT_STATS');
+  });
+
+  it('routes data questions away from product guidance', () => {
+    expect(intent('what is the priority of INC-42', true)).toBe('INCIDENT_SUMMARY');
+    expect(intent('what is the severity of this incident', true)).toBe('INCIDENT_SUMMARY');
+    expect(intent('what is the history of this incident', true)).toBe('TIMELINE');
+    expect(intent('what is the escalation policy for checkout')).toBe('SERVICE_HEALTH');
+    expect(intent('how long does it take to resolve incidents on average')).toBe('INCIDENT_STATS');
+    expect(intent('help me find runbooks for redis')).toBe('RUNBOOK_SEARCH');
+    expect(intent('how do I acknowledge an incident?')).toBe('GUIDANCE');
+    expect(intent('what is the priority of an incident used for')).toBe('GUIDANCE');
+  });
+
+  it('picks the most specific product guide', () => {
+    expect(productGuidance('how do I set up sso in opsknight')).toContain('## Identity and access');
+    expect(productGuidance('how does escalation work')).toContain('## Escalation and paging');
+    expect(productGuidance('what is opsknight')).toContain('## OpsKnight');
+  });
+
+  it('routes questions about the incident on screen', () => {
+    expect(intent('what is the status of this incident', true)).toBe('INCIDENT_SUMMARY');
+    expect(intent('is it resolved?', true)).toBe('INCIDENT_SUMMARY');
+    expect(intent('who resolved it', true)).toBe('TIMELINE');
+    expect(intent('show incidents assigned to Alice', true)).toBe('SEARCH_INCIDENTS');
+    expect(intent('who is assigned to this incident?', true)).toBe('RESPONDERS');
+  });
+
+  it('greets only greetings, and strips stacked greetings once', () => {
+    for (const text of ['morning briefing', 'hey oncall?', 'yo status?', 'hi incidents'])
+      expect(routeIntent(normalizeMessage(text), false), text).not.toBe('GREETING');
+    for (const text of ['hey 👋', 'hey squire!', 'good morning team', 'hi there'])
+      expect(routeIntent(normalizeMessage(text), false), text).toBe('GREETING');
+    expect(routeIntent('cool, thanks', false)).toBe('THANKS');
+    expect(routeIntent('ok great, thanks!', false)).toBe('THANKS');
+    expect(stripGreeting('hey hi there, any open incidents?')).toEqual({
+      greeted: true,
+      rest: 'any open incidents?',
+    });
+    expect(stripGreeting('Hey Knight! my queue', 'Knight')).toEqual({ greeted: true, rest: 'my queue' });
+    expect(stripGreeting("what's up with checkout?").greeted).toBe(false);
+    expect(normalizeMessage("what's up with checkout?")).toBe('what is going on with checkout?');
+    expect(intent('how is it going with the payments outage')).toBe('ACTIVE_INCIDENTS');
+    const started = performance.now();
+    expect(stripGreeting('hey '.repeat(500)).rest).toBe('');
+    expect(performance.now() - started).toBeLessThan(200);
+  });
+
+  it('offers chips that each read as a question after their answer', () => {
+    const chips = [
+      ...suggestFollowUps({ intent: 'SEARCH_INCIDENTS', incident: null, mode: 'basic' }),
+      ...suggestFollowUps({ intent: 'INCIDENT_STATS', incident: null, mode: 'basic' }),
+      ...suggestFollowUps({ intent: 'RECENT_CHANGES', incident: null, mode: 'basic' }),
+    ];
+    expect(chips).not.toContain('Incidents since those changes');
+    for (const chip of chips) expect(keywords(chip), chip).toEqual([]);
   });
 });

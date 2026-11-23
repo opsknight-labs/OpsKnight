@@ -62,9 +62,11 @@ describe('bounded permission-scoped query parsing', () => {
       'Show my high urgency P1 open checkout incidents from the past 7 days',
       now
     );
+    // "Open" means unresolved (OPEN or ACKNOWLEDGED), not the OPEN status alone.
     expect(q).toMatchObject({
       mine: true,
-      status: 'OPEN',
+      status: undefined,
+      active: true,
       urgency: 'HIGH',
       priority: 'P1',
       terms: ['checkout'],
@@ -165,7 +167,8 @@ describe('expanded citations and conversational entity filters', () => {
     expect(parseBasicQuery(merged, now)).toMatchObject({
       terms: ['payments', 'worker'],
       urgency: 'HIGH',
-      status: 'OPEN',
+      status: undefined,
+      active: true,
     });
     expect(parseBasicQuery(merged, now).window?.label).toContain('yesterday');
   });

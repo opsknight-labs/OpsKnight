@@ -42,6 +42,10 @@ export interface SquireSurfaceInput {
 }
 
 const DEFAULT_TIMEOUT_MS = 45_000;
+/** The whole bound once the turn turns out to be an investigation (they read many sources). */
+export const SQUIRE_INVESTIGATION_TIMEOUT_MS = 150_000;
+/** After the deadline, how long the turn may take to wind down and send what it has (a partial answer). */
+const WIND_DOWN_MS = 10_000;
 const MAX_TEXT = 12_000;
 const MAX_NOTICES = 4;
 const MAX_PROPOSALS = 2;
@@ -51,6 +55,8 @@ export async function collectSquireTurn(
   input: SquireSurfaceInput,
   options: {
     timeoutMs?: number;
+    /** Replaces `timeoutMs`, counted from the start, once an investigation step arrives. */
+    investigationTimeoutMs?: number;
     signal?: AbortSignal;
     scope?: SquireTurnScope;
     /** Sees every event as it arrives, for surfaces that show progress. Must not throw. */
@@ -73,14 +79,46 @@ export async function collectSquireTurn(
   });
   if (!parsed.success) return { ...answer, error: 'Ask a question of up to 2,000 characters.' };
 
+  const started = Date.now();
   const controller = new AbortController();
   const abort = () => controller.abort();
   options.signal?.addEventListener('abort', abort, { once: true });
-  const timer = setTimeout(abort, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  let timer = setTimeout(abort, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  let extended = false;
+  // Aborting asks the turn to stop; an investigation then still sends its partial answer, so reading
+  // continues (bounded) until the turn returns instead of dropping what it found.
+  let windDown: ReturnType<typeof setTimeout> | undefined;
+  const woundDown = new Promise<'cut'>(resolve =>
+    controller.signal.addEventListener(
+      'abort',
+      () => (windDown = setTimeout(() => resolve('cut'), WIND_DOWN_MS)),
+      { once: true }
+    )
+  );
+  let cut = false;
   const events = streamSquire(actor, parsed.data, controller.signal, options.scope);
   try {
-    for await (const event of events) {
-      if (controller.signal.aborted) break;
+    for (;;) {
+      const next = await Promise.race([events.next(), woundDown]);
+      if (next === 'cut') {
+        cut = true;
+        break;
+      }
+      if (next.done) break;
+      const event = next.value;
+      if (event.type === 'investigation' && !extended && !controller.signal.aborted) {
+        extended = true;
+        clearTimeout(timer);
+        timer = setTimeout(
+          abort,
+          Math.max(
+            0,
+            started +
+              (options.investigationTimeoutMs ?? SQUIRE_INVESTIGATION_TIMEOUT_MS) -
+              Date.now()
+          )
+        );
+      }
       options.onEvent?.(event);
       switch (event.type) {
         case 'meta':
@@ -110,8 +148,11 @@ export async function collectSquireTurn(
     }
   } finally {
     clearTimeout(timer);
+    clearTimeout(windDown);
     options.signal?.removeEventListener('abort', abort);
-    if (controller.signal.aborted) await events.return(undefined).catch(() => undefined);
+    // A pending next() would hold an awaited return() forever; the abort signal stops the turn anyway.
+    if (cut) void events.return(undefined).catch(() => undefined);
+    else if (controller.signal.aborted) await events.return(undefined).catch(() => undefined);
   }
   answer.text = redactSecrets(answer.text.slice(0, MAX_TEXT));
   if (controller.signal.aborted && !answer.error) {

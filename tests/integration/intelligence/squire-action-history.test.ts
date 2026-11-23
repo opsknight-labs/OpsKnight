@@ -164,6 +164,22 @@ describe('Squire action history', () => {
     expect(unknown.rows.map(row => row.who)).toEqual(['Ada Admin']);
   });
 
+  it('shows the stored outcome text only to the person who confirmed it', async () => {
+    const w = await world();
+    await receipt({
+      userId: w.member.id,
+      action: 'operation:updateService',
+      result: { ok: true, message: 'Done: Update a service. Now: name = Secret name.', href: '/' },
+    });
+    const own = (await listSquireActionHistory(w.memberActor))!;
+    expect(own.rows[0].message).toContain('Secret name');
+    const all = (await listSquireActionHistory(w.adminActor, { scope: 'everyone' }))!;
+    expect(all.rows).toHaveLength(1);
+    expect(all.rows[0]).toMatchObject({ who: 'Uma User', status: 'SUCCEEDED' });
+    expect(all.rows[0].message).toMatch(/^The action completed/);
+    expect(JSON.stringify(all)).not.toContain('Secret name');
+  });
+
   it('pages 50 at a time, newest first, without repeats', async () => {
     const w = await world();
     const base = Date.now() - 1_000_000;

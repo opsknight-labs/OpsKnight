@@ -70,6 +70,8 @@ export interface SquireModelEvalExpect {
   maxTokensSent?: number;
   /** Today's recorded usage grew by exactly what the fake model reported. */
   usageAccounted?: boolean;
+  /** Chart events the turn sends (each also saved with the turn); 0 means none. */
+  charts?: number;
 }
 
 export interface SquireModelEvalCase {
@@ -314,6 +316,25 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       { say: 'Eval Teammate is active.' },
     ],
     expect: { mode: 'ai', toolLabels: ['Looking up people'], toolSaw: ['Eval Teammate'] },
+  },
+  {
+    id: 'tool-catch-up',
+    category: 'tool-choice',
+    question: 'Catch me up on the last 12 hours',
+    onIncident: false,
+    script: [
+      { tool: 'get_catch_up', input: { hours: 12 } },
+      { say: 'Two checkout incidents opened and are still open: /incidents/$other' },
+    ],
+    // Only the asker's own teams and readable incidents; another team's incident never reaches the model.
+    expect: {
+      mode: 'ai',
+      toolSaw: ['Checkout pool exhausted again'],
+      modelNeverSaw: ['Hidden payroll outage'],
+      citeKinds: ['incident'],
+      memoryClass: 'PERSONAL',
+      noProposal: true,
+    },
   },
   {
     id: 'tool-invalid-input',
@@ -1750,5 +1771,48 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     })),
     // Connector calls count against the same round-trip ceiling as every other tool.
     expect: { mode: 'ai', modelCalls: 6, answerContains: ['From what I read so far'] },
+  },
+  {
+    id: 'chart-metrics-answer',
+    category: 'rca',
+    question: 'Graph the pool metrics around this incident',
+    script: [
+      { tool: 'query_metrics', input: { query: 'pool_in_use', incidentId: '$incident' } },
+      { say: 'Pool use climbed from 40 to 98 in a minute.' },
+    ],
+    // The chart comes from what the metrics tool returned (redacted), never from the model's words, and is
+    // saved with the turn so a reopened conversation shows it again.
+    expect: {
+      mode: 'ai',
+      toolLabels: ['Querying metrics'],
+      charts: 1,
+      modelNeverSaw: ['oncall-canary@example.com'],
+    },
+  },
+  {
+    id: 'chart-none-for-logs',
+    category: 'tool-choice',
+    question: 'Show me the checkout errors in the logs',
+    script: [
+      { tool: 'search_logs', input: { query: '{app="checkout"}' } },
+      { say: 'Pool timeouts after 30s.' },
+    ],
+    // Log lines are not a time series: no chart.
+    expect: { mode: 'ai', toolLabels: ['Searching logs'], charts: 0 },
+  },
+  {
+    id: 'language-reply-rule',
+    category: 'conversation',
+    question: '¿Qué está pasando con este incidente?',
+    script: [{ say: 'El incidente sigue abierto: el pool de conexiones está saturado.' }],
+    // The question reaches the model as written, alongside the rule to answer in the person's language.
+    expect: {
+      mode: 'ai',
+      modelCalls: 1,
+      modelSaw: [
+        'Reply in the language the user wrote in',
+        '¿Qué está pasando con este incidente?',
+      ],
+    },
   },
 ];

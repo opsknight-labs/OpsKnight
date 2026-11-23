@@ -29,9 +29,11 @@ export async function POST(request: NextRequest) {
       user_id: params.get('user_id') || '',
       user_name: params.get('user_name') || '',
       team_id: params.get('team_id') || '',
+      enterprise_id: params.get('enterprise_id') || '',
       response_url: params.get('response_url') || '',
     };
-    if (!payload.team_id) return NextResponse.json({ error: 'Missing Slack workspace' }, { status: 400 });
+    if (!payload.team_id)
+      return NextResponse.json({ error: 'Missing Slack workspace' }, { status: 400 });
 
     await enqueueChatOpsIntent({
       kind: 'SLASH_COMMAND',
@@ -41,7 +43,10 @@ export async function POST(request: NextRequest) {
       slackUserId: payload.user_id,
       payload,
     });
-    return NextResponse.json({ response_type: 'ephemeral', text: '⚙️ Processing `/incident` command...' });
+    return NextResponse.json({
+      response_type: 'ephemeral',
+      text: '⚙️ Processing `/incident` command...',
+    });
   } catch (error) {
     logger.error('[Slack] Commands API persistence error', { error });
     return NextResponse.json({ error: 'Unable to queue command' }, { status: 503 });

@@ -13,6 +13,14 @@ vi.mock('@/lib/intelligence/conversations/store', () => ({
   recordExchange: store.record,
 }));
 
+const background = vi.hoisted(() => ({ handedOff: vi.fn() }));
+vi.mock('@/lib/intelligence/conversations/background', () => ({
+  hasBackgroundHandOff: background.handedOff,
+}));
+vi.mock('@/lib/intelligence/conversations/background-run', () => ({
+  startBackgroundTurns: vi.fn(async () => undefined),
+}));
+
 const incidents = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('@/lib/intelligence/squire/deterministic', () => ({
   readIncidentForActor: incidents.read,
@@ -39,6 +47,7 @@ beforeEach(() => {
   turns.run.mockReset().mockImplementation(events);
   store.status.mockReset().mockResolvedValue({ enabled: false, retentionDays: 30 });
   store.record.mockReset().mockResolvedValue('conv1');
+  background.handedOff.mockReset().mockResolvedValue(false);
   incidents.read
     .mockReset()
     .mockImplementation(async (_actor: unknown, id: string) => (id === 'inc1' ? { id } : null));
@@ -182,16 +191,91 @@ describe('POST /api/intelligence/squire', () => {
       yield { type: 'delta', text: 'partial answer' };
       await new Promise(() => undefined);
     });
-    const response = await POST(make({ message: 'hello', incidentId: 'inc1' }));
+    const response = await POST(
+      make({ message: 'hello', incidentId: 'inc1', conversationId: 'c-interrupted' })
+    );
     const reader = response.body!.getReader();
     await reader.read();
     await reader.cancel();
-    await vi.waitFor(() => expect(store.record).toHaveBeenCalledOnce());
-    expect(store.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        answer: 'partial answer',
-        turn: expect.objectContaining({ completion: 'INTERRUPTED', verified: false }),
-      })
+    // It first waits briefly for a hand-off sent as the tab closed. (Earlier tests' cancelled streams
+    // may still be finishing, so this looks for this request's save rather than counting calls.)
+    await vi.waitFor(
+      () =>
+        expect(store.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            incidentId: 'inc1',
+            answer: 'partial answer',
+            turn: expect.objectContaining({ completion: 'INTERRUPTED', verified: false }),
+          })
+        ),
+      { timeout: 4_000 }
+    );
+    expect(background.handedOff).toHaveBeenCalledWith('u1', 'c-interrupted', expect.any(Date));
+  });
+
+  it('does not save an interrupted first turn: the client would never learn the new conversation', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    turns.run.mockImplementation(async function* () {
+      yield { type: 'delta', text: 'partial answer' };
+      await new Promise(() => undefined);
+    });
+    const response = await POST(make({ message: 'first question' }));
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    await new Promise(resolve => setTimeout(resolve, 1_800));
+    expect(store.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ answer: 'partial answer', question: 'first question' })
+    );
+    expect(background.handedOff).not.toHaveBeenCalled();
+  });
+
+  it('keeps pinging while a slow save finishes after the answer', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+      let finishSave: (id: string) => void = () => undefined;
+      store.record.mockImplementation(() => new Promise<string>(resolve => (finishSave = resolve)));
+      const response = await POST(make({ message: 'hello' }));
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      const lines: string[] = [];
+      const readLine = async () => {
+        const { value } = await reader.read();
+        lines.push(decoder.decode(value));
+      };
+      // meta, delta, done
+      for (let i = 0; i < 3; i += 1) await readLine();
+      const ping = readLine();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await ping;
+      expect(lines.at(-1)).toContain('"ping"');
+      finishSave('conv1');
+      await readLine();
+      expect(lines.at(-1)).toContain('"conversation"');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not save a cut-off copy of an answer handed to the background', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    background.handedOff.mockResolvedValue(true);
+    turns.run.mockImplementation(async function* () {
+      yield { type: 'delta', text: 'partial answer' };
+      await new Promise(() => undefined);
+    });
+    const response = await POST(make({ message: 'hello', conversationId: 'c1' }));
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    await vi.waitFor(
+      () => expect(background.handedOff).toHaveBeenCalledWith('u1', 'c1', expect.any(Date)),
+      { timeout: 4_000 }
+    );
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(store.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'c1' })
     );
   });
 

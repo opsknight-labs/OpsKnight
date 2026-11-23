@@ -15,10 +15,14 @@ import { UNKNOWN_ACTION_MESSAGE, type SquireActionResult } from './actions/outco
 import {
   argsSchema,
   changesOf,
+  displayName,
   extendedOn,
+  incidentOf,
   invoke,
+  isHighRisk,
   isReadOperation,
   mayCall,
+  receiptRefusal,
   refusal,
   squireOperation,
   summaryOf,
@@ -32,12 +36,14 @@ import {
  * (same catalog gate, role check, validation and REST handler); a step may use an earlier step's result
  * through a `{"$from": "<index>", "pointer": "/json/pointer"}` reference, resolved only at execution.
  * There is no rollback: steps already applied stay applied, and the result says so.
+ * A high-risk change (R3) is never a plan step: it always gets its own card. A reference may only fill the
+ * path of a step that creates something; an update or delete always shows its real target id on the card.
  */
 
 export const PROPOSE_PLAN_TOOL: AiToolDefinition = {
   name: 'propose_plan',
   description:
-    'Suggest several related changes from find_operations as one plan (for example create a service, then its escalation policy, then a maintenance window). Pass { title, steps: [{ operationId, args }] } with 2 to 5 steps; a later step may use an earlier step\'s result with {"$from": "<0-based step index>", "pointer": "/data/id"} (a JSON pointer into that step\'s response). The user sees one card listing every step and decides; nothing happens unless they confirm.',
+    'Suggest several related changes from find_operations as one plan (for example create a service, then its escalation policy, then a maintenance window). Pass { title, steps: [{ operationId, args }] } with 2 to 5 steps; a later step may use an earlier step\'s result with {"$from": "<0-based step index>", "pointer": "/data/id"} (a JSON pointer into that step\'s response). A reference may fill the path only of a create step. High-risk changes such as deletes cannot be in a plan; propose them on their own. The user sees one card listing every step and decides; nothing happens unless they confirm.',
   kind: 'PROPOSE_WRITE',
   inputSchema: {
     type: 'object',
@@ -143,6 +149,10 @@ function at(response: unknown, pointer: string): unknown {
   return target;
 }
 
+/** A POST that adds a record (createX, addX): the only kind of step whose path may come from an earlier step. */
+const createsRecord = (operation: { method: string; operationId: string }) =>
+  operation.method === 'post' && /^(create|add)[A-Z]/.test(operation.operationId);
+
 /**
  * Checks every step as at proposal time: a change this person may make, valid with each reference stood in
  * by a readable placeholder ("from-step-1"). Returns the steps and their placeholder args, or null.
@@ -152,7 +162,17 @@ function checkSteps(actor: AuthorizationActor, steps: SealedPlan['steps']) {
   try {
     return steps.map(({ operationId, args }, index) => {
       const operation = squireOperation(operationId);
-      if (!operation || isReadOperation(operation) || !mayCall(actor, operation)) throw new Error();
+      if (
+        !operation ||
+        isReadOperation(operation) ||
+        isHighRisk(operation) ||
+        !mayCall(actor, operation)
+      )
+        throw new Error();
+      if (!createsRecord(operation))
+        mapReferences(args.path, index, () => {
+          throw new Error('a reference in the target of an update');
+        });
       const shown = mapReferences(args, index, from => `from-step-${from + 1}`);
       return {
         operation,
@@ -244,12 +264,14 @@ export async function executePlanProposal(
   const steps = checkSteps(actor, sealed.steps);
   if (!steps)
     return fail('Your role does not allow every change in this plan, or it is no longer valid.');
+  const context = { name: await displayName(actor.id) };
   try {
     await prisma.squireActionReceipt.create({
       data: {
         id: sealed.id,
         userId: actor.id,
         action: `plan:${steps.length} steps`,
+        incidentId: steps.map(step => incidentOf(step.operation, step.args)).find(Boolean),
         status: 'RUNNING',
         startedAt: new Date(),
         intentEncrypted: await encrypt(
@@ -257,8 +279,8 @@ export async function executePlanProposal(
         ),
       },
     });
-  } catch {
-    return fail('This suggestion was already used. Ask again for a fresh one.');
+  } catch (error) {
+    return fail(receiptRefusal(error));
   }
   // eslint-disable-next-line security/detect-object-injection -- a step index below steps.length
   const name = (index: number) => `step ${index + 1} (${summaryOf(steps[index].operation)})`;
@@ -278,7 +300,7 @@ export async function executePlanProposal(
       break;
     }
     try {
-      responses.push(await invoke(actor, step.operation, args));
+      responses.push(await invoke(actor, step.operation, args, context));
     } catch (error) {
       logger.warn('[Squire] Confirmed plan step was refused', {
         operationId: step.operation.operationId,

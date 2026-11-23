@@ -11,14 +11,27 @@ const STOP = new Set(
     ' '
   )
 );
+/** Words that only shape the question (time, filler), never a title or service name to filter on. */
+const FILLER = new Set(
+  'monday tuesday wednesday thursday friday saturday sunday mon tue tues wed thu thur thurs fri sat sun january february march april may june july august september october november december jan feb mar apr jun jul aug sep sept oct nov dec night tonight weekend morning evening afternoon anything something going issues issue problems problem errors error only them previous break like seen before started fits give sev severity urgent'.split(
+    ' '
+  )
+);
+/** A word that shapes the question rather than naming something to search for. */
+export const isQueryWord = (token: string) => STOP.has(token) || FILLER.has(token);
 export function keywords(message: string): string[] {
   const quoted = message.match(/["“]([^"”]{1,120})["”]/)?.[1];
+  // Spans the window parser reads ("since monday", "on 3 nov", "between mon and wed") are filters, not terms.
+  const text = quoted ?? message.toLowerCase().replace(WINDOW_SPAN, ' ');
   return [
     ...new Set(
-      ((quoted ?? message).toLowerCase().match(/[a-z0-9][a-z0-9_.-]*/g) ?? []).filter(
+      (text.toLowerCase().match(/[a-z0-9][a-z0-9_.-]*/g) ?? []).filter(
         token =>
           token.length >= 2 &&
-          (Boolean(quoted) || (!STOP.has(token) && !/^(?:\d+|p[0-5])$/.test(token)))
+          (Boolean(quoted) ||
+            (!STOP.has(token) &&
+              !FILLER.has(token) &&
+              !/^(?:\d+(?:st|nd|rd|th)?|p[0-5]|\d{4}-\d{2}-\d{2})$/.test(token)))
       )
     ),
   ].slice(0, 6);
@@ -46,7 +59,9 @@ export function parseBasicQuery(message: string, now = new Date(), timezone = 'U
   const key = formatDateKeyInTimeZone(now, tz);
   const query: BasicQuery = {
     terms: keywords(message),
-    priority: text.match(/\bp[0-5]\b/i)?.[0].toUpperCase(),
+    priority:
+      text.match(/\bp[0-5]\b/i)?.[0].toUpperCase() ??
+      text.match(/\b(?:sev(?:erity)?|priority) ?([0-5])\b/)?.[1].replace(/^/, 'P'),
     status: /\b(unresolved|not resolved|not closed)\b/.test(text)
       ? undefined
       : /\b(resolved|closed)\b/.test(text)
@@ -59,11 +74,12 @@ export function parseBasicQuery(message: string, now = new Date(), timezone = 'U
               ? 'SNOOZED'
               : /\bsuppressed\b/.test(text)
                 ? 'SUPPRESSED'
-                : /\b(open|opened|triggered)\b/.test(text)
+                : /\b(opened|triggered)\b/.test(text)
                   ? 'OPEN'
                   : undefined,
+    // "Open" means unresolved (OPEN or ACKNOWLEDGED), as the incident list uses it; the filter line says so.
     active:
-      /\b(active|unresolved|not resolved|not closed|workload|work queue|my queue|unassigned)\b/.test(
+      /\b(open|active|unresolved|not resolved|not closed|workload|work queue|my queue|unassigned)\b/.test(
         text
       ),
     urgency: /\b(high|critical)\b/.test(text)
@@ -211,7 +227,10 @@ const DAY_MS = 86_400_000;
 const MAX_WINDOW_DAYS = 90;
 const WEEKDAY =
   '(?:last |this |past )?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|(?<=last |this |on |since |from |to |and )(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun))';
-const DATE_EXPR = `(?:\\d{4}-\\d{2}-\\d{2}|today|yesterday|${WEEKDAY}|\\d{1,2}(?:st|nd|rd|th)? (?:of )?[a-z]{3,9}(?: \\d{4})?|[a-z]{3,9} \\d{1,2}(?:st|nd|rd|th)?(?:,? \\d{4})?)`;
+// Real month names only, so "show 5" or "marketing 5" is never read as a date.
+const MONTH =
+  '(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+const DATE_EXPR = `(?:\\d{4}-\\d{2}-\\d{2}|today|yesterday|${WEEKDAY}|\\d{1,2}(?:st|nd|rd|th)? (?:of )?${MONTH}(?: \\d{4})?|${MONTH} \\d{1,2}(?:st|nd|rd|th)?(?:,? \\d{4})?)`;
 // The alternation is a fixed list of bounded shapes, so matching stays linear.
 
 const BETWEEN = new RegExp(
@@ -220,7 +239,13 @@ const BETWEEN = new RegExp(
 
 const SINCE = new RegExp(`\\bsince\\s+(${DATE_EXPR})\\b`);
 
-const ON_DAY = new RegExp(`\\b(?:on\\s+)?(${DATE_EXPR})\\b`);
+const ON_DAY = new RegExp(`\\b(?:on\\s+)?(${DATE_EXPR})\\b`, 'g');
+
+/** Every span a time window is read from; removed before keywords are taken. */
+const WINDOW_SPAN = new RegExp(
+  `\\b(?:(?:between|from|since|on|until|till|to|and|before|after)\\s+)?(?:${DATE_EXPR}|(?:last|past|next|this)\\s+(?:\\d{1,5}\\s+)?(?:hours?|days?|weeks?|months?|night|weekend))\\b`,
+  'g'
+);
 
 function dayKeyOf(date: Date, tz: string): string {
   return formatDateKeyInTimeZone(date, tz);
@@ -259,7 +284,8 @@ export function resolveDayKey(
       // Within the current Monday-start week; a day still ahead is not a day with incidents yet.
       const sinceMonday = (todayIndex + 6) % 7;
       const offset = (index + 6) % 7;
-      if (offset > sinceMonday) return null;
+      if (offset > sinceMonday)
+        return allowFuture ? keyOf(todayUtc + (offset - sinceMonday) * DAY_MS) : null;
       back = sinceMonday - offset;
     }
     return keyOf(todayUtc - back * DAY_MS);
@@ -295,6 +321,10 @@ export function parseExplicitWindow(
 ): { gte: Date; lt: Date; label: string } | { error: string } | null {
   const tooLong = { error: 'Choose a time window between 1 hour and 90 days.' };
   const future = { error: 'That date is in the future. Choose a day up to today.' };
+  // A date-shaped expression that is not a calendar day ("2026-02-30") is an error, never "no filter".
+  const invalid = (expression: string) => ({
+    error: `“${expression.slice(0, 40)}” is not a date I can read. Use a real day such as “since 2026-11-01” or “on 5 Nov”.`,
+  });
   const dayStart = (dayKey: string) => startOfDayFromDateKey(dayKey, tz);
   const between = text.match(BETWEEN);
   if (between) {
@@ -303,7 +333,7 @@ export function parseExplicitWindow(
     if (!start || !end)
       return resolveDayKey(between[1], key, true) || resolveDayKey(between[2], key, true)
         ? future
-        : null;
+        : invalid(start ? between[2] : between[1]);
     const [from, to] = start <= end ? [start, end] : [end, start];
     const gte = dayStart(from);
     const lt = new Date(Math.min(dayStart(addDaysToDateKey(to, 1)).getTime(), now.getTime()));
@@ -313,15 +343,15 @@ export function parseExplicitWindow(
   const since = text.match(SINCE);
   if (since) {
     const start = resolveDayKey(since[1], key);
-    if (!start) return resolveDayKey(since[1], key, true) ? future : null;
+    if (!start) return resolveDayKey(since[1], key, true) ? future : invalid(since[1]);
     const gte = dayStart(start);
     if (now.getTime() - gte.getTime() > MAX_WINDOW_DAYS * DAY_MS) return tooLong;
     return { gte, lt: now, label: `since ${start} (${tz})` };
   }
-  const on = text.match(ON_DAY);
-  if (on && !/^(today|yesterday)$/.test(on[1])) {
+  for (const on of text.matchAll(ON_DAY)) {
+    if (/^(today|yesterday)$/.test(on[1])) continue;
     const day = resolveDayKey(on[1], key);
-    if (!day) return resolveDayKey(on[1], key, true) ? future : null;
+    if (!day) return resolveDayKey(on[1], key, true) ? future : invalid(on[1]);
     const gte = dayStart(day);
     if (now.getTime() - gte.getTime() > MAX_WINDOW_DAYS * DAY_MS) return tooLong;
     const weekdayName = WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()];

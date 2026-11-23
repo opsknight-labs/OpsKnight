@@ -18,6 +18,7 @@ import { ConnectorError, type ConnectorFetch } from '../connectors/http';
 import { LIMITS, type TimeWindow } from '../connectors/normalize';
 import { contextFor, loadConnectionForActor, type EligibleConnection } from '../connectors/service';
 import { readIncidentForActor } from './deterministic';
+import { SQUIRE_CHART_LIMITS, squireChartSchema, type SquireChart } from './contract';
 import {
   buildDiscoveryTools,
   DISCOVERY_TOOL_CAPABILITY,
@@ -157,6 +158,100 @@ export function redactConnectorResult(value: unknown, dataClass: AiDataClass): u
       ? safe
       : redactPersonalData(safe, { email: true, phone: true, ip: false });
   });
+}
+
+const clipName = (text: string, max: number) =>
+  text.length > max ? `${text.slice(0, max - 1)}…` : text;
+
+/**
+ * Takes the chart-only dense points out of a metrics result: the model gets the result without them, the
+ * chart gets them by series index. Anything that is not a metrics result passes through untouched.
+ */
+export function splitChartSamples(result: unknown): { forModel: unknown; dense: unknown[] } {
+  const value = result as { kind?: unknown; series?: unknown } | null;
+  if (!value || value.kind !== 'metrics' || !Array.isArray(value.series))
+    return { forModel: result, dense: [] };
+  const dense: unknown[] = [];
+  const series = value.series.map(item => {
+    if (!item || typeof item !== 'object') {
+      // Keep indexes aligned: dense[i] always belongs to series[i].
+      dense.push(undefined);
+      return item;
+    }
+    const { chartSamples, ...rest } = item as { chartSamples?: unknown };
+    dense.push(chartSamples);
+    return rest;
+  });
+  return { forModel: { ...value, series }, dense };
+}
+
+/**
+ * The chart for a `query_metrics` result, or null for anything else (another tool, an error, too little
+ * data). Built only from the already-redacted result the tool returned, so it carries nothing the model did
+ * not also receive.
+ * Points come from `dense` (the chart-only samples split off before the model saw the result, matched by
+ * series index; labels still come from the redacted result) and fall back to the summary's few samples.
+ */
+export function metricsChart(
+  tool: string,
+  result: unknown,
+  dense: readonly unknown[] = []
+): SquireChart | null {
+  if (tool !== 'query_metrics' || !result || typeof result !== 'object') return null;
+  const value = result as {
+    kind?: unknown;
+    query?: unknown;
+    connectionId?: unknown;
+    connectionName?: unknown;
+    series?: unknown;
+  };
+  if (value.kind !== 'metrics' || !Array.isArray(value.series)) return null;
+  const query = typeof value.query === 'string' ? value.query.trim() : '';
+  const series = value.series
+    .map((item, index) => {
+      const { labels, samples: few } = (item ?? {}) as { labels?: unknown; samples?: unknown };
+      // eslint-disable-next-line security/detect-object-injection -- numeric index into a local array
+      const samples = Array.isArray(dense[index]) ? dense[index] : few;
+      const byTime = new Map<string, number>();
+      for (const sample of Array.isArray(samples) ? samples : []) {
+        const { at, value: v } = (sample ?? {}) as { at?: unknown; value?: unknown };
+        const ms = typeof at === 'string' ? Date.parse(at) : NaN;
+        if (Number.isFinite(ms) && typeof v === 'number' && Number.isFinite(v))
+          byTime.set(new Date(ms).toISOString(), v);
+      }
+      const points = [...byTime.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(0, SQUIRE_CHART_LIMITS.points)
+        .map(([t, v]) => ({ t, v }));
+      const label =
+        labels && typeof labels === 'object'
+          ? Object.entries(labels as Record<string, unknown>)
+              .filter(([, text]) => typeof text === 'string' && text)
+              .map(([key, text]) => `${key}=${text}`)
+              .join(', ')
+          : '';
+      return { name: clipName(label || query || 'value', SQUIRE_CHART_LIMITS.name), points };
+    })
+    // One point is not a line.
+    .filter(item => item.points.length >= 2)
+    .slice(0, SQUIRE_CHART_LIMITS.series);
+  if (series.length === 0) return null;
+  const parsed = squireChartSchema.safeParse({
+    title: clipName(query || 'Metrics', SQUIRE_CHART_LIMITS.title),
+    series,
+    ...(typeof value.connectionId === 'string'
+      ? {
+          source: {
+            kind: 'observability',
+            id: value.connectionId,
+            ...(typeof value.connectionName === 'string'
+              ? { label: clipName(value.connectionName, SQUIRE_CHART_LIMITS.title) }
+              : {}),
+          },
+        }
+      : {}),
+  });
+  return parsed.success ? parsed.data : null;
 }
 
 function connectionList(connections: readonly EligibleConnection[]): string {

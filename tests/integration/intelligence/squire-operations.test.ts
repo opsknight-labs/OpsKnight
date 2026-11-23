@@ -3,6 +3,8 @@ import { resolveUserActor } from '@/lib/authorization-actors';
 import {
   buildOperationProposal,
   buildOperationTools,
+  executeOperationProposal,
+  openOperationProposal,
   searchOperations,
   squireOperation,
 } from '@/lib/intelligence/squire/operations';
@@ -217,6 +219,100 @@ describe('Squire operation catalog', () => {
     );
     expect(asResponder.ok).toBe(true);
     expect(asResponder.ok && asResponder.followUp).toBeFalsy();
+  });
+
+  it("never offers deciding someone else's request (approve or reject) as a card", async () => {
+    const { admin } = await world();
+    for (const id of ['approveRunbookExecutionStep', 'rejectRunbookExecutionStep'])
+      expect(squireOperation(id)).toBeNull();
+    const found = searchOperations(admin, 'approve reject runbook execution step', 50);
+    expect(found.map(item => item.operationId)).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/^(approve|reject)[A-Z]/)])
+    );
+  });
+
+  it('offers no undo that would clear a state the incident already had before the change', async () => {
+    const { admin, service } = await world();
+    const run = async (operationId: string, id: string) => {
+      const proposal = await buildOperationProposal(admin, {
+        operationId,
+        args: { path: { id }, body: {} },
+      });
+      expect(proposal, operationId).not.toBeNull();
+      const result = await executeSquireAction(admin, proposal!.token);
+      expect(result.ok, result.message).toBe(true);
+      return result.ok ? result.followUp : undefined;
+    };
+    // From OPEN, the undo returns it to OPEN.
+    const open = await createTestIncident('Open one', service.id);
+    expect(await run('acknowledgeIncident', open.id)).toMatchObject({ confirmLabel: 'Undo' });
+    const suppressed = await createTestIncident('Open two', service.id);
+    expect(await run('suppressIncident', suppressed.id)).toMatchObject({ confirmLabel: 'Undo' });
+    // Already in that state: the change did nothing, so there is nothing to undo.
+    const acked = await createTestIncident('Already acked', service.id);
+    await db.incident.update({ where: { id: acked.id }, data: { status: 'ACKNOWLEDGED' } });
+    expect(await run('acknowledgeIncident', acked.id)).toBeUndefined();
+    expect((await db.incident.findUniqueOrThrow({ where: { id: acked.id } })).status).toBe(
+      'ACKNOWLEDGED'
+    );
+    const already = await createTestIncident('Already suppressed', service.id);
+    await db.incident.update({ where: { id: already.id }, data: { status: 'SUPPRESSED' } });
+    expect(await run('suppressIncident', already.id)).toBeUndefined();
+  });
+
+  it('records the incident on an incident change receipt, and nothing for other domains', async () => {
+    const { admin, service, incident } = await world();
+    const tag = await buildOperationProposal(admin, {
+      operationId: 'addIncidentTag',
+      args: { path: { id: incident.id }, body: { name: 'database' } },
+    });
+    const rename = await buildOperationProposal(admin, {
+      operationId: 'updateService',
+      args: { path: { id: service.id }, body: { name: 'Checkout v2' } },
+    });
+    for (const proposal of [tag, rename])
+      expect((await executeSquireAction(admin, proposal!.token)).ok).toBe(true);
+    const receipt = (id: string) => db.squireActionReceipt.findUniqueOrThrow({ where: { id } });
+    expect((await receipt(tag!.receiptId!)).incidentId).toBe(incident.id);
+    expect((await receipt(rename!.receiptId!)).incidentId).toBeNull();
+  });
+
+  it('reports a receipt that cannot be written as not recorded, and only a duplicate as already used', async () => {
+    const { admin, service } = await world();
+    const input = {
+      operationId: 'updateService',
+      args: { path: { id: service.id }, body: { name: 'Checkout v2' } },
+    };
+    const proposal = await buildOperationProposal(admin, input);
+    // A receipt for a person who no longer exists fails on its foreign key, not as a duplicate.
+    const ghost = await buildOperationProposal(admin, input);
+    const sealed = (await openOperationProposal(ghost!.token, admin.id))!;
+    const missing = await executeOperationProposal(
+      { ...admin, id: 'no-such-user' },
+      {
+        ...sealed,
+        actorId: 'no-such-user',
+      }
+    );
+    expect(missing).toEqual({ ok: false, message: expect.stringMatching(/could not be recorded/) });
+    expect((await executeSquireAction(admin, proposal!.token)).ok).toBe(true);
+    const replay = await executeSquireAction(admin, proposal!.token);
+    expect(replay).toEqual({ ok: false, message: expect.stringMatching(/already used/) });
+  });
+
+  it('stops a catalog read once the turn is stopped', async () => {
+    const { admin, service } = await world();
+    const controller = new AbortController();
+    controller.abort();
+    const read = buildOperationTools(admin, { signal: controller.signal }).find(
+      tool => tool.name === 'read_operation'
+    )!;
+    const result = (await read.execute!({
+      operationId: 'getService',
+      args: { path: { id: service.id } },
+    })) as { data?: unknown; error?: string };
+    expect(result.data).toBeUndefined();
+    expect(result.error).toBeTruthy();
   });
 
   it('reads through the catalog with the field allowlist applied', async () => {

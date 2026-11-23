@@ -452,6 +452,7 @@ describe('rendering', () => {
     const ledger: EvidenceEntry[] = [
       { handle: 'h1', kind: 'change', id: 'c1', label: 'Deploy 42', href: '/changes/c1' },
       { handle: 'h2', kind: 'alert', id: 'a1', label: 'DB CPU', href: '/alerts/a1' },
+      { handle: 'h3', kind: 'observability', id: 'o1', label: 'Prometheus', href: null },
     ];
     const { text } = renderDiagnosis(
       {
@@ -462,7 +463,7 @@ describe('rendering', () => {
             explanation: 'Errors began two minutes after Deploy 42.',
             confidence: 0.8,
             support: 'validated',
-            evidence: ['h1'],
+            evidence: ['h1', 'h3'],
           },
           {
             title: 'Database saturation',
@@ -569,5 +570,116 @@ describe('investigation trigger', () => {
           }) as unknown as LanguageModelPort,
       })
     ).toBe(false);
+  });
+});
+
+describe('review fixes', () => {
+  const ledger: EvidenceEntry[] = [
+    { handle: 'h1', kind: 'change', id: 'c1', label: 'Deploy 42', href: '/changes/c1' },
+    { handle: 'h2', kind: 'service', id: 's1', label: 'Checkout', href: '/services/s1' },
+    {
+      handle: 'h3',
+      kind: 'service',
+      id: 's2',
+      label: 'Payments',
+      href: '/services/s2',
+      tools: ['get_service'],
+    },
+  ];
+  const hypothesis = (
+    title: string,
+    evidence: string[],
+    support?: Diagnosis['hypotheses'][0]['support'],
+    confidence = 0.6
+  ) => ({
+    title,
+    explanation: 'x',
+    confidence,
+    ...(support ? { support } : {}),
+    evidence,
+  });
+
+  it('downgrades "validated" unless a live-state read is cited, and returns the checked diagnosis', () => {
+    const { text, diagnosis } = renderDiagnosis(
+      {
+        summary: 's',
+        hypotheses: [
+          hypothesis('Only a change', ['h1', 'nope'], 'alternatives_ruled_out', 0.9),
+          hypothesis('Service record without a live read', ['h2'], 'validated', 0.8),
+          hypothesis('Live service state', ['h3'], 'validated', 0.7),
+        ],
+        nextChecks: ['check'],
+      },
+      ledger,
+      { steps: 1, reads: 3 }
+    );
+    expect(diagnosis.hypotheses.map(h => h.support)).toEqual([
+      'supported',
+      'supported',
+      'validated',
+    ]);
+    // Only handles that were read survive in the structured result.
+    expect(diagnosis.hypotheses[0].evidence).toEqual(['h1']);
+    expect(text).toContain('confidence 70% (high, validated by system state)');
+    expect(text).not.toContain('alternatives ruled out');
+  });
+
+  it('bounds standing and ruled-out hypotheses separately', () => {
+    const { diagnosis } = renderDiagnosis(
+      {
+        summary: 's',
+        hypotheses: [
+          ...[1, 2, 3].map(i => hypothesis(`Ruled out ${i}`, ['h1'], 'contradicted', 0.9)),
+          ...[1, 2, 3].map(i => hypothesis(`Standing ${i}`, ['h1'], 'supported', 0.5)),
+        ],
+        nextChecks: [],
+      },
+      ledger,
+      { steps: 1, reads: 1 }
+    );
+    expect(diagnosis.hypotheses.filter(h => h.support !== 'contradicted')).toHaveLength(3);
+    expect(diagnosis.hypotheses.filter(h => h.support === 'contradicted')).toHaveLength(3);
+  });
+
+  it('reports rate limiting as its own stop, not as the token budget', async () => {
+    const h = harness();
+    const planner = scriptedPort([
+      { thought: 'read', calls: [call('get_service')], done: false },
+      new Error('Too many requests'),
+    ]);
+    const { outcome } = await drain(runInvestigation(inputFor(h, planner, scriptedPort([]))));
+    expect(outcome).toMatchObject({ partial: true, stop: 'rate_limited' });
+    expect(outcome.answer).toContain('rate limit');
+    expect(outcome.answer).not.toContain('token budget');
+  });
+
+  it('stops planning at the caller deadline and concludes from what was read', async () => {
+    const h = harness();
+    const planner = scriptedPort([
+      { thought: 'read', calls: [call('get_service')], done: false },
+      { thought: 'more', calls: [call('get_slo_status')], done: false },
+    ]);
+    const diagnoser = scriptedPort([
+      { summary: 'Done in time.', hypotheses: [hypothesis('Bad deploy', [])], nextChecks: [] },
+    ]);
+    const { outcome } = await drain(
+      runInvestigation(
+        // Inside the conclusion reserve: only the first step runs before concluding.
+        inputFor(h, planner, diagnoser, { deadlineMs: INVESTIGATION_LIMITS.conclusionMs - 1 })
+      )
+    );
+    expect(planner.requests).toHaveLength(1);
+    expect(outcome).toMatchObject({ partial: false, stop: 'concluded', reads: 1 });
+    expect(outcome.diagnosis?.summary).toBe('Done in time.');
+  });
+
+  it('throws a typed start error only when nothing was read', async () => {
+    const { InvestigationStartError } =
+      await import('@/lib/intelligence/squire/investigation/engine');
+    const h = harness();
+    const run = drain(
+      runInvestigation(inputFor(h, scriptedPort([new Error('provider down')]), scriptedPort([])))
+    );
+    await expect(run).rejects.toBeInstanceOf(InvestigationStartError);
   });
 });

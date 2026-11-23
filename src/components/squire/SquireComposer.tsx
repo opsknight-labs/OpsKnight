@@ -102,7 +102,9 @@ export default function SquireComposer({
   const found = mentionQuery
     ? search.results.filter(result => MENTION_KIND[result.type]).slice(0, 8)
     : [];
-  const mentionOpen = found.length > 0 && closedFor !== value;
+  // While "@text" is typed the popup shows results, "Searching…" or "No matches".
+  const mentionPanel = Boolean(mentionQuery) && closedFor !== value;
+  const mentionOpen = mentionPanel && found.length > 0;
   const listOpen = menuOpen || mentionOpen;
   const count = menuOpen ? commands.length : found.length;
   const current = Math.min(active, count - 1);
@@ -138,12 +140,12 @@ export default function SquireComposer({
         pick(current);
         return;
       }
-      if (event.key === 'Escape') {
-        // Prevented, so the panel's own Escape handler leaves the chat open.
-        event.preventDefault();
-        setClosedFor(value);
-        return;
-      }
+    }
+    if ((listOpen || mentionPanel) && event.key === 'Escape') {
+      // Prevented, so the panel's own Escape handler leaves the chat open.
+      event.preventDefault();
+      setClosedFor(value);
+      return;
     }
     onKeyDown(event);
   };
@@ -199,6 +201,14 @@ export default function SquireComposer({
             ))}
         </ul>
       )}
+      {mentionPanel && !mentionOpen && (
+        <p
+          role="status"
+          className="absolute inset-x-3 bottom-full z-10 mb-1 rounded-xl border border-border bg-popover px-3 py-2 text-sm text-muted-foreground shadow-lg"
+        >
+          {search.loading ? 'Searching…' : 'No matches'}
+        </p>
+      )}
       {editing && (
         <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>Editing a question starts a new version of this chat.</span>
@@ -221,7 +231,8 @@ export default function SquireComposer({
                   type="button"
                   aria-label={`Remove mention ${mention.label}`}
                   onClick={() => onMentionsChange?.(mentions.filter(other => other !== mention))}
-                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                  // 44 px to tap on phones; a small cross in the desktop panel.
+                  className="-my-3 inline-flex h-11 w-11 shrink-0 items-center sm:my-0 sm:h-5 sm:w-5 justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X aria-hidden="true" className="h-3 w-3" />
                 </button>
@@ -242,6 +253,8 @@ export default function SquireComposer({
               onChange(event.target.value);
             }}
             onKeyDown={handleKeyDown}
+            role={listOpen ? 'combobox' : undefined}
+            aria-expanded={listOpen ? true : undefined}
             aria-autocomplete={onCommand || onMentionsChange ? 'list' : undefined}
             aria-controls={listOpen ? listId : undefined}
             aria-activedescendant={listOpen ? `${listId}-${current}` : undefined}

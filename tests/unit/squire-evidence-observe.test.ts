@@ -142,3 +142,53 @@ describe('SquireEvidenceRegistry.observe', () => {
     expect(evidence.citations('see [evidence:E12]')).toEqual([]);
   });
 });
+
+describe('evidence cap and result shape', () => {
+  const incidents = (from: number, count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      id: `inc-${from + index}`,
+      title: `Incident ${from + index}`,
+    }));
+
+  it('past the source cap returns the data without new citations, says so once, never "unavailable"', async () => {
+    const evidence = registry();
+    const first = (await evidence.observe('search_incidents', {}, incidents(0, 30))) as Observed;
+    expect(first.evidence).toHaveLength(30);
+    const over = (await evidence.observe('search_incidents', {}, incidents(25, 10))) as Observed;
+    expect(over.error).toBeUndefined();
+    expect(over.data).toHaveLength(10);
+    // Only the five already-held sources keep their handles.
+    expect(over.evidence.map(e => e.id)).toEqual([
+      'inc-25',
+      'inc-26',
+      'inc-27',
+      'inc-28',
+      'inc-29',
+    ]);
+    await evidence.observe('search_incidents', {}, incidents(40, 3));
+    expect(evidence.notices().filter(text => text.includes('without citations'))).toHaveLength(1);
+    expect(evidence.verified).toBe(false);
+    expect(evidence.sources()).toHaveLength(30);
+  });
+
+  it('puts the evidence handles before the data and trims to what the model receives', async () => {
+    const evidence = registry();
+    const big = Array.from({ length: 30 }, (_, index) => ({
+      id: `inc-${index}`,
+      title: 'x'.repeat(300),
+    }));
+    const out = (await evidence.observe('search_incidents', {}, big)) as Observed;
+    expect(Object.keys(out)).toEqual(['evidence', 'truncated', 'data']);
+    expect(JSON.stringify(out.data).length).toBeLessThanOrEqual(6_000);
+    // Evidence is minted only for the rows that were kept.
+    expect(out.evidence).toHaveLength((out.data as unknown[]).length);
+    const narrow = (await registry().observe('search_incidents', {}, big, 1_800)) as Observed;
+    expect(JSON.stringify(narrow.data).length).toBeLessThanOrEqual(1_800);
+  });
+
+  it('remembers which read tool returned each source', async () => {
+    const evidence = registry();
+    await evidence.observe('get_service', { id: 's1' }, { id: 's1', name: 'Checkout' });
+    expect(evidence.entries().find(entry => entry.id === 's1')?.tools).toEqual(['get_service']);
+  });
+});

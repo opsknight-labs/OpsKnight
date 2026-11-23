@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { withDbBudget, dbNow } from '../jobs/db-budget';
-import { enqueueWorkItems, WORK_KINDS } from '../jobs/work-queue';
+import { enqueueWorkItems, MAX_WORK_ATTEMPTS, WORK_KINDS } from '../jobs/work-queue';
 import { resolveEffectivePolicy } from '../settings/service';
 import { registerAiGateway } from '../ai/gateway';
 import { resolveLanguageModel, type AiOutputSchema } from '../ai/port';
@@ -16,17 +16,36 @@ import { AI_SETTINGS_DEFAULTS } from '../ai/contract';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
 import { incidentSummarySchema, postmortemDraftSchema } from '../drafts/schemas';
-import { PROACTIVE_AI_ACTOR, PROACTIVE_LIMITS, type ProactiveKind } from './contract';
+import { PROACTIVE_LIMITS, proactiveAiActor, type ProactiveKind } from './contract';
+import { publishSquireUpdate } from '@/lib/chatops/squire/publish';
 import {
   buildBriefing,
   buildNudge,
   buildPostmortemDraft,
   inputRefsOf,
+  investigationContentSchema,
   proactiveModelBrief,
   type IncidentFacts,
+  type InvestigationContent,
   type ProactiveRefs,
 } from './proactive-content';
+import {
+  channelSafeInvestigation,
+  digestIsEmpty,
+  digestMarkdown,
+  type InvestigationDigest,
+} from './proactive-digest';
 import { investigateIncident } from './proactive-investigation';
+import {
+  assessedSince,
+  findReassessCandidates,
+  hasNewSignals,
+  nextInvestigationContent,
+  readNewSignals,
+  reassessmentsToday,
+  signalLines,
+  withAttempt,
+} from './proactive-live';
 import {
   getSquireServicePolicy,
   listProactivePolicies,
@@ -82,7 +101,7 @@ export async function scanProactiveWork(budget: Budget): Promise<number> {
     const drafting = ids(policy => policy.postmortemDraftEnabled);
     const investigate = investigating ? ids(policy => policy.investigationEnabled) : [];
     const take = PROACTIVE_LIMITS.scanBatch;
-    const [toBrief, toNudge, toDraft, toInvestigate] = await Promise.all([
+    const [toBrief, toNudge, toDraft, toInvestigate, toReassess] = await Promise.all([
       briefing.length
         ? tx.incident.findMany({
             where: {
@@ -133,13 +152,17 @@ export async function scanProactiveWork(budget: Budget): Promise<number> {
             select: { id: true },
           })
         : [],
-      // Private incidents are left out: the investigation reads only what the owning team can see.
+      // Visibility (PUBLIC/PRIVATE) is status-page only and never gates Squire; the investigation still reads
+      // only what the owning team can open, and viewers are re-checked per source when the note is shown.
       investigate.length
         ? tx.incident.findMany({
             where: {
               serviceId: { in: investigate },
               status: { in: [...OPEN] },
               urgency: 'HIGH',
+              // Mirrors the team-shared part of incidentReadWhere: the team-scoped reader the investigation runs
+              // as cannot open an incident shared only with its assignee and watchers, so it is not a candidate
+              // (rather than being queued every minute and skipped at the access check).
               visibility: 'PUBLIC',
               createdAt: {
                 gte: new Date(now.getTime() - PROACTIVE_LIMITS.investigationWindowMs),
@@ -152,13 +175,30 @@ export async function scanProactiveWork(budget: Budget): Promise<number> {
             select: { id: true },
           })
         : [],
+      // Live updates: open investigated incidents with new signals since the last run (debounced, capped).
+      investigate.length ? findReassessCandidates(tx, investigate, now) : [],
     ]);
-    return [
+    const subjects = [
       ...toBrief.map(row => proactiveSubject('BRIEFING', row.id)),
       ...toNudge.map(row => proactiveSubject('STAKEHOLDER_NUDGE', row.id)),
       ...toDraft.map(row => proactiveSubject('POSTMORTEM_DRAFT', row.id)),
       ...toInvestigate.map(row => proactiveSubject('INVESTIGATION', row.id)),
+      ...toReassess.map(id => proactiveSubject('INVESTIGATION', id)),
     ];
+    if (subjects.length === 0) return subjects;
+    // Re-enqueueing moves scheduledAt to now: an item backing off after a failure keeps its retry time.
+    const backingOff = await tx.intelligenceWorkItem.findMany({
+      where: {
+        kind: WORK_KINDS.SQUIRE_PROACTIVE,
+        subjectKey: { in: subjects },
+        claimToken: null,
+        attempts: { gt: 0, lt: MAX_WORK_ATTEMPTS },
+        scheduledAt: { gt: now },
+      },
+      select: { subjectKey: true },
+    });
+    const skip = new Set(backingOff.map(row => row.subjectKey));
+    return subjects.filter(subject => !skip.has(subject));
   });
   if (items.length)
     await enqueueWorkItems(
@@ -370,6 +410,8 @@ export async function runProactiveJob(
   const parsed = parseProactiveSubject(subject);
   if (!parsed) return 'skipped';
   const { kind, incidentId } = parsed;
+  // The investigation concludes inside the lane's job budget instead of being cut off by it.
+  const deadline = Date.now() + PROACTIVE_LIMITS.investigationDeadlineMs;
 
   const prepared = await withDbBudget(budget, async tx => {
     const gathered = await gather(tx, incidentId);
@@ -377,7 +419,14 @@ export async function runProactiveJob(
     const policy = await getSquireServicePolicy(gathered.serviceId, tx);
     const existing = await tx.squireProactiveNote.findUnique({
       where: { incidentId_kind: { incidentId, kind } },
-      select: { generation: true, content: true },
+      select: {
+        generation: true,
+        content: true,
+        mode: true,
+        model: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
     return { gathered, policy, existing };
   });
@@ -459,21 +508,41 @@ export async function runProactiveJob(
     content = nudge as unknown as Prisma.InputJsonValue;
   } else if (kind === 'INVESTIGATION') {
     if (!policy.investigationEnabled) return 'off';
-    if (!open || existing || facts.urgency !== 'HIGH') return 'skipped';
+    // Live updates stop on resolve: a closed incident is never re-assessed.
+    if (!open) return 'skipped';
+    if (existing) {
+      const live = await reassess(incidentId, gathered, existing, budget, generation, {
+        signal,
+        deadline,
+      });
+      if (live.outcome !== 'written') return live.outcome;
+      await publishInvestigation(incidentId, facts.title, live.content, live.digest);
+      return 'written';
+    }
+    if (facts.urgency !== 'HIGH') return 'skipped';
     if (now.getTime() - facts.createdAt.getTime() > PROACTIVE_LIMITS.investigationWindowMs)
       return 'skipped';
     // AI only: without a model there is no investigation and no note (never a deterministic stand-in).
-    const investigation = await investigateIncident(incidentId, gathered.serviceId, signal).catch(
-      error => {
-        logger.info('[Squire] Automatic investigation unavailable', {
-          error: error instanceof Error ? error.name : 'error',
-        });
-        return null;
-      }
-    );
+    // Nothing (or only a partial run) concluded: write nothing, the next scan retries.
+    const investigation = await investigateIncident(
+      incidentId,
+      gathered.serviceId,
+      signal,
+      undefined,
+      deadline
+    ).catch(error => {
+      logger.info('[Squire] Automatic investigation unavailable', {
+        error: error instanceof Error ? error.name : 'error',
+      });
+      return null;
+    });
     if (!investigation) return 'skipped';
     mode = 'AI';
-    content = investigation as unknown as Prisma.InputJsonValue;
+    content = {
+      ...investigation,
+      assessedAt: now.toISOString(),
+      revision: 1,
+    } satisfies InvestigationContent as unknown as Prisma.InputJsonValue;
   } else {
     if (!policy.postmortemDraftEnabled) return 'off';
     if (facts.status !== 'RESOLVED' || gathered.hasPostmortem || existing) return 'skipped';
@@ -511,12 +580,164 @@ export async function runProactiveJob(
   const written = await withDbBudget(budget, tx =>
     writeProactiveNote(tx, { incidentId, kind, generation, mode, model, content })
   );
-  if (written) addOperationalMetric('opsknight_squire_proactive_notes_total', 1, { kind, mode });
-  return written ? 'written' : 'stale';
+  if (!written) return 'stale';
+  addOperationalMetric('opsknight_squire_proactive_notes_total', 1, { kind, mode });
+  if (kind === 'BRIEFING')
+    await publishSquireUpdate({
+      incidentId,
+      kind: 'SUMMARY',
+      title: `Briefing: ${facts.title}`.slice(0, 200),
+      markdown: briefingChannelMarkdown(facts, incidentId),
+    });
+  else if (kind === 'INVESTIGATION')
+    await publishInvestigation(
+      incidentId,
+      facts.title,
+      content as unknown as InvestigationContent,
+      null
+    );
+  return 'written';
+}
+
+/**
+ * One live update of an open incident's investigation: only after the debounce, under the per-incident daily
+ * cap, for incidents opened within the re-assessment window, and only when something new arrived since the
+ * evidence was last read. The run gets the previous conclusion as context; its result becomes the next
+ * generation with a "What changed" digest. A run that produces nothing (or only a partial run) keeps the previous
+ * conclusion and records the attempt, as does every candidate the scan picked but a check here rejects: so it is
+ * retried at the debounce, never every scan.
+ */
+async function reassess(
+  incidentId: string,
+  gathered: Gathered,
+  existing: {
+    content: unknown;
+    mode: string;
+    model: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  budget: Budget,
+  generation: number,
+  run: { signal?: AbortSignal; deadline?: number }
+): Promise<
+  | { outcome: 'written'; content: InvestigationContent; digest: InvestigationDigest }
+  | { outcome: Exclude<ProactiveOutcome, 'written'> }
+> {
+  const { now, serviceId } = gathered;
+  const { signal } = run;
+  // Same conclusion, same mode and model: only the note's attempt record (and so its debounce) moves.
+  const keep = async (content: unknown) => {
+    await withDbBudget(budget, tx =>
+      writeProactiveNote(tx, {
+        incidentId,
+        kind: 'INVESTIGATION',
+        generation,
+        mode: existing.mode,
+        model: existing.model,
+        content: content as Prisma.InputJsonValue,
+      })
+    );
+    return { outcome: 'skipped' as const };
+  };
+  const previous = investigationContentSchema.safeParse(existing.content);
+  if (!previous.success) return keep(existing.content);
+  if (now.getTime() - existing.updatedAt.getTime() < PROACTIVE_LIMITS.reassessDebounceMs)
+    return { outcome: 'waiting' };
+  const attempted = { ...previous.data, reassessedAt: withAttempt(previous.data, now) };
+  if (
+    reassessmentsToday(previous.data, now) >= PROACTIVE_LIMITS.reassessPerIncidentDaily ||
+    now.getTime() - gathered.facts.createdAt.getTime() > PROACTIVE_LIMITS.reassessWindowMs
+  )
+    return keep(attempted);
+  const signals = await withDbBudget(budget, tx =>
+    readNewSignals(tx, {
+      incidentId,
+      serviceId,
+      since: assessedSince(previous.data, existing.createdAt),
+    })
+  );
+  if (!hasNewSignals(signals)) return keep(attempted);
+
+  const next = await investigateIncident(
+    incidentId,
+    serviceId,
+    signal,
+    { answer: previous.data.answer, signals: signalLines(signals) },
+    run.deadline
+  ).catch(error => {
+    logger.info('[Squire] Investigation update unavailable', {
+      error: error instanceof Error ? error.name : 'error',
+    });
+    return null;
+  });
+  // Nothing or only a partial run: the previous conclusion stands, nothing is published, no digest.
+  if (!next) return signal?.aborted ? { outcome: 'skipped' } : keep(attempted);
+  const { content, digest } = nextInvestigationContent(previous.data, next, {
+    startedAt: now,
+    signals,
+  });
+  const written = await withDbBudget(budget, tx =>
+    writeProactiveNote(tx, {
+      incidentId,
+      kind: 'INVESTIGATION',
+      generation,
+      mode: 'AI',
+      model: null,
+      content: content as unknown as Prisma.InputJsonValue,
+    })
+  );
+  if (!written) return { outcome: 'stale' };
+  addOperationalMetric('opsknight_squire_proactive_notes_total', 1, {
+    kind: 'INVESTIGATION',
+    mode: 'AI',
+  });
+  return { outcome: 'written', content, digest };
+}
+
+/** The conclusion is edited in place in the incident channel; a non-empty digest is threaded under it. */
+async function publishInvestigation(
+  incidentId: string,
+  title: string,
+  content: InvestigationContent,
+  digest: InvestigationDigest | null
+): Promise<void> {
+  const revision = content.revision ?? 1;
+  await publishSquireUpdate({
+    incidentId,
+    kind: 'INVESTIGATION',
+    title: `Squire investigation${revision > 1 ? ` (update ${revision - 1})` : ''}: ${title}`.slice(
+      0,
+      200
+    ),
+    markdown: channelSafeInvestigation(content.answer, incidentId),
+  });
+  if (digest && !digestIsEmpty(digest))
+    await publishSquireUpdate({
+      incidentId,
+      kind: 'DIGEST',
+      title: 'What changed',
+      markdown: digestMarkdown(digest),
+    });
+}
+
+/**
+ * The briefing as channel text: the incident's own headline and a link, nothing else. A channel's members are not
+ * re-checked per record, so AI prose and other incidents, changes or runbooks stay on the incident page.
+ */
+export function briefingChannelMarkdown(
+  facts: Pick<IncidentFacts, 'title' | 'serviceName'>,
+  incidentId: string
+): string {
+  const plain = (text: string) => text.replace(/[*_~`[\]<>|]/g, '').slice(0, 300);
+  return [
+    `**${plain(`${facts.title} (${facts.serviceName})`)}**`,
+    `_Briefing: [open the incident in OpsKnight](/incidents/${encodeURIComponent(incidentId)})._`,
+  ].join('\n');
 }
 
 /** Generation-fenced upsert: creates the note, or replaces it only from a newer pass. */
-async function writeProactiveNote(
+export async function writeProactiveNote(
   tx: Tx,
   input: {
     incidentId: string;
@@ -579,7 +800,8 @@ async function generate<T>(
     const prompt = renderPrompt(promptId, {}, await getGuidance(promptId));
     const result = await cachedGenerateStructured(port, {
       context: {
-        actorId: PROACTIVE_AI_ACTOR,
+        // Per incident: concurrent incidents never share (and trip) one per-minute rate bucket.
+        actorId: proactiveAiActor(incidentId),
         capability: definition.capability,
         callSite: 'proactive',
         dataClass: definition.dataClass,

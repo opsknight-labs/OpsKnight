@@ -41,10 +41,21 @@ const openMore = () =>
   });
 
 const fetchMock = vi.fn();
+/** Background answers have their own endpoint; kept apart so the chat and history mocks stay in order. */
+const backgroundFetch = vi.fn();
 beforeEach(() => {
   nav.pathname = '/';
+  // The open conversation is kept per tab; each test starts in a fresh one.
+  window.sessionStorage.clear();
   fetchMock.mockReset();
-  vi.stubGlobal('fetch', fetchMock);
+  backgroundFetch
+    .mockReset()
+    .mockImplementation(async () => Response.json({ data: { turns: [] } }));
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+    String(url).startsWith('/api/intelligence/squire/background')
+      ? backgroundFetch(url, init)
+      : fetchMock(url, init)
+  );
 });
 
 describe('SquireLauncher', () => {
@@ -664,7 +675,7 @@ describe('supplied Squire mascot lifecycle', () => {
 });
 
 describe('chat editing and recovery', () => {
-  it('regenerates into a new saved thread without deleting or appending to the original', async () => {
+  it('regenerates in the same saved thread; only an edit starts a new version', async () => {
     fetchMock
       .mockResolvedValueOnce(
         streamOf([
@@ -686,9 +697,13 @@ describe('chat editing and recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
     await screen.findByText('Fresh response');
     const payload = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(payload).toEqual({ message: 'Help me investigate', history: [] });
+    expect(payload).toEqual({
+      message: 'Help me investigate',
+      history: [],
+      conversationId: 'original-thread',
+    });
     expect(screen.queryByText('Original response')).not.toBeInTheDocument();
-    expect(screen.getByText(/Existing saved chats are unchanged/)).toBeInTheDocument();
+    expect(screen.queryByText(/Existing saved chats are unchanged/)).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.every(([, options]) => options.method === 'POST')).toBe(true);
   });
   it('edits a question with a visible branch notice and supports the keyboard shortcut in the composer', async () => {
@@ -791,4 +806,258 @@ it('lets the reader stay above a streaming answer and jump back deliberately', a
     controller.close();
   });
   scroll.mockRestore();
+});
+
+describe('answers that finish in the background', () => {
+  /** A stream that sends `events`, then waits until the request is aborted. */
+  function openStream(events: unknown[], signal?: AbortSignal | null) {
+    const encoder = new TextEncoder();
+    const chunks = events.map(event => encoder.encode(`${JSON.stringify(event)}\n`));
+    let index = 0;
+    return {
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: () =>
+            index < chunks.length
+              ? Promise.resolve({ done: false, value: chunks[index++] })
+              : new Promise((_, reject) =>
+                  signal?.addEventListener('abort', () =>
+                    reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+                  )
+                ),
+          releaseLock: () => undefined,
+        }),
+      },
+    };
+  }
+  const investigating = [
+    { type: 'meta', mode: 'ai', name: 'Pip' },
+    {
+      type: 'investigation',
+      step: { index: 1, title: 'Checking recent changes', status: 'running', calls: [] },
+    },
+  ];
+  const ask = async (question: string) => {
+    fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: question } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  };
+
+  it('hands a running answer to the background and stops waiting for it', async () => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+      openStream(investigating, init?.signal)
+    );
+    render(<SquireLauncher name="Pip" history={{ retentionDays: 30 }} aiEnabled />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    await ask('Why is checkout slow?');
+    backgroundFetch.mockImplementation(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? Response.json({ data: { id: 'bg1' } }, { status: 202 })
+        : Response.json({ data: { turns: [] } })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep working in the background' }));
+    expect(await screen.findByText(/Pip is finishing this in the background/)).toBeInTheDocument();
+    const [url, init] = backgroundFetch.mock.calls.find(([, call]) => call?.method === 'POST')!;
+    expect(url).toBe('/api/intelligence/squire/background');
+    expect(init.keepalive).toBe(false);
+    expect(JSON.parse(init.body)).toMatchObject({ message: 'Why is checkout slow?' });
+    // The live stream was let go: the composer can send again.
+    expect(
+      screen.queryByRole('button', { name: 'Keep working in the background' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('says why when an answer cannot move to the background, and keeps it streaming', async () => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+      openStream(investigating, init?.signal)
+    );
+    render(<SquireLauncher name="Pip" history={{ retentionDays: 30 }} aiEnabled />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    await ask('Why is checkout slow?');
+    backgroundFetch.mockImplementation(async () =>
+      Response.json(
+        { error: 'You already have 3 answers working in the background.' },
+        { status: 429 }
+      )
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep working in the background' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('You already have 3 answers');
+    expect(
+      screen.getByRole('button', { name: 'Keep working in the background' })
+    ).toBeInTheDocument();
+  });
+
+  it('hands an investigation over only once the tab has stayed hidden, or on pagehide', async () => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+      openStream(investigating, init?.signal)
+    );
+    backgroundFetch.mockImplementation(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? Response.json({ data: { id: 'bg1' } }, { status: 202 })
+        : Response.json({ data: { turns: [] } })
+    );
+    render(<SquireLauncher name="Pip" history={{ retentionDays: 30 }} aiEnabled />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    await ask('Investigate checkout');
+    await screen.findAllByText(/Checking recent changes/);
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const timeout = vi.spyOn(window, 'setTimeout');
+    try {
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      // A quick tab switch hands nothing over; the answer keeps streaming here.
+      expect(backgroundFetch).not.toHaveBeenCalledWith(
+        '/api/intelligence/squire/background',
+        expect.objectContaining({ method: 'POST' })
+      );
+      const hidden = timeout.mock.calls.find(([, ms]) => ms === 30_000);
+      expect(hidden).toBeDefined();
+      act(() => (hidden![0] as () => void)());
+      await waitFor(() =>
+        expect(backgroundFetch).toHaveBeenCalledWith(
+          '/api/intelligence/squire/background',
+          expect.objectContaining({ method: 'POST', keepalive: true })
+        )
+      );
+    } finally {
+      visibility.mockRestore();
+      timeout.mockRestore();
+    }
+  });
+
+  it('hands an investigation over on pagehide', async () => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+      openStream(investigating, init?.signal)
+    );
+    backgroundFetch.mockImplementation(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? Response.json({ data: { id: 'bg1' } }, { status: 202 })
+        : Response.json({ data: { turns: [] } })
+    );
+    render(<SquireLauncher name="Pip" history={{ retentionDays: 30 }} aiEnabled />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    await ask('Investigate checkout');
+    await screen.findAllByText(/Checking recent changes/);
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    await waitFor(() =>
+      expect(backgroundFetch).toHaveBeenCalledWith(
+        '/api/intelligence/squire/background',
+        expect.objectContaining({ method: 'POST', keepalive: true })
+      )
+    );
+  });
+
+  it('is not offered without saved history', async () => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+      openStream(investigating, init?.signal)
+    );
+    render(<SquireLauncher name="Pip" aiEnabled />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    await ask('Investigate checkout');
+    await screen.findAllByText(/Checking recent changes/);
+    expect(
+      screen.queryByRole('button', { name: 'Keep working in the background' })
+    ).not.toBeInTheDocument();
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    expect(backgroundFetch).not.toHaveBeenCalled();
+  });
+
+  it('lists background answers, cancels a running one and opens a finished one', async () => {
+    backgroundFetch.mockImplementation(async () =>
+      Response.json({
+        data: {
+          turns: [
+            {
+              id: 'bg-run',
+              title: 'Investigate checkout',
+              status: 'RUNNING',
+              conversationId: null,
+              failure: null,
+              createdAt: new Date().toISOString(),
+              completedAt: null,
+            },
+            {
+              id: 'bg-done',
+              title: 'Why is it slow?',
+              status: 'DONE',
+              conversationId: 'conv-done',
+              failure: null,
+              createdAt: new Date().toISOString(),
+              completedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      })
+    );
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          conversation: {
+            id: 'conv-done',
+            incidentId: null,
+            messages: [
+              { role: 'user', content: 'Why is it slow?' },
+              { role: 'assistant', content: 'The pool is exhausted.' },
+            ],
+          },
+        },
+      }),
+    });
+    render(<SquireLauncher name="Pip" history={{ retentionDays: 30 }} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    const strip = await screen.findByRole('region', { name: 'Background answers' });
+    expect(strip).toHaveTextContent('1 working');
+    expect(strip).toHaveTextContent('1 ready');
+    fireEvent.click(screen.getByRole('button', { name: /Background answers/ }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Cancel background answer: Investigate checkout' })
+    );
+    await waitFor(() =>
+      expect(backgroundFetch).toHaveBeenCalledWith(
+        '/api/intelligence/squire/background/bg-run',
+        expect.objectContaining({ method: 'DELETE' })
+      )
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open answer: Why is it slow?' }));
+    expect(await screen.findByText('The pool is exhausted.')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/intelligence/squire/conversations/conv-done',
+      expect.anything()
+    );
+  });
+
+  it('opens the conversation a finished-answer notification links to', async () => {
+    window.history.replaceState(null, '', '/?squire=open&conversation=conv-linked');
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          conversation: {
+            id: 'conv-linked',
+            incidentId: null,
+            messages: [
+              { role: 'user', content: 'Investigate checkout' },
+              { role: 'assistant', content: 'Finished in the background.' },
+            ],
+          },
+        },
+      }),
+    });
+    try {
+      render(<SquireLauncher name="Pip" history={{ retentionDays: 30 }} />);
+      expect(await screen.findByText('Finished in the background.')).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: /Pip/ })).toBeInTheDocument();
+      expect(window.location.search).not.toContain('conversation=');
+    } finally {
+      window.history.replaceState(null, '', '/');
+    }
+  });
 });

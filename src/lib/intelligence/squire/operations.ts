@@ -2,6 +2,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { z } from 'zod/v4';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { decrypt, encrypt } from '@/lib/encryption';
 import { logAudit } from '@/lib/audit';
@@ -39,7 +40,7 @@ import { UNKNOWN_ACTION_MESSAGE, type SquireActionResult } from './actions/outco
  * - Reviewed operations in operational domains are reachable: everything executable up to R2, and the R3
  *   changes the catalog lets through with an impact preview (deletes and the like), shown as high-risk cards.
  *   Sensitive reads, credentials, webhook configuration and anything the catalog denies never are.
- * - Like Datadog Bits, Squire does exactly what the person's role allows, after they confirm it; no second
+ * - Squire does exactly what the person's role allows, after they confirm it; no second
  *   person is involved. When the role does not allow something, the catalog search says which role does.
  * - Every call runs the operation's own REST v2 handler in-process as the signed-in person: the same
  *   validation, role and resource checks, audit and timeline text as an API call they made themselves.
@@ -56,7 +57,13 @@ export type Operation = (typeof MCP_CATALOG)[number];
 
 export function squireOperation(operationId: string): Operation | null {
   const operation = MCP_OPERATION_MAP.get(operationId);
-  if (!operation || EXCLUDED_DOMAINS.has(operation.domain) || isMcpSensitiveRead(operation))
+  if (
+    !operation ||
+    EXCLUDED_DOMAINS.has(operation.domain) ||
+    isMcpSensitiveRead(operation) ||
+    // Deciding someone else's request (a runbook step approval and the like) is never offered as a card.
+    /^(approve|reject)[A-Z]/.test(operation.operationId)
+  )
     return null;
   // R3 only where the catalog reviewed it with an impact preview; denied R3 operations never pass.
   if (operation.risk === 'R3') return isMcpApprovalGated(operation) ? operation : null;
@@ -151,12 +158,20 @@ function authFor(actor: AuthorizationActor, operation: Operation, name: string):
 
 export type OperationArgs = ReturnType<typeof validateOperationArgs>;
 
+/** Who the REST handler names in audit and timeline text, looked up once per turn or confirmation. */
+export type InvokeContext = { name: string; signal?: AbortSignal };
+
+export async function displayName(userId: string): Promise<string> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  return user?.name ?? 'Someone';
+}
+
 /** Runs one operation's REST handler as the person. Throws McpBoundaryError on a refusal. */
 export async function invoke(
   actor: AuthorizationActor,
   operation: Operation,
   args: OperationArgs,
-  signal?: AbortSignal
+  { name, signal }: InvokeContext
 ): Promise<unknown> {
   const load =
     (isMcpApprovalGated(operation) ? MCP_APPROVAL_HANDLERS : MCP_HANDLERS).get(
@@ -177,7 +192,6 @@ export async function invoke(
   const headers = new Headers({ 'content-type': 'application/json' });
   if (args.idempotencyKey) headers.set('idempotency-key', args.idempotencyKey);
   if (args.ifMatch) headers.set('if-match', args.ifMatch);
-  const user = await prisma.user.findUnique({ where: { id: actor.id }, select: { name: true } });
   const request = new NextRequest(url, {
     method: operation.method.toUpperCase(),
     headers,
@@ -194,19 +208,40 @@ export async function invoke(
     signal,
   });
   const handler = await load();
+  // In-process handlers do not watch the request signal, so a stopped turn starts no further read.
+  signal?.throwIfAborted();
   const response = await withInternalV2Invocation(
     request,
-    authFor(actor, operation, user?.name ?? 'Someone'),
+    authFor(actor, operation, name),
     () => handler(request, { params: Promise.resolve(path) }),
     undefined,
     'squire'
   );
   if (!response.ok) throw await domainRejection(response);
+  // "Did the fix hold?" for a confirmed resolve (single change or plan step); never fails the change.
+  const resolvedId = operation.operationId === 'resolveIncident' ? args.path?.id : undefined;
+  if (typeof resolvedId === 'string')
+    await (
+      await import('../memory/proactive-verification')
+    ).scheduleFixVerification({ incidentId: resolvedId, userId: actor.id, trigger: 'RESOLVE' });
   if (response.status === 204) return null;
   const text = await response.text();
   // Too large to hand a model; a change it reports has still happened.
   if (text.length > 200_000) return { tooLarge: true };
   return text ? JSON.parse(text) : null;
+}
+
+/** Why a receipt could not be written: only a duplicate id means the card was already used. */
+export function receiptRefusal(error: unknown): string {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+    ? 'This suggestion was already used. Ask again for a fresh one.'
+    : 'The change could not be recorded, so nothing was changed. Try again.';
+}
+
+/** The incident a change is about (`/incidents/{id}...`), so its receipt is only shown to people who can read it. */
+export function incidentOf(operation: Operation, args: { path?: unknown }): string | undefined {
+  const id = (args.path as { id?: unknown } | undefined)?.id;
+  return operation.path.startsWith('/incidents/{id}') && typeof id === 'string' ? id : undefined;
 }
 
 /** A refusal in words a person can act on, never the domain's own free text. */
@@ -235,7 +270,11 @@ export const OPERATION_READ_TOOLS: ReadonlySet<string> = new Set([
 
 // ── Read tools ────────────────────────────────────────────────────────────────────────────────────────
 
-export function buildOperationTools(actor: AuthorizationActor): AiToolDefinition[] {
+export function buildOperationTools(
+  actor: AuthorizationActor,
+  options: { signal?: AbortSignal } = {}
+): AiToolDefinition[] {
+  let name: Promise<string> | undefined;
   return [
     {
       name: 'find_operations',
@@ -318,7 +357,10 @@ export function buildOperationTools(actor: AuthorizationActor): AiToolDefinition
           return { error: 'Not a read operation you may use. Use find_operations first.' };
         try {
           const args = validateOperationArgs(operation.operationId, parsed.data.args, 'generic');
-          const raw = await invoke(actor, operation, args);
+          const raw = await invoke(actor, operation, args, {
+            name: await (name ??= displayName(actor.id)),
+            signal: options.signal,
+          });
           const redacted: string[] = [];
           return {
             data: projectMcpData(allowMcpFields(operation.operationId, raw), redacted),
@@ -413,12 +455,13 @@ export const summaryOf = (operation: Operation) =>
 export async function readTarget(
   actor: AuthorizationActor,
   operation: Operation,
-  args: OperationArgs
+  args: OperationArgs,
+  context: InvokeContext,
+  readId: string | null = beforeReadFor(operation)
 ): Promise<unknown> {
-  const readId = beforeReadFor(operation);
   const read = readId ? squireOperation(readId) : null;
   if (!read || !args.path) return null;
-  const raw = await invoke(actor, read, { path: args.path }).catch(() => null);
+  const raw = await invoke(actor, read, { path: args.path }, context).catch(() => null);
   return (raw as { data?: unknown } | null)?.data ?? raw;
 }
 
@@ -443,6 +486,22 @@ function nowLine(changes: [string, string][], after: unknown): string {
 
 type Inverse = { operationId: string; args: Record<string, unknown> };
 
+/**
+ * Incident state changes and their inverse. The inverse is offered only when the incident was in the state
+ * the inverse returns it to, so an undo never clears a snooze, suppression or acknowledgement that was
+ * already there before the change.
+ */
+const STATUS_UNDO: Partial<Record<string, { inverse: string; from: string }>> = {
+  snoozeIncident: { inverse: 'unsnoozeIncident', from: 'OPEN' },
+  suppressIncident: { inverse: 'unsuppressIncident', from: 'OPEN' },
+  acknowledgeIncident: { inverse: 'unacknowledgeIncident', from: 'OPEN' },
+  unsuppressIncident: { inverse: 'suppressIncident', from: 'SUPPRESSED' },
+};
+
+/** The read whose result `inverseOf` needs as `before`: the incident for a state change, else the update target. */
+const beforeReadOf = (operation: Operation) =>
+  STATUS_UNDO[operation.operationId] ? 'getIncident' : beforeReadFor(operation);
+
 /** The change that reverses this one, built exactly from the request, its response and the prior state. */
 async function inverseOf(
   operation: Operation,
@@ -456,19 +515,17 @@ async function inverseOf(
     operationId,
     args: { path, ...(body ? { body } : {}) },
   });
+  const status = STATUS_UNDO[operation.operationId];
+  if (status)
+    return (before as { status?: unknown } | null)?.status === status.from
+      ? same(status.inverse, {})
+      : null;
   switch (operation.operationId) {
-    case 'snoozeIncident':
-      return same('unsnoozeIncident', {});
-    case 'suppressIncident':
-      return same('unsuppressIncident', {});
-    case 'unsuppressIncident':
-      return same('suppressIncident', {});
-    case 'acknowledgeIncident':
-      return same('unacknowledgeIncident', {});
+    // An impact that was already marked (or already absent) was not changed; undoing it would undo more.
     case 'markIncidentBusinessServiceImpact':
-      return same('unmarkIncidentBusinessServiceImpact');
+      return data?.changed === true ? same('unmarkIncidentBusinessServiceImpact') : null;
     case 'unmarkIncidentBusinessServiceImpact':
-      return same('markIncidentBusinessServiceImpact');
+      return data?.changed === true ? same('markIncidentBusinessServiceImpact') : null;
     case 'addIncidentTag':
       // A tag that was already there was not added by this change; removing it would undo more.
       return data?.added === true && typeof data.id === 'string'
@@ -513,11 +570,19 @@ async function undoFor(
   actor: AuthorizationActor,
   operation: Operation,
   args: OperationArgs,
-  before: unknown,
-  response: unknown
+  states: { before: unknown; response: unknown; after: unknown },
+  name: string
 ): Promise<(SquireProposal & { href?: string }) | null> {
-  const inverse = await inverseOf(operation, args, before, response);
-  const proposal = inverse ? await buildOperationProposal(actor, inverse) : null;
+  const inverse = await inverseOf(operation, args, states.before, states.response);
+  const reverse = inverse ? squireOperation(inverse.operationId) : null;
+  // The re-read after the change is the undo card's "before" when both read the same record.
+  const proposal =
+    inverse && reverse
+      ? await buildOperationProposal(actor, inverse, new Date(), {
+          name,
+          ...(beforeReadFor(reverse) === beforeReadFor(operation) ? { target: states.after } : {}),
+        })
+      : null;
   return proposal
     ? { ...proposal, title: `Undo: ${summaryOf(operation)}`.slice(0, 120), confirmLabel: 'Undo' }
     : null;
@@ -527,7 +592,8 @@ async function undoFor(
 export async function buildOperationProposal(
   actor: AuthorizationActor,
   rawInput: unknown,
-  now: Date = new Date()
+  now: Date = new Date(),
+  known: { name?: string; target?: unknown } = {}
 ): Promise<(SquireProposal & { href?: string }) | null> {
   if (actor.apiKey || actor.status !== 'ACTIVE' || !(await extendedOn())) return null;
   const parsed = argsSchema.safeParse(rawInput);
@@ -548,7 +614,12 @@ export async function buildOperationProposal(
   }
   const changes = changesOf(operation, args);
   // Best effort, for the card only: the target as the person sees it now.
-  const rows = reviewDiff(changes, await readTarget(actor, operation, args));
+  const target = Object.hasOwn(known, 'target')
+    ? known.target
+    : await readTarget(actor, operation, args, {
+        name: known.name ?? (await displayName(actor.id)),
+      });
+  const rows = reviewDiff(changes, target);
   const preview = (
     rows.length
       ? rows
@@ -629,12 +700,14 @@ export async function executeOperationProposal(
   } catch {
     return fail('This suggestion is no longer valid. Ask again for a fresh one.');
   }
+  const context = { name: await displayName(actor.id) };
   try {
     await prisma.squireActionReceipt.create({
       data: {
         id: sealed.id,
         userId: actor.id,
         action: `operation:${operation.operationId}`,
+        incidentId: incidentOf(operation, args),
         status: 'RUNNING',
         startedAt: new Date(),
         intentEncrypted: await encrypt(
@@ -642,8 +715,8 @@ export async function executeOperationProposal(
         ),
       },
     });
-  } catch {
-    return fail('This suggestion was already used. Ask again for a fresh one.');
+  } catch (error) {
+    return fail(receiptRefusal(error));
   }
   const href = webPath(operation, args.path);
   const finish = async (status: 'SUCCEEDED' | 'FAILED' | 'UNKNOWN', result: SquireActionResult) => {
@@ -670,13 +743,17 @@ export async function executeOperationProposal(
     return result;
   };
   try {
-    const before = await readTarget(actor, operation, args);
-    const response = await invoke(actor, operation, args);
+    const before = await readTarget(actor, operation, args, context, beforeReadOf(operation));
+    const response = await invoke(actor, operation, args, context);
     // Best effort: neither the re-read nor the undo card can fail a change that has happened.
-    const [after, followUp] = await Promise.all([
-      readTarget(actor, operation, args),
-      undoFor(actor, operation, args, before, response).catch(() => null),
-    ]);
+    const after = await readTarget(actor, operation, args, context);
+    const followUp = await undoFor(
+      actor,
+      operation,
+      args,
+      { before, response, after },
+      context.name
+    ).catch(() => null);
     return finish('SUCCEEDED', {
       ok: true,
       message: `Done: ${summaryOf(operation)}.${nowSummary(changesOf(operation, args), after)}`,

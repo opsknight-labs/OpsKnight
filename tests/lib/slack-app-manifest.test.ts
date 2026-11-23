@@ -69,6 +69,15 @@ describe('Slack app manifest', () => {
     }
   });
 
+  it('asks for Squire’s scopes as optional, with the mention event', () => {
+    const m = buildSlackAppManifest({ baseUrl: BASE });
+    // chat:write.customize only changes how Squire's messages are labelled; never required.
+    expect([...SLACK_REQUIRED_BOT_SCOPES]).not.toContain('chat:write.customize');
+    expect(SLACK_BOT_SCOPES).toContain('chat:write.customize');
+    expect(m.oauth_config.scopes.bot).toContain('app_mentions:read');
+    expect(m.settings.event_subscriptions.bot_events).toContain('app_mention');
+  });
+
   it('serialises to valid, pasteable JSON', () => {
     const json = buildSlackAppManifestJson({ baseUrl: BASE });
     expect(() => JSON.parse(json)).not.toThrow();

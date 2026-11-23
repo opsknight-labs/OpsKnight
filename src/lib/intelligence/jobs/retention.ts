@@ -49,6 +49,7 @@ export interface RetentionResult {
   knowledgeChunks?: number;
   proactiveNotes?: number;
   metricAnomalies?: number;
+  backgroundTurns?: number;
   /** Tables whose step failed this sweep (timeout, contention); every other table still progressed. */
   failedTables: string[];
   /** True when any table hit the batch ceiling or failed, so more expired rows may remain. */
@@ -260,6 +261,13 @@ export async function purgeExpiredIntelligenceData(
         DELETE FROM "SquireActionReceipt" WHERE id IN (
           SELECT id FROM "SquireActionReceipt" WHERE "createdAt" < ${cutoff(1)} LIMIT ${limit})`)
     );
+    // Squire answers finished in the background: a day in the launcher's list, then gone (their encrypted
+    // question with them). The background sweep does the same while intelligence is unconfigured.
+    const backgroundTurns = await step('SquireBackgroundTurn', tx =>
+      tx.$executeRaw(Prisma.sql`
+        DELETE FROM "SquireBackgroundTurn" WHERE id IN (
+          SELECT id FROM "SquireBackgroundTurn" WHERE "createdAt" < ${cutoff(1)} LIMIT ${limit})`)
+    );
     const dependencyObservations = await step('DependencyObservationBucket', tx =>
       tx.$executeRaw(Prisma.sql`
         DELETE FROM "DependencyObservationBucket" WHERE (bucket, "serviceId") IN (
@@ -316,6 +324,7 @@ export async function purgeExpiredIntelligenceData(
       ...(proactiveNotes > 0 ? { proactiveNotes } : {}),
       ...(metricAnomalies > 0 ? { metricAnomalies } : {}),
       ...(opsInsights > 0 ? { opsInsights } : {}),
+      ...(backgroundTurns > 0 ? { backgroundTurns } : {}),
     };
     const ceilings =
       Object.values(counts).some(count => count >= limit) ||

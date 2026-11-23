@@ -31,12 +31,14 @@ import { getSimilarIncidentsForActor } from '../similarity/view';
 import { getRelatedIncidentsForActor } from '../correlation/view';
 import {
   SQUIRE_ACTION_DESCRIPTIONS,
+  SQUIRE_ACTION_INPUTS,
   SQUIRE_ACTION_JSON_SCHEMAS,
   SQUIRE_ACTION_NAMES,
   type SquireActionName,
 } from './actions/catalog';
 import { FOLLOW_UP_ONLY_ACTIONS, isExtendedSquireAction } from './actions/catalog-extended';
 import { readIncidentForActor } from './deterministic';
+import { buildCatchUp } from './catch-up';
 import { classifyIntent, normalizeMessage, parseSlashCommand } from './basic/nlu';
 // --- Observability connectors (slice F1): tools live in their own module and are appended below.
 import type { EligibleConnection } from '../connectors/service';
@@ -57,6 +59,8 @@ export const SQUIRE_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = {
   get_timeline: 'PERSONAL',
   list_alerts: 'INTERNAL',
   who_is_on_call: 'PERSONAL',
+  // Names the people who wrote notes and quotes those notes.
+  get_catch_up: 'PERSONAL',
   find_people: 'PERSONAL',
   search_postmortems: 'PERSONAL',
   get_incident: 'INTERNAL',
@@ -764,6 +768,24 @@ export function buildSquireTools(
         }
       ),
       readTool(
+        'get_catch_up',
+        'Catch the asking person up (a shift hand-off): what opened, resolved and is still open on their teams and assigned to them since their last on-call shift ended (or the last `hours`, default 12, at most 168), still-open high-urgency incidents, incidents that paged them, notes that mention them, and their current or next shift. Lead with what needs action.',
+        {
+          type: 'object',
+          properties: { hours: { type: 'integer', minimum: 1, maximum: 168 } },
+          additionalProperties: false,
+        },
+        async input => {
+          const parsed = z
+            .object({ hours: z.number().int().min(1).max(168).optional() })
+            .strict()
+            .safeParse(input ?? {});
+          if (!parsed.success) return { error: 'Invalid input' };
+          if (!scoped(() => incidentReadWhere(actor))) return NOT_FOUND;
+          return buildCatchUp(actor, { hours: parsed.data.hours });
+        }
+      ),
+      readTool(
         'find_people',
         'Find active people by name or email, to reassign an incident. Returns at most 5 with their ids.',
         {
@@ -860,8 +882,13 @@ export function buildSquireTools(
       ]),
       ...(options.observe && tool.kind === 'READ'
         ? {
-            execute: async (input: unknown) =>
-              options.observe!(tool.name, input, await tool.execute!(input)),
+            execute: async (input: unknown, call?: { signal?: AbortSignal }) => {
+              const result = await tool.execute!(input, call);
+              // Settled: the call was given up on (deadline, cancelled turn), so its late result must not
+              // become evidence or a chart for an answer that no longer uses it.
+              if (call?.signal?.aborted) throw new Error('Tool call already settled');
+              return options.observe!(tool.name, input, result);
+            },
           }
         : {}),
     }));
@@ -893,7 +920,7 @@ const READ_FAMILIES: Array<{ tools: Set<string>; words: RegExp; intents?: Set<st
     ]),
     // Bounded, literal alternatives over a message capped by the request schema.
     words:
-      /\b(logs?|metrics?|promql|traces?|spans?|errors?|exceptions?|stack|latency|slow|cpu|memory|5\d\d|4\d\d|diffs?|commits?|code|deploy\w*|release\w*|queries|query|dashboards?|labels?|series|spikes?|timeouts?|why|cause\w*|root|investigat\w*|debug\w*|fail\w*|broke\w*|down|outage|evidence|signals?|telemetry|sentry|loki|tempo|prometheus|datadog|cloudwatch|grafana|github)\b/,
+      /\b(logs?|metrics?|promql|traces?|spans?|errors?|exceptions?|stack|latency|slow|cpu|memory|5\d\d|4\d\d|diffs?|commits?|code|deploy\w*|release\w*|queries|query|dashboards?|labels?|series|spikes?|graphs?|charts?|plots?|trends?|timeouts?|why|cause\w*|root|investigat\w*|debug\w*|fail\w*|broke\w*|down|outage|evidence|signals?|telemetry|sentry|loki|tempo|prometheus|datadog|cloudwatch|grafana|github)\b/,
     intents: new Set(['CAUSES', 'SERVICE_HEALTH', 'INCIDENT_SUMMARY']),
   },
   {
@@ -957,6 +984,9 @@ function proposalTool(name: SquireActionName): AiToolDefinition {
     kind: 'PROPOSE_WRITE',
     // eslint-disable-next-line security/detect-object-injection -- name is a member of the closed action union
     inputSchema: SQUIRE_ACTION_JSON_SCHEMAS[name],
+    // The same check buildProposal applies, so the model hears at once that a malformed card was not shown.
+    // eslint-disable-next-line security/detect-object-injection -- name is a member of the closed action union
+    validate: input => SQUIRE_ACTION_INPUTS[name].safeParse(input).success,
   };
 }
 

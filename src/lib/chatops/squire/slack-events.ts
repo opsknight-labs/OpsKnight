@@ -2,13 +2,18 @@ import 'server-only';
 import { enqueueChatOpsIntent } from '@/lib/chatops/intents';
 import { logger } from '@/lib/logger';
 import { isSquireChatOpsEnabled } from './handler';
-import type { SlackSquireMentionPayload } from './slack';
+import { loadSquireIdentity } from './identity';
+import { findSlackIncidentForChannel, type SlackSquireMentionPayload } from './slack';
 
 type SlackEventEnvelope = {
   team_id?: unknown;
+  enterprise_id?: unknown;
   event_id?: unknown;
+  /** Who the event was delivered for; the bot's entry names its own user id. */
+  authorizations?: unknown;
   event?: {
     type?: unknown;
+    subtype?: unknown;
     user?: unknown;
     bot_id?: unknown;
     text?: unknown;
@@ -16,26 +21,82 @@ type SlackEventEnvelope = {
     ts?: unknown;
     thread_ts?: unknown;
     team?: unknown;
+    /** The poster's home workspace; differs from team_id for someone from another workspace. */
+    user_team?: unknown;
   };
 };
 
 const str = (value: unknown, max: number) =>
   typeof value === 'string' ? value.trim().slice(0, max) : '';
 
+/** The app's own bot user id, from the event's authorizations. */
+function botUserId(authorizations: unknown): string | undefined {
+  if (!Array.isArray(authorizations)) return undefined;
+  const bot = authorizations.find(
+    (entry): entry is { user_id: string } =>
+      Boolean(entry) &&
+      (entry as { is_bot?: unknown }).is_bot === true &&
+      typeof (entry as { user_id?: unknown }).user_id === 'string'
+  );
+  return bot ? str(bot.user_id, 64) || undefined : undefined;
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
- * Route side of `@squire`: validate the signed `app_mention` event and queue it. Bots (including this
- * one) are ignored, and nothing is queued while Squire is off for chat, so a disabled feature costs no
- * work. Slack redelivers an event with the same `event_id`; that id is the de-duplication key.
+ * The question of a channel message addressed to Squire by name as plain text ("@Squire investigate"):
+ * Slack has no user called Squire to mention, so the app sees it as an ordinary message. Null for any
+ * other message, including one that also mentions the app (that arrives as `app_mention`). Mentions of
+ * other people ("@Squire ask <@U123> …") are fine; with the bot's id unknown any mention is skipped.
+ */
+export function squireAddressedText(
+  text: string,
+  squireName: string,
+  botUserId?: string
+): string | null {
+  if (!/^\s*@/.test(text)) return null;
+  if (botUserId ? text.includes(`<@${botUserId}`) : text.includes('<@')) return null;
+  const names = [...new Set(['squire', squireName.toLowerCase()])].map(escapeRegExp).join('|');
+  // eslint-disable-next-line security/detect-non-literal-regexp -- built from escaped names only
+  const prefix = new RegExp(`^\\s*@(?:${names})(?=$|[\\s:,])[:,]?`, 'i');
+  return prefix.test(text) ? text.replace(prefix, ' ').trim() : null;
+}
+
+/**
+ * Route side of `@squire`: validate the signed `app_mention` event (or a channel message that starts with
+ * "@Squire") and queue it. Bots (including this one) are ignored, and nothing is queued while Squire is off
+ * for chat, so a disabled feature costs no work. Slack redelivers an event with the same `event_id`; that id
+ * is the de-duplication key.
  */
 export async function enqueueSlackSquireMention(envelope: SlackEventEnvelope): Promise<boolean> {
   const event = envelope.event;
-  if (!event || event.type !== 'app_mention' || event.bot_id) return false;
+  if (!event || event.bot_id) return false;
+  const teamId = str(envelope.team_id, 64) || str(event.team, 64);
+  // Someone from another workspace in a shared channel is never answered as a member of this one.
+  const userTeam = str(event.user_team, 64);
+  if (userTeam && userTeam !== teamId) return false;
+  let text = str(event.text, 4_000);
+  if (event.type === 'message') {
+    // Cheap test first: every channel message passes through here.
+    if (event.subtype || !/^\s*@/.test(text)) return false;
+    const addressed = squireAddressedText(
+      text,
+      (await loadSquireIdentity()).name,
+      botUserId(envelope.authorizations)
+    );
+    if (addressed === null) return false;
+    // Plain-text addressing is only for incident channels; elsewhere "@Squire" is just text.
+    if (!(await findSlackIncidentForChannel(teamId, str(event.channel, 64)))) return false;
+    text = addressed;
+  } else if (event.type !== 'app_mention') return false;
+  const enterpriseId = str(envelope.enterprise_id, 64);
   const payload: SlackSquireMentionPayload = {
     __kind: 'SQUIRE_MENTION',
-    team_id: str(envelope.team_id, 64) || str(event.team, 64),
+    team_id: teamId,
+    ...(enterpriseId ? { enterprise_id: enterpriseId } : {}),
     channel_id: str(event.channel, 64),
     user_id: str(event.user, 64),
-    text: str(event.text, 4_000),
+    text,
     ts: str(event.ts, 64),
     ...(str(event.thread_ts, 64) ? { thread_ts: str(event.thread_ts, 64) } : {}),
   };

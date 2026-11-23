@@ -17,6 +17,7 @@ import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Slack, ExternalLink, Copy, CheckCircle2, ArrowRight, ArrowLeft, Info } from 'lucide-react';
 import { notify as toast } from '@/lib/toast';
 import SlackManifestCard from '@/components/settings/SlackManifestCard';
+import { SLACK_BOT_SCOPES } from '@/lib/slack/app-manifest';
 
 type SetupStep = 1 | 2 | 3;
 
@@ -277,21 +278,7 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                   Scroll to &quot;Scopes&quot; → &quot;Bot Token Scopes&quot; and add these:
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {[
-                    'chat:write',
-                    'channels:read',
-                    'channels:join',
-                    'channels:manage',
-                    'channels:history',
-                    'reactions:read',
-                    'users:read',
-                    'users:read.email',
-                    'groups:read',
-                    'groups:write',
-                    'groups:history',
-                    'im:read',
-                    'mpim:read',
-                  ].map(scope => (
+                  {SLACK_BOT_SCOPES.map(scope => (
                     <Badge key={scope} variant="secondary" size="xs" className="font-mono">
                       {scope}
                     </Badge>
@@ -304,7 +291,11 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                     <strong>users:read.email</strong> matches Slack users to OpsKnight accounts so
                     responders are auto-invited, and <strong>reactions:read</strong> plus{' '}
                     <strong>channels:history</strong> capture 📌 pinned messages as incident notes.
-                    The <strong>groups:*</strong> scopes add private channel support.
+                    The <strong>groups:*</strong> scopes add private channel support.{' '}
+                    <strong>app_mentions:read</strong> lets Squire answer @OpsKnight mentions, and
+                    the optional <strong>chat:write.customize</strong> posts Squire&apos;s messages
+                    under its own name and avatar; without it they post as OpsKnight with a Squire
+                    header.
                   </AlertDescription>
                 </Alert>
               </div>

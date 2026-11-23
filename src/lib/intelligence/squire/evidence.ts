@@ -7,6 +7,7 @@ import type { SourceReference } from '../conversations/contract';
 import type { SquireCitation } from './contract';
 import { readSourceStates, sourceKey, type SourceIdentity } from './evidence-access';
 import type { IncidentBriefing } from './prompt';
+import { catchUpEvidence, type SquireCatchUp } from './catch-up';
 
 export type EvidenceSnapshot = SourceIdentity & { data: unknown; label?: string };
 type Row = Record<string, unknown>;
@@ -14,16 +15,24 @@ const row = (value: unknown): Row =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Row) : {};
 const rows = (value: unknown): Row[] => (Array.isArray(value) ? value.map(row) : []);
 const unavailable = { error: 'Evidence could not be verified. Read the source again.' };
-const MAX_RESULT_BYTES = 32_768;
+/** Distinct sources one turn may cite; reads beyond it are still answered, without new citations. */
+export const MAX_EVIDENCE_SOURCES = 32;
+/**
+ * Bytes of one result kept for the model: under the gateway's 8 KB tool envelope (capOutput), leaving room for
+ * the preamble and the evidence handles, so evidence is minted only for rows the model actually receives. The
+ * investigation planner sees less per result and passes its own bound.
+ */
+export const MAX_RESULT_BYTES = 6_000;
 const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8');
+const OVER_CAP_NOTICE = `This answer read more than ${MAX_EVIDENCE_SOURCES} sources; later reads are used without citations.`;
 
 /**
  * An oversized result keeps its leading rows: the longest list (the result itself, or a top-level field) is
  * halved until the whole fits. Returns null when there is no list left to trim.
  */
-function trimRows(result: unknown): unknown {
+function trimRows(result: unknown, limit = MAX_RESULT_BYTES): unknown {
   let current = result;
-  while (bytes(current) > MAX_RESULT_BYTES) {
+  while (bytes(current) > limit) {
     if (Array.isArray(current)) {
       if (current.length <= 1) return null;
       current = current.slice(0, Math.floor(current.length / 2));
@@ -54,7 +63,7 @@ const prefixes = new Map<SourceReference['kind'], string>([
 export class SquireEvidenceRegistry {
   private readonly captured = new Map<
     string,
-    { source: SourceReference; label: string; ref: string }
+    { source: SourceReference; label: string; ref: string; tools: Set<string> }
   >();
   private complete = true;
   private readonly coverageNotices = new Set<string>();
@@ -73,10 +82,11 @@ export class SquireEvidenceRegistry {
     return [...this.captured.values()].map(value => value.source);
   }
 
-  async capture(snapshots: EvidenceSnapshot[]): Promise<SourceReference[] | null> {
+  /** `via`: the read tool the snapshots came back from, kept so live-state reads can be told apart. */
+  async capture(snapshots: EvidenceSnapshot[], via?: string): Promise<SourceReference[] | null> {
     const unique = [...new Map(snapshots.map(source => [sourceKey(source), source])).values()];
     const additional = unique.filter(source => !this.captured.has(sourceKey(source)));
-    if (this.captured.size + additional.length > 32) {
+    if (this.captured.size + additional.length > MAX_EVIDENCE_SOURCES) {
       this.complete = false;
       return null;
     }
@@ -117,7 +127,8 @@ export class SquireEvidenceRegistry {
         source,
         label: (snapshot.label ?? snapshot.id).slice(0, 200),
         // The model sees this short handle; the uuid, digest and read time stay on the server.
-        ref: this.captured.get(sourceKey(snapshot))?.ref ?? `E${this.captured.size + 1}`,
+        ref: existing?.ref ?? `E${this.captured.size + 1}`,
+        tools: new Set([...(existing?.tools ?? []), ...(via ? [via] : [])]),
       });
       result.push(source);
     }
@@ -152,8 +163,13 @@ export class SquireEvidenceRegistry {
     return (await this.capture(snapshots)) ? briefing : null;
   }
 
-  async observe(name: string, input: unknown, full: unknown): Promise<unknown> {
-    const result = trimRows(full);
+  async observe(
+    name: string,
+    input: unknown,
+    full: unknown,
+    maxBytes = MAX_RESULT_BYTES
+  ): Promise<unknown> {
+    const result = trimRows(full, maxBytes);
     if (result === null) {
       this.complete = false;
       return unavailable;
@@ -253,6 +269,10 @@ export class SquireEvidenceRegistry {
       case 'find_people':
         rows(result).forEach(data => add('person', data, 'personId'));
         break;
+      // A catch-up cites every incident and schedule it names.
+      case 'get_catch_up':
+        snapshots.push(...catchUpEvidence(object as unknown as SquireCatchUp));
+        break;
       case 'get_status_page':
         add('status_page', object);
         rows(object.services).forEach(data => add('service', data));
@@ -347,14 +367,26 @@ export class SquireEvidenceRegistry {
         this.complete = false;
         return unavailable;
     }
-    const evidence = await this.capture(snapshots);
+    // The cap bounds citations, not answers: past it the data is still returned, citing only sources this turn
+    // already holds, and the answer is no longer fully verified.
+    const fresh = new Set(snapshots.map(sourceKey).filter(key => !this.captured.has(key))).size;
+    const citable =
+      this.captured.size + fresh > MAX_EVIDENCE_SOURCES
+        ? snapshots.filter(source => this.captured.has(sourceKey(source)))
+        : snapshots;
+    if (citable !== snapshots) {
+      this.complete = false;
+      this.coverageNotices.add(OVER_CAP_NOTICE);
+    }
+    const evidence = await this.capture(citable, name);
     if (!evidence) return unavailable;
     const refs = evidence.map(source => ({
       handle: this.captured.get(sourceKey(source))!.ref,
       kind: source.kind,
       id: source.id,
     }));
-    return { data: result, evidence: refs, ...(truncated ? { truncated: true } : {}) };
+    // Handles first: if the envelope cuts the text, the model still has what it may cite.
+    return { evidence: refs, ...(truncated ? { truncated: true } : {}), data: result };
   }
 
   /**
@@ -367,8 +399,9 @@ export class SquireEvidenceRegistry {
     id: string;
     label: string;
     href: string | null;
+    tools: string[];
   }> {
-    return [...this.captured.values()].map(({ source, label, ref }) => {
+    return [...this.captured.values()].map(({ source, label, ref, tools }) => {
       const prefix = prefixes.get(source.kind);
       return {
         // The short handle the model saw; it is only ever resolved back through this turn's ledger.
@@ -377,6 +410,7 @@ export class SquireEvidenceRegistry {
         id: source.id,
         label,
         href: prefix ? `${prefix}${encodeURIComponent(source.id)}` : null,
+        tools: [...tools],
       };
     });
   }

@@ -112,6 +112,10 @@ export async function POST(request: NextRequest) {
       // War-room channel capture (off unless enabled). Slack redelivers an event it thinks was not
       // acknowledged in time, with a retry header; a redelivery is skipped so a message is saved once.
       if (event.type === 'message') {
+        // "@Squire …" typed as plain text (Slack has no Squire user to mention): answered like a
+        // mention. Queued by event_id, so a redelivery is a duplicate rather than a second answer.
+        const { enqueueSlackSquireMention } = await import('@/lib/chatops/squire/slack-events');
+        await enqueueSlackSquireMention(payload);
         if (!request.headers.get('x-slack-retry-num')) {
           const { captureSlackChannelMessage } = await import('@/lib/chatops/war-room-capture');
           await captureSlackChannelMessage(payload).catch(error =>

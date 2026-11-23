@@ -149,6 +149,28 @@ describe('basic mode (no AI)', () => {
     expect(events.at(-1)).toEqual({ type: 'done' });
   });
 
+  it('honours a narrower read scope (an MCP connection, a shared channel) in basic answers', async () => {
+    const admin = await setup();
+    await scopedWorld();
+    const scoped = async (message: string) => {
+      const events: SquireEvent[] = [];
+      for await (const event of streamSquire(
+        await actorOf(admin.id),
+        { message, history: [] },
+        undefined,
+        { readTools: new Set(['get_incident']) }
+      ))
+        events.push(event);
+      return events;
+    };
+    const refused = await scoped("what's on fire?");
+    expect(textOf(refused)).toContain('not allowed to read what that question needs');
+    expect(textOf(refused)).not.toContain('Checkout latency high');
+    expect(refused.at(-1)).toEqual({ type: 'done' });
+    // Templates read nothing and stay available.
+    expect(textOf(await scoped('help'))).toContain('I never change anything');
+  });
+
   it('lists only incidents the asker may see', async () => {
     const admin = await setup();
     const { member } = await scopedWorld();
@@ -275,6 +297,7 @@ describe('AI mode', () => {
       'find_people',
       'get_alert_payload',
       'get_automation_decision',
+      'get_catch_up',
       'get_escalation_policy',
       'get_incident',
       'get_intelligence',
@@ -397,6 +420,20 @@ describe('AI mode', () => {
     } finally {
       registerEmbeddingResolver(async () => null);
     }
+  });
+
+  it('refuses a malformed proposal to the model instead of claiming a card was shown', async () => {
+    const admin = await setup({ ai: true, provider: true });
+    const { mine } = await scopedWorld();
+    model.script.push(
+      { toolCall: { name: 'propose_acknowledge_incident', args: JSON.stringify({ note: 'x' }) } },
+      { content: 'I could not prepare that.' }
+    );
+    const events = await turn(admin.id, 'acknowledge it', { incidentId: mine.id });
+    expect(events.some(event => event.type === 'proposal')).toBe(false);
+    const second = JSON.stringify(model.requests[1].body);
+    expect(second).toContain('was not valid');
+    expect(second).not.toContain('Sent as a suggestion card');
   });
 
   it('search tool is scoped and bounded', async () => {

@@ -23,4 +23,23 @@ describe('product docs search', () => {
   it('stems and drops stop words', () => {
     expect(docsTerms('How do I configure the escalations?')).toEqual(['configure', 'escalation']);
   });
+
+  it('maps singular and plural to one stem', () => {
+    const pairs = [
+      ['services', 'service'],
+      ['notes', 'note'],
+      ['pages', 'page'],
+      ['statuses', 'status'],
+      ['policies', 'policy'],
+      ['boxes', 'box'],
+    ];
+    for (const [plural, singular] of pairs) expect(docsTerms(plural)).toEqual(docsTerms(singular));
+    expect(docsTerms('status access redis')).toEqual(['status', 'access', 'redis']);
+  });
+
+  it('does not answer from two common words that only brush a section', async () => {
+    expect(await searchProductDocs('pizza delivery status')).toEqual([]);
+    expect(await searchProductDocs('random words incident blah')).toEqual([]);
+    expect((await searchProductDocs('set up status pages')).length).toBeGreaterThan(0);
+  });
 });

@@ -530,6 +530,7 @@ describe('Squire scripted-model evaluation', () => {
       notices: of('notice').map(e => e.text),
       labels: of('tool').map(e => e.label),
       memory: of('memory')[0]?.turn,
+      charts: of('chart').map(e => e.chart),
       context: of('context')[0],
       requests: model.requests.filter(r => !r.path.endsWith('/embeddings')).map(r => r.body),
       usageDelta: (await usageToday()) - before,
@@ -612,6 +613,15 @@ describe('Squire scripted-model evaluation', () => {
         expect(body.max_tokens ?? body.max_completion_tokens, why('max tokens')).toBe(
           expectation.maxTokensSent
         );
+    if (expectation.charts !== undefined) {
+      expect(result.charts, why('chart events')).toHaveLength(expectation.charts);
+      expect(result.memory?.charts ?? [], why('saved charts')).toEqual(result.charts);
+      // A chart is built from the redacted tool result, so it never carries what the model must not see.
+      for (const text of expectation.modelNeverSaw ?? [])
+        expect(JSON.stringify(result.charts), why(`chart never shows ${text}`)).not.toContain(
+          fill(text)
+        );
+    }
     if (expectation.usageAccounted)
       expect(result.usageDelta, why('usage accounted')).toBe(
         calls * (FAKE_USAGE[0] + FAKE_USAGE[1])

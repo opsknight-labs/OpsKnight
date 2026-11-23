@@ -27,7 +27,7 @@ In Slack's message composer, enter `/incident help` to display the supported com
 
 ## Configure the command
 
-Supported commands are `ack`, `resolve [summary]`, `note <message>`, `who`, `postmortem`, and `help`. Provide required text and avoid sensitive information in notes/summaries.
+Supported commands are `ack`, `resolve [summary]`, `note <message>`, `who`, `postmortem`, and `help`. When Squire is enabled for chat, `ask <question>` and `investigate [focus]` answer privately about the channel's incident, under your linked account's access. Provide required text and avoid sensitive information in notes/summaries.
 
 ## Complete the action
 

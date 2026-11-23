@@ -249,8 +249,8 @@ describe('automatic investigations', () => {
     const calls = model.requests.length;
     expect(calls).toBeGreaterThan(0);
 
-    // Once: a later pass neither runs again nor is enqueued again.
-    expect(await runProactiveJob(`INVESTIGATION:${high.id}`, 2, budget)).toBe('skipped');
+    // Once: a later pass neither runs again nor is enqueued again (until new signals; see live updates).
+    expect(await runProactiveJob(`INVESTIGATION:${high.id}`, 2, budget)).toBe('waiting');
     expect(model.requests).toHaveLength(calls);
     await db.intelligenceWorkItem.deleteMany();
     await scanProactiveWork(budget);
@@ -287,12 +287,15 @@ describe('automatic investigations', () => {
     expect(model.requests).toHaveLength(0);
   });
 
-  it('never investigates a private incident (the owning team cannot read it)', async () => {
+  it('does not gate on status-page visibility, but reads only what the owning team may open', async () => {
     const { service, admin, high } = await setup({ ai: true });
     await enable(service.id, admin.id);
     await db.incident.update({ where: { id: high.id }, data: { visibility: 'PRIVATE' } });
-    expect(await scanProactiveWork(budget)).toBe(0);
+    // PUBLIC/PRIVATE is a status-page setting: the scan picks the incident like any other.
+    expect(await scanProactiveWork(budget)).toBe(1);
+    // The team-read identity still goes through incident authorization, which decides what it may open.
     expect(await runProactiveJob(`INVESTIGATION:${high.id}`, 1, budget)).toBe('skipped');
+    expect(await db.squireProactiveNote.count()).toBe(0);
     expect(model.requests).toHaveLength(0);
   });
 });

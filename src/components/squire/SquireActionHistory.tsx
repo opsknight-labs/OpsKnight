@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui';
 import { toneClasses, type ToneKey } from '@/components/patterns/status-tone';
 import { cn } from '@/lib/utils';
+import { useTimezone } from '@/contexts/TimezoneContext';
+import { formatDateTime } from '@/lib/timezone';
 import type {
   ActionHistoryPage,
   ActionHistoryRow,
@@ -36,6 +38,7 @@ export default function SquireActionHistory({
   const [error, setError] = useState(false);
   const [pending, startTransition] = useTransition();
   const showWho = initial.scope === 'everyone';
+  const { userTimeZone } = useTimezone();
 
   const more = () =>
     startTransition(async () => {
@@ -50,8 +53,13 @@ export default function SquireActionHistory({
       }
     });
 
+  const filtered = status && status in STATUS ? STATUS[status as ActionHistoryRow['status']] : null;
   if (rows.length === 0 && !cursor)
-    return <p className="px-4 py-6 text-sm text-muted-foreground md:px-6">No actions yet.</p>;
+    return (
+      <p className="px-4 py-6 text-sm text-muted-foreground md:px-6">
+        {filtered ? `No ${filtered.label.toLowerCase()} actions.` : 'No actions yet.'}
+      </p>
+    );
 
   return (
     <div>
@@ -83,8 +91,8 @@ export default function SquireActionHistory({
             {rows.map(row => (
               <tr key={row.id} className="align-top">
                 <td className="whitespace-nowrap px-4 py-3 text-muted-foreground md:px-6">
-                  <time dateTime={row.at} suppressHydrationWarning>
-                    {new Date(row.at).toLocaleString()}
+                  <time dateTime={row.at}>
+                    {formatDateTime(row.at, userTimeZone, { includeTimeZone: true })}
                   </time>
                 </td>
                 {showWho && <td className="px-4 py-3">{row.who}</td>}
@@ -119,7 +127,7 @@ export default function SquireActionHistory({
             Load more
           </Button>
           {error && (
-            <p role="alert" className="text-sm text-status-critical-deep dark:text-rose-300">
+            <p role="alert" className={cn('text-sm', toneClasses('critical').text)}>
               Older actions could not be loaded. Try again.
             </p>
           )}

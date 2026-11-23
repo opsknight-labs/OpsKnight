@@ -22,6 +22,10 @@ verification:
       tests/unit/squire-surfaces-contract.test.ts,
       tests/integration/intelligence/squire-pinned-briefing.test.ts,
       tests/mcp/tools-list-contract.test.ts,
+      src/components/squire/SquireChart.tsx,
+      src/lib/intelligence/assistant/feedback.ts,
+      tests/integration/intelligence/squire-charts-feedback.test.ts,
+      tests/components/squire/SquireChart.test.tsx,
     ]
 ---
 
@@ -144,3 +148,31 @@ Type a question in the search box at the top of the app (`/` or `⌘K` / `Ctrl+K
 Add `?squire=open&q=<question>` to any app address to open the panel with that question written in the message box, for example `/incidents/<id>?squire=open&q=What%20changed%3F`. The question is **not** sent until you send it, so opening a link never starts a conversation or spends AI budget on your behalf. The two parameters are removed from the address once the panel has opened.
 
 Links to a single finding use `/incidents/<id>?insights=<section>#finding-<finding id>`.
+
+## Charts in answers
+
+When Squire reads metrics to answer you (the `query_metrics` read of a connected Prometheus, Grafana, Datadog, CloudWatch or base14 Scout backend), it draws the series as a line chart under the answer. This works in ordinary AI answers and in step-by-step investigations.
+
+- The chart is built from what the metrics read returned, never from the model's text, so it shows exactly the numbers the answer relied on. Secrets and email addresses are removed before the chart is built, as they are for the model.
+- Up to two charts per answer, four series per chart and 200 points per series. Series that came back with fewer than two points are left out. The chart plots the evenly spaced samples Squire reads, not every raw point; open the backend for full resolution.
+- A chart is a figure you can reach with `Tab`. Screen readers announce the title and a sentence per series (first and last value, lowest and highest), and every value is in a table that assistive technology reads. Series differ by line style as well as colour, and the chart follows light and dark mode.
+- With conversation history on, the chart is saved with the answer, so it is there again when you reopen the conversation. If you can no longer use the connection the numbers came from, the earlier answer is withheld, chart included.
+- Charts appear in the web app only. Slack, Microsoft Teams and `ask_squire` give the text answer.
+
+## Help Squire learn
+
+Under every finished answer, rate it with 👍 or 👎. With 👎 you can say what went wrong (**Wrong facts**, **Missed the point**, **Too long**, **Wrong action** or **Other**) and add a note of up to 300 characters. Leave out secrets: the note is kept as you wrote it.
+
+Squire stores the rating, the reason and note, the answer mode and a digest of your question, never the question or answer text. When you asked on an incident or service page, it also stores that incident and service, but only after checking again that you can open them.
+
+Intelligence administrators review ratings in **Settings → Intelligence → Squire feedback** (`/settings/intelligence/ai/feedback`). Each row shows the reason, the mode, the basic-mode intent and the service, never who gave it. Filter by **New**, **Learned** or **Dismissed**, then:
+
+- **Learn for this service**: write the fact Squire should remember (10 to 500 characters, no secrets). Squire turns it into the same confirmation card a chat suggestion shows; nothing is saved until you confirm the card, and confirming re-checks that the knowledge index is on and that you may curate the service. Only feedback asked on an incident can become a fact, because facts are learned from an incident.
+- **Add to eval set**: produces a case in the basic or scripted evaluation shape to copy or download and add to `tests/evals/squire`. The question text is included only while the organisation keeps conversation history and the question is still in the person's saved conversation; otherwise the case carries the question's digest and a placeholder.
+- **Dismiss**: marks the feedback as reviewed with no change.
+
+**Learn** and **Add to eval set** mark the feedback **Learned**. Every action is recorded in the audit log (`intelligence.squire.feedback.learn_candidate`, `.eval_case`, `.dismissed`).
+
+## Language
+
+With AI, Squire replies in the language you wrote in. Record names, ids, commands, queries and links stay exactly as they are. Basic mode (no AI) always answers in English.

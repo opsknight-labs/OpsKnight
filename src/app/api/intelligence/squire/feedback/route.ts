@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
   }
   const parsed = feedbackInputSchema.safeParse(body);
   if (!parsed.success) return deny(400, 'Invalid request');
-  const id = await recordFeedback(actor.id, parsed.data);
+  // The incident and service are kept only when this person can still read them.
+  const id = await recordFeedback(actor.id, parsed.data, actor);
   return jsonOk({ id }, 201, { 'Cache-Control': 'no-store' });
 }

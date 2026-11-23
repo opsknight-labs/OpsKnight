@@ -43,6 +43,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     incidentOnly: true,
   },
   { name: 'week', hint: 'Incidents this week', prompt: 'How many incidents this week?' },
+  { name: 'catchup', hint: 'Catch me up since my last shift', prompt: 'Catch me up' },
   // Changes: picked alone they send the bare command, which answers with its usage line.
   { name: 'tag', hint: 'Tag this incident: /tag <name>', prompt: '/tag', incidentOnly: true },
   {

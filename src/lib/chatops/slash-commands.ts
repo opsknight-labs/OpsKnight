@@ -63,6 +63,8 @@ export interface SlashCommandPayload {
   user_id: string;
   user_name: string;
   team_id: string;
+  /** Enterprise Grid org of the workspace, when there is one. */
+  enterprise_id?: string;
   response_url: string;
   __opsknightIntentId?: string;
 }
@@ -73,10 +75,50 @@ interface SlackResponse {
   blocks?: unknown[];
 }
 
+/** The Slack workspace a request was signed for (and its Enterprise Grid org, when there is one). */
+export interface SlackWorkspaceRef {
+  teamId: string;
+  enterpriseId?: string | null;
+}
+
+type SlackUserInfo = {
+  team_id?: string;
+  deleted?: boolean;
+  is_bot?: boolean;
+  is_restricted?: boolean;
+  is_ultra_restricted?: boolean;
+  is_stranger?: boolean;
+  enterprise_user?: { enterprise_id?: string };
+  profile?: { email?: string; is_email_confirmed?: boolean };
+};
+
+/**
+ * The email of a Slack account that may act as an OpsKnight user: a full, active, human member of the
+ * signed workspace (or its Grid org) whose email Slack has confirmed. Guests, people from other
+ * workspaces in a shared channel, bots and deactivated accounts never resolve.
+ */
+export function trustedSlackEmail(user: SlackUserInfo | undefined, workspace: SlackWorkspaceRef) {
+  if (!user || !workspace.teamId) return undefined;
+  const sameWorkspace =
+    user.team_id === workspace.teamId ||
+    Boolean(
+      workspace.enterpriseId && user.enterprise_user?.enterprise_id === workspace.enterpriseId
+    );
+  if (!sameWorkspace) return undefined;
+  if (user.deleted || user.is_bot || user.is_restricted || user.is_ultra_restricted)
+    return undefined;
+  if (user.is_stranger || user.profile?.is_email_confirmed === false) return undefined;
+  return user.profile?.email?.trim() || undefined;
+}
+
 /**
  * Resolve a Slack user ID to an active OpsKnight user by verified Slack email.
  */
-export async function resolveOpsKnightUser(slackUserId: string, botToken: string) {
+export async function resolveOpsKnightUser(
+  slackUserId: string,
+  botToken: string,
+  workspace: SlackWorkspaceRef
+) {
   try {
     let slackEmail: string | undefined;
 
@@ -93,9 +135,7 @@ export async function resolveOpsKnightUser(slackUserId: string, botToken: string
       );
 
       const data = await response.json();
-      if (data.ok && data.user) {
-        slackEmail = data.user.profile?.email?.trim();
-      }
+      if (data.ok && data.user) slackEmail = trustedSlackEmail(data.user, workspace);
     }
 
     if (slackEmail) {
@@ -121,6 +161,7 @@ export async function resolveOpsKnightUser(slackUserId: string, botToken: string
  */
 export async function handleSlashCommand(payload: SlashCommandPayload): Promise<SlackResponse> {
   const { text, channel_id, user_id } = payload;
+  const workspace = { teamId: payload.team_id, enterpriseId: payload.enterprise_id || null };
   const idempotency = payload.__opsknightIntentId
     ? { key: payload.__opsknightIntentId, principalId: `chatops:${user_id}` }
     : undefined;
@@ -182,6 +223,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
               '`/incident role commander @person|me|clear` — Assign or clear a role',
               '`/incident postmortem` — Create a postmortem draft from timeline & notes',
               '`/incident ask <question>` — Ask Squire about this incident (when enabled)',
+              '`/incident investigate [focus]` — Have Squire investigate this incident’s cause (when enabled)',
               '`/incident help` — Show this help message',
             ].join('\n'),
           },
@@ -209,12 +251,13 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     // Squire answers under the asker's own permissions, so it needs the linked account too.
     'ask',
     'squire',
+    'investigate',
     'role',
     'roles',
   ]);
   const actor =
     mutatingCommands.has(subcommand) && botToken
-      ? await resolveOpsKnightUser(user_id, botToken)
+      ? await resolveOpsKnightUser(user_id, botToken, workspace)
       : null;
   if (mutatingCommands.has(subcommand) && !actor) {
     return {
@@ -368,7 +411,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
       if (parsed.target.kind === 'me') targetUserId = actor!.id;
       if (parsed.target.kind === 'slack') {
         const target = botToken
-          ? await resolveOpsKnightUser(parsed.target.slackUserId, botToken)
+          ? await resolveOpsKnightUser(parsed.target.slackUserId, botToken, workspace)
           : null;
         if (!target) {
           return {
@@ -528,6 +571,16 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
       // Answered privately to the asker; suggestions carry Confirm buttons only they can use.
       const { answerSlackSquireSlash } = await import('@/lib/chatops/squire/slack');
       return answerSlackSquireSlash({ userId: actor!.id, incidentId: incident.id, question: args });
+    }
+
+    case 'investigate': {
+      // Investigation mode on this channel's incident, under the asker's own access to it.
+      const { answerSlackSquireSlash } = await import('@/lib/chatops/squire/slack');
+      return answerSlackSquireSlash({
+        userId: actor!.id,
+        incidentId: incident.id,
+        question: `investigate ${args}`,
+      });
     }
 
     default:

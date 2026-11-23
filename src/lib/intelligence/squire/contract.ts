@@ -95,6 +95,56 @@ export const squireRequestSchema = z
   .strict();
 export type SquireRequest = z.infer<typeof squireRequestSchema>;
 
+export const SQUIRE_CHART_LIMITS = {
+  /** Charts one answer may carry. */
+  perTurn: 2,
+  series: 4,
+  points: 200,
+  title: 120,
+  name: 80,
+  unit: 16,
+} as const;
+
+/**
+ * A line chart drawn under an answer. Built on the server from what a read tool returned (never from model
+ * text), bounded, and saved with the turn so a reopened conversation shows it again.
+ */
+export const squireChartSchema = z
+  .object({
+    title: z.string().trim().min(1).max(SQUIRE_CHART_LIMITS.title),
+    unit: z.string().trim().min(1).max(SQUIRE_CHART_LIMITS.unit).optional(),
+    series: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(1).max(SQUIRE_CHART_LIMITS.name),
+            points: z
+              .array(z.object({ t: z.iso.datetime(), v: z.number().finite() }).strict())
+              .min(1)
+              .max(SQUIRE_CHART_LIMITS.points),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(SQUIRE_CHART_LIMITS.series),
+    /** Where the numbers came from; `href` only for an in-app page. */
+    source: z
+      .object({
+        kind: z.enum(['observability', 'incident', 'service']),
+        id: z.string().min(1).max(64),
+        label: z.string().max(SQUIRE_CHART_LIMITS.title).optional(),
+        href: z
+          .string()
+          .max(256)
+          .regex(/^\/(?!\/)/)
+          .optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type SquireChart = z.infer<typeof squireChartSchema>;
+
 /** A link the answer relied on, checked to be readable by the person before it is shown. */
 export interface SquireCitation {
   kind: 'incident' | 'runbook' | 'change' | 'alert' | 'service' | 'schedule' | 'postmortem';
@@ -130,6 +180,8 @@ export type SquireEvent =
    */
   | { type: 'proposal'; proposal: SquireProposal & { href?: string; untrustedContext?: boolean } }
   | { type: 'citations'; items: SquireCitation[] }
+  /** A chart of time series a read tool returned this turn (see `squireChartSchema`). */
+  | { type: 'chart'; chart: SquireChart }
   | { type: 'suggestions'; items: string[] }
   | { type: 'notice'; text: string }
   /** Trusted internal persistence metadata; the HTTP stream never forwards this event to the browser. */

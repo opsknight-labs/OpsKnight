@@ -80,6 +80,7 @@ export const USER_REFERENCE_POLICY = {
   squireConversations: { deactivate: 'KEEP', delete: 'CASCADE' },
   aiUsageDays: { deactivate: 'KEEP', delete: 'CASCADE' },
   squireActionReceipts: { deactivate: 'KEEP', delete: 'CASCADE' },
+  squireBackgroundTurns: { deactivate: 'KEEP', delete: 'CASCADE' },
   squireFeedback: { deactivate: 'KEEP', delete: 'CASCADE' },
   squireDialogueStates: { deactivate: 'KEEP', delete: 'CASCADE' },
   knowledgeFactsApproved: { deactivate: 'KEEP', delete: 'SET_NULL' },

@@ -153,6 +153,16 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         keywords: ['squire', 'assistant', 'ai', 'actions', 'history', 'audit', 'receipts'],
       },
       {
+        id: 'squire-feedback',
+        label: 'Squire Feedback',
+        description:
+          'Ratings on Squire answers: teach a service fact, keep an eval case, or dismiss',
+        href: '/settings/intelligence/ai/feedback',
+        icon: 'activity',
+        badge: 'Admin',
+        keywords: ['squire', 'assistant', 'ai', 'feedback', 'thumbs', 'rating', 'learn', 'eval'],
+      },
+      {
         id: 'custom-fields',
         label: 'Custom Fields',
         description: 'Define custom incident metadata, dropdown attributes, and validation rules',

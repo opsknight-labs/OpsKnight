@@ -51,5 +51,5 @@ export async function deliverSquireMention(
       payload as unknown as TeamsSquireMentionPayload,
       reply as TeamsSquireReply
     );
-  return deliverSlackSquireReply(reply as SlackSquireReply);
+  return deliverSlackSquireReply(reply as SlackSquireReply | null);
 }

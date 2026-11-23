@@ -8,25 +8,45 @@ vi.mock('@/lib/slack', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/slack')>()),
   getSlackBotToken: vi.fn(async () => 'xoxb-test'),
 }));
-// Slack users.info: the verified email of each Slack account.
+// Slack users.info: each Slack account, a full member of T_WORKSPACE with a confirmed email unless a
+// test overrides fields; every other Slack call goes to the recorded fetch.
 const slackEmails = vi.hoisted(() => new Map<string, string>());
+const slackUserFields = vi.hoisted(() => new Map<string, Record<string, unknown>>());
 vi.mock('@/lib/retry', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/retry')>()),
-  retryFetch: vi.fn(async (url: string) => {
+  retryFetch: vi.fn(async (url: string, init?: RequestInit) => {
+    if (!String(url).includes('users.info')) return fetch(url, init);
     const user = new URL(url).searchParams.get('user') ?? '';
     const email = slackEmails.get(user);
     return {
       json: async () =>
-        email ? { ok: true, user: { profile: { email } } } : { ok: false, error: 'user_not_found' },
+        email
+          ? {
+              ok: true,
+              user: {
+                team_id: 'T_WORKSPACE',
+                profile: { email, is_email_confirmed: true },
+                ...slackUserFields.get(user),
+              },
+            }
+          : { ok: false, error: 'user_not_found' },
     };
   }),
 }));
 
+// The real turn, recorded so the tool scope a surface asks for can be checked.
+vi.mock('@/lib/intelligence/squire/surfaces', async importOriginal => {
+  const real = await importOriginal<typeof import('@/lib/intelligence/squire/surfaces')>();
+  return { ...real, collectSquireTurn: vi.fn(real.collectSquireTurn) };
+});
+
 import { resolveUserActor } from '@/lib/authorization-actors';
+import { collectSquireTurn } from '@/lib/intelligence/squire/surfaces';
 import { processChatOpsIntent } from '@/lib/chatops/intents';
 import { handleSlashCommand } from '@/lib/chatops/slash-commands';
 import {
   answerChatQuestion,
+  CHAT_CHANNEL_READ_TOOLS,
   SQUIRE_CHAT_DISABLED,
   SQUIRE_CHAT_NOT_LINKED,
   SQUIRE_CHAT_NOT_OWNER,
@@ -73,6 +93,7 @@ beforeEach(async () => {
     throw new Error('Dedicated test DB required');
   await resetDatabase();
   slackEmails.clear();
+  slackUserFields.clear();
   posted.length = 0;
   vi.stubGlobal(
     'fetch',
@@ -178,6 +199,21 @@ describe('Squire in Slack: @mention', () => {
     const stored = await db.chatOpsIntent.findFirstOrThrow({ orderBy: { createdAt: 'desc' } });
     expect(JSON.stringify(stored.responsePayload)).not.toContain('acknowledge');
     expect(stored.status).toBe('COMPLETED');
+    // Answered in the channel: only the incident-scoped reads, nothing personal or workspace-wide.
+    const scope = vi.mocked(collectSquireTurn).mock.calls.at(-1)?.[2]?.scope;
+    expect(scope?.readTools).toBe(CHAT_CHANNEL_READ_TOOLS);
+    for (const tool of [
+      'get_catch_up',
+      'find_operations',
+      'describe_operation',
+      'read_operation',
+      'find_people',
+      'search_knowledge',
+      'search_logs',
+    ])
+      expect(CHAT_CHANNEL_READ_TOOLS.has(tool)).toBe(false);
+    expect(CHAT_CHANNEL_READ_TOOLS.has('get_incident')).toBe(true);
+    expect(CHAT_CHANNEL_READ_TOOLS.has('search_product_docs')).toBe(true);
   });
 
   it('offers an action only OpsKnight can confirm as a link, never as a Confirm button', async () => {
@@ -202,10 +238,88 @@ describe('Squire in Slack: @mention', () => {
     expect(json).toContain(`/incidents/${w.incident.id}`);
   });
 
-  it('refuses to answer for a Slack account that is not linked to an active user', async () => {
+  /** Queue and run a mention; returns the Slack calls it made. */
+  async function mentionCalls(user: string, eventId?: string) {
+    expect(
+      await enqueueSlackSquireMention(mention(user, '<@U0BOT> what is going on?', eventId))
+    ).toBe(true);
+    const intent = await db.chatOpsIntent.findFirstOrThrow({ orderBy: { createdAt: 'desc' } });
+    const before = posted.length;
+    await processChatOpsIntent(intent.id);
+    return posted
+      .slice(before)
+      .filter(call => call.url.startsWith('https://slack.com/api/'))
+      .map(call => call.url.replace('https://slack.com/api/', ''));
+  }
+
+  it('tells an unlinked Slack account privately, once, and posts nothing in the thread', async () => {
     await world();
-    const { reply } = await mentionAndReply('U_STRANGER', '<@U0BOT> what is going on?');
-    expect(JSON.stringify(reply.blocks)).toContain(SQUIRE_CHAT_NOT_LINKED.slice(0, 40));
+    expect(await mentionCalls('U_STRANGER')).toEqual(['chat.postEphemeral']);
+    const notice = posted.find(call => call.url.includes('chat.postEphemeral'))!.body;
+    expect(notice).toMatchObject({ channel: CHANNEL, user: 'U_STRANGER' });
+    expect(String(notice.text)).toContain(SQUIRE_CHAT_NOT_LINKED.slice(0, 40));
+    // A second try within minutes is not repeated.
+    expect(await mentionCalls('U_STRANGER')).toEqual([]);
+  });
+
+  it('never resolves a guest, a deactivated, an unconfirmed or another workspace’s account', async () => {
+    await world();
+    for (const [index, fields] of [
+      { team_id: 'T_OTHER' },
+      { is_restricted: true },
+      { is_ultra_restricted: true },
+      { is_stranger: true },
+      { deleted: true },
+      { is_bot: true },
+      { profile: { email: 'olive@example.com', is_email_confirmed: false } },
+    ].entries()) {
+      slackUserFields.set('U_OWNER', fields);
+      const calls = await mentionCalls('U_OWNER', `EvId${index}`);
+      expect(calls.filter(call => call !== 'chat.postEphemeral')).toEqual([]);
+    }
+    // The same person in an Enterprise Grid org resolves through the org.
+    slackUserFields.set('U_OWNER', {
+      team_id: 'T_HOME',
+      enterprise_user: { enterprise_id: 'E_ORG' },
+    });
+    expect(
+      await enqueueSlackSquireMention({
+        ...mention('U_OWNER', '<@U0BOT> help'),
+        enterprise_id: 'E_ORG',
+      })
+    ).toBe(true);
+    const intent = await db.chatOpsIntent.findFirstOrThrow({ orderBy: { createdAt: 'desc' } });
+    await processChatOpsIntent(intent.id);
+    expect(posted.at(-1)?.url).toContain('chat.postMessage');
+  });
+
+  it('drops a mention from someone in another workspace before queueing it', async () => {
+    await world();
+    const event = mention('U_OWNER', '<@U0BOT> help');
+    expect(
+      await enqueueSlackSquireMention({ ...event, event: { ...event.event, user_team: 'T_OTHER' } })
+    ).toBe(false);
+    expect(await db.chatOpsIntent.count()).toBe(0);
+  });
+
+  it('checks the per-person limit before posting anything in the thread', async () => {
+    await world();
+    for (let i = 0; i < SQUIRE_CHAT_QUESTIONS_PER_MINUTE; i += 1) await mentionCalls('U_MATE');
+    expect(await mentionCalls('U_MATE')).toEqual(['chat.postEphemeral']);
+  });
+
+  it('ignores plain-text "@Squire" outside incident channels', async () => {
+    await world();
+    const event = mention('U_OWNER', '@Squire help');
+    expect(
+      await enqueueSlackSquireMention({
+        ...event,
+        event: { ...event.event, type: 'message', channel: 'C_GENERAL' },
+      })
+    ).toBe(false);
+    expect(
+      await enqueueSlackSquireMention({ ...event, event: { ...event.event, type: 'message' } })
+    ).toBe(true);
   });
 
   it('answers with the asker’s own permissions: an outsider gets no proposal for the incident', async () => {
@@ -330,6 +444,8 @@ describe('Squire in Slack: /incident ask and limits', () => {
     })) as { response_type: string; blocks?: unknown };
     expect(response.response_type).toBe('ephemeral');
     expect(confirmValue(response.blocks)).toBeDefined();
+    // Private to the asker, so the turn keeps the asker's full set of reads.
+    expect(vi.mocked(collectSquireTurn).mock.calls.at(-1)?.[2]?.scope).toBeUndefined();
   });
 
   it('rate-limits questions per person', async () => {

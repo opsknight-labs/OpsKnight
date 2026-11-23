@@ -17,11 +17,23 @@ import type { EligibleConnection } from '../../connectors/service';
 import type { SquireEvidenceRegistry } from '../evidence';
 import { buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from '../tools';
 import { traceReadTool } from '../tracing';
-import { INVESTIGATION_LIMITS, runInvestigation, standardFirstReads } from './engine';
+import {
+  INVESTIGATION_LIMITS,
+  InvestigationStartError,
+  runInvestigation,
+  standardFirstReads,
+} from './engine';
 
 const CHUNK = 48;
+/**
+ * Bytes of one read kept as evidence: what the planner sees of it (observationChars) less the untrusted-data
+ * preamble and the evidence handles, so no handle is minted for rows the models never received.
+ */
+const INVESTIGATION_RESULT_BYTES = INVESTIGATION_LIMITS.observationChars - 700;
 
 /** The per-question token ceiling: the fixed cap, or a tenth of the daily budget when that is smaller. */
+const NOT_FOR_DIAGNOSIS: ReadonlySet<string> = new Set(['search_product_docs', 'get_catch_up']);
+
 export function investigationCeiling(settings: Pick<AiSettingsView, 'dailyTokenBudget'>): number {
   return Math.max(
     8_000,
@@ -76,10 +88,16 @@ export async function* streamInvestigation(input: {
     observe: (name, toolInput, result) => {
       // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
       ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
-      return input.evidence.observe(name, toolInput, result);
+      return input.evidence.observe(name, toolInput, result, INVESTIGATION_RESULT_BYTES);
     },
   })
-    .filter(tool => tool.kind === 'READ' && (!input.readTools || input.readTools.has(tool.name)))
+    .filter(
+      tool =>
+        tool.kind === 'READ' &&
+        // Diagnosis needs evidence reads only: product docs and a shift hand-off add tokens, not evidence.
+        !NOT_FOR_DIAGNOSIS.has(tool.name) &&
+        (!input.readTools || input.readTools.has(tool.name))
+    )
     .map(traceReadTool);
   const [planner, diagnoser] = await Promise.all([
     portFor('CLASSIFY', input.dataClass, input.chatPort),
@@ -118,8 +136,10 @@ export async function* streamInvestigation(input: {
         }
       yield next.value;
     }
-  } catch {
-    // Nothing was read and the planner is unavailable: answer the ordinary way (the model, with tools).
+  } catch (error) {
+    // Only "nothing was read and the planner is unavailable" falls back; any other failure is a real error.
+    if (!(error instanceof InvestigationStartError)) throw error;
+    // Answer the ordinary way (the model, with tools).
     yield {
       type: 'notice',
       text: 'A step-by-step investigation could not start. Answering directly.',

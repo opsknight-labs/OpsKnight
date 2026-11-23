@@ -94,6 +94,9 @@ export default function SquireBarCompanion({
   const busy = useRef(false);
   const cancelled = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
+  // The note's clock stops while the pointer or focus is on it; "Got it" ends it at once.
+  const holding = useRef(false);
+  const ended = useRef(false);
   // Pending waits of the current round; cancelling the round resolves them all at once.
   const waiters = useRef(new Set<() => void>());
   const wait = useCallback(
@@ -239,7 +242,7 @@ export default function SquireBarCompanion({
       if (busy.current || home === null || open) return false;
       busy.current = true;
       cancelled.current = false;
-      markDelivered(next);
+      ended.current = false;
       setDozing(false);
       try {
         setMood('greeting');
@@ -251,7 +254,14 @@ export default function SquireBarCompanion({
         setNote(next);
         setPose('message');
         setScrollOpen(true);
-        await wait(next.id === 'intro' ? INTRO_MS : NOTE_MS);
+        // Delivered only once it is on screen; a note cut short on the way is offered again.
+        markDelivered(next);
+        let left = next.id === 'intro' ? INTRO_MS : NOTE_MS;
+        while (left > 0 && !ended.current && !cancelled.current) {
+          const started = Date.now();
+          await wait(Math.min(left, 250));
+          if (!holding.current) left -= Date.now() - started;
+        }
       } finally {
         setScrollOpen(false);
         setMood('idle');
@@ -269,6 +279,7 @@ export default function SquireBarCompanion({
 
   /** Roll the scroll away now: ends the current wait, so he walks back as after a timeout. */
   const dismiss = useCallback(() => {
+    ended.current = true;
     for (const done of [...waiters.current]) done();
   }, []);
 
@@ -465,9 +476,17 @@ export default function SquireBarCompanion({
           </span>
         </button>
       </div>
+      {/* Always mounted, so screen readers hear each note when it arrives. */}
+      <p role="status" className="sr-only">
+        {scrollOpen && note ? note.text : ''}
+      </p>
       <div
         className={`sqbar-scroll${scrollOpen ? ' open' : ''}${animated ? '' : ' still'}`}
         aria-hidden={!scrollOpen}
+        onPointerEnter={() => (holding.current = true)}
+        onPointerLeave={() => (holding.current = false)}
+        onFocus={() => (holding.current = true)}
+        onBlur={() => (holding.current = false)}
         style={{
           // A note's card ends at his right edge, so it never runs off the end of the bar.
           transform: note
@@ -476,7 +495,7 @@ export default function SquireBarCompanion({
         }}
       >
         {note ? (
-          <div className="sqbar-paper sqbar-letter" role="status">
+          <div className="sqbar-paper sqbar-letter">
             <p>{note.text}</p>
             <div className="sqbar-letter-actions">
               <button type="button" onClick={dismiss} tabIndex={scrollOpen ? 0 : -1}>

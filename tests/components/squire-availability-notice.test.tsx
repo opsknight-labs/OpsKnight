@@ -50,3 +50,25 @@ describe('SquireAvailabilityNotice', () => {
     expect(screen.getByText(/until an administrator changes the AI providers/)).toBeInTheDocument();
   });
 });
+
+describe('SquireAvailabilityNotice countdown', () => {
+  it('keeps the ticking countdown out of the live region', () => {
+    vi.useFakeTimers();
+    render(
+      <SquireAvailabilityNotice
+        state="rate_limited"
+        rateLimit={{ until: Date.now() + 5_000 }}
+        canManageAi={false}
+        canRetry
+        onRetry={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(/^Too many requests$/);
+    expect(screen.getByText(/You can retry in 5 seconds/)).toHaveClass(
+      'line-clamp-2',
+      'sm:truncate'
+    );
+    expect(screen.getByRole('button', { name: 'Retry in 5s' })).toBeDisabled();
+    vi.useRealTimers();
+  });
+});

@@ -287,8 +287,10 @@ describe('intelligence architecture boundaries', () => {
 
   it('lets Squire outside the app (chat, MCP) change things only through the sealed proposal executor', () => {
     const chatDir = join(root, 'src/lib/chatops/squire');
+    // The channel publisher writes only its own bookkeeping rows (checked below).
+    const publisher = join(chatDir, 'publish.ts');
     const surfaces = [
-      ...sourceFiles(chatDir),
+      ...sourceFiles(chatDir).filter(file => file !== publisher),
       join(root, 'src/lib/mcp/core/ask-squire.ts'),
       join(root, 'src/lib/mcp/core/ask-squire-contract.ts'),
       join(intelligenceDir, 'squire/surfaces.ts'),
@@ -306,6 +308,15 @@ describe('intelligence architecture boundaries', () => {
     expect(executorImports.map(file => relative(root, file))).toEqual([
       'src/lib/chatops/squire/handler.ts',
     ]);
+    const publish = read(publisher);
+    expect([
+      ...new Set(
+        [...publish.matchAll(/\bprisma\.(\w+)\s*\.(?:create|update|upsert|delete)\w*\(/g)].map(
+          match => match[1]
+        )
+      ),
+    ]).toEqual(['squireChannelMessage']);
+    expect(publish).not.toMatch(/\$executeRaw|\$transaction|\.token\b/);
     // MCP is read-only: it never imports the executor and never hands out a sealed token.
     const mcp = read(join(root, 'src/lib/mcp/core/ask-squire.ts'));
     expect(mcp).not.toMatch(/actions\/execute|executeSquireAction/);
@@ -459,7 +470,13 @@ describe('intelligence architecture boundaries', () => {
       ].map(match => match[1])
     );
     expect(delegates.length).toBeGreaterThan(0);
-    expect([...new Set(delegates)].sort()).toEqual(['squireConversation', 'squireMessage']);
+    // Background answers (background.ts) keep their own queue rows; the answer itself is saved through
+    // recordExchange like any other turn.
+    expect([...new Set(delegates)].sort()).toEqual([
+      'squireBackgroundTurn',
+      'squireConversation',
+      'squireMessage',
+    ]);
     for (const file of sourceFiles(dir)) expect(read(file)).not.toMatch(/\$executeRaw/);
   });
 

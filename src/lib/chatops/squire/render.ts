@@ -16,6 +16,8 @@ export const SQUIRE_TEAMS_CONFIRM_VERB = 'squire.confirm';
 /** Slack rejects a button whose value is longer than this. */
 export const SLACK_BUTTON_VALUE_MAX = 2_000;
 const SLACK_SECTION_MAX = 2_900;
+/** Slack refuses a section or context mrkdwn text longer than this (`invalid_blocks`). */
+export const SLACK_TEXT_MAX = 3_000;
 const MAX_SECTIONS = 3;
 const MAX_CITATIONS = 6;
 const MAX_PROPOSALS = 2;
@@ -69,14 +71,15 @@ const trimSlash = (value: string) => value.replace(/\/+$/, '');
 
 /** An in-app link made absolute; anything that does not point into OpsKnight returns null. */
 export function appLink(href: string, baseUrl: string): string | null {
-  const base = trimSlash(baseUrl);
-  if (/^\/(?!\/)[^\s]*$/.test(href)) return `${base}${href}`;
+  // These would end or split a Slack `<url|label>` link (or a Teams markdown link) and inject markup.
+  if (/[\s<>|\\"`\u0000-\u001f\u007f]/.test(href)) return null;
   // The public product docs, which Squire cites for how-to answers.
   if (/^https:\/\/opsknight\.com\/docs\/[A-Za-z0-9/_.-]*$/.test(href)) return href;
+  const base = trimSlash(baseUrl);
+  if (href.startsWith('/') && !href.startsWith('//')) href = `${base}${href}`;
   try {
     const url = new URL(href);
-    const origin = new URL(base).origin;
-    return url.origin === origin ? url.toString() : null;
+    return url.origin === new URL(base).origin ? url.toString() : null;
   } catch {
     return null;
   }
@@ -87,7 +90,7 @@ export function escapeSlack(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-const LINK = /\[([^\]\n]{1,200})\]\(([^)\s]{1,2000})\)/g;
+const LINK = /\[([^\]\n]{1,200})\]\(([^)\s<>]{1,2000})\)/g;
 
 /** Markdown answer text to Slack mrkdwn: escaped, with only OpsKnight links clickable. */
 export function markdownToSlack(markdown: string, baseUrl: string): string {
@@ -129,7 +132,31 @@ export function markdownToTeams(markdown: string, baseUrl: string): string {
     });
 }
 
-function chunks(text: string, size: number, max: number): string[] {
+/** Escaped mrkdwn cut to Slack's limit, never leaving half a `<link|label>` behind. */
+export function fitSlack(text: string, max = SLACK_TEXT_MAX): string {
+  if (text.length <= max) return text;
+  let cut = text.slice(0, max - 1);
+  const open = cut.lastIndexOf('<');
+  if (open > cut.lastIndexOf('>')) cut = cut.slice(0, open);
+  return `${cut}…`;
+}
+
+/** A Block Kit message's text alone, for resending after Slack refused its blocks. */
+export function slackBlocksText(
+  blocks: readonly Record<string, unknown>[],
+  fallback: string
+): string {
+  const texts = blocks.flatMap(block => {
+    const own = (block.text as { text?: unknown } | undefined)?.text;
+    const elements = (block.elements as Array<{ text?: unknown }> | undefined) ?? [];
+    return [own, ...elements.map(element => element.text)].filter(
+      (text): text is string => typeof text === 'string' && text.length > 0
+    );
+  });
+  return fitSlack(texts.join('\n\n') || fallback, 3_900);
+}
+
+export function chunks(text: string, size: number, max: number): string[] {
   const out: string[] = [];
   let rest = text;
   while (rest.length > 0 && out.length < max) {
@@ -172,7 +199,7 @@ export function renderSlackAnswer(
 ): { text: string; blocks: Record<string, unknown>[] } {
   const blocks: Record<string, unknown>[] = [];
   if (answer.error) {
-    const text = `:warning: ${escapeSlack(answer.error)}`;
+    const text = fitSlack(`:warning: ${escapeSlack(answer.error)}`);
     return { text, blocks: [{ type: 'section', text: { type: 'mrkdwn', text } }] };
   }
   const body = markdownToSlack(
@@ -180,11 +207,11 @@ export function renderSlackAnswer(
     options.baseUrl
   );
   for (const part of chunks(body, SLACK_SECTION_MAX, MAX_SECTIONS))
-    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: part } });
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: fitSlack(part) } });
   for (const notice of answer.notices.slice(0, 2))
     blocks.push({
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: `:information_source: ${escapeSlack(notice)}` }],
+      elements: [{ type: 'mrkdwn', text: fitSlack(`:information_source: ${escapeSlack(notice)}`) }],
     });
   const sources = answer.citations
     .slice(0, MAX_CITATIONS)
@@ -197,13 +224,13 @@ export function renderSlackAnswer(
   if (sources.length)
     blocks.push({
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: `Sources: ${sources.join(' · ')}` }],
+      elements: [{ type: 'mrkdwn', text: fitSlack(`Sources: ${sources.join(' · ')}`) }],
     });
   for (const proposal of answer.proposals.slice(0, MAX_PROPOSALS)) {
     const detail = `*${escapeSlack(proposal.title)}*\n${escapeSlack(proposal.detail)}${
       proposal.untrustedContext ? `\n:warning: ${UNTRUSTED_WARNING}` : ''
     }`;
-    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: detail } });
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: fitSlack(detail) } });
     const link = appLink(
       proposal.href ?? `/incidents/${encodeURIComponent(proposal.incidentId ?? '')}`,
       options.baseUrl
@@ -282,7 +309,13 @@ export function renderTeamsAnswer(
       ),
     });
     for (const notice of answer.notices.slice(0, 2))
-      body.push({ type: 'TextBlock', wrap: true, isSubtle: true, size: 'Small', text: notice });
+      body.push({
+        type: 'TextBlock',
+        wrap: true,
+        isSubtle: true,
+        size: 'Small',
+        text: markdownToTeams(notice, options.baseUrl),
+      });
     const sources = answer.citations
       .slice(0, MAX_CITATIONS)
       .map(citation => {
@@ -299,12 +332,23 @@ export function renderTeamsAnswer(
         text: `Sources: ${sources.join(' · ')}`,
       });
     for (const proposal of answer.proposals.slice(0, MAX_PROPOSALS)) {
+      // Button titles are plain text: a markdown link keeps only its label.
+      const buttonTitle = proposal.title.replace(LINK, '$1');
       body.push({
         type: 'Container',
         style: 'emphasis',
         items: [
-          { type: 'TextBlock', wrap: true, weight: 'Bolder', text: proposal.title },
-          { type: 'TextBlock', wrap: true, text: proposal.detail },
+          {
+            type: 'TextBlock',
+            wrap: true,
+            weight: 'Bolder',
+            text: markdownToTeams(proposal.title, options.baseUrl),
+          },
+          {
+            type: 'TextBlock',
+            wrap: true,
+            text: markdownToTeams(proposal.detail, options.baseUrl),
+          },
           ...(proposal.untrustedContext
             ? [{ type: 'TextBlock', wrap: true, color: 'Warning', text: UNTRUSTED_WARNING }]
             : []),
@@ -317,7 +361,7 @@ export function renderTeamsAnswer(
       if (confirmableInChat(proposal))
         actions.push({
           type: 'Action.Execute',
-          title: `Confirm: ${proposal.title}`.slice(0, 80),
+          title: `Confirm: ${buttonTitle}`.slice(0, 80),
           verb: SQUIRE_TEAMS_CONFIRM_VERB,
           data: { squire: { v: 1, t: proposal.token, o: options.ownerUserId } },
         });
@@ -325,8 +369,8 @@ export function renderTeamsAnswer(
         actions.push({
           type: 'Action.OpenUrl',
           title: (proposal.kind === 'WRITE'
-            ? `Open in OpsKnight: ${proposal.title}`
-            : proposal.title
+            ? `Open in OpsKnight: ${buttonTitle}`
+            : buttonTitle
           ).slice(0, 80),
           url: link,
         });

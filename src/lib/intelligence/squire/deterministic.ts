@@ -16,11 +16,11 @@ import {
 } from '@/lib/authorization-filters';
 import { readChangeReference } from './references';
 import { actorHasCapability, type AuthorizationActor } from '@/lib/authorization-policy';
-import { CAPABILITIES } from '@/lib/authorization';
+import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
 import { getRelatedIncidentsForActor } from '../correlation/view';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
-import { GREETING_PREFIX, routeIntent, incidentIntents, type SquireIntent } from './intents';
+import { routeIntent, incidentIntents, stripGreeting, type SquireIntent } from './intents';
 import {
   answerBasicReadDetailed,
   BASIC_PAGE_SIZE,
@@ -30,7 +30,8 @@ import {
 import { incidentRef } from '../incident-ux/explain';
 import { productGuidance } from './basic/guidance';
 import { docsTerms, searchProductDocs } from './docs';
-import { keywords, mergeBasicQuestion } from './basic/query';
+import { keywords, mergeBasicQuestion, parseBasicQuery } from './basic/query';
+import { buildCatchUp, catchUpEvidence, renderCatchUp } from './catch-up';
 import {
   classifyIntent,
   correctSpelling,
@@ -286,11 +287,12 @@ const HELP = [
   '• Reports: incident volume by service, team, urgency, day or hour; period comparisons; bounded MTTA and MTTR.',
   '• Service health records, ownership, escalation policies and visible dependencies. Typos in names are matched to the closest service you can see.',
   '• On-call coverage for a named service or team, now, tomorrow or at a point in time.',
+  '• Catch me up: what happened on your teams and to you since your last on-call shift (or "the past 24 hours"), notes that mention you, and your next shift.',
   '• Runbook catalog, recent changes, postmortems and overdue follow-up tasks.',
   '• Dates: "since 2026-11-01", "between Monday and Wednesday", "last Friday", "past 24 hours".',
   '• Product guidance: schedules, overrides, urgency, integrations, notifications, privacy and permissions.',
   '• On an incident: a briefing, similar incidents and recorded fixes, change leads, runbooks, a factual timeline, and proposals you confirm: "acknowledge this", "resolve this: rolled back v42", "add a note: …", "assign to Alice".',
-  '• Shortcuts: /ack, /resolve <what fixed it>, /note <text>, /assign <name>, /oncall <service or team>, /incidents <filters>, /help.',
+  '• Shortcuts: /ack, /resolve <what fixed it>, /note <text>, /assign <name>, /oncall <service or team>, /incidents <filters>, /catchup [24h], /help.',
   '• Changes you confirm (when your administrator allows them): /tag <name> on an incident, /maintenance <duration> [title] or /rename <new name> on a service, /override <duration> on a schedule. Durations: 30m, 2h, 1d.',
   'I never change anything on my own. A proposal happens only when you confirm its card. AI adds free-form reasoning on top of the same data.',
 ].join('\n');
@@ -497,6 +499,7 @@ const INTENT_LABEL: Partial<Record<SquireIntent, string>> = {
   TIMELINE: 'Show the timeline',
   RESPONDERS: 'Who is assigned to this incident?',
   INCIDENT_SUMMARY: 'Give me a briefing',
+  CATCH_UP: 'Catch me up',
 };
 
 const READ_INTENTS: ReadonlySet<SquireIntent> = new Set([
@@ -534,7 +537,7 @@ const scopeKey = (actor: AuthorizationActor) =>
   `${actor.id}:${actor.role}:${[...actor.teamIds].sort().join(',')}`;
 
 /** Turns a slash command into the plain question it stands for, or an action request. */
-function expandSlash(message: string): { message: string; help?: boolean } {
+function expandSlash(message: string): { message: string; help?: boolean; catchUp?: boolean } {
   const slash = parseSlashCommand(message);
   if (!slash) return { message };
   switch (slash.command) {
@@ -544,6 +547,17 @@ function expandSlash(message: string): { message: string; help?: boolean } {
       return { message: slash.args ? `who is on call for "${slash.args}"` : 'who is on call' };
     case 'incidents':
       return { message: slash.args ? `find incidents ${slash.args}` : 'show open incidents' };
+    case 'catchup': {
+      // Always the shift catch-up, also on an incident page; a window that is not "24h" ("since monday")
+      // is kept as text for the window parser.
+      const ms = parseDuration(slash.args);
+      return {
+        catchUp: true,
+        message: ms
+          ? `catch me up on the past ${Math.ceil(ms / 3_600_000)} hours`
+          : `catch me up ${slash.args}`.trim(),
+      };
+    }
     case 'ack':
       return { message: 'acknowledge this incident' };
     case 'resolve':
@@ -556,6 +570,27 @@ function expandSlash(message: string): { message: string; help?: boolean } {
       return { message: `snooze this incident ${slash.args}` };
   }
   return { message };
+}
+
+/** "Catch me up", optionally over a window the person names ("the past 24 hours", "since Monday"). */
+async function catchUpAnswer(
+  actor: AuthorizationActor,
+  text: string,
+  now: Date,
+  collect?: Collect
+): Promise<string> {
+  const timeZone = await timeZoneFor(actor.id);
+  const query = parseBasicQuery(text, now, timeZone);
+  if (query.error) return query.error;
+  try {
+    const catchUp = await buildCatchUp(actor, { since: query.window?.gte, now });
+    catchUpEvidence(catchUp).forEach(source => collect?.(source));
+    return renderCatchUp(catchUp, timeZone);
+  } catch (error) {
+    if (error instanceof AuthorizationError)
+      return 'You do not have permission to read incidents, so there is nothing I can catch you up on. Ask an administrator to review your access.';
+    throw error;
+  }
 }
 
 const MAX_CHANGE_MS = 7 * 86_400_000;
@@ -579,7 +614,11 @@ function operationSlash(
   const slash = parseSlashCommand(input.message);
   if (!slash || !(slash.command in OPERATION_USAGE)) return null;
   const command = slash.command as keyof typeof OPERATION_USAGE;
-  const { args } = slash;
+  // One line, without wrapping quotes: '/tag "database"' and a pasted newline both tag "database".
+  const args = slash.args
+    .replace(/\s+/g, ' ')
+    .replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, '')
+    .trim();
   // eslint-disable-next-line security/detect-object-injection -- `command` is a key of the closed table above
   const usage = OPERATION_USAGE[command];
   const page = input.page;
@@ -660,17 +699,12 @@ export async function planBasicTurn(
   input: BasicTurnInput,
   collect?: Collect
 ): Promise<BasicTurnResult> {
-  // "Hey, any open incidents?": greet, then answer the question itself.
-  const greeted = input.message.toLowerCase().match(GREETING_PREFIX);
-  if (
-    greeted &&
-    input.message.trim().length > greeted[0].length + 1 &&
-    routeIntent(normalizeMessage(input.message), false) !== 'GREETING'
-  ) {
-    const answer = await planBasicTurn(
-      { ...input, message: input.message.slice(greeted[0].length) },
-      collect
-    );
+  // "Hey, any open incidents?": greet once, then answer the question itself. Every leading greeting is
+  // removed in one pass, so the rest is answered by a single nested turn.
+  const greeting = stripGreeting(input.message, input.name);
+  const greetOnly = greeting.greeted && !/[\p{L}\p{N}]/u.test(greeting.rest);
+  if (greeting.greeted && !greetOnly) {
+    const answer = await planBasicTurn({ ...input, message: greeting.rest }, collect);
     return answer.intent === 'GREETING' ? answer : { ...answer, text: `Hi! ${answer.text}` };
   }
   const { actor, name = 'Squire' } = input;
@@ -701,8 +735,20 @@ export async function planBasicTurn(
 
   const change = operationSlash(input, now);
   if (change) return result(change.text, change.intent, { operation: change.operation });
+  const slash = parseSlashCommand(input.message);
+  // "/ack <ref>" acts only on the incident on screen; a different reference is refused, never redirected.
+  if (slash?.command === 'ack' && slash.args && !(incident && refersTo(slash.args, incident.id)))
+    return result(
+      `/ack acknowledges the incident on screen, and “${short(slash.args)}” is not it. Open that incident and run /ack there.`,
+      'RESPONDERS'
+    );
   const expanded = expandSlash(input.message);
   if (expanded.help) return result(HELP, 'HELP');
+  if (expanded.catchUp)
+    return result(
+      await catchUpAnswer(actor, normalizeMessage(expanded.message), now, collect),
+      'CATCH_UP'
+    );
   const normalized = normalizeMessage(expanded.message);
   const known = [incident?.serviceName ?? '', input.page?.name ?? ''].filter(Boolean);
   const corrected = correctSpelling(normalized, known);
@@ -711,61 +757,111 @@ export async function planBasicTurn(
   let slots = extractSlots(text, expanded.message);
   const state = input.state ?? null;
   const onIncident = incident !== null;
+  const raw = expanded.message.trim();
 
-  // "Show more": continue the list the person was paging through.
-  let offset = 0;
-  if (slots.more && state?.page) {
-    text = normalizeMessage(state.page.question);
-    offset = state.page.offset + BASIC_PAGE_SIZE;
-  } else if (slots.more) {
+  // "Show more": continue the list the person was paging through, with its intent and filters as stored.
+  const page = slots.more ? state?.page : undefined;
+  if (slots.more && !page)
     return result(
       'There is no list to continue. Ask for incidents, alerts, runbooks or changes first, then say "show more".',
       'UNKNOWN'
     );
+  let offset = 0;
+  let forcedIntent: SquireIntent | null = null;
+  if (page && READ_INTENTS.has(page.intent as SquireIntent)) {
+    text = normalizeMessage(page.question);
+    offset = page.offset + BASIC_PAGE_SIZE;
+    forcedIntent = page.intent as SquireIntent;
   }
 
-  // A short reply that answers a pending clarification completes the earlier question.
-  if (state?.pending && !slots.more) {
+  // A reply to a pending clarification completes the earlier question.
+  let picked: { id: string; label: string } | null = null;
+  if (state?.pending && !page) {
+    if (/^(?:cancel|stop|never ?mind|nvm|no|nope|forget (?:it|that)|abort)[\s!.]*$/i.test(raw))
+      return result('Okay, I dropped that. What would you like to check?', 'UNKNOWN');
     const reply = text.replace(/[?!.]+$/, '').trim();
-    const choice = state.pending.choices?.find(
-      (option, index) =>
-        option.label.toLowerCase() === reply ||
-        option.id === reply ||
-        reply === String(index + 1) ||
-        option.label.toLowerCase().includes(reply)
-    );
-    // A reply to a free-text request (a resolution note, a note body) is taken as that text unless it is
-    // clearly a new question or a command; other replies are new questions when they read as one.
+    const choices = state.pending.choices ?? [];
+    // An empty or punctuation-only reply never picks a choice; a number picks by position first.
+    const meaningful = /[\p{L}\p{N}]/u.test(reply);
+    const choice = !meaningful
+      ? undefined
+      : (choices.find(option => option.label.toLowerCase() === reply || option.id === reply) ??
+        (/^\d{1,2}$/.test(reply) ? choices[Number(reply) - 1] : undefined) ??
+        (reply.length >= 2
+          ? choices.find(option => option.label.toLowerCase().includes(reply))
+          : undefined));
+    // A free-text request (a resolution note) takes the reply as that text unless it is clearly a question
+    // or a command; otherwise a reply the rules read as a question of its own is a new question.
+    const ruled = classifyIntent(text, onIncident);
     const standalone =
-      state.pending.kind === 'incident'
-        ? /\?$/.test(reply) || parseSlashCommand(expanded.message) !== null
-        : classifyIntent(text, onIncident).intent !== 'UNKNOWN' && reply.split(' ').length > 3;
+      slash !== null ||
+      (state.pending.kind === 'incident'
+        ? /\?$/.test(raw)
+        : !choice && ruled.intent !== 'UNKNOWN' && !ruled.scored);
     // The completed question keeps the reply's original capitalisation, so names and notes survive.
     let completed: string | null = null;
-    if (state.pending.kind === 'intent' && choice?.label) completed = choice.label;
-    else if (state.pending.kind === 'service' && !standalone)
-      completed = `${state.pending.question} for "${choice?.label ?? expanded.message.trim()}"`;
-    else if (state.pending.kind === 'person' && !standalone)
-      completed = `${state.pending.question} ${choice?.label ?? expanded.message.trim()}`;
-    else if (state.pending.kind === 'incident' && !standalone)
-      completed = `${state.pending.question}: ${expanded.message.trim()}`;
+    if (!standalone && meaningful) {
+      const kind = state.pending.kind;
+      if (kind === 'intent' && choice?.id && READ_INTENTS.has(choice.id as SquireIntent)) {
+        // The original subject ("checkout incidents?") stays; the pick only settles the intent.
+        forcedIntent = choice.id as SquireIntent;
+        completed = state.pending.question;
+      } else if (kind === 'intent' && choice) completed = choice.label;
+      else if (kind === 'service')
+        completed = `${state.pending.question} for "${choice?.label ?? raw}"`;
+      else if (kind === 'person' && choice?.id) picked = { id: choice.id, label: choice.label };
+      else if (kind === 'person') completed = `${state.pending.question} ${raw}`;
+      else if (kind === 'incident') completed = `${state.pending.question}: ${raw}`;
+    }
+    // A person picked from the list is used by id; re-reading the name could garble or re-ask it.
+    if (picked && state.pending.intent === 'RESPONDERS') {
+      if (!incident) return result('Open the incident you mean first.', 'UNKNOWN');
+      collect?.({ kind: 'incident', id: incident.id, label: incident.title, data: incident });
+      return result(
+        `I can propose assigning ${short(incident.title)} to ${short(picked.label)}. Nothing happens until you confirm the card below.`,
+        'RESPONDERS',
+        {
+          proposals: [
+            {
+              action: 'reassign_incident',
+              input: { incidentId: incident.id, assigneeId: picked.id },
+            },
+          ],
+        }
+      );
+    }
+    if (picked && READ_INTENTS.has(state.pending.intent as SquireIntent)) {
+      forcedIntent = state.pending.intent as SquireIntent;
+      completed = state.pending.question;
+    }
     if (completed) {
       text = normalizeMessage(completed);
       slots = { ...extractSlots(text, completed), more: false };
+      if (picked) delete slots.person;
     }
   }
 
   let prediction = classifyIntent(text, onIncident);
-  let intent = prediction.intent;
+  let intent = forcedIntent ?? prediction.intent;
   const previous = input.previousQuestions?.at(-1);
   const followup =
-    /^(and|also|more|tell me more|what else|continue|explain|what about|only|just)\b/i.test(
-      expanded.message.trim()
+    !forcedIntent &&
+    /^(and|also|more|tell me more|what else|continue|explain|what about|only|just|group|break|split|compare)\b/i.test(
+      raw
     );
-  if (previous && followup && intent === 'UNKNOWN') {
-    prediction = classifyIntent(normalizeMessage(previous), onIncident);
-    intent = prediction.intent;
+  if (previous && followup) {
+    const before = classifyIntent(normalizeMessage(previous), onIncident);
+    if (intent === 'UNKNOWN') {
+      prediction = before;
+      intent = before.intent;
+    } else if (
+      // "Group them by service" after a list is a breakdown of that list, not a service lookup.
+      /^(group|break|split|compare)\b/i.test(raw) &&
+      ['SEARCH_INCIDENTS', 'ACTIVE_INCIDENTS', 'WORK_QUEUE', 'INCIDENT_STATS'].includes(before.intent)
+    )
+      intent = 'INCIDENT_STATS';
   }
+  if (greetOnly) intent = 'GREETING';
 
   if (incident && (intent === 'GREETING' || intent === 'UNKNOWN'))
     collect?.({ kind: 'incident', id: incident.id, label: incident.title, data: incident });
@@ -792,35 +888,34 @@ export async function planBasicTurn(
     );
   }
 
+  if (intent === 'CATCH_UP')
+    return result(await catchUpAnswer(actor, text, now, collect), 'CATCH_UP');
+
   // Explicit action requests become proposal cards; the person confirms, the server executes.
-  if (slots.action && (incident || slots.incidentRef)) {
+  if (slots.action && !forcedIntent && (incident || slots.incidentRef)) {
     return actionTurn(input, slots, text, now, result, collect);
   }
-  if (slots.action && !incident)
+  if (slots.action && !forcedIntent && !incident)
     return result(
       'Open the incident you mean, then ask again (for example "acknowledge this"). I only propose actions for the incident on screen, and nothing happens until you confirm the card.',
       'UNKNOWN'
     );
 
-  // Ambiguous: offer the two best readings instead of guessing.
+  // Ambiguous: offer the two best readings instead of guessing; the pick keeps this question's subject.
   if (intent === 'UNKNOWN' && prediction.alternatives.length >= 2 && !incident) {
     const choices = prediction.alternatives
-      .map(alternative => INTENT_LABEL[alternative.intent])
-      .filter((label): label is string => Boolean(label))
+      .flatMap(alternative => {
+        const label = INTENT_LABEL[alternative.intent];
+        return label ? [{ label, id: alternative.intent }] : [];
+      })
       .slice(0, 2);
     if (choices.length === 2)
       return result(
-        `I'm not sure which you mean. Did you want "${choices[0]}" or "${choices[1]}"? Pick one, or rephrase.`,
+        `I'm not sure which you mean. Did you want "${choices[0].label}" or "${choices[1].label}"? Pick one, or rephrase.`,
         'UNKNOWN',
         {
-          suggestions: choices,
-          nextState: pendingState(
-            'intent',
-            text,
-            'UNKNOWN',
-            choices.map(label => ({ label })),
-            now
-          ),
+          suggestions: choices.map(choice => choice.label),
+          nextState: pendingState('intent', text, 'UNKNOWN', choices, now),
         }
       );
   }
@@ -830,13 +925,16 @@ export async function planBasicTurn(
     offset,
     limit: slots.limit,
     groupBy: slots.groupBy,
+    ...(page?.filters ?? {}),
+    ...(picked ? { assigneeId: picked.id } : {}),
   };
-  let noteLines: string[] = [];
-  let question = previous && followup && !slots.more ? mergeBasicQuestion(previous, text) : text;
-  if (READ_INTENTS.has(intent)) {
+  let noteLines: string[] = picked ? [`Incidents assigned to ${short(picked.label)}.`] : [];
+  let question = previous && followup ? mergeBasicQuestion(previous, text) : text;
+  // A next page reuses the names already resolved for the first one.
+  if (READ_INTENTS.has(intent) && !page) {
     const resolved = await resolveNames(actor, question, slots, intent, input.page, incident);
     question = resolved.question;
-    noteLines = resolved.notes;
+    noteLines = [...noteLines, ...resolved.notes];
     if (resolved.teamIds) options.teamIds = resolved.teamIds;
     if (resolved.assigneeId) options.assigneeId = resolved.assigneeId;
     if (resolved.clarify) {
@@ -851,6 +949,8 @@ export async function planBasicTurn(
         ),
       });
     }
+  }
+  if (READ_INTENTS.has(intent)) {
     if (input.page?.kind === 'schedule' && intent === 'ON_CALL') options.scheduleId = input.page.id;
     if (input.page?.kind === 'service' && SERVICE_INTENTS.has(intent) && !keywords(question).length)
       options.contextService = input.page.name;
@@ -932,7 +1032,13 @@ export async function planBasicTurn(
     hasMore: boolean | undefined,
     cached: boolean
   ) {
-    const nextState = hasMore ? pageState(intent, question, offset, total, now) : null;
+    const filters = {
+      ...(options.teamIds?.length ? { teamIds: options.teamIds } : {}),
+      ...(options.assigneeId ? { assigneeId: options.assigneeId } : {}),
+      ...(options.limit ? { limit: options.limit } : {}),
+      ...(options.groupBy ? { groupBy: options.groupBy } : {}),
+    };
+    const nextState = hasMore ? pageState(intent, question, offset, total, now, filters) : null;
     return result(text, intent, {
       cached,
       nextState,
@@ -949,6 +1055,12 @@ export async function planBasicTurn(
       }),
     });
   }
+}
+
+/** True when `ref` is the incident's id or its short "#ABCDE" reference. */
+function refersTo(ref: string, incidentId: string): boolean {
+  const value = ref.trim().replace(/^#/, '').toLowerCase();
+  return value === incidentId.toLowerCase() || value === incidentId.slice(-5).toLowerCase();
 }
 
 /** A proposal card for an explicit action request. The person still has to confirm it. */
@@ -969,7 +1081,14 @@ async function actionTurn(
   collect?.({ kind: 'incident', id: incident.id, label: incident.title, data: incident });
   const confirm = 'Nothing happens until you confirm the card below.';
   switch (slots.action) {
-    case 'acknowledge':
+    case 'acknowledge': {
+      // "acknowledge INC-42" names another incident: refuse rather than act on the one on screen.
+      const ref = slots.actionText?.match(/#?[\w-]*\d[\w-]*/)?.[0];
+      if (ref && !refersTo(ref, incident.id))
+        return result(
+          `I only acknowledge the incident on screen, and “${short(ref)}” is not it. Open that incident and ask there.`,
+          'RESPONDERS'
+        );
       if (incident.status !== 'OPEN')
         return result(
           `${short(incident.title)} is ${incident.status.toLowerCase()}, so there is nothing to acknowledge.`,
@@ -982,6 +1101,7 @@ async function actionTurn(
           proposals: [{ action: 'acknowledge_incident', input: { incidentId: incident.id } }],
         }
       );
+    }
     case 'resolve': {
       const resolution = slots.actionText?.trim() ?? '';
       if (incident.status === 'RESOLVED')
@@ -1278,7 +1398,8 @@ async function resolveNames(
       resolvedQuestion = resolvedQuestion.replace(slots.person.toLowerCase(), '');
     } else if (people.length > 1)
       return {
-        question,
+        // Stored without the name: the pick supplies the person by id.
+        question: resolvedQuestion.replace(slots.person.toLowerCase(), '').replace(/\s+/g, ' ').trim(),
         notes,
         clarify: {
           kind: 'person',

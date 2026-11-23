@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import { incidentBrief } from '../ai/brief';
 import { redactSecrets } from '../ai/redact';
 import { PROACTIVE_LIMITS } from './contract';
+import { investigationDigestSchema } from './proactive-digest';
 
 /**
  * The stored shape of proactive notes and the deterministic writers behind them. Pure: the lane gathers the facts,
@@ -338,6 +339,16 @@ export const investigationContentSchema = z
           .strict()
       )
       .max(32),
+    /** Live updates (absent on notes written before them): when the evidence was last read, and the run count. */
+    assessedAt: z.iso.datetime().optional(),
+    revision: z.number().int().min(1).optional(),
+    /** Start times of recent re-runs, attempts included, oldest first: the per-incident daily cap. */
+    reassessedAt: z
+      .array(z.iso.datetime())
+      .max(PROACTIVE_LIMITS.reassessPerIncidentDaily)
+      .optional(),
+    /** "What changed" digests, newest first. */
+    updates: z.array(investigationDigestSchema).max(PROACTIVE_LIMITS.maxDigests).optional(),
   })
   .strict();
 export type InvestigationContent = z.infer<typeof investigationContentSchema>;

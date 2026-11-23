@@ -199,6 +199,15 @@ export async function executeSquireAction(
             ),
             followUp: undefined,
           };
+    // "Did the fix hold?": a later check for new alerts and incidents, reported to this person.
+    if (proposal.action === 'resolve_incident' || proposal.action === 'run_runbook')
+      await (
+        await import('../../memory/proactive-verification')
+      ).scheduleFixVerification({
+        incidentId,
+        userId: actor.id,
+        trigger: proposal.action === 'resolve_incident' ? 'RESOLVE' : 'RUNBOOK',
+      });
     try {
       revalidatePath(`/incidents/${incidentId}`);
     } catch {

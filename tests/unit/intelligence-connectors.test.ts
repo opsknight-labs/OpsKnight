@@ -658,7 +658,14 @@ describe('normalisation bounds', () => {
     expect(summary.truncated).toBe(true);
     expect(summary.series[0].samples).toHaveLength(LIMITS.samplesPerSeries);
     expect(Object.keys(summary.series[0].labels)).toHaveLength(LIMITS.labelsPerSeries);
-    expect(JSON.stringify(summary).length).toBeLessThan(7_000);
+    // What a model receives: the chart-only points are split off first (splitChartSamples).
+    const forModel = {
+      ...summary,
+      series: summary.series.map(({ chartSamples: _chart, ...rest }) => rest),
+    };
+    expect(JSON.stringify(forModel).length).toBeLessThan(7_000);
+    // The chart points are bounded on their own.
+    expect(summary.series[0].chartSamples).toHaveLength(LIMITS.chartSamplesPerSeries);
   });
 
   it('caps log lines and their length', () => {

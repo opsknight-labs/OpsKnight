@@ -1,5 +1,5 @@
 import { SpanStatusCode } from '@opentelemetry/api';
-import { ToolDeadlineError, withToolDeadline } from '../ai/gateway';
+import { runWithDeadline, ToolDeadlineError } from '../ai/gateway';
 import type { AiToolDefinition } from '../ai/port';
 import { failSpan, startSpan, withSpan } from '../telemetry';
 import type { SquireEvent } from './contract';
@@ -61,10 +61,11 @@ export function traceReadTool(tool: AiToolDefinition): AiToolDefinition {
   if (tool.kind !== 'READ' || !execute) return tool;
   return {
     ...tool,
-    execute: input =>
+    execute: (input, call) =>
       withSpan('squire.tool', { 'squire.tool': toolName(tool.name) }, async span => {
         try {
-          const result = await withToolDeadline(execute(input));
+          // The tool gets a signal that aborts at the deadline, so a late result is discarded, not recorded.
+          const result = await runWithDeadline(signal => execute(input, { signal }), call?.signal);
           const failed = !!result && typeof result === 'object' && 'error' in result;
           span.setAttribute('squire.tool.outcome', failed ? 'error' : 'ok');
           return result;

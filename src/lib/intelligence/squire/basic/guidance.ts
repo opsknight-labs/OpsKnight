@@ -43,7 +43,7 @@ const GUIDES: ReadonlyArray<{ match: RegExp; title: string; answer: string }> = 
       'Open Schedules to inspect rotation layers, participants, restrictions and the schedule timezone. Use an override for a temporary coverage change and verify the resulting coverage. Being listed on a schedule is different from being the assignee of an incident. Ask “Who is on call for Checkout?” to check live coverage.',
   },
   {
-    match: /\b(escalat|paging|page me)\b/,
+    match: /\b(escalat\w*|paging|page me)\b/,
     title: 'Escalation and paging',
     answer:
       'A service’s escalation policy defines ordered routing steps, targets and delays. Review it on the service and policy pages. Who is on call and who is assigned can differ. Basic mode can read routing context but does not trigger an escalation or send a page.',
@@ -122,7 +122,14 @@ const GUIDES: ReadonlyArray<{ match: RegExp; title: string; answer: string }> = 
   },
 ];
 export function productGuidance(message: string): string {
-  const match = GUIDES.find(guide => guide.match.test(message.toLowerCase()));
+  const text = message.toLowerCase();
+  // The most specific guide wins: the longest matched phrase, with the general OpsKnight guide last.
+  let match: (typeof GUIDES)[number] | undefined;
+  let best = 0;
+  for (const guide of GUIDES) {
+    const length = guide.title === 'OpsKnight' ? 0.5 : (text.match(guide.match)?.[0].length ?? 0);
+    if (length > best && guide.match.test(text)) [match, best] = [guide, length];
+  }
   return match
     ? `## ${match.title}\n\n${match.answer}\n\nThis explains the product workflow; it does not verify your current configuration or execute a change.`
     : 'I can explain incident lifecycle, urgency and priority, schedules and overrides, escalation policies, runbooks, postmortems, integrations, notifications, status pages, saved chats, identity and permissions. Ask a specific question such as “How do schedule overrides work?”';

@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import type { StoredTurnEnvelope } from '@/lib/intelligence/conversations/contract';
 import type { SquireProposalView } from './SquireProposalCard';
 
-import { mergeInvestigationStep, type Turn, type Citation } from './chat-types';
+import { mergeChart, mergeInvestigationStep, type Turn, type Citation } from './chat-types';
 import {
   describeSquireContext,
   incidentIdFromPath,
@@ -61,6 +61,13 @@ import { matchSlashCommands, type SlashCommand } from './slash-commands';
 import type { StatusBarShift } from '@/lib/status-bar';
 import { toneClasses } from '@/components/patterns/status-tone';
 import { incidentRef } from '@/lib/intelligence/incident-ux/explain';
+import SquireBackgroundAnswers from './SquireBackgroundAnswers';
+import {
+  CONVERSATION_PARAM,
+  readConversationLink,
+  useSquireBackground,
+  type BackgroundTurn,
+} from './background-turns';
 type SavedConversation = {
   id: string;
   title: string;
@@ -72,6 +79,8 @@ const CONVERSATIONS_URL = '/api/intelligence/squire/conversations';
 
 const HISTORY_TURNS = 10;
 const STALL_MS = 45_000;
+// A tab hidden this long counts as left: a running investigation then moves to the background.
+const HIDDEN_HANDOFF_MS = 30_000;
 /** The open conversation, per tab, so a reload continues it instead of starting over. */
 const CONVERSATION_KEY = 'opsknight.squire.conversation';
 const MAX_LENGTH = 2000;
@@ -79,6 +88,7 @@ const MAX_LENGTH = 2000;
 const HISTORY_TURN_LENGTH = 4000;
 const SUGGESTIONS = [
   'What is on fire?',
+  'Catch me up',
   'My open incidents',
   'How many incidents this week?',
   'List services',
@@ -219,7 +229,7 @@ export default function SquireLauncher({
   const realtime = useOptionalRealtime();
   const { userTimeZone } = useTimezone();
   const side = useSyncExternalStore(subscribeSide, readSide, serverSide);
-  const sendRef = useRef<(message: string, replayFrom?: number) => Promise<void>>(
+  const sendRef = useRef<(message: string, replayFrom?: number, retry?: boolean) => Promise<void>>(
     async () => undefined
   );
   const incidentId = incidentIdFrom(pathname);
@@ -339,10 +349,13 @@ export default function SquireLauncher({
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Each request gets a number; a stream that is no longer the latest (new chat, opened conversation)
   // cannot write into what is on screen now.
   const requestSeq = useRef(0);
+  // Each saved-chat load gets a number too, so a slow response cannot replace a newer one.
+  const openSeq = useRef(0);
   const pendingRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -354,6 +367,15 @@ export default function SquireLauncher({
   const wasOpen = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
+  /** The request of the answer in progress, so it can be handed to the background. */
+  const liveRequestRef = useRef<Record<string, unknown> | null>(null);
+  const handingOffRef = useRef(false);
+  const [handOffError, setHandOffError] = useState('');
+  // Read before the deep-link hook below tidies the address bar; never rendered, so no hydration concern.
+  const [linkedConversation] = useState(() =>
+    typeof window === 'undefined' ? null : readConversationLink(window.location.search)
+  );
+  const background = useSquireBackground({ enabled: Boolean(history), open });
 
   // Closing only hides the panel: an answer in progress keeps arriving and is there when it is reopened.
   const close = useCallback(() => setOpen(false), []);
@@ -459,7 +481,8 @@ export default function SquireLauncher({
   }, [input]);
 
   const send = useCallback(
-    async (raw: string, replayFrom?: number) => {
+    /** `replayFrom` with `retry`: answer the same question again in this conversation; without: an edit. */
+    async (raw: string, replayFrom?: number, retry = false) => {
       const message = raw.trim().slice(0, MAX_LENGTH);
       if (!message || !online) return;
       if (busy) {
@@ -468,6 +491,8 @@ export default function SquireLauncher({
         return;
       }
       const priorTurns = replayFrom === undefined ? turns : turns.slice(0, replayFrom);
+      // Only an edited question starts a new version of the chat; a retry stays in this one.
+      const fork = replayFrom !== undefined && !retry;
       const history = priorTurns
         .filter(turn => turn.content && !turn.failed)
         .slice(-HISTORY_TURNS)
@@ -491,21 +516,20 @@ export default function SquireLauncher({
           role: 'assistant',
           content: '',
           incidentId,
-          ...(replayFrom !== undefined
-            ? { notice: 'This is a new version. Existing saved chats are unchanged.' }
-            : {}),
+          context: contextKey,
+          ...(fork ? { notice: 'This is a new version. Existing saved chats are unchanged.' } : {}),
         },
       ]);
-      if (replayFrom !== undefined) setConversationId(undefined);
+      if (fork) setConversationId(undefined);
       setEditIndex(null);
       setShowHistory(false);
       setActionOutcome(null);
       atBottomRef.current = true;
       setUnread(false);
       setInput('');
-      // Mentions go with the question they were picked for, not with a replayed one.
-      const sentMentions = replayFrom === undefined ? mentions : [];
-      setMentions([]);
+      // Mentions go with the question they were picked for (new or edited); a retry leaves them for the next.
+      const sentMentions = retry ? [] : mentions;
+      if (!retry) setMentions([]);
       setBusy(true);
       const controller = new AbortController();
       abortRef.current = controller;
@@ -539,7 +563,7 @@ export default function SquireLauncher({
           ...(sentMentions.length
             ? { mentions: sentMentions.map(({ kind, id }) => ({ kind, id })) }
             : {}),
-          ...(conversationId && replayFrom === undefined ? { conversationId } : {}),
+          ...(conversationId && !fork ? { conversationId } : {}),
         };
         // Bound the serialized UTF-8 request, including integrity proofs and multibyte text.
         while (
@@ -547,6 +571,8 @@ export default function SquireLauncher({
           new TextEncoder().encode(JSON.stringify(payload)).byteLength > 60_000
         )
           payload.history.shift();
+        liveRequestRef.current = payload;
+        setHandOffError('');
         const response = await fetch('/api/intelligence/squire', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -611,6 +637,7 @@ export default function SquireLauncher({
             proposal?: SquireProposalView;
             items?: unknown[];
             step?: unknown;
+            chart?: unknown;
           };
           try {
             event = JSON.parse(line);
@@ -630,6 +657,10 @@ export default function SquireLauncher({
           if (event.type === 'meta') setAttention(event.attention === true);
           if (event.type === 'done') {
             completed = true;
+            // The answer is complete: a slow save is not a stall. Keep reading for the conversation id, but
+            // give up quietly (no "stalled") if the stream never closes.
+            window.clearTimeout(stallTimer);
+            stallTimer = window.setTimeout(() => controller.abort(), STALL_MS);
             return;
           }
           if (event.type === 'context') {
@@ -655,6 +686,8 @@ export default function SquireLauncher({
             }));
           else if (event.type === 'tool' && event.label)
             patch(turn => ({ ...turn, activity: event.label }));
+          else if (event.type === 'chart')
+            patch(turn => ({ ...turn, charts: mergeChart(turn.charts, event.chart) }));
           else if (event.type === 'investigation')
             patch(turn => ({
               ...turn,
@@ -701,7 +734,7 @@ export default function SquireLauncher({
           for (;;) {
             const { value, done } = await reader.read();
             if (done) break;
-            armStall();
+            if (!completed) armStall();
             buffer += decoder.decode(value, { stream: true });
             let newline = buffer.indexOf('\n');
             while (newline >= 0) {
@@ -752,6 +785,7 @@ export default function SquireLauncher({
         window.clearTimeout(stallTimer);
         patch(turn => ({ ...turn, activity: undefined }));
         if (seq === requestSeq.current) {
+          liveRequestRef.current = null;
           setBusy(false);
           if (!openRef.current) setAnswerReady(seq);
         }
@@ -765,7 +799,7 @@ export default function SquireLauncher({
       .slice(0, index)
       .findLastIndex(turn => turn.role === 'user');
     if (questionIndex >= 0)
-      void sendRef.current(turnsRef.current.at(questionIndex)!.content, questionIndex);
+      void sendRef.current(turnsRef.current.at(questionIndex)!.content, questionIndex, true);
   }, []);
   const editQuestion = useCallback((index: number) => {
     const turn = turnsRef.current.at(index);
@@ -780,7 +814,8 @@ export default function SquireLauncher({
     endRef.current?.scrollIntoView?.({ block: 'end', behavior: 'instant' });
   };
 
-  const stopResponse = () => {
+  /** Ends the answer in progress on screen, keeping what arrived, with `notice` under it. */
+  const haltLive = useCallback((notice: string) => {
     // Keep the text that already arrived this frame, then fence late chunks before aborting so they
     // cannot replace the retained answer.
     deltasRef.current?.flush();
@@ -788,22 +823,77 @@ export default function SquireLauncher({
     requestSeq.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
+    liveRequestRef.current = null;
     setTurns(current =>
       current.map((turn, index) =>
         index === current.length - 1 && turn.role === 'assistant'
           ? {
               ...turn,
               activity: undefined,
-              notice: [turn.notice, 'Response stopped. You can ask a follow-up.']
-                .filter(Boolean)
-                .join(' '),
+              notice: [turn.notice, notice].filter(Boolean).join(' '),
             }
           : turn
       )
     );
     setBusy(false);
+  }, []);
+  const stopResponse = () => {
+    // A question queued behind the stopped answer (asked from elsewhere on the page) is dropped too.
+    pendingRef.current = null;
+    haltLive('Response stopped. You can ask a follow-up.');
     inputRef.current?.focus();
   };
+
+  /**
+   * Moves the answer in progress to the server, which finishes it, saves it to this conversation and sends a
+   * notification. `leaving`: the tab is closing or hidden, so the request must outlive the page.
+   */
+  const { handOff, cancel: cancelBackground } = background;
+  const keepWorking = useCallback(
+    async (leaving = false) => {
+      const payload = liveRequestRef.current;
+      if (!payload || handingOffRef.current) return;
+      handingOffRef.current = true;
+      try {
+        const outcome = await handOff(payload, leaving);
+        // The answer finished (or another started) meanwhile: it is already here, so the copy is not needed.
+        if (liveRequestRef.current !== payload) {
+          if (outcome.ok && outcome.id) void cancelBackground(outcome.id);
+          return;
+        }
+        if (outcome.ok)
+          haltLive(
+            `${name} is finishing this in the background. You will get a notification when the answer is ready.`
+          );
+        else if (!leaving) setHandOffError(outcome.message);
+      } finally {
+        handingOffRef.current = false;
+      }
+    },
+    [handOff, cancelBackground, haltLive, name]
+  );
+
+  // Leaving mid-investigation (closing the tab, or leaving it hidden) hands it over instead of losing it. A
+  // quick tab switch is not leaving, and the answer on screen keeps running until the server accepts it.
+  useEffect(() => {
+    if (!history) return;
+    let hiddenTimer: number | undefined;
+    const leave = () => {
+      if (turnsRef.current.at(-1)?.investigation?.length) void keepWorking(true);
+    };
+    const visibility = () => {
+      window.clearTimeout(hiddenTimer);
+      if (document.visibilityState === 'hidden')
+        hiddenTimer = window.setTimeout(leave, HIDDEN_HANDOFF_MS);
+    };
+    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('pagehide', leave);
+    return () => {
+      window.clearTimeout(hiddenTimer);
+      document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener('pagehide', leave);
+    };
+  }, [history, keepWorking]);
 
   // A question asked while busy goes out as soon as the current answer is complete.
   useEffect(() => {
@@ -826,6 +916,7 @@ export default function SquireLauncher({
     stopCurrent();
     setTurns([]);
     setInput('');
+    setMentions([]);
     setEditIndex(null);
     setActionOutcome(null);
     setAttention(false);
@@ -872,6 +963,14 @@ export default function SquireLauncher({
   const openSaved = useCallback(
     async (id: string, quiet = false) => {
       setHistoryError('');
+      const load = ++openSeq.current;
+      const sendAt = requestSeq.current;
+      // A newer load, a question sent or a new chat since this started: what is on screen wins.
+      const stale = () =>
+        load !== openSeq.current ||
+        requestSeq.current !== sendAt ||
+        // The reload restore never replaces a chat already under way.
+        (quiet && turnsRef.current.length > 0);
       try {
         const response = await fetch(`${CONVERSATIONS_URL}/${encodeURIComponent(id)}`, {
           cache: 'no-store',
@@ -893,9 +992,11 @@ export default function SquireLauncher({
           };
         };
         const conversation = body.data?.conversation;
+        if (stale()) return;
         if (!conversation) throw new Error('missing');
         stopCurrent();
         setInput('');
+        setMentions([]);
         setEditIndex(null);
         setActionOutcome(null);
         setAttention(false);
@@ -922,6 +1023,7 @@ export default function SquireLauncher({
               ? { mode: envelope.mode }
               : {}),
             citations: envelope?.citations,
+            charts: envelope?.charts,
             savedActions: envelope?.actions,
             notice:
               [...new Set([...(envelope?.notices ?? []), ...(notice ? [notice] : [])])].join(' ') ||
@@ -931,6 +1033,7 @@ export default function SquireLauncher({
         setConversationId(conversation.id);
         setShowHistory(false);
       } catch {
+        if (stale()) return;
         if (quiet) storeConversation(undefined);
         else setHistoryError('That conversation could not be opened.');
       }
@@ -938,18 +1041,49 @@ export default function SquireLauncher({
     [stopCurrent]
   );
 
-  // Restore this tab's conversation after a reload; keep the stored id in step with what is open.
+  // Restore this tab's conversation after a reload; keep the stored id in step with what is open. A link to
+  // a conversation (a finished background answer's notification) wins over the stored one; its
+  // `squire=open` opens the panel (use-squire-surfaces).
   const restored = useRef(false);
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
-    const id = readStoredConversation();
+    if (linkedConversation) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete(CONVERSATION_PARAM);
+        window.history.replaceState(
+          window.history.state,
+          '',
+          `${url.pathname}${url.search}${url.hash}`
+        );
+      } catch {
+        // The link still works; only the address bar keeps its parameter.
+      }
+    }
+    const id = linkedConversation ?? readStoredConversation();
     // After the effect, like a subscription callback: opening sets state.
     if (id && history) void Promise.resolve().then(() => openSaved(id, true));
-  }, [history, openSaved]);
+  }, [history, openSaved, linkedConversation]);
+  // Written only when the id changes, never with the initial undefined: on mount that would wipe the stored
+  // id before the restore above has read the conversation back.
+  const storedId = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (restored.current) storeConversation(conversationId);
+    if (conversationId === storedId.current) return;
+    storedId.current = conversationId;
+    storeConversation(conversationId);
   }, [conversationId]);
+
+  const { markOpened, ready: readyBackground } = background;
+  const openBackground = useCallback(
+    (turn: BackgroundTurn) => {
+      if (!turn.conversationId) return;
+      markOpened(turn.id);
+      void openSaved(turn.conversationId);
+    },
+    [markOpened, openSaved]
+  );
+  const readyIds = useMemo(() => new Set(readyBackground.map(turn => turn.id)), [readyBackground]);
 
   const removeSaved = useCallback(
     async (id?: string) => {
@@ -967,6 +1101,7 @@ export default function SquireLauncher({
           setInput('');
         }
         setConfirmDeleteAll(false);
+        setConfirmDelete(null);
         await loadSaved();
       } catch {
         setHistoryError('Could not delete. Please try again.');
@@ -998,7 +1133,8 @@ export default function SquireLauncher({
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
-      void send(input, editIndex ?? undefined);
+      // While an answer arrives the text stays in the box (Stop first); nothing is queued out of sight.
+      if (!busy) void send(input, editIndex ?? undefined);
     }
   };
 
@@ -1153,6 +1289,15 @@ export default function SquireLauncher({
               onRetry={retryLatest}
             />
           )}
+          {history && (
+            <SquireBackgroundAnswers
+              turns={background.turns}
+              readyIds={readyIds}
+              timeZone={userTimeZone}
+              onOpen={openBackground}
+              onCancel={id => void background.cancel(id)}
+            />
+          )}
           {actionOutcome && (
             <p
               role="status"
@@ -1228,14 +1373,39 @@ export default function SquireLauncher({
                               · {item.messageCount} messages
                             </span>
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => void removeSaved(item.id)}
-                            aria-label={`Delete conversation: ${item.title}`}
-                            className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                          </button>
+                          {confirmDelete === item.id ? (
+                            <div
+                              role="group"
+                              aria-label={`Confirm deleting ${item.title}`}
+                              className="flex shrink-0 items-center gap-1 text-xs"
+                            >
+                              <button
+                                type="button"
+                                // Focus lands here when the confirmation opens, so Enter does not delete.
+                                autoFocus
+                                onClick={() => setConfirmDelete(null)}
+                                className="min-h-11 rounded px-2 hover:bg-accent sm:min-h-8"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void removeSaved(item.id)}
+                                className="min-h-11 rounded px-2 font-medium text-destructive hover:bg-accent sm:min-h-8"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDelete(item.id)}
+                              aria-label={`Delete conversation: ${item.title}`}
+                              className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          )}
                         </li>
                       ))}
                   </ul>
@@ -1249,14 +1419,14 @@ export default function SquireLauncher({
                       <button
                         type="button"
                         onClick={() => void removeSaved()}
-                        className="font-medium text-destructive hover:underline"
+                        className="min-h-11 font-medium text-destructive hover:underline sm:min-h-8"
                       >
                         Delete all
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteAll(false)}
-                        className="hover:underline"
+                        className="min-h-11 hover:underline sm:min-h-8"
                       >
                         Cancel
                       </button>
@@ -1265,7 +1435,7 @@ export default function SquireLauncher({
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteAll(true)}
-                      className="text-xs text-destructive underline-offset-2 hover:underline"
+                      className="min-h-11 text-xs text-destructive underline-offset-2 hover:underline sm:min-h-8"
                     >
                       Delete all saved conversations
                     </button>
@@ -1396,6 +1566,27 @@ export default function SquireLauncher({
           <div className="sr-only" role="status" aria-live="polite" data-testid="squire-progress">
             {progressAnnouncement(busy, lastTurn, turns.length > 0)}
           </div>
+          {busy && history && !showHistory && (
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-muted/40 px-3 py-1.5 text-xs">
+              <span className="text-muted-foreground">
+                {lastTurn?.investigation?.length
+                  ? 'Investigations can take a while.'
+                  : 'No need to wait here.'}
+              </span>
+              <button
+                type="button"
+                onClick={() => void keepWorking()}
+                className="min-h-11 rounded font-medium underline underline-offset-2 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
+              >
+                Keep working in the background
+              </button>
+              {handOffError && (
+                <p role="alert" className={`w-full ${toneClasses('critical').text}`}>
+                  {handOffError}
+                </p>
+              )}
+            </div>
+          )}
           {!online && (
             <p
               role="status"

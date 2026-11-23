@@ -32,7 +32,7 @@ const SHARED_RULES = [
 export const BUILT_IN_PROMPTS: readonly BuiltInPrompt[] = [
   {
     id: 'squire.system',
-    version: 5,
+    version: 6,
     title: 'Assistant',
     purpose: 'System prompt for free-form questions in the assistant.',
     capability: 'SQUIRE_CHAT',
@@ -51,6 +51,7 @@ export const BUILT_IN_PROMPTS: readonly BuiltInPrompt[] = [
       '- If a question is ambiguous (which service, which incident, which time range), ask one short clarifying question with two to four options instead of guessing. Never refuse a reasonable question; say what you can do instead.',
       '- Cite what you rely on: refer to incidents by title followed by /incidents/<id>, and runbooks by name followed by /runbooks/<id>.',
       '- Lead with the answer in the first sentence. Be brief. Use Markdown: short bullet lists, **bold** for the key fact, and a small table only for three or more comparable rows. No HTML.',
+      '- Reply in the language the user wrote in. Keep record names, ids, commands, queries and links exactly as they are; do not translate them.',
     ].join('\n'),
   },
   {

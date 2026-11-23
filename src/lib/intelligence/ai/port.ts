@@ -76,7 +76,12 @@ export interface AiToolDefinition {
    * Runs a READ tool under the caller's own permissions. Absent for PROPOSE_WRITE tools, whose call is
    * handed back to the caller instead of being executed. Output is untrusted data to the model.
    */
-  execute?: (input: unknown) => Promise<unknown>;
+  execute?: (input: unknown, call?: { signal?: AbortSignal }) => Promise<unknown>;
+  /**
+   * PROPOSE_WRITE only: whether a call's input is a well-formed proposal. An invalid call is refused to the model
+   * (so it can correct itself) and never handed to the caller.
+   */
+  validate?: (input: unknown) => boolean;
 }
 
 export interface AiToolCall {
@@ -114,6 +119,8 @@ export interface AiGenerateResult {
   cached?: boolean;
   /** True when spend controls degraded the request (small model, shorter answer) past 80% of a daily budget. */
   degraded?: boolean;
+  /** True when the budget refused another tool step, so the answer was written from what had been read. */
+  budgetLimited?: boolean;
 }
 
 export type AiStreamEvent =

@@ -78,4 +78,15 @@ describe('SquireActionHistory', () => {
     );
     expect(screen.getByText('No actions yet.')).toBeTruthy();
   });
+
+  it('names the status filter when nothing matches it', () => {
+    render(
+      <SquireActionHistory
+        initial={{ scope: 'mine', canSeeEveryone: false, nextCursor: null, rows: [] }}
+        status="FAILED"
+        loadMore={vi.fn()}
+      />
+    );
+    expect(screen.getByText('No failed actions.')).toBeTruthy();
+  });
 });

@@ -7,6 +7,7 @@ import {
   resolveEntities,
 } from '@/lib/intelligence/squire/basic/entities';
 import {
+  pendingState,
   readDialogueState,
   resetDialogueMemory,
 } from '@/lib/intelligence/assistant/dialogue-state';
@@ -512,5 +513,159 @@ describe('calendar questions end to end', () => {
       incident: null,
     });
     expect(between.text).toMatch(/\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}/);
+  });
+});
+
+describe('dialogue follow-ups from the adversarial review', () => {
+  const onScreen = (w: Awaited<ReturnType<typeof world>>, index = 2) => ({
+    id: w.incidents[index].id,
+    title: `Pool exhausted ${index + 1}`,
+    status: 'OPEN',
+    urgency: 'HIGH',
+    serviceName: 'Checkout API',
+    createdAt: new Date(),
+  });
+
+  it('assigns to the person picked from a list by id, keeping names that re-parsing garbled', async () => {
+    const w = await world();
+    const names = ["Alice O'Brien", 'Alice Ortega'];
+    const people = await Promise.all(names.map(name => createTestUser({ role: 'USER', name })));
+    for (const person of people)
+      await db.teamMember.create({
+        data: { userId: person.id, teamId: w.team.id, role: 'MEMBER' },
+      });
+    const incident = onScreen(w);
+    const ask = await planBasicTurn({ actor: w.actor, message: 'assign this to Alice', incident });
+    expect(ask.nextState?.pending?.kind).toBe('person');
+    const pick = await planBasicTurn({
+      actor: w.actor,
+      message: "Alice O'Brien",
+      incident,
+      state: ask.nextState,
+    });
+    expect(pick.proposals).toEqual([
+      { action: 'reassign_incident', input: { incidentId: incident.id, assigneeId: people[0].id } },
+    ]);
+    const byNumber = await planBasicTurn({
+      actor: w.actor,
+      message: '2',
+      incident,
+      state: ask.nextState,
+    });
+    expect(byNumber.proposals[0]?.input).toMatchObject({ assigneeId: people[1].id });
+    const me = await planBasicTurn({ actor: w.actor, message: 'assign this to me', incident });
+    expect(me.proposals[0]?.input).toMatchObject({ assigneeId: w.responder.id });
+  });
+
+  it('cancels, ignores empty replies and takes a real question as new', async () => {
+    const w = await world();
+    const ask = await planBasicTurn({ actor: w.actor, message: 'who owns pay', incident: null });
+    expect(ask.nextState?.pending?.kind).toBe('service');
+    const cancel = await planBasicTurn({
+      actor: w.actor,
+      message: 'never mind',
+      incident: null,
+      state: ask.nextState,
+    });
+    expect(cancel.text).toContain('dropped');
+    expect(cancel.nextState).toBeNull();
+    const empty = await planBasicTurn({
+      actor: w.actor,
+      message: '?',
+      incident: null,
+      state: ask.nextState,
+    });
+    expect(empty.text).not.toContain('Payments API');
+    const fresh = await planBasicTurn({
+      actor: w.actor,
+      message: 'my queue',
+      incident: null,
+      state: ask.nextState,
+    });
+    expect(fresh.intent).toBe('WORK_QUEUE');
+  });
+
+  it('completes a two-way clarification with the original subject', async () => {
+    const w = await world();
+    await createTestIncident('Billing glitch', w.payments.id, { assigneeId: w.responder.id });
+    const state = pendingState('intent', 'checkout incidents?', 'UNKNOWN', [
+      { label: 'Search incidents', id: 'SEARCH_INCIDENTS' },
+      { label: 'My open incidents', id: 'WORK_QUEUE' },
+    ]);
+    const picked = await planBasicTurn({
+      actor: w.actor,
+      message: 'Search incidents',
+      incident: null,
+      state,
+    });
+    expect(picked.intent).toBe('SEARCH_INCIDENTS');
+    expect(picked.text).toContain('keywords: checkout');
+    expect(picked.text).not.toContain('Billing glitch');
+  });
+
+  it('keeps the person filter and intent on "show more"', async () => {
+    const w = await world();
+    const other = await createTestUser({ role: 'RESPONDER', name: 'Someone Else' });
+    await createTestIncident('Other person incident', w.checkout.id, { assigneeId: other.id });
+    const first = await planBasicTurn({
+      actor: w.actor,
+      message: 'incidents assigned to Eval Responder',
+      incident: null,
+    });
+    expect(first.nextState?.page?.filters).toEqual({ assigneeId: w.responder.id });
+    const next = await planBasicTurn({
+      actor: w.actor,
+      message: 'show me more',
+      incident: null,
+      state: first.nextState,
+    });
+    expect(next.intent).toBe(first.intent);
+    expect(next.text).toContain('Showing 6–7 of 7');
+    expect(next.text).not.toContain('Other person incident');
+  });
+
+  it('runs every list and report chip after the question that offered it', async () => {
+    const w = await world();
+    const chain: Array<[string, string, string]> = [
+      ['list open incidents', 'Only high urgency', 'Pool exhausted'],
+      ['list open incidents', 'Only the last 24 hours', 'Pool exhausted'],
+      ['list open incidents', 'Group them by service', 'Checkout API'],
+      ['How many incidents this week?', 'Break it down by team', '### By team'],
+      ['How many incidents this week?', 'Compare with the previous period', 'incidents'],
+    ];
+    for (const [previous, chip, expected] of chain) {
+      const next = await planBasicTurn({
+        actor: w.actor,
+        message: chip,
+        incident: null,
+        previousQuestions: [previous],
+      });
+      expect(next.intent, chip).not.toBe('UNKNOWN');
+      expect(next.text, chip).toContain(expected);
+      expect(next.text, chip).not.toContain('0 matches');
+    }
+    const grouped = await planBasicTurn({
+      actor: w.actor,
+      message: 'Group them by service',
+      incident: null,
+      previousQuestions: ['list open incidents'],
+    });
+    expect(grouped.intent).toBe('INCIDENT_STATS');
+  });
+
+  it('refuses /ack for another incident and normalises tag names', async () => {
+    const w = await world();
+    const incident = onScreen(w);
+    const other = await planBasicTurn({ actor: w.actor, message: '/ack INC-42', incident });
+    expect(other.proposals).toHaveLength(0);
+    expect(other.text).toContain('is not it');
+    const same = await planBasicTurn({
+      actor: w.actor,
+      message: `/ack #${incident.id.slice(-5).toUpperCase()}`,
+      incident,
+    });
+    expect(same.proposals[0]?.action).toBe('acknowledge_incident');
+    const tag = await planBasicTurn({ actor: w.actor, message: '/tag "database"\n', incident });
+    expect(tag.operation?.args).toMatchObject({ body: { name: 'database' } });
   });
 });

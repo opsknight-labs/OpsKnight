@@ -119,6 +119,28 @@ describe('Squire @-mentions', () => {
     ]);
   });
 
+  it('is a combobox while the list is open and says when nothing matches', async () => {
+    render(<Harness />);
+    const field = screen.getByLabelText('Message Pip');
+    expect(field).not.toHaveAttribute('role');
+    fireEvent.change(field, { target: { value: 'is @Check' } });
+    await screen.findByRole('listbox', { name: 'Mention a record' });
+    expect(field).toHaveAttribute('role', 'combobox');
+    expect(field).toHaveAttribute('aria-expanded', 'true');
+    expect(field).toHaveAttribute('aria-controls', 'squire-input-mentions');
+
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ results: [] }),
+    }));
+    fireEvent.change(field, { target: { value: 'is @Nothing' } });
+    expect(await screen.findByText('No matches')).toHaveAttribute('role', 'status');
+    expect(field).not.toHaveAttribute('role');
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(screen.queryByText('No matches')).not.toBeInTheDocument();
+  });
+
   it('offers nothing once five records are mentioned', async () => {
     const five = Array.from({ length: 5 }, (_, i) => ({
       kind: 'team' as const,
@@ -151,6 +173,36 @@ describe('Squire @-mentions', () => {
       history: [],
       mentions: [{ kind: 'service', id: 'svc_1' }],
     });
+    expect(
+      screen.queryByRole('button', { name: 'Remove mention Checkout API' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('sends mentions with an edited question, and a new chat drops unsent ones', async () => {
+    render(<SquireLauncher name="Pip" />);
+    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+    const field = screen.getByLabelText('Message Pip');
+    fireEvent.change(field, { target: { value: 'how is checkout' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit question' }));
+    fireEvent.change(field, { target: { value: 'how is @Check' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Checkout API/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(([url]) => url === '/api/intelligence/squire')
+      ).toHaveLength(2)
+    );
+    const [, init] = fetchMock.mock.calls.filter(([url]) => url === '/api/intelligence/squire')[1];
+    expect(JSON.parse(init.body).mentions).toEqual([{ kind: 'service', id: 'svc_1' }]);
+
+    // Picked but never sent: a new chat clears it.
+    await screen.findAllByRole('button', { name: 'Edit question' });
+    fireEvent.change(field, { target: { value: 'and @Check' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Checkout API/ }));
+    expect(screen.getByRole('button', { name: 'Remove mention Checkout API' })).toBeInTheDocument();
+    fireEvent.change(field, { target: { value: '/new' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
     expect(
       screen.queryByRole('button', { name: 'Remove mention Checkout API' })
     ).not.toBeInTheDocument();

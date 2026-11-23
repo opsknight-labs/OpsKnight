@@ -5,6 +5,7 @@ import {
   markdownToSlack,
   markdownToTeams,
   parseSquireButtonValue,
+  slackBlocksText,
   parseTeamsSquireAction,
   questionFromMention,
   renderSlackAnswer,
@@ -64,10 +65,49 @@ describe('Squire chat rendering: links', () => {
     expect(text).not.toContain('evil.example');
   });
 
+  it('never lets a link target close the Slack link or carry markup', () => {
+    for (const markdown of [
+      '[x](/a><!channel>)',
+      '[Open](/x><https://evil.tld|Open)',
+      '[Open](/incidents/ID?x><!channel>)',
+      '[x](/a|b)',
+      '[x](/a\\evil.tld)',
+    ]) {
+      const text = markdownToSlack(markdown, BASE);
+      expect(text).not.toMatch(/<!channel>|<https:\/\/evil|\|Open>/);
+      // Only the escaped form of anything markup-like survives.
+      expect(text.replace(/&lt;|&gt;|&amp;/g, '')).not.toMatch(/[<>]/);
+    }
+    for (const href of [
+      '/a><!channel>',
+      '/a b',
+      '/a|b',
+      '/a\nb',
+      '/a\u0007',
+      '/a"b',
+      '/\\evil.tld',
+    ])
+      expect(appLink(href, BASE)).toBeNull();
+    // A label cannot end the link or start another.
+    expect(markdownToSlack('[a|b>c](/incidents/x)', BASE)).toBe(`<${BASE}/incidents/x|a/b&gt;c>`);
+  });
+
   it('keeps a dash after a link as text, not a bullet', () => {
     expect(markdownToSlack('[a](/incidents/a) - next', BASE)).toBe(
       `<${BASE}/incidents/a|a> - next`
     );
+  });
+
+  it('renders citation links with markup in their target as plain labels', () => {
+    const { blocks } = renderSlackAnswer(
+      answer({
+        citations: [{ kind: 'incident', label: 'Open', href: '/x><https://evil.tld|Open' }],
+      }),
+      { baseUrl: BASE, ownerUserId: 'u1' }
+    );
+    const json = JSON.stringify(blocks);
+    expect(json).toContain('Sources: Open');
+    expect(json).not.toContain('evil.tld');
   });
 
   it('neutralises HTML and foreign links for Teams', () => {
@@ -170,6 +210,33 @@ describe('Squire chat rendering: Slack', () => {
     for (const section of sections) expect(section.text.text.length).toBeLessThanOrEqual(3_000);
   });
 
+  it('keeps every block within Slack limits after escaping, and can fall back to text', () => {
+    const long = '<&>'.repeat(2_000);
+    const { blocks, text } = renderSlackAnswer(
+      answer({
+        error: undefined,
+        notices: [long],
+        proposals: [{ ...writeProposal, title: long, detail: long }],
+      }),
+      { baseUrl: BASE, ownerUserId: 'u1' }
+    );
+    for (const block of blocks) {
+      const texts = [
+        (block.text as { text?: string } | undefined)?.text,
+        ...((block.elements as Array<{ text?: unknown }> | undefined) ?? []).map(e => e.text),
+      ].filter((value): value is string => typeof value === 'string');
+      for (const value of texts) expect(value.length).toBeLessThanOrEqual(3_000);
+    }
+    const { blocks: errorBlocks } = renderSlackAnswer(answer({ error: long, text: '' }), {
+      baseUrl: BASE,
+      ownerUserId: '',
+    });
+    expect((errorBlocks[0].text as { text: string }).text.length).toBeLessThanOrEqual(3_000);
+    const fallback = slackBlocksText(blocks, text);
+    expect(fallback.length).toBeLessThanOrEqual(3_900);
+    expect(fallback).toContain('payments');
+  });
+
   it('fits a sealed acknowledge or short-resolution proposal in a Slack button value', async () => {
     // A maximum-length resolution or note does not fit; it is offered as an OpsKnight link instead
     // (covered above), never truncated.
@@ -232,6 +299,25 @@ describe('Squire chat rendering: Teams', () => {
       url: `${BASE}/incidents/inc_1`,
     });
     expect(JSON.stringify(card)).not.toContain(SQUIRE_TEAMS_CONFIRM_VERB);
+  });
+
+  it('neutralises links outside OpsKnight in proposals and notices', () => {
+    const card = renderTeamsAnswer(
+      answer({
+        notices: ['See [this](https://evil.example/n)'],
+        proposals: [
+          {
+            ...writeProposal,
+            title: 'Ack [now](https://evil.example/t)',
+            detail: '<b>x</b> [here](https://evil.example/d)',
+          },
+        ],
+      }),
+      { baseUrl: BASE, ownerUserId: 'u1' }
+    );
+    const json = JSON.stringify(card);
+    expect(json).not.toContain('evil.example');
+    expect(json).toContain('&lt;b&gt;x&lt;/b&gt;');
   });
 
   it('never treats an incident-card action as a Squire action', () => {

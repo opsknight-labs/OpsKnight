@@ -114,7 +114,9 @@ async function resultMessage(
 /**
  * Receipts of confirmed Squire actions, newest first. The viewer sees their own; an intelligence
  * manager may see everyone's. A row about an incident the viewer can no longer read is left out
- * entirely, so its outcome text (which may name the incident) is never shown.
+ * entirely, so its outcome text (which may name the incident) is never shown. Only the person who
+ * confirmed an action sees its stored outcome text (it can quote record names and values); everyone
+ * else sees the per-status wording.
  */
 export async function listSquireActionHistory(
   actor: AuthorizationActor,
@@ -149,6 +151,7 @@ export async function listSquireActionHistory(
     ...(cursor ? { cursor: { id: cursor } } : {}),
     select: {
       id: true,
+      userId: true,
       action: true,
       incidentId: true,
       status: true,
@@ -187,7 +190,9 @@ export async function listSquireActionHistory(
       action: actionLabel(receipt.action),
       status: rowStatus,
       message:
-        (await resultMessage(receipt.resultEncrypted, rowStatus)) ?? genericMessage(rowStatus),
+        (receipt.userId === actor.id
+          ? await resultMessage(receipt.resultEncrypted, rowStatus)
+          : null) ?? genericMessage(rowStatus),
       ...(receipt.incidentId ? { href: `/incidents/${receipt.incidentId}` } : {}),
     });
   }

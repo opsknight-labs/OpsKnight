@@ -2,7 +2,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { getAiSettings } from '../ai/settings';
+import { getAiSettings, type AiSettingsView } from '../ai/settings';
 import { getProactiveNotesForActor } from '../memory/proactive-view';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
@@ -61,7 +61,9 @@ export async function getPinnedBriefingForActor(
   incidentId: string,
   client: typeof prisma = prisma,
   /** The incident the caller already read through `actor`'s visibility (skips the re-read). */
-  readable?: ReadableIncident
+  readable?: ReadableIncident,
+  /** Settings the caller already read this request (skips the re-read). */
+  loaded?: Pick<AiSettingsView, 'squireEnabled'>
 ): Promise<PinnedBriefing | null> {
   if (
     actor.apiKey ||
@@ -70,7 +72,7 @@ export async function getPinnedBriefingForActor(
   )
     return null;
   const [settings, incident] = await Promise.all([
-    getAiSettings(client).catch(() => null),
+    loaded ?? getAiSettings(client).catch(() => null),
     readable?.id === incidentId
       ? readable
       : readIncidentForActor(actor, incidentId, client).catch(() => null),

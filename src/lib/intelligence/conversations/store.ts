@@ -15,7 +15,7 @@ import {
 } from './contract';
 import { decrypt, encrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
-import { getAiSettings } from '../ai/settings';
+import { getAiSettings, type AiSettingsView } from '../ai/settings';
 import { withDbBudget } from '../jobs/db-budget';
 
 /**
@@ -62,8 +62,11 @@ export interface HistoryStatus {
   retentionDays: number;
 }
 
-export async function getHistoryStatus(): Promise<HistoryStatus> {
-  const settings = await getAiSettings();
+/** `loaded`: settings the caller already read this request, saving a round trip. */
+export async function getHistoryStatus(
+  loaded?: Pick<AiSettingsView, 'squireHistoryEnabled' | 'squireHistoryRetentionDays'>
+): Promise<HistoryStatus> {
+  const settings = loaded ?? (await getAiSettings());
   return {
     enabled: settings.squireHistoryEnabled,
     retentionDays: settings.squireHistoryRetentionDays,
@@ -256,9 +259,10 @@ export async function listConversations(userId: string): Promise<ConversationSum
 
 export async function getConversation(
   userId: string,
-  id: string
+  id: string,
+  loaded?: Pick<AiSettingsView, 'squireHistoryRetentionDays'>
 ): Promise<ConversationDetail | null> {
-  const settings = await getAiSettings();
+  const settings = loaded ?? (await getAiSettings());
   const row = await prisma.squireConversation.findFirst({
     where: {
       id,

@@ -233,6 +233,30 @@ describe('Squire on the status bar', () => {
     expect(document.querySelector('.sqbar-scroll.open')).toBeNull();
   });
 
+  it('holds a note while it is hovered and lets it go after the pointer leaves', async () => {
+    window.localStorage.setItem('opsknight.squire.delivered', JSON.stringify(['intro']));
+    // A different shift than the test above: delivered notes are remembered for the page.
+    renderCompanion(notesFor({ shifts: [shift(100, 600)] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_600);
+    });
+    const scroll = document.querySelector('.sqbar-scroll')!;
+    // React derives enter/leave from over/out.
+    fireEvent.pointerOver(scroll);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(document.querySelector('.sqbar-scroll.open')).not.toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('begins in 1h 40m');
+    fireEvent.pointerOut(scroll, { relatedTarget: document.body });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16_000);
+    });
+    expect(document.querySelector('.sqbar-scroll.open')).toBeNull();
+    // The live region stays mounted, empty between notes.
+    expect(screen.getByRole('status')).toHaveTextContent('');
+  });
+
   it('rests awake, dozes after two quiet minutes, and wakes on activity', async () => {
     window.localStorage.setItem('opsknight.squire.delivered', JSON.stringify(['intro']));
     renderCompanion([]);

@@ -10,6 +10,8 @@ import { readSourceStates, sourceKey, type SourceIdentity } from './evidence-acc
 const MAX_TEXT = 4_000;
 const MAX_PROOF = 8_192;
 const TTL_MS = 60 * 60_000;
+/** Sources a proof re-checks on replay; a wider answer keeps its first ones rather than losing its proof. */
+const MAX_PROOF_SOURCES = 16;
 const proofSchema = z
   .object({
     v: z.literal(1),
@@ -22,6 +24,8 @@ const proofSchema = z
     dataClass: z.enum(AI_DATA_CLASSES),
     exp: z.number().finite(),
     observedAt: z.string().datetime(),
+    /** A completed answer whose sources were not all verified: replayed, labelled as such. */
+    unverified: z.literal(true).optional(),
     sources: z
       .array(
         z
@@ -43,7 +47,7 @@ const proofSchema = z
           })
           .strict()
       )
-      .max(16),
+      .max(MAX_PROOF_SOURCES),
   })
   .strict();
 export const authorizationContextHash = (actor: AuthorizationActor): string =>
@@ -67,11 +71,12 @@ export async function mintContextProof(
     dataClass: AiDataClass;
     sources?: readonly SourceReference[];
     observedAt?: Date;
+    /** False for a completed answer whose sources were not all verified. */
+    verified?: boolean;
   },
   now: Date = new Date()
 ): Promise<string | undefined> {
-  if (input.actor.status !== 'ACTIVE' || input.actor.apiKey || (input.sources?.length ?? 0) > 16)
-    return undefined;
+  if (input.actor.status !== 'ACTIVE' || input.actor.apiKey) return undefined;
   const data = proofSchema.parse({
     v: 1,
     kind: 'squire-context',
@@ -83,7 +88,8 @@ export async function mintContextProof(
     dataClass: input.dataClass,
     exp: now.getTime() + TTL_MS,
     observedAt: (input.observedAt ?? now).toISOString(),
-    sources: (input.sources ?? []).map(source => ({
+    ...(input.verified === false ? { unverified: true as const } : {}),
+    sources: (input.sources ?? []).slice(0, MAX_PROOF_SOURCES).map(source => ({
       kind: source.kind,
       id: source.id,
       ...(source.sourceUpdatedAt ? { sourceUpdatedAt: source.sourceUpdatedAt } : {}),
@@ -91,6 +97,13 @@ export async function mintContextProof(
   });
   const proof = await encrypt(JSON.stringify(data));
   return proof.length <= MAX_PROOF ? proof : undefined;
+}
+
+/** How a replayed answer is introduced to the model: dated, and marked when its sources were not verified. */
+export function earlierAnswerLabel(recordedAt: string, verified: boolean): string {
+  return verified
+    ? `[Earlier answer recorded ${recordedAt}; verify current facts with tools.]`
+    : `[Earlier answer, sources not verified; recorded ${recordedAt}. Verify current facts with tools.]`;
 }
 
 /** Unproved assistant text is omitted, not silently relabelled Personal. User-authored text remains input. */
@@ -131,6 +144,7 @@ export async function readBrowserContext(
             ? [{ kind: 'incident' as const, id: value.incidentId! }, ...value.sources]
             : value.sources,
           observedAt: value.observedAt,
+          unverified: Boolean(value.unverified),
           label: elsewhere ? `[Asked while viewing incident /incidents/${value.incidentId}] ` : '',
         };
       } catch {
@@ -158,7 +172,7 @@ export async function readBrowserContext(
       role: value.turn.role,
       content:
         value.turn.role === 'assistant' && 'observedAt' in value
-          ? `[Earlier answer recorded ${value.observedAt}; verify current facts with tools.]\n${value.turn.content.slice(0, MAX_TEXT)}`
+          ? `${earlierAnswerLabel(value.observedAt ?? 'an earlier time', !value.unverified)}\n${value.turn.content.slice(0, MAX_TEXT)}`
           : `${'label' in value ? value.label : ''}${value.turn.content}`.slice(0, MAX_TEXT),
       dataClass: highestDataClass(['PERSONAL', value.dataClass]),
     });

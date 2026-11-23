@@ -99,6 +99,16 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
       'Steps and answer of a Squire investigation started over MCP, readable by its starter for one hour',
   },
   {
+    id: 'squire.background-request',
+    model: 'SquireBackgroundTurn',
+    field: 'requestEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Background Assistant Question',
+    description:
+      'A question (with its page and earlier turns) the assistant finishes in the background for its owner; kept one day',
+  },
+  {
     id: 'squire.conversation-title',
     model: 'SquireConversation',
     field: 'titleEncrypted',

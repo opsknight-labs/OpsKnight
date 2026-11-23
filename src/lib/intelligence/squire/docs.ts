@@ -39,16 +39,28 @@ const STOP = new Set(
   )
 );
 
-const stem = (word: string) =>
-  word.length > 4
-    ? word.replace(/(?:ies|ing|ed|es|s)$/, match => (match === 'ies' ? 'y' : ''))
-    : word;
+/**
+ * Light stemming that maps singular and plural to one form: "ies" → "y" (policies), "es" only after
+ * s/x/z/ch/sh (boxes, statuses), otherwise a final "s" except after "ss", "us" or "is" (access, status,
+ * redis), so services/service, notes/note and pages/page agree. "-ing"/"-ed" are dropped on longer words.
+ */
+const stem = (word: string) => {
+  if (word.length <= 3) return word;
+  if (/ies$/.test(word)) return `${word.slice(0, -3)}y`;
+  if (/(?:s|x|z|ch|sh)es$/.test(word)) return word.slice(0, -2);
+  if (/(?:ss|us|is)$/.test(word)) return word;
+  if (/s$/.test(word)) return word.slice(0, -1);
+  return word.length > 4 ? word.replace(/(?:ing|ed)$/, '') : word;
+};
 
 export function docsTerms(text: string): string[] {
   return (text.toLowerCase().match(/[a-z0-9]+/g) ?? [])
     .filter(word => word.length > 1 && !STOP.has(word))
     .map(stem);
 }
+
+/** The BM25 score two matched terms must reach to count as an answer. */
+const MIN_PAIR_SCORE = 8;
 
 let units: Promise<{ units: Unit[]; df: Map<string, number>; avg: number }> | null = null;
 
@@ -116,7 +128,11 @@ export function buildDocsTool(): AiToolDefinition {
 export async function searchProductDocs(query: string, limit = 3): Promise<DocsHit[]> {
   const terms = [...new Set(docsTerms(query.slice(0, 500)))];
   if (terms.length === 0) return [];
-  units ??= load();
+  // A failed load is not kept: the next question tries again instead of docs search staying broken.
+  units ??= load().catch(error => {
+    units = null;
+    throw error;
+  });
   const { units: list, df, avg } = await units;
   const k1 = 1.2;
   const b = 0.75;
@@ -131,8 +147,10 @@ export async function searchProductDocs(query: string, limit = 3): Promise<DocsH
       const idf = Math.log(1 + (list.length - df.get(term)! + 0.5) / (df.get(term)! + 0.5));
       score += (idf * tf * (k1 + 1)) / (tf + k1 * (1 - b + (b * unit.length) / avg));
     }
-    // A single shared word is noise for a multi-word question.
-    if (matched > 0 && (terms.length === 1 || matched >= 2)) scored.push({ unit, score });
+    // A single shared word is noise for a multi-word question, and so are two common words that only
+    // brush a section ("pizza delivery status" scores ~7.4; "acknowledge incident" ~8.7).
+    if (matched > 0 && (terms.length === 1 || matched >= 3 || (matched === 2 && score >= MIN_PAIR_SCORE)))
+      scored.push({ unit, score });
   }
   scored.sort((a, z) => z.score - a.score);
   const seen = new Set<string>();

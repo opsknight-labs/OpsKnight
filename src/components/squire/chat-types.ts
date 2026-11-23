@@ -1,5 +1,10 @@
 import type { SavedActionReference } from '@/lib/intelligence/conversations/contract';
 import type { SquireProposalView } from './SquireProposalCard';
+import {
+  SQUIRE_CHART_LIMITS,
+  squireChartSchema,
+  type SquireChart,
+} from '@/lib/intelligence/squire/contract';
 export type Citation = {
   kind: 'incident' | 'runbook' | 'change' | 'alert' | 'service' | 'schedule' | 'postmortem';
   id: string;
@@ -32,7 +37,19 @@ export type Turn = {
   context?: string;
   /** Steps of an investigation answer, in order. */
   investigation?: InvestigationStepView[];
+  /** Charts of the time series the answer read (from `chart` events, or the saved turn). */
+  charts?: SquireChart[];
 };
+
+/** Adds a streamed chart after checking its shape; anything malformed or over the per-answer cap is ignored. */
+export function mergeChart(
+  charts: SquireChart[] | undefined,
+  chart: unknown
+): SquireChart[] | undefined {
+  const parsed = squireChartSchema.safeParse(chart);
+  if (!parsed.success || (charts?.length ?? 0) >= SQUIRE_CHART_LIMITS.perTurn) return charts;
+  return [...(charts ?? []), parsed.data];
+}
 
 /** Mirrors `SquireInvestigationStep` from the server contract (kept dependency-free for the client). */
 export type InvestigationStepView = {

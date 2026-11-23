@@ -83,4 +83,32 @@ describe('read-only browser context integrity', () => {
       }).success
     ).toBe(false);
   });
+
+  it('keeps a proof for a wide answer (its first 16 sources) and labels an unverified one', async () => {
+    const sources = Array.from({ length: 20 }, (_, index) => ({
+      kind: 'incident' as const,
+      id: `inc-${index}`,
+      handle: '00000000-0000-4000-8000-000000000000',
+      observedAt: now.toISOString(),
+      version: 'v',
+      dataClass: 'INTERNAL' as const,
+    }));
+    const { decrypt } = await import('@/lib/encryption');
+    const wide = await mintContextProof(
+      { actor, role: 'assistant', text, dataClass: 'INTERNAL', sources },
+      now
+    );
+    expect(JSON.parse(await decrypt(wide!)).sources).toHaveLength(16);
+    const unverified = await mintContextProof(
+      { actor, role: 'assistant', text, dataClass: 'INTERNAL', verified: false },
+      now
+    );
+    const context = await readBrowserContext(
+      actor,
+      null,
+      [{ role: 'assistant', content: text, contextProof: unverified }],
+      now
+    );
+    expect(context.messages[0].content).toContain('[Earlier answer, sources not verified');
+  });
 });

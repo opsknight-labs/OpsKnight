@@ -1,11 +1,72 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import RelativeTime from '@/components/patterns/RelativeTime';
 import SquireMarkdown from '@/components/squire/SquireMarkdown';
-import type { ProactiveNotesView } from '@/lib/intelligence/memory/proactive-view';
+import { toneClasses } from '@/components/patterns/status-tone';
+import type {
+  InvestigationView,
+  ProactiveNotesView,
+} from '@/lib/intelligence/memory/proactive-view';
 
 const modeLabel = (mode: 'BASIC' | 'AI') => (mode === 'AI' ? 'Written with AI' : 'Basic mode');
+
+type Digest = InvestigationView['updates'][number];
+
+/** One "What changed" entry: only the lists that have something in them. */
+function DigestEntry({ digest }: { digest: Digest }) {
+  const lists: Array<[string, string[]]> = [
+    ['New hypotheses', digest.added],
+    ['More likely', digest.up],
+    ['Less likely', digest.down],
+    ['Ruled out', digest.ruledOut],
+    ['No longer supported', digest.dropped],
+    ['New next checks', digest.nextChecks],
+  ];
+  const changed =
+    digest.leading || digest.newEvidence.length || lists.some(([, items]) => items.length);
+  return (
+    <li className="space-y-1">
+      <p className="text-xs text-muted-foreground">
+        <RelativeTime date={new Date(digest.at)} format="long" />
+        {digest.signals.length ? ` · after ${digest.signals.join(', ')}` : ''}
+      </p>
+      {digest.leading && (
+        <p>
+          <span className="font-medium">Leading hypothesis is now: </span>
+          {digest.leading}
+        </p>
+      )}
+      {lists.map(([label, items]) =>
+        items.length ? (
+          <div key={label}>
+            <p className="font-medium">{label}</p>
+            <ul className="list-disc pl-5">
+              {items.map(item => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null
+      )}
+      {digest.newEvidence.length > 0 && (
+        <div>
+          <p className="font-medium">New evidence</p>
+          <ul className="list-disc pl-5">
+            {digest.newEvidence.map(item => (
+              <li key={`${item.kind}:${item.id}`}>
+                <Link href={item.href} className="hover:underline">
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!changed && <p className="text-muted-foreground">No change to the conclusion.</p>}
+    </li>
+  );
+}
 
 /**
  * Squire's proactive notes for one incident: a briefing, a stakeholder-update nudge and a postmortem draft,
@@ -17,6 +78,7 @@ export function ProactiveNotes({
   notes,
   routePrefix = '',
   action,
+  assistantName = 'Squire',
 }: {
   incidentId: string;
   notes: ProactiveNotesView;
@@ -24,18 +86,22 @@ export function ProactiveNotes({
   routePrefix?: string;
   /** Optional control shown beside the heading (the inspector's "Ask Squire"). */
   action?: ReactNode;
+  /** The configured assistant name (Settings → Assistant). */
+  assistantName?: string;
 }) {
-  const { briefing, nudge, postmortemDraft, investigation } = notes;
+  const { briefing, nudge, postmortemDraft, investigation, verification } = notes;
+  // Unique per instance: the desktop inspector and the mobile sheet can both render the notes.
+  const headingId = useId();
   return (
     <section
-      aria-labelledby="squire-proactive-heading"
+      aria-labelledby={headingId}
       className="space-y-4 rounded-lg border border-border bg-card p-4"
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <h3 id="squire-proactive-heading" className="text-sm font-semibold">
-            Squire
+          <h3 id={headingId} className="text-sm font-semibold">
+            {assistantName}
           </h3>
         </div>
         {action}
@@ -44,7 +110,7 @@ export function ProactiveNotes({
       {nudge && (
         <div
           role="status"
-          className="space-y-2 rounded-md border border-status-elevated/40 bg-status-elevated-soft p-3 text-sm dark:bg-status-elevated/10"
+          className={`space-y-2 rounded-md border p-3 text-sm ${toneClasses('elevated').soft}`}
         >
           <p className="font-medium">
             No stakeholder update for {nudge.minutesSinceUpdate} minutes.
@@ -54,12 +120,54 @@ export function ProactiveNotes({
         </div>
       )}
 
+      {verification && (
+        <div
+          role="status"
+          className={
+            verification.holding
+              ? 'space-y-1 rounded-md border border-border p-3 text-sm'
+              : `space-y-1 rounded-md border p-3 text-sm ${toneClasses('critical').soft}`
+          }
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h4 className="font-medium">
+              {verification.trigger === 'RESOLVE' ? 'Did the fix hold?' : 'After the runbook'}
+            </h4>
+            <span className="text-xs text-muted-foreground">
+              Checked <RelativeTime date={new Date(verification.checkedAt)} format="long" />
+            </span>
+          </div>
+          <p>{verification.headline}</p>
+          {verification.related.length > 0 && (
+            <ul className="space-y-1">
+              {verification.related.map(item => (
+                <li key={item.id}>
+                  <Link href={`${routePrefix}/incidents/${item.id}`} className="hover:underline">
+                    {item.label}
+                  </Link>{' '}
+                  <span className="text-xs text-muted-foreground">
+                    {item.opened
+                      ? 'new'
+                      : `${item.alerts} new alert${item.alerts === 1 ? '' : 's'}`}{' '}
+                    · {item.status.toLowerCase()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {investigation && (
         <div className="space-y-2 text-sm">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h4 className="font-medium">Squire investigated this</h4>
+            <h4 className="font-medium">{assistantName} investigated this</h4>
             <span className="text-xs text-muted-foreground">
-              <RelativeTime date={investigation.createdAt} format="long" />
+              {investigation.revision > 1 ? 'Updated ' : ''}
+              <RelativeTime date={investigation.updatedAt} format="long" />
+              {investigation.revision > 1
+                ? ` · ${investigation.revision - 1} update${investigation.revision === 2 ? '' : 's'}`
+                : ''}
               {investigation.partial ? ' · partial' : ''}
             </span>
           </div>
@@ -73,6 +181,18 @@ export function ProactiveNotes({
             <p className="text-muted-foreground">
               This investigation used sources you cannot open, so it is not shown.
             </p>
+          )}
+          {investigation.updates.length > 0 && (
+            <details>
+              <summary className="cursor-pointer font-medium">
+                Updates ({investigation.updates.length})
+              </summary>
+              <ol className="mt-2 space-y-3">
+                {investigation.updates.map(digest => (
+                  <DigestEntry key={`${digest.revision}:${digest.at}`} digest={digest} />
+                ))}
+              </ol>
+            </details>
           )}
         </div>
       )}

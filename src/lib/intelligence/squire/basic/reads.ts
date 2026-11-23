@@ -75,7 +75,7 @@ function filters(ctx: Context): string {
       ctx.query.mine ? 'assigned to you' : '',
       ctx.query.myTeams ? 'your teams' : '',
       ctx.query.unassigned ? 'no person or team assigned' : '',
-      ctx.query.status ?? (ctx.query.active ? 'OPEN or ACKNOWLEDGED' : ''),
+      ctx.query.status ?? (ctx.query.active ? 'unresolved (OPEN or ACKNOWLEDGED)' : ''),
       ctx.query.urgency ? `${ctx.query.urgency} urgency` : '',
       ctx.query.priority ?? '',
       ctx.query.terms.length
@@ -568,7 +568,7 @@ async function alertStats(ctx: Context): Promise<string> {
       })),
     ],
     createdAt: { gte: window.gte, lt: window.lt },
-    ...(ctx.query.status
+    ...(ctx.query.status || ctx.query.active
       ? { status: ctx.query.status === 'RESOLVED' ? 'RESOLVED' : 'TRIGGERED' }
       : {}),
     ...(ctx.incident &&
@@ -824,7 +824,7 @@ async function responders(ctx: Context): Promise<string> {
 }
 
 async function oncall(ctx: Context): Promise<string> {
-  if (/\bnext (week|month|shift|on.?call)\b/i.test(ctx.message))
+  if (/\bnext (?:\d{1,3} )?(hours?|days?|weeks?|week|month|shift|on.?call)\b/i.test(ctx.message))
     return 'For future coverage, ask “Who is on call tomorrow?” or “Who is on call in 2 hours?”. Open Schedules to review a full future rotation.';
   const named =
     ctx.query.terms.length > 0 || Boolean(ctx.incident) || Boolean(ctx.options.contextService);

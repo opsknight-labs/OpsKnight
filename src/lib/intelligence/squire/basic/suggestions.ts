@@ -62,7 +62,12 @@ export function suggestFollowUps(context: SuggestionContext): string[] {
       push('Who is on call tomorrow?', 'What is on fire right now?', 'Show unassigned incidents');
       break;
     case 'RECENT_CHANGES':
-      push('Incidents since those changes', 'Who owns that service?', 'What is on fire right now?');
+      // "And …" keeps the service the changes were asked about.
+      push(
+        'And incidents in the past 24 hours?',
+        'Who owns that service?',
+        'What is on fire right now?'
+      );
       break;
     case 'RUNBOOK_SEARCH':
       push('Open incidents right now', 'Who is on call?');
@@ -87,6 +92,9 @@ export function suggestFollowUps(context: SuggestionContext): string[] {
       break;
     case 'RUNBOOKS':
       push('Have we seen this before?', 'What changed before this started?');
+      break;
+    case 'CATCH_UP':
+      push('My open incidents', 'What is on fire right now?', 'Who is on call tomorrow?');
       break;
     case 'INCIDENT_SUMMARY':
       push('Show the timeline', 'Have we seen this before?', 'What changed before this started?');

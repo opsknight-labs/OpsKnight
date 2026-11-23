@@ -134,7 +134,7 @@ export async function reserveAiTokens(
 ): Promise<AiReservation | null> {
   const day = extend?.day ?? utcDay(now);
   const tokens = Math.max(1, clampTokens(estimate));
-  return prisma.$transaction(async tx => {
+  const held = await prisma.$transaction(async tx => {
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`ai-budget:${day}`}, 0))`
     );
@@ -213,11 +213,34 @@ export async function reserveAiTokens(
       },
       select: { id: true, day: true },
     });
-    // Retain settled receipts for a day so retried accounting is idempotent; bound maintenance work.
-    await tx.$executeRaw(Prisma.sql`DELETE FROM "AiTokenReservation" WHERE id IN (
-      SELECT id FROM "AiTokenReservation" WHERE "expiresAt" < ${new Date(+now - 86_400_000)} LIMIT 500)`);
     return row;
-  });
+  }, BUDGET_TRANSACTION);
+  if (held && !extend) sweepExpiredReservations(now);
+  return held;
+}
+
+/**
+ * Every budget transaction serialises on the day lock, so it is bounded: a stuck holder makes the next request
+ * fail fast (reported as a temporary outage) instead of queueing behind it.
+ */
+const BUDGET_TRANSACTION = { maxWait: 3_000, timeout: 8_000 } as const;
+
+const SWEEP_EVERY_MS = 60_000;
+let sweptAt = 0;
+
+/**
+ * Retain settled receipts for a day so retried accounting is idempotent, then delete them. Off the reservation
+ * path (outside its transaction and the day lock), at most once a minute per process, bounded, best effort.
+ */
+function sweepExpiredReservations(now: Date): void {
+  if (+now - sweptAt < SWEEP_EVERY_MS) return;
+  sweptAt = +now;
+  void prisma
+    .$executeRaw(
+      Prisma.sql`DELETE FROM "AiTokenReservation" WHERE id IN (
+      SELECT id FROM "AiTokenReservation" WHERE "expiresAt" < ${new Date(+now - 86_400_000)} LIMIT 500)`
+    )
+    .catch(() => undefined);
 }
 
 export async function recordAiUsage(
@@ -305,7 +328,7 @@ export async function recordAiUsage(
     }
     if (held)
       await tx.aiTokenReservation.update({ where: { id: held.id }, data: { settledAt: now } });
-  });
+  }, BUDGET_TRANSACTION);
 }
 
 /** Rough token count (about four characters per token) for work that ended before the provider reported usage. */

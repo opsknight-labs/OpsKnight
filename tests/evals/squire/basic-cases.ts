@@ -427,4 +427,27 @@ export const BASIC_CASES: readonly SquireBasicEvalCase[] = [
     mustContain: ['No matching service'],
     mustNotContain: ['Payroll secret'],
   },
+  // Catch me up (shift hand-off)
+  {
+    id: 'catch-up-default',
+    question: 'Catch me up',
+    expectIntent: 'CATCH_UP',
+    mustContain: ['Catch-up since', 'Assigned to you', 'Pool exhausted', 'Resolved'],
+    mustNotContain: ['Hidden payroll', 'Payroll secret'],
+    mustCite: true,
+    forbidProposal: true,
+  },
+  {
+    id: 'catch-up-slash-window',
+    question: '/catchup 24h',
+    expectIntent: 'CATCH_UP',
+    mustContain: ['Catch-up since', 'Pool exhausted'],
+    mustNotContain: ['Hidden payroll'],
+  },
+  {
+    id: 'catch-up-phrasing',
+    question: 'what did I miss overnight?',
+    expectIntent: 'CATCH_UP',
+    mustContain: ['no on-call shift', 'Only data you can read'],
+  },
 ];

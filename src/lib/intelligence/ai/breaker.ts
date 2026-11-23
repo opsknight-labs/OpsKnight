@@ -3,7 +3,13 @@ export interface BreakerOptions {
   openMs: number;
 }
 
-type BreakerState = { failures: number; openUntil: number; probing: boolean };
+type BreakerState = {
+  failures: number;
+  openUntil: number;
+  probing: boolean;
+  /** When this replica last saw the provider answer; a shared reading older than this is stale. */
+  succeededAt?: number;
+};
 
 export interface SharedBreakerState {
   failures: number;
@@ -73,7 +79,13 @@ export class ProviderBreakers {
           const shared = await this.store!.load(id);
           if (!shared) return;
           const state = this.state(id);
-          if (shared.openUntil > state.openUntil && shared.openUntil > this.now()) {
+          // A breaker opens at failure time + openMs: one opened before this replica's last success is stale.
+          const openedAt = shared.openUntil - this.options.openMs;
+          if (
+            shared.openUntil > state.openUntil &&
+            shared.openUntil > this.now() &&
+            openedAt > (state.succeededAt ?? -Infinity)
+          ) {
             state.openUntil = shared.openUntil;
             state.failures = Math.max(
               state.failures,
@@ -125,8 +137,11 @@ export class ProviderBreakers {
   }
 
   recordSuccess(id: string): void {
-    this.states.set(id, { failures: 0, openUntil: 0, probing: false });
-    this.publish(id);
+    const previous = this.state(id);
+    const changed = previous.failures > 0 || previous.openUntil > 0;
+    this.states.set(id, { failures: 0, openUntil: 0, probing: false, succeededAt: this.now() });
+    // Only a recovery is news to other replicas; a healthy provider's every answer is not a write.
+    if (changed) this.publish(id);
   }
 
   recordFailure(id: string): void {

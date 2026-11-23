@@ -386,3 +386,58 @@ it('keeps 89-day chats readable without extending retention and rejects expired 
   expect(await purgeConversations()).toMatchObject({ deleted: 1 });
   expect((await list(request('?cursor=not-valid-json'))).status).toBe(400);
 });
+
+describe('replaying earlier answers', () => {
+  it('replays completed answers that were unverified, keeps catalog receipts, and never replays interrupted ones', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    await configure(admin.id, { enabled: true });
+    const { resolveUserActor } = await import('@/lib/authorization-actors');
+    const { getConversationForActor } = await import('@/lib/intelligence/conversations/view');
+    const { authorizationContextHash, readBrowserContext } =
+      await import('@/lib/intelligence/squire/context-proof');
+    const actor = (await resolveUserActor(admin.id))!;
+    const authorizationHash = authorizationContextHash(actor);
+    const receiptId = 'b6a4c9e2-1f3d-4e5a-9b7c-2d8e0f1a3b4c';
+    const id = await recordExchange({
+      userId: admin.id,
+      question: 'Can you snooze the maintenance window?',
+      answer: 'I can propose extending the window by an hour.',
+      turn: {
+        mode: 'ai',
+        verified: false,
+        authorizationHash,
+        // A catalog change has no incident: the receipt is the owner's own.
+        actions: [{ receiptId, action: 'run_operation', title: 'Extend maintenance' }],
+      },
+    });
+    await recordExchange({
+      userId: admin.id,
+      conversationId: id,
+      question: 'And the other one?',
+      answer: 'Partial',
+      turn: { mode: 'ai', completion: 'INTERRUPTED', verified: false, authorizationHash },
+    });
+
+    const saved = (await getConversationForActor(actor, id))!;
+    const [, unverified, , interrupted] = saved.messages;
+    expect(unverified.replayable).toBe(true);
+    expect(unverified.envelope?.actions).toEqual([
+      { receiptId, action: 'run_operation', title: 'Extend maintenance' },
+    ]);
+    expect(unverified.contextProof).toBeTruthy();
+    expect(interrupted.replayable).toBe(false);
+    expect(interrupted.contextProof).toBeUndefined();
+
+    // The browser copy replays it too, labelled as unverified.
+    const replay = await readBrowserContext(actor, null, [
+      { role: 'user', content: saved.messages[0].content },
+      {
+        role: 'assistant',
+        content: unverified.content,
+        contextProof: unverified.contextProof,
+      },
+    ]);
+    expect(replay.omitted).toBe(false);
+    expect(replay.messages[1].content).toContain('[Earlier answer, sources not verified');
+  });
+});

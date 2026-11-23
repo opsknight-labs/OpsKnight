@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
 import { AI_DATA_CLASSES } from '../ai/port';
+import { SQUIRE_CHART_LIMITS, squireChartSchema } from '../squire/contract';
 
 export const conversationScopeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('GLOBAL') }).strict(),
@@ -70,7 +71,8 @@ export const savedActionReferenceSchema = z
     receiptId: z.string().uuid(),
     action: z.string().regex(/^[a-z_]{1,64}$/),
     title: z.string().max(120),
-    incidentId: z.string().min(1).max(64),
+    /** Absent for an operation-catalog change or a plan (`run_operation`, `run_plan`). */
+    incidentId: z.string().min(1).max(64).optional(),
   })
   .strict();
 export type SavedActionReference = z.infer<typeof savedActionReferenceSchema>;
@@ -103,6 +105,8 @@ export const savedTurnInputSchema = z
     sources: z.array(sourceReferenceSchema).max(32).default([]),
     notices: z.array(z.string().max(1_000)).max(4).default([]),
     actions: z.array(savedActionReferenceSchema).max(2).default([]),
+    /** Charts drawn under the answer, from the tool results it read (absent on older turns). */
+    charts: z.array(squireChartSchema).max(SQUIRE_CHART_LIMITS.perTurn).optional(),
     verified: z.boolean().default(false),
     authorizationHash: z
       .string()

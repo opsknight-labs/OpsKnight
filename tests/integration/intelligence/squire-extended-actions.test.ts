@@ -837,6 +837,12 @@ describe('run_runbook', () => {
     const executions = await db.runbookExecution.findMany({ where: { incidentId: incident.id } });
     expect(executions).toHaveLength(1);
     expect(executions[0].triggeredByUserId).toBe(responder.id);
+    // "Did the fix hold?" is checked later for the person who started it, once (the replay adds nothing).
+    const checks = (
+      await db.intelligenceWorkItem.findMany({ select: { subjectKey: true } })
+    ).filter(row => row.subjectKey.startsWith(`VERIFICATION:${incident.id}:${responder.id}:`));
+    expect(checks).toHaveLength(1);
+    expect(checks[0].subjectKey).toMatch(/:B$/);
   });
 
   it('is not offered for a runbook that is not bound to the service, nor to someone who may not run runbooks', async () => {
