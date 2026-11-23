@@ -28,14 +28,13 @@ the **strip**, and the same panel.
 
 ## The AI briefing card, the strip and the Investigation panel
 
-The **AI briefing** card is two lines. The first holds the briefing headline, chips for anything else
-worth a look, and **Open investigation** (or press **I**), which opens the Investigation panel. The second
-holds one-line facts: **Summary** (the current state), **Causes** (up to two possible causes, to verify),
-**Changes** (up to two changes before onset; select to see why they were linked) and **Next** (the next
-step). Hover over a fact or the headline to read it in full. Hovering over **AI briefing** says whether it
-was **Written with AI** or comes from **Basic mode**; check it before acting. When intelligence is off
-for the service, intelligence managers see a one-line **AI briefing is off for this service** card with
-**Turn on**.
+The **AI briefing** card appears only when an AI wrote the incident's briefing. It shows the briefing
+headline with the next step under it (**Next:**), chips for anything else worth a look, and **Open
+investigation** (or press **I**), which opens the Investigation panel. Below are three short columns:
+**Summary** (the current state), **Possible causes, to verify** (up to two) and **Changes before onset**
+(up to two; select one to see why it was linked). Hover over any of them to read it in full. The card
+says it was written with AI; check it before acting. With intelligence off, or in Basic mode, there is
+no AI briefing card: the chips appear on their own when the analysis found something.
 
 A chip appears only when there is something to say, for example **Triage: urgency HIGH**,
 **3 similar**, **Likely cause: deploy api v9**, **Suppressed by rule X**, **Impact: 4 services, SLO
