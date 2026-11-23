@@ -117,7 +117,9 @@ Key behaviors:
   of silently dropping remediation.
 - Explicit responder executions require normal risk approvals and local
   policy but **do not consume** automatic budgets.
-- Incident Runbooks tab shows current usage.
+- The **Safeguards** button on the incident's **Runbooks & automation** tab
+  shows current usage (for example **1/3 runs · 0/3 writes**); expand it for
+  every limit.
 
 ## Artifact retention
 

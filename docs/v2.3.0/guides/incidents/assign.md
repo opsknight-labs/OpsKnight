@@ -40,7 +40,7 @@ Only active users are eligible. A team must still exist. Assignment does not byp
 
 ## Open the feature
 
-Open **Incidents → select the incident** and locate the **Assignee** control in incident details.
+Open **Incidents → select the incident** and locate the **Assignee** field in the **Details** card at the top of the right-hand column (along the bottom of the title card on narrower screens). On a phone, open **Incident details & assignment**.
 
 ## Configure and assign a user or team
 
@@ -57,7 +57,7 @@ Selecting a user clears any previous team assignment. Selecting a team clears an
 
 Confirm:
 
-1. The incident header or assignee section shows the intended owner.
+1. The **Assignee** field in the title card shows the intended owner.
 2. The timeline records the assignment change and actor.
 3. The assignee can open the incident, including when it is private.
 4. The response status remains correct. If ownership was accepted, acknowledge separately.
@@ -70,7 +70,7 @@ Use the incident page as the source of truth. Provider cards may update asynchro
 Reassignment changes the recorded owner immediately, so coordinate the handoff before saving it:
 
 1. Tell the incoming responder or team why ownership is moving.
-2. Add a concise timeline note covering current impact, actions completed, remaining risk, and the next decision.
+2. Add a concise note on the **Notes** tab covering current impact, actions completed, remaining risk, and the next decision.
 3. Change the assignee.
 4. Confirm the new owner can access the incident and accepts the handoff.
 5. Leave acknowledgement unchanged unless the lifecycle itself needs to return to open.

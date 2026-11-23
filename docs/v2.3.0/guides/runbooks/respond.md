@@ -89,8 +89,8 @@ Key behaviors:
 
 ### Preview execution
 
-Open the incident's **Runbooks** tab and select **Preview execution** on a
-suggestion or available workflow:
+Open the incident's **Runbooks & automation** tab and select **Preview
+execution** on a suggestion or available workflow:
 
 1. Review the immutable version/checksum, resolved target, redacted inputs,
    ordered actions, risk, and approval gates.
@@ -134,6 +134,32 @@ When a step waits for approval:
 
 Watch subsequent step progress and verification output; use artifact download
 links when available.
+
+### Run a runbook that is not attached
+
+**Run another runbook**, at the top right of the incident's **Runbooks &
+automation** tab, runs any published runbook against this incident. It needs
+`runbook.execute` and opens **Run a runbook** with three steps:
+
+1. **Choose**: search published runbooks and select one.
+2. **Configure**: enter its inputs and, when it has Agent-executed steps, an
+   Agent or Agent pool. A runbook that contains write actions says so here.
+3. **Review & run**: select **Preview execution** to build the exact plan, then
+   **Execute this plan**. If you change an input or the target after preview,
+   preview again.
+
+Step approvals, Agent policy, and the write authorization above still apply.
+When the incident has no attached or suggested runbooks, the tab shows a
+one-line note with a link to attach one to the service.
+
+### Safeguards
+
+The **Safeguards** button next to the **Runbooks** heading shows how much of
+the unattended-automation budget this incident has used, for example
+**1/3 runs · 0/3 writes**. Expand it to see the automatic run, write, and
+non-idempotent action limits. When a limit is reached it reads **Automatic
+budget used up**, and further remediation must be started by a responder. Runs
+you start yourself are not counted.
 
 ## Execute through the v2 API
 

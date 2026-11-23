@@ -65,6 +65,8 @@ type IncidentHeaderProps = {
    * timing becomes the last cell, and the ID is left to the title row.
    */
   embedded?: boolean;
+  /** Properties panel for the page's side column: one row per field, label left and value right. */
+  panel?: boolean;
   /** Escalation execution health, shown as the second line of the Escalation field. */
   escalationHealth?: React.ReactNode;
 };
@@ -89,6 +91,7 @@ export default function IncidentHeader({
   canManage,
   routePrefix = '',
   embedded = false,
+  panel = false,
   escalationHealth,
 }: IncidentHeaderProps) {
   const router = useRouter();
@@ -127,37 +130,55 @@ export default function IncidentHeader({
 
   // Boxed cells: uppercase label on top, value below. items-start stops chips stretching to the cell width.
   // Embedded (title card band): one line of content-sized cells; only assignee and policy may shrink.
-  const cellClass = embedded
-    ? 'flex min-w-0 shrink-0 flex-col items-start justify-start px-3 py-2'
-    : 'flex min-h-[52px] min-w-0 flex-col items-start justify-start px-3 py-2.5';
+  // Panel: a two-column row; anything after the value (escalation health, duration) sits under the value.
+  const cellClass = panel
+    ? 'grid min-h-10 min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 px-3 py-1.5 [&>*:nth-child(n+3)]:col-start-2'
+    : embedded
+      ? 'flex min-w-0 shrink-0 flex-col items-start justify-start px-3 py-2'
+      : 'flex min-h-[52px] min-w-0 flex-col items-start justify-start px-3 py-2.5';
   const shrinkCell = embedded ? 'shrink' : '';
-  const labelClass = 'mb-1 flex items-center gap-1 whitespace-nowrap';
+  const labelClass = panel
+    ? 'flex min-w-0 items-center gap-1.5 whitespace-nowrap [&>svg]:h-3.5 [&>svg]:w-3.5'
+    : 'mb-1 flex items-center gap-1 whitespace-nowrap';
+  const labelText = panel
+    ? 'text-xs text-muted-foreground'
+    : 'text-2xs font-bold uppercase tracking-wider text-muted-foreground';
   const linkCell = 'hover:bg-muted/40 transition-colors';
 
   return (
     <div
       className={cn(
         'overflow-hidden text-card-foreground',
-        embedded
-          ? 'border-t border-border/70 bg-muted/20'
-          : cn('rounded-xl border border-border/80 bg-card shadow-2xs transition-all', statusAccent)
+        panel
+          ? 'rounded-xl border border-border/80 bg-card shadow-2xs'
+          : embedded
+            ? 'border-t border-border/70 bg-muted/20'
+            : cn(
+                'rounded-xl border border-border/80 bg-card shadow-2xs transition-all',
+                statusAccent
+              )
       )}
     >
+      {panel && (
+        <h2 className="border-b border-border/70 bg-muted/20 px-3 py-2 text-xs font-semibold text-foreground">
+          Details
+        </h2>
+      )}
       {/* Embedded: one row on desktop (wraps on phones). Standalone: 7 equal cells + footer. */}
       <div
         className={cn(
-          embedded
-            ? 'flex flex-wrap divide-x divide-border/60 lg:flex-nowrap'
-            : 'grid grid-cols-2 divide-x divide-y divide-border/60 sm:grid-cols-3 xl:grid-cols-7 xl:divide-y-0'
+          panel
+            ? 'flex flex-col divide-y divide-border/50'
+            : embedded
+              ? 'flex flex-wrap divide-x divide-border/60 lg:flex-nowrap'
+              : 'grid grid-cols-2 divide-x divide-y divide-border/60 sm:grid-cols-3 xl:grid-cols-7 xl:divide-y-0'
         )}
       >
         {/* Priority */}
         <div className={cellClass}>
           <div className={labelClass}>
             <Activity className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
-              Priority
-            </span>
+            <span className={labelText}>Priority</span>
           </div>
           <PrioritySelector
             incidentId={incident.id}
@@ -170,9 +191,7 @@ export default function IncidentHeader({
         <div className={cellClass}>
           <div className={labelClass}>
             <AlertTriangle className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
-              Urgency
-            </span>
+            <span className={labelText}>Urgency</span>
           </div>
           {canManage ? (
             <Select
@@ -214,9 +233,7 @@ export default function IncidentHeader({
             ) : (
               <Eye className="h-3 w-3 text-muted-foreground shrink-0" />
             )}
-            <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
-              Visibility
-            </span>
+            <span className={labelText}>Visibility</span>
           </div>
           {canManage ? (
             <Select
@@ -272,9 +289,7 @@ export default function IncidentHeader({
         >
           <div className={labelClass}>
             <Server className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
-              Service
-            </span>
+            <span className={labelText}>Service</span>
           </div>
           <div className="flex h-8 min-w-0 max-w-full items-center gap-1">
             <TruncatedText
@@ -289,9 +304,7 @@ export default function IncidentHeader({
         <div className={cn(cellClass, shrinkCell)}>
           <div className={labelClass}>
             <Users className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
-              Assignee
-            </span>
+            <span className={labelText}>Assignee</span>
           </div>
           <AssigneeSection
             assignee={incident.assignee}
@@ -314,9 +327,7 @@ export default function IncidentHeader({
           >
             <div className={labelClass}>
               <Shield className="h-3 w-3 text-muted-foreground shrink-0" />
-              <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
-                Incident policy
-              </span>
+              <span className={labelText}>Incident policy</span>
             </div>
             <div className="flex h-8 min-w-0 max-w-full items-center gap-1">
               <TruncatedText
@@ -330,9 +341,7 @@ export default function IncidentHeader({
           <div className={cn(cellClass, shrinkCell, 'opacity-60')}>
             <div className={labelClass}>
               <Shield className="h-3 w-3 text-muted-foreground shrink-0" />
-              <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
-                Incident policy
-              </span>
+              <span className={labelText}>Incident policy</span>
             </div>
             <span className="text-xs text-muted-foreground italic">
               {incident.noEscalation ? 'Personal paging skipped' : 'None'}
@@ -344,9 +353,7 @@ export default function IncidentHeader({
         <div className={cellClass}>
           <div className={labelClass}>
             <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
-              Escalation
-            </span>
+            <span className={labelText}>Escalation</span>
           </div>
           {(() => {
             // Case 1: Incident is Resolved
@@ -426,13 +433,11 @@ export default function IncidentHeader({
         </div>
 
         {/* Timing: in the title card it is the last cell, not a separate footer bar. */}
-        {embedded && (
+        {(embedded || panel) && (
           <div className={cellClass}>
             <div className={labelClass}>
               <Timer className="h-3 w-3 text-muted-foreground shrink-0" />
-              <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
-                Opened
-              </span>
+              <span className={labelText}>Opened</span>
             </div>
             <span className="flex h-8 items-center text-sm font-medium text-foreground">
               <RelativeTime date={incident.createdAt} />
@@ -449,7 +454,7 @@ export default function IncidentHeader({
         )}
       </div>
 
-      {!embedded && (
+      {!embedded && !panel && (
         <div className="border-t border-border/50 bg-muted/15 px-3 py-1.5 flex flex-wrap items-center justify-between gap-y-1 text-xs text-muted-foreground">
           {/* Left: Timestamps + duration */}
           <div className="flex items-center gap-x-3.5 gap-y-0.5 flex-wrap text-[11px] font-medium">

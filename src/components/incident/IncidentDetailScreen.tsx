@@ -512,6 +512,19 @@ export default async function IncidentDetailScreen({
   );
 
   const routePrefix = presentation === 'mobile' ? '/m' : '';
+  const detailsProps = {
+    incident,
+    users: pageableUsers,
+    teams,
+    canManage: canManageIncident,
+    routePrefix,
+    escalationHealth: escalationInBand ? (
+      <EscalationExecutionHealth health={escalationHealth} variant="inline" />
+    ) : null,
+  };
+  const detailsBand = <IncidentHeader {...detailsProps} embedded />;
+  // From lg the details are a properties panel at the top of the side column.
+  const detailsPanel = <IncidentHeader {...detailsProps} panel />;
   const dedupChip = (
     <DedupRecurrenceChip
       alertTotal={alertActivity.total}
@@ -729,20 +742,8 @@ export default async function IncidentDetailScreen({
               </div>
             </div>
           </div>
-          {/* Details band along the bottom of the card: boxed fields, 4 × 2. */}
-          <IncidentHeader
-            incident={incident}
-            users={pageableUsers}
-            teams={teams}
-            canManage={canManageIncident}
-            routePrefix={routePrefix}
-            embedded
-            escalationHealth={
-              escalationInBand ? (
-                <EscalationExecutionHealth health={escalationHealth} variant="inline" />
-              ) : null
-            }
-          />
+          {/* Below lg the side column drops under the tabs, so the details stay in the card there. */}
+          <div className="lg:hidden">{detailsBand}</div>
         </section>
       )}
 
@@ -966,6 +967,7 @@ export default async function IncidentDetailScreen({
           </>
         ) : (
           <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
+            <div className="hidden lg:block">{detailsPanel}</div>
             {/* AI briefing sits beside the description: what is going on, next to what the alert said. */}
             {showInsightsInspector && (
               <Suspense fallback={null}>

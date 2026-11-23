@@ -46,12 +46,16 @@ is who runs the response. They are often the same person.
 
 ## Assign a role in the web app
 
-1. Open the incident. The roles strip sits under the title.
-2. Select a role. Empty roles show **Assign**.
-3. Choose **Take command** (or **Assign to me**), pick a teammate, or choose **Step down** /
-   **Clear role**.
+1. Open the incident. The **Roles** chips sit under the title, next to the SLA chips. The
+   **Commander** chip is always shown, and so is any role someone holds. On a `P1` or `P2`
+   incident every role is shown; otherwise, if you can fill one of the empty roles, select
+   **+ N more roles** to show them.
+2. Hover over a chip to see what the role is for and who holds it. An empty role shows a dashed
+   chip with **+** and the role name.
+3. Select the chip and choose **Take command** (or **Assign to me**), pick a teammate, or choose
+   **Step down** / **Clear role**.
 
-On a phone the strip shows two roles per row. **Take command** is also in the command bar on
+On a phone the chips wrap under the title. **Take command** is also in the action bar on
 desktop and in the **More** sheet on mobile while nobody else is commander.
 
 When a role is set, OpsKnight:

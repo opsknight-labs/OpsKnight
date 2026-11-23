@@ -30,7 +30,7 @@ Open **Settings → Integrations → Jira** and keep a synthetic OpsKnight servi
 1. Follow [Connect Jira](../../integrations/issue-tracking/jira/connect) to save encrypted credentials and pass the connection test.
 2. Map the synthetic service to the intended Jira project and issue type.
 3. Follow [Configure Jira webhooks](../../integrations/issue-tracking/jira/configure-webhooks) and send a controlled webhook test.
-4. Open the synthetic incident and create its Jira issue.
+4. Open the synthetic incident and select **Link Jira Issue** in the action bar under the title card, then **Create Jira Issue**.
 5. Change one supported field from OpsKnight and verify Jira, then change one supported field in Jira and verify the webhook-driven OpsKnight state.
 
 ## What OpsKnight does
@@ -40,6 +40,8 @@ Rendering an incident performs no hidden Jira request. Explicit actions, webhook
 ## Verify the integration
 
 Require the expected Jira key, URL, project, issue type, status, assignee, and last sync direction/time. Confirm repeated webhook delivery does not create a duplicate link or transition.
+
+On the incident, linked issues share one **Jira** button in the action bar. It shows the first issue's key and status, and **+N** when more are linked. Select it to see every linked issue with its assignee and last sync, **Open in Jira**, **Sync** (pulls the latest status and assignee from Jira), and **Manage** to link, create, or unlink issues.
 
 ## Disconnect or undo
 

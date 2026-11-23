@@ -26,7 +26,7 @@ service ChatOps policy.
 
 ## Open the feature
 
-Open **Incidents → select incident** and locate the **Create war room** launcher in the incident command bar.
+Open **Incidents → select incident** and locate the **Create war room** button in the action bar under the incident's title card, after the tags.
 
 ## Configure manual or automatic creation
 
@@ -41,7 +41,7 @@ new incident; changing it does not migrate an already provisioned room.
 
 ## Verify the room
 
-1. Open the incident command bar and select **Create war room**.
+1. On the incident's action bar, select **Create war room**.
 2. Select the provider (Slack or Microsoft Teams) in the creation dialog, then confirm creation.
 3. Wait for provisioning to finish. Do not retry while the operation is still
    pending; durable operation and provider markers prevent duplicate rooms.
