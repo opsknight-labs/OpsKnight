@@ -40,6 +40,35 @@ Do not act from an old provider message without confirming the current OpsKnight
 - **Description card:** the verified **Context** first, as key/value pills with a **Verified · automation vN** badge (a dashed pill is a field that is missing or whose value was not recognised; only recognised fields drive runbook triggers and Agent targeting), then the description or raw alert payload. When intelligence is on for the service and has something to report, the compact **AI briefing** card sits directly under the title card; **Open investigation** opens the **Investigation** panel (see [Use Intelligence suggestions](../intelligence/use-suggestions)).
 - **Tabs:** **Notes** (with the note count), **Timeline** (an **Events** list with an activity graph, or the **Response path** view), **Runbooks & automation** (runbooks first, then the automation decision and alert context; the tab is named **Automation** when you cannot read runbooks), and **Postmortem** once the incident is resolved. The tab bar stays in view while you scroll.
 
+### See who is responding, and what customers were told
+
+The right-hand column, under **Details**:
+
+- **Responders** — the escalation right now (the next step, its target and when it fires; or stopped,
+  acknowledged, paused, max step reached), then one row per person paged: the escalation step, each channel
+  with its delivery state (delivered, failed with the short reason, pending), and when they acknowledged.
+  People a step targeted but never paged are listed too. **On call for this service** shows who is on call
+  now and next.
+- **Customer updates** — the status-page posts for this incident (newest first), when the next update is
+  due or how long it is overdue, the affected status-page components and their state, and **Post update**
+  for people who may publish.
+
+Under **Opened** in **Details**, the incident is compared with the service's recent history: **Usually
+resolved in ~31m**, or, for an open incident running past twice that, **48× longer than usual**. The
+comparison uses the median of the service's last 90 days of resolved incidents and appears once it has at
+least three.
+
+### Catch up and move fast
+
+When you come back to an incident, a **Since you looked** strip under the title card counts what changed
+since your last visit in this browser (alerts, notes, escalations, status and assignment changes, failed
+pages) and shows the latest status change and escalation in words. Nothing shows on a first visit.
+
+On the incident page, press **A** to acknowledge, **R** to resolve, **W** to write a note, **T** to open the
+timeline, **S** to copy a summary, and **I** to open the investigation. **?** lists every shortcut. The
+summary (priority, title, status, how long it has been open, service, assignee, escalation, alert count and
+link) is also behind the **Summary** copy button beside the incident ID.
+
 ### Read the alert payload
 
 When the incident's description is an alert payload, the **Description & Context** card shows it as a
@@ -64,6 +93,10 @@ is shown. The **Raw alert payload** row below the view shows the format and size
 payload as received and **Copy** copies it.
 
 ### Read the timeline
+
+The **Timeline** tab has three views: **Events**, **Response path**, and **Alerts**, which lists every alert
+deduplicated into the incident, newest first, marks the one that opened it, and opens each to its readable
+payload (see [Read the alert payload](#read-the-alert-payload)).
 
 The **Timeline** tab has two views. **Response path** shows routing, paging, remediation, verification and recovery as lanes. **Events** lists every event and shows an **Activity** graph above the list:
 
