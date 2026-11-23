@@ -747,6 +747,13 @@ export default async function IncidentDetailScreen({
         </section>
       )}
 
+      {/* AI briefing: one compact card under the title card, so it is read first without pushing the rest down. */}
+      {presentation !== 'mobile' && showInsightsInspector && (
+        <Suspense fallback={null}>
+          <IncidentInsights incidentId={incident.id} presentation={presentation} variant="card" />
+        </Suspense>
+      )}
+
       {storedIncident.maintenanceWindow && incident.status === 'SUPPRESSED' && (
         <div
           role="status"
@@ -968,16 +975,6 @@ export default async function IncidentDetailScreen({
         ) : (
           <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
             <div className="hidden lg:block">{detailsPanel}</div>
-            {/* AI briefing sits beside the description: what is going on, next to what the alert said. */}
-            {showInsightsInspector && (
-              <Suspense fallback={null}>
-                <IncidentInsights
-                  incidentId={incident.id}
-                  presentation={presentation}
-                  variant="card"
-                />
-              </Suspense>
-            )}
             {watchersContent}
             {customFieldsContent}
             {quickLinksContent}

@@ -45,6 +45,7 @@ export default async function IncidentInsights({
 }: {
   incidentId: string;
   presentation?: Presentation;
+  /** `card`: the compact AI briefing card under the title card (desktop); `strip`: chips (phones). */
   variant?: 'strip' | 'card';
 }) {
   const insights = await incidentInsightsForRequest(incidentId);
@@ -102,119 +103,111 @@ export default async function IncidentInsights({
     const currentState = briefing?.ai?.currentState ?? null;
     const changes = briefing?.refs.changes.slice(0, 2) ?? [];
     const causes = briefing?.ai?.possibleCauses.slice(0, 2) ?? [];
-    const nextStep = (briefing?.ai?.nextSteps.length ? briefing.ai.nextSteps : briefing?.nextSteps)?.[0];
+    const nextStep = (
+      briefing?.ai?.nextSteps.length ? briefing.ai.nextSteps : briefing?.nextSteps
+    )?.[0];
     // The card already is the briefing and lists the changes, so those two chips would only repeat it.
-    const cardChips = chips.filter(chip => chip.id !== 'briefing' && !(chip.id === 'why' && changes.length));
+    const cardChips = chips.filter(
+      chip => chip.id !== 'briefing' && !(chip.id === 'why' && changes.length)
+    );
     const firstSection = sections[0];
+    // One line each; the full text is on hover and in the Investigation panel.
+    const facts = [
+      currentState && { label: 'Summary', text: currentState },
+      causes.length > 0 && { label: 'Causes', text: causes.join(' · ') },
+      changes.length > 0 && {
+        label: 'Changes',
+        text: changes.map(c => `${c.label} (${beforeOnset(c.minutesBefore)})`).join(' · '),
+        href: 'why',
+      },
+      nextStep && { label: 'Next', text: nextStep },
+    ].filter(Boolean) as Array<{ label: string; text: string; href?: string }>;
+    const aiNote = briefing?.ai
+      ? 'Written with AI · check before acting'
+      : 'Basic mode · check before acting';
     return (
       <>
+        {/* Compact: two lines under the title card. Headline first, then one-line facts. */}
         <section
           aria-labelledby="ai-briefing-heading"
-          className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-2xs"
+          className="min-w-0 rounded-xl border border-border/80 bg-card px-3 py-2 text-card-foreground shadow-2xs"
         >
-          <header className="flex items-center justify-between gap-2 border-b border-border/70 bg-muted/20 px-3.5 py-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+            <span
+              aria-hidden="true"
+              title={aiNote}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-foreground text-background"
+            >
+              <Sparkles className="h-3 w-3" />
+            </span>
             <h2
               id="ai-briefing-heading"
-              className="flex items-center gap-2 text-xs font-semibold text-foreground"
+              className="shrink-0 text-xs font-semibold text-muted-foreground"
+              title={aiNote}
             >
-              <Sparkles className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               AI briefing
             </h2>
-            {briefing && (
-              <span className="text-2xs text-muted-foreground">
-                {briefing.ai ? 'Written with AI' : 'Basic mode'} · check before acting
-              </span>
-            )}
-          </header>
-          <div className="space-y-3 px-3.5 py-3">
-            {headline ? (
-              <div className="space-y-1.5">
-                <p className="text-sm font-semibold leading-snug text-foreground">{headline}</p>
-                {currentState && (
-                  <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
-                    {currentState}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                No briefing yet. What the analysis found so far:
-              </p>
-            )}
-
-            {causes.length > 0 && (
-              <div className="space-y-1.5">
-                <h3 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Possible causes · to verify
-                </h3>
-                <ul className="space-y-1">
-                  {causes.map(cause => (
-                    <li key={cause} className="flex gap-2 text-xs leading-snug text-foreground">
-                      <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-status-elevated" />
-                      <span>{cause}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {changes.length > 0 && (
-              <div className="space-y-1.5">
-                <h3 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Changes before onset
-                </h3>
-                <ul className="space-y-1">
-                  {changes.map(change => (
-                    <li key={change.id} className="flex gap-2 text-xs leading-snug">
-                      <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
-                      <a
-                        href="?insights=why"
-                        data-insights-open="why"
-                        className="min-w-0 text-foreground underline-offset-2 hover:underline"
-                      >
-                        {change.label}
-                        <span className="text-muted-foreground"> · {beforeOnset(change.minutesBefore)}</span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {nextStep && (
-              <div className="flex items-start gap-2 rounded-lg border border-border/70 bg-muted/30 px-2.5 py-2">
-                <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Next
-                </span>
-                <span className="text-xs font-medium leading-snug text-foreground">{nextStep}</span>
-              </div>
-            )}
-
-            <IntelligenceStrip
-              incidentId={incidentId}
-              chips={cardChips}
-              freshness={freshness}
-              touch={presentation === 'mobile'}
-              bare
-            />
+            <p
+              className="min-w-0 flex-1 basis-64 truncate text-sm font-semibold text-foreground"
+              title={headline ?? undefined}
+            >
+              {headline ?? (
+                <span className="font-normal text-muted-foreground">No briefing yet</span>
+              )}
+            </p>
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <IntelligenceStrip
+                incidentId={incidentId}
+                chips={cardChips}
+                freshness={freshness}
+                touch={presentation === 'mobile'}
+                bare
+              />
+              {firstSection && (
+                <a
+                  href={`?insights=${firstSection}`}
+                  data-insights-open={firstSection}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md text-xs font-semibold text-foreground underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Open investigation
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  <kbd
+                    className="hidden rounded border border-border bg-muted px-1 font-mono text-2xs font-normal text-muted-foreground lg:inline"
+                    title="Keyboard shortcut: I"
+                  >
+                    I
+                  </kbd>
+                </a>
+              )}
+            </div>
           </div>
-          {firstSection && (
-            <footer className="flex items-center justify-between gap-2 border-t border-border/70 px-3.5 py-2">
-              <a
-                href={`?insights=${firstSection}`}
-                data-insights-open={firstSection}
-                className="inline-flex items-center gap-1.5 rounded-md text-xs font-semibold text-foreground underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Open investigation
-                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </a>
-              <kbd
-                className="hidden rounded border border-border bg-muted px-1 font-mono text-2xs text-muted-foreground lg:inline"
-                title="Keyboard shortcut: I"
-              >
-                I
-              </kbd>
-            </footer>
+          {facts.length > 0 && (
+            <dl className="mt-1 grid min-w-0 gap-x-4 gap-y-0.5 pl-7.5 text-xs sm:grid-cols-2 xl:grid-cols-4">
+              {facts.map(fact => (
+                <div
+                  key={fact.label}
+                  className="flex min-w-0 items-baseline gap-1.5"
+                  title={fact.text}
+                >
+                  <dt className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {fact.label}
+                  </dt>
+                  <dd className="min-w-0 truncate text-foreground/90">
+                    {fact.href ? (
+                      <a
+                        href={`?insights=${fact.href}`}
+                        data-insights-open={fact.href}
+                        className="underline-offset-2 hover:underline"
+                      >
+                        {fact.text}
+                      </a>
+                    ) : (
+                      fact.text
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           )}
         </section>
         {inspector}

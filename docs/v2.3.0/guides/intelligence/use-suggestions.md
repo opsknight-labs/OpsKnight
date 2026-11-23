@@ -22,16 +22,18 @@ verification:
 # Use Intelligence suggestions and the assistant
 
 An incident page keeps its own content first: title, status, actions, description, notes and timeline
-stay where they are. On a desktop, intelligence is the **AI briefing** card beside the description and
-one panel you open on demand, **Investigation**. On a phone it is one row of chips under the action bar,
+stay where they are. On a desktop, intelligence is the compact **AI briefing** card directly under the
+incident's title card and one panel you open on demand, **Investigation**. On a phone it is one row of chips under the action bar,
 the **strip**, and the same panel.
 
 ## The AI briefing card, the strip and the Investigation panel
 
-The **AI briefing** card shows the briefing headline and current state, up to two possible causes to
-verify, up to two changes before onset, and the next step, followed by chips for anything else worth a
-look. It says whether it was **Written with AI** or comes from **Basic mode**; check it before acting.
-**Open investigation** at the bottom of the card opens the Investigation panel. When intelligence is off
+The **AI briefing** card is two lines. The first holds the briefing headline, chips for anything else
+worth a look, and **Open investigation** (or press **I**), which opens the Investigation panel. The second
+holds one-line facts: **Summary** (the current state), **Causes** (up to two possible causes, to verify),
+**Changes** (up to two changes before onset; select to see why they were linked) and **Next** (the next
+step). Hover over a fact or the headline to read it in full. Hovering over **AI briefing** says whether it
+was **Written with AI** or comes from **Basic mode**; check it before acting. When intelligence is off
 for the service, intelligence managers see a one-line **AI briefing is off for this service** card with
 **Turn on**.
 
