@@ -67,7 +67,11 @@ pages) and shows the latest status change and escalation in words. Nothing shows
 On the incident page, press **A** to acknowledge, **R** to resolve, **W** to write a note, **T** to open the
 timeline, **S** to copy a summary, and **I** to open the investigation. **?** lists every shortcut. The
 summary (priority, title, status, how long it has been open, service, assignee, escalation, alert count and
-link) is also behind the **Summary** copy button beside the incident ID.
+link) is also behind **Copy summary** beside the incident ID.
+
+**Follow** at the top right of the title card subscribes you to the incident's updates in one click (it
+reads **Following** once you do); the avatars beside it are the people following, and select them to open
+the **Subscribers** card, where you choose a role or add teammates.
 
 ### Read the alert payload
 

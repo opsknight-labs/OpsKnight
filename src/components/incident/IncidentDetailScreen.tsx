@@ -5,6 +5,7 @@ import IncidentInsights, {
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
 import { readPayload } from '@/lib/payload-reader';
+import FollowControl from '@/components/incident/detail/FollowControl';
 import { incidentSummaryText } from '@/lib/incidents/summary-text';
 import IncidentShortcuts from '@/components/incident/IncidentShortcuts';
 import { catchUpKind, type CatchUpItem } from '@/lib/incidents/catch-up';
@@ -519,7 +520,7 @@ export default async function IncidentDetailScreen({
   );
   // Suggested responders sit with the responders card; only people who can add responders see them.
   const watchersContent = (
-    <div className="space-y-3">
+    <div id="incident-subscribers" className="scroll-mt-24 space-y-3">
       {watchersCard}
       {canManageIncident && (
         <Suspense fallback={null}>
@@ -586,6 +587,20 @@ export default async function IncidentDetailScreen({
       : null,
     url: `${appUrl}/incidents/${id}`,
   });
+  const followControl = (
+    <FollowControl
+      currentUserId={user.id}
+      currentWatcherId={incident.watchers.find(w => w.user.id === user.id)?.id ?? null}
+      followers={incident.watchers.map(w => ({
+        id: w.user.id,
+        name: w.user.name,
+        avatarUrl: w.user.avatarUrl ?? null,
+      }))}
+      total={incident.watchers.length}
+      onAddWatcher={handleAddWatcher}
+      onRemoveWatcher={handleRemoveWatcher}
+    />
+  );
   const routePrefix = presentation === 'mobile' ? '/m' : '';
   const detailsProps = {
     incident,
@@ -785,6 +800,8 @@ export default async function IncidentDetailScreen({
                     {dedupChip}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
+                    {/* Follow / Following with who follows, where Watch sits on GitHub: always in view. */}
+                    <div className="mr-2">{followControl}</div>
                     <Badge
                       variant="outline"
                       className="hidden border-border/80 font-mono text-xs text-muted-foreground sm:inline-flex"
@@ -794,7 +811,8 @@ export default async function IncidentDetailScreen({
                     <CopyButton text={id} label="ID" className="h-7 px-2 text-xs font-medium" />
                     <CopyButton
                       text={summaryText}
-                      label="Summary"
+                      label="Copy summary"
+                      variant="button"
                       className="h-7 px-2 text-xs font-medium"
                     />
                     <CopyButton
