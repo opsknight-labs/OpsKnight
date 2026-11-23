@@ -12,6 +12,7 @@ vi.mock('next/link', () => ({
 
 import SquireBarCompanion from '@/components/squire/SquireBarCompanion';
 import SquireComposer from '@/components/squire/SquireComposer';
+import SquireMessage from '@/components/squire/SquireMessage';
 import { buildNotes, nextNoteAt, type SquireNote } from '@/components/squire/squire-messages';
 import { matchSlashCommands, type SlashCommand } from '@/components/squire/slash-commands';
 import {
@@ -33,7 +34,6 @@ const shift = (startMin: number, endMin: number, endClamped = false) => ({
 const notesFor = (input: Partial<Parameters<typeof buildNotes>[0]> = {}) =>
   buildNotes({
     name: 'Pip',
-    shortcut: '⌘J',
     tone: 'calm',
     shifts: [],
     now: NOW,
@@ -70,15 +70,17 @@ describe('Squire notes', () => {
   it('always carries the introduction first', () => {
     const [intro] = notesFor();
     expect(intro).toMatchObject({ id: 'intro', keep: 'forever', dismissLabel: 'Later' });
-    expect(intro.text).toContain("I'm Pip");
-    expect(intro.text).toContain('⌘J');
+    expect(intro.title).toBe("Hi, I'm Pip.");
+    expect(intro.asks).toEqual([
+      'What is on fire right now?',
+      'Who is on call?',
+      'Show recent changes',
+    ]);
   });
 
   it('gives an on-call heads-up within two hours of a shift, never earlier', () => {
     const soon = notesFor({ shifts: [shift(90, 600)] }).find(n => n.id.startsWith('on-call:'));
-    expect(soon?.text).toBe(
-      'Heads up, my knight: your watch on Payments primary begins in 1h 30m.'
-    );
+    expect(soon?.text).toBe('Heads up: your Payments primary shift starts in 1h 30m.');
     expect(soon?.action).toEqual({ label: 'View schedule', href: '/schedules/sch_1' });
     const crisp = notesFor({ shifts: [shift(90, 600)], tone: 'crisp' }).at(-1);
     expect(crisp?.text).toBe('On call for Payments primary in 1h 30m.');
@@ -101,7 +103,7 @@ describe('Squire notes', () => {
 
   it('adds "answer ready" once per finished answer', () => {
     const ready = notesFor({ answerReady: 7 }).find(n => n.id === 'ready:7');
-    expect(ready).toMatchObject({ text: 'Your answer awaits, my knight.', keep: 'page' });
+    expect(ready).toMatchObject({ text: 'Your answer is ready.', keep: 'page' });
   });
 });
 
@@ -174,32 +176,34 @@ describe('Squire on the status bar', () => {
     bar.remove();
   });
 
-  const renderCompanion = (notes: SquireNote[], onOpen = vi.fn()) =>
+  const renderCompanion = (notes: SquireNote[], onOpen = vi.fn(), onAsk = vi.fn()) =>
     render(
       <SquireBarCompanion
         name="Pip"
         open={false}
         onOpen={onOpen}
+        onAsk={onAsk}
         launcherState="idle"
         animated={false}
         notes={notes}
       />
     );
 
-  it('introduces himself once, without motion, and "Show me" opens the chat', async () => {
+  it('introduces himself once, without motion, and a question asks it in one click', async () => {
     const notes = notesFor();
-    const onOpen = vi.fn();
-    const first = renderCompanion(notes, onOpen);
+    const onAsk = vi.fn();
+    const first = renderCompanion(notes, vi.fn(), onAsk);
     expect(document.querySelector('.sqbar-scroll.open')).toBeNull();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_600);
     });
-    expect(screen.getByRole('status')).toHaveTextContent("Hail! I'm Pip");
+    expect(screen.getByRole('status')).toHaveTextContent("Hi, I'm Pip");
     expect(document.querySelector('.sqbar-scroll.open')).not.toBeNull();
     // Motion off: the scroll fades in instead of unrolling.
     expect(document.querySelector('.sqbar-scroll.still')).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show me' }));
-    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('status')).toHaveTextContent('opens me anywhere');
+    fireEvent.click(screen.getByRole('button', { name: 'What is on fire right now?' }));
+    expect(onAsk).toHaveBeenCalledWith('What is on fire right now?');
     expect(window.localStorage.getItem('opsknight.squire.delivered')).toContain('intro');
     first.unmount();
 
@@ -216,7 +220,7 @@ describe('Squire on the status bar', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_600);
     });
-    expect(screen.getByRole('status')).toHaveTextContent('begins in 1h 30m');
+    expect(screen.getByRole('status')).toHaveTextContent('starts in 1h 30m');
     expect(screen.getByRole('link', { name: 'View schedule' })).toHaveAttribute(
       'href',
       '/schedules/sch_1'
@@ -258,5 +262,39 @@ describe('Squire on the status bar', () => {
     );
     expect(screen.getByRole('button', { name: 'Ask Pip, an answer is ready' })).toBeInTheDocument();
     expect(document.querySelector('.sqbar-dot')).not.toBeNull();
+  });
+});
+
+describe('a helpful rating', () => {
+  const rate = async (calm: boolean) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    const view = render(
+      <SquireMessage
+        turn={{ role: 'assistant', content: 'Two incidents are open.', mode: 'basic' }}
+        index={1}
+        name="Pip"
+        busy={false}
+        last
+        animated
+        contextValid
+        onOutcome={() => undefined}
+        onRetry={() => undefined}
+        onEdit={() => undefined}
+        onCheer={() => calm}
+      />
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Helpful answer' }));
+    });
+    const status = await screen.findByText('Thanks for the feedback.');
+    const salute = status.closest('p')?.querySelector('[data-avatar="SQUIRE"] svg');
+    view.unmount();
+    vi.unstubAllGlobals();
+    return salute;
+  };
+
+  it('gets a salute right where the person clicked, only when calm', async () => {
+    expect(await rate(true)).toHaveAttribute('data-state', 'success');
+    expect(await rate(false)).toBeFalsy();
   });
 });
