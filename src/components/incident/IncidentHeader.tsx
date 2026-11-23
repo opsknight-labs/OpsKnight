@@ -23,6 +23,7 @@ import {
   Pause,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { BaselineLabel } from '@/lib/incidents/baseline';
 import { FIELD_SELECT_CLASS, FIELD_VALUE_CLASS } from '@/components/incident/field-styles';
 import { incidentStatusTone, urgencyTone } from '@/lib/design/status-palette';
 import { toneClasses } from '@/components/patterns/status-tone';
@@ -67,6 +68,8 @@ type IncidentHeaderProps = {
   embedded?: boolean;
   /** Properties panel for the page's side column: one row per field, label left and value right. */
   panel?: boolean;
+  /** The service's usual response times, for "usually resolved in ~45m" under Opened. */
+  baseline?: BaselineLabel | null;
   /** Escalation execution health, shown as the second line of the Escalation field. */
   escalationHealth?: React.ReactNode;
 };
@@ -93,6 +96,7 @@ export default function IncidentHeader({
   embedded = false,
   panel = false,
   escalationHealth,
+  baseline = null,
 }: IncidentHeaderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -450,6 +454,19 @@ export default function IncidentHeader({
                 </>
               )}
             </span>
+            {baseline && (
+              <span
+                className={cn(
+                  'text-2xs',
+                  baseline.long
+                    ? 'font-medium text-status-elevated-deep dark:text-status-elevated'
+                    : 'text-muted-foreground'
+                )}
+                title={baseline.title}
+              >
+                {baseline.text}
+              </span>
+            )}
           </div>
         )}
       </div>

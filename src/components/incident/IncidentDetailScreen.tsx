@@ -5,6 +5,7 @@ import IncidentInsights, {
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
 import { readPayload } from '@/lib/payload-reader';
+import { baselineLabel, computeBaseline } from '@/lib/incidents/baseline';
 import IncidentAlertsView from '@/components/incident/detail/IncidentAlertsView';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import DedupRecurrenceChip from '@/components/incident/detail/DedupRecurrenceChip';
@@ -298,6 +299,8 @@ export default async function IncidentDetailScreen({
 
   // Rendering an incident must not perform hidden Jira or provider network I/O.
   // Persisted state is refreshed by background webhooks or explicit sync actions.
+  // One clock read per render: the baseline window and the "running long" line use the same instant.
+  const pageRenderedAt = new Date();
   const [
     jiraLinks,
     collaboration,
@@ -306,6 +309,7 @@ export default async function IncidentDetailScreen({
     alertRows,
     alertTotal,
     previousOnKey,
+    baselineRows,
   ] = await Promise.all([
     prisma.externalIssueLink.findMany({
       where: { incidentId: id, provider: 'JIRA' },
@@ -328,7 +332,28 @@ export default async function IncidentDetailScreen({
     prisma.alert.count({ where: { incidentId: id } }),
     // The last earlier incident on the same dedup key the viewer may read: "first in 41 days".
     loadPreviousOnDedupKey(id, storedIncident.dedupKey ?? null, storedIncident.createdAt),
+    // The service's usual response times: its recent resolved incidents (bounded).
+    prisma.incident
+      .findMany({
+        where: {
+          serviceId: storedIncident.serviceId,
+          id: { not: id },
+          status: 'RESOLVED',
+          resolvedAt: { not: null },
+          createdAt: { gte: new Date(pageRenderedAt.getTime() - 90 * 86_400_000) },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: { createdAt: true, acknowledgedAt: true, resolvedAt: true },
+      })
+      .catch(() => []),
   ]);
+  const serviceBaseline = baselineLabel(
+    computeBaseline(baselineRows),
+    storedIncident.createdAt,
+    storedIncident.resolvedAt ?? null,
+    pageRenderedAt.getTime()
+  );
   const alertActivity = summarizeAlertActivity(
     alertRows,
     alertTotal,
@@ -520,6 +545,7 @@ export default async function IncidentDetailScreen({
     teams,
     canManage: canManageIncident,
     routePrefix,
+    baseline: serviceBaseline,
     escalationHealth: escalationInBand ? (
       <EscalationExecutionHealth health={escalationHealth} variant="inline" />
     ) : null,
