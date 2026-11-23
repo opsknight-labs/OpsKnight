@@ -70,12 +70,13 @@ export default memo(function SquireMessage({
   conversationId?: string;
   /** Shown while the answer has no activity of its own to report yet. */
   pendingLabel?: string;
-  /** A helpful rating: the mascot gives a little salute. */
-  onCheer?: () => void;
+  /** A helpful rating; returns true when Squire may celebrate (calm, not during a high-urgency incident). */
+  onCheer?: () => boolean;
 }) {
   const [copyNotice, setCopyNotice] = useState('');
   const [feedback, setFeedback] = useState<'UP' | 'DOWN' | 'sent' | 'failed' | null>(null);
   const [reason, setReason] = useState('');
+  const [cheered, setCheered] = useState(false);
   const assistant = turn.role === 'assistant';
   const streaming = busy && last;
   const allowed = useMemo(
@@ -241,7 +242,7 @@ export default memo(function SquireMessage({
                   disabled={feedback === 'UP'}
                   onClick={() => {
                     setFeedback('UP');
-                    onCheer?.();
+                    setCheered(onCheer?.() ?? false);
                     void sendFeedback('UP');
                   }}
                 >
@@ -303,7 +304,11 @@ export default memo(function SquireMessage({
           </form>
         )}
         {(feedback === 'sent' || feedback === 'failed' || copyNotice) && (
-          <p role="status" className="text-2xs text-muted-foreground">
+          <p role="status" className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+            {/* The salute happens where the person clicked, not on a mascot hidden behind the panel. */}
+            {feedback === 'sent' && cheered && (
+              <SquireAvatar size="xs" state="success" animated={animated} />
+            )}
             {feedback === 'sent'
               ? 'Thanks for the feedback.'
               : feedback === 'failed'

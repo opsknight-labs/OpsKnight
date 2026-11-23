@@ -1,14 +1,18 @@
 import { deriveOnCall, type StatusBarShift } from '@/lib/status-bar';
-import { answerReadyLine, formatLead, introLine, type Tone } from './squire-voice';
+import { answerReadyLine, formatLead, intro, type Tone } from './squire-voice';
 
 /**
- * What Squire carries to the person on his scroll in the status bar: a one-time introduction, on-call
+ * What Squire brings to the person in his speech bubble on the status bar: a one-time introduction, on-call
  * heads-ups and "your answer is ready". Incident alerts are not repeated here; the incident banner and
  * toasts already own them.
  */
 export type SquireNote = {
   id: string;
+  /** A heading; only the introduction has one. */
+  title?: string;
   text: string;
+  /** Questions offered as one-click buttons; each opens the chat and asks it. */
+  asks?: string[];
   /** How long a delivered note stays delivered: this browser for good, this tab session, or this page. */
   keep: 'forever' | 'session' | 'page';
   action?: { label: string; href: string } | { label: string; open: true };
@@ -21,7 +25,6 @@ export const HANDOFF_LEAD_MS = 30 * 60_000;
 
 export function buildNotes(input: {
   name: string;
-  shortcut: string;
   tone: Tone;
   shifts: readonly StatusBarShift[];
   now: number;
@@ -29,13 +32,7 @@ export function buildNotes(input: {
   answerReady: number | null;
 }): SquireNote[] {
   const notes: SquireNote[] = [
-    {
-      id: 'intro',
-      text: introLine(input.name, input.shortcut),
-      keep: 'forever',
-      action: { label: 'Show me', open: true },
-      dismissLabel: 'Later',
-    },
+    { id: 'intro', ...intro(input.name), keep: 'forever', dismissLabel: 'Later' },
   ];
   if (input.answerReady !== null)
     notes.push({
@@ -54,7 +51,7 @@ export function buildNotes(input: {
         id: `on-call:${state.scheduleId}:${state.next}`,
         text: crisp
           ? `On call for ${state.scheduleName} in ${formatLead(lead)}.`
-          : `Heads up, my knight: your watch on ${state.scheduleName} begins in ${formatLead(lead)}.`,
+          : `Heads up: your ${state.scheduleName} shift starts in ${formatLead(lead)}.`,
         keep: 'session',
         action: { label: 'View schedule', href: `/schedules/${state.scheduleId}` },
         dismissLabel: 'Got it',
@@ -66,7 +63,7 @@ export function buildNotes(input: {
         id: `handoff:${state.scheduleId}:${state.until}`,
         text: crisp
           ? `Your ${state.scheduleName} shift ends in ${formatLead(lead)}.`
-          : `Your watch on ${state.scheduleName} ends in ${formatLead(lead)}. Time to ready the handoff.`,
+          : `Your ${state.scheduleName} shift ends in ${formatLead(lead)}. Good time to prep the handoff.`,
         keep: 'session',
         action: { label: 'View schedule', href: `/schedules/${state.scheduleId}` },
         dismissLabel: 'Got it',

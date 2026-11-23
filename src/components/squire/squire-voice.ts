@@ -17,10 +17,10 @@ export function shortcutLabel(): string {
 }
 
 const PENDING = [
-  'Saddling up…',
-  'Consulting the scrolls…',
-  'Lighting the lantern…',
+  'On it…',
+  'Gathering the facts…',
   'Checking the watchtower…',
+  'Pulling the threads…',
 ];
 
 /** Shown while an answer has no activity of its own to report yet. */
@@ -48,7 +48,7 @@ export function emptyTip(seed: number, shortcut: string): string {
   return pickLine(
     [
       'Psst: type / for quick commands.',
-      `${shortcut} summons me from any page.`,
+      `${shortcut} opens me from any page.`,
       'Ask about a service and I will name its owner and who is on call.',
       'Close me mid-answer and I will wave when it is ready.',
     ],
@@ -56,12 +56,17 @@ export function emptyTip(seed: number, shortcut: string): string {
   );
 }
 
-export function introLine(name: string, shortcut: string): string {
-  return `Hail! I'm ${name}, your incident sidekick. Ask me what's on fire, who's on call, or what changed. Press ${shortcut} anytime.`;
+/** The first-visit introduction; each question is one basic mode answers, asked in one click. */
+export function intro(name: string) {
+  return {
+    title: `Hi, I'm ${name}.`,
+    text: 'Ask about incidents, on-call and recent changes. I answer from your OpsKnight data.',
+    asks: ['What is on fire right now?', 'Who is on call?', 'Show recent changes'],
+  };
 }
 
 export function answerReadyLine(tone: Tone): string {
-  return tone === 'crisp' ? 'Answer ready' : 'Your answer awaits, my knight.';
+  return tone === 'crisp' ? 'Answer ready' : 'Your answer is ready.';
 }
 
 /** Idle and greeting labels get a little character when calm; everything else stays plain. */
