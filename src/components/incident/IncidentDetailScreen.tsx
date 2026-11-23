@@ -890,12 +890,13 @@ export default async function IncidentDetailScreen({
               incident={incident}
               resolutionNote={resolutionNote}
               postmortemStatus={postmortem?.status ?? null}
+            showPostmortem={incident.status === 'RESOLVED'}
               canManage={canManageIncident}
             />
           )}
 
           <IncidentDetailTabs
-            defaultTab={initialTab || 'overview'}
+            defaultTab={initialTab || 'notes'}
             eventCount={totalEventsCount}
             noteCount={totalNotesCount}
             activityContent={activityContent}
@@ -916,6 +917,7 @@ export default async function IncidentDetailScreen({
             timelineContent={timelineContent}
             postmortemContent={postmortemContent}
             postmortemStatus={postmortem?.status ?? null}
+            showPostmortem={incident.status === 'RESOLVED'}
           />
         </div>
 
