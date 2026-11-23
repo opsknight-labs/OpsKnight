@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma';
 import { readPayload } from '@/lib/payload-reader';
 import { baselineLabel, computeBaseline } from '@/lib/incidents/baseline';
 import IncidentAlertsView from '@/components/incident/detail/IncidentAlertsView';
+import IncidentCustomerCommsCard from '@/components/incident/detail/IncidentCustomerCommsCard';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import DedupRecurrenceChip from '@/components/incident/detail/DedupRecurrenceChip';
 import { ALERT_ACTIVITY_MAX_TIMES, summarizeAlertActivity } from '@/lib/incidents/alert-activity';
@@ -1015,6 +1016,18 @@ export default async function IncidentDetailScreen({
         ) : (
           <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
             <div className="hidden lg:block">{detailsPanel}</div>
+            {/* What customers were told, and when the next update is due. */}
+            <Suspense fallback={null}>
+              <IncidentCustomerCommsCard
+                incident={{
+                  id,
+                  serviceId: storedIncident.serviceId,
+                  status: storedIncident.status,
+                  visibility: storedIncident.visibility,
+                }}
+                timeZone={userTimeZone}
+              />
+            </Suspense>
             {watchersContent}
             {customFieldsContent}
             {quickLinksContent}
