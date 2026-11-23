@@ -51,7 +51,7 @@ export function tabForAnchor(
           hasRunbooks: hasRunbooksOrOptions.hasRunbooks ?? false,
           hasAutomation: hasRunbooksOrOptions.hasAutomation ?? true,
         };
-  if (anchor.startsWith('timeline-')) return 'timeline';
+  if (anchor.startsWith('timeline-') || anchor === 'incident-activity') return 'timeline';
   if (anchor.startsWith('runbook-')) return opts.hasRunbooks ? 'automation' : null;
   if (anchor === 'response-activity') return 'timeline';
   if (anchor === 'automation-decision' || anchor.startsWith('automation-')) {
@@ -123,7 +123,9 @@ export default function IncidentDetailTabs({
   const [timelineView, setTimelineView] = useState<TimelineView>(() => {
     if (typeof window === 'undefined') return 'events';
     const p = new URLSearchParams(window.location.search).get('tab');
-    return p === 'response' || window.location.hash === '#response-activity' ? 'response' : 'events';
+    return p === 'response' || window.location.hash === '#response-activity'
+      ? 'response'
+      : 'events';
   });
 
   if (!isAvailable(tab) && tab !== 'notes') {
@@ -145,7 +147,8 @@ export default function IncidentDetailTabs({
       if (!target || !isAvailable(target)) return;
       setTab(target);
       if (anchor === 'response-activity') setTimelineView('response');
-      else if (anchor.startsWith('timeline-')) setTimelineView('events');
+      else if (anchor.startsWith('timeline-') || anchor === 'incident-activity')
+        setTimelineView('events');
       // Wait for the newly selected tab panel to mount before scrolling.
       window.requestAnimationFrame(() =>
         window.requestAnimationFrame(() =>

@@ -138,6 +138,26 @@ async function main() {
   };
   const p1 = await precedent('p1', 'Checkout API 5xx after deploy (pool exhaustion)', 23, 31);
   const p2 = await precedent('p2', 'Checkout timeouts: payments-db pool saturated', 61, 48);
+  // The same monitor (same dedup key) last opened an incident 41 days ago: "first in 41 days" on the title card.
+  const earlierOnKey = await prisma.incident.findFirst({
+    where: { dedupKey, id: { not: incident.id }, createdAt: { lt: incident.createdAt } },
+  });
+  if (!earlierOnKey) {
+    const createdAt = new Date(t0 - 41 * 86_400_000);
+    await prisma.incident.create({
+      data: {
+        title: 'Checkout API: 5xx rate above 5% on POST /v1/checkout',
+        serviceId,
+        status: 'RESOLVED',
+        urgency: 'HIGH',
+        priority: 'P2',
+        dedupKey,
+        createdAt,
+        acknowledgedAt: new Date(createdAt.getTime() + 6 * 60_000),
+        resolvedAt: new Date(createdAt.getTime() + 22 * 60_000),
+      },
+    });
+  }
   const change = (key: string, summary: string, kind: 'DEPLOY' | 'CONFIG', minutesBefore: number) =>
     prisma.changeEvent.upsert({
       where: { source_dedupKey: { source: 'ci', dedupKey: `${DEMO}${key}` } },

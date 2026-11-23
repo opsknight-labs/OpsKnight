@@ -130,7 +130,8 @@ export default function TimelineGraph({
 
   return (
     <figure
-      className="mb-3 rounded-lg border border-border/70 bg-background px-3 pt-2 pb-1.5"
+      id="incident-activity"
+      className="mb-3 scroll-mt-24 rounded-lg border border-border/70 bg-background px-3 pt-2 pb-1.5"
       aria-label={`Incident activity: ${total} alert${total === 1 ? '' : 's'} and ${markers.length} key events`}
     >
       <figcaption className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">

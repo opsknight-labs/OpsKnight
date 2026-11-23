@@ -4,6 +4,8 @@ import IncidentInsights, {
   SuggestedRunbooks,
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
+import { incidentReadWhere } from '@/lib/authorization-filters';
+import DedupRecurrenceChip from '@/components/incident/detail/DedupRecurrenceChip';
 import { ALERT_ACTIVITY_MAX_TIMES, summarizeAlertActivity } from '@/lib/incidents/alert-activity';
 import { CHAT_EVENT_DISPLAY_MAX, LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
 import { Suspense } from 'react';
@@ -294,28 +296,37 @@ export default async function IncidentDetailScreen({
 
   // Rendering an incident must not perform hidden Jira or provider network I/O.
   // Persisted state is refreshed by background webhooks or explicit sync actions.
-  const [jiraLinks, collaboration, escalationHealth, statusUpdate, alertRows, alertTotal] =
-    await Promise.all([
-      prisma.externalIssueLink.findMany({
-        where: { incidentId: id, provider: 'JIRA' },
-        orderBy: { createdAt: 'desc' },
-      }),
-      getIncidentCollaborationView({ incidentId: id, userId: user.id }),
-      // A health read failure must not block the incident page.
-      getEscalationExecutionHealth(id).catch(() => null),
-      // "Post status update": the status-page publish permission (admin), like the announcement API.
-      permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE)
-        ? loadIncidentStatusUpdate(storedIncident).catch(() => null)
-        : null,
-      // Alert arrivals for the Timeline activity graph and its dedup summary.
-      prisma.alert.findMany({
-        where: { incidentId: id },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        take: ALERT_ACTIVITY_MAX_TIMES,
-        select: { createdAt: true, status: true, severity: true, fingerprintHash: true },
-      }),
-      prisma.alert.count({ where: { incidentId: id } }),
-    ]);
+  const [
+    jiraLinks,
+    collaboration,
+    escalationHealth,
+    statusUpdate,
+    alertRows,
+    alertTotal,
+    previousOnKey,
+  ] = await Promise.all([
+    prisma.externalIssueLink.findMany({
+      where: { incidentId: id, provider: 'JIRA' },
+      orderBy: { createdAt: 'desc' },
+    }),
+    getIncidentCollaborationView({ incidentId: id, userId: user.id }),
+    // A health read failure must not block the incident page.
+    getEscalationExecutionHealth(id).catch(() => null),
+    // "Post status update": the status-page publish permission (admin), like the announcement API.
+    permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE)
+      ? loadIncidentStatusUpdate(storedIncident).catch(() => null)
+      : null,
+    // Alert arrivals for the Timeline activity graph and its dedup summary.
+    prisma.alert.findMany({
+      where: { incidentId: id },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: ALERT_ACTIVITY_MAX_TIMES,
+      select: { createdAt: true, status: true, severity: true, fingerprintHash: true },
+    }),
+    prisma.alert.count({ where: { incidentId: id } }),
+    // The last earlier incident on the same dedup key the viewer may read: "first in 41 days".
+    loadPreviousOnDedupKey(id, storedIncident.dedupKey ?? null, storedIncident.createdAt),
+  ]);
   const alertActivity = summarizeAlertActivity(
     alertRows,
     alertTotal,
@@ -501,6 +512,15 @@ export default async function IncidentDetailScreen({
   );
 
   const routePrefix = presentation === 'mobile' ? '/m' : '';
+  const dedupChip = (
+    <DedupRecurrenceChip
+      alertTotal={alertActivity.total}
+      hasDedupKey={Boolean(storedIncident.dedupKey)}
+      createdAt={incident.createdAt}
+      previous={previousOnKey}
+      routePrefix={routePrefix}
+    />
+  );
 
   const holderByRole = new Map(
     storedIncident.roleAssignments.map(assignment => [assignment.roleKey, assignment.user])
@@ -576,6 +596,7 @@ export default async function IncidentDetailScreen({
                     {incident.priority}
                   </Badge>
                 )}
+                {dedupChip}
               </div>
               <div className="flex shrink-0 items-center">
                 <CopyButton text={id} label="ID" className="h-9 px-2 text-xs" />
@@ -666,6 +687,7 @@ export default async function IncidentDetailScreen({
                       {incident.title}
                     </h1>
                     <StatusBadge status={incident.status} live={incident.status === 'OPEN'} />
+                    {dedupChip}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <Badge
@@ -962,4 +984,25 @@ export default async function IncidentDetailScreen({
       </div>
     </div>
   );
+}
+
+async function loadPreviousOnDedupKey(
+  incidentId: string,
+  dedupKey: string | null,
+  createdAt: Date
+) {
+  if (!dedupKey) return null;
+  try {
+    const readable = incidentReadWhere(await getCurrentAuthorizationActor());
+    return await prisma.incident.findFirst({
+      where: {
+        AND: [{ dedupKey, id: { not: incidentId }, createdAt: { lt: createdAt } }, readable],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, createdAt: true },
+    });
+  } catch {
+    // A recurrence hint must never block the incident page.
+    return null;
+  }
 }
