@@ -242,7 +242,7 @@ export default function IncidentResponseTimeline({
               />
 
               {/* Event Card Container */}
-              <div className="rounded-lg border border-border/70 bg-card p-2.5 sm:p-3 shadow-2xs hover:border-border transition-all text-card-foreground">
+              <div className="rounded-lg border border-border/70 bg-background px-3 py-2 shadow-2xs transition-colors hover:border-border text-foreground">
                 {/* Header Row: Lane Chip, Title, Timestamp */}
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -264,13 +264,17 @@ export default function IncidentResponseTimeline({
                     </span>
                   </div>
 
-                  <time
-                    dateTime={entry.at}
-                    className="shrink-0 text-[11px] tabular-nums font-mono text-muted-foreground flex items-center gap-1"
-                  >
-                    <Clock className="h-3 w-3 text-muted-foreground/60" />
-                    <span>{formatDateTime(entry.at, timeZone, { format: 'datetime' })}</span>
-                  </time>
+                  {/* Time and the record link share the header, so a card is one or two lines. */}
+                  <div className="flex shrink-0 items-center gap-3">
+                    {entry.record && <RecordLink record={entry.record} compact={compact} />}
+                    <time
+                      dateTime={entry.at}
+                      className="flex items-center gap-1 font-mono text-2xs tabular-nums text-muted-foreground"
+                    >
+                      <Clock className="h-3 w-3 text-muted-foreground/60" />
+                      <span>{formatDateTime(entry.at, timeZone, { format: 'datetime' })}</span>
+                    </time>
+                  </div>
                 </div>
 
                 {/* Detail description */}
@@ -280,34 +284,18 @@ export default function IncidentResponseTimeline({
                   </p>
                 )}
 
-                {/* Facts Property Inspector Grid */}
+                {/* Facts as one line of label/value pairs. */}
                 {entry.facts.length > 0 && (
-                  <div className="mt-2 rounded bg-muted/30 dark:bg-muted/15 border border-border/50 p-2 text-xs">
-                    <dl
-                      className={cn(
-                        'grid min-w-0 gap-x-3 gap-y-1 text-xs',
-                        compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-[7.5rem_1fr]'
-                      )}
-                    >
-                      {entry.facts.map(item => (
-                        <div key={item.label} className="contents">
-                          <dt className="text-muted-foreground font-medium text-[11px] uppercase tracking-wide">
-                            {item.label}
-                          </dt>
-                          <dd className="min-w-0 wrap-break-word font-mono text-xs font-semibold text-foreground">
-                            {item.value}
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </div>
-                )}
-
-                {/* Record Link Action */}
-                {entry.record && (
-                  <div className="mt-1.5 pt-1.5 border-t border-border/40 flex items-center">
-                    <RecordLink record={entry.record} compact={compact} />
-                  </div>
+                  <dl className="mt-1.5 flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs">
+                    {entry.facts.map(item => (
+                      <div key={item.label} className="flex min-w-0 items-baseline gap-1.5">
+                        <dt className="shrink-0 text-2xs text-muted-foreground">{item.label}</dt>
+                        <dd className="min-w-0 wrap-break-word font-medium text-foreground">
+                          {item.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
                 )}
               </div>
             </li>
