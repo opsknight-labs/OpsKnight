@@ -26,6 +26,7 @@ import {
   Loader2,
   Workflow,
   Sparkles,
+  ChevronDown,
 } from 'lucide-react';
 import Link from 'next/link';
 import UngroupButton from '../intelligence/UngroupButton';
@@ -700,6 +701,26 @@ export default function IncidentTimeline({
     });
   };
 
+  // Consecutive alert rows fold into one "N alerts" row: the activity graph already plots each arrival.
+  const { alertRuns, alertRunSkip } = useMemo(() => {
+    const runs = new Map<string, TimelineRow[]>();
+    const skip = new Set<string>();
+    let current: TimelineRow[] = [];
+    const flush = () => {
+      if (current.length > 1) {
+        runs.set(current[0].id, current);
+        for (const row of current.slice(1)) skip.add(row.id);
+      }
+      current = [];
+    };
+    for (const row of filteredEvents) {
+      if (row.intelligence?.kind === 'ALERT') current.push(row);
+      else flush();
+    }
+    flush();
+    return { alertRuns: runs, alertRunSkip: skip };
+  }, [filteredEvents]);
+
   const filterCounts = useMemo(() => {
     const counts: Record<TimelineFilter, number> = {
       ALL: timelineEvents.length,
@@ -906,15 +927,64 @@ export default function IncidentTimeline({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         {activityGraph}
         {filterChips}
       </div>
-      <div className="space-y-6 relative ml-2">
+      <div className="space-y-4 relative ml-1">
         {/* Continuous vertical line background */}
-        <div className="absolute left-[19px] top-2 bottom-4 w-px bg-border/70" />
+        <div className="absolute left-[15px] top-2 bottom-4 w-px bg-border/70" />
         {filteredEvents.map((event, index) => {
+          if (alertRunSkip.has(event.id)) return null;
+          const run = alertRuns.get(event.id);
+          if (run) {
+            const runConfig = getEventConfig(event.type, event.message);
+            const first = run[0];
+            const last = run[run.length - 1];
+            return (
+              <details
+                key={event.id}
+                id={`timeline-${event.id}`}
+                className="group/run relative scroll-mt-24 target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
+              >
+                <summary className="flex cursor-pointer list-none gap-3 [&::-webkit-details-marker]:hidden">
+                  <div
+                    className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-background shadow-2xs ${runConfig.avatarBg} ${runConfig.avatarText}`}
+                  >
+                    {runConfig.icon}
+                  </div>
+                  <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pt-1">
+                    <span className="min-w-0 text-sm">
+                      <span className="font-semibold text-foreground">{run.length} alerts</span>
+                      <span className="text-muted-foreground">
+                        {' '}
+                        · deduplicated into this incident ·{' '}
+                        {formatDateTime(first.createdAt, userTimeZone, { format: 'time' })}–
+                        {formatDateTime(last.createdAt, userTimeZone, { format: 'time' })}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open/run:rotate-180"
+                      aria-hidden
+                    />
+                  </div>
+                </summary>
+                <ul className="mt-2 ml-11 space-y-1 border-l border-border/70 pl-3 text-xs">
+                  {run.map(alert => (
+                    <li key={alert.id} className="flex gap-2">
+                      <span className="shrink-0 font-mono tabular-nums text-muted-foreground">
+                        {formatDateTime(alert.createdAt, userTimeZone, { format: 'time' })}
+                      </span>
+                      <span className="min-w-0 text-foreground/90">
+                        {alert.intelligence?.detail ?? alert.message}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            );
+          }
           const config = getEventConfig(event.type, event.message);
           const isLifecycleEvent =
             event.type === 'CREATED' || event.type === 'ACKNOWLEDGED' || event.type === 'RESOLVED';
@@ -931,11 +1001,11 @@ export default function IncidentTimeline({
                 className="relative flex scroll-mt-24 gap-4 group target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
               >
                 <div
-                  className={`relative z-10 rounded-full border-4 border-background shrink-0 h-10 w-10 flex items-center justify-center shadow-2xs ${config.avatarBg} ${config.avatarText}`}
+                  className={`relative z-10 rounded-full border-2 border-background shrink-0 h-8 w-8 flex items-center justify-center shadow-2xs ${config.avatarBg} ${config.avatarText}`}
                 >
                   {config.icon}
                 </div>
-                <div className="flex-1 pt-1.5 min-w-0">
+                <div className="flex-1 pt-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs sm:text-sm font-semibold text-foreground/90">
@@ -1033,13 +1103,13 @@ export default function IncidentTimeline({
             >
               {/* Node Icon */}
               <div
-                className={`relative z-10 rounded-full border-4 border-background shrink-0 h-10 w-10 flex items-center justify-center shadow-2xs ${config.avatarBg} ${config.avatarText}`}
+                className={`relative z-10 rounded-full border-2 border-background shrink-0 h-8 w-8 flex items-center justify-center shadow-2xs ${config.avatarBg} ${config.avatarText}`}
               >
                 {config.icon}
               </div>
 
               {/* Content Body */}
-              <div className="flex-1 pt-1.5 min-w-0">
+              <div className="flex-1 pt-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <div className="flex items-center gap-2">
                     <span
