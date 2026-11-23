@@ -12,3 +12,11 @@ export const FIELD_SELECT_CLASS =
 
 export const FIELD_VALUE_CLASS =
   'inline-flex h-8 max-w-full cursor-default items-center gap-1.5 whitespace-nowrap text-sm font-medium text-foreground';
+
+/**
+ * Every chip / badge-like control on the incident page (tags, links, SLA, roles, dedup, intelligence chips):
+ * the same height, radius, border and type as the action bar's buttons (Acknowledge is h-8 rounded-md), so a
+ * row of mixed controls lines up. Colour (tone) is added per use; the shape never changes.
+ */
+export const CHIP_CLASS =
+  'inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-2xs transition-colors';

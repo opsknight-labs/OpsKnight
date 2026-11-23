@@ -33,8 +33,9 @@ const REASON: Record<IncidentImpactChip['source'], string> = {
   MANUAL: 'Marked by a responder',
 };
 
+// The page's chip shape (field-styles CHIP_CLASS).
 const chip =
-  'inline-flex h-6 items-center gap-1 rounded-md border border-border bg-muted/40 px-2 text-xs font-medium text-foreground';
+  'inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-2xs';
 
 /** "Impacts: Checkout, Payments" with the reason for each; responders can add or remove one. */
 export default function IncidentImpacts({

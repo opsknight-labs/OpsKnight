@@ -12,8 +12,9 @@ const TONE_DOT: Record<StripChipTone, string> = {
   shift: 'bg-status-shift',
 };
 
+// The page's chip shape (field-styles CHIP_CLASS), with a 44px touch target on phones.
 const CHIP_CLASS =
-  'inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-2xs transition-colors hover:bg-muted/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 const OPENER_CLASS =
   'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -42,7 +43,7 @@ export default function IntelligenceStrip({
   bare?: boolean;
 }) {
   if (chips.length === 0 && !freshness) return null;
-  const chipClass = touch ? CHIP_CLASS : `${CHIP_CLASS} sm:min-h-7`;
+  const chipClass = touch ? CHIP_CLASS : `${CHIP_CLASS} sm:min-h-8`;
   const firstSection = chips.flatMap(chip =>
     'section' in chip.target ? [chip.target.section] : []
   )[0];
@@ -81,7 +82,9 @@ export default function IntelligenceStrip({
               </kbd>
             </a>
           )}
-          <ul className={bare ? 'flex flex-wrap items-center gap-1.5' : 'flex items-center gap-1.5'}>
+          <ul
+            className={bare ? 'flex flex-wrap items-center gap-1.5' : 'flex items-center gap-1.5'}
+          >
             {chips.map(chip => (
               <li key={chip.id} className="flex shrink-0">
                 {'section' in chip.target ? (

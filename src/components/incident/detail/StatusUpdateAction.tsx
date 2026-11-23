@@ -65,7 +65,7 @@ export default function StatusUpdateAction({
         className={cn(
           mobile
             ? 'h-11 w-full justify-start gap-2.5 text-sm font-medium'
-            : 'h-7 gap-1.5 px-2.5 text-xs font-semibold bg-background hover:bg-muted/40 border-border text-foreground shadow-2xs'
+            : 'h-8 gap-1.5 px-2.5 text-xs font-semibold bg-background hover:bg-muted/40 border-input text-foreground shadow-2xs'
         )}
       >
         <Link

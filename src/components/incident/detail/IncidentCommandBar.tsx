@@ -369,7 +369,10 @@ export default function IncidentCommandBar({
           )}
 
           {collaboration?.visible && (
-            <WarRoomLauncher collaboration={collaboration} className="h-7 gap-1.5 px-2.5" />
+            <WarRoomLauncher
+              collaboration={collaboration}
+              className="h-8 gap-1.5 px-2.5 border-input"
+            />
           )}
 
           {primaryJira ? (
@@ -379,7 +382,7 @@ export default function IncidentCommandBar({
                 <button
                   type="button"
                   aria-label={`Jira issues: ${primaryJira.externalKey}${primaryJira.externalStatus ? `, ${primaryJira.externalStatus}` : ''}${jiraLinks.length > 1 ? `, and ${jiraLinks.length - 1} more` : ''}`}
-                  className="group inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-semibold text-foreground shadow-2xs transition-colors hover:bg-muted/60 data-[state=open]:bg-muted/60"
+                  className="group inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-xs font-semibold text-foreground shadow-2xs transition-colors hover:bg-muted/60 data-[state=open]:bg-muted/60"
                 >
                   <JiraLogo className="h-3.5 w-3.5 shrink-0" />
                   <span className="font-mono">{primaryJira.externalKey}</span>
@@ -500,7 +503,7 @@ export default function IncidentCommandBar({
               variant="outline"
               size="sm"
               onClick={() => setShowJiraDialog(true)}
-              className="h-7 gap-1.5 border-dashed border-border bg-background px-2.5 text-xs font-medium text-muted-foreground shadow-2xs hover:text-foreground"
+              className="h-8 gap-1.5 border-dashed border-border bg-background px-2.5 text-xs font-medium text-muted-foreground shadow-2xs hover:text-foreground"
             >
               <JiraLogo className="h-3.5 w-3.5 shrink-0" />
               <span>Link Jira Issue</span>

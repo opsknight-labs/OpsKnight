@@ -129,7 +129,7 @@ export default function IncidentTags({
           type="button"
           variant="outline"
           size="sm"
-          className="h-7 gap-1 rounded-md border-dashed border-border bg-background px-2.5 text-xs font-medium text-muted-foreground shadow-2xs transition-colors hover:text-foreground"
+          className="h-8 gap-1 rounded-md border-dashed border-border bg-background px-2.5 text-xs font-medium text-muted-foreground shadow-2xs transition-colors hover:text-foreground"
         >
           <Plus className="h-3 w-3" />
           <span>{tags.length === 0 ? 'Add Tag' : 'Tag'}</span>
@@ -203,7 +203,7 @@ export default function IncidentTags({
           <span
             key={tag.id}
             className={cn(
-              'group inline-flex h-7 shrink-0 items-center gap-1 rounded-md border pr-1 pl-2 text-xs font-semibold transition-colors',
+              'group inline-flex h-8 shrink-0 items-center gap-1 rounded-md border pr-1 pl-2.5 text-xs font-semibold transition-colors',
               getTagClass(tag.name)
             )}
           >
@@ -238,7 +238,7 @@ export default function IncidentTags({
               type="button"
               variant="outline"
               size="sm"
-              className="h-7 px-2 text-xs font-semibold text-muted-foreground border-border bg-background shadow-2xs hover:text-foreground"
+              className="h-8 px-2.5 text-xs font-semibold text-muted-foreground border-input bg-background shadow-2xs hover:text-foreground"
             >
               +{overflowTags.length}
               <span className="sr-only"> more tags</span>

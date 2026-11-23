@@ -49,10 +49,7 @@ export default function IncidentRoles({
   const canFill = folded.some(role => role.canAssignOthers || role.canTakeSelf);
 
   return (
-    <section
-      aria-label="Incident roles"
-      className="flex flex-wrap items-center gap-x-2 gap-y-1.5"
-    >
+    <section aria-label="Incident roles" className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
       <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
         <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
         Roles
@@ -139,9 +136,7 @@ function RoleSlot({
         <Plus aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       )}
       {/* One line: role, then holder. Why the role exists lives in the hover card and the picker. */}
-      <span
-        className="flex min-w-0 flex-1 items-baseline gap-1.5 text-left leading-tight"
-      >
+      <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-left leading-tight">
         <span
           className={cn(
             'shrink-0 text-muted-foreground',
@@ -177,8 +172,8 @@ function RoleSlot({
 
   const slotClass = cn(
     'flex w-full min-w-0 items-center border text-left transition-colors',
-    'h-7 gap-1.5 rounded-md pr-2',
-    holder ? 'pl-0.5' : 'pl-2',
+    'h-8 gap-1.5 rounded-md pr-2.5',
+    holder ? 'pl-1' : 'pl-2.5',
     holder ? 'border-border bg-background' : 'border-dashed border-border/80 bg-muted/20'
   );
 
@@ -214,7 +209,11 @@ function RoleSlot({
       </div>
       {interactive && (
         <p className="border-t border-border bg-muted/30 px-3 py-1.5 text-2xs text-muted-foreground">
-          {holder ? 'Click to change or clear' : canTake ? 'Click to take it or assign someone' : 'Click to assign someone'}
+          {holder
+            ? 'Click to change or clear'
+            : canTake
+              ? 'Click to take it or assign someone'
+              : 'Click to assign someone'}
         </p>
       )}
     </HoverCardContent>

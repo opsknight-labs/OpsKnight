@@ -59,7 +59,7 @@ export default function IncidentSLABadges({ sla, className }: IncidentSLABadgesP
           {sla.clock.paused && (
             <li
               className={cn(
-                'inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold',
+                'inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold shadow-2xs',
                 toneClasses('elevated').soft
               )}
             >
@@ -84,7 +84,7 @@ export default function IncidentSLABadges({ sla, className }: IncidentSLABadgesP
                     : `${full}: not required`
                 }
                 className={cn(
-                  'relative inline-flex h-7 items-center gap-1.5 overflow-hidden rounded-lg border px-2.5 text-xs tabular-nums',
+                  'relative inline-flex h-8 items-center gap-1.5 overflow-hidden rounded-md border px-2.5 text-xs shadow-2xs tabular-nums',
                   tone.soft
                 )}
               >

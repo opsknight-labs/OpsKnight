@@ -36,7 +36,7 @@ export default function DedupRecurrenceChip({
 }) {
   if (alertTotal === 0 && !hasDedupKey) return null;
   return (
-    <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 text-xs text-muted-foreground">
+    <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs text-muted-foreground shadow-2xs">
       <Layers className="h-3.5 w-3.5 shrink-0" aria-hidden />
       {alertTotal > 0 && (
         <a
