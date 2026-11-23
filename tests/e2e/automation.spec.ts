@@ -13,6 +13,8 @@ const db = createPrismaClient();
 // Desktop browsers (Chromium, Firefox, WebKit) use desktop routes; device emulations use /m.
 const isDesktop = (info: { project: { use: { isMobile?: boolean } } }) =>
   !info.project.use.isMobile;
+// The incident tab holding automation is "Runbooks & automation" when the viewer can read runbooks.
+const AUTOMATION_TAB = { name: /^(?:Runbooks & automation|Automation)$/ };
 let email: string;
 const password = 'Automation-Local-Test-938!';
 let serviceId: string;
@@ -186,7 +188,7 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
       )
       .toBe(notificationCase === 'BOTH' ? 2 : 1);
     await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
-    await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+    await page.getByRole('tab', AUTOMATION_TAB).click();
     const alertContext = page.getByRole('region', { name: 'Alert Context', exact: true });
     await expect(
       alertContext.getByRole('heading', { name: 'Alert Context', exact: true })
@@ -248,7 +250,7 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
       auditorEmail
     );
     await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
-    await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+    await page.getByRole('tab', AUTOMATION_TAB).click();
     await expect(
       page.getByText('Alert context is restricted.', { exact: true }).filter({ visible: true })
     ).toBeVisible();
@@ -446,7 +448,7 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
   await page.goto(
     `${isDesktop(testInfo) ? '' : '/m'}/incidents/${missing.data.result.incident.id}`
   );
-  await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+  await page.getByRole('tab', AUTOMATION_TAB).click();
   await expect(
     page.getByText('Not provided', { exact: true }).filter({ visible: true }).first()
   ).toBeVisible();
@@ -479,7 +481,7 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
   await page.getByRole('button', { name: 'Archive policy', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Policy Dependencies · Archived' })).toBeVisible();
   await page.goto(`${isDesktop(testInfo) ? '' : '/m'}/incidents/${incident.id}`);
-  await page.getByRole('tab', { name: 'Automation', exact: true }).click();
+  await page.getByRole('tab', AUTOMATION_TAB).click();
   await expect(
     page.getByText('production', { exact: true }).filter({ visible: true }).first()
   ).toBeVisible();
@@ -502,8 +504,12 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
     if (await linksDisclosure.count()) await linksDisclosure.click();
   }
   await expect(
-    page.locator(`a[title="Escalation Policy: ${policy.name}"]`).filter({ visible: true })
-  ).toBeVisible();
+    // The Incident policy field in Details (the side panel from lg, the title card band below it).
+    page
+      .locator(`a[href$="/policies/${policy.id}"]`)
+      .filter({ visible: true })
+      .filter({ has: page.getByText('Incident policy', { exact: true }) })
+  ).toContainText(policy.name);
   await expect(
     page
       .getByText(`Current service default: ${defaultPolicy.name}`, { exact: true })
