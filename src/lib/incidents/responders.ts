@@ -620,7 +620,7 @@ export async function loadIncidentResponders(input: {
               () =>
                 getOnCallNow({
                   userId: input.viewerId,
-                  readWhere: { AND: [input.scheduleWhere, { id: { in: scheduleIds } }] },
+                  readWhere: { AND: [input.scheduleWhere!, { id: { in: scheduleIds } }] }, // checked above
                   scope: 'all',
                   limit: ON_CALL_SCHEDULE_LIMIT,
                   now,
