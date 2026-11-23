@@ -544,6 +544,7 @@ export default function IncidentCommandBar({
                     <Button
                       type="submit"
                       size="sm"
+                      data-incident-action="acknowledge"
                       className="h-8 gap-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-2xs text-xs transition-colors"
                     >
                       <Check className="h-3.5 w-3.5" />
@@ -569,6 +570,7 @@ export default function IncidentCommandBar({
                     type="button"
                     variant="outline"
                     size="sm"
+                    data-incident-action="resolve"
                     className="h-8 gap-1.5 px-3.5 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold shadow-2xs bg-background text-xs transition-colors"
                     onClick={() => setShowResolveModal(true)}
                   >

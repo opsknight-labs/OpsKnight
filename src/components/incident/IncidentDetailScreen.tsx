@@ -5,6 +5,8 @@ import IncidentInsights, {
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
 import { readPayload } from '@/lib/payload-reader';
+import { incidentSummaryText } from '@/lib/incidents/summary-text';
+import IncidentShortcuts from '@/components/incident/IncidentShortcuts';
 import { catchUpKind, type CatchUpItem } from '@/lib/incidents/catch-up';
 import CatchUpStrip from '@/components/incident/detail/CatchUpStrip';
 import { baselineLabel, computeBaseline } from '@/lib/incidents/baseline';
@@ -565,6 +567,25 @@ export default async function IncidentDetailScreen({
       text: 'Alert',
     })),
   ];
+  const summaryText = incidentSummaryText({
+    title: incident.title,
+    priority: incident.priority ?? null,
+    status: incident.status,
+    serviceName: incident.service.name,
+    assigneeName: incident.assignee?.name ?? incident.team?.name ?? null,
+    createdAt: incident.createdAt,
+    now: pageRenderedAt,
+    alertTotal: alertActivity.total,
+    escalation: incident.escalationStatus
+      ? ((
+          { ESCALATING: 'escalating', COMPLETED: 'max step reached', PAUSED: 'paused' } as Record<
+            string,
+            string
+          >
+        )[incident.escalationStatus] ?? incident.escalationStatus.toLowerCase())
+      : null,
+    url: `${appUrl}/incidents/${id}`,
+  });
   const routePrefix = presentation === 'mobile' ? '/m' : '';
   const detailsProps = {
     incident,
@@ -772,6 +793,11 @@ export default async function IncidentDetailScreen({
                     </Badge>
                     <CopyButton text={id} label="ID" className="h-7 px-2 text-xs font-medium" />
                     <CopyButton
+                      text={summaryText}
+                      label="Summary"
+                      className="h-7 px-2 text-xs font-medium"
+                    />
+                    <CopyButton
                       text={`${appUrl}/incidents/${id}`}
                       icon="link"
                       label="Link"
@@ -807,6 +833,9 @@ export default async function IncidentDetailScreen({
           <div className="lg:hidden">{detailsBand}</div>
         </section>
       )}
+
+      {/* A, R, W, T, S on the incident page (listed in the ? shortcuts overlay). */}
+      <IncidentShortcuts summary={summaryText} />
 
       {/* "Since you looked 2h ago: …" — remembered per incident in the viewer's browser; nothing on a first visit. */}
       <CatchUpStrip incidentId={incident.id} items={catchUpItems} />

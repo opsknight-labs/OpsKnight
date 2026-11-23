@@ -365,6 +365,7 @@ export default function IncidentNotes({
               ) : (
                 <Textarea
                   ref={textareaRef}
+                  data-incident-note-input
                   name="content"
                   value={noteContent}
                   onChange={e => setNoteContent(e.target.value)}

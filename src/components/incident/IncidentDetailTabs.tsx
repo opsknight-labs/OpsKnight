@@ -199,7 +199,7 @@ export default function IncidentDetailTabs({
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-t-xl border-b border-border/70 bg-muted/40 p-1.5 backdrop-blur-sm sm:px-3 sm:py-2">
           <div className="scrollbar-none min-w-0 max-w-full flex-1 overflow-x-auto">
             <TabsList className="inline-flex h-9 w-max min-w-full items-center justify-start gap-1 rounded-lg border border-border/50 bg-muted/60 p-1 sm:h-8 sm:w-auto dark:bg-muted/30">
-              <TabsTrigger value="notes" className={TRIGGER_CLASS}>
+              <TabsTrigger value="notes" data-incident-tab="notes" className={TRIGGER_CLASS}>
                 <MessageSquareText className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span>Notes</span>
                 {typeof noteCount === 'number' && noteCount > 0 && (
@@ -208,18 +208,26 @@ export default function IncidentDetailTabs({
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="timeline" className={TRIGGER_CLASS}>
+              <TabsTrigger value="timeline" data-incident-tab="timeline" className={TRIGGER_CLASS}>
                 <History className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span>Timeline</span>
               </TabsTrigger>
               {(hasAutomation || hasRunbooks) && (
-                <TabsTrigger value="automation" className={TRIGGER_CLASS}>
+                <TabsTrigger
+                  value="automation"
+                  data-incident-tab="automation"
+                  className={TRIGGER_CLASS}
+                >
                   <Workflow className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span>{hasRunbooks ? 'Runbooks & automation' : 'Automation'}</span>
                 </TabsTrigger>
               )}
               {hasPostmortem && (
-                <TabsTrigger value="postmortem" className={TRIGGER_CLASS}>
+                <TabsTrigger
+                  value="postmortem"
+                  data-incident-tab="postmortem"
+                  className={TRIGGER_CLASS}
+                >
                   <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span>Postmortem</span>
                   {postmortemStatus && (
