@@ -609,7 +609,6 @@ export default async function IncidentDetailScreen({
                     {incident.priority}
                   </Badge>
                 )}
-                {dedupChip}
               </div>
               <div className="flex shrink-0 items-center">
                 <CopyButton text={id} label="ID" className="h-9 px-2 text-xs" />
@@ -624,6 +623,8 @@ export default async function IncidentDetailScreen({
             <h1 className="wrap-break-word text-lg font-bold leading-snug tracking-tight text-foreground">
               {incident.title}
             </h1>
+            {/* Dedup and recurrence on its own line on phones, so it never crowds the copy buttons. */}
+            <div className="flex">{dedupChip}</div>
             {showIntelligence && (
               <Suspense fallback={null}>
                 <IncidentGroupLine incidentId={incident.id} presentation="mobile" />
@@ -699,7 +700,12 @@ export default async function IncidentDetailScreen({
                     >
                       {incident.title}
                     </h1>
-                    <StatusBadge status={incident.status} live={incident.status === 'OPEN'} />
+                    <StatusBadge
+                      status={incident.status}
+                      live={incident.status === 'OPEN'}
+                      // The page's chip shape (field-styles CHIP_CLASS); other pages keep the pill.
+                      className="h-8 rounded-md px-2.5 text-xs shadow-2xs"
+                    />
                     {dedupChip}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">

@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Layers } from 'lucide-react';
 
 const HOUR_MS = 3_600_000;
+/** Inline so it beats the global coarse-pointer rule (44px min size + padding on every link); the chip is the target. */
+const TIGHT = { minHeight: 0, minWidth: 0, padding: 0, margin: 0 } as const;
 const DAY_MS = 24 * HOUR_MS;
 
 /** "first in 41 days" / "again after 3 h" / "first time": how long since this dedup key last opened an incident. */
@@ -41,6 +43,7 @@ export default function DedupRecurrenceChip({
       {alertTotal > 0 && (
         <a
           href="#incident-activity"
+          style={TIGHT}
           className="font-medium tabular-nums text-foreground hover:underline"
           title="Alerts deduplicated into this incident: open the activity graph and dedup details"
         >
@@ -53,6 +56,7 @@ export default function DedupRecurrenceChip({
           {previous ? (
             <Link
               href={`${routePrefix}/incidents/${previous.id}`}
+              style={TIGHT}
               className="hover:text-foreground hover:underline"
               title={`Last incident on this dedup key: “${previous.title}”, ${previous.createdAt.toUTCString()}`}
             >
