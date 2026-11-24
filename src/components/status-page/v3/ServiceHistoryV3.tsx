@@ -10,6 +10,7 @@ import { buildPublicHistoryDays } from '@/lib/status-pages/history-presentation'
 import { normalizePublicStatus, statusPresentation } from '@/lib/status-pages/status-presentation';
 import { describeUptimeWindow } from '@/lib/status-pages/presentation';
 import { formatDateTime } from '@/lib/timezone';
+import { barSeverity, barTooltip } from '@/lib/status-pages/history-bars';
 import StatusBadge from '@/components/incident/StatusBadge';
 
 function gradeLabel(grade: string | undefined): string | undefined {
@@ -125,12 +126,6 @@ function ServiceHistoryV3Inner({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setSelected(null);
-      } else if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        navigateDay(-1);
-      } else if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        navigateDay(1);
       }
     };
     const onDown = (event: MouseEvent) => {
@@ -142,7 +137,25 @@ function ServiceHistoryV3Inner({
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('mousedown', onDown);
     };
-  }, [selected, navigateDay]);
+  }, [selected]);
+
+  // Roving tabindex: arrows move focus (and the open inspector) across the days that are visible.
+  const onBarKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const delta = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+    if (!delta && event.key !== 'Home' && event.key !== 'End') return;
+    const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button')].filter(
+      b => b.offsetParent !== null
+    );
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (at < 0) return;
+    event.preventDefault();
+    const next = buttons.at(
+      event.key === 'Home' ? 0 : event.key === 'End' ? -1 : Math.min(buttons.length - 1, Math.max(0, at + delta))
+    );
+    next?.focus();
+    const index = next ? Number(next.id.slice(next.id.lastIndexOf('-') + 1)) : NaN;
+    if (selected !== null && Number.isFinite(index)) setSelected(index);
+  };
 
   const hasUptime = Boolean(service.uptime?.days30 || service.uptime?.days90);
   const hasDays = days.length > 0;
@@ -181,68 +194,38 @@ function ServiceHistoryV3Inner({
 
       {canShowHistory && (
         <>
-          <svg
+          <div
             className="status-v3-history"
-            viewBox={`0 0 ${days.length} 10`}
-            preserveAspectRatio="none"
-            role="listbox"
-            tabIndex={0}
-            aria-label={`Daily status history for ${service.name} — press Enter to open details, arrow keys to navigate days`}
-            aria-activedescendant={
-              selected != null ? `history-day-${service.id}-${selected}` : undefined
-            }
-            onClick={event => {
-              const target = event.target as SVGElement;
-              const rect = target.closest('rect[data-day-index]');
-              if (!rect) return;
-              const idx = Number(rect.getAttribute('data-day-index'));
-              if (Number.isFinite(idx)) setSelected(prev => (prev === idx ? null : idx));
-            }}
-            onKeyDown={event => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                // Open on the most recent day: that is what a visitor checking status wants first.
-                setSelected(prev => (prev === null ? days.length - 1 : prev));
-              } else if (event.key === 'ArrowLeft') {
-                event.preventDefault();
-                navigateDay(-1);
-                if (selected === null) setSelected(days.length - 1);
-              } else if (event.key === 'ArrowRight') {
-                event.preventDefault();
-                navigateDay(1);
-                if (selected === null) setSelected(0);
-              } else if (event.key === 'Escape') {
-                setSelected(null);
-              }
-            }}
+            role="group"
+            aria-label={`Daily status history for ${service.name}. Arrow keys move between days, Enter opens details.`}
+            onKeyDown={onBarKeyDown}
           >
             {days.map((entry, index) => {
-              const token = statusPresentation(entry.status).token;
+              const presentation = statusPresentation(entry.status);
               const isSelected = selected === index;
+              const tip = barTooltip(entry, presentation.label);
               return (
-                <rect
+                <button
                   key={entry.date}
+                  type="button"
                   id={`history-day-${service.id}-${index}`}
-                  className={`status-v3-history__day status-${token}${isSelected ? ' status-v3-history__day--selected' : ''}`}
-                  role="option"
-                  aria-selected={isSelected}
-                  x={index + 0.08}
-                  y={0}
-                  width={0.84}
-                  height={10}
-                  rx={0.22}
-                  fill="currentColor"
-                  data-day-index={index}
-                >
-                  <title>
-                    {`${entry.date}: ${statusPresentation(entry.status).label}${entry.availabilityPercent != null ? ` · ${entry.availabilityPercent}%` : ''}`}
-                  </title>
-                </rect>
+                  className={`status-v3-history__day status-${presentation.token}${isSelected ? ' status-v3-history__day--selected' : ''}`}
+                  data-severity={barSeverity(entry)}
+                  data-tip={tip}
+                  aria-label={tip}
+                  aria-pressed={isSelected}
+                  tabIndex={index === (selected ?? days.length - 1) ? 0 : -1}
+                  onClick={() => setSelected(prev => (prev === index ? null : index))}
+                />
               );
             })}
-          </svg>
+          </div>
 
-          <div className="status-v3-history__axis" aria-hidden="true">
+          <div className="status-v3-history__axis status-v3-history__axis--narrow" aria-hidden="true">
+            <span>{days.length > 30 ? '30 days ago' : days.length > 1 ? `${days.length} days ago` : 'Yesterday'}</span>
+            <span>Today</span>
+          </div>
+          <div className="status-v3-history__axis status-v3-history__axis--wide" aria-hidden="true">
             {days.length <= 30 ? (
               <>
                 <span>{days.length > 1 ? `${days.length} days ago` : 'Yesterday'}</span>
