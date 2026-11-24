@@ -5,6 +5,7 @@ import { ArrowUpRight, Boxes, LayoutPanelTop, Network, Users } from 'lucide-reac
 import { KPI_CARD, KPI_GRID, KpiBody } from '@/components/analytics/KpiCard';
 import { EmptyState, RelativeTime, SeverityBadge, StatusBadge } from '@/components/patterns';
 import type { BsStatus, BusinessServiceStats } from '@/lib/business-services/contract';
+import type { ErrorBudget } from '@/lib/business-services/slo';
 import { cn } from '@/lib/utils';
 import DependencyMiniGraph from './DependencyMiniGraph';
 import HealthBadge, { CRITICALITY_LABEL } from './HealthBadge';
@@ -35,16 +36,34 @@ function duration(minutes: number | null) {
   return hours < 48 ? `${hours.toFixed(1)}h` : `${Math.round(hours / 24)}d`;
 }
 
+const BURN_LABEL = { OK: 'On track', AT_RISK: 'At risk', BREACHED: 'Budget spent' } as const;
+
 /** Uptime 30/90 days, incidents, MTTA and MTTR over the last 30 days. */
 export function OverviewKpis({
   last30,
   last90,
+  slo,
 }: {
   last30: BusinessServiceStats;
   last90: BusinessServiceStats;
+  slo?: (ErrorBudget & { target: number; windowDays: number }) | null;
 }) {
   return (
     <ul className={KPI_GRID} aria-label="Key metrics">
+      {slo && (
+        <li className={KPI_CARD}>
+          <KpiBody
+            label={`Error budget, ${slo.windowDays} days`}
+            value={`${Math.max(slo.remainingPercent, 0).toFixed(0)}% left`}
+            meta={
+              <span className="tabular-nums">
+                {BURN_LABEL[slo.burnState]}. Target {slo.target}%, {Math.round(slo.consumedMinutes)}{' '}
+                of {Math.round(slo.allowedMinutes)} min used
+              </span>
+            }
+          />
+        </li>
+      )}
       <li className={KPI_CARD}>
         <KpiBody
           label="Uptime, 30 days"

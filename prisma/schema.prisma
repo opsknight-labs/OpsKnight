@@ -576,6 +576,7 @@ model User {
   incidentRoles               IncidentRoleAssignment[]        @relation("IncidentRoleHolder")
   incidentRolesAssigned       IncidentRoleAssignment[]        @relation("IncidentRoleAssigner")
   businessServiceFollows      BusinessServiceFollower[]
+  ownedBusinessServices       BusinessService[]         @relation("BusinessServiceOwner")
   businessServiceImpactsMarked IncidentBusinessServiceImpact[]
   auditLogs                   AuditLog[]
   overrides                   OnCallOverride[]             @relation("OverrideUser")
@@ -816,6 +817,7 @@ model EscalationPolicy {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   services    Service[]
+  businessServices BusinessService[]
   automationDecisions IncidentAutomationDecision[]
 }
 
@@ -2919,6 +2921,13 @@ enum BusinessServiceTier {
   TIER_3
 }
 
+enum BusinessServiceLifecycle {
+  ACTIVE
+  BETA
+  DEPRECATED
+  RETIRED
+}
+
 enum BusinessServiceImpactSource {
   DIRECT
   DEPENDENCY
@@ -2943,9 +2952,30 @@ model BusinessService {
   /// Plain-language description shown on status pages.
   statusPageSummary  String?
   ownerTeamId        String?
+  /// SLO availability target in percent (90 to 99.999); null = no SLO.
+  sloTarget          Float?
+  /// SLO rolling window in days (7, 30 or 90).
+  sloWindowDays      Int                                     @default(30)
+  ownerUserId        String?
+  escalationPolicyId String?
+  contactChannel     String?
+  tags               String[]                                @default([])
+  /// Free text such as production or staging.
+  environment        String?
+  lifecycle          BusinessServiceLifecycle                @default(ACTIVE)
+  lastReviewedAt     DateTime?
+  /// Flat { key: string | number | boolean } map, validated on write.
+  customAttributes   Json?
+  /// Quorum rule: when set, status derives from the share of critical members impacted.
+  quorumPartialPct   Int?
+  quorumMajorPct     Int?
+  /// How many dependency hops from a member count as impact (1 to 5).
+  dependencyHopDepth Int                                     @default(3)
   createdAt          DateTime                                @default(now())
   updatedAt          DateTime                                @updatedAt
   ownerTeam          Team?                                   @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
+  ownerUser          User?                                   @relation("BusinessServiceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  escalationPolicy   EscalationPolicy?                       @relation(fields: [escalationPolicyId], references: [id], onDelete: SetNull)
   members            BusinessServiceMember[]
   followers          BusinessServiceFollower[]
   statusPages        StatusPageBusinessService[]
@@ -2960,6 +2990,8 @@ model BusinessService {
   maintenanceWindows MaintenanceWindowBusinessService[]
 
   @@index([ownerTeamId])
+  @@index([ownerUserId])
+  @@index([escalationPolicyId])
 }
 
 model BusinessServiceMember {

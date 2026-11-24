@@ -250,12 +250,17 @@ export default function CatalogDirectory({
       description="A business service names something customers rely on, like Checkout or Payments, and the technical services behind it. Its health follows their incidents."
       action={
         canManage ? (
-          <Button asChild size="sm" className="gap-1.5">
-            <Link href="/services/business/new">
-              <Plus className="h-4 w-4" aria-hidden />
-              Create a business service
-            </Link>
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button asChild size="sm" className="gap-1.5">
+              <Link href="/services/business/new">
+                <Plus className="h-4 w-4" aria-hidden />
+                Create a business service
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/services/business/setup">Guided setup</Link>
+            </Button>
+          </div>
         ) : undefined
       }
     />

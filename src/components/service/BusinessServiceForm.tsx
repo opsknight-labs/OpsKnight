@@ -17,6 +17,7 @@ import { notify } from '@/lib/toast';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { cn } from '@/lib/utils';
 import { linksFromLines } from '@/lib/business-services/links';
+import { attributesFromLines } from '@/lib/business-services/attributes';
 import {
   createBusinessServiceAction,
   deleteBusinessServiceAction,
@@ -48,6 +49,25 @@ export type BusinessServiceFormValue = {
   nonCriticalServiceIds: string[];
   /** Business services this one depends on. */
   dependsOnBusinessServiceIds: string[];
+  teamSubscriberIds: string[];
+  ownerUserId: string;
+  escalationPolicyId: string;
+  contactChannel: string;
+  environment: string;
+  lifecycle: 'ACTIVE' | 'BETA' | 'DEPRECATED' | 'RETIRED';
+  /** Comma separated. */
+  tagsText: string;
+  /** One "key = value" per line. */
+  attributesText: string;
+  /** Tick to stamp "reviewed" now. */
+  markReviewed: boolean;
+  /** Percent, '' = no SLO. */
+  sloTarget: string;
+  sloWindowDays: '7' | '30' | '90';
+  /** '' = worst-of (no quorum rule). */
+  quorumPartialPct: string;
+  quorumMajorPct: string;
+  dependencyHopDepth: string;
 };
 
 const NO_TEAM = '__none__';
@@ -79,7 +99,23 @@ const EMPTY: BusinessServiceFormValue = {
   impactMaxPriority: '',
   nonCriticalServiceIds: [],
   dependsOnBusinessServiceIds: [],
+  teamSubscriberIds: [],
+  ownerUserId: '',
+  escalationPolicyId: '',
+  contactChannel: '',
+  environment: '',
+  lifecycle: 'ACTIVE',
+  tagsText: '',
+  attributesText: '',
+  markReviewed: false,
+  sloTarget: '',
+  sloWindowDays: '30',
+  quorumPartialPct: '',
+  quorumMajorPct: '',
+  dependencyHopDepth: '3',
 };
+const LIFECYCLES = ['ACTIVE', 'BETA', 'DEPRECATED', 'RETIRED'] as const;
+const pct = (text: string) => (text.trim() === '' ? null : Number(text));
 
 /** Pick many from a searchable list; selected rows stay on top so the choice is visible. */
 function MultiPicker({
@@ -214,17 +250,94 @@ function MultiPicker({
   );
 }
 
+function TextField({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  maxLength,
+  inputMode,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  placeholder?: string;
+  maxLength?: number;
+  inputMode?: 'decimal' | 'numeric';
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="text-sm font-semibold">
+        {label}
+      </label>
+      <Input
+        id={id}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        inputMode={inputMode}
+      />
+    </div>
+  );
+}
+
+/** A single choice from a short list, '' = none. */
+function PickField({
+  id,
+  label,
+  none,
+  value,
+  options,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  none: string;
+  value: string;
+  options: Option[];
+  onChange: (next: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="text-sm font-semibold">
+        {label}
+      </label>
+      <Select
+        value={value || NO_TEAM}
+        onValueChange={next => onChange(next === NO_TEAM ? '' : next)}
+      >
+        <SelectTrigger id={id}>
+          <SelectValue placeholder={none} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_TEAM}>{none}</SelectItem>
+          {options.map(option => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 export default function BusinessServiceForm({
   initial,
   services,
   teams,
   users,
+  escalationPolicies = [],
   businessServices = [],
   canDelete = false,
 }: {
   initial?: BusinessServiceFormValue;
   services: Option[];
   teams: Option[];
+  escalationPolicies?: Option[];
   users: Option[];
   /** Other business services it can depend on (never itself). */
   businessServices?: Option[];
@@ -252,8 +365,44 @@ export default function BusinessServiceForm({
       );
       return;
     }
+    const attributes = attributesFromLines(value.attributesText);
+    if (!attributes) {
+      setError('Custom attributes: one "key = value" per line, at most 20, keys like cost_center.');
+      return;
+    }
+    const slo = pct(value.sloTarget);
+    if (slo !== null && !(slo >= 90 && slo <= 99.999)) {
+      setError('SLO target must be between 90 and 99.999 percent.');
+      return;
+    }
+    const partial = pct(value.quorumPartialPct);
+    const major = pct(value.quorumMajorPct);
+    if (
+      [partial, major].some(n => n !== null && !(Number.isInteger(n) && n >= 1 && n <= 100)) ||
+      (partial !== null && major !== null && partial > major)
+    ) {
+      setError('Quorum thresholds are whole percents from 1 to 100; partial cannot exceed major.');
+      return;
+    }
     setError(null);
     const payload = {
+      sloTarget: slo,
+      sloWindowDays: Number(value.sloWindowDays) as 7 | 30 | 90,
+      ownerUserId: value.ownerUserId || null,
+      escalationPolicyId: value.escalationPolicyId || null,
+      contactChannel: value.contactChannel.trim() || null,
+      environment: value.environment.trim() || null,
+      lifecycle: value.lifecycle,
+      tags: value.tagsText
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(Boolean),
+      customAttributes: Object.keys(attributes).length ? attributes : null,
+      ...(value.markReviewed ? { lastReviewedAt: new Date() } : {}),
+      quorumPartialPct: partial,
+      quorumMajorPct: major,
+      dependencyHopDepth: Number(value.dependencyHopDepth) || 3,
+      teamSubscriberIds: value.teamSubscriberIds,
       statusPageSummary: value.statusPageSummary.trim() || null,
       links,
       name: value.name.trim(),
@@ -441,6 +590,117 @@ export default function BusinessServiceForm({
       </section>
 
       <section
+        aria-labelledby="bs-catalog-heading"
+        className="grid gap-6 rounded-xl border border-border bg-card p-5 text-card-foreground sm:p-6 lg:grid-cols-2"
+      >
+        <div className="space-y-4">
+          <div>
+            <h2 id="bs-catalog-heading" className="text-sm font-semibold">
+              Ownership and SLO
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              All optional. Used for the catalog scorecard, the error budget and who is on call.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <PickField
+              id="bs-owner-user"
+              label="Owner (person)"
+              none="No person"
+              value={value.ownerUserId}
+              options={users}
+              onChange={next => set('ownerUserId', next)}
+            />
+            <PickField
+              id="bs-policy"
+              label="Escalation policy"
+              none="None"
+              value={value.escalationPolicyId}
+              options={escalationPolicies}
+              onChange={next => set('escalationPolicyId', next)}
+            />
+          </div>
+          <TextField
+            id="bs-contact"
+            label="Contact channel"
+            value={value.contactChannel}
+            placeholder="#checkout-oncall"
+            maxLength={200}
+            onChange={next => set('contactChannel', next)}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              id="bs-slo"
+              label="SLO target (%)"
+              value={value.sloTarget}
+              placeholder="99.9"
+              inputMode="decimal"
+              onChange={next => set('sloTarget', next)}
+            />
+            <PickField
+              id="bs-slo-window"
+              label="SLO window"
+              none="30 days"
+              value={value.sloWindowDays === '30' ? '' : value.sloWindowDays}
+              options={[
+                { id: '7', name: '7 days' },
+                { id: '90', name: '90 days' },
+              ]}
+              onChange={next => set('sloWindowDays', (next || '30') as '7' | '30' | '90')}
+            />
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              id="bs-environment"
+              label="Environment"
+              value={value.environment}
+              placeholder="production"
+              maxLength={40}
+              onChange={next => set('environment', next)}
+            />
+            <PickField
+              id="bs-lifecycle"
+              label="Lifecycle"
+              none="Active"
+              value={value.lifecycle === 'ACTIVE' ? '' : value.lifecycle}
+              options={LIFECYCLES.filter(l => l !== 'ACTIVE').map(l => ({ id: l, name: l }))}
+              onChange={next => set('lifecycle', (next || 'ACTIVE') as typeof value.lifecycle)}
+            />
+          </div>
+          <TextField
+            id="bs-tags"
+            label="Tags (comma separated)"
+            value={value.tagsText}
+            placeholder="payments, pci"
+            onChange={next => set('tagsText', next)}
+          />
+          <div className="space-y-1.5">
+            <label htmlFor="bs-attributes" className="text-sm font-semibold">
+              Custom attributes
+            </label>
+            <Textarea
+              id="bs-attributes"
+              value={value.attributesText}
+              onChange={event => set('attributesText', event.target.value)}
+              placeholder="cost_center = 4410"
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">One key = value per line, up to 20.</p>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={value.markReviewed}
+              onChange={event => set('markReviewed', event.target.checked)}
+            />
+            Mark as reviewed today
+          </label>
+        </div>
+      </section>
+
+      <section
         aria-labelledby="bs-impact-heading"
         className="grid gap-6 rounded-xl border border-border bg-card p-5 text-card-foreground sm:p-6 lg:grid-cols-2"
       >
@@ -454,6 +714,12 @@ export default function BusinessServiceForm({
               default unless this business service needs its own rule. Non-critical services (set in
               the list above) can only make it degraded.
             </p>
+            {!value.criticality && (
+              <p className="mt-1 text-xs text-status-elevated" role="note">
+                Criticality is not set, so every open incident on a member counts as impact. Pick a
+                tier to filter low-urgency noise.
+              </p>
+            )}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -504,6 +770,35 @@ export default function BusinessServiceForm({
               </Select>
             </div>
           </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <TextField
+              id="bs-quorum-partial"
+              label="Partial at (% down)"
+              value={value.quorumPartialPct}
+              placeholder="50"
+              inputMode="numeric"
+              onChange={next => set('quorumPartialPct', next)}
+            />
+            <TextField
+              id="bs-quorum-major"
+              label="Major at (% down)"
+              value={value.quorumMajorPct}
+              placeholder="100"
+              inputMode="numeric"
+              onChange={next => set('quorumMajorPct', next)}
+            />
+            <TextField
+              id="bs-hops"
+              label="Dependency hops (1-5)"
+              value={value.dependencyHopDepth}
+              inputMode="numeric"
+              onChange={next => set('dependencyHopDepth', next)}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Quorum (optional): status follows the share of critical services impacted instead of the
+            worst one. Hops: how far down its services&apos; dependencies an incident still counts.
+          </p>
         </div>
         <MultiPicker
           label="Depends on business services"
@@ -525,6 +820,16 @@ export default function BusinessServiceForm({
           onChange={next => set('followerUserIds', next)}
           emptyText="No people match."
         />
+        <div className="mt-6">
+          <MultiPicker
+            label="Subscriber teams"
+            description="Every member of these teams is told when it is affected."
+            options={teams}
+            value={value.teamSubscriberIds}
+            onChange={next => set('teamSubscriberIds', next)}
+            emptyText="No teams."
+          />
+        </div>
       </section>
 
       {error && (

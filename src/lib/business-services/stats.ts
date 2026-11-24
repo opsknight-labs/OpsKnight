@@ -25,6 +25,8 @@ import type {
 } from './contract';
 import { getHealthSnapshot } from './health';
 import { businessServiceReadWhere } from './commands';
+import { needsWhere } from './scorecard';
+import { URGENCY_DOWNTIME_WEIGHT, weightedDowntime } from './slo';
 
 const MINUTE = 60_000;
 const MAX_TIMELINE = 500;
@@ -151,6 +153,7 @@ export async function getBusinessServiceStats(
   await assertVisible(businessServiceId, actor);
   const now = new Date();
   const intervals: Array<{ start: number; end: number }> = [];
+  const weighted: Array<{ start: number; end: number; weight: number }> = [];
   let after: string | undefined;
   for (;;) {
     const batch = await prisma.incidentBusinessServiceImpact.findMany({
@@ -163,10 +166,15 @@ export async function getBusinessServiceStats(
       },
       orderBy: { id: 'asc' },
       take: STATS_BATCH,
-      select: { id: true, startedAt: true, endedAt: true },
+      select: { id: true, startedAt: true, endedAt: true, incident: { select: { urgency: true } } },
     });
-    for (const row of batch)
-      intervals.push({ start: row.startedAt.getTime(), end: (row.endedAt ?? now).getTime() });
+    for (const row of batch) {
+      const interval = { start: row.startedAt.getTime(), end: (row.endedAt ?? now).getTime() };
+      intervals.push(interval);
+      // shortcut: weight is the incident's urgency, not the status this business service had
+      // during the interval (intervals do not store one); upgrade if intervals gain a severity.
+      weighted.push({ ...interval, weight: URGENCY_DOWNTIME_WEIGHT[row.incident.urgency] });
+    }
     if (batch.length < STATS_BATCH) break;
     after = batch.at(-1)!.id;
   }
@@ -176,6 +184,20 @@ export async function getBusinessServiceStats(
   };
   const impactMs = unionDurationMs(intervals, bounds);
   const total = Math.max(bounds.to - bounds.from, 0);
+  const planned = await prisma.maintenanceWindow.findMany({
+    where: {
+      businessServices: { some: { businessServiceId } },
+      startsAt: { lt: window.to },
+      endsAt: { gt: window.from },
+    },
+    take: 1000,
+    select: { startsAt: true, endsAt: true },
+  });
+  const slo = weightedDowntime(
+    weighted,
+    planned.map(w => ({ start: w.startsAt.getTime(), end: w.endsAt.getTime() })),
+    bounds
+  );
   const [aggregate] = await prisma.$queryRaw<
     Array<{ incidents: number; mtta: number | null; mttr: number | null }>
   >`
@@ -198,6 +220,9 @@ export async function getBusinessServiceStats(
     window,
     impactMinutes: impactMs / MINUTE,
     uptimePercent: total > 0 ? Math.max(0, (1 - impactMs / total) * 100) : 100,
+    weightedUptimePercent:
+      slo.windowMs > 0 ? Math.max(0, (1 - slo.downtimeMs / slo.windowMs) * 100) : 100,
+    weightedDowntimeMinutes: slo.downtimeMs / MINUTE,
     incidentCount: aggregate?.incidents ?? 0,
     mttaMinutes: minutes(aggregate?.mtta),
     mttrMinutes: minutes(aggregate?.mttr),
@@ -249,6 +274,7 @@ export async function listBusinessServices(
           : {},
         filter.criticality?.length ? { criticality: { in: [...filter.criticality] } } : {},
         filter.ownerTeamId ? { ownerTeamId: filter.ownerTeamId } : {},
+        filter.needs ? needsWhere(filter.needs) : {},
         matching ? { id: { in: matching } } : {},
       ],
     },

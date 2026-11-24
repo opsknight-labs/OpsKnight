@@ -14,6 +14,7 @@ import { serviceReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import type { BusinessServiceHealth, ImpactSource } from './contract';
 import { invalidateBusinessServiceHealth } from './health';
 import { wouldCreateSupportCycle } from './stats';
+import { CustomAttributesSchema } from './attributes';
 import { BusinessServiceLinkSchema, parseBusinessServiceLinks } from './links';
 
 const id = z.string().trim().min(1).max(100);
@@ -44,6 +45,23 @@ export const BusinessServiceInputSchema = z
     nonCriticalServiceIds: z.array(id).max(200).optional(),
     /** Business services this one depends on (they support it). Cycles are rejected. */
     dependsOnBusinessServiceIds: z.array(id).max(50).optional(),
+    /** Teams whose members hear about this business service; replaces the set when present. */
+    teamSubscriberIds: z.array(id).max(200).optional(),
+    // Catalog depth. Optional without defaults so a client that omits them keeps stored values.
+    sloTarget: z.number().min(90).max(99.999).nullable().optional(),
+    sloWindowDays: z.union([z.literal(7), z.literal(30), z.literal(90)]).optional(),
+    ownerUserId: id.nullable().optional(),
+    escalationPolicyId: id.nullable().optional(),
+    contactChannel: z.string().trim().max(200).nullable().optional(),
+    tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+    environment: z.string().trim().max(40).nullable().optional(),
+    lifecycle: z.enum(['ACTIVE', 'BETA', 'DEPRECATED', 'RETIRED']).optional(),
+    lastReviewedAt: z.union([z.null(), z.coerce.date()]).optional(),
+    customAttributes: CustomAttributesSchema.nullable().optional(),
+    // Health inputs: quorum of critical members impacted, and the dependency walk depth.
+    quorumPartialPct: z.number().int().min(1).max(100).nullable().optional(),
+    quorumMajorPct: z.number().int().min(1).max(100).nullable().optional(),
+    dependencyHopDepth: z.number().int().min(1).max(5).optional(),
   })
   .strict();
 
@@ -60,9 +78,24 @@ export const BUSINESS_SERVICE_SELECT = {
   impactMinUrgency: true,
   impactMaxPriority: true,
   ownerTeamId: true,
+  sloTarget: true,
+  sloWindowDays: true,
+  ownerUserId: true,
+  escalationPolicyId: true,
+  contactChannel: true,
+  tags: true,
+  environment: true,
+  lifecycle: true,
+  lastReviewedAt: true,
+  customAttributes: true,
+  quorumPartialPct: true,
+  quorumMajorPct: true,
+  dependencyHopDepth: true,
   createdAt: true,
   updatedAt: true,
   ownerTeam: { select: { id: true, name: true } },
+  ownerUser: { select: { id: true, name: true, email: true } },
+  escalationPolicy: { select: { id: true, name: true } },
   members: {
     orderBy: { createdAt: 'asc' },
     select: {
@@ -78,6 +111,7 @@ export const BUSINESS_SERVICE_SELECT = {
     orderBy: { createdAt: 'asc' },
     select: { user: { select: { id: true, name: true, email: true } } },
   },
+  teamSubscribers: { select: { team: { select: { id: true, name: true } } } },
 } satisfies Prisma.BusinessServiceSelect;
 
 /** Business services the actor can see: all for org-wide readers, else their teams' or members'. */
@@ -142,12 +176,27 @@ async function assertReferencesExist(
   tx: Prisma.TransactionClient,
   input: ParsedInput,
   actor: AuthorizationActor,
-  current?: { id: string; memberServiceIds: readonly string[]; ownerTeamId: string | null }
+  current?: {
+    id: string;
+    memberServiceIds: readonly string[];
+    ownerTeamId: string | null;
+    ownerUserId: string | null;
+    escalationPolicyId: string | null;
+  }
 ) {
   const existing = new Set(current?.memberServiceIds ?? []);
   const added = input.memberServiceIds.filter(serviceId => !existing.has(serviceId));
   const dependsOn = input.dependsOnBusinessServiceIds ?? [];
-  const [services, visibleAdded, users, team, dependencies] = await Promise.all([
+  if (
+    input.quorumPartialPct != null &&
+    input.quorumMajorPct != null &&
+    input.quorumPartialPct > input.quorumMajorPct
+  )
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      userMessage: 'The partial quorum threshold cannot exceed the major one.',
+    });
+  const [services, visibleAdded, users, team, dependencies, owner, policy] = await Promise.all([
     input.memberServiceIds.length
       ? tx.service.count({ where: { id: { in: input.memberServiceIds } } })
       : 0,
@@ -168,7 +217,20 @@ async function assertReferencesExist(
           where: { AND: [{ id: { in: dependsOn } }, businessServiceReadWhere(actor)] },
         })
       : 0,
+    input.ownerUserId ? tx.user.count({ where: { id: input.ownerUserId, status: 'ACTIVE' } }) : 1,
+    input.escalationPolicyId
+      ? tx.escalationPolicy.count({ where: { id: input.escalationPolicyId, archivedAt: null } })
+      : 1,
   ]);
+  // An unchanged owner or policy may stay even if it has since been disabled or archived.
+  if (
+    (!owner && input.ownerUserId !== current?.ownerUserId) ||
+    (!policy && input.escalationPolicyId !== current?.escalationPolicyId)
+  )
+    throw new AppError({
+      code: 'RESOURCE_NOT_FOUND',
+      userMessage: 'Owner or escalation policy not found.',
+    });
   if (services !== new Set(input.memberServiceIds).size || visibleAdded !== new Set(added).size)
     throw new AppError({
       code: 'RESOURCE_NOT_FOUND',
@@ -320,6 +382,18 @@ async function replaceChildren(
   }
   if (input.dependsOnBusinessServiceIds)
     await replaceSupports(tx, businessServiceId, input.dependsOnBusinessServiceIds);
+  if (input.teamSubscriberIds) {
+    const teamIds = [...new Set(input.teamSubscriberIds)];
+    if ((await tx.team.count({ where: { id: { in: teamIds } } })) !== teamIds.length)
+      throw new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Subscriber team not found.' });
+    await tx.businessServiceTeamSubscriber.deleteMany({
+      where: { businessServiceId, teamId: { notIn: teamIds } },
+    });
+    await tx.businessServiceTeamSubscriber.createMany({
+      data: teamIds.map(teamId => ({ businessServiceId, teamId })),
+      skipDuplicates: true,
+    });
+  }
   await tx.businessServiceFollower.deleteMany({
     where: { businessServiceId, userId: { notIn: input.followerUserIds } },
   });
@@ -375,6 +449,13 @@ async function audit(
   );
 }
 
+/** Only the keys the caller sent, so an omitted field keeps its stored value on update. */
+function pick<K extends keyof ParsedInput>(input: ParsedInput, keys: readonly K[]) {
+  return Object.fromEntries(
+    keys.filter(key => input[key] !== undefined).map(key => [key, input[key]])
+  );
+}
+
 function columns(input: ParsedInput) {
   return {
     name: input.name,
@@ -386,6 +467,23 @@ function columns(input: ParsedInput) {
       : {}),
     ...(input.links !== undefined ? { links: input.links ?? Prisma.DbNull } : {}),
     ...(input.criticality !== undefined ? { criticality: input.criticality } : {}),
+    ...pick(input, [
+      'sloTarget',
+      'sloWindowDays',
+      'ownerUserId',
+      'escalationPolicyId',
+      'contactChannel',
+      'tags',
+      'environment',
+      'lifecycle',
+      'lastReviewedAt',
+      'quorumPartialPct',
+      'quorumMajorPct',
+      'dependencyHopDepth',
+    ]),
+    ...(input.customAttributes !== undefined
+      ? { customAttributes: input.customAttributes ?? Prisma.DbNull }
+      : {}),
     ...(input.impactMinUrgency !== undefined ? { impactMinUrgency: input.impactMinUrgency } : {}),
     ...(input.impactMaxPriority !== undefined
       ? { impactMaxPriority: input.impactMaxPriority }
@@ -400,6 +498,12 @@ function auditFields(
     criticality: string | null;
     impactMinUrgency: string | null;
     impactMaxPriority: string | null;
+    sloTarget: number | null;
+    ownerUserId: string | null;
+    lifecycle: string;
+    quorumPartialPct: number | null;
+    quorumMajorPct: number | null;
+    dependencyHopDepth: number;
   }
 ) {
   return {
@@ -412,6 +516,12 @@ function auditFields(
     dependsOnBusinessServiceIds: input.dependsOnBusinessServiceIds ?? null,
     linkCount: input.links?.length ?? null,
     hasStatusPageSummary: Boolean(input.statusPageSummary),
+    sloTarget: input.sloTarget ?? current?.sloTarget ?? null,
+    ownerUserId: input.ownerUserId ?? current?.ownerUserId ?? null,
+    lifecycle: input.lifecycle ?? current?.lifecycle ?? 'ACTIVE',
+    quorumPartialPct: input.quorumPartialPct ?? current?.quorumPartialPct ?? null,
+    quorumMajorPct: input.quorumMajorPct ?? current?.quorumMajorPct ?? null,
+    dependencyHopDepth: input.dependencyHopDepth ?? current?.dependencyHopDepth ?? 3,
   };
 }
 
@@ -469,6 +579,8 @@ export async function updateBusinessService(
       id,
       memberServiceIds: currentMemberIds,
       ownerTeamId: current.ownerTeamId,
+      ownerUserId: current.ownerUserId,
+      escalationPolicyId: current.escalationPolicyId,
     });
     if (input.dependsOnBusinessServiceIds?.includes(id))
       throw new AppError({
@@ -489,6 +601,12 @@ export async function updateBusinessService(
         ownerTeamId: current.ownerTeamId,
         impactMinUrgency: current.impactMinUrgency,
         impactMaxPriority: current.impactMaxPriority,
+        sloTarget: current.sloTarget,
+        ownerUserId: current.ownerUserId,
+        lifecycle: current.lifecycle,
+        quorumPartialPct: current.quorumPartialPct,
+        quorumMajorPct: current.quorumMajorPct,
+        dependencyHopDepth: current.dependencyHopDepth,
         dependsOnBusinessServiceIds: previousSupports,
         linksChanged:
           input.links !== undefined &&
@@ -611,6 +729,19 @@ export function businessServiceDto(
     impactMinUrgency: row.impactMinUrgency,
     impactMaxPriority: row.impactMaxPriority,
     ownerTeam: row.ownerTeam,
+    sloTarget: row.sloTarget,
+    sloWindowDays: row.sloWindowDays,
+    ownerUser: row.ownerUser ? { id: row.ownerUser.id, name: row.ownerUser.name } : null,
+    escalationPolicy: row.escalationPolicy,
+    contactChannel: row.contactChannel,
+    tags: row.tags,
+    environment: row.environment,
+    lifecycle: row.lifecycle,
+    lastReviewedAt: row.lastReviewedAt,
+    customAttributes: row.customAttributes ?? null,
+    quorumPartialPct: row.quorumPartialPct,
+    quorumMajorPct: row.quorumMajorPct,
+    dependencyHopDepth: row.dependencyHopDepth,
     members: row.members.map(({ service, critical }) => ({
       id: service.id,
       name: service.name,
@@ -640,6 +771,7 @@ export function healthDto(health: BusinessServiceHealth, readableIncidents?: Rea
     memberCount: health.memberCount,
     impactedMemberCount: health.impactedMemberCount,
     computedAt: health.computedAt,
+    ...(health.unknownReason ? { unknownReason: health.unknownReason } : {}),
   };
 }
 

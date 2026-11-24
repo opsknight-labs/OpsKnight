@@ -1,6 +1,6 @@
 /* eslint-disable security/detect-object-injection -- lookups are keyed by typed enum values (status, tier, urgency), never request input */
 import Link from 'next/link';
-import { Boxes, MonitorCheck, Plus } from 'lucide-react';
+import { Boxes, MonitorCheck, Plus, Wand2 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccess } from '@/lib/access/server';
 import { CAPABILITIES } from '@/lib/authorization';
@@ -23,6 +23,7 @@ import {
   hasActiveFilters,
   isImpacted,
   parseCatalogParams,
+  scoreRow,
   type CatalogSearchParams,
 } from '@/components/business-service/catalog-model';
 import type { DetailStatItem } from '@/components/ui/DetailHeroBanner';
@@ -66,9 +67,12 @@ export default async function BusinessServicesPage({
       description: true,
       criticality: true,
       ownerTeamId: true,
+      ownerUserId: true,
+      _count: { select: { members: true } },
       ownerTeam: { select: { id: true, name: true } },
     },
   });
+  const countable = visible.map(row => ({ ...row, memberCount: row._count.members }));
 
   const list = (cursor: string | null) =>
     listBusinessServices({ filter, cursor, limit: PAGE_SIZE }, actor);
@@ -117,7 +121,8 @@ export default async function BusinessServicesPage({
     tier,
     count: visible.filter(row => row.criticality === tier).length,
   })).filter(entry => entry.count > 0);
-  const base = { q: '', tier: '', status: '', team: '' } as const;
+  const needsAttention = countable.filter(row => scoreRow(row).needsAttention).length;
+  const base = { q: '', tier: '', status: '', team: '', needs: '' } as const;
   const stats: DetailStatItem[] = [
     { label: 'Business services', value: visible.length.toLocaleString() },
     {
@@ -126,6 +131,17 @@ export default async function BusinessServicesPage({
       href: catalogHref({ ...base, status: 'impacted' }),
       active: query.status === 'impacted' && !query.tier,
     },
+    ...(needsAttention
+      ? [
+          {
+            label: 'Needs attention',
+            value: needsAttention.toLocaleString(),
+            subtext: 'no owner, tier or services',
+            href: catalogHref({ ...base, needs: 'attention' }),
+            active: query.needs === 'attention',
+          },
+        ]
+      : []),
     ...tierCounts.map(({ tier, count }) => ({
       label: CRITICALITY_LABEL[tier],
       value: count.toLocaleString(),
@@ -170,12 +186,22 @@ export default async function BusinessServicesPage({
         description="What customers rely on, like Checkout or Payments, and how it is doing right now."
         stats={stats}
         secondaryActions={
-          <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>
-            <Link href="/status-dashboard">
-              <MonitorCheck className="h-4 w-4" aria-hidden />
-              Status dashboard
-            </Link>
-          </Button>
+          <>
+            {canManage && (
+              <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>
+                <Link href="/services/business/setup">
+                  <Wand2 className="h-4 w-4" aria-hidden />
+                  Guided setup
+                </Link>
+              </Button>
+            )}
+            <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>
+              <Link href="/status-dashboard">
+                <MonitorCheck className="h-4 w-4" aria-hidden />
+                Status dashboard
+              </Link>
+            </Button>
+          </>
         }
         primaryAction={
           canManage ? (
@@ -214,6 +240,18 @@ export default async function BusinessServicesPage({
             options: TIERS.map(tier => ({ value: tier, label: CRITICALITY_LABEL[tier] })),
           },
           {
+            name: 'needs',
+            label: 'Needs',
+            value: query.needs,
+            anyLabel: 'Anything',
+            options: [
+              { value: 'attention', label: 'Needs attention' },
+              { value: 'no-owner', label: 'No owner' },
+              { value: 'no-tier', label: 'No tier' },
+              { value: 'no-members', label: 'No services' },
+            ],
+          },
+          {
             name: 'team',
             label: 'Owner team',
             value: query.team,
@@ -232,7 +270,7 @@ export default async function BusinessServicesPage({
           pagination={{
             page: engine.cursors.length + 1,
             pageSize: PAGE_SIZE,
-            totalCount: countMatching(visible, engine.health, query),
+            totalCount: countMatching(countable, engine.health, query),
             prevHref: engine.cursors.length
               ? catalogHref(query, engine.cursors.slice(0, -1))
               : undefined,

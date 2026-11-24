@@ -5,11 +5,7 @@ import { z } from 'zod/v4';
 import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import prisma from '@/lib/prisma';
-import {
-  incidentReadWhere,
-  scheduleReadWhere,
-  serviceReadWhere,
-} from '@/lib/authorization-filters';
+import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { businessServiceReadWhere } from '@/lib/business-services/commands';
 import { getBusinessServiceHealth } from '@/lib/business-services/contract';
 import { activeIncidentStatuses } from '@/lib/incident-status';
@@ -18,7 +14,7 @@ import {
   removeDependency,
   reviewDependency,
 } from '@/lib/intelligence/dependencies/service';
-import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
+import { onCallFor } from '@/lib/business-services/on-call';
 import { assertCanModifyService, getCurrentAuthorizationActor } from '@/lib/rbac';
 
 export type GraphActionResult = { ok: boolean; message: string };
@@ -236,35 +232,4 @@ function serialize(incident: {
   createdAt: Date;
 }) {
   return { ...incident, createdAt: incident.createdAt.toISOString() };
-}
-
-async function onCallFor(
-  step: {
-    targetType: string;
-    targetUser: { name: string | null; email: string } | null;
-    targetTeam: { name: string } | null;
-    targetScheduleId: string | null;
-    targetSchedule: { name: string } | null;
-  } | null,
-  actor: Awaited<ReturnType<typeof getCurrentAuthorizationActor>>
-): Promise<GraphNodeDetails['onCall']> {
-  if (!step) return null;
-  if (step.targetUser)
-    return { label: 'Escalation target', names: [step.targetUser.name || step.targetUser.email] };
-  if (step.targetTeam) return { label: 'Team', names: [step.targetTeam.name] };
-  if (!step.targetScheduleId) return null;
-  let where;
-  try {
-    where = scheduleReadWhere(actor);
-  } catch {
-    return null;
-  }
-  const shifts = await getActiveOnCallShifts(new Date(), {
-    scheduleId: step.targetScheduleId,
-    where,
-  });
-  return {
-    label: step.targetSchedule?.name ?? 'Schedule',
-    names: [...new Set(shifts.map(shift => shift.user.name || 'Unnamed responder'))],
-  };
 }

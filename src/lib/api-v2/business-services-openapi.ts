@@ -42,6 +42,8 @@ const LINK: Schema = object({
   url: { type: 'string', format: 'uri', pattern: '^https://', maxLength: 2000 },
 });
 
+const LIFECYCLE = ['ACTIVE', 'BETA', 'DEPRECATED', 'RETIRED'];
+
 const input = {
   name: { type: 'string', minLength: 1, maxLength: 120 },
   description: { type: ['string', 'null'], maxLength: 2000 },
@@ -56,6 +58,24 @@ const input = {
   impactMaxPriority: { type: ['string', 'null'], pattern: '^[Pp][1-9]$' },
   nonCriticalServiceIds: ids(200),
   dependsOnBusinessServiceIds: ids(50),
+  sloTarget: { type: ['number', 'null'], minimum: 90, maximum: 99.999 },
+  sloWindowDays: { type: 'integer', enum: [7, 30, 90] },
+  ownerUserId: nullableString,
+  escalationPolicyId: nullableString,
+  contactChannel: { type: ['string', 'null'], maxLength: 200 },
+  tags: { type: 'array', maxItems: 20, items: { type: 'string', minLength: 1, maxLength: 40 } },
+  environment: { type: ['string', 'null'], maxLength: 40 },
+  lifecycle: { type: 'string', enum: LIFECYCLE },
+  lastReviewedAt: nullableDate,
+  customAttributes: {
+    type: ['object', 'null'],
+    maxProperties: 20,
+    propertyNames: { pattern: '^[A-Za-z][A-Za-z0-9_.-]{0,39}$' },
+    additionalProperties: { type: ['string', 'number', 'boolean'] },
+  },
+  quorumPartialPct: { type: ['integer', 'null'], minimum: 1, maximum: 100 },
+  quorumMajorPct: { type: ['integer', 'null'], minimum: 1, maximum: 100 },
+  dependencyHopDepth: { type: 'integer', minimum: 1, maximum: 5 },
 };
 
 /** Why a business service has its status; the worst reason is first. */
@@ -76,15 +96,27 @@ const reason: Schema = {
   },
   additionalProperties: false,
 };
-const health: Schema = object({
-  status,
-  since: nullableDate,
-  reasons: { type: 'array', items: reason },
-  openIncidentCount: { type: 'integer', minimum: 0 },
-  memberCount: { type: 'integer', minimum: 0 },
-  impactedMemberCount: { type: 'integer', minimum: 0 },
-  computedAt: date,
-});
+const health: Schema = object(
+  {
+    status,
+    since: nullableDate,
+    reasons: { type: 'array', items: reason },
+    openIncidentCount: { type: 'integer', minimum: 0 },
+    memberCount: { type: 'integer', minimum: 0 },
+    impactedMemberCount: { type: 'integer', minimum: 0 },
+    computedAt: date,
+    unknownReason: { type: 'string', enum: ['NO_MEMBERS'] },
+  },
+  [
+    'status',
+    'since',
+    'reasons',
+    'openIncidentCount',
+    'memberCount',
+    'impactedMemberCount',
+    'computedAt',
+  ]
+);
 
 export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
   BusinessService: object({
@@ -98,6 +130,19 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     impactMinUrgency: { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] },
     impactMaxPriority: nullableString,
     ownerTeam: { oneOf: [object({ id, name: string }), { type: 'null' }] },
+    sloTarget: { type: ['number', 'null'] },
+    sloWindowDays: { type: 'integer', enum: [7, 30, 90] },
+    ownerUser: { oneOf: [object({ id, name: string }), { type: 'null' }] },
+    escalationPolicy: { oneOf: [object({ id, name: string }), { type: 'null' }] },
+    contactChannel: nullableString,
+    tags: { type: 'array', items: string },
+    environment: nullableString,
+    lifecycle: { type: 'string', enum: LIFECYCLE },
+    lastReviewedAt: nullableDate,
+    customAttributes: { type: ['object', 'null'], additionalProperties: true },
+    quorumPartialPct: { type: ['integer', 'null'] },
+    quorumMajorPct: { type: ['integer', 'null'] },
+    dependencyHopDepth: { type: 'integer', minimum: 1, maximum: 5 },
     members: {
       type: 'array',
       items: object({ id, name: string, status: string, critical: { type: 'boolean' } }),

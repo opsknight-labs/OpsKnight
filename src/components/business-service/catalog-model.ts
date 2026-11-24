@@ -4,6 +4,12 @@ import type {
   BusinessServiceHealth,
   BusinessServiceListFilter,
 } from '@/lib/business-services/contract';
+import {
+  CATALOG_NEEDS,
+  matchesNeed,
+  scoreBusinessService,
+  type CatalogNeed,
+} from '@/lib/business-services/scorecard';
 import { PUBLIC_SERVICE_STATUSES } from '@/lib/status-pages/public-contract';
 
 /** URL query of the catalog. `c` is the stack of keyset cursors that led to the current page. */
@@ -15,6 +21,8 @@ export type CatalogQuery = {
   /** A status, or "impacted" for anything degraded or worse. */
   status: BsStatus | 'impacted' | '';
   team: string;
+  /** Scorecard gap filter. */
+  needs: CatalogNeed | '';
 };
 
 const TIERS: readonly BusinessServiceTier[] = ['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3'];
@@ -30,6 +38,7 @@ const first = (value: string | string[] | undefined) =>
 export function parseCatalogParams(params: CatalogSearchParams = {}) {
   const tier = first(params.tier);
   const status = first(params.status);
+  const needs = first(params.needs);
   const query: CatalogQuery = {
     q: first(params.q).slice(0, 100),
     tier: (TIERS as readonly string[]).includes(tier) ? (tier as BusinessServiceTier) : '',
@@ -38,6 +47,7 @@ export function parseCatalogParams(params: CatalogSearchParams = {}) {
         ? (status as CatalogQuery['status'])
         : '',
     team: first(params.team).slice(0, 100),
+    needs: (CATALOG_NEEDS as readonly string[]).includes(needs) ? (needs as CatalogNeed) : '',
   };
   const raw = params.c;
   const cursors = (Array.isArray(raw) ? raw : raw ? [raw] : [])
@@ -56,11 +66,12 @@ export function toListFilter(query: CatalogQuery): BusinessServiceListFilter {
         ? { status: [query.status] }
         : {}),
     ...(query.team ? { ownerTeamId: query.team } : {}),
+    ...(query.needs ? { needs: query.needs } : {}),
   };
 }
 
 export const hasActiveFilters = (query: CatalogQuery) =>
-  Boolean(query.q || query.tier || query.status || query.team);
+  Boolean(query.q || query.tier || query.status || query.team || query.needs);
 
 /** Catalog URL for a query and cursor stack; empty values stay out of the URL. */
 export function catalogHref(query: CatalogQuery, cursors: readonly string[] = []) {
@@ -71,12 +82,19 @@ export function catalogHref(query: CatalogQuery, cursors: readonly string[] = []
   return text ? `/services/business?${text}` : '/services/business';
 }
 
+/** Only the owner, tier and member checks matter to the catalog filters. */
+export const scoreRow = (
+  row: Pick<CountRow, 'ownerTeamId' | 'ownerUserId' | 'criticality' | 'memberCount'>
+) => scoreBusinessService({ ...row, linkCount: 0, description: null });
+
 type CountRow = {
   id: string;
   name: string;
   description: string | null;
   criticality: BusinessServiceTier | null;
   ownerTeamId: string | null;
+  ownerUserId: string | null;
+  memberCount: number;
 };
 
 /**
@@ -102,6 +120,7 @@ export function countMatching(
       return false;
     if (query.tier && row.criticality !== query.tier) return false;
     if (query.team && row.ownerTeamId !== query.team) return false;
+    if (query.needs && !matchesNeed(scoreRow(row), query.needs)) return false;
     if (query.status === 'impacted') return isImpacted(status);
     return !query.status || status === query.status;
   }).length;

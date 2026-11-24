@@ -21,6 +21,8 @@ import {
   type BusinessServiceHealth,
 } from '@/lib/business-services/contract';
 import { orUnavailable } from '@/lib/business-services/dashboards';
+import { FIRST_STEP_SELECT, onCallFor } from '@/lib/business-services/on-call';
+import { computeErrorBudget } from '@/lib/business-services/slo';
 import { SectionCard, SectionSkeleton } from '@/components/analytics/SectionCard';
 import { KpiGridSkeleton } from '@/components/analytics/KpiCard';
 import { PageHeader } from '@/components/patterns';
@@ -80,16 +82,44 @@ const stats30 = cache((id: string, actor: AuthorizationActor) =>
   getBusinessServiceStats(id, windowOf(30), actor)
 );
 
+const sloStats = (id: string, actor: AuthorizationActor, days: number) =>
+  days === 30 ? stats30(id, actor) : getBusinessServiceStats(id, windowOf(days), actor);
+
 /** Uptime and response KPIs (30 and 90 days). */
-async function KpiSection({ id, actor }: { id: string; actor: AuthorizationActor }) {
+async function KpiSection({
+  id,
+  actor,
+  slo,
+}: {
+  id: string;
+  actor: AuthorizationActor;
+  slo: { target: number; windowDays: number } | null;
+}) {
   const stats = await orUnavailable(
-    Promise.all([stats30(id, actor), getBusinessServiceStats(id, windowOf(90), actor)]),
+    Promise.all([
+      stats30(id, actor),
+      getBusinessServiceStats(id, windowOf(90), actor),
+      // The error budget is measured over the service's own SLO window.
+      slo ? sloStats(id, actor, slo.windowDays) : null,
+    ]),
     'business_services.overview.stats_unavailable'
   );
   if (!stats) {
     return <HealthUnavailable />;
   }
-  return <OverviewKpis last30={stats[0]} last90={stats[1]} />;
+  const budget =
+    slo && stats[2]
+      ? {
+          target: slo.target,
+          windowDays: slo.windowDays,
+          ...computeErrorBudget({
+            targetPercent: slo.target,
+            windowDays: slo.windowDays,
+            downtimeMinutes: stats[2].weightedDowntimeMinutes ?? stats[2].impactMinutes,
+          }),
+        }
+      : null;
+  return <OverviewKpis last30={stats[0]} last90={stats[1]} slo={budget} />;
 }
 
 async function TimelineSection({
@@ -221,6 +251,17 @@ export default async function BusinessServiceOverviewPage({
       criticality: true,
       links: true,
       ownerTeam: { select: { id: true, name: true } },
+      sloTarget: true,
+      sloWindowDays: true,
+      ownerUser: { select: { id: true, name: true, email: true } },
+      escalationPolicy: {
+        select: { id: true, name: true, steps: FIRST_STEP_SELECT },
+      },
+      contactChannel: true,
+      tags: true,
+      environment: true,
+      lifecycle: true,
+      lastReviewedAt: true,
       members: {
         orderBy: { createdAt: 'asc' },
         select: {
@@ -297,7 +338,7 @@ export default async function BusinessServiceOverviewPage({
   const wanted = own ? reasonIds(own.reasons) : { services: [], businessServices: [] };
   const missingServices = wanted.services.filter(sid => !knownServices.has(sid));
   const missingBusiness = wanted.businessServices.filter(bid => !knownBusiness.has(bid));
-  const [extraServices, extraBusiness, dependencies] = await Promise.all([
+  const [extraServices, extraBusiness, dependencies, onCall] = await Promise.all([
     missingServices.length
       ? prisma.service.findMany({
           where: { AND: [{ id: { in: missingServices } }, serviceReadWhere(actor)] },
@@ -325,11 +366,15 @@ export default async function BusinessServiceOverviewPage({
           },
         })
       : [],
+    onCallFor(item.escalationPolicy?.steps[0] ?? null, actor),
   ]);
   for (const row of extraServices) knownServices.set(row.id, row.name);
   for (const row of extraBusiness) knownBusiness.set(row.id, row.name);
   const reasons = own
     ? [
+        ...(own.unknownReason === 'NO_MEMBERS'
+          ? ['No member services yet, so health is unknown. Add services to monitor it.']
+          : []),
         ...new Set(
           own.reasons.map(reason =>
             describeReason(reason, { services: knownServices, businessServices: knownBusiness })
@@ -374,7 +419,15 @@ export default async function BusinessServiceOverviewPage({
   const overview = (
     <div className="space-y-4 sm:space-y-6">
       <Suspense fallback={<KpiGridSkeleton count={4} />}>
-        <KpiSection id={item.id} actor={actor} />
+        <KpiSection
+          id={item.id}
+          actor={actor}
+          slo={
+            item.sloTarget === null
+              ? null
+              : { target: item.sloTarget, windowDays: item.sloWindowDays }
+          }
+        />
       </Suspense>
       <Suspense fallback={<SectionSkeleton title="Impact, last 30 days" height="h-24" />}>
         <TimelineSection id={item.id} actor={actor} showIncidents={canReadIncidents} />
@@ -420,6 +473,25 @@ export default async function BusinessServiceOverviewPage({
                 ))}
               </ul>
             )}
+            {!item.criticality && (
+              <p className="text-xs text-status-elevated">
+                Criticality is not set, so every open incident on a member counts as impact. Set a
+                tier to filter out low-urgency noise.
+              </p>
+            )}
+            {(item.tags.length > 0 || item.environment || item.lifecycle !== 'ACTIVE') && (
+              <ul aria-label="Tags" className="flex flex-wrap gap-1.5 text-xs">
+                {item.lifecycle !== 'ACTIVE' && (
+                  <li className={pageHeaderBadgeClass}>{item.lifecycle}</li>
+                )}
+                {item.environment && <li className={pageHeaderBadgeClass}>{item.environment}</li>}
+                {item.tags.map(tag => (
+                  <li key={tag} className={pageHeaderBadgeClass}>
+                    {tag}
+                  </li>
+                ))}
+              </ul>
+            )}
             {links.length > 0 && (
               <ul aria-label="Links" className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                 {links.map(entry => (
@@ -441,7 +513,24 @@ export default async function BusinessServiceOverviewPage({
           </div>
         }
         stats={[
-          { label: 'Owner team', value: item.ownerTeam?.name ?? 'No owner' },
+          {
+            label: 'Owner',
+            value:
+              item.ownerUser?.name ?? item.ownerUser?.email ?? item.ownerTeam?.name ?? 'No owner',
+            subtext:
+              item.ownerUser && item.ownerTeam
+                ? item.ownerTeam.name
+                : (item.contactChannel ?? undefined),
+          },
+          {
+            label: 'On call now',
+            value: onCall?.names.length ? onCall.names.join(', ') : '—',
+            subtext: onCall?.names.length
+              ? onCall.label
+              : item.escalationPolicy
+                ? item.escalationPolicy.name
+                : 'No escalation policy',
+          },
           {
             label: 'Criticality',
             value: item.criticality ? CRITICALITY_LABEL[item.criticality] : 'Not set',

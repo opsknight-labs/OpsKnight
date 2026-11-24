@@ -67,34 +67,47 @@ export async function loadBusinessServiceFormOptions(
     dependsOn?: readonly Option[];
   } = {}
 ) {
-  const [services, selectedServices, teams, users, selectedUsers, businessServices] =
-    await Promise.all([
-      searchBusinessServiceFormOptions(actor, 'services'),
-      selected.serviceIds?.length
-        ? searchBusinessServiceFormOptions(actor, 'services', '', selected.serviceIds)
-        : [],
-      prisma.team.findMany({
-        where: teamReadWhere(actor),
-        orderBy: { name: 'asc' },
-        take: 200,
-        select: { id: true, name: true },
-      }),
-      searchBusinessServiceFormOptions(actor, 'users'),
-      selected.userIds?.length
-        ? searchBusinessServiceFormOptions(actor, 'users', '', selected.userIds)
-        : [],
-      prisma.businessService.findMany({
-        where: {
-          AND: [
-            businessServiceReadWhere(actor),
-            selected.businessServiceId ? { id: { not: selected.businessServiceId } } : {},
-          ],
-        },
-        orderBy: { name: 'asc' },
-        take: 200,
-        select: { id: true, name: true },
-      }),
-    ]);
+  const [
+    services,
+    selectedServices,
+    teams,
+    users,
+    selectedUsers,
+    businessServices,
+    escalationPolicies,
+  ] = await Promise.all([
+    searchBusinessServiceFormOptions(actor, 'services'),
+    selected.serviceIds?.length
+      ? searchBusinessServiceFormOptions(actor, 'services', '', selected.serviceIds)
+      : [],
+    prisma.team.findMany({
+      where: teamReadWhere(actor),
+      orderBy: { name: 'asc' },
+      take: 200,
+      select: { id: true, name: true },
+    }),
+    searchBusinessServiceFormOptions(actor, 'users'),
+    selected.userIds?.length
+      ? searchBusinessServiceFormOptions(actor, 'users', '', selected.userIds)
+      : [],
+    prisma.businessService.findMany({
+      where: {
+        AND: [
+          businessServiceReadWhere(actor),
+          selected.businessServiceId ? { id: { not: selected.businessServiceId } } : {},
+        ],
+      },
+      orderBy: { name: 'asc' },
+      take: 200,
+      select: { id: true, name: true },
+    }),
+    prisma.escalationPolicy.findMany({
+      where: { archivedAt: null },
+      orderBy: { name: 'asc' },
+      take: 200,
+      select: { id: true, name: true },
+    }),
+  ]);
   const merge = (first: Option[], extra: Option[]) => {
     const known = new Set(first.map(option => option.id));
     return [...first, ...extra.filter(option => !known.has(option.id))];
@@ -102,6 +115,7 @@ export async function loadBusinessServiceFormOptions(
   return {
     services: merge(services, selectedServices),
     teams,
+    escalationPolicies,
     users: merge(users, selectedUsers),
     businessServices: merge(
       businessServices.map(row => ({ ...row, hint: null })),
