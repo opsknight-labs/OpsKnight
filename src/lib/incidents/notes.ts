@@ -37,12 +37,13 @@ export async function addIncidentNoteDomainCommand(
     const { incidentId, content, actor } = input;
     const actorName = actor.name || 'API User';
 
-    const incident = await tx.incident.findUnique({
+    // Existence check and updatedAt bump in one write, so open incident pages (live refresh) see the note.
+    const touched = await tx.incident.updateMany({
       where: { id: incidentId },
-      select: { id: true },
+      data: { updatedAt: new Date() },
     });
 
-    if (!incident) {
+    if (touched.count === 0) {
       throw new AppError({
         code: 'INCIDENT_NOT_FOUND',
         userMessage: `Incident with id '${incidentId}' was not found.`,
