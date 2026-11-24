@@ -3,6 +3,7 @@
 import { Button, FormField, Switch } from '@/components/ui';
 import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
 import { Globe, Shield, Link2, Mail } from 'lucide-react';
+import StatusPageDomainCheck from '@/components/status-page/StatusPageDomainCheck';
 import type { StatusPageConfigState } from './useStatusPageConfigState';
 
 export default function GeneralSection({ ctx }: { ctx: StatusPageConfigState }) {
@@ -134,6 +135,11 @@ export default function GeneralSection({ ctx }: { ctx: StatusPageConfigState }) 
             helperText="Full custom domain pointing to your status page."
           />
         </div>
+        <StatusPageDomainCheck
+          pageId={statusPage.id}
+          savedDomain={statusPage.customDomain ?? null}
+          unsaved={(formData.customDomain || '') !== (statusPage.customDomain || '')}
+        />
       </StatusPageSectionCard>
 
       <StatusPageSectionCard

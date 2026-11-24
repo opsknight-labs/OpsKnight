@@ -15,7 +15,11 @@ export default function Services2Section({ ctx }: { ctx: StatusPageConfigState }
     privacySettings,
     setPrivacySettings,
     hasSelectedRegions,
+    statusPage,
   } = ctx;
+  const viaBusinessServiceIds = new Set(
+    statusPage.services.filter(row => row.viaBusinessService).map(row => row.serviceId)
+  );
   return (
     <StatusPageServicesManager
       allServices={allServices}
@@ -28,6 +32,7 @@ export default function Services2Section({ ctx }: { ctx: StatusPageConfigState }
       privacySettings={privacySettings}
       setPrivacySettings={setPrivacySettings}
       hasSelectedRegions={hasSelectedRegions}
+      viaBusinessServiceIds={viaBusinessServiceIds}
     />
   );
 }

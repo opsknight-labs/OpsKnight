@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import { isCheckableHostname, mapDomainDnsResult } from '@/lib/status-pages/domain-dns';
 
 const base = { domain: 'status.acme.com', appHost: 'app.ops.io', appAddresses: ['1.1.1.1'] };
@@ -31,8 +32,6 @@ describe('domain DNS mapping', () => {
     expect(isCheckableHostname('status.acme.com')).toBe(true);
   });
 });
-
-import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 
 describe('status page manage gate (domain check, override, IP allow-list writers)', () => {
   const actor = (role: string) =>

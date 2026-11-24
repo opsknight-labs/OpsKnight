@@ -39,6 +39,11 @@ import {
   type StatusPageColorScheme,
   type StatusPageThemeDensity,
 } from '@/lib/status-pages/theme-contract';
+import {
+  MAX_IP_ALLOW_ENTRIES,
+  isValidIpAllowEntry,
+  normalizeIpAllowList,
+} from '@/lib/status-pages/ip-allow-list';
 
 export type StatusPageBranding = {
   logoUrl?: string;
@@ -138,6 +143,7 @@ export type StatusPageConfigProps = {
     allowedCustomFields?: string[];
     dataRetentionDays?: number | null;
     authProvider?: string | null;
+    ipAllowList?: string[];
     uptimeExcellentThreshold?: number;
     uptimeGoodThreshold?: number;
     services: Array<{
@@ -146,6 +152,8 @@ export type StatusPageConfigProps = {
       displayName?: string | null;
       showOnPage: boolean;
       order: number;
+      /** True while the row exists only because a business service on the page contains it. */
+      viaBusinessService?: boolean;
       service: {
         id: string;
         name: string;
@@ -414,7 +422,14 @@ export function useStatusPageConfigState({
   const [privacySettings, setPrivacySettings] =
     useState<PrivacySettings>(getInitialPrivacySettings);
 
+  const [ipAllowListText, setIpAllowListText] = useState(() =>
+    (statusPage.ipAllowList ?? []).join('\n')
+  );
+  const ipAllowListEntries = normalizeIpAllowList(ipAllowListText.split(/[\n,]+/));
+  const ipAllowListInvalid = ipAllowListEntries.filter(entry => !isValidIpAllowEntry(entry));
+
   const handleDiscardChanges = () => {
+    setIpAllowListText((statusPage.ipAllowList ?? []).join('\n'));
     setFormData(getInitialFormData());
     setPrivacySettings(getInitialPrivacySettings());
     setSelectedServices(getInitialSelectedServices());
@@ -534,6 +549,14 @@ export function useStatusPageConfigState({
     ) {
       return;
     }
+    if (ipAllowListInvalid.length > 0 || ipAllowListEntries.length > MAX_IP_ALLOW_ENTRIES) {
+      setError(
+        ipAllowListInvalid.length > 0
+          ? `Fix the IP allow-list before saving: ${ipAllowListInvalid.slice(0, 3).join(', ')} is not a valid address or CIDR range.`
+          : `The IP allow-list can hold at most ${MAX_IP_ALLOW_ENTRIES} entries.`
+      );
+      return;
+    }
     setError(null);
 
     startTransition(async () => {
@@ -624,6 +647,7 @@ export function useStatusPageConfigState({
                 dataRetentionDays: privacySettings.dataRetentionDays,
                 requireAuth: privacySettings.requireAuth,
                 authProvider: privacySettings.authProvider,
+                ipAllowList: ipAllowListEntries,
                 showServiceOwners: formData.showServiceOwners,
                 showServiceSlaTier: formData.showServiceSlaTier,
                 showChangelog: formData.showChangelog,
@@ -938,6 +962,10 @@ export function useStatusPageConfigState({
   })();
 
   return {
+    ipAllowListText,
+    setIpAllowListText,
+    ipAllowListEntries,
+    ipAllowListInvalid,
     browserTimeZone,
     router,
     isPending,

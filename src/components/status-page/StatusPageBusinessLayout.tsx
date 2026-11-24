@@ -1,8 +1,25 @@
 'use client';
 
 import { useState } from 'react';
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, ArrowUpRight, Check } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpRight, Check, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
@@ -13,7 +30,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/shadcn/dialog';
 import { STATUS_OVERRIDE_VALUES } from '@/lib/status-pages/status-override';
+import { describeLocalZone, describeOverrideEffect } from '@/lib/status-pages/override-preview';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 
 export type StatusPageServiceLayout = 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
@@ -48,6 +74,15 @@ function localInputValue(iso: string | null) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
+function browserZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** Summary row plus a dialog: pin a business service's public status, or clear the pin. */
 function OverrideControl({
   name,
   value,
@@ -57,60 +92,184 @@ function OverrideControl({
   value: BusinessServiceOverride;
   onApply: (next: BusinessServiceOverride) => Promise<string | null>;
 }) {
+  const [open, setOpen] = useState(false);
   const [status, setStatus] = useState(value.status ?? COMPUTED);
   const [until, setUntil] = useState(localInputValue(value.until));
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const zone = browserZone();
+  const untilIso = status === COMPUTED || !until ? null : new Date(until).toISOString();
   const dirty = status !== (value.status ?? COMPUTED) || until !== localInputValue(value.until);
-  const apply = async () => {
+  const invalid = status !== COMPUTED && until !== '' && Number.isNaN(new Date(until).getTime());
+  const effect = describeOverrideEffect({
+    status: status === COMPUTED ? null : status,
+    until: untilIso,
+    timeZone: zone,
+  });
+  const current = value.status
+    ? describeOverrideEffect({ status: value.status, until: value.until, timeZone: zone })
+    : 'Shown automatically from incidents.';
+  const submit = async (next: BusinessServiceOverride) => {
     setPending(true);
-    setError(
-      await onApply({
-        status: status === COMPUTED ? null : status,
-        until: status === COMPUTED || !until ? null : new Date(until).toISOString(),
-      })
-    );
+    const failure = await onApply(next);
     setPending(false);
+    setError(failure);
+    if (!failure) setOpen(false);
+  };
+  const reset = (next: boolean) => {
+    setOpen(next);
+    if (next) {
+      setStatus(value.status ?? COMPUTED);
+      setUntil(localInputValue(value.until));
+      setError(null);
+    }
   };
   return (
-    <div className="flex flex-wrap items-end gap-2">
-      <label className="space-y-1 text-xs text-muted-foreground">
-        <span className="block">Public status</span>
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="h-8 w-44 text-xs" aria-label={`Public status of ${name}`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={COMPUTED}>Automatic (from incidents)</SelectItem>
-            {STATUS_OVERRIDE_VALUES.map(option => (
-              <SelectItem key={option} value={option}>
-                {statusPresentation(option).label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
-      {status !== COMPUTED && (
-        <label className="space-y-1 text-xs text-muted-foreground">
-          <span className="block">Until (blank = 30 days)</span>
-          <Input
-            type="datetime-local"
-            value={until}
-            onChange={event => setUntil(event.target.value)}
-            className="h-8 w-48 text-xs"
-            aria-label={`Override of ${name} ends`}
-          />
-        </label>
-      )}
-      <Button type="button" size="sm" variant="outline" disabled={!dirty || pending} onClick={apply}>
-        {pending ? 'Applying…' : 'Apply now'}
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span className={cn('text-muted-foreground', value.status && 'font-medium text-foreground')}>
+        {current}
+      </span>
+      <Button type="button" size="sm" variant="outline" onClick={() => reset(true)}>
+        {value.status ? 'Change override' : 'Override status'}
+        <span className="sr-only"> for {name}</span>
       </Button>
-      {error && (
-        <p role="alert" className="basis-full text-xs text-destructive">
-          {error}
-        </p>
+      {value.status && (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={pending}
+          onClick={() => submit({ status: null, until: null })}
+        >
+          Clear<span className="sr-only"> override for {name}</span>
+        </Button>
       )}
+      <Dialog open={open} onOpenChange={reset}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Override status of {name}</DialogTitle>
+            <DialogDescription>
+              Pins what visitors see, ignoring incidents, until the end time. Applied immediately,
+              not with the settings save.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="block space-y-1 text-xs text-muted-foreground">
+              <span className="block">Public status</span>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger
+                  className="h-9 w-full text-sm"
+                  aria-label={`Public status of ${name}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={COMPUTED}>Automatic (from incidents)</SelectItem>
+                  {STATUS_OVERRIDE_VALUES.map(option => (
+                    <SelectItem key={option} value={option}>
+                      {statusPresentation(option).label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            {status !== COMPUTED && (
+              <label className="block space-y-1 text-xs text-muted-foreground">
+                <span className="block">Ends (blank = 30 days)</span>
+                <Input
+                  type="datetime-local"
+                  value={until}
+                  onChange={event => setUntil(event.target.value)}
+                  className="h-9 text-sm"
+                  aria-describedby="override-zone"
+                />
+                <span id="override-zone" className="block">
+                  Your time zone: {describeLocalZone(zone, new Date())}. The page itself shows the
+                  end in UTC.
+                </span>
+              </label>
+            )}
+            <p
+              aria-live="polite"
+              className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-foreground"
+            >
+              {effect}
+            </p>
+            {error && (
+              <p role="alert" className="text-xs text-destructive">
+                {error}
+              </p>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => reset(false)}>
+              Cancel
+            </Button>
+            {value.status && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => submit({ status: null, until: null })}
+              >
+                Clear override
+              </Button>
+            )}
+            <Button
+              type="button"
+              disabled={!dirty || pending || invalid}
+              onClick={() =>
+                submit({ status: status === COMPUTED ? null : status, until: untilIso })
+              }
+            >
+              {pending ? 'Applying…' : 'Apply now'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+/** One draggable row. The grip is the only drag handle so inputs inside stay usable. */
+function SortableRow({
+  id,
+  label,
+  children,
+}: {
+  id: string;
+  label: string;
+  children: (grip: React.ReactNode) => React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+  const grip = (
+    <button
+      type="button"
+      ref={setActivatorNodeRef}
+      {...attributes}
+      {...listeners}
+      aria-label={`Drag to reorder ${label}. Space to pick up, arrow keys to move.`}
+      className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+    >
+      <GripVertical className="h-3.5 w-3.5" aria-hidden />
+    </button>
+  );
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn('space-y-2 bg-card px-3 py-2 text-sm', isDragging && 'relative z-10 shadow-md')}
+    >
+      {children(grip)}
+    </li>
   );
 }
 
@@ -158,6 +317,16 @@ export default function StatusPageBusinessLayout({
   const byId = new Map(businessServices.map(item => [item.id, item]));
   const selected = selectedIds.flatMap(id => (byId.has(id) ? [byId.get(id)!] : []));
   const available = businessServices.filter(item => !selectedIds.includes(item.id));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const from = selectedIds.indexOf(String(active.id));
+    const to = selectedIds.indexOf(String(over.id));
+    if (from >= 0 && to >= 0) onSelectedIdsChange(arrayMove(selectedIds, from, to));
+  };
   const move = (index: number, delta: number) => {
     const next = [...selectedIds];
     const [item] = next.splice(index, 1);
@@ -238,108 +407,130 @@ export default function StatusPageBusinessLayout({
           ) : (
             <>
               {selected.length > 0 && (
-                <ol className="divide-y divide-border rounded-lg border border-border">
-                  {selected.map((item, index) => {
-                    const config = { ...DEFAULT_CONFIG, ...configs[item.id] };
-                    const override = overrides[item.id];
-                    return (
-                      <li key={item.id} className="space-y-2 px-3 py-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 text-xs text-muted-foreground tabular-nums">
-                            {index + 1}
-                          </span>
-                          <span
-                            className={cn(
-                              'min-w-0 flex-1 truncate font-medium',
-                              !config.showOnPage && 'text-muted-foreground line-through'
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={onDragEnd}
+                >
+                  <SortableContext
+                    items={selected.map(item => item.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <ol className="divide-y divide-border rounded-lg border border-border">
+                      {selected.map((item, index) => {
+                        const config = { ...DEFAULT_CONFIG, ...configs[item.id] };
+                        const override = overrides[item.id];
+                        return (
+                          <SortableRow key={item.id} id={item.id} label={item.name}>
+                            {grip => (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  {grip}
+                                  <span className="w-5 text-xs text-muted-foreground tabular-nums">
+                                    {index + 1}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      'min-w-0 flex-1 truncate font-medium',
+                                      !config.showOnPage && 'text-muted-foreground line-through'
+                                    )}
+                                  >
+                                    {item.name}
+                                  </span>
+                                  <span className="hidden text-xs text-muted-foreground sm:inline tabular-nums">
+                                    {item.memberServiceIds.length}{' '}
+                                    {item.memberServiceIds.length === 1 ? 'service' : 'services'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    aria-label={`Move ${item.name} up`}
+                                    disabled={index === 0}
+                                    onClick={() => move(index, -1)}
+                                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                                  >
+                                    <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={`Move ${item.name} down`}
+                                    disabled={index === selected.length - 1}
+                                    onClick={() => move(index, 1)}
+                                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                                  >
+                                    <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onSelectedIdsChange(selectedIds.filter(id => id !== item.id))
+                                    }
+                                    className="rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                                {onConfigChange && (
+                                  <div className="flex flex-wrap items-end gap-3 pl-7">
+                                    <label className="space-y-1 text-xs text-muted-foreground">
+                                      <span className="block">Name on page</span>
+                                      <Input
+                                        value={config.displayName}
+                                        placeholder={item.name}
+                                        maxLength={200}
+                                        onChange={event =>
+                                          onConfigChange(item.id, {
+                                            displayName: event.target.value,
+                                          })
+                                        }
+                                        className="h-8 w-52 text-xs"
+                                        aria-label={`Name of ${item.name} on this page`}
+                                      />
+                                    </label>
+                                    <label className="flex h-8 items-center gap-1.5 text-xs">
+                                      <input
+                                        type="checkbox"
+                                        checked={config.showOnPage}
+                                        onChange={event =>
+                                          onConfigChange(item.id, {
+                                            showOnPage: event.target.checked,
+                                          })
+                                        }
+                                      />
+                                      Show on page
+                                    </label>
+                                    {layout === 'BUSINESS_EXPANDABLE' && (
+                                      <label className="flex h-8 items-center gap-1.5 text-xs">
+                                        <input
+                                          type="checkbox"
+                                          checked={config.showMembers}
+                                          onChange={event =>
+                                            onConfigChange(item.id, {
+                                              showMembers: event.target.checked,
+                                            })
+                                          }
+                                        />
+                                        List its services
+                                      </label>
+                                    )}
+                                  </div>
+                                )}
+                                {onOverride && override && (
+                                  <div className="pl-7">
+                                    <OverrideControl
+                                      name={item.name}
+                                      value={override}
+                                      onApply={next => onOverride(item.id, next)}
+                                    />
+                                  </div>
+                                )}
+                              </>
                             )}
-                          >
-                            {item.name}
-                          </span>
-                          <span className="hidden text-xs text-muted-foreground sm:inline tabular-nums">
-                            {item.memberServiceIds.length}{' '}
-                            {item.memberServiceIds.length === 1 ? 'service' : 'services'}
-                          </span>
-                          <button
-                            type="button"
-                            aria-label={`Move ${item.name} up`}
-                            disabled={index === 0}
-                            onClick={() => move(index, -1)}
-                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-                          >
-                            <ArrowUp className="h-3.5 w-3.5" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Move ${item.name} down`}
-                            disabled={index === selected.length - 1}
-                            onClick={() => move(index, 1)}
-                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
-                          >
-                            <ArrowDown className="h-3.5 w-3.5" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onSelectedIdsChange(selectedIds.filter(id => id !== item.id))
-                            }
-                            className="rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        {onConfigChange && (
-                          <div className="flex flex-wrap items-end gap-3 pl-7">
-                            <label className="space-y-1 text-xs text-muted-foreground">
-                              <span className="block">Name on page</span>
-                              <Input
-                                value={config.displayName}
-                                placeholder={item.name}
-                                maxLength={200}
-                                onChange={event =>
-                                  onConfigChange(item.id, { displayName: event.target.value })
-                                }
-                                className="h-8 w-52 text-xs"
-                                aria-label={`Name of ${item.name} on this page`}
-                              />
-                            </label>
-                            <label className="flex h-8 items-center gap-1.5 text-xs">
-                              <input
-                                type="checkbox"
-                                checked={config.showOnPage}
-                                onChange={event =>
-                                  onConfigChange(item.id, { showOnPage: event.target.checked })
-                                }
-                              />
-                              Show on page
-                            </label>
-                            {layout === 'BUSINESS_EXPANDABLE' && (
-                              <label className="flex h-8 items-center gap-1.5 text-xs">
-                                <input
-                                  type="checkbox"
-                                  checked={config.showMembers}
-                                  onChange={event =>
-                                    onConfigChange(item.id, { showMembers: event.target.checked })
-                                  }
-                                />
-                                List its services
-                              </label>
-                            )}
-                          </div>
-                        )}
-                        {onOverride && override && (
-                          <div className="pl-7">
-                            <OverrideControl
-                              name={item.name}
-                              value={override}
-                              onApply={next => onOverride(item.id, next)}
-                            />
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ol>
+                          </SortableRow>
+                        );
+                      })}
+                    </ol>
+                  </SortableContext>
+                </DndContext>
               )}
               {available.length > 0 && (
                 <div className="flex flex-wrap gap-1.5" aria-label="Add a business service">
