@@ -23,7 +23,8 @@ esac
 export ENCRYPTION_KEY="${TEST_ENCRYPTION_KEY:-68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba}"
 export NODE_ENV=test VITEST_USE_REAL_DB=1 DATABASE_URL="$TEST_DATABASE_URL"
 
-echo "🗄️  Preparing $db_name (migrate, indexes, validation)..."
+# Creates a database on the same server if it is missing (args: url).
+ensure_db() {
 node -e '
 const { Client } = require("pg");
 const url = new URL(process.argv[1]); const name = url.pathname.slice(1); url.pathname = "/postgres";
@@ -33,7 +34,11 @@ c.connect()
   .then(r => (r.rowCount ? null : c.query(`CREATE DATABASE "${name}"`)))
   .then(() => c.end())
   .catch(e => { console.error("❌ Cannot reach PostgreSQL:", e.message); process.exit(1); });
-' "$TEST_DATABASE_URL"
+' "$1"
+}
+
+echo "🗄️  Preparing $db_name (migrate, indexes, validation)..."
+ensure_db "$TEST_DATABASE_URL"
 npx prisma migrate deploy
 npm run prisma:indexes:status-platform
 npm run prisma:validate
@@ -52,9 +57,22 @@ npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 \
   --exclude tests/integration/oidc-linking-scale-database.test.ts \
   --exclude tests/integration/oidc-team-mapping-database.test.ts
 
-echo "🧪 Database secret operator scripts and ingestion durability..."
-npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/db-secret-scripts.test.ts
-npx vitest run --config vitest.ingestion.config.ts
+# Same server, the database name each certification insists on (as in CI).
+url_for() { node -e 'const u = new URL(process.argv[1]); u.pathname = "/" + process.argv[2]; u.search = process.argv[3] || ""; console.log(u.toString())' "$@"; }
+
+SECRET_URL="$(url_for "$TEST_DATABASE_URL" pr847_test '?schema=public')"
+echo "🧪 Database secret operator scripts (pr847_test)..."
+ensure_db "$SECRET_URL"
+DATABASE_URL="$SECRET_URL" npx prisma migrate deploy
+DATABASE_URL="$SECRET_URL" DB_SECRET_SCRIPTS_CERTIFICATION=1 npx vitest run --no-file-parallelism \
+  --maxWorkers=1 tests/integration/db-secret-scripts.test.ts
+
+# Ingestion certification insists on its own localhost database named ingestion_test_*, as in CI.
+INGESTION_URL="$(url_for "$TEST_DATABASE_URL" ingestion_test_local '?connection_limit=5')"
+echo "🧪 Ingestion durability (ingestion_test_local)..."
+ensure_db "$INGESTION_URL"
+DATABASE_URL="$INGESTION_URL" npx prisma migrate deploy
+DATABASE_URL="$INGESTION_URL" npx vitest run --config vitest.ingestion.config.ts
 
 # Integration runs rewrite these generated reports; never push them by accident.
 git checkout -- plans/ docs/automation/load-results.json 2>/dev/null || true
