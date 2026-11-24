@@ -244,7 +244,10 @@ function AnnouncementCard({ item, timeZone }: { item: PublicAnnouncement; timeZo
         <ClampedDesc text={item.message} className="status-v3-announcement-pill__desc" />
       )}
 
-      <AffectsChips services={item.affectedServices} regions={item.affectedRegions} />
+      <AffectsChips
+        services={[...(item.affectedBusinessServices ?? []), ...(item.affectedServices ?? [])]}
+        regions={item.affectedRegions}
+      />
     </div>
   );
 }
@@ -288,7 +291,9 @@ function ChangelogCard({ item, timeZone }: { item: PublicChangelogEntry; timeZon
       {item.message && (
         <ClampedDesc text={item.message} className="status-v3-changelog-pill__desc" />
       )}
-      <ChangelogAffects services={item.affectedServices} />
+      <ChangelogAffects
+        services={[...(item.affectedBusinessServices ?? []), ...(item.affectedServices ?? [])]}
+      />
     </div>
   );
 }
@@ -315,7 +320,10 @@ function ChangelogV3Inner({
     <section className="status-v3-changelog-inline" aria-labelledby="status-v3-changelog-heading">
       <div className="status-v3-announcements-inline__head">
         <div className="status-v3-announcements-inline__title-wrap">
-          <h2 id="status-v3-changelog-heading" className="status-section-title status-v3-announcements-inline__title">
+          <h2
+            id="status-v3-changelog-heading"
+            className="status-section-title status-v3-announcements-inline__title"
+          >
             Changelog
           </h2>
           <span className="status-v3-announcements-inline__subtitle">

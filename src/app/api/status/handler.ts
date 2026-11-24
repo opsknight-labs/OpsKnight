@@ -106,6 +106,13 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
           statusLegacy: legacyPublicStatus(service.status),
         })),
         incidents: snapshot.incidents,
+        // Additive: present only when the page has them, so existing consumers see no change.
+        ...(snapshot.page.serviceLayout
+          ? { page: { serviceLayout: snapshot.page.serviceLayout } }
+          : {}),
+        ...(snapshot.businessServices ? { businessServices: snapshot.businessServices } : {}),
+        ...(snapshot.maintenance ? { maintenance: snapshot.maintenance } : {}),
+        ...(snapshot.announcements?.length ? { announcements: snapshot.announcements } : {}),
         metrics: {
           uptime: snapshot.services.map(service => ({
             serviceId: service.id,

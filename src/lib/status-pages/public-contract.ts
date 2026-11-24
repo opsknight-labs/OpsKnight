@@ -76,7 +76,7 @@ export type PublicServiceLayout = 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
 
 /**
  * A customer-facing capability (Checkout, Payments) made of published technical services.
- * Status is the worst member status; uptime is the weakest member's; history is merged.
+ * Status is the worst member status; uptime is the union of member downtime; history is merged.
  */
 export interface PublicBusinessService {
   id: string;

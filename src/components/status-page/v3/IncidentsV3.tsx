@@ -176,6 +176,7 @@ const IncidentCard = memo(function IncidentCard({
 
   const hasService = Boolean(incident.service?.name);
   const hasRegions = Boolean(incident.service?.regions?.length);
+  const businessServices = incident.businessServices ?? [];
   const hasUpdates = Boolean(incident.updates?.length);
   const hasDescription = Boolean(incident.description);
   const isRedacted = incident.redacted === true;
@@ -347,9 +348,14 @@ const IncidentCard = memo(function IncidentCard({
           </div>
         )}
 
-        {(hasService || hasRegions) && (
+        {(hasService || hasRegions || businessServices.length > 0) && (
           <div className="status-v3-incident-pill__affects">
             <span className="status-v3-incident-pill__affected-label">Affects:</span>
+            {businessServices.map(item => (
+              <span key={item.id} className="status-v3-chip status-v3-chip--muted">
+                {item.name}
+              </span>
+            ))}
             {hasService && <span className="status-v3-chip status-v3-chip--muted">{incident.service!.name}</span>}
             {incident.service?.regions?.map(region => (
               <span key={region} className="status-v3-chip status-v3-chip--muted">
