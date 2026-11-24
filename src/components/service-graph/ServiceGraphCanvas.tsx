@@ -148,6 +148,8 @@ export type ServiceGraphCanvasProps = {
   grouped: boolean;
   selectedKey: string | null;
   canEdit: boolean;
+  /** A connection starts from the dependent service, which must belong to one of these teams; null = any. */
+  editableTeamIds?: readonly string[] | null;
   onSelect: (key: string | null) => void;
   /** Dragged from `dependentId` to `dependencyId` (both technical services). */
   onConnect: (dependentId: string, dependencyId: string) => void;
@@ -160,6 +162,7 @@ export default function ServiceGraphCanvas({
   grouped,
   selectedKey,
   canEdit,
+  editableTeamIds = null,
   onSelect,
   onConnect,
   onLinkClick,
@@ -244,6 +247,7 @@ export default function ServiceGraphCanvas({
     [links]
   );
 
+  const itemByKey = useMemo(() => new Map(items.map(item => [item.key, item])), [items]);
   const byKey = useMemo(() => new Map(links.map(link => [link.key, link])), [links]);
   // Hover/selection highlight is a style rule, so nodes and edges keep their identity while the
   // pointer moves (re-creating 2000 nodes per hover is slow and interrupts drag-to-connect).
@@ -287,7 +291,9 @@ export default function ServiceGraphCanvas({
         isValidConnection={(connection: Connection | Edge) =>
           connection.source !== connection.target &&
           connection.source.startsWith('svc:') &&
-          connection.target.startsWith('svc:')
+          connection.target.startsWith('svc:') &&
+          (!editableTeamIds ||
+            editableTeamIds.includes(itemByKey.get(connection.source)?.teamId ?? ''))
         }
         onConnect={connection => {
           if (connection.source && connection.target)

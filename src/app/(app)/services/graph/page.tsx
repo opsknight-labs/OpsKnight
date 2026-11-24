@@ -38,7 +38,13 @@ export default async function ServiceGraphPage({
       take: 500,
     }),
   ]);
-  const canEdit = hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE);
+  // Mirrors assertCanModifyService: admins edit anything; other managers only services of teams
+  // they belong to (the dragged-from, dependent service decides).
+  const isAdmin = actor.role === 'ADMIN';
+  const editableTeamIds = isAdmin ? null : [...actor.teamIds];
+  const canEdit =
+    hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE) &&
+    (isAdmin || actor.teamIds.length > 0);
   const focusName = !graph
     ? null
     : focus?.kind === 'bs'
@@ -111,6 +117,7 @@ export default async function ServiceGraphPage({
           graph={graph}
           teams={teams}
           canEdit={canEdit}
+          editableTeamIds={editableTeamIds}
           focusName={focusName}
           initial={{
             q: first(raw?.q) ?? '',

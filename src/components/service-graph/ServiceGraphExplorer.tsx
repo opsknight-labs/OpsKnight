@@ -69,6 +69,7 @@ export default function ServiceGraphExplorer({
   graph,
   teams,
   canEdit,
+  editableTeamIds = null,
   focusName,
   initial,
 }: {
@@ -76,6 +77,8 @@ export default function ServiceGraphExplorer({
   graph: ServiceGraphView;
   teams: ReadonlyArray<{ id: string; name: string }>;
   canEdit: boolean;
+  /** Teams whose services the viewer may change; null = all (admins). */
+  editableTeamIds?: readonly string[] | null;
   focusName: string | null;
 }) {
   const router = useRouter();
@@ -267,6 +270,7 @@ export default function ServiceGraphExplorer({
                 grouped={grouped}
                 selectedKey={selectedKey}
                 canEdit={canEdit && !saving}
+                editableTeamIds={editableTeamIds}
                 onSelect={setSelectedKey}
                 onConnect={(dependentId, dependencyId) =>
                   run(() =>
