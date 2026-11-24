@@ -11,6 +11,7 @@ jobs:
   swarm-l0-validation:
     name: L0 Syntax, Config & Capacity Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       OPSKNIGHT_IMAGE: ghcr.io/opsknight-labs/opsknight:ci-test
       OPSKNIGHT_AGENT_IMAGE: ghcr.io/opsknight-labs/opsknight-agent:ci-test
@@ -141,6 +142,7 @@ jobs:
     name: L1-L5 Swarm Convergence, Scaling, Secret Rotation & Mode Switching
     needs: swarm-l0-validation
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
