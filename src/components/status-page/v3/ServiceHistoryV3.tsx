@@ -102,9 +102,11 @@ function ServiceHistoryV3Inner({
   showHistoryBars?: boolean;
   showSlaMetrics?: boolean;
 }) {
+  // Days are bucketed in UTC on purpose: the visitor's zone is only known after hydration, and
+  // re-bucketing then would redraw every bar. Timestamps elsewhere still follow the visitor.
   const days = useMemo(
-    () => (service.history ? buildPublicHistoryDays(service.history, timeZone) : []),
-    [service.history, timeZone]
+    () => (service.history ? buildPublicHistoryDays(service.history, 'UTC') : []),
+    [service.history]
   );
   const [selected, setSelected] = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -197,7 +199,7 @@ function ServiceHistoryV3Inner({
           <div
             className="status-v3-history"
             role="group"
-            aria-label={`Daily status history for ${service.name}. Arrow keys move between days, Enter opens details.`}
+            aria-label={`Daily status history for ${service.name} (days in UTC). Arrow keys move between days, Enter opens details.`}
             onKeyDown={onBarKeyDown}
           >
             {days.map((entry, index) => {

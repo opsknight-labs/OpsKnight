@@ -72,7 +72,15 @@ export default function StatusPageSnapshotView({
       }}
     >
       {autoRefresh !== false && (
-        <StatusPageAutoRefresh enabled intervalSeconds={Math.max(30, refreshInterval)} />
+        <StatusPageAutoRefresh
+          enabled
+          intervalSeconds={Math.max(30, refreshInterval)}
+          apiPath={
+            snapshot.page.slug && !snapshot.page.isDefault
+              ? `/api/status/${encodeURIComponent(snapshot.page.slug)}`
+              : '/api/status'
+          }
+        />
       )}
       <StatusPageV3
         snapshot={snapshot}

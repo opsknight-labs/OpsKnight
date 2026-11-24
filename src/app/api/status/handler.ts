@@ -5,13 +5,9 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
-import { createHash } from 'node:crypto';
 import { observeOperationalHistogram } from '@/lib/metrics/operational/registry';
 import { getStatusPageSnapshotByRoute } from '@/lib/status-pages/snapshot';
-import {
-  PRIVATE_STATUS_CACHE_CONTROL,
-  PUBLIC_STATUS_CACHE_CONTROL,
-} from '@/lib/status-pages/cache-policy';
+import { etagMatches, statusCacheControl, statusEtag } from '@/lib/status-pages/cache-policy';
 import { getAppUrl } from '@/lib/app-config';
 import {
   extractStatusSessionToken,
@@ -126,14 +122,11 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
         projection: { revision: snapshot.revision, stale: projected.stale },
       };
       const headers: Record<string, string> = {
-        'Cache-Control':
-          statusPage.requireAuth || statusPage.statusApiRequireToken
-            ? PRIVATE_STATUS_CACHE_CONTROL
-            : PUBLIC_STATUS_CACHE_CONTROL,
+        'Cache-Control': statusCacheControl(statusPage),
         ...(projected.stale ? { Warning: '110 - "Response is stale"' } : {}),
       };
-      const etag = `"${createHash('sha256').update(JSON.stringify(responseData)).digest('base64url')}"`;
-      if (req.headers.get('if-none-match') === etag) {
+      const etag = statusEtag([statusPage.id, snapshot.revision, projected.stale]);
+      if (etagMatches(req.headers.get('if-none-match'), etag)) {
         return new NextResponse(null, { status: 304, headers: { ...headers, ETag: etag } });
       }
       return jsonOk(responseData, 200, { ...headers, ETag: etag });
