@@ -35,6 +35,8 @@ feat/* fix/* ──PR (squash)──▶ develop ──release PR (merge commit)�
 | Tag `vX.Y.Z-rc.N` | `ghcr.io/opsknight-labs/opsknight:X.Y.Z-rc.N` (and agent), GitHub pre-release | Release candidates |
 | Tag `vX.Y.Z` | `ghcr.io/opsknight-labs/opsknight:{X.Y.Z,X.Y,X,latest}`, agent, pgbouncer, SBOM, GitHub release | Users |
 
+**Docker Hub:** when the repo variable `DOCKERHUB_NAMESPACE` and the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are set, the release job also copies the published tags to `docker.io/<namespace>/{opsknight,opsknight-agent,opsknight-pgbouncer}` with identical digests (`scripts/ci/mirror-dockerhub.sh`). Release candidates copy only their own tag. A Docker Hub failure does not fail the release. To backfill existing tags by hand: `DOCKERHUB_NAMESPACE=opsknight GHCR_TOKEN=$(gh auth token) scripts/ci/mirror-dockerhub.sh all` after `docker login`.
+
 **Release-tag approval:** builds and checks run unattended. Publishing to users waits for approval in the **`production`** environment, so open the run and click **Review deployments → Approve**.
 
 ## Release (vX.Y.0)
