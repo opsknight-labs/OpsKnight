@@ -5,6 +5,7 @@ import IncidentInsights, {
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
 import { readPayload } from '@/lib/payload-reader';
+import { priorityReason } from '@/lib/incidents/priority-reason';
 import IncidentLiveRefresh from '@/components/incident/IncidentLiveRefresh';
 import CardSkeleton from '@/components/incident/detail/CardSkeleton';
 import { getCachedOrFetch } from '@/lib/realtime-cache';
@@ -599,6 +600,12 @@ export default async function IncidentDetailScreen({
     canManage: canManageIncident,
     routePrefix,
     baseline: serviceBaseline,
+    priorityReason: priorityReason({
+      priority: storedIncident.priority ?? null,
+      source: storedIncident.classificationPrioritySource ?? null,
+      rule: storedIncident.classificationRule ?? null,
+      slaRule: storedIncident.slaPolicyRule ?? null,
+    }),
     escalationHealth: escalationInBand ? (
       <EscalationExecutionHealth health={escalationHealth} variant="inline" />
     ) : null,

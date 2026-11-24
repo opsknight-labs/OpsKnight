@@ -107,6 +107,15 @@ export default function IncidentSLABadges({ sla, className }: IncidentSLABadgesP
           })}
         </ul>
       )}
+      {/* Paused time already discounted from the targets (on the SLA state, no extra read). */}
+      {sla?.valid && sla.clock.pausedMs >= 60_000 && !sla.clock.paused && (
+        <span
+          className="text-2xs text-muted-foreground"
+          title="Time the SLA clock was paused (snoozed, suppressed or in maintenance); not counted against the targets"
+        >
+          paused {formatTimeMinutesMs(sla.clock.pausedMs)} in total
+        </span>
+      )}
     </div>
   );
 }

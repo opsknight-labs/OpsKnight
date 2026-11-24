@@ -68,6 +68,8 @@ type IncidentHeaderProps = {
   embedded?: boolean;
   /** Properties panel for the page's side column: one row per field, label left and value right. */
   panel?: boolean;
+  /** "Set by rule “payments-high” · SLA rule “P1”": why the incident has its priority. */
+  priorityReason?: string | null;
   /** The service's usual response times, for "usually resolved in ~45m" under Opened. */
   baseline?: BaselineLabel | null;
   /** Escalation execution health, shown as the second line of the Escalation field. */
@@ -97,6 +99,7 @@ export default function IncidentHeader({
   panel = false,
   escalationHealth,
   baseline = null,
+  priorityReason = null,
 }: IncidentHeaderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -189,6 +192,12 @@ export default function IncidentHeader({
             priority={incident.priority}
             canManage={canManage}
           />
+          {/* Why it has this priority: from the incident row, no extra read. */}
+          {priorityReason && (
+            <span className="truncate text-2xs text-muted-foreground" title={priorityReason}>
+              {priorityReason}
+            </span>
+          )}
         </div>
 
         {/* Urgency */}
