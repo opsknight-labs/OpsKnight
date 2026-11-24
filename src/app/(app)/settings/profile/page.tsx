@@ -6,6 +6,7 @@ import { userIdentityStatus } from '@/lib/users/identity-status';
 import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
 import WeeklyDigestToggle from '@/components/settings/WeeklyDigestToggle';
+import SquireHeadsUpSettings from '@/components/settings/SquireHeadsUpSettings';
 import { hasConfiguredEmailProvider, isWeeklyDigestEnabled } from '@/lib/analytics/digest';
 import QuietHoursForm from '@/components/settings/QuietHoursForm';
 import NoiseSettings from '@/components/settings/NoiseSettings';
@@ -70,6 +71,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
           pushNotificationsEnabled: true,
           whatsappNotificationsEnabled: true,
           analyticsDigest: { select: { optedOut: true } },
+          squireSettings: { select: { headsUpEnabled: true, headsUpLeadMinutes: true } },
           phoneNumber: true,
           quietHoursEnabled: true,
           quietHoursStartMinutes: true,
@@ -253,6 +255,10 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
               enabled={!user?.analyticsDigest?.optedOut}
               workspaceEnabled={await isWeeklyDigestEnabled()}
               emailReady={await hasConfiguredEmailProvider()}
+            />
+            <SquireHeadsUpSettings
+              enabled={user?.squireSettings?.headsUpEnabled ?? true}
+              leadMinutes={user?.squireSettings?.headsUpLeadMinutes ?? 60}
             />
           </>
         }

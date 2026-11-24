@@ -38,6 +38,11 @@ export function inAppNotificationHref(notification: {
     return '/settings/access';
   if (entityType === 'ACCESS_GRANT') return '/settings/access/admin#temporary-access';
   if (entityType === 'ACCESS_REVIEW') return '/settings/access/admin#access-reviews';
+  // A Squire answer finished in the background: the assistant opens on that conversation.
+  if (entityType === 'SQUIRE_CONVERSATION')
+    return entityId
+      ? `/?squire=open&conversation=${encodeURIComponent(entityId)}`
+      : '/?squire=open';
   if (!entityId) return null;
   // A personal access token about to expire: its owner's connections list.
   if (entityType === 'MCP_PERSONAL_TOKEN') return '/settings/integrations/mcp?tab=connections';

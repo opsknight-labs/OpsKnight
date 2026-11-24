@@ -114,6 +114,11 @@ describe('slash commands', () => {
     expect(matchSlashCommands('/fi', false).map(c => c.name)).toEqual(['fire']);
     expect(matchSlashCommands('/fire now', false)).toEqual([]);
     expect(matchSlashCommands('what /fire', false)).toEqual([]);
+    // Change commands are offered only on the page they act on.
+    expect(matchSlashCommands('/re', false).map(c => c.name)).not.toContain('rename');
+    expect(matchSlashCommands('/re', false, 'service').map(c => c.name)).toContain('rename');
+    expect(matchSlashCommands('/ov', false, 'schedule').map(c => c.name)).toEqual(['override']);
+    expect(matchSlashCommands('/ov', false, 'service')).toEqual([]);
   });
 
   it('opens a list from "/" that the keyboard can pick from or dismiss', () => {
@@ -201,7 +206,8 @@ describe('Squire on the status bar', () => {
     expect(document.querySelector('.sqbar-scroll.open')).not.toBeNull();
     // Motion off: the scroll fades in instead of unrolling.
     expect(document.querySelector('.sqbar-scroll.still')).not.toBeNull();
-    expect(screen.getByRole('status')).toHaveTextContent('opens me anywhere');
+    // The keyboard hint is part of the bubble; the live region announces the note itself.
+    expect(document.querySelector('.sqbar-bubble')).toHaveTextContent('opens me anywhere');
     fireEvent.click(screen.getByRole('button', { name: 'What is on fire right now?' }));
     expect(onAsk).toHaveBeenCalledWith('What is on fire right now?');
     expect(window.localStorage.getItem('opsknight.squire.delivered')).toContain('intro');
@@ -230,6 +236,30 @@ describe('Squire on the status bar', () => {
       await vi.advanceTimersByTimeAsync(10);
     });
     expect(document.querySelector('.sqbar-scroll.open')).toBeNull();
+  });
+
+  it('holds a note while it is hovered and lets it go after the pointer leaves', async () => {
+    window.localStorage.setItem('opsknight.squire.delivered', JSON.stringify(['intro']));
+    // A different shift than the test above: delivered notes are remembered for the page.
+    renderCompanion(notesFor({ shifts: [shift(100, 600)] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_600);
+    });
+    const scroll = document.querySelector('.sqbar-scroll')!;
+    // React derives enter/leave from over/out.
+    fireEvent.pointerOver(scroll);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(document.querySelector('.sqbar-scroll.open')).not.toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('starts in 1h 40m');
+    fireEvent.pointerOut(scroll, { relatedTarget: document.body });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16_000);
+    });
+    expect(document.querySelector('.sqbar-scroll.open')).toBeNull();
+    // The live region stays mounted, empty between notes.
+    expect(screen.getByRole('status')).toHaveTextContent('');
   });
 
   it('rests awake, dozes after two quiet minutes, and wakes on activity', async () => {
@@ -276,7 +306,6 @@ describe('a helpful rating', () => {
         busy={false}
         last
         animated
-        contextValid
         onOutcome={() => undefined}
         onRetry={() => undefined}
         onEdit={() => undefined}

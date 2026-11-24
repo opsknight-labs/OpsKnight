@@ -644,6 +644,24 @@ async function runOnce() {
 
     await assertLease(leaseEpoch);
 
+    // Squire on-call heads-up: once per shift, within each person's lead time.
+    try {
+      const { sendSquireHeadsUps } = await import('./intelligence/squire/heads-up');
+      const headsUps = await sendSquireHeadsUps(new Date());
+      if (headsUps > 0) logger.info('[Cron] Squire heads-ups sent', { headsUps });
+    } catch (error) {
+      logger.warn('[Cron] Squire heads-ups failed', { error });
+    }
+
+    // Squire documentation sources: at most one overdue source per tick, bounded in size and time.
+    try {
+      const { syncDueDocSource } = await import('./intelligence/knowledge/doc-sources/service');
+      const docSync = await syncDueDocSource(new Date());
+      if (docSync) logger.info('[Cron] Documentation source synced', { ...docSync });
+    } catch (error) {
+      logger.warn('[Cron] Documentation source sync failed', { error });
+    }
+
     // Recurring maintenance: materialise upcoming occurrences as ordinary windows.
     try {
       const { materializeMaintenanceSchedules } = await import('./service-maintenance/schedules');

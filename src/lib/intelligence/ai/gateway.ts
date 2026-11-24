@@ -1,6 +1,10 @@
 import 'server-only';
 import {
+  APICallError,
+  EmptyResponseBodyError,
+  InvalidResponseDataError,
   Output,
+  RetryError,
   embedMany,
   generateText,
   jsonSchema,
@@ -20,6 +24,7 @@ import { safeOutboundFetch } from '@/lib/network-security';
 import { assertNotMetadataEndpoint } from './egress';
 import {
   admitAiRequest,
+  CACHE_READ_BUDGET_WEIGHT,
   estimateTokens,
   recordAiUsage,
   reserveAiTokens,
@@ -67,6 +72,8 @@ export type AiGatewayErrorCode =
   | 'ALL_PROVIDERS_FAILED'
   | 'ABORTED'
   | 'OUTPUT_INVALID'
+  /** Budget or rate-limit bookkeeping failed (database, lock): not a refusal, so retrying later may work. */
+  | 'UNAVAILABLE'
   /** The request carried no call-site tag, or was made while a list view or badge was rendering. */
   | 'CALL_SITE_REFUSED';
 
@@ -248,22 +255,75 @@ export function capOutput(value: unknown): unknown {
   return `${UNTRUSTED_DATA_PREAMBLE}\n${bounded}`;
 }
 
-function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undefined {
+/** One slow lookup (a stuck backend, a heavy query) must not hold the whole answer. */
+export const TOOL_DEADLINE_MS = 20_000;
+const TOOL_TIMED_OUT =
+  'This lookup took too long and was stopped. Answer from what you already have and say this one timed out.';
+
+export class ToolDeadlineError extends Error {
+  constructor() {
+    super('Tool deadline exceeded');
+    this.name = 'ToolDeadlineError';
+  }
+}
+
+export function withToolDeadline<T>(work: Promise<T>, ms = TOOL_DEADLINE_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new ToolDeadlineError()), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Runs one tool call under the deadline with its own signal, aborted when the deadline passes or `parent` (the
+ * SDK's per-call signal: request cancelled, step or total timeout) aborts. The tool may stop on it; a result
+ * that still arrives later finds the signal aborted and is discarded (it is settled), never recorded.
+ */
+export function runWithDeadline<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  parent?: AbortSignal,
+  ms = TOOL_DEADLINE_MS
+): Promise<T> {
+  const controller = new AbortController();
+  const signal = parent ? AbortSignal.any([parent, controller.signal]) : controller.signal;
+  return withToolDeadline(run(signal), ms).catch(error => {
+    controller.abort(error);
+    throw error;
+  });
+}
+
+export function toToolSet(
+  definitions: AiToolDefinition[] | undefined,
+  kind?: GatewayProvider['kind']
+): ToolSet | undefined {
   if (!definitions || definitions.length === 0) return undefined;
   const set: ToolSet = {};
+  const last = definitions.at(-1);
   for (const definition of definitions) {
     const execute = definition.kind === 'READ' ? definition.execute : undefined;
+    const validate = definition.validate;
     const inputSchema = jsonSchema<unknown>(
       compactToolSchema(definition.inputSchema) as Parameters<typeof jsonSchema>[0]
     );
+    // The tool list opens the prompt: a marker on its last tool caches it even when the system prompt changes.
+    // Only Anthropic reads tool-level cache options (Bedrock's tool config has no cache point).
+    const providerOptions =
+      definition === last && kind === 'ANTHROPIC' ? CACHE_HINTS.ANTHROPIC : undefined;
     set[definition.name] = execute
       ? tool<unknown, unknown>({
           description: definition.description,
           inputSchema,
-          execute: async (input: unknown) => {
+          ...(providerOptions ? { providerOptions } : {}),
+          execute: async (input: unknown, { abortSignal }) => {
             try {
-              return capOutput(await execute(input));
-            } catch {
+              return capOutput(
+                await runWithDeadline(signal => execute(input, { signal }), abortSignal)
+              );
+            } catch (error) {
+              if (error instanceof ToolDeadlineError) return TOOL_TIMED_OUT;
               // The model sees a neutral failure; details stay with the tool's own logging.
               return 'The tool failed or you are not permitted to use it.';
             }
@@ -274,31 +334,56 @@ function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undef
         tool<unknown, string>({
           description: definition.description,
           inputSchema,
-          execute: async () => PROPOSAL_ACKNOWLEDGEMENT,
+          ...(providerOptions ? { providerOptions } : {}),
+          execute: async (input: unknown) =>
+            validate && !validate(input) ? PROPOSAL_INVALID : PROPOSAL_ACKNOWLEDGEMENT,
         });
   }
   return set;
 }
 
-const PROPOSAL_ACKNOWLEDGEMENT =
-  'Shown to the user as a suggestion card. It happens only if they confirm it; do not say it has been done.';
+/** The caller still checks the card (permissions, current state), so the model is not told it was shown. */
+export const PROPOSAL_ACKNOWLEDGEMENT =
+  'Sent as a suggestion card: it is shown to the user if it is still valid, and happens only if they confirm it. Do not say it has been done or shown.';
+export const PROPOSAL_INVALID =
+  'That suggestion was not valid (check the required fields and ids) and nothing was shown. Correct it, or tell the user what you would suggest instead.';
+
+/** A proposal call the caller may present: well formed (the SDK parsed it) and accepted by its validator. */
+function validProposal(
+  call: { toolName: string; input: unknown; invalid?: boolean },
+  proposals: ReadonlyMap<string, AiToolDefinition>
+): boolean {
+  const definition = proposals.get(call.toolName);
+  if (!definition || call.invalid) return false;
+  return !definition.validate || definition.validate(call.input);
+}
+
+const proposalTools = (definitions: AiToolDefinition[] | undefined) =>
+  new Map((definitions ?? []).filter(d => d.kind === 'PROPOSE_WRITE').map(d => [d.name, d]));
 
 /**
  * The system prompt is the stable prefix of every request (rules, guidance, incident context), so providers
- * that cache prompts explicitly are told to cache it; OpenAI-style providers cache long prefixes on their own.
+ * that cache prompts explicitly are told to cache it, as is a message the caller marks as the end of a stable
+ * prefix (`cache`, e.g. the replayed history). OpenAI-style providers cache long prefixes on their own.
  */
 const CACHE_HINTS: Partial<
-  Record<GatewayProvider['kind'], Record<string, Record<string, unknown>>>
+  Record<GatewayProvider['kind'], NonNullable<ModelMessage['providerOptions']>>
 > = {
   ANTHROPIC: { anthropic: { cacheControl: { type: 'ephemeral' } } },
   BEDROCK: { bedrock: { cachePoint: { type: 'default' } } },
 };
 
-const toMessages = (request: AiGenerateRequest, kind?: GatewayProvider['kind']): ModelMessage[] =>
+export const toMessages = (
+  request: AiGenerateRequest,
+  kind?: GatewayProvider['kind']
+): ModelMessage[] =>
   request.messages.map(message => {
     const content = redactSecrets(message.content);
-    // eslint-disable-next-line security/detect-object-injection -- kind is a member of the closed provider-kind union
-    const hint = message.role === 'system' && kind ? CACHE_HINTS[kind] : undefined;
+    const hint =
+      (message.role === 'system' || message.cache) && kind
+        ? // eslint-disable-next-line security/detect-object-injection -- kind is a member of the closed provider-kind union
+          CACHE_HINTS[kind]
+        : undefined;
     return (
       hint
         ? { role: message.role, content, providerOptions: hint }
@@ -308,8 +393,8 @@ const toMessages = (request: AiGenerateRequest, kind?: GatewayProvider['kind']):
 
 /**
  * Rolling cache breakpoint: besides the system prompt's marker, the newest message of every step is marked, so
- * the next step (and the next turn) reads the whole conversation so far from cache. At most two markers are
- * live per request, within Anthropic's four.
+ * the next step (and the next turn) reads the whole conversation so far from cache. With the last tool's and
+ * the history's markers at most four are live per request, Anthropic's limit.
  */
 export function withRollingCacheBreakpoint(
   messages: ModelMessage[],
@@ -329,17 +414,100 @@ const clampSteps = (steps: number | undefined) =>
   Math.max(1, Math.min(MAX_STEPS_CEILING, steps ?? DEFAULT_MAX_STEPS));
 
 function proposedCalls(
-  steps: ReadonlyArray<{ toolCalls: ReadonlyArray<{ toolName: string; input: unknown }> }>,
+  steps: ReadonlyArray<{
+    toolCalls: ReadonlyArray<{ toolName: string; input: unknown; invalid?: boolean }>;
+  }>,
   definitions: AiToolDefinition[] | undefined
 ): AiToolCall[] {
-  const proposals = new Set(
-    (definitions ?? []).filter(d => d.kind === 'PROPOSE_WRITE').map(d => d.name)
-  );
+  const proposals = proposalTools(definitions);
   return steps.flatMap(step =>
     step.toolCalls
-      .filter(call => proposals.has(call.toolName))
+      .filter(call => validProposal(call, proposals))
       .map(call => ({ name: call.toolName, input: call.input }))
   );
+}
+
+/**
+ * Whether a failed call says something about the provider's health. Server errors, rate limits, rejected
+ * credentials and network failures do. A request the provider refused as malformed or naming a missing model
+ * (400/404/413/422) is this route's configuration, not the provider being down, so it never trips the breaker
+ * for every other capability. Our own step/idle timer counts only while nothing had come back yet: once tools
+ * ran or text streamed, the time went on our side (tools, a long answer).
+ */
+export function isProviderFault(error: unknown, progressed: boolean): boolean {
+  const cause = RetryError.isInstance(error) ? error.lastError : error;
+  if (APICallError.isInstance(cause)) {
+    const status = cause.statusCode;
+    return status === undefined || ![400, 404, 413, 422].includes(status);
+  }
+  if (InvalidResponseDataError.isInstance(cause) || EmptyResponseBodyError.isInstance(cause))
+    return true;
+  const name = (cause as { name?: unknown } | null)?.name;
+  return !progressed && (name === 'TimeoutError' || name === 'AbortError');
+}
+
+/**
+ * Prompt tokens a further step adds to the hold. A provider that caches reads the previous step's whole prompt
+ * from cache, which the budget counts at CACHE_READ_BUDGET_WEIGHT; only the rest is charged in full.
+ */
+export function stepInputEstimate(sent: number, previousPrompt: number, caches: boolean): number {
+  const cached = caches ? Math.min(previousPrompt, sent) : 0;
+  return Math.max(0, sent - Math.round(cached * (1 - CACHE_READ_BUDGET_WEIGHT)));
+}
+
+/** The whole-call cap: every step may use its model time plus a tool deadline. */
+function timeouts(requestTimeoutMs: number, maxSteps: number | undefined, streaming: boolean) {
+  const stepMs = requestTimeoutMs + TOOL_DEADLINE_MS;
+  return {
+    totalMs: clampSteps(maxSteps) * stepMs,
+    stepMs,
+    // Idle between stream parts; a running tool sends nothing until its result, so it gets its deadline.
+    ...(streaming ? { chunkMs: Math.max(requestTimeoutMs, TOOL_DEADLINE_MS + 5_000) } : {}),
+  };
+}
+
+const addUsage = (a: AiUsage, b: AiUsage): AiUsage => ({
+  inputTokens: a.inputTokens + b.inputTokens,
+  outputTokens: a.outputTokens + b.outputTokens,
+  ...(a.cacheReadTokens || b.cacheReadTokens
+    ? { cacheReadTokens: (a.cacheReadTokens ?? 0) + (b.cacheReadTokens ?? 0) }
+    : {}),
+  ...(a.cacheWriteTokens || b.cacheWriteTokens
+    ? { cacheWriteTokens: (a.cacheWriteTokens ?? 0) + (b.cacheWriteTokens ?? 0) }
+    : {}),
+});
+
+/** Per-attempt loop state shared by the stop condition, the step preparation and the step callback. */
+interface LoopState {
+  /** Real usage of the steps that finished, for settling a call that fails or is cancelled later. */
+  used: AiUsage | null;
+  /** Prompt tokens of the last finished step. */
+  lastPrompt: number;
+  /** A provider that reported cache reads or writes. */
+  caching: boolean;
+  /** A tool ran: the turn has read (and recorded) evidence, so another provider must not start over. */
+  toolsRan: boolean;
+  /** The budget refused another tool step: one last step answers without tools. */
+  budgetLimited: boolean;
+}
+
+const newLoop = (): LoopState => ({
+  used: null,
+  lastPrompt: 0,
+  caching: false,
+  toolsRan: false,
+  budgetLimited: false,
+});
+
+function recordStep(
+  loop: LoopState,
+  step: { usage: Parameters<typeof usageOf>[0]; toolResults?: readonly unknown[] }
+) {
+  const usage = usageOf(step.usage);
+  loop.used = loop.used ? addUsage(loop.used, usage) : usage;
+  loop.lastPrompt = usage.inputTokens;
+  if (usage.cacheReadTokens || usage.cacheWriteTokens) loop.caching = true;
+  if (step.toolResults?.length) loop.toolsRan = true;
 }
 
 interface GatewayContextData {
@@ -367,6 +535,16 @@ export function usageOf(usage: {
  * Deterministic-first gate: every model call says where it comes from, and none may start while a list view
  * or badge is rendering. Checked before admission so a refused call costs no rate-limit slot and no tokens.
  */
+/** Budget or rate-limit bookkeeping failed: a temporary outage, never reported as a spent budget. */
+function unavailable(stage: 'admission' | 'reservation', error: unknown): never {
+  if (error instanceof AiGatewayError) throw error;
+  logger.warn('[AI] Budget bookkeeping failed', {
+    stage,
+    error: error instanceof Error ? error.name : 'error',
+  });
+  throw new AiGatewayError('UNAVAILABLE', 'AI is temporarily unavailable');
+}
+
 export function assertCallSite(request: AiGenerateRequest): void {
   const refusal = callSiteRefusal(request.context);
   if (refusal) throw new AiGatewayError('CALL_SITE_REFUSED', refusal);
@@ -375,6 +553,17 @@ export function assertCallSite(request: AiGenerateRequest): void {
 /** Prompt size estimate for a call that ended before the provider reported usage. */
 function estimatedInput(request: AiGenerateRequest): number {
   return estimateTokens(request.messages.map(message => message.content).join('\n'));
+}
+
+/**
+ * Usage for an attempt that ended before the provider reported its total: the finished steps' real usage plus
+ * the text streamed since, or the prompt estimate when no step finished.
+ */
+function unsettledUsage(request: AiGenerateRequest, loop: LoopState, pendingText = ''): AiUsage {
+  const pending = estimateTokens(pendingText);
+  return loop.used
+    ? { ...loop.used, outputTokens: loop.used.outputTokens + pending }
+    : { inputTokens: estimatedInput(request), outputTokens: pending };
 }
 
 class GatewayPort implements LanguageModelPort {
@@ -403,7 +592,7 @@ class GatewayPort implements LanguageModelPort {
       this.data.settings,
       new Date(),
       request.context.callSite
-    );
+    ).catch(error => unavailable('admission', error));
     if (!decision.allowed) {
       throw new AiGatewayError(
         decision.reason,
@@ -471,55 +660,81 @@ class GatewayPort implements LanguageModelPort {
     );
   }
 
+  /**
+   * The first hold. Only a refusal is "Daily AI budget reached"; a database or lock failure is reported as a
+   * temporary outage, so a person is never told the budget is spent when it is not.
+   */
   private async reserve(request: AiGenerateRequest, provider: GatewayProvider, structured = false) {
+    let reservation: AiReservation | null;
     try {
-      const reservation = await this.hold(request, provider, estimatedInput(request), structured);
-      if (!reservation) throw new AiGatewayError('BUDGET_EXHAUSTED', 'Daily AI budget reached');
-      return reservation;
+      reservation = await this.hold(request, provider, estimatedInput(request), structured);
     } catch (error) {
       breakers.release(provider.id);
-      throw error;
+      return unavailable('reservation', error);
     }
+    if (!reservation) {
+      breakers.release(provider.id);
+      throw new AiGatewayError('BUDGET_EXHAUSTED', 'Daily AI budget reached');
+    }
+    return reservation;
   }
 
   /** Per-step options for a tool loop: the rolling cache breakpoint. */
-  private stepper(provider: GatewayProvider, request: AiGenerateRequest) {
+  private stepper(provider: GatewayProvider, request: AiGenerateRequest, loop: LoopState) {
     const last = clampSteps(request.maxSteps) - 1;
     return ({ messages, stepNumber }: { messages: ModelMessage[]; stepNumber: number }) => ({
       messages: withRollingCacheBreakpoint(messages, provider.kind),
-      // The last allowed step must answer from what was read: a long tool loop never ends without a word.
-      ...(last > 0 && stepNumber >= last ? { toolChoice: 'none' as const } : {}),
+      // The last allowed step (or the one the budget leaves) must answer from what was read: a tool loop never
+      // ends without a word.
+      ...((last > 0 && stepNumber >= last) || loop.budgetLimited
+        ? { toolChoice: 'none' as const }
+        : {}),
     });
   }
 
   /**
-   * When a tool loop stops: at the step cap, or when the hold cannot be topped up for one more step. The
-   * top-up runs only when the loop would otherwise continue; a refusal ends it with the answer so far, so no
-   * model call is ever made unfunded.
+   * When a tool loop stops: at the step cap, or after the answer step that follows a refused top-up. The top-up
+   * runs only when the loop would otherwise continue. When the budget refuses it, one last step runs without
+   * tools so the person gets an answer from what was already read (it overruns the hold by at most that step,
+   * and is settled at its real usage), and the result says the answer was cut short.
    */
   private stopper(
     request: AiGenerateRequest,
     provider: GatewayProvider,
-    reservation: AiReservation
+    reservation: AiReservation,
+    loop: LoopState
   ): StopCondition<ToolSet> {
     const maxSteps = clampSteps(request.maxSteps);
     return async ({ steps }) => {
-      if (steps.length >= maxSteps) return true;
+      if (steps.length >= maxSteps || loop.budgetLimited) return true;
       const sent = JSON.stringify([request.messages, steps.at(-1)?.response.messages ?? []]);
       const funded = await this.hold(
         request,
         provider,
-        estimateTokens(sent),
+        stepInputEstimate(
+          estimateTokens(sent),
+          loop.lastPrompt,
+          loop.caching || Boolean(CACHE_HINTS[provider.kind])
+        ),
         false,
         reservation
-      ).catch(() => null);
-      return !funded;
+      ).catch(error => {
+        logger.warn('[AI] Could not top up the token hold', {
+          error: error instanceof Error ? error.name : 'error',
+        });
+        return null;
+      });
+      if (!funded) loop.budgetLimited = true;
+      return false;
     };
   }
 
-  private signalFor(request: AiGenerateRequest): AbortSignal {
-    const timeout = AbortSignal.timeout(this.data.settings.requestTimeoutMs);
-    return request.context.signal ? AbortSignal.any([request.context.signal, timeout]) : timeout;
+  /**
+   * The caller's signal only: step, idle and total time limits are the SDK's `timeout` (see `timeouts`), so a
+   * multi-step loop is not cut off by one request-sized timer.
+   */
+  private signalFor(request: AiGenerateRequest): AbortSignal | undefined {
+    return request.context.signal;
   }
 
   private candidates(request: AiGenerateRequest): GatewayProvider[] {
@@ -643,6 +858,8 @@ class GatewayPort implements LanguageModelPort {
                 Math.max(this.data.settings.maxOutputTokens, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
               ),
               abortSignal: this.signalFor(request),
+              // One step, no tools: the request timeout is the whole call.
+              timeout: this.data.settings.requestTimeoutMs,
               maxRetries: 1,
             });
             span.setAttribute('ai.tokens.input', generated.totalUsage.inputTokens ?? 0);
@@ -689,7 +906,8 @@ class GatewayPort implements LanguageModelPort {
           invalidOutputs += 1;
           continue;
         }
-        breakers.recordFailure(provider.id);
+        if (isProviderFault(error, false)) breakers.recordFailure(provider.id);
+        else breakers.release(provider.id);
         logger.warn('[AI] Provider call failed', {
           providerId: provider.id,
           error: error instanceof Error ? error.name : 'error',
@@ -723,6 +941,7 @@ class GatewayPort implements LanguageModelPort {
       if (!breakers.canAttempt(provider.id)) continue;
       const reservation = await this.reserve(request, provider);
       let accounted = false;
+      const loop = newLoop();
       attempts += 1;
       try {
         const result = await withSpan(
@@ -736,11 +955,13 @@ class GatewayPort implements LanguageModelPort {
             const generated = await generateText({
               model: await buildModel(provider),
               messages: toMessages(request, provider.kind),
-              tools: toToolSet(request.tools),
-              stopWhen: this.stopper(request, provider, reservation),
-              prepareStep: this.stepper(provider, request),
+              tools: toToolSet(request.tools, provider.kind),
+              stopWhen: this.stopper(request, provider, reservation, loop),
+              prepareStep: this.stepper(provider, request, loop),
+              onStepFinish: step => recordStep(loop, step),
               maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
               abortSignal: this.signalFor(request),
+              timeout: timeouts(this.data.settings.requestTimeoutMs, request.maxSteps, false),
               maxRetries: 1,
             });
             span.setAttribute('ai.tokens.input', generated.totalUsage.inputTokens ?? 0);
@@ -753,8 +974,14 @@ class GatewayPort implements LanguageModelPort {
           text: result.text,
           toolCalls: proposedCalls(result.steps, request.tools),
           usage: usageOf(result.totalUsage),
-          served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
+          served: {
+            providerId: provider.id,
+            model: provider.model,
+            fallbackDepth: depth,
+            kind: provider.kind,
+          },
           finishReason: result.finishReason,
+          ...(loop.budgetLimited ? { budgetLimited: true } : {}),
         };
         accounted = true;
         await this.finish(request, served, {}, reservation);
@@ -764,17 +991,20 @@ class GatewayPort implements LanguageModelPort {
           breakers.release(provider.id);
           throw new AiGatewayError('ABORTED', 'Request cancelled');
         }
-        breakers.recordFailure(provider.id);
+        if (isProviderFault(error, loop.toolsRan)) breakers.recordFailure(provider.id);
+        else breakers.release(provider.id);
         logger.warn('[AI] Provider call failed', {
           providerId: provider.id,
           error: error instanceof Error ? error.name : 'error',
         });
+        // Tools already ran (and recorded evidence): another provider would read everything again.
+        if (loop.toolsRan) break;
       } finally {
         if (!accounted)
           await this.finish(
             request,
             {
-              usage: { inputTokens: estimatedInput(request), outputTokens: 0 },
+              usage: unsettledUsage(request, loop),
               served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
             },
             { usageEstimated: true },
@@ -790,7 +1020,11 @@ class GatewayPort implements LanguageModelPort {
       await this.admit(request);
     } catch (error) {
       if (error instanceof AiGatewayError) {
-        yield { type: 'error', message: error.message, retryable: error.code === 'RATE_LIMITED' };
+        yield {
+          type: 'error',
+          message: error.message,
+          retryable: error.code === 'RATE_LIMITED' || error.code === 'UNAVAILABLE',
+        };
         return;
       }
       throw error;
@@ -813,12 +1047,18 @@ class GatewayPort implements LanguageModelPort {
       let reservation: AiReservation;
       try {
         reservation = await this.reserve(request, provider);
-      } catch {
-        yield { type: 'error', message: 'Daily AI budget reached', retryable: false };
+      } catch (error) {
+        const refused = error instanceof AiGatewayError && error.code === 'BUDGET_EXHAUSTED';
+        yield refused
+          ? { type: 'error', message: 'Daily AI budget reached', retryable: false }
+          : { type: 'error', message: 'AI is temporarily unavailable', retryable: true };
         return;
       }
       let emitted = false;
       let text = '';
+      // Text of the step in progress: finished steps are settled from their real usage.
+      let pendingText = '';
+      const loop = newLoop();
       // Set once this attempt's usage is accounted for (finished, or failed on the provider's side).
       let settled = false;
       const span = startSpan('intelligence.ai.stream', {
@@ -833,31 +1073,41 @@ class GatewayPort implements LanguageModelPort {
           onError: () => undefined,
           model: await buildModel(provider),
           messages: toMessages(request, provider.kind),
-          tools: toToolSet(request.tools),
-          stopWhen: this.stopper(request, provider, reservation),
-          prepareStep: this.stepper(provider, request),
+          tools: toToolSet(request.tools, provider.kind),
+          stopWhen: this.stopper(request, provider, reservation, loop),
+          prepareStep: this.stepper(provider, request, loop),
+          onStepFinish: step => {
+            recordStep(loop, step);
+            pendingText = '';
+          },
           maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
           abortSignal: this.signalFor(request),
+          timeout: timeouts(this.data.settings.requestTimeoutMs, request.maxSteps, true),
           maxRetries: 0,
         });
-        const proposals = new Set(
-          (request.tools ?? []).filter(d => d.kind === 'PROPOSE_WRITE').map(d => d.name)
-        );
+        const proposals = proposalTools(request.tools);
         for await (const part of run.fullStream) {
           if (part.type === 'text-delta') {
             emitted = true;
             text += part.text;
+            pendingText += part.text;
             yield { type: 'text-delta', delta: part.text };
           } else if (part.type === 'tool-call') {
-            // Something has been shown once a proposal is out, so a later failure must not switch provider.
+            // A malformed or rejected proposal is refused to the model (see toToolSet), never shown.
             if (proposals.has(part.toolName)) {
+              if (!validProposal(part, proposals)) continue;
+              // Something has been shown once a proposal is out, so a later failure must not switch provider.
               emitted = true;
               yield { type: 'tool-call', call: { name: part.toolName, input: part.input } };
-            } else {
+            } else if (!part.invalid) {
+              loop.toolsRan = true;
               yield { type: 'tool-start', name: part.toolName };
             }
           } else if (part.type === 'error') {
             throw part.error instanceof Error ? part.error : new Error('stream error');
+          } else if (part.type === 'abort') {
+            // A step, idle or total timeout ends the stream with an abort part rather than an error.
+            throw new DOMException('AI request timed out', 'TimeoutError');
           }
         }
         breakers.recordSuccess(provider.id);
@@ -867,7 +1117,13 @@ class GatewayPort implements LanguageModelPort {
           text,
           toolCalls: proposedCalls(steps, request.tools),
           usage: usageOf(totalUsage),
-          served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
+          served: {
+            providerId: provider.id,
+            model: provider.model,
+            fallbackDepth: depth,
+            kind: provider.kind,
+          },
+          ...(loop.budgetLimited ? { budgetLimited: true } : {}),
         };
         span.setAttribute('ai.tokens.input', result.usage.inputTokens);
         span.setAttribute('ai.tokens.output', result.usage.outputTokens);
@@ -881,13 +1137,15 @@ class GatewayPort implements LanguageModelPort {
           yield { type: 'error', message: 'Request cancelled', retryable: false };
           return;
         }
-        breakers.recordFailure(provider.id);
+        // Our own timer after tools ran or text streamed says nothing about the provider: release the probe.
+        if (isProviderFault(error, emitted || loop.toolsRan)) breakers.recordFailure(provider.id);
         logger.warn('[AI] Provider stream failed', {
           providerId: provider.id,
           error: error instanceof Error ? error.name : 'error',
         });
-        // After the first token the user has seen output; switching provider would splice two answers.
-        if (emitted) {
+        // After the first token the user has seen output, and after a tool ran its evidence and progress are
+        // out: switching provider would splice two answers or read everything again.
+        if (emitted || loop.toolsRan) {
           yield { type: 'error', message: 'The response was interrupted', retryable: true };
           return;
         }
@@ -899,7 +1157,7 @@ class GatewayPort implements LanguageModelPort {
           await this.finish(
             request,
             {
-              usage: { inputTokens: estimatedInput(request), outputTokens: estimateTokens(text) },
+              usage: unsettledUsage(request, loop, pendingText),
               served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
             },
             { cancelled: Boolean(request.context.signal?.aborted), usageEstimated: true },
@@ -934,7 +1192,27 @@ class GatewayEmbeddingPort implements EmbeddingPort {
       throw new AiGatewayError('NO_PROVIDER', 'Embedding provider unavailable');
     }
     const estimate = estimateTokens(values.join('\n'));
-    const price = await priceForModel(this.provider.kind, this.provider.embeddingModel);
+    let price: Awaited<ReturnType<typeof priceForModel>>;
+    let reservation: AiReservation | null;
+    try {
+      price = await priceForModel(this.provider.kind, this.provider.embeddingModel);
+      reservation = await reserveAiTokens(
+        context.actorId,
+        this.settings,
+        estimate,
+        this.settings.requestTimeoutMs * 2 + 60_000,
+        new Date(),
+        {
+          capability: 'EMBED',
+          teamId: null,
+          costMicros: costMicrosFor({ inputTokens: estimate, outputTokens: 0 }, price),
+        }
+      );
+    } catch (error) {
+      // Nothing reached the provider: a half-open probe taken above must be handed back.
+      embeddingBreakers.release(this.provider.id);
+      throw error;
+    }
     const attribution = (tokens: number) => ({
       providerKind: this.provider.kind,
       model: this.provider.embeddingModel ?? this.provider.model,
@@ -942,18 +1220,6 @@ class GatewayEmbeddingPort implements EmbeddingPort {
       teamId: null,
       costMicros: costMicrosFor({ inputTokens: tokens, outputTokens: 0 }, price),
     });
-    const reservation = await reserveAiTokens(
-      context.actorId,
-      this.settings,
-      estimate,
-      this.settings.requestTimeoutMs * 2 + 60_000,
-      new Date(),
-      {
-        capability: 'EMBED',
-        teamId: null,
-        costMicros: costMicrosFor({ inputTokens: estimate, outputTokens: 0 }, price),
-      }
-    );
     if (!reservation) {
       embeddingBreakers.release(this.provider.id);
       throw new AiGatewayError('BUDGET_EXHAUSTED', 'Daily AI budget reached');
@@ -984,7 +1250,8 @@ class GatewayEmbeddingPort implements EmbeddingPort {
       ).catch(() => undefined);
       return { vectors: result.embeddings, tokens };
     } catch (error) {
-      if (context.signal?.aborted) embeddingBreakers.release(this.provider.id);
+      if (context.signal?.aborted || !isProviderFault(error, false))
+        embeddingBreakers.release(this.provider.id);
       else embeddingBreakers.recordFailure(this.provider.id);
       throw error;
     } finally {

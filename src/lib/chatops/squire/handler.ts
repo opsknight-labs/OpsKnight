@@ -1,13 +1,16 @@
 import 'server-only';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
-import { getAiSettings } from '@/lib/intelligence/ai/settings';
-import { collectSquireTurn } from '@/lib/intelligence/squire/surfaces';
+import {
+  collectSquireTurn,
+  SQUIRE_INVESTIGATION_TIMEOUT_MS,
+} from '@/lib/intelligence/squire/surfaces';
+import { ASK_SQUIRE_CORE_TOOLS } from '@/lib/mcp/core/ask-squire-contract';
 import { executeSquireAction } from '@/lib/intelligence/squire/actions/execute';
 import { isChatConfirmableAction } from '@/lib/intelligence/squire/actions/catalog';
 import { redactSecrets } from '@/lib/intelligence/ai/redact';
+import { readIncidentForActor } from '@/lib/intelligence/squire/deterministic';
 import type { SquireEvent, SquireRequest } from '@/lib/intelligence/squire/contract';
 import type { ChatSquireAnswer } from './render';
 
@@ -24,6 +27,8 @@ export type SquireChatProvider = 'SLACK' | 'MICROSOFT_TEAMS';
 
 /** Questions per person per minute across Slack and Teams. A turn can be an AI call. */
 export const SQUIRE_CHAT_QUESTIONS_PER_MINUTE = 6;
+/** Questions per chat channel per minute, whoever asks. */
+export const SQUIRE_CHAT_CHANNEL_QUESTIONS_PER_MINUTE = 20;
 /** Confirm clicks per person per minute. */
 export const SQUIRE_CHAT_CONFIRMS_PER_MINUTE = 20;
 
@@ -34,26 +39,37 @@ export const SQUIRE_CHAT_NOT_LINKED =
 export const SQUIRE_CHAT_NOT_OWNER =
   'Only the person who asked Squire can confirm this suggestion. Ask Squire yourself for your own.';
 export const SQUIRE_CHAT_RATE_LIMITED = 'You are asking Squire quickly. Try again in a minute.';
+export const SQUIRE_CHAT_NO_INCIDENT_ACCESS =
+  'You do not have access to this incident in OpsKnight, so Squire cannot investigate it for you.';
+export const SQUIRE_CHAT_INVESTIGATE_NEEDS_INCIDENT =
+  'Investigate works in an OpsKnight incident channel, about that channel’s incident.';
+
+/**
+ * `investigate [focus]` (after the mention or slash command) as the question that runs Squire's
+ * investigation mode on the channel's incident; null for any other question.
+ */
+export function investigationQuestion(question: string): string | null {
+  const match = /^\s*investigate\b[\s:,.-]*([\s\S]*)$/i.exec(question);
+  if (!match) return null;
+  const focus = match[1].trim().slice(0, 1_500);
+  return `Investigate this incident${
+    focus ? `, focusing on: ${focus}` : ''
+  }. Find the most likely cause and show the evidence for it.`;
+}
 const EMPTY_QUESTION =
   'Ask a question after @squire, for example “@squire what changed before this started?”';
 
-export function chatBaseUrl(): string {
-  try {
-    return getBaseUrl().replace(/\/+$/, '');
-  } catch {
-    return 'http://localhost:3000';
-  }
-}
+import { chatBaseUrl, isSquireChatOpsEnabled } from './switches';
+export { chatBaseUrl, isSquireChatOpsEnabled };
 
-/** Both switches: the assistant itself and its chat surface. Fails closed. */
-export async function isSquireChatOpsEnabled(): Promise<boolean> {
-  try {
-    const settings = await getAiSettings();
-    return settings.squireEnabled && settings.squireChatOpsEnabled;
-  } catch {
-    return false;
-  }
-}
+/**
+ * The only read tools of a turn whose answer is posted where everyone in the channel reads it: the
+ * incident, service, on-call, runbook and postmortem reads plus the product docs. Personal or
+ * workspace-wide reads (catch-up, operations, people, logs, knowledge) stay in OpsKnight.
+ */
+export const CHAT_CHANNEL_READ_TOOLS: ReadonlySet<string> = new Set(ASK_SQUIRE_CORE_TOOLS);
+
+export { recalledPlaceholder, rememberPlaceholder } from './placeholder';
 
 /** Thread history passed to a chat turn: the newest messages that fit both bounds. */
 export const CHAT_HISTORY_LIMITS = { messages: 20, bytes: 8_192 } as const;
@@ -157,10 +173,14 @@ export async function answerChatQuestion(input: {
   history?: SquireRequest['history'];
   /** Called with a preview of the answer as it is written; the caller rate-limits its edits. */
   onProgress?: (text: string) => void;
+  /** The answer is posted in a channel or thread (not privately), so only CHAT_CHANNEL_READ_TOOLS run. */
+  inChannel?: boolean;
 }): Promise<ChatSquireAnswer> {
   if (!(await isSquireChatOpsEnabled())) return failure(SQUIRE_CHAT_DISABLED);
   if (!input.userId) return failure(SQUIRE_CHAT_NOT_LINKED);
-  const question = input.question.trim();
+  const investigation = investigationQuestion(input.question);
+  if (investigation && !input.incidentId) return failure(SQUIRE_CHAT_INVESTIGATE_NEEDS_INCIDENT);
+  const question = (investigation ?? input.question).trim();
   if (!question) return failure(EMPTY_QUESTION);
   const rate = await checkRateLimit(
     `squire:chatops:ask:${input.userId}`,
@@ -170,6 +190,10 @@ export async function answerChatQuestion(input: {
   if (!rate.allowed) return failure(SQUIRE_CHAT_RATE_LIMITED);
   const actor = await resolveUserActor(input.userId);
   if (!actor || actor.status !== 'ACTIVE') return failure(SQUIRE_CHAT_NOT_LINKED);
+  // An ordinary question quietly drops an incident the asker cannot read; an investigation is only
+  // about that incident, so it is refused outright.
+  if (investigation && !(await readIncidentForActor(actor, input.incidentId!)))
+    return failure(SQUIRE_CHAT_NO_INCIDENT_ACCESS);
   const onProgress = input.onProgress;
   const track = progressTracker();
   const answer = await collectSquireTurn(
@@ -179,17 +203,22 @@ export async function answerChatQuestion(input: {
       ...(input.incidentId ? { incidentId: input.incidentId } : {}),
       ...(input.history?.length ? { history: input.history } : {}),
     },
-    onProgress
-      ? {
-          onEvent: event => {
-            const preview = track(event);
-            if (preview) onProgress(preview);
-          },
-        }
-      : {}
+    {
+      ...(investigation ? { timeoutMs: SQUIRE_INVESTIGATION_TIMEOUT_MS } : {}),
+      ...(input.inChannel ? { scope: { readTools: CHAT_CHANNEL_READ_TOOLS } } : {}),
+      ...(onProgress
+        ? {
+            onEvent: (event: SquireEvent) => {
+              const preview = track(event);
+              if (preview) onProgress(preview);
+            },
+          }
+        : {}),
+    }
   );
   logger.info('[Squire] Chat question answered', {
     provider: input.provider,
+    investigation: Boolean(investigation),
     mode: answer.mode,
     failed: Boolean(answer.error),
     proposals: answer.proposals.length,

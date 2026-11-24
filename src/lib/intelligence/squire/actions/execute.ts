@@ -34,6 +34,9 @@ import {
   type SquireActionInput,
 } from './catalog';
 import { buildProposal, openProposal, type OpenedProposal } from './proposals';
+import { executeOperationProposal, openOperationProposal } from '../operations';
+import { executePlanProposal, offerRunbookFromFix, openPlanProposal } from '../plans';
+import { executeRememberProposal, openRememberProposal } from '../memory';
 import { isExtendedSquireAction, type ExtendedSquireActionName } from './catalog-extended';
 import { checkExtendedPreconditions, extendedActionsAvailable } from './extended';
 import {
@@ -62,6 +65,19 @@ export async function executeSquireAction(
   channel?: SquireConfirmChannel
 ): Promise<SquireActionResult> {
   if (actor.apiKey || actor.status !== 'ACTIVE') return failed('Sign in to confirm this action.');
+  // A change from the operation catalog (operations.ts) has its own sealed shape and runner.
+  const operation = await openOperationProposal(token, actor.id);
+  if (operation)
+    return channel
+      ? failed(CHAT_UNCONFIRMABLE_MESSAGE)
+      : executeOperationProposal(actor, operation);
+  // A multi-step plan of catalog changes (plans.ts).
+  const plan = await openPlanProposal(token, actor.id);
+  if (plan) return channel ? failed(CHAT_UNCONFIRMABLE_MESSAGE) : executePlanProposal(actor, plan);
+  // A fact the person asked Squire to remember (memory.ts).
+  const remember = await openRememberProposal(token, actor.id);
+  if (remember)
+    return channel ? failed(CHAT_UNCONFIRMABLE_MESSAGE) : executeRememberProposal(actor, remember);
   const proposal = await openProposal(token, actor.id);
   if (!proposal) return failed('This suggestion has expired. Ask again for a fresh one.');
   if (SQUIRE_ACTION_KIND[proposal.action] !== 'WRITE')
@@ -92,6 +108,7 @@ export async function executeSquireAction(
         userId: actor.id,
         action: proposal.action,
         incidentId,
+        incidentIds: [incidentId],
         status: 'RESERVED',
         intentEncrypted: await encrypt(
           JSON.stringify({
@@ -188,16 +205,31 @@ export async function executeSquireAction(
             ),
             followUp: undefined,
           };
+    // "Did the fix hold?": a later check for new alerts and incidents, reported to this person.
+    if (proposal.action === 'resolve_incident' || proposal.action === 'run_runbook')
+      await (
+        await import('../../memory/proactive-verification')
+      ).scheduleFixVerification({
+        incidentId,
+        userId: actor.id,
+        trigger: proposal.action === 'resolve_incident' ? 'RESOLVE' : 'RUNBOOK',
+      });
     try {
       revalidatePath(`/incidents/${incidentId}`);
     } catch {
       logger.warn('[Squire] Action succeeded; page refresh failed', { action: proposal.action });
     }
+    // In the application only: offer to keep the fix as a runbook draft (not stored with the receipt).
+    const offer =
+      followUp ??
+      (!channel && proposal.action === 'resolve_incident'
+        ? await offerRunbookFromFix(actor, incidentId)
+        : undefined);
     return {
       ok: true,
       message,
       href: `/incidents/${encodeURIComponent(incidentId)}`,
-      ...(followUp ? { followUp } : {}),
+      ...(offer ? { followUp: offer } : {}),
     };
   } catch (error) {
     // A lost commit response must not erase an atomically persisted success.

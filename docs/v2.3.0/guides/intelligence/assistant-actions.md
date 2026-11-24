@@ -1,6 +1,6 @@
 ---
 title: Confirm actions the assistant suggests
-description: Turn on extended assistant actions and confirm escalations, urgency changes, snoozes, watchers, Jira issues, status updates and runbook runs from Squire.
+description: Turn on extended assistant actions and confirm escalations, urgency changes, snoozes, watchers, Jira issues, status updates, runbook runs and changes beyond incidents (overrides, maintenance windows, services) from Squire.
 type: how-to
 product_area: intelligence
 audience: [responder, administrator]
@@ -15,6 +15,8 @@ verification:
       src/lib/intelligence/squire/actions,
       src/components/squire/SquireProposalCard.tsx,
       tests/integration/intelligence/squire-extended-actions.test.ts,
+      src/lib/intelligence/squire/operations.ts,
+      tests/integration/intelligence/squire-operations.test.ts,
     ]
 ---
 
@@ -65,4 +67,56 @@ Without AI (basic mode), on an incident page you can ask for the simple ones dir
   If the result is unknown (for example the connection dropped while paging), check the incident before
   asking for another card.
 
-Suppression rules and maintenance windows are not yet available as assistant actions.
+## Changes beyond incidents
+
+With extended actions on, Squire can also suggest changes outside an incident, such as adding a schedule
+override, creating a maintenance window, renaming a service or setting its escalation policy, tagging an
+incident, editing a postmortem, or updating an SLO, a dashboard or a status page. It finds the operation in
+the same reviewed API catalog the MCP server uses, and you get a card with:
+
+- what the change is, and a **before → after** line for each field it sets (where the current value can
+  be read);
+- **Apply change**, which runs that API operation once, as you: the same validation, role checks and
+  audit as if you had called the API yourself;
+- **Open in OpsKnight**, to review the record first.
+
+Squire does exactly what your role allows, after you confirm it, and nothing more. If you ask for
+something your role cannot do, it says so and names the role that can (for example "this needs Admin"),
+so you know whom to ask. Credentials, webhook and integration settings, notification delivery, sensitive
+reads and high-risk operations the catalog denies (credential rotation, user administration) are never
+reachable from Squire. These cards can only be confirmed in the web app, not from Slack or Teams.
+
+Squire can also read through the same catalog (for example a schedule's overrides or a maintenance
+window) when no dedicated lookup exists. Those reads use your permissions and the same field allowlist and
+redaction as MCP.
+
+## High-risk changes
+
+Deleting a service, schedule, team or escalation policy, and similar changes, are offered only if your
+role allows them. The card is marked **High-risk change**, its button reads **Confirm high-risk change**,
+and it says that Squire cannot undo it. It runs as you the moment you confirm, like the same action in
+OpsKnight, and is audited.
+
+## Several changes at once
+
+When a request needs two to five related changes (for example "create a Payments service and a
+maintenance window for it"), Squire can suggest them as one **Plan** card. Each step is listed with the
+fields it sets; a value that comes from an earlier step (such as the new service's id) shows as
+`from-step-1`. Every step must be a change your role allows, or no card is shown.
+
+**Apply all** runs the steps in order, as you, each exactly like its single-change card. It stops at the
+first step that fails and tells you which steps were done, which failed and why, and which were not
+attempted. Steps already done are not rolled back; fix or undo them in OpsKnight. A plan card works once,
+expires after 10 minutes and can only be confirmed in the web app.
+
+## Review what was done
+
+**Settings → Squire Action History** (`/settings/intelligence/ai/actions`) lists every action confirmed
+from a Squire card, newest first: when, the action, its status (succeeded, failed, unknown or in
+progress) and the recorded outcome, with a link to the incident. You see your own actions; people who
+manage intelligence settings can switch to **Everyone** to see who confirmed what. Filter by status, and
+use **Load more** for older entries.
+
+The history never shows what was sent with an action, only its outcome, and leaves out actions on
+incidents you can no longer open. Entries are removed by intelligence retention (currently after one
+day).

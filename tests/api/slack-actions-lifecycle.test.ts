@@ -73,7 +73,7 @@ describe('Slack interactive lifecycle actions', () => {
       vi.fn().mockResolvedValue({
         json: async () => ({
           ok: true,
-          user: { profile: { email: 'alice@test.com', real_name: 'Alice' } },
+          user: { team_id: 'T123', profile: { email: 'alice@test.com', real_name: 'Alice' } },
         }),
       })
     );
@@ -114,6 +114,21 @@ describe('Slack interactive lifecycle actions', () => {
       team: { id: 'T123' },
     };
   }
+
+  it('never maps a Slack user from another workspace, or a guest, to an OpsKnight account', async () => {
+    for (const user of [
+      { team_id: 'T999', profile: { email: 'alice@test.com' } },
+      { team_id: 'T123', is_restricted: true, profile: { email: 'alice@test.com' } },
+      { team_id: 'T123', profile: { email: 'alice@test.com', is_email_confirmed: false } },
+    ]) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => ({ ok: true, user }) }));
+      vi.mocked(prisma.user.findFirst).mockClear();
+      const body = await (await handleSlackActionRequest(payload('ack'))).json();
+      expect(body.text).toContain('not linked');
+      expect(prisma.user.findFirst).not.toHaveBeenCalled();
+      expect(executeChatOpsLifecycleCommand).not.toHaveBeenCalled();
+    }
+  });
 
   it('routes acknowledge through the lifecycle adapter without a duplicate timeline write', async () => {
     const response = await handleSlackActionRequest(payload('ack'));

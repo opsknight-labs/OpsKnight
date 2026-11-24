@@ -1,9 +1,15 @@
 import { readIncidentAnalysisState } from '../analysis/view';
 import { SquireEvidenceRegistry, type EvidenceSnapshot } from './evidence';
-import { mintContextProof, readBrowserContext, authorizationContextHash } from './context-proof';
+import {
+  mintContextProof,
+  readBrowserContext,
+  authorizationContextHash,
+  earlierAnswerLabel,
+} from './context-proof';
 import type { SourceReference } from '../conversations/contract';
 import { readAlertReference, readChangeReference } from './references';
 import 'server-only';
+import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
 import { getUserTimeZone } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
@@ -16,37 +22,75 @@ import {
   highestDataClass,
   dataClassAllows,
   type AiMessage,
+  type AiToolDefinition,
   type LanguageModelPort,
   type AiDataClass,
 } from '../ai/port';
 import { redactPersonalData, redactSecrets } from '../ai/redact';
 import { AI_LEAN_NOTICE } from '../ai/contract';
-import { getAiSettings } from '../ai/settings';
+import { getAiSettings, type AiSettingsView } from '../ai/settings';
 import { getGuidance } from '../ai/prompts';
-import { getHistoryStatus, type ConversationDetail } from '../conversations/store';
+import type { ConversationDetail } from '../conversations/store';
 import { getConversationForActor } from '../conversations/view';
 import { getPinnedBriefingForActor } from './briefing-view';
 import { buildProposal } from './actions/proposals';
 import {
+  AI_PROVIDER_LABELS,
+  SQUIRE_CHART_LIMITS,
   SQUIRE_LIMITS,
   aiLimitFrom,
+  type SquireChart,
   type SquireAiLimit,
   type SquireCitation,
   type SquireEvent,
   type SquireRequest,
+  type SquireTrace,
 } from './contract';
 import {
+  mentionedIncident,
   planBasicTurn,
   readIncidentForActor,
   resolvePageContext,
   type ReadableIncident,
   type ResolvedPageContext,
 } from './deterministic';
+import { aboutUserLines, mentionLine, viewingLine } from './about';
+import { resolveMentions } from './mentions';
+import { traceReadTool, traceTurn } from './tracing';
+import {
+  argsSchema,
+  buildOperationProposal,
+  buildOperationTools,
+  mayCall,
+  PROPOSE_OPERATION_TOOL,
+  rolesAllowing,
+  squireOperation,
+} from './operations';
+import {
+  buildPlanProposal,
+  buildRunbookFromFixProposal,
+  PROPOSE_PLAN_TOOL,
+  PROPOSE_RUNBOOK_FROM_FIX_TOOL,
+  runbookFromFixInput,
+} from './plans';
+import { buildRememberProposal, memoriesForPrompt, REMEMBER_FACT_TOOL } from './memory';
+import {
+  detectEntityReferences,
+  entityHintsForPrompt,
+  resolveEntityReferences,
+} from './entity-refs';
 import { readDialogueState, writeDialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
+import type { SquireIntent } from './intents';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
-import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS, toolsForMessage } from './tools';
-import { OBSERVABILITY_TOOL_LABELS, OBSERVABILITY_TOOL_NAMES } from './tools-observability';
+import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools';
+import {
+  metricsChart,
+  splitChartSamples,
+  OBSERVABILITY_TOOL_DATA_CLASS,
+  OBSERVABILITY_TOOL_LABELS,
+  OBSERVABILITY_TOOL_NAMES,
+} from './tools-observability';
 import { listEligibleConnections } from '../connectors/service';
 import { INCIDENT_TOOL_LABELS } from './tools-incident';
 import { summarizeOlderTurns } from './context-summary';
@@ -59,6 +103,26 @@ const MAX_BASIC_SOURCES = 32;
 
 const CHUNK = 48;
 const MAX_PROPOSALS = 2;
+const PROPOSAL_CAP_NOTICE = `Only the first ${MAX_PROPOSALS} suggested actions are shown. Ask again for the others.`;
+const PROPOSAL_DROPPED_NOTICE =
+  'A suggested action could not be shown: it may no longer apply, or you may not have permission for it.';
+const BUDGET_CUT_NOTICE =
+  'The AI budget did not allow more lookups, so this answer is written from what was read so far.';
+
+/** Mirrors plans.ts's input schema: a title and two to five operation steps. */
+const planInput = z
+  .object({ title: z.string().trim().min(1).max(120), steps: z.array(argsSchema).min(2).max(5) })
+  .strict();
+
+/** The extended proposal tools, each validated like its card builder, so a malformed call is refused at once. */
+const PROPOSAL_EXTRA_TOOLS: AiToolDefinition[] = [
+  { ...PROPOSE_OPERATION_TOOL, validate: input => argsSchema.safeParse(input).success },
+  { ...PROPOSE_PLAN_TOOL, validate: input => planInput.safeParse(input).success },
+  {
+    ...PROPOSE_RUNBOOK_FROM_FIX_TOOL,
+    validate: input => runbookFromFixInput.safeParse(input).success,
+  },
+];
 const MAX_CITATIONS = 8;
 
 async function* typed(text: string): AsyncGenerator<SquireEvent> {
@@ -82,6 +146,11 @@ const TOOL_LABELS: Record<string, string> = {
   semantic_search_incidents: 'Searching incidents by meaning',
   get_status_page: 'Reading the status page',
   get_problem_outcomes: 'Checking past outcomes for this problem',
+  search_product_docs: 'Searching the OpsKnight docs',
+  get_catch_up: 'Catching you up',
+  find_operations: 'Looking for the right operation',
+  describe_operation: 'Checking what the operation needs',
+  read_operation: 'Reading from OpsKnight',
   ...OBSERVABILITY_TOOL_LABELS,
   ...INCIDENT_TOOL_LABELS,
   get_automation_decision: 'Checking why automation routed it',
@@ -106,26 +175,129 @@ function mayRead(scope: SquireTurnScope, ...names: string[]): boolean {
 }
 
 /**
+ * The read tools that back each basic-mode intent: a scoped turn gets the basic answer only when one of them is
+ * allowed. Template intents (help, greetings, guidance) read nothing and are always allowed.
+ */
+const BASIC_INTENT_READS: Partial<Record<SquireIntent, readonly string[]>> = {
+  WORK_QUEUE: ['search_incidents'],
+  ACTIVE_INCIDENTS: ['search_incidents'],
+  SEARCH_INCIDENTS: ['search_incidents', 'semantic_search_incidents'],
+  ALERT_STATS: ['list_alerts', 'incident_analytics'],
+  INCIDENT_STATS: ['incident_analytics'],
+  SERVICE_HEALTH: ['get_service'],
+  RUNBOOK_SEARCH: ['get_runbook'],
+  RUNBOOKS: ['get_intelligence', 'get_runbook'],
+  RECENT_CHANGES: ['get_recent_changes'],
+  FOLLOWUPS: ['search_postmortems'],
+  POSTMORTEMS: ['search_postmortems'],
+  RESPONDERS: ['who_is_on_call', 'find_people'],
+  ON_CALL: ['who_is_on_call'],
+  TIMELINE: ['get_timeline'],
+  SIMILAR: ['get_intelligence'],
+  CAUSES: ['get_intelligence', 'get_recent_changes'],
+  INCIDENT_SUMMARY: ['get_incident'],
+  CATCH_UP: ['get_catch_up'],
+};
+
+export function basicIntentAllowed(scope: SquireTurnScope, intent: SquireIntent): boolean {
+  // eslint-disable-next-line security/detect-object-injection -- intent is a member of the closed intent union
+  const reads = BASIC_INTENT_READS[intent];
+  return !reads || mayRead(scope, ...reads);
+}
+
+const BASIC_SCOPE_REFUSAL =
+  'This connection is not allowed to read what that question needs. Ask in OpsKnight, or ask an administrator to grant the matching access.';
+
+/**
  * One Squire turn as a stream of events. It never throws: any failure becomes an `error` or a graceful fall
  * back to the basic (no-AI) answer, so a model outage degrades the assistant rather than breaking it.
  * Unreadable or unknown incident ids are dropped silently so they cannot be probed.
  */
-export async function* streamSquire(
+export function streamSquire(
   actor: AuthorizationActor,
   request: SquireRequest,
   signal?: AbortSignal,
   scope: SquireTurnScope = {}
 ): AsyncGenerator<SquireEvent> {
+  const served: ServedTrace = {};
+  return traceTurn(withTrace(squireTurn(actor, request, signal, scope, served), served), signal);
+}
+
+/** What the AI answer's model call reported, for the trace. */
+type ServedTrace = Pick<SquireTrace, 'model' | 'provider' | 'tokens'>;
+
+/**
+ * Passes a turn's events through and, just before `done`, sends how the answer was made. Built from the
+ * events themselves, so every path (AI, investigation, basic) gets one; model and tokens come from `served`.
+ */
+export async function* withTrace(
+  events: AsyncGenerator<SquireEvent>,
+  served: ServedTrace,
+  startedAt = Date.now()
+): AsyncGenerator<SquireEvent> {
+  let mode: SquireTrace['mode'] = 'basic';
+  let verified = false;
+  let sources: string[] = [];
+  const tools = new Set<string>();
+  for await (const event of events) {
+    if (event.type === 'meta') mode = event.mode;
+    else if (event.type === 'tool') tools.add(event.label);
+    else if (event.type === 'investigation')
+      for (const call of event.step.calls) tools.add(call.label);
+    else if (event.type === 'citations') sources = event.items.map(item => item.label);
+    else if (event.type === 'memory') verified = event.turn.verified === true;
+    else if (event.type === 'done')
+      yield {
+        type: 'trace',
+        trace: {
+          mode,
+          tools: [...tools].slice(0, 24).map(label => label.slice(0, 200)),
+          sources: sources.slice(0, 8).map(label => label.slice(0, 200)),
+          // A basic answer after a failed or empty model call was not written by that model.
+          ...(mode === 'ai' ? served : {}),
+          durationMs: Date.now() - startedAt,
+          verified,
+        },
+      };
+    yield event;
+  }
+}
+
+async function* squireTurn(
+  actor: AuthorizationActor,
+  request: SquireRequest,
+  signal: AbortSignal | undefined,
+  scope: SquireTurnScope,
+  served: ServedTrace = {}
+): AsyncGenerator<SquireEvent> {
   try {
-    const [settings, requestedIncident, page] = await Promise.all([
-      getAiSettings(),
+    const reading = getAiSettings();
+    const [settings, requestedIncident, page, mentioned, savedRead] = await Promise.all([
+      reading,
       request.incidentId ? readIncidentForActor(actor, request.incidentId) : Promise.resolve(null),
       resolvePageContext(actor, request.pageContext),
+      resolveMentions(actor, request.mentions),
+      // The saved conversation starts with the other reads, reusing the settings read (undefined: not asked).
+      request.conversationId
+        ? reading.then(loaded =>
+            loaded.squireHistoryEnabled
+              ? getConversationForActor(actor, request.conversationId!, loaded)
+              : undefined
+          )
+        : Promise.resolve(undefined),
     ]);
     // An alert or postmortem page is its incident's page, when the person may read that incident.
+    // A question that names an incident by id or link ("what's going on with incident <id>") is about it, when
+    // the person may read it: its briefing is loaded up front as on its page.
+    const named = !request.incidentId ? mentionedIncident(request.message) : null;
     const incident =
       requestedIncident ??
+      (named ? await readIncidentForActor(actor, named.id).catch(() => null) : null) ??
       (page?.incidentId ? await readIncidentForActor(actor, page.incidentId) : null);
+    // Basic answers have no model to read mention lines: one mentioned record, asked off any page, is the page.
+    const sole = !incident && !page && mentioned.length === 1 ? mentioned[0] : undefined;
+    const basicIncident = incident ?? sole?.incident ?? null;
+    const basicPage = page ?? sole?.page ?? null;
     if (!settings.squireEnabled) {
       yield { type: 'error', message: 'The assistant is turned off.' };
       return;
@@ -139,25 +311,13 @@ export async function* streamSquire(
       return;
     }
 
-    let savedConversation: ConversationDetail | null = null;
-    if (request.conversationId && (await getHistoryStatus()).enabled) {
-      const saved = await getConversationForActor(actor, request.conversationId);
-      savedConversation = saved;
-      if (!saved) {
-        yield {
-          type: 'error',
-          message: 'That conversation is not available. Start a new conversation to continue.',
-        };
-        return;
-      }
-      if (saved && saved.incidentId !== (incident?.id ?? null)) {
-        yield {
-          type: 'error',
-          message:
-            'This conversation belongs to a different context. Open its incident or start a new conversation.',
-        };
-        return;
-      }
+    const savedConversation: ConversationDetail | null = savedRead ?? null;
+    if (savedRead === null) {
+      yield {
+        type: 'error',
+        message: 'That conversation is not available. Start a new conversation to continue.',
+      };
+      return;
     }
 
     registerAiGateway();
@@ -165,21 +325,42 @@ export async function* streamSquire(
     // Start them together so provider discovery does not add serial database round trips.
     const preparation = settings.enabled
       ? Promise.all([
-          incident ? brief(actor, incident) : Promise.resolve(null),
+          incident ? brief(actor, incident, settings) : Promise.resolve(null),
           getGuidance('squire.system').catch(() => null),
           priorTurns(actor, request, savedConversation, incident?.id ?? null),
           // Answers state times in the person's zone, as basic answers do.
           prisma.user
-            .findUnique({ where: { id: actor.id }, select: { timeZone: true } })
+            .findUnique({ where: { id: actor.id }, select: { timeZone: true, name: true } })
             .catch(() => null),
+          prisma.team
+            .findMany({
+              where: { id: { in: [...actor.teamIds] } },
+              select: { name: true },
+              orderBy: { name: 'asc' },
+              take: 20,
+            })
+            .catch(() => []),
+          // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
+          squireKnowledgeEnabled().catch(() => false),
+          // Observability connectors are optional: a lookup failure only means their tools are not offered.
+          mayRead(scope, ...OBSERVABILITY_TOOL_NAMES)
+            ? listEligibleConnections(actor).catch(() => [])
+            : Promise.resolve([]),
+          // A conversation turn is at least Personal; resolved now, and again only if history raises it.
+          resolveLanguageModel('SQUIRE_CHAT', 'PERSONAL'),
         ])
       : Promise.resolve(null);
-    const [briefing, guidance, context, viewer] = (await preparation) ?? [
-      null,
-      null,
-      { messages: [] as AiMessage[], omitted: false },
-      null,
-    ];
+    const [briefing, guidance, context, viewer, teams, knowledge, observability, personalPort] =
+      (await preparation) ?? [
+        null,
+        null,
+        { messages: [], omitted: false } as PriorTurns,
+        null,
+        [],
+        false,
+        [],
+        null,
+      ];
     const history = context.messages;
     if (context.omitted)
       yield {
@@ -188,13 +369,29 @@ export async function* streamSquire(
       };
     // A conversation turn is Personal: free text can name people and customers, and redaction only removes
     // emails, phones and IPs. Without a provider cleared for Personal data the turn gets a basic answer.
-    const historyClass = highestDataClass(['INTERNAL', ...history.map(message => message.dataClass)]);
+    const historyClass = highestDataClass([
+      'INTERNAL',
+      ...history.map(message => message.dataClass),
+    ]);
     const dataClass: AiDataClass = highestDataClass(['PERSONAL', historyClass]);
-    const port: LanguageModelPort | null = settings.enabled
-      ? await resolveLanguageModel('SQUIRE_CHAT', dataClass)
-      : null;
+    const port: LanguageModelPort | null = !settings.enabled
+      ? null
+      : dataClass === 'PERSONAL'
+        ? personalPort
+        : await resolveLanguageModel('SQUIRE_CHAT', dataClass);
     const personal = dataClassAllows(dataClass, 'PERSONAL');
     const question = personal ? request.message : redactPersonalData(request.message);
+    // Remembered facts are personal data: only for a provider cleared for it, and never fatal.
+    const memories = port && personal ? await memoriesForPrompt(actor.id).catch(() => []) : [];
+    // Records the question names by link, id or name, each loaded only if the person may read it.
+    const hints = port
+      ? entityHintsForPrompt(
+          await resolveEntityReferences(actor, detectEntityReferences(request.message)).catch(
+            () => []
+          ),
+          { personal }
+        )
+      : '';
 
     if (port) {
       yield {
@@ -204,20 +401,53 @@ export async function* streamSquire(
         ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
       };
       const evidence = new SquireEvidenceRegistry(actor, dataClass);
+      // Charts come from what a read tool really returned, on both the ordinary and investigation paths
+      // (both read through the registry), and only when this turn's data class may show that tool's data.
+      const charts: SquireChart[] = [];
+      const observeEvidence = evidence.observe.bind(evidence);
+      evidence.observe = async (name, input, result, maxBytes) => {
+        // Dense chart points never reach the model; they are kept here for the chart only.
+        const { forModel, dense } = splitChartSamples(result);
+        const observed = await observeEvidence(name, input, forModel, maxBytes);
+        // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names never chart
+        const toolClass = OBSERVABILITY_TOOL_DATA_CLASS[name];
+        // Only a result the registry captured as evidence (`{ data, evidence }`) is drawn.
+        const captured = (observed as { data?: unknown } | null)?.data;
+        const chart =
+          charts.length < SQUIRE_CHART_LIMITS.perTurn &&
+          toolClass &&
+          dataClassAllows(dataClass, toolClass)
+            ? metricsChart(name, captured, dense)
+            : null;
+        if (chart) charts.push(chart);
+        return observed;
+      };
       const prepared = briefing
         ? await evidence.briefing(
             personal ? briefing : { ...briefing, summary: undefined, timeline: undefined }
           )
         : null;
-      // Observability connectors are optional: a lookup failure only means their tools are not offered.
-      const observability = !mayRead(scope, ...OBSERVABILITY_TOOL_NAMES)
-        ? []
-        : await listEligibleConnections(actor).catch(() => []);
       const prompt = buildSystemPrompt(
         settings.squireName,
         prepared,
         guidance,
-        getUserTimeZone(viewer ?? undefined)
+        getUserTimeZone(viewer ?? undefined),
+        new Date(),
+        {
+          user: aboutUserLines({
+            role: actor.role,
+            // A name is personal data: only sent to a provider cleared for it.
+            firstName: personal ? viewer?.name?.trim().split(/\s+/)[0] : null,
+            teams: teams.map(team => team.name),
+            memories,
+          }),
+          ...(page && !incident ? { viewing: viewingLine(page) } : {}),
+          // A person's name is personal data, like the first name above.
+          mentions: [
+            ...mentioned.filter(mention => personal || mention.kind !== 'person').map(mentionLine),
+            ...(hints ? [hints] : []),
+          ],
+        }
       );
       const system: AiMessage = { role: 'system', content: prompt.system, dataClass };
       // The parts of the briefing that change between turns, sent after the cached prefix.
@@ -229,22 +459,28 @@ export async function* streamSquire(
       // The ordinary AI answer: the model with tools. Also what an investigation falls back to when its
       // planner fails before reading anything, so a basic answer never replaces an available model.
       const ordinary = async function* (): AsyncGenerator<SquireEvent> {
+        const replay = personal
+          ? history
+          : history
+              // Questions only: no earlier answers, and no summary of them.
+              .filter(message => message.role === 'user' && message !== context.summary)
+              .map(message => ({
+                ...message,
+                content: redactPersonalData(message.content),
+                dataClass: 'INTERNAL' as const,
+              }));
         const messages: AiMessage[] = [
           system,
-          ...(personal
-            ? history
-            : history
-                .filter(message => message.role === 'user')
-                .map(message => ({
-                  ...message,
-                  content: redactPersonalData(message.content),
-                  dataClass: 'INTERNAL' as const,
-                }))),
+          // The history is append-only, so the next turn sends it again unchanged: cache up to its end.
+          ...replay.map((message, index) =>
+            index === replay.length - 1 ? { ...message, cache: true } : message
+          ),
           ...volatile,
           { role: 'user', content: question, dataClass },
         ];
         let answer = '';
         let proposals = 0;
+        let droppedNotice = false;
         let failed = false;
         // The classes of the tools that actually ran decide what the saved turn is classified as, and
         // whether a proposal was made after reading third-party text (alerts, notes, payloads).
@@ -262,25 +498,29 @@ export async function* streamSquire(
             prompt: prompt.meta,
           },
           messages,
-          tools: toolsForMessage(
-            buildSquireTools(actor, {
-              personal,
-              extendedActions: settings.squireExtendedActions,
-              // Knowledge memory (F4): a failed settings read simply leaves the knowledge tools out.
-              knowledge: await squireKnowledgeEnabled(),
-              dataClass,
-              signal,
-              observability,
-              observe: (name, input, result) => {
-                // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
-                ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
-                readUntrusted = true;
-                return evidence.observe(name, input, result);
-              },
-            }).filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name)),
-            request.message,
-            Boolean(incident)
-          ),
+          // The same tools in the same order every turn (not narrowed per question), so the cached prefix holds.
+          tools: buildSquireTools(actor, {
+            personal,
+            extendedActions: settings.squireExtendedActions,
+            knowledge,
+            dataClass,
+            signal,
+            observability,
+            // The operation catalog: reads for everyone, changes (confirmable cards) with extended actions.
+            extraTools: [
+              ...buildOperationTools(actor, { signal }),
+              ...(settings.squireExtendedActions ? PROPOSAL_EXTRA_TOOLS : []),
+              REMEMBER_FACT_TOOL,
+            ],
+            observe: (name, input, result) => {
+              // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
+              ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
+              readUntrusted = true;
+              return evidence.observe(name, input, result);
+            },
+          })
+            .filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name))
+            .map(traceReadTool),
           maxSteps: SQUIRE_LIMITS.maxSteps,
         })) {
           for (const text of evidence.notices()) {
@@ -293,20 +533,66 @@ export async function* streamSquire(
             answer += event.delta;
             yield { type: 'delta', text: event.delta };
           } else if (event.type === 'finish') {
+            const { usage, served: by } = event.result;
+            Object.assign(served, {
+              model: by.model,
+              ...(by.kind ? { provider: AI_PROVIDER_LABELS[by.kind] ?? by.kind } : {}),
+              tokens: {
+                input: usage.inputTokens,
+                output: usage.outputTokens,
+                ...(usage.cacheReadTokens ? { cacheRead: usage.cacheReadTokens } : {}),
+              },
+            });
             if (event.result.degraded) yield { type: 'notice', text: AI_LEAN_NOTICE };
+            if (event.result.budgetLimited) yield { type: 'notice', text: BUDGET_CUT_NOTICE };
           } else if (event.type === 'tool-start') {
             const label = TOOL_LABELS[event.name];
             if (label) yield { type: 'tool', label };
           } else if (event.type === 'tool-call') {
             const action = actionForTool(event.call.name);
-            if (!action || proposals >= MAX_PROPOSALS) continue;
-            const proposal = await buildProposal(actor, action, event.call.input).catch(() => null);
+            const operation = event.call.name === PROPOSE_OPERATION_TOOL.name;
+            const plan = event.call.name === PROPOSE_PLAN_TOOL.name;
+            const remember = event.call.name === REMEMBER_FACT_TOOL.name;
+            const fix = event.call.name === PROPOSE_RUNBOOK_FROM_FIX_TOOL.name;
+            if (!action && !operation && !plan && !remember && !fix) continue;
+            // The model was told a card is shown only if still valid: say so when one is not.
+            if (proposals >= MAX_PROPOSALS) {
+              if (!droppedNotice) yield { type: 'notice', text: PROPOSAL_CAP_NOTICE };
+              droppedNotice = true;
+              continue;
+            }
+            if (fix) {
+              // The fix card refuses with a reason (role needed, not resolved): say it rather than a generic drop.
+              const built = await buildRunbookFromFixProposal(actor, event.call.input).catch(
+                () => null
+              );
+              if (built && 'token' in built) {
+                proposals += 1;
+                yield {
+                  type: 'proposal',
+                  proposal: { ...built, ...(readUntrusted ? { untrustedContext: true } : {}) },
+                };
+              } else yield { type: 'notice', text: built?.refusal ?? PROPOSAL_DROPPED_NOTICE };
+              continue;
+            }
+            const proposal = await (
+              remember
+                ? buildRememberProposal(actor, event.call.input)
+                : plan
+                  ? buildPlanProposal(actor, event.call.input)
+                  : operation
+                    ? buildOperationProposal(actor, event.call.input)
+                    : buildProposal(actor, action!, event.call.input)
+            ).catch(() => null);
             if (proposal) {
               proposals += 1;
               yield {
                 type: 'proposal',
                 proposal: { ...proposal, ...(readUntrusted ? { untrustedContext: true } : {}) },
               };
+            } else if (!droppedNotice) {
+              droppedNotice = true;
+              yield { type: 'notice', text: PROPOSAL_DROPPED_NOTICE };
             }
           } else if (event.type === 'error') {
             const limit = aiLimitFrom(event.message);
@@ -331,13 +617,15 @@ export async function* streamSquire(
             yield* basicAnswer(
               actor,
               request,
-              incident,
+              basicIncident,
               settings.squireName,
               dataClass,
               savedConversation,
               limit ? 'quota' : 'unavailable',
-              page,
-              limit
+              basicPage,
+              limit,
+              undefined,
+              scope
             );
             return;
           }
@@ -349,12 +637,15 @@ export async function* streamSquire(
           yield* basicAnswer(
             actor,
             request,
-            incident,
+            basicIncident,
             settings.squireName,
             dataClass,
             savedConversation,
             'ready',
-            page
+            basicPage,
+            undefined,
+            undefined,
+            scope
           );
           return;
         }
@@ -401,38 +692,41 @@ export async function* streamSquire(
           dataClass,
         }))
       ) {
-        yield* streamInvestigation({
-          actor,
-          question,
-          // Only the final diagnosis reads this (the planner has its own prompt): the system prompt and
-          // the current briefing, without the chat history.
-          preamble: [system, ...volatile],
-          context: investigationContext,
-          dataClass,
-          chatPort: port,
-          settings,
-          evidence,
-          labels: TOOL_LABELS,
-          suggestions: followUps(incident, true),
-          verifiedHash: authorizationContextHash(actor),
-          observability,
-          knowledge: await squireKnowledgeEnabled(),
-          ...(scope.readTools ? { readTools: scope.readTools } : {}),
-          finish: answer =>
-            contextProofs(
-              actor,
-              { ...request, incidentId: incident?.id },
-              answer,
-              dataClass,
-              evidence.sources(),
-              evidence.verified
-            ),
-          fallback: ordinary,
-        });
+        yield* withCharts(
+          charts,
+          streamInvestigation({
+            actor,
+            question,
+            // Only the final diagnosis reads this (the planner has its own prompt): the system prompt and
+            // the current briefing, without the chat history.
+            preamble: [system, ...volatile],
+            context: investigationContext,
+            dataClass,
+            chatPort: port,
+            settings,
+            evidence,
+            labels: TOOL_LABELS,
+            suggestions: followUps(incident, true),
+            verifiedHash: authorizationContextHash(actor),
+            observability,
+            knowledge,
+            ...(scope.readTools ? { readTools: scope.readTools } : {}),
+            finish: answer =>
+              contextProofs(
+                actor,
+                { ...request, incidentId: incident?.id },
+                answer,
+                dataClass,
+                evidence.sources(),
+                evidence.verified
+              ),
+            fallback: ordinary,
+          })
+        );
         return;
       }
 
-      yield* ordinary();
+      yield* withCharts(charts, ordinary());
       return;
     }
 
@@ -440,18 +734,19 @@ export async function* streamSquire(
     yield* basicAnswer(
       actor,
       request,
-      incident,
+      basicIncident,
       settings.squireName,
       dataClass,
       savedConversation,
       settings.enabled ? 'unavailable' : 'disabled',
-      page,
+      basicPage,
       undefined,
       settings.enabled
         ? dataClass === 'SENSITIVE'
           ? 'No AI provider is allowed to receive Sensitive data, which this conversation holds'
           : 'No enabled AI provider is allowed to receive Internal data'
-        : undefined
+        : undefined,
+      scope
     );
   } catch (error) {
     if (signal?.aborted) return;
@@ -460,6 +755,35 @@ export async function* streamSquire(
     });
     yield { type: 'error', message: 'Something went wrong. Please try again.' };
   }
+}
+
+/** Why a slash-command change produced no card, in words the person can act on. */
+/**
+ * Passes a turn's events through, sending each chart collected since the last event before the next one, and
+ * saving the charts with the turn so a reopened conversation still shows them.
+ */
+export async function* withCharts(
+  charts: readonly SquireChart[],
+  events: AsyncGenerator<SquireEvent>
+): AsyncGenerator<SquireEvent> {
+  let sent = 0;
+  for await (const event of events) {
+    while (sent < charts.length) yield { type: 'chart', chart: charts[sent++] };
+    yield event.type === 'memory' && charts.length > 0
+      ? { ...event, turn: { ...event.turn, charts: [...charts] } }
+      : event;
+  }
+}
+
+async function operationRefusal(actor: AuthorizationActor, operationId: string): Promise<string> {
+  const settings = await getAiSettings().catch(() => null);
+  if (!settings?.squireExtendedActions)
+    return 'That change is not available: an administrator has not turned on "Extended assistant actions" in the AI settings. Nothing was prepared.';
+  const operation = squireOperation(operationId);
+  if (!operation) return 'That change is not available from Squire. Nothing was prepared.';
+  if (!mayCall(actor, operation))
+    return `You don't have permission for that change: it needs ${rolesAllowing(actor, operation)}. Ask someone with that role, or an administrator to change your role. Nothing was prepared.`;
+  return 'That change is not available right now (the target may have changed or be out of your reach). Nothing was prepared.';
 }
 
 async function* basicAnswer(
@@ -472,7 +796,8 @@ async function* basicAnswer(
   availability: 'ready' | 'disabled' | 'quota' | 'unavailable' = 'disabled',
   page: ResolvedPageContext | null = null,
   limit?: SquireAiLimit,
-  reason?: string
+  reason?: string,
+  turnScope: SquireTurnScope = {}
 ): AsyncGenerator<SquireEvent> {
   const scope = {
     userId: actor.id,
@@ -508,25 +833,56 @@ async function* basicAnswer(
     intent: plan.intent,
     ...(incident?.status === 'OPEN' && incident.urgency === 'HIGH' ? { attention: true } : {}),
   };
+  // A narrower principal (an MCP connection, a shared channel) gets no basic answer its read tools could not.
+  if (!basicIntentAllowed(turnScope, plan.intent)) {
+    const text = BASIC_SCOPE_REFUSAL;
+    yield* typed(text);
+    yield { type: 'suggestions', items: [] };
+    yield {
+      type: 'memory',
+      turn: {
+        mode: 'basic',
+        dataClass,
+        completion: 'COMPLETED',
+        sources: [],
+        verified: false,
+        authorizationHash: authorizationContextHash(actor),
+      },
+    };
+    yield await contextProofs(actor, { ...request, incidentId: incident?.id }, text, dataClass);
+    yield { type: 'done' };
+    return;
+  }
   // A wide answer cites its first sources rather than being withheld; the rest is reachable by narrowing.
   const paged = snapshots.length > MAX_BASIC_SOURCES;
   const readable = await evidence.capture(
     paged ? snapshots.slice(0, MAX_BASIC_SOURCES) : snapshots
   );
+  // A slash-command change is built before the text, so a refusal replaces the "I can propose" line.
+  const operationCard = plan.operation
+    ? await buildOperationProposal(actor, plan.operation).catch(() => null)
+    : null;
+  const refusal =
+    plan.operation && !operationCard
+      ? await operationRefusal(actor, plan.operation.operationId)
+      : null;
   const templateOnly =
     snapshots.length === 0 &&
-    ['HELP', 'GREETING', 'THANKS', 'GUIDANCE', 'UNKNOWN', 'RESPONDERS'].includes(plan.intent);
+    (Boolean(plan.operation) ||
+      ['HELP', 'GREETING', 'THANKS', 'GUIDANCE', 'UNKNOWN', 'RESPONDERS'].includes(plan.intent));
   const verified = Boolean(readable) && (evidence.verified || templateOnly);
   const text = readable
     ? redactSecrets(
-        paged
-          ? `${plan.text}\n\nThis answer touched more than ${MAX_BASIC_SOURCES} records; only the first ${MAX_BASIC_SOURCES} are cited. Narrow the question (a service, a status or a shorter window) for complete citations.`
-          : plan.text
+        refusal ??
+          (paged
+            ? `${plan.text}\n\nThis answer touched more than ${MAX_BASIC_SOURCES} records; only the first ${MAX_BASIC_SOURCES} are cited. Narrow the question (a service, a status or a shorter window) for complete citations.`
+            : plan.text)
       )
     : 'The source changed or became unavailable. Please ask for a fresh answer.';
   yield* typed(text);
   const citations = evidence.citations(text);
   if (citations.length > 0) yield { type: 'citations', items: citations };
+  if (operationCard && readable) yield { type: 'proposal', proposal: operationCard };
   let proposed = 0;
   for (const requestProposal of plan.proposals.slice(0, MAX_PROPOSALS)) {
     const proposal = await buildProposal(
@@ -571,21 +927,25 @@ async function* basicAnswer(
 /** The incident on screen with its top intelligence, read through the person's own visibility. */
 async function brief(
   actor: AuthorizationActor,
-  incident: ReadableIncident
+  incident: ReadableIncident,
+  settings: Pick<AiSettingsView, 'squireEnabled'>
 ): Promise<IncidentBriefing> {
   // The pinned briefing is the panel's view of the same findings, with the incident's one shared AI summary.
-  const [pinned, events, analysis] = await Promise.all([
-    getPinnedBriefingForActor(actor, incident.id, undefined, incident).catch(() => null),
-    prisma.incidentEvent
-      .findMany({
-        where: { incidentId: incident.id },
-        orderBy: { createdAt: 'desc' },
-        take: 8,
-        select: { type: true, createdAt: true, message: true },
-      })
-      .catch(() => []),
+  const [pinned, analysis] = await Promise.all([
+    getPinnedBriefingForActor(actor, incident.id, undefined, incident, settings).catch(() => null),
     readIncidentAnalysisState(actor, incident.id).catch(() => null),
   ]);
+  // The timeline is only the fallback for an incident without the shared summary.
+  const events = pinned?.summary
+    ? []
+    : await prisma.incidentEvent
+        .findMany({
+          where: { incidentId: incident.id },
+          orderBy: { createdAt: 'desc' },
+          take: 8,
+          select: { type: true, createdAt: true, message: true },
+        })
+        .catch(() => []);
   return {
     incident,
     analysis: analysis
@@ -628,29 +988,24 @@ async function brief(
 
 /** Messages summarised together: the replay boundary moves in steps of this many (three exchanges). */
 const HISTORY_BLOCK = 6;
-const SOURCE_LINK =
-  /\/(?:incidents|runbooks|changes|alerts|services|schedules|postmortems)\/[A-Za-z0-9_-]{1,64}(?![A-Za-z0-9_-])/g;
-
-/** An older answer as history: its first sentence plus the in-app sources it cited. */
-export function replayDigest(answer: string): string {
-  const text = answer.trim();
-  const first = (text.match(/^[\s\S]*?[.!?](?=\s|$)/)?.[0] ?? text).slice(0, 400);
-  const sources = [...new Set(text.match(SOURCE_LINK) ?? [])]
-    .filter(link => !first.includes(link))
-    .slice(0, 8);
-  return sources.length ? `${first} Sources: ${sources.join(' ')}` : first;
-}
 
 /**
  * Earlier turns. A saved conversation is the source of truth when history is on (the person's own, read
  * on the server); otherwise the browser's copy is used, already trimmed by the request schema.
  */
+interface PriorTurns {
+  messages: AiMessage[];
+  omitted: boolean;
+  /** The digest of turns before the replay window (also first in `messages`). */
+  summary?: AiMessage;
+}
+
 async function priorTurns(
   actor: AuthorizationActor,
   request: SquireRequest,
   saved: ConversationDetail | null,
   incidentId: string | null
-): Promise<{ messages: AiMessage[]; omitted: boolean }> {
+): Promise<PriorTurns> {
   if (saved) {
     // The summarised/verbatim boundary moves in fixed blocks, so the summary and the replayed turns stay
     // byte-identical (and cached) for several turns instead of shifting by one on every turn.
@@ -659,11 +1014,27 @@ async function priorTurns(
       Math.ceil((saved.messages.length - SQUIRE_LIMITS.historyMax) / HISTORY_BLOCK) * HISTORY_BLOCK
     );
     const turns = saved.messages.slice(cut);
+    // A completed answer is replayed whether or not its sources were verified (labelled below), so a follow-up
+    // such as "yes, do it" keeps its context; interrupted and access-changed ones are not (`replayable`).
     const isReplayable = (message: ConversationDetail['messages'][number]) =>
-      message.role === 'user' ||
-      (message.replayable !== false &&
-        message.envelope?.verified &&
-        message.envelope.completion === 'COMPLETED');
+      message.replayable !== false &&
+      (message.role === 'user' || message.envelope?.completion === 'COMPLETED');
+    // The conversation follows the person across pages: a question asked elsewhere says where.
+    const here = incidentId
+      ? `incident:${incidentId}`
+      : request.pageContext
+        ? `${request.pageContext.kind}:${request.pageContext.id}`
+        : null;
+    const askedOn = (message: ConversationDetail['messages'][number]) => {
+      const context =
+        message.envelope?.context ??
+        (saved.incidentId ? { kind: 'incident' as const, id: saved.incidentId } : null);
+      if (context?.kind === 'general') return here ? '[Asked as a general question] ' : '';
+      if (!context || `${context.kind}:${context.id}` === here) return '';
+      return context.kind === 'incident'
+        ? `[Asked while viewing incident /incidents/${context.id}] `
+        : `[Asked while viewing a ${context.kind.replace('_', ' ')} page] `;
+    };
     const replayable = turns.filter(isReplayable);
     // Turns before the replay window are summarised (pinned after the system prompt), not dropped. The
     // summary is the deterministic digest: a model summary here would add a SUMMARIZE call, a per-user
@@ -674,19 +1045,22 @@ async function priorTurns(
       incidentId: incidentId ?? undefined,
     }).catch(() => null);
     return {
+      ...(summary ? { summary } : {}),
       messages: [
         ...(summary ? [summary] : []),
-        ...replayable.map((message, index) => ({
+        ...replayable.map(message => ({
           role: message.role,
           content:
             message.role === 'assistant'
-              ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]\n${
-                  // Only the latest answer is replayed in full; older ones as their gist and sources.
-                  replayable.slice(index + 1).some(later => later.role === 'assistant')
-                    ? replayDigest(message.content)
-                    : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)
+              ? `${
+                  message.envelope?.verified
+                    ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]`
+                    : earlierAnswerLabel(message.createdAt.toISOString(), false)
+                }\n${
+                  // Every answer the same way, whatever its position, so the replayed prefix is append-only.
+                  message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)
                 }`
-              : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax),
+              : `${askedOn(message)}${message.content}`.slice(0, SQUIRE_LIMITS.historyTurnMax),
           dataClass: message.dataClass,
         })),
       ],
@@ -712,16 +1086,16 @@ async function contextProofs(
       text: request.message,
       dataClass,
     }).catch(() => undefined),
-    verified
-      ? mintContextProof({
-          actor,
-          incidentId: request.incidentId,
-          role: 'assistant',
-          text: answer,
-          dataClass,
-          sources,
-        }).catch(() => undefined)
-      : undefined,
+    // Every completed answer gets a proof so the browser can replay it; an unverified one says so.
+    mintContextProof({
+      actor,
+      incidentId: request.incidentId,
+      role: 'assistant',
+      text: answer,
+      dataClass,
+      sources,
+      verified,
+    }).catch(() => undefined),
   ]);
   return {
     type: 'context',

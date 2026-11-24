@@ -149,6 +149,28 @@ describe('basic mode (no AI)', () => {
     expect(events.at(-1)).toEqual({ type: 'done' });
   });
 
+  it('honours a narrower read scope (an MCP connection, a shared channel) in basic answers', async () => {
+    const admin = await setup();
+    await scopedWorld();
+    const scoped = async (message: string) => {
+      const events: SquireEvent[] = [];
+      for await (const event of streamSquire(
+        await actorOf(admin.id),
+        { message, history: [] },
+        undefined,
+        { readTools: new Set(['get_incident']) }
+      ))
+        events.push(event);
+      return events;
+    };
+    const refused = await scoped("what's on fire?");
+    expect(textOf(refused)).toContain('not allowed to read what that question needs');
+    expect(textOf(refused)).not.toContain('Checkout latency high');
+    expect(refused.at(-1)).toEqual({ type: 'done' });
+    // Templates read nothing and stay available.
+    expect(textOf(await scoped('help'))).toContain('I never change anything');
+  });
+
   it('lists only incidents the asker may see', async () => {
     const admin = await setup();
     const { member } = await scopedWorld();
@@ -171,6 +193,22 @@ describe('basic mode (no AI)', () => {
       await turn(member.id, 'tell me about this', { incidentId: 'does-not-exist' })
     );
     expect(missing).toBe(probed); // an unreadable and a nonexistent incident are indistinguishable
+  });
+
+  it('treats one readable @-mention as the page, and an unreadable one as no mention', async () => {
+    await setup();
+    const { member, mine, theirs } = await scopedWorld();
+    const own = textOf(
+      await turn(member.id, 'tell me about this', { mentions: [{ kind: 'incident', id: mine.id }] })
+    );
+    expect(own).toContain('Checkout latency high');
+    const probed = textOf(
+      await turn(member.id, 'tell me about this', {
+        mentions: [{ kind: 'incident', id: theirs.id }],
+      })
+    );
+    expect(probed).not.toMatch(/Payroll|corruption/);
+    expect(probed).toBe(textOf(await turn(member.id, 'tell me about this')));
   });
 
   it('answers similar, cause and runbook questions from the intelligence findings', async () => {
@@ -200,7 +238,9 @@ describe('basic mode (no AI)', () => {
     });
     await analyzeResponse({ subjectKey: target.id, generation: 1 }, settings);
 
-    const similar = textOf(await turn(admin.id, 'any similar incidents?', { incidentId: target.id }));
+    const similar = textOf(
+      await turn(admin.id, 'any similar incidents?', { incidentId: target.id })
+    );
     expect(similar).toContain('db-9');
     // Look-alikes carry their short id and opening date, so same-titled ones can be told apart.
     expect(similar).toContain(`#${precedent.id.slice(-5).toUpperCase()}, opened `);
@@ -251,10 +291,13 @@ describe('AI mode', () => {
     const tools = body.tools?.map(t => t.function.name) ?? [];
     // Conversation turns require Personal clearance, including the corresponding scoped tools.
     expect(tools.filter(name => !name.startsWith('propose_')).sort()).toEqual([
+      'describe_operation',
       'explain_automation_rule',
+      'find_operations',
       'find_people',
       'get_alert_payload',
       'get_automation_decision',
+      'get_catch_up',
       'get_escalation_policy',
       'get_incident',
       'get_intelligence',
@@ -268,12 +311,54 @@ describe('AI mode', () => {
       'get_timeline',
       'incident_analytics',
       'list_alerts',
+      'read_operation',
       'search_incidents',
       'search_postmortems',
+      'search_product_docs',
       'semantic_search_incidents',
       'who_is_on_call',
     ]);
     expect(tools).toContain('propose_reassign_incident');
+  });
+
+  it('adds readable @-mentions to the volatile prompt and silently drops unreadable ones', async () => {
+    const admin = await setup({ ai: true, provider: true });
+    const { member, mine, theirs, serviceA, serviceB } = await scopedWorld();
+    model.script.push({ content: 'Noted.' });
+    const events = await turn(member.id, 'how are these doing?', {
+      mentions: [
+        { kind: 'service', id: serviceA.id },
+        { kind: 'service', id: serviceB.id },
+        { kind: 'incident', id: mine.id },
+        { kind: 'incident', id: theirs.id },
+        // A USER outside the admin's teams may not read the admin's profile.
+        { kind: 'person', id: admin.id },
+        { kind: 'team', id: 'does-not-exist' },
+      ],
+    });
+    expect(events.at(-1)).toEqual({ type: 'done' });
+    const body = model.requests[0].body as { messages: Array<{ role: string; content: string }> };
+    const volatile = body.messages.at(-2)!;
+    expect(volatile.role).toBe('user');
+    expect(volatile.content).toContain('[Untrusted data:');
+    expect(volatile.content).toContain(
+      `The user mentioned the service "${serviceA.name}" /services/${serviceA.id}.`
+    );
+    expect(volatile.content).toContain(
+      `The user mentioned the incident "Checkout latency high" /incidents/${mine.id}.`
+    );
+    const all = JSON.stringify(body);
+    expect(all).not.toContain(serviceB.name);
+    expect(all).not.toContain(serviceB.id);
+    expect(all).not.toContain('Payroll');
+    expect(all).not.toContain(admin.id);
+    expect(all).not.toContain('does-not-exist');
+
+    // The administrator may read people, so the same person mention reaches their prompt.
+    model.requests.length = 0;
+    model.script.push({ content: 'Noted.' });
+    await turn(admin.id, 'who is this?', { mentions: [{ kind: 'person', id: member.id }] });
+    expect(JSON.stringify(model.requests[0].body)).toContain(`(person id ${member.id})`);
   });
 
   it('lets tools read only what the asker may read', async () => {
@@ -337,6 +422,20 @@ describe('AI mode', () => {
     }
   });
 
+  it('refuses a malformed proposal to the model instead of claiming a card was shown', async () => {
+    const admin = await setup({ ai: true, provider: true });
+    const { mine } = await scopedWorld();
+    model.script.push(
+      { toolCall: { name: 'propose_acknowledge_incident', args: JSON.stringify({ note: 'x' }) } },
+      { content: 'I could not prepare that.' }
+    );
+    const events = await turn(admin.id, 'acknowledge it', { incidentId: mine.id });
+    expect(events.some(event => event.type === 'proposal')).toBe(false);
+    const second = JSON.stringify(model.requests[1].body);
+    expect(second).toContain('was not valid');
+    expect(second).not.toContain('Sent as a suggestion card');
+  });
+
   it('search tool is scoped and bounded', async () => {
     await setup({ ai: true, provider: true });
     const { member } = await scopedWorld();
@@ -359,8 +458,9 @@ describe('AI mode', () => {
       'meta',
       'notice',
       'meta',
-      ...publicEvents.slice(3, -2).map(() => 'delta'),
+      ...publicEvents.slice(3, -3).map(() => 'delta'),
       'suggestions',
+      'trace',
       'done',
     ]);
     expect(events[1]).toMatchObject({
@@ -427,7 +527,10 @@ it('gives a basic answer and sends nothing when no provider may receive Personal
   await db.aiProvider.updateMany({ data: { maxDataClass: 'INTERNAL' } });
   invalidateGatewayCache();
   // Free text can name people; redaction alone does not make it Internal.
-  const events = await turn(admin.id, 'Why did Alice Smith page customer Acme? Mail ops-lead@example.com');
+  const events = await turn(
+    admin.id,
+    'Why did Alice Smith page customer Acme? Mail ops-lead@example.com'
+  );
   expect(model.requests).toHaveLength(0);
   expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
 });
@@ -459,7 +562,7 @@ it('keeps saved Personal history away from Internal-only fallback after a provid
   expect(events.some(event => event.type === 'meta' && event.mode === 'basic')).toBe(true);
 });
 
-it('rejects saved incident history in a global conversation before provider egress', async () => {
+it('continues saved incident history on another page, labelled with the incident it was asked on', async () => {
   const admin = await setup({ ai: true, provider: true });
   const { recordExchange } = await import('@/lib/intelligence/conversations/store');
   await db.aiSettings.update({ where: { id: 'default' }, data: { squireHistoryEnabled: true } });
@@ -468,16 +571,14 @@ it('rejects saved incident history in a global conversation before provider egre
   const conversationId = await recordExchange({
     userId: admin.id,
     incidentId: historyIncident.id,
-    question: 'Old context',
-    answer: 'context-canary-42',
+    question: 'context-question-42',
+    answer: 'context-answer',
   });
   const events = await turn(admin.id, 'Continue here', { conversationId });
-  expect(model.requests).toHaveLength(0);
-  expect(events).toContainEqual(
-    expect.objectContaining({
-      type: 'error',
-      message: expect.stringContaining('different context'),
-    })
+  expect(events).not.toContainEqual(expect.objectContaining({ type: 'error' }));
+  expect(model.requests).toHaveLength(1);
+  expect(JSON.stringify(model.requests[0].body)).toContain(
+    `[Asked while viewing incident /incidents/${historyIncident.id}] context-question-42`
   );
 });
 
@@ -581,4 +682,35 @@ it('gives concrete basic investigation checks and understands a follow-up withou
   expect(followup).toContain('active connections');
   expect(followup).not.toContain('invented-old-fact-canary');
   expect(model.requests).toHaveLength(0);
+});
+
+it('labels a general turn as general, never with the incident the conversation started on', async () => {
+  const admin = await setup({ ai: true, provider: true });
+  await db.aiSettings.update({ where: { id: 'default' }, data: { squireHistoryEnabled: true } });
+  const { mine } = await scopedWorld();
+  const { recordExchange } = await import('@/lib/intelligence/conversations/store');
+  const id = await recordExchange({
+    userId: admin.id,
+    incidentId: mine.id,
+    question: 'incident-question-canary',
+    answer: 'a1',
+    turn: { context: { kind: 'incident', id: mine.id } },
+  });
+  await recordExchange({
+    userId: admin.id,
+    conversationId: id,
+    question: 'general-question-canary',
+    answer: 'a2',
+    turn: { context: { kind: 'general', id: 'general' } },
+  });
+  model.script.push({ content: 'ok' }, { content: 'ok' });
+  await turn(admin.id, 'next', { conversationId: id, incidentId: mine.id });
+  expect(JSON.stringify(model.requests[0].body)).toContain(
+    '[Asked as a general question] general-question-canary'
+  );
+  await turn(admin.id, 'next', { conversationId: id });
+  const general = JSON.stringify(model.requests[1].body);
+  expect(general).toContain('general-question-canary');
+  expect(general).not.toContain('[Asked as a general question]');
+  expect(general).not.toMatch(/\[Asked while viewing incident [^\]]*\] general-question-canary/);
 });

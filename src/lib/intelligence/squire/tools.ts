@@ -1,7 +1,7 @@
 import 'server-only';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { CAPABILITIES, hasCapability, type Capability } from '@/lib/authorization';
 import {
   dashboardUserReadWhere,
   incidentReadWhere,
@@ -31,18 +31,21 @@ import { getSimilarIncidentsForActor } from '../similarity/view';
 import { getRelatedIncidentsForActor } from '../correlation/view';
 import {
   SQUIRE_ACTION_DESCRIPTIONS,
+  SQUIRE_ACTION_INPUTS,
   SQUIRE_ACTION_JSON_SCHEMAS,
   SQUIRE_ACTION_NAMES,
   type SquireActionName,
 } from './actions/catalog';
 import { FOLLOW_UP_ONLY_ACTIONS, isExtendedSquireAction } from './actions/catalog-extended';
 import { readIncidentForActor } from './deterministic';
+import { buildCatchUp } from './catch-up';
 import { classifyIntent, normalizeMessage, parseSlashCommand } from './basic/nlu';
 // --- Observability connectors (slice F1): tools live in their own module and are appended below.
 import type { EligibleConnection } from '../connectors/service';
 import { buildObservabilityTools, OBSERVABILITY_TOOL_DATA_CLASS } from './tools-observability';
 import { buildIncidentTools, INCIDENT_TOOL_DATA_CLASS } from './tools-incident';
 import { buildKnowledgeTools, KNOWLEDGE_TOOL_DATA_CLASS } from './tools-knowledge';
+import { buildDocsTool } from './docs';
 import { AUTOMATION_TOOL_DATA_CLASS, buildAutomationTools } from './tools-automation';
 
 const NOT_FOUND = { error: 'Not found, or you do not have access to it.' };
@@ -56,6 +59,8 @@ export const SQUIRE_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = {
   get_timeline: 'PERSONAL',
   list_alerts: 'INTERNAL',
   who_is_on_call: 'PERSONAL',
+  // Names the people who wrote notes and quotes those notes.
+  get_catch_up: 'PERSONAL',
   find_people: 'PERSONAL',
   search_postmortems: 'PERSONAL',
   get_incident: 'INTERNAL',
@@ -67,6 +72,10 @@ export const SQUIRE_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = {
   semantic_search_incidents: 'INTERNAL',
   get_status_page: 'PUBLIC',
   get_problem_outcomes: 'INTERNAL',
+  search_product_docs: 'PUBLIC',
+  find_operations: 'PUBLIC',
+  describe_operation: 'PUBLIC',
+  read_operation: 'PERSONAL',
   // Observability connector tools (logs are Personal; the rest Internal).
   ...OBSERVABILITY_TOOL_DATA_CLASS,
   // Incident-response tools (tools-incident.ts) declare their own classes.
@@ -140,6 +149,11 @@ export function buildSquireTools(
     extendedActions?: boolean;
     /** The knowledge index is on: offer search_knowledge and the learn_service_fact proposal (F4). */
     knowledge?: boolean;
+    /**
+     * More tools, data-class filtered and evidence-observed like the built-in ones. The chat turn passes the
+     * operation catalog (operations.ts) here, so the investigation lane's worker bundle never loads it.
+     */
+    extraTools?: readonly AiToolDefinition[];
   }
 ): AiToolDefinition[] {
   const tools: AiToolDefinition[] = [
@@ -754,6 +768,24 @@ export function buildSquireTools(
         }
       ),
       readTool(
+        'get_catch_up',
+        'Catch the asking person up (a shift hand-off): what opened, resolved and is still open on their teams and assigned to them since their last on-call shift ended (or the last `hours`, default 12, at most 168), still-open high-urgency incidents, incidents that paged them, notes that mention them, and their current or next shift. Lead with what needs action.',
+        {
+          type: 'object',
+          properties: { hours: { type: 'integer', minimum: 1, maximum: 168 } },
+          additionalProperties: false,
+        },
+        async input => {
+          const parsed = z
+            .object({ hours: z.number().int().min(1).max(168).optional() })
+            .strict()
+            .safeParse(input ?? {});
+          if (!parsed.success) return { error: 'Invalid input' };
+          if (!scoped(() => incidentReadWhere(actor))) return NOT_FOUND;
+          return buildCatchUp(actor, { hours: parsed.data.hours });
+        }
+      ),
+      readTool(
         'find_people',
         'Find active people by name or email, to reassign an incident. Returns at most 5 with their ids.',
         {
@@ -811,6 +843,10 @@ export function buildSquireTools(
   if (options.knowledge) tools.push(...buildKnowledgeTools(actor, options));
   // Automation (J1.6): read tools for people who may read automation.
   tools.push(...buildAutomationTools(actor));
+  // Product documentation for how-to questions.
+  tools.push(buildDocsTool());
+  // Tools the caller supplies (the chat turn adds the operation catalog), wrapped like every other below.
+  if (options.extraTools) tools.push(...options.extraTools);
 
   for (const name of SQUIRE_ACTION_NAMES) {
     if (!options.personal && name === 'reassign_incident') continue;
@@ -819,6 +855,9 @@ export function buildSquireTools(
     if (FOLLOW_UP_ONLY_ACTIONS.has(name)) continue;
     if (!options.personal && name === 'add_responder') continue;
     if (!options.knowledge && name === 'learn_service_fact') continue;
+    // Never offer a card the role could not confirm: the model then says who can instead.
+    const needs = PROPOSAL_CAPABILITY.get(name);
+    if (needs && !hasCapability(actor.role, needs)) continue;
     if (
       name === 'draft_automation_rule' &&
       !hasCapability(actor.role, CAPABILITIES.AUTOMATION_EDIT)
@@ -836,18 +875,23 @@ export function buildSquireTools(
         (tool.dataClass ?? SQUIRE_TOOL_DATA_CLASS[tool.name] ?? 'INTERNAL') !== 'PERSONAL'
     )
     .map(tool => ({
-    ...tool,
-    dataClass: highestDataClass([
-      options.dataClass ?? 'INTERNAL',
-      tool.dataClass ?? SQUIRE_TOOL_DATA_CLASS[tool.name] ?? 'INTERNAL',
-    ]),
-    ...(options.observe && tool.kind === 'READ'
-      ? {
-          execute: async (input: unknown) =>
-            options.observe!(tool.name, input, await tool.execute!(input)),
-        }
-      : {}),
-  }));
+      ...tool,
+      dataClass: highestDataClass([
+        options.dataClass ?? 'INTERNAL',
+        tool.dataClass ?? SQUIRE_TOOL_DATA_CLASS[tool.name] ?? 'INTERNAL',
+      ]),
+      ...(options.observe && tool.kind === 'READ'
+        ? {
+            execute: async (input: unknown, call?: { signal?: AbortSignal }) => {
+              const result = await tool.execute!(input, call);
+              // Settled: the call was given up on (deadline, cancelled turn), so its late result must not
+              // become evidence or a chart for an answer that no longer uses it.
+              if (call?.signal?.aborted) throw new Error('Tool call already settled');
+              return options.observe!(tool.name, input, result);
+            },
+          }
+        : {}),
+    }));
 }
 
 /**
@@ -856,6 +900,13 @@ export function buildSquireTools(
  * are always on offer.
  */
 const READ_FAMILIES: Array<{ tools: Set<string>; words: RegExp; intents?: Set<string> }> = [
+  {
+    // The operation catalog: schedules, maintenance, SLOs, dashboards and any change beyond incidents.
+    tools: new Set(['find_operations', 'describe_operation', 'read_operation']),
+    // Bounded, literal alternatives over a message capped by the request schema.
+    words:
+      /\b(schedules?|overrides?|maintenance|slos?|objectives?|dashboards?|reports?|teams?|polic(?:y|ies)|postmortems?|status ?pages?|custom fields?|tags?|watchers?|roles?|templates?|business services?|runbooks?|services?|create|update|edit|change|rename|archive|publish|add|remove|set|cover|swap)\b/,
+  },
   {
     tools: new Set([
       'query_metrics',
@@ -869,7 +920,7 @@ const READ_FAMILIES: Array<{ tools: Set<string>; words: RegExp; intents?: Set<st
     ]),
     // Bounded, literal alternatives over a message capped by the request schema.
     words:
-      /\b(logs?|metrics?|promql|traces?|spans?|errors?|exceptions?|stack|latency|slow|cpu|memory|5\d\d|4\d\d|diffs?|commits?|code|deploy\w*|release\w*|queries|query|dashboards?|labels?|series|spikes?|timeouts?|why|cause\w*|root|investigat\w*|debug\w*|fail\w*|broke\w*|down|outage|evidence|signals?|telemetry|sentry|loki|tempo|prometheus|datadog|cloudwatch|grafana|github)\b/,
+      /\b(logs?|metrics?|promql|traces?|spans?|errors?|exceptions?|stack|latency|slow|cpu|memory|5\d\d|4\d\d|diffs?|commits?|code|deploy\w*|release\w*|queries|query|dashboards?|labels?|series|spikes?|graphs?|charts?|plots?|trends?|timeouts?|why|cause\w*|root|investigat\w*|debug\w*|fail\w*|broke\w*|down|outage|evidence|signals?|telemetry|sentry|loki|tempo|prometheus|datadog|cloudwatch|grafana|github)\b/,
     intents: new Set(['CAUSES', 'SERVICE_HEALTH', 'INCIDENT_SUMMARY']),
   },
   {
@@ -877,6 +928,17 @@ const READ_FAMILIES: Array<{ tools: Set<string>; words: RegExp; intents?: Set<st
     words: /\b(automat\w*|rules?|rout\w*|priorit\w*|escalat\w*|assign\w*|paged|page|why)\b/,
   },
 ];
+
+/** Role capability an extended proposal needs (mirrors the checks in actions/extended.ts). */
+const PROPOSAL_CAPABILITY = new Map<string, Capability>([
+  ['change_urgency', CAPABILITIES.OPERATIONS_MANAGE],
+  ['snooze_incident', CAPABILITIES.OPERATIONS_MANAGE],
+  ['create_jira_issue', CAPABILITIES.OPERATIONS_MANAGE],
+  ['unlink_related_incident', CAPABILITIES.INTELLIGENCE_FEEDBACK],
+  ['draft_status_update', CAPABILITIES.ADMIN_MANAGE],
+  ['publish_status_update', CAPABILITIES.ADMIN_MANAGE],
+  ['run_runbook', CAPABILITIES.RUNBOOK_EXECUTE],
+]);
 
 /** The everyday incident actions stay on offer for any question; the rest only when the message asks to act. */
 const CORE_PROPOSALS = new Set([
@@ -887,7 +949,7 @@ const CORE_PROPOSALS = new Set([
 // Bounded, literal alternatives over a message capped by the request schema.
 
 const ACTION_WORDS =
-  /\b(ack|acknowledge|resolve|close|reopen|re-?assign|assign|hand ?over|snooze|mute|escalate|page|un-?link|link|note|add|remove|draft|start|open|create|run|execute|publish|post|mark|set|raise|lower|bump|make|remember|learn|follow(?!-ups)|unfollow|notify|invite|subscribe|propose|suggest)\b/;
+  /\b(ack|acknowledge|resolve|close|reopen|re-?assign|assign|hand ?over|snooze|mute|escalate|page|un-?link|link|note|add|remove|draft|start|open|create|run|execute|publish|post|mark|set|raise|lower|bump|make|remember|learn|follow(?!-ups)|unfollow|notify|invite|subscribe|propose|suggest|change(?![sd])|update|edit|rename|cover|swap|archive|delete|cancel|end)\b/;
 
 /**
  * Tool subset by intent, so a question does not carry every schema. Uses the basic-mode NLU: a message with
@@ -922,6 +984,9 @@ function proposalTool(name: SquireActionName): AiToolDefinition {
     kind: 'PROPOSE_WRITE',
     // eslint-disable-next-line security/detect-object-injection -- name is a member of the closed action union
     inputSchema: SQUIRE_ACTION_JSON_SCHEMAS[name],
+    // The same check buildProposal applies, so the model hears at once that a malformed card was not shown.
+    // eslint-disable-next-line security/detect-object-injection -- name is a member of the closed action union
+    validate: input => SQUIRE_ACTION_INPUTS[name].safeParse(input).success,
   };
 }
 

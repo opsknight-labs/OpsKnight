@@ -28,7 +28,12 @@ export const SLACK_OPTIONAL_BOT_SCOPES = [
   'groups:history', // Pin sync inside private channels
   'im:read',
   'mpim:read',
+  'app_mentions:read', // Receive @OpsKnight mentions so Squire can answer in incident channels
+  'chat:write.customize', // Post Squire's messages under its own name and avatar
 ] as const;
+
+/** Lets Squire's messages carry its own name and avatar instead of the app's. */
+export const SLACK_CUSTOMIZE_SENDER_SCOPE = 'chat:write.customize';
 
 export const SLACK_BOT_SCOPES: string[] = [
   ...SLACK_REQUIRED_BOT_SCOPES,
@@ -40,6 +45,8 @@ export const SLACK_BOT_EVENTS = [
   'reaction_added',
   'app_uninstalled',
   'tokens_revoked',
+  // @OpsKnight mentions answered by Squire (off unless Squire is enabled for chat).
+  'app_mention',
   // War-room channel capture (Settings → Intelligence); ignored unless that switch is on.
   'message.channels',
   'message.groups',
@@ -47,7 +54,7 @@ export const SLACK_BOT_EVENTS = [
 
 /** Subcommands the dispatcher actually implements — keeps the hint honest. */
 export const SLACK_COMMAND_USAGE_HINT =
-  'ack | resolve [summary] | note <message> | who | postmortem | help';
+  'ack | resolve [summary] | note <message> | who | postmortem | ask <question> | investigate | help';
 
 export interface SlackManifestOptions {
   /** Public base URL, e.g. https://opsknight.example.com */

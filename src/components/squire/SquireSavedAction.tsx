@@ -38,12 +38,15 @@ export default function SquireSavedAction({ action }: { action: SavedActionRefer
     >
       <p className="font-medium">{action.title}</p>
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <Link
-          href={`/incidents/${encodeURIComponent(action.incidentId)}`}
-          className="inline-flex min-h-11 items-center text-primary underline underline-offset-2"
-        >
-          View incident
-        </Link>
+        {/* A catalog or plan change may not be about an incident. */}
+        {action.incidentId && (
+          <Link
+            href={`/incidents/${encodeURIComponent(action.incidentId)}`}
+            className="inline-flex min-h-11 items-center text-primary underline underline-offset-2"
+          >
+            View incident
+          </Link>
+        )}
         <button
           type="button"
           disabled={checking}

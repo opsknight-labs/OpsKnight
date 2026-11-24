@@ -1,8 +1,10 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { decrypt } from '@/lib/encryption';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { getSlackBotToken } from '@/lib/slack';
-import { resolveOpsKnightUser } from '@/lib/chatops/slash-commands';
+import { resolveOpsKnightUser, type SlackWorkspaceRef } from '@/lib/chatops/slash-commands';
 import { slackApiCall } from '@/lib/war-room/providers/slack/client';
 import type { SquireRequest } from '@/lib/intelligence/squire/contract';
 import {
@@ -11,13 +13,29 @@ import {
   chatBaseUrl,
   confirmChatProposal,
   progressEditor,
+  recalledPlaceholder,
+  rememberPlaceholder,
+  SQUIRE_CHAT_CHANNEL_QUESTIONS_PER_MINUTE,
+  SQUIRE_CHAT_NOT_LINKED,
   SQUIRE_CHAT_NOT_OWNER,
+  SQUIRE_CHAT_QUESTIONS_PER_MINUTE,
+  SQUIRE_CHAT_RATE_LIMITED,
 } from './handler';
 import {
+  loadSquireIdentity,
+  slackCanCustomizeSender,
+  slackSquireBlocks,
+  slackSquireSender,
+  type SquireIdentity,
+} from './identity';
+import { SLACK_GONE } from './publish';
+import {
+  appLink,
   escapeSlack,
   parseSquireButtonValue,
   questionFromMention,
   renderSlackAnswer,
+  slackBlocksText,
   SQUIRE_SLACK_CONFIRM_ACTION,
   SQUIRE_SLACK_DISMISS_ACTION,
 } from './render';
@@ -32,11 +50,15 @@ import {
 export interface SlackSquireMentionPayload {
   __kind: 'SQUIRE_MENTION';
   team_id: string;
+  /** Enterprise Grid org of the workspace, when there is one. */
+  enterprise_id?: string;
   channel_id: string;
   user_id: string;
   text: string;
   ts: string;
   thread_ts?: string;
+  /** Added by the intent worker; keys the remembered progress message of a retried answer. */
+  __opsknightIntentId?: string;
 }
 
 /** What the worker stores and then posts in the thread. `__serviceId` selects the bot token only. */
@@ -46,11 +68,28 @@ export interface SlackSquireReply {
   text: string;
   blocks: Record<string, unknown>[];
   __serviceId: string | null;
+  /** The workspace the mention came from; selects that installation's token. */
+  __teamId?: string;
   /** The "looking into it" message posted in the thread; the answer replaces it. */
   __placeholderTs?: string;
+  /** Posts as Squire (`chat:write.customize`); used only when the answer is posted as a new message. */
+  __sender?: { username?: string; icon_url?: string };
 }
 
-const SQUIRE_THINKING = ':hourglass_flowing_sand: Squire is looking into it…';
+const thinking = (identity: SquireIdentity) =>
+  `:hourglass_flowing_sand: ${escapeSlack(identity.name)} is looking into it…`;
+
+/** A plain mrkdwn Squire message: the text, led by the Squire header when Slack shows OpsKnight as sender. */
+function squireText(text: string, identity: SquireIdentity, canCustomize: boolean) {
+  return {
+    text,
+    blocks: slackSquireBlocks(
+      [{ type: 'section', text: { type: 'mrkdwn', text } }],
+      identity,
+      canCustomize
+    ),
+  };
+}
 /** Replies read to find the last messages of a thread (Slack returns a thread oldest first). */
 const THREAD_READ_LIMIT = 200;
 
@@ -143,64 +182,155 @@ export async function findSlackIncidentForChannel(workspaceId: string, channelId
 const NOT_AN_INCIDENT_CHANNEL =
   'I answer in OpsKnight incident channels. Open the incident in OpsKnight to ask about anything else.';
 
-/** Worker: answers one mention and returns the threaded reply to post. */
+/**
+ * The bot token of the installation in this workspace. With several workspaces installed, a service's own
+ * integration (or the global one) may belong to another workspace, whose token cannot read or post here.
+ */
+export async function slackInstallationToken(
+  teamId: string,
+  serviceId?: string | null
+): Promise<string | null> {
+  const installation = teamId
+    ? await prisma.slackIntegration.findFirst({
+        where: { workspaceId: teamId, enabled: true },
+        orderBy: { updatedAt: 'desc' },
+        select: { botToken: true },
+      })
+    : null;
+  if (installation?.botToken) {
+    try {
+      return await decrypt(installation.botToken);
+    } catch {
+      // Never fall back to another workspace's token for this one.
+      logger.warn('[Squire] Could not read the Slack installation token');
+      return null;
+    }
+  }
+  // No installation row (environment token, single workspace): the identity check still binds the workspace.
+  return getSlackBotToken(serviceId ?? undefined);
+}
+
+/** Within the per-person and per-channel question limits; checked before Squire does anything visible. */
+async function withinMentionLimits(payload: SlackSquireMentionPayload): Promise<boolean> {
+  const person = await checkRateLimit(
+    `squire:chatops:slack-user:${payload.team_id}:${payload.user_id}`,
+    SQUIRE_CHAT_QUESTIONS_PER_MINUTE,
+    60_000
+  );
+  if (!person.allowed) return false;
+  const channel = await checkRateLimit(
+    `squire:chatops:slack-channel:${payload.team_id}:${payload.channel_id}`,
+    SQUIRE_CHAT_CHANNEL_QUESTIONS_PER_MINUTE,
+    60_000
+  );
+  return channel.allowed;
+}
+
+/** One private notice to the asker; repeats within ten minutes are dropped so nobody is spammed. */
+async function noticeOnce(token: string, payload: SlackSquireMentionPayload, text: string) {
+  const once = await checkRateLimit(
+    `squire:chatops:slack-notice:${payload.team_id}:${payload.user_id}`,
+    1,
+    10 * 60_000
+  );
+  if (!once.allowed) return;
+  await slackApiCall('chat.postEphemeral', token, {
+    channel: payload.channel_id,
+    user: payload.user_id,
+    ...(payload.thread_ts ? { thread_ts: payload.thread_ts } : {}),
+    text: escapeSlack(text),
+  }).catch(() => undefined);
+}
+
+/**
+ * Worker: answers one mention and returns the threaded reply to post, or null when nothing is posted. The
+ * asker is resolved and the limits checked before any Slack call, so an unlinked or over-limit person gets a
+ * single private notice and no thread activity.
+ */
 export async function answerSlackSquireMention(
   payload: SlackSquireMentionPayload
-): Promise<SlackSquireReply> {
+): Promise<SlackSquireReply | null> {
   const thread = payload.thread_ts || payload.ts;
+  const workspace: SlackWorkspaceRef = {
+    teamId: payload.team_id,
+    enterpriseId: payload.enterprise_id || null,
+  };
   const incident = await findSlackIncidentForChannel(payload.team_id, payload.channel_id);
+  const botToken = await slackInstallationToken(payload.team_id, incident?.serviceId);
+  if (!botToken) return null;
+  const user = await resolveOpsKnightUser(payload.user_id, botToken, workspace);
+  // A retried answer already passed the limits and posted its progress message.
+  const remembered = await recalledPlaceholder(payload.__opsknightIntentId);
+  const refusal = !user
+    ? SQUIRE_CHAT_NOT_LINKED
+    : !remembered && !(await withinMentionLimits(payload))
+      ? SQUIRE_CHAT_RATE_LIMITED
+      : null;
+  if (refusal) {
+    await noticeOnce(botToken, payload, refusal);
+    return null;
+  }
+  const [identity, canCustomize] = await Promise.all([
+    loadSquireIdentity(),
+    slackCanCustomizeSender(incident?.serviceId),
+  ]);
+  const sender = slackSquireSender(identity, canCustomize);
   const reply = (text: string, blocks?: Record<string, unknown>[]): SlackSquireReply => ({
     channel: payload.channel_id,
     thread_ts: thread,
     text,
-    blocks: blocks ?? [{ type: 'section', text: { type: 'mrkdwn', text } }],
+    blocks: blocks
+      ? slackSquireBlocks(blocks, identity, canCustomize)
+      : squireText(text, identity, canCustomize).blocks,
     __serviceId: incident?.serviceId ?? null,
+    __teamId: payload.team_id,
+    ...(canCustomize ? { __sender: sender } : {}),
   });
   if (!incident) return reply(NOT_AN_INCIDENT_CHANNEL);
-  const botToken = await getSlackBotToken(incident.serviceId);
-  const user = botToken ? await resolveOpsKnightUser(payload.user_id, botToken) : null;
-  const [history, placeholder] = botToken
-    ? await Promise.all([
-        payload.thread_ts
-          ? readSlackThread(
-              botToken,
-              payload.channel_id,
-              payload.thread_ts,
-              payload.ts,
-              payload.user_id
-            )
-          : Promise.resolve([]),
-        slackApiCall('chat.postMessage', botToken, {
-          channel: payload.channel_id,
-          thread_ts: thread,
-          text: SQUIRE_THINKING,
-        })
-          .then(result => (result.ok ? (result as { ts?: string }).ts : undefined))
-          .catch(() => undefined),
-      ])
-    : [[], undefined];
-  const editor =
-    botToken && placeholder
-      ? progressEditor(text =>
-          slackApiCall('chat.update', botToken, {
-            channel: payload.channel_id,
-            ts: placeholder,
-            text: escapeSlack(text),
-          })
+  const [history, placeholder] = await Promise.all([
+    payload.thread_ts
+      ? readSlackThread(
+          botToken,
+          payload.channel_id,
+          payload.thread_ts,
+          payload.ts,
+          payload.user_id
         )
-      : null;
+      : Promise.resolve([]),
+    remembered ??
+      slackApiCall('chat.postMessage', botToken, {
+        channel: payload.channel_id,
+        thread_ts: thread,
+        ...squireText(thinking(identity), identity, canCustomize),
+        ...sender,
+      })
+        .then(result => (result.ok ? (result as { ts?: string }).ts : undefined))
+        .catch(() => undefined),
+  ]);
+  if (placeholder && !remembered)
+    await rememberPlaceholder(payload.__opsknightIntentId, placeholder);
+  const editor = placeholder
+    ? progressEditor(text =>
+        slackApiCall('chat.update', botToken, {
+          channel: payload.channel_id,
+          ts: placeholder,
+          ...squireText(escapeSlack(text), identity, canCustomize),
+        })
+      )
+    : null;
   const answer = await answerChatQuestion({
     provider: 'SLACK',
-    userId: user?.id ?? null,
+    userId: user!.id,
     question: questionFromMention(payload.text),
     incidentId: incident.id,
     history,
+    inChannel: true,
     ...(editor ? { onProgress: (text: string) => editor.push(text) } : {}),
   });
   await editor?.settle();
   const rendered = renderSlackAnswer(answer, {
     baseUrl: chatBaseUrl(),
-    ownerUserId: user?.id ?? '',
+    ownerUserId: user!.id,
   });
   return {
     ...reply(rendered.text, rendered.blocks),
@@ -208,33 +338,59 @@ export async function answerSlackSquireMention(
   };
 }
 
-/** Worker: posts the stored reply in the thread. A failure is retried by the intent pipeline. */
-export async function deliverSlackSquireReply(reply: SlackSquireReply): Promise<void> {
-  const token = await getSlackBotToken(reply.__serviceId ?? undefined);
+/** Slack refused the blocks (too long, malformed): the same message as text alone will still go through. */
+const BLOCKS_REFUSED = new Set(['invalid_blocks', 'invalid_blocks_format', 'msg_too_long']);
+
+/**
+ * Worker: posts the stored reply in the thread. A failure throws so the intent pipeline retries; a new
+ * message is posted only when the progress message it would replace is gone, never as a second copy.
+ */
+export async function deliverSlackSquireReply(reply: SlackSquireReply | null): Promise<void> {
+  if (!reply) return;
+  const token = reply.__teamId
+    ? await slackInstallationToken(reply.__teamId, reply.__serviceId)
+    : await getSlackBotToken(reply.__serviceId ?? undefined);
   if (!token) throw new Error('Slack bot token is not available');
-  const { __serviceId: _service, __placeholderTs: placeholder, ...message } = reply;
+  const {
+    __serviceId: _service,
+    __teamId: _team,
+    __placeholderTs: placeholder,
+    __sender: sender,
+    ...message
+  } = reply;
+  const textOnly = { text: slackBlocksText(message.blocks, message.text) };
   if (placeholder) {
-    // The answer replaces the progress message; if that message is gone it is posted as a new reply.
-    const updated = await slackApiCall('chat.update', token, {
-      channel: message.channel,
-      ts: placeholder,
-      text: message.text,
-      blocks: message.blocks,
-    }).catch(() => null);
-    if (updated?.ok) return;
+    const update = (content: Record<string, unknown>) =>
+      slackApiCall('chat.update', token, { channel: message.channel, ts: placeholder, ...content });
+    let updated = await update({ text: message.text, blocks: message.blocks });
+    if (!updated.ok && BLOCKS_REFUSED.has(updated.error ?? ''))
+      updated = await update({ ...textOnly, blocks: [] });
+    if (updated.ok) return;
+    if (!SLACK_GONE.has(updated.error ?? ''))
+      throw new Error(`Slack reply update failed (${updated.error ?? 'error'})`);
   }
-  const response = await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ ...message, unfurl_links: false, unfurl_media: false }),
-    signal: AbortSignal.timeout(5_000),
-  });
-  const body = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-  if (!response.ok || !body?.ok)
-    throw new Error(`Slack reply failed (${body?.error ?? response.status})`);
+  const post = async (content: Record<string, unknown>) => {
+    const response = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ ...content, ...sender, unfurl_links: false, unfurl_media: false }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    const body = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      error?: string;
+    } | null;
+    return { ok: response.ok && Boolean(body?.ok), error: body?.error ?? String(response.status) };
+  };
+  let posted = await post(message);
+  if (!posted.ok && BLOCKS_REFUSED.has(posted.error)) {
+    const { blocks: _blocks, ...rest } = message;
+    posted = await post({ ...rest, ...textOnly });
+  }
+  if (!posted.ok) throw new Error(`Slack reply failed (${posted.error})`);
 }
 
 /** `/incident ask <question>`: answered privately to the asker, in the war-room channel. */
@@ -253,13 +409,20 @@ export async function answerSlackSquireSlash(input: {
     baseUrl: chatBaseUrl(),
     ownerUserId: input.userId,
   });
-  return { response_type: 'ephemeral', ...rendered };
+  // An ephemeral response always shows the app as its sender, so it carries the Squire header.
+  const identity = await loadSquireIdentity();
+  return {
+    response_type: 'ephemeral',
+    text: rendered.text,
+    blocks: slackSquireBlocks(rendered.blocks, identity, false),
+  };
 }
 
 type SlackButtonPayload = {
   actions?: Array<{ action_id?: string; value?: string }>;
   user?: { id?: string };
   team?: { id?: string };
+  enterprise?: { id?: string } | null;
   channel?: { id?: string };
   container?: { channel_id?: string; thread_ts?: string; message_ts?: string };
   message?: { ts?: string; thread_ts?: string };
@@ -285,10 +448,17 @@ export async function handleSlackSquireButton(
   });
   if (!action || !parsed) return ephemeral('This suggestion is no longer valid. Ask Squire again.');
   const channelId = payload.channel?.id ?? payload.container?.channel_id ?? '';
-  const incident = await findSlackIncidentForChannel(payload.team?.id ?? '', channelId);
-  const botToken = await getSlackBotToken(incident?.serviceId ?? undefined);
+  const teamId = payload.team?.id ?? '';
+  const incident = await findSlackIncidentForChannel(teamId, channelId);
+  const botToken = await slackInstallationToken(teamId, incident?.serviceId);
   const slackUserId = payload.user?.id ?? '';
-  const user = botToken && slackUserId ? await resolveOpsKnightUser(slackUserId, botToken) : null;
+  const user =
+    botToken && slackUserId
+      ? await resolveOpsKnightUser(slackUserId, botToken, {
+          teamId,
+          enterpriseId: payload.enterprise?.id ?? null,
+        })
+      : null;
   if (action.action_id === SQUIRE_SLACK_DISMISS_ACTION) {
     if (!user || user.id !== parsed.owner) return ephemeral(SQUIRE_CHAT_NOT_OWNER);
     return ephemeral('Dismissed. Nothing was changed.');
@@ -306,7 +476,8 @@ export async function handleSlackSquireButton(
     return ephemeral(`:warning: ${escapeSlack(result.message)}`);
   }
   const thread = payload.container?.thread_ts ?? payload.message?.thread_ts;
-  const link = result.href ? ` <${result.href}|Open incident>` : '';
+  const href = result.href ? appLink(result.href, chatBaseUrl()) : null;
+  const link = href ? ` <${href}|Open incident>` : '';
   return {
     response_type: 'in_channel',
     replace_original: false,

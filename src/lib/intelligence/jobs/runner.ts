@@ -45,6 +45,7 @@ import {
   TOPOLOGY_SYNC_CHECK_INTERVAL_MS,
 } from '../dependencies/topology-sources';
 import { purgeConversations } from '../conversations/store';
+import { sweepBackgroundTurns } from '../conversations/background';
 import { evaluateMetricTemplate } from '../metric-anomaly/evaluate';
 import { scheduleMetricEvaluationsIfDue } from '../metric-anomaly/service';
 import { evaluateSloPolicy } from '@/lib/slo/burn-alerts/evaluate';
@@ -88,6 +89,8 @@ export const RECONCILE_LOOKBACK_DAYS = 7;
 export const RECONCILE_INTERVAL_MS = 10 * 60_000;
 /** The updated-incident repair is cheap and index-backed; this paces it without delaying repair noticeably. */
 export const UPDATED_REPAIR_INTERVAL_MS = 5_000;
+/** Background answers start as they are asked; this sweep only recovers and tidies. */
+const BACKGROUND_TURN_SWEEP_MS = 60_000;
 const DISCOVERY_BATCH_MULTIPLIER = 5;
 const DEPENDENCY_OBSERVER_SUBJECT = 'dependency-observation';
 /** Retention batches shrink while a table keeps timing out and grow back once sweeps are clean. */
@@ -272,6 +275,8 @@ export interface LaneState {
   lastEmbedAt: number;
   lastDigestCheckAt: number;
   lastConversationSweepAt: number;
+  /** Squire answers that finish in the background; optional so older lane states stay valid. */
+  lastBackgroundTurnSweepAt?: number;
   lastTopologyCheckAt: number;
   /** Optional so lane states built before metric templates existed stay valid. */
   lastMetricCheckAt?: number;
@@ -345,6 +350,7 @@ export function createLaneState(): LaneState {
     lastEmbedAt: 0,
     lastDigestCheckAt: 0,
     lastConversationSweepAt: 0,
+    lastBackgroundTurnSweepAt: 0,
     lastTopologyCheckAt: 0,
     lastMetricCheckAt: 0,
     lastSloCheckAt: 0,
@@ -630,7 +636,8 @@ async function runCycle(
     const sweepDue =
       (settings.revision > 0 && now() - state.lastRetentionAt >= RETENTION_INTERVAL_MS) ||
       (handlers === DEFAULT_HANDLERS &&
-        now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS);
+        (now() - state.lastConversationSweepAt >= RETENTION_INTERVAL_MS ||
+          now() - (state.lastBackgroundTurnSweepAt ?? 0) >= BACKGROUND_TURN_SWEEP_MS));
     if (!settings.enabled && !sweepDue) return { ...base(), status: 'disabled' };
 
     const waitingQueries = await (dependencies.getPoolWaitingQueries ?? getPrismaPoolWaitCount)();
@@ -702,6 +709,22 @@ async function runCycle(
         if (swept.more) state.lastConversationSweepAt = now() - RETENTION_INTERVAL_MS + 60_000;
       } catch (error) {
         logger.warn('[Intelligence] Conversation retention sweep failed; will retry', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Squire answers left to finish in the background: start queued ones, fail those a restart orphaned,
+    // and drop them all when saved history is off. Independent of the engine switch, like conversations.
+    if (
+      handlers === DEFAULT_HANDLERS &&
+      now() - (state.lastBackgroundTurnSweepAt ?? 0) >= BACKGROUND_TURN_SWEEP_MS
+    ) {
+      state.lastBackgroundTurnSweepAt = now();
+      try {
+        await sweepBackgroundTurns(new Date(now()));
+      } catch (error) {
+        logger.warn('[Intelligence] Background answer sweep failed; will retry', {
           error: error instanceof Error ? error.message : String(error),
         });
       }

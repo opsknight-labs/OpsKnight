@@ -1,6 +1,9 @@
 import 'server-only';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
+import { logAudit } from '@/lib/audit';
+import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { sha256 } from '../ai/digest';
 
 /**
@@ -10,6 +13,12 @@ import { sha256 } from '../ai/digest';
  */
 
 export const FEEDBACK_REASONS = [
+  // What the 👎 form offers.
+  'wrong_facts',
+  'missed_point',
+  'too_long',
+  'wrong_action',
+  // Older clients and integrations.
   'wrong',
   'incomplete',
   'outdated',
@@ -28,9 +37,18 @@ export const feedbackInputSchema = z
       .regex(/^[A-Z_]{2,40}$/)
       .optional(),
     reason: z.enum(FEEDBACK_REASONS).optional(),
-    note: z.string().trim().max(500).optional(),
+    note: z.string().trim().max(300).optional(),
     question: z.string().max(2_000).optional(),
     conversationId: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/)
+      .optional(),
+    /** The page the answer was asked on. Kept only when the person can still read it (re-checked here). */
+    incidentId: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/)
+      .optional(),
+    serviceId: z
       .string()
       .regex(/^[A-Za-z0-9_-]{1,64}$/)
       .optional(),
@@ -38,10 +56,48 @@ export const feedbackInputSchema = z
   .strict();
 export type FeedbackInput = z.infer<typeof feedbackInputSchema>;
 
-export async function recordFeedback(userId: string, input: FeedbackInput): Promise<string> {
+/**
+ * The incident and service the rated answer was about, read under the person's own permissions. An id they
+ * cannot read is dropped without saying so; an incident's own service wins over a claimed one.
+ */
+async function readableSubject(
+  actor: AuthorizationActor,
+  input: Pick<FeedbackInput, 'incidentId' | 'serviceId'>
+): Promise<{ incidentId: string | null; serviceId: string | null }> {
+  try {
+    const incident = input.incidentId
+      ? await prisma.incident.findFirst({
+          where: { AND: [{ id: input.incidentId }, incidentReadWhere(actor)] },
+          select: { id: true, serviceId: true },
+        })
+      : null;
+    if (incident) return { incidentId: incident.id, serviceId: incident.serviceId };
+    const service = input.serviceId
+      ? await prisma.service.findFirst({
+          where: { AND: [{ id: input.serviceId }, serviceReadWhere(actor)] },
+          select: { id: true },
+        })
+      : null;
+    return { incidentId: null, serviceId: service?.id ?? null };
+  } catch {
+    // A scope that cannot be built (inactive actor) keeps the rating but no subject.
+    return { incidentId: null, serviceId: null };
+  }
+}
+
+/** Stores one rating. Without `actor` the incident and service are not kept (nothing to re-check them with). */
+export async function recordFeedback(
+  userId: string,
+  input: FeedbackInput,
+  actor?: AuthorizationActor
+): Promise<string> {
+  const subject = actor
+    ? await readableSubject(actor, input)
+    : { incidentId: null, serviceId: null };
   const row = await prisma.squireFeedback.create({
     data: {
       userId,
+      ...subject,
       conversationId: input.conversationId ?? null,
       mode: input.mode,
       intent: input.intent ?? null,
@@ -107,5 +163,162 @@ export async function getFeedbackSummary(
     reasons: [...reasons.entries()]
       .map(([reason, count]) => ({ reason, count }))
       .sort((a, b) => b.count - a.count),
+  };
+}
+
+/* --------------------------------------------------------------------------------------- admin review */
+
+export const FEEDBACK_REVIEW_STATUSES = ['NEW', 'LEARNED', 'DISMISSED'] as const;
+export type FeedbackReviewStatus = (typeof FEEDBACK_REVIEW_STATUSES)[number];
+
+export interface FeedbackReviewItem {
+  id: string;
+  createdAt: Date;
+  rating: string;
+  mode: string;
+  intent: string | null;
+  /** The reason code, then the person's note after ": ". */
+  reason: string | null;
+  reviewStatus: string;
+  hasQuestion: boolean;
+  incident: { id: string; title: string } | null;
+  service: { id: string; name: string } | null;
+}
+
+/**
+ * Recent feedback for an intelligence administrator, newest first: rating, reason, mode, intent and the
+ * incident and service it was about (named only when the reviewer can read them). Never who gave it.
+ */
+export async function listFeedbackForReview(
+  actor: AuthorizationActor,
+  options: { status?: FeedbackReviewStatus; limit?: number } = {}
+): Promise<FeedbackReviewItem[]> {
+  const rows = await prisma.squireFeedback.findMany({
+    where: options.status ? { reviewStatus: options.status } : {},
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: Math.min(Math.max(options.limit ?? 50, 1), 200),
+    select: {
+      id: true,
+      createdAt: true,
+      rating: true,
+      mode: true,
+      intent: true,
+      reason: true,
+      reviewStatus: true,
+      questionHash: true,
+      incidentId: true,
+      serviceId: true,
+    },
+  });
+  const ids = <K extends 'incidentId' | 'serviceId'>(key: K) => [
+    // eslint-disable-next-line security/detect-object-injection -- key is one of two literal column names
+    ...new Set(rows.flatMap(row => (row[key] ? [row[key] as string] : []))),
+  ];
+  const [incidents, services] = await Promise.all([
+    ids('incidentId').length
+      ? prisma.incident.findMany({
+          where: { AND: [{ id: { in: ids('incidentId') } }, incidentReadWhere(actor)] },
+          select: { id: true, title: true },
+        })
+      : [],
+    ids('serviceId').length
+      ? prisma.service.findMany({
+          where: { AND: [{ id: { in: ids('serviceId') } }, serviceReadWhere(actor)] },
+          select: { id: true, name: true },
+        })
+      : [],
+  ]);
+  const incidentById = new Map(incidents.map(item => [item.id, item]));
+  const serviceById = new Map(services.map(item => [item.id, item]));
+  return rows.map(row => ({
+    id: row.id,
+    createdAt: row.createdAt,
+    rating: row.rating,
+    mode: row.mode,
+    intent: row.intent,
+    reason: row.reason,
+    reviewStatus: row.reviewStatus,
+    hasQuestion: Boolean(row.questionHash),
+    incident: row.incidentId ? (incidentById.get(row.incidentId) ?? null) : null,
+    service: row.serviceId ? (serviceById.get(row.serviceId) ?? null) : null,
+  }));
+}
+
+/** The feedback row behind an admin action, or null. */
+export async function getFeedbackForReview(id: string) {
+  return prisma.squireFeedback.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      userId: true,
+      conversationId: true,
+      rating: true,
+      mode: true,
+      intent: true,
+      reason: true,
+      questionHash: true,
+      incidentId: true,
+      serviceId: true,
+      reviewStatus: true,
+    },
+  });
+}
+
+/** Moves one feedback row to a review state; audited with what was done, never with any text. */
+export async function setFeedbackReview(
+  actor: AuthorizationActor,
+  id: string,
+  status: Exclude<FeedbackReviewStatus, 'NEW'>,
+  outcome: 'learn_candidate' | 'eval_case' | 'dismissed'
+): Promise<boolean> {
+  return prisma.$transaction(async tx => {
+    const updated = await tx.squireFeedback.updateMany({
+      where: { id },
+      data: { reviewStatus: status },
+    });
+    if (updated.count === 0) return false;
+    await logAudit(
+      {
+        action: `intelligence.squire.feedback.${outcome}`,
+        entityType: 'SYSTEM_CONFIG',
+        entityId: id,
+        actorId: actor.id,
+        source: 'UI',
+        details: { feedbackId: id, reviewStatus: status },
+      },
+      tx
+    );
+    return true;
+  });
+}
+
+/**
+ * An evaluation case built from one feedback row, in the basic (`basic-cases.ts`) or scripted
+ * (`model-cases.ts`) shape. The rated question is never decrypted for a reviewer: conversations are private
+ * to their owner, and the reviewer may not be able to read what the question was about. The case carries the
+ * question's digest and a placeholder to fill in from a reproduction.
+ */
+export async function feedbackEvalCase(
+  row: NonNullable<Awaited<ReturnType<typeof getFeedbackForReview>>>
+): Promise<Record<string, unknown>> {
+  const reason = row.reason?.split(':')[0] ?? (row.rating === 'UP' ? 'helpful' : 'unrated');
+  const base = {
+    id: `feedback-${row.id.slice(-8)}-${reason}`.replace(/[^a-z0-9-]/gi, '-').toLowerCase(),
+    question: `TODO: the rated question (sha256 ${row.questionHash ?? 'not recorded'})`,
+    ...(row.incidentId ? { onIncident: true } : { onIncident: false }),
+    ...(row.serviceId && !row.incidentId ? { onService: true } : {}),
+  };
+  if (row.mode === 'basic')
+    return {
+      ...base,
+      expectIntent: row.intent ?? 'TODO_INTENT',
+      mustContain: [],
+      mustNotContain: [],
+    };
+  return {
+    ...base,
+    category: reason === 'wrong_action' ? 'proposal-unwanted' : 'rca',
+    script: [{ say: 'TODO: the scripted model reply' }],
+    expect: { mode: 'ai' },
   };
 }

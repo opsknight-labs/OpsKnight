@@ -47,6 +47,8 @@ export interface AiMessage {
   content: string;
   /** Trusted server-side classification, never accepted from browser history. */
   dataClass?: AiDataClass;
+  /** The end of a stable prefix (e.g. the replayed history): providers that cache explicitly cache up to here. */
+  cache?: boolean;
 }
 
 /** Who is asking and for what; used for budgets, audit and data-policy checks. */
@@ -76,7 +78,12 @@ export interface AiToolDefinition {
    * Runs a READ tool under the caller's own permissions. Absent for PROPOSE_WRITE tools, whose call is
    * handed back to the caller instead of being executed. Output is untrusted data to the model.
    */
-  execute?: (input: unknown) => Promise<unknown>;
+  execute?: (input: unknown, call?: { signal?: AbortSignal }) => Promise<unknown>;
+  /**
+   * PROPOSE_WRITE only: whether a call's input is a well-formed proposal. An invalid call is refused to the model
+   * (so it can correct itself) and never handed to the caller.
+   */
+  validate?: (input: unknown) => boolean;
 }
 
 export interface AiToolCall {
@@ -107,13 +114,15 @@ export interface AiGenerateResult {
   toolCalls: AiToolCall[];
   usage: AiUsage;
   /** Which route/provider/model actually served the request, for audit and the status chip. */
-  served: { providerId: string; model: string; fallbackDepth: number };
+  served: { providerId: string; model: string; fallbackDepth: number; kind?: string };
   /** Why the model stopped ("stop", "length", "content-filter", ...) when the provider says. */
   finishReason?: string;
   /** True when the answer came from the result cache: no model ran and `usage` is zero. */
   cached?: boolean;
   /** True when spend controls degraded the request (small model, shorter answer) past 80% of a daily budget. */
   degraded?: boolean;
+  /** True when the budget refused another tool step, so the answer was written from what had been read. */
+  budgetLimited?: boolean;
 }
 
 export type AiStreamEvent =

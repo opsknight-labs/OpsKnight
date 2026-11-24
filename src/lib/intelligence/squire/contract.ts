@@ -9,7 +9,19 @@ export const SQUIRE_LIMITS = {
   historyMax: 10,
   /** Ceiling on model/tool round trips per answer. */
   maxSteps: 6,
+  /** Records picked with "@" in one question. */
+  mentionsMax: 5,
 } as const;
+
+export const SQUIRE_MENTION_KINDS = [
+  'incident',
+  'service',
+  'schedule',
+  'team',
+  'runbook',
+  'person',
+] as const;
+export type SquireMentionKind = (typeof SQUIRE_MENTION_KINDS)[number];
 
 /** Anything up to this is accepted and trimmed; beyond it the request is malformed, not just long. */
 const HISTORY_TURN_ACCEPTED = 16_000;
@@ -56,6 +68,21 @@ export const squireRequestSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * Records the person picked with "@". Only identifiers: each is read under the person's own
+     * permissions, and one they cannot read is ignored without saying so.
+     */
+    mentions: z
+      .array(
+        z
+          .object({
+            kind: z.enum(SQUIRE_MENTION_KINDS),
+            id: z.string().trim().min(1).max(64),
+          })
+          .strict()
+      )
+      .max(SQUIRE_LIMITS.mentionsMax)
+      .optional(),
     /** Saved conversation to continue; ignored unless history is on and the caller owns it. */
     conversationId: z
       .string()
@@ -64,9 +91,101 @@ export const squireRequestSchema = z
       .max(64)
       .regex(/^[A-Za-z0-9_-]+$/)
       .optional(),
+    /** A retry of the latest answer: replaces that exchange in the saved conversation instead of appending. */
+    replaceLastExchange: z.boolean().optional(),
   })
   .strict();
 export type SquireRequest = z.infer<typeof squireRequestSchema>;
+
+export const SQUIRE_CHART_LIMITS = {
+  /** Charts one answer may carry. */
+  perTurn: 2,
+  series: 4,
+  points: 200,
+  title: 120,
+  name: 80,
+  unit: 16,
+} as const;
+
+/**
+ * A line chart drawn under an answer. Built on the server from what a read tool returned (never from model
+ * text), bounded, and saved with the turn so a reopened conversation shows it again.
+ */
+export const squireChartSchema = z
+  .object({
+    title: z.string().trim().min(1).max(SQUIRE_CHART_LIMITS.title),
+    unit: z.string().trim().min(1).max(SQUIRE_CHART_LIMITS.unit).optional(),
+    series: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(1).max(SQUIRE_CHART_LIMITS.name),
+            points: z
+              .array(z.object({ t: z.iso.datetime(), v: z.number().finite() }).strict())
+              .min(1)
+              .max(SQUIRE_CHART_LIMITS.points),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(SQUIRE_CHART_LIMITS.series),
+    /** Where the numbers came from; `href` only for an in-app page. */
+    source: z
+      .object({
+        kind: z.enum(['observability', 'incident', 'service']),
+        id: z.string().min(1).max(64),
+        label: z.string().max(SQUIRE_CHART_LIMITS.title).optional(),
+        href: z
+          .string()
+          .max(256)
+          .regex(/^\/(?!\/)/)
+          .optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type SquireChart = z.infer<typeof squireChartSchema>;
+
+const traceText = z.string().max(200);
+const tokenCount = z.number().int().nonnegative();
+
+/**
+ * How an answer was made ("How I got this"): sent as the turn's last event before `done` and saved with the
+ * turn. Labels only: tool names, prompts and raw results never leave the server.
+ */
+export const squireTraceSchema = z
+  .object({
+    mode: z.enum(['ai', 'basic']),
+    /** What the assistant looked up, as the progress labels the person saw. */
+    tools: z.array(traceText).max(24),
+    /** The cited sources' labels. */
+    sources: z.array(traceText).max(8),
+    model: traceText.optional(),
+    provider: traceText.optional(),
+    tokens: z
+      .object({ input: tokenCount, output: tokenCount, cacheRead: tokenCount.optional() })
+      .strict()
+      .optional(),
+    durationMs: tokenCount,
+    /** Every record the answer read was captured as evidence. */
+    verified: z.boolean(),
+  })
+  .strict();
+export type SquireTrace = z.infer<typeof squireTraceSchema>;
+
+/** Provider kinds as people know them, for the trace. */
+export const AI_PROVIDER_LABELS: Record<string, string> = {
+  OPENAI: 'OpenAI',
+  ANTHROPIC: 'Anthropic',
+  GOOGLE: 'Google Gemini',
+  AZURE_OPENAI: 'Azure OpenAI',
+  BEDROCK: 'Amazon Bedrock',
+  VERTEX: 'Google Vertex AI',
+  MISTRAL: 'Mistral',
+  GROQ: 'Groq',
+  OPENAI_COMPATIBLE: 'OpenAI-compatible',
+};
 
 /** A link the answer relied on, checked to be readable by the person before it is shown. */
 export interface SquireCitation {
@@ -103,8 +222,12 @@ export type SquireEvent =
    */
   | { type: 'proposal'; proposal: SquireProposal & { href?: string; untrustedContext?: boolean } }
   | { type: 'citations'; items: SquireCitation[] }
+  /** A chart of time series a read tool returned this turn (see `squireChartSchema`). */
+  | { type: 'chart'; chart: SquireChart }
   | { type: 'suggestions'; items: string[] }
   | { type: 'notice'; text: string }
+  /** How the answer was made; sent just before `done` (see `squireTraceSchema`). */
+  | { type: 'trace'; trace: SquireTrace }
   /** Trusted internal persistence metadata; the HTTP stream never forwards this event to the browser. */
   | { type: 'memory'; turn: SavedTurnInput }
   /** Read-only integrity proofs for browser-held turns; these never authorize an action. */

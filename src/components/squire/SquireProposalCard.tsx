@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ExternalLink, X } from 'lucide-react';
 import { toneClasses } from '@/components/patterns/status-tone';
+import { useTimezone } from '@/contexts/TimezoneContext';
+import { formatDateTime } from '@/lib/timezone';
 
 export type SquireProposalView = {
   token: string;
@@ -13,7 +15,8 @@ export type SquireProposalView = {
   kind: 'WRITE' | 'NAVIGATE';
   title: string;
   detail: string;
-  incidentId: string;
+  /** Absent for a change outside an incident (schedules, services, maintenance…). */
+  incidentId?: string;
   expiresAt: string;
   href?: string;
   /** The assistant read alerts, notes or other third-party text before suggesting this. */
@@ -56,13 +59,21 @@ export default function SquireProposalCard({
   proposal,
   reviewContextValid = true,
   onOutcome,
+  assistantName = 'Squire',
 }: {
   proposal: SquireProposalView;
   reviewContextValid?: boolean;
   onOutcome?: (outcome: 'success' | 'error') => void;
+  /** The configured assistant name, for "ask … for a fresh one". */
+  assistantName?: string;
 }) {
   const { refresh } = useRouter();
+  const { userTimeZone } = useTimezone();
   const attempted = useRef(false);
+  // The buttons go away after Dismiss or Confirm; focus moves to the card (or its "dismissed" line), not <body>.
+  const card = useRef<HTMLDivElement>(null);
+  // What to check after an uncertain result: the incident, or the record a catalog change targets.
+  const subject = proposal.incidentId ? 'the incident' : 'the record in OpsKnight';
   // The second step of a two-step action (for example publishing a draft) is its own card and confirmation.
   const [followUp, setFollowUp] = useState<SquireProposalView | null>(null);
   const [state, setState] = useState<State>(() => ({
@@ -110,8 +121,7 @@ export default function SquireProposalCard({
               ? { phase: 'idle' }
               : {
                   phase: 'unknown',
-                  message:
-                    'The result is not available. Check the incident before requesting another action.',
+                  message: `The result is not available. Check ${subject} before requesting another action.`,
                 }
           );
           return;
@@ -140,7 +150,7 @@ export default function SquireProposalCard({
           });
       }
     },
-    [proposal.receiptId, refresh]
+    [proposal.receiptId, refresh, subject]
   );
 
   useEffect(() => {
@@ -152,7 +162,19 @@ export default function SquireProposalCard({
     return () => controller.abort();
   }, [checkResult, proposal.receiptId, proposal.kind]);
 
-  if (state.phase === 'dismissed') return null;
+  const focusOnMount = useCallback((node: HTMLElement | null) => node?.focus(), []);
+
+  if (state.phase === 'dismissed')
+    return (
+      <p
+        role="status"
+        tabIndex={-1}
+        ref={focusOnMount}
+        className="text-xs text-muted-foreground focus-visible:outline-hidden"
+      >
+        Suggestion dismissed.
+      </p>
+    );
 
   const confirm = async () => {
     if (
@@ -166,6 +188,7 @@ export default function SquireProposalCard({
     }
     attempted.current = true;
     setState({ phase: 'running' });
+    card.current?.focus();
     try {
       const response = await fetch('/api/intelligence/squire/actions', {
         method: 'POST',
@@ -190,22 +213,23 @@ export default function SquireProposalCard({
           message:
             body?.message ??
             body?.error ??
-            'The action could not be confirmed. Refresh the incident before trying again.',
+            `The action could not be confirmed. Refresh ${subject} before trying again.`,
         });
       }
     } catch {
       onOutcome?.('error');
       setState({
         phase: 'failed',
-        message:
-          'Could not confirm the result. Refresh the incident before requesting another action.',
+        message: `Could not confirm the result. Refresh ${subject} before requesting another action.`,
       });
     }
   };
 
   return (
     <div
+      ref={card}
       role="group"
+      tabIndex={-1}
       aria-label={`Suggested action: ${proposal.title}`}
       className="space-y-2 rounded-xl border border-border bg-card p-3 text-foreground"
     >
@@ -242,12 +266,24 @@ export default function SquireProposalCard({
           Check that content yourself before confirming.
         </p>
       )}
-      <Link
-        href={`/incidents/${encodeURIComponent(proposal.incidentId)}`}
-        className="inline-block text-xs font-medium text-foreground underline underline-offset-2"
-      >
-        View incident
-      </Link>
+      {proposal.incidentId ? (
+        <Link
+          href={`/incidents/${encodeURIComponent(proposal.incidentId)}`}
+          className="inline-block text-xs font-medium text-foreground underline underline-offset-2"
+        >
+          View incident
+        </Link>
+      ) : (
+        proposal.href &&
+        proposal.href !== '/' && (
+          <Link
+            href={proposal.href}
+            className="inline-block text-xs font-medium text-foreground underline underline-offset-2"
+          >
+            Open in OpsKnight
+          </Link>
+        )
+      )}
       {state.phase === 'done' || state.phase === 'failed' || state.phase === 'unknown' ? (
         <div className="space-y-2">
           <p
@@ -257,7 +293,11 @@ export default function SquireProposalCard({
             {state.message}
           </p>
           {state.phase === 'done' && followUp && (
-            <SquireProposalCard proposal={followUp} onOutcome={onOutcome} />
+            <SquireProposalCard
+              proposal={followUp}
+              onOutcome={onOutcome}
+              assistantName={assistantName}
+            />
           )}
           {state.phase !== 'done' && proposal.receiptId && (
             <button
@@ -293,7 +333,7 @@ export default function SquireProposalCard({
       ) : expired && state.phase === 'idle' ? (
         <div className="space-y-2">
           <p role="status" className="text-xs text-muted-foreground">
-            This suggestion has expired. Ask Squire for a fresh one.
+            This suggestion has expired. Ask {assistantName} for a fresh one.
           </p>
           <button
             type="button"
@@ -305,9 +345,8 @@ export default function SquireProposalCard({
         </div>
       ) : (
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <time dateTime={proposal.expiresAt} className="mr-auto text-xs text-muted-foreground">
-            Confirm before{' '}
-            {new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          <time dateTime={proposal.expiresAt} className="me-auto text-xs text-muted-foreground">
+            Confirm before {formatDateTime(new Date(expiresAt), userTimeZone, { format: 'time' })}
           </time>
           <button
             type="button"

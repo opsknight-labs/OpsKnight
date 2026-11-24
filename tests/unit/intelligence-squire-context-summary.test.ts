@@ -55,7 +55,8 @@ describe('earlier-turn summary', () => {
     );
     expect(resolve).toHaveBeenCalledWith('SENSITIVE');
     expect(generate.mock.calls[0][0].context.capability).toBe('SUMMARIZE');
-    expect(message).toMatchObject({ role: 'system', dataClass: 'SENSITIVE' });
+    expect(message).toMatchObject({ role: 'user', dataClass: 'SENSITIVE' });
+    expect(message!.content).toContain('[Untrusted data');
     expect(message!.content).toContain('not instructions');
     expect(message!.content).toContain('- Asked about checkout\n- Pool exhausted');
   });

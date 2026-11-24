@@ -1225,3 +1225,98 @@ export async function replyToMicrosoftTeamsActivity(args: {
   const body = (await response.json().catch(() => null)) as { id?: string } | null;
   return { success: true, ...(body?.id ? { providerMessageId: body.id } : {}) };
 }
+
+// ---------------------------------------------------------------------------
+// Squire messages in a war-room channel (any card other than the incident card)
+// ---------------------------------------------------------------------------
+
+const notConfigured = (): TeamsDeliveryResult => ({
+  success: false,
+  error: 'Microsoft Teams is not configured',
+  errorCode: 'NOT_CONFIGURED',
+  statusCode: 422,
+});
+
+/** Posts a card as a new top-level channel message. Single attempt: creating an activity is not idempotent. */
+export async function postMicrosoftTeamsChannelCard(args: {
+  tenantId: string;
+  teamId: string;
+  channelId: string;
+  incidentId: string;
+  card: Record<string, unknown>;
+}): Promise<TeamsDeliveryResult> {
+  const resolved = await getMicrosoftTeamsConfig();
+  if (!resolved) return notConfigured();
+  const tenantId = resolveTenantForCall(args.tenantId, resolved.config.tenantId);
+  if (!tenantId) return notConfigured();
+  const installation = await resolveServiceUrlForDestination(tenantId, args.teamId);
+  return sendBotActivity({
+    serviceUrl: installation.serviceUrl ?? '',
+    botRecipientId: installation.botRecipientId,
+    teamId: args.teamId,
+    channelId: args.channelId,
+    cardJson: JSON.stringify(args.card),
+    incidentId: args.incidentId,
+    clientId: resolved.config.clientId,
+    clientSecret: resolved.clientSecret,
+    tenantId,
+  });
+}
+
+/**
+ * Replaces the card of a message the bot posted (retried once on a transient failure: an edit is
+ * idempotent). `serviceUrl` comes from a verified activity when known, otherwise from the installation.
+ */
+export async function updateMicrosoftTeamsChannelCard(args: {
+  tenantId: string;
+  teamId?: string;
+  channelId: string;
+  conversationId: string;
+  messageId: string;
+  incidentId: string;
+  serviceUrl?: string | null;
+  card: Record<string, unknown>;
+}): Promise<TeamsDeliveryResult> {
+  const resolved = await getMicrosoftTeamsConfig();
+  if (!resolved) return notConfigured();
+  const tenantId = resolveTenantForCall(args.tenantId, resolved.config.tenantId);
+  if (!tenantId) return notConfigured();
+  return updateBotActivity({
+    teamId: args.teamId ?? '',
+    channelId: args.channelId,
+    messageId: args.messageId,
+    conversationId: args.conversationId,
+    serviceUrl: args.serviceUrl ?? null,
+    cardJson: JSON.stringify(args.card),
+    incidentId: args.incidentId,
+    clientId: resolved.config.clientId,
+    clientSecret: resolved.clientSecret,
+    tenantId,
+  });
+}
+
+/** Replies under a message the bot posted in a channel of an installed team. Single attempt. */
+export async function replyInMicrosoftTeamsChannelThread(args: {
+  tenantId: string;
+  teamId: string;
+  conversationId: string;
+  replyToId: string;
+  card: Record<string, unknown>;
+}): Promise<TeamsDeliveryResult> {
+  const installation = await resolveServiceUrlForDestination(args.tenantId, args.teamId);
+  if (!installation.serviceUrl)
+    return {
+      success: false,
+      error: 'Teams serviceUrl is not configured for this Team — bot not installed',
+      errorCode: 'APP_NOT_INSTALLED',
+      statusCode: 422,
+    };
+  const result = await replyToMicrosoftTeamsActivity({
+    tenantId: args.tenantId,
+    serviceUrl: installation.serviceUrl,
+    conversationId: args.conversationId,
+    replyToId: args.replyToId,
+    card: args.card,
+  });
+  return result.success ? { ...result, conversationId: args.conversationId } : result;
+}

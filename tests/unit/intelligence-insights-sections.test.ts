@@ -30,4 +30,14 @@ describe('one incident summary in the inspector', () => {
     };
     expect(insightsSections(insights(written))).toEqual(['briefing']);
   });
+
+  it('shows the notes section for an automatic investigation on its own', () => {
+    const investigated = {
+      briefing: null,
+      nudge: null,
+      postmortemDraft: null,
+      investigation: { answer: 'Deploy 42', at: new Date().toISOString() },
+    };
+    expect(insightsSections(insights(investigated))).toContain('briefing');
+  });
 });

@@ -6,13 +6,14 @@ import {
   type LanguageModelPort,
 } from '../ai/port';
 import { outputTokensFor } from '../ai/output-limits';
-import { redactSecrets } from '../ai/redact';
+import { redactSecrets, sanitizeUntrusted, UNTRUSTED_DATA_PREAMBLE } from '../ai/redact';
 import { cachedGenerate } from '../ai/result-cache';
 
 /**
  * Earlier turns beyond the replay window are summarised instead of silently dropped. With AI on, the
  * SUMMARIZE route writes the summary; otherwise (or when it fails) a deterministic digest of the earlier
- * questions and answers is used. The summary is placed right after the system prompt, so the incident
+ * questions and answers is used. The summary is placed right after the system prompt (as untrusted data in a
+ * user message), so the incident
  * briefing stays pinned at the top and the most recent turns stay verbatim after it.
  *
  * Only user questions and answers that were verified and completed when saved are summarised, the same rule
@@ -134,9 +135,11 @@ export async function summarizeOlderTurns(
       summary = null;
     }
   }
+  // Earlier turns quote people, alerts and tool output (and a model wrote the summary from them): they arrive
+  // as untrusted data in a user message, never with system authority.
   return {
-    role: 'system',
-    content: `${SUMMARY_PREFIX}\n${summary ?? digestTurns(recent)}`,
+    role: 'user',
+    content: `${UNTRUSTED_DATA_PREAMBLE}\n${SUMMARY_PREFIX}\n${String(sanitizeUntrusted(summary ?? digestTurns(recent)))}`,
     dataClass,
   };
 }

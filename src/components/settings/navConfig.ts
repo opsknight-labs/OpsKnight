@@ -54,6 +54,14 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         ],
       },
       {
+        id: 'squire',
+        label: 'Squire Memory',
+        description: 'What Squire remembers about you: view, edit, delete, or turn memory off',
+        href: '/settings/squire',
+        icon: 'brain',
+        keywords: ['squire', 'assistant', 'memory', 'remember', 'ai', 'preferences'],
+      },
+      {
         id: 'security',
         label: 'Security & Sessions',
         description: 'Password credentials, active login sessions, and session revocation',
@@ -143,6 +151,24 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
           'dependencies',
           'root cause',
         ],
+      },
+      {
+        id: 'squire-action-history',
+        label: 'Squire Action History',
+        description: 'Every action confirmed from a Squire card, who confirmed it, and its outcome',
+        href: '/settings/intelligence/ai/actions',
+        icon: 'activity',
+        keywords: ['squire', 'assistant', 'ai', 'actions', 'history', 'audit', 'receipts'],
+      },
+      {
+        id: 'squire-feedback',
+        label: 'Squire Feedback',
+        description:
+          'Ratings on Squire answers: teach a service fact, keep an eval case, or dismiss',
+        href: '/settings/intelligence/ai/feedback',
+        icon: 'activity',
+        badge: 'Admin',
+        keywords: ['squire', 'assistant', 'ai', 'feedback', 'thumbs', 'rating', 'learn', 'eval'],
       },
       {
         id: 'custom-fields',

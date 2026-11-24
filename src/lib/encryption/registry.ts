@@ -99,6 +99,35 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
       'Steps and answer of a Squire investigation started over MCP, readable by its starter for one hour',
   },
   {
+    id: 'squire.background-request',
+    model: 'SquireBackgroundTurn',
+    field: 'requestEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Background Assistant Question',
+    description:
+      'A question (with its page and earlier turns) the assistant finishes in the background for its owner; kept one day',
+  },
+  {
+    id: 'squire.user-memory',
+    model: 'SquireUserMemory',
+    field: 'textEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Assistant Personal Memory',
+    description:
+      'A fact a person asked the assistant to remember; visible and deletable only by them',
+  },
+  {
+    id: 'knowledge.doc-source-token',
+    model: 'KnowledgeDocSource',
+    field: 'tokenEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Documentation Source Access Token',
+    description: 'Optional read token an admin gave for a private documentation repository',
+  },
+  {
     id: 'squire.conversation-title',
     model: 'SquireConversation',
     field: 'titleEncrypted',

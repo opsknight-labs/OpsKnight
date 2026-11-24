@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
 import { AI_DATA_CLASSES } from '../ai/port';
+import { SQUIRE_CHART_LIMITS, squireChartSchema, squireTraceSchema } from '../squire/contract';
 
 export const conversationScopeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('GLOBAL') }).strict(),
@@ -70,13 +71,36 @@ export const savedActionReferenceSchema = z
     receiptId: z.string().uuid(),
     action: z.string().regex(/^[a-z_]{1,64}$/),
     title: z.string().max(120),
-    incidentId: z.string().min(1).max(64),
+    /** Absent for an operation-catalog change or a plan (`run_operation`, `run_plan`). */
+    incidentId: z.string().min(1).max(64).optional(),
   })
   .strict();
 export type SavedActionReference = z.infer<typeof savedActionReferenceSchema>;
 
+/** The page a turn was asked on. A conversation follows the person, so each turn keeps its own. */
+export const TURN_CONTEXT_KINDS = [
+  'incident',
+  'service',
+  'team',
+  'schedule',
+  'runbook',
+  'alert',
+  'change',
+  'postmortem',
+  'escalation_policy',
+  'status_page',
+  // A question asked with no page context. Explicit, so it is never mistaken for an older turn (which has no
+  // context at all and belongs to the conversation's incident).
+  'general',
+] as const;
+export const turnContextSchema = z
+  .object({ kind: z.enum(TURN_CONTEXT_KINDS), id: z.string().min(1).max(64) })
+  .strict();
+export type TurnContext = z.infer<typeof turnContextSchema>;
+
 export const savedTurnInputSchema = z
   .object({
+    context: turnContextSchema.optional(),
     mode: z.enum(['ai', 'basic', 'unknown']).default('unknown'),
     completion: z.enum(['COMPLETED', 'INTERRUPTED', 'STOPPED', 'FAILED']).default('COMPLETED'),
     dataClass: z.enum(AI_DATA_CLASSES).default('PERSONAL'),
@@ -84,6 +108,10 @@ export const savedTurnInputSchema = z
     sources: z.array(sourceReferenceSchema).max(32).default([]),
     notices: z.array(z.string().max(1_000)).max(4).default([]),
     actions: z.array(savedActionReferenceSchema).max(2).default([]),
+    /** Charts drawn under the answer, from the tool results it read (absent on older turns). */
+    charts: z.array(squireChartSchema).max(SQUIRE_CHART_LIMITS.perTurn).optional(),
+    /** How the answer was made ("How I got this"); absent on older turns. */
+    trace: squireTraceSchema.optional(),
     verified: z.boolean().default(false),
     authorizationHash: z
       .string()

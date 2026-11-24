@@ -15,7 +15,7 @@ import {
 } from './contract';
 import { decrypt, encrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
-import { getAiSettings } from '../ai/settings';
+import { getAiSettings, type AiSettingsView } from '../ai/settings';
 import { withDbBudget } from '../jobs/db-budget';
 
 /**
@@ -62,8 +62,11 @@ export interface HistoryStatus {
   retentionDays: number;
 }
 
-export async function getHistoryStatus(): Promise<HistoryStatus> {
-  const settings = await getAiSettings();
+/** `loaded`: settings the caller already read this request, saving a round trip. */
+export async function getHistoryStatus(
+  loaded?: Pick<AiSettingsView, 'squireHistoryEnabled' | 'squireHistoryRetentionDays'>
+): Promise<HistoryStatus> {
+  const settings = loaded ?? (await getAiSettings());
   return {
     enabled: settings.squireHistoryEnabled,
     retentionDays: settings.squireHistoryRetentionDays,
@@ -91,7 +94,9 @@ const titleFrom = (question: string) => {
 
 /**
  * Saves one question and its answer. Continues `conversationId` when the person owns it and it has
- * room; otherwise starts a new conversation. Returns the conversation the exchange was saved to.
+ * room, whatever page it is asked on (the conversation's incident is the one it started on; each turn
+ * records its own page in the envelope); otherwise starts a new conversation. Returns the conversation
+ * the exchange was saved to.
  */
 export async function recordExchange(input: {
   userId: string;
@@ -102,6 +107,8 @@ export async function recordExchange(input: {
   turn?: SavedTurnInput;
   question: string;
   answer: string;
+  /** A retry: replaces the conversation's latest exchange when it is this same question. */
+  replaceLastExchange?: boolean;
 }): Promise<string> {
   const scope = conversationScopeSchema.parse(input.scope ?? scopeForIncident(input.incidentId));
   const incidentId = scope.kind === 'INCIDENT' ? scope.incidentId : null;
@@ -127,20 +134,48 @@ export async function recordExchange(input: {
   const [question, answer, questionEnvelope, answerEnvelope] = await Promise.all([
     encrypt(questionText),
     encrypt(answerText),
-    encrypt(envelope(questionText, { verified: true, dataClass })),
+    encrypt(envelope(questionText, { verified: true, dataClass, context: turn.context })),
     encrypt(envelope(answerText, turn)),
   ]);
   const settings = await getAiSettings();
   const cutoff = new Date(Date.now() - settings.squireHistoryRetentionDays * 86_400_000);
   return prisma.$transaction(async tx => {
     let conversationId: string | null = null;
+    if (input.conversationId && input.replaceLastExchange) {
+      // Owner-scoped like the claim below; any other shape (or another question) is a normal append.
+      const [answer, question] = await tx.squireMessage.findMany({
+        where: {
+          conversation: {
+            id: input.conversationId,
+            userId: input.userId,
+            updatedAt: { gt: cutoff },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 2,
+        select: { id: true, role: true, contentEncrypted: true },
+      });
+      if (
+        answer?.role === 'assistant' &&
+        question?.role === 'user' &&
+        (await readable(question.contentEncrypted)) === questionText
+      ) {
+        const { count } = await tx.squireMessage.deleteMany({
+          where: { id: { in: [answer.id, question.id] } },
+        });
+        if (count)
+          await tx.squireConversation.update({
+            where: { id: input.conversationId },
+            data: { messageCount: { decrement: count } },
+          });
+      }
+    }
     if (input.conversationId) {
       // Owner-scoped and capacity-checked in one statement, so a race can never overfill a conversation.
       const claimed = await tx.squireConversation.updateMany({
         where: {
           id: input.conversationId,
           userId: input.userId,
-          incidentId,
           updatedAt: { gt: cutoff },
           messageCount: { lte: CONVERSATION_LIMITS.messagesPerConversation - 2 },
         },
@@ -255,9 +290,10 @@ export async function listConversations(userId: string): Promise<ConversationSum
 
 export async function getConversation(
   userId: string,
-  id: string
+  id: string,
+  loaded?: Pick<AiSettingsView, 'squireHistoryRetentionDays'>
 ): Promise<ConversationDetail | null> {
-  const settings = await getAiSettings();
+  const settings = loaded ?? (await getAiSettings());
   const row = await prisma.squireConversation.findFirst({
     where: {
       id,

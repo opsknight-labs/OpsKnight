@@ -260,15 +260,30 @@ it('expires token reservations and action receipts while the master switch is of
   await db.aiTokenReservation.create({
     data: { day: old.toISOString().slice(0, 10), actorId: user.id, tokens: 100, expiresAt: old },
   });
-  await db.squireActionReceipt.create({
-    data: {
-      id: 'old-receipt',
-      userId: user.id,
-      incidentId: 'reference-only',
-      action: 'add_incident_note',
-      createdAt: old,
-    },
-  });
+  const receipt = (id: string, createdAt: Date) =>
+    db.squireActionReceipt.create({
+      data: {
+        id,
+        userId: user.id,
+        incidentId: 'reference-only',
+        action: 'add_incident_note',
+        intentEncrypted: 'sealed-intent',
+        resultEncrypted: 'sealed-result',
+        createdAt,
+      },
+    });
+  await receipt('old-receipt', days(31));
+  await receipt('recent-receipt', old);
+  await receipt('fresh-receipt', days(0));
   const result = await purgeExpiredIntelligenceData(retention, { batchSize: 100 });
   expect(result).toMatchObject({ aiReservations: 1, actionReceipts: 1 });
+  // History stays 30 days; the confirmed request (free text) goes after one.
+  const kept = await db.squireActionReceipt.findMany({
+    orderBy: { id: 'asc' },
+    select: { id: true, intentEncrypted: true, resultEncrypted: true },
+  });
+  expect(kept).toEqual([
+    { id: 'fresh-receipt', intentEncrypted: 'sealed-intent', resultEncrypted: 'sealed-result' },
+    { id: 'recent-receipt', intentEncrypted: null, resultEncrypted: 'sealed-result' },
+  ]);
 });

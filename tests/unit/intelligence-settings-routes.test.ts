@@ -174,6 +174,13 @@ describe('links into intelligence settings', () => {
       else if (path.startsWith(`${INTELLIGENCE_SETTINGS_ROOT}/services/`)) continue;
       // The metric templates sub-page is a real page that kept its address under the earlier folder.
       else if (path === `${INTELLIGENCE_SETTINGS_ROOT}/response/metrics`) continue;
+      // Squire's own pages are real pages of their own (action history, feedback review, doc sources).
+      else if (
+        path === `${INTELLIGENCE_SETTINGS_ROOT}/ai/actions` ||
+        path === `${INTELLIGENCE_SETTINGS_ROOT}/ai/feedback` ||
+        path === `${INTELLIGENCE_SETTINGS_ROOT}/ai/docs`
+      )
+        continue;
       else if (!groupPaths.has(path)) problems.push(`${file}: ${link} is not a settings page`);
       else if (
         fragment &&

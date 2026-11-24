@@ -84,6 +84,27 @@ describe('Squire proposal review', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it('shows the deadline in the user time zone and names the configured assistant', () => {
+    render(<SquireProposalCard proposal={proposal()} assistantName="Pip" />);
+    expect(screen.getByText('Confirm before 8:00 AM')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(screen.getByRole('status')).toHaveTextContent('Ask Pip for a fresh one.');
+  });
+
+  it('moves focus to the card on Confirm and to a status line on Dismiss', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true, message: 'Done.' }) });
+    const { unmount } = render(<SquireProposalCard proposal={proposal()} />);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Confirm' })));
+    expect(screen.getByRole('group')).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('Done.');
+    unmount();
+
+    render(<SquireProposalCard proposal={proposal()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Suggestion dismissed.');
+    expect(screen.getByRole('status')).toHaveFocus();
+  });
+
   it('rejects an invalid expiry without making a request', () => {
     render(<SquireProposalCard proposal={proposal({ expiresAt: 'invalid' })} />);
     expect(screen.getByRole('status')).toHaveTextContent(/expired/);

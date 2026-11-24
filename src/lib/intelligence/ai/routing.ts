@@ -121,10 +121,23 @@ export function defaultModelFor(
   return tier ? PROVIDER_MODEL_TIERS[kind]?.[tier] : undefined;
 }
 
+/** Model names of each kind's own family; anything else (a fine-tune, a pinned or custom name) is never replaced. */
+const MODEL_FAMILIES: Readonly<Partial<Record<ProviderKind, RegExp>>> = {
+  ANTHROPIC: /^claude-/,
+  OPENAI: /^gpt-/,
+  GOOGLE: /^gemini-/,
+  MISTRAL: /^mistral-/,
+  GROQ: /^llama-/,
+};
+/** Names that already mark a small model: tiering would move these up, so they stay. */
+const SMALL_CLASS = /(haiku|mini|nano|flash|lite|small|instant|\b[1-9]b\b)/i;
+
 /**
- * Spend controls' default routing: every provider in the chain answers this capability with its small or strong
- * model. An administrator's explicit route is applied afterwards and wins. `tier` forces one tier for every
- * capability (degradation uses `small`).
+ * Spend controls' default routing: a provider answers cheap, frequent work with its small model. Tiering only
+ * ever moves down: a capability is never sent to a bigger model than the one configured (the strong tier keeps
+ * the configured model), and a model outside the provider's known family, or already a small one, is kept. An
+ * administrator's explicit route is applied afterwards and wins. `tier` forces one tier for every capability
+ * (degradation uses `small`).
  */
 export function applyDefaultTiers<P extends { kind: ProviderKind; model: string }>(
   chain: readonly P[],
@@ -134,7 +147,15 @@ export function applyDefaultTiers<P extends { kind: ProviderKind; model: string 
   return chain.map(provider => {
     // An undefined tier falls back to the capability's own tier.
     const model = defaultModelFor(provider.kind, capability, tier);
-    return model && model !== provider.model ? { ...provider, model } : provider;
+    const small = PROVIDER_MODEL_TIERS[provider.kind]?.small;
+    const family = MODEL_FAMILIES[provider.kind];
+    return model &&
+      model === small &&
+      model !== provider.model &&
+      family?.test(provider.model) &&
+      !SMALL_CLASS.test(provider.model)
+      ? { ...provider, model }
+      : provider;
   });
 }
 

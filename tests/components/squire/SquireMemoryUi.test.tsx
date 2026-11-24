@@ -58,6 +58,7 @@ describe('Squire memory settings forms', () => {
           briefingEnabled: false,
           nudgeAfterMinutes: null,
           postmortemDraftEnabled: false,
+          investigationEnabled: false,
           revision: 0,
         }}
       />
@@ -69,6 +70,9 @@ describe('Squire memory settings forms', () => {
     expect(minutes).toBeEnabled();
     fireEvent.change(minutes, { target: { value: '45' } });
     fireEvent.click(screen.getByRole('checkbox', { name: /Briefing when an incident opens/ }));
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /Investigate high-urgency incidents automatically/ })
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(actions.saveSquireServicePolicyAction).toHaveBeenCalledTimes(1));
     const form = formOf(actions.saveSquireServicePolicyAction);
@@ -77,6 +81,7 @@ describe('Squire memory settings forms', () => {
     expect(form.get('nudgeEnabled')).toBe('on');
     expect(form.get('nudgeAfterMinutes')).toBe('45');
     expect(form.get('postmortemDraftEnabled')).toBeNull();
+    expect(form.get('investigationEnabled')).toBe('on');
     expect(form.get('expectedRevision')).toBe('0');
   });
 
@@ -130,6 +135,137 @@ describe('Proactive Squire notes on the incident page', () => {
     expect(screen.getByText('Likely change (unconfirmed)')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Restart api pods' })).toBeInTheDocument();
     expect(screen.queryByText('Possible causes (to verify)')).toBeNull();
+  });
+
+  it('shows an automatic investigation, or withholds it when its sources are not all readable', async () => {
+    const investigation = {
+      createdAt: new Date('2026-11-08T10:00:00Z'),
+      partial: false,
+      answer: '**Release 42** is the most likely trigger.',
+      citations: [],
+      updatedAt: new Date('2026-11-08T10:00:00Z'),
+      revision: 1,
+      updates: [],
+    };
+    const { unmount } = render(
+      <ProactiveNotes incidentId="inc-1" notes={view({ briefing: null, investigation })} />
+    );
+    expect(screen.getByRole('heading', { name: 'Squire investigated this' })).toBeInTheDocument();
+    expect(await screen.findByText('Release 42')).toBeInTheDocument();
+    unmount();
+
+    render(
+      <ProactiveNotes
+        incidentId="inc-1"
+        notes={view({ briefing: null, investigation: { ...investigation, answer: null } })}
+      />
+    );
+    expect(screen.getByText(/used sources you cannot open/)).toBeInTheDocument();
+    expect(screen.queryByText('Release 42')).toBeNull();
+  });
+
+  it('shows live updates under the latest conclusion, collapsed', () => {
+    render(
+      <ProactiveNotes
+        incidentId="inc-1"
+        notes={view({
+          briefing: null,
+          investigation: {
+            createdAt: new Date('2026-11-08T10:00:00Z'),
+            updatedAt: new Date('2026-11-08T10:30:00Z'),
+            revision: 3,
+            partial: false,
+            answer: 'Cache eviction is now the leading cause.',
+            citations: [],
+            updates: [
+              {
+                at: '2026-11-08T10:30:00Z',
+                revision: 3,
+                signals: ['2 new alerts'],
+                leading: 'Cache eviction storm',
+                added: ['Cache eviction storm (70%)'],
+                up: [],
+                down: ['Release 42 introduced the errors (70% → 40%)'],
+                ruledOut: [],
+                dropped: [],
+                nextChecks: ['Check cache hit rate'],
+                newEvidence: [{ kind: 'metric', id: 'm1', label: 'Cache hit rate', href: '/x' }],
+              },
+              {
+                at: '2026-11-08T10:15:00Z',
+                revision: 2,
+                signals: ['1 new note'],
+                leading: null,
+                added: [],
+                up: [],
+                down: [],
+                ruledOut: [],
+                dropped: [],
+                nextChecks: [],
+                newEvidence: [],
+              },
+            ],
+          },
+        })}
+      />
+    );
+    expect(screen.getByText('Cache eviction is now the leading cause.')).toBeInTheDocument();
+    expect(screen.getByText(/2 updates/)).toBeInTheDocument();
+    expect(screen.getByText('Updates (2)')).toBeInTheDocument();
+    expect(screen.getByText('Cache eviction storm')).toBeInTheDocument();
+    expect(screen.getByText('Release 42 introduced the errors (70% → 40%)')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cache hit rate' })).toHaveAttribute('href', '/x');
+    expect(screen.getByText('No change to the conclusion.')).toBeInTheDocument();
+  });
+
+  it('shows whether the fix held, with related incidents the viewer may open', () => {
+    const { unmount } = render(
+      <ProactiveNotes
+        incidentId="inc-1"
+        notes={view({
+          briefing: null,
+          verification: {
+            checkedAt: '2026-11-08T10:30:00Z',
+            trigger: 'RESOLVE',
+            holding: false,
+            headline: 'Not holding: 3 new alerts since resolve, the incident reopened.',
+            related: [
+              {
+                id: 'inc-9',
+                label: 'Checkout down again',
+                status: 'OPEN',
+                alerts: 1,
+                opened: true,
+              },
+            ],
+          },
+        })}
+      />
+    );
+    expect(screen.getByRole('heading', { name: 'Did the fix hold?' })).toBeInTheDocument();
+    expect(screen.getByText(/Not holding: 3 new alerts/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Checkout down again' })).toHaveAttribute(
+      'href',
+      '/incidents/inc-9'
+    );
+    unmount();
+    render(
+      <ProactiveNotes
+        incidentId="inc-1"
+        notes={view({
+          briefing: null,
+          verification: {
+            checkedAt: '2026-11-08T10:30:00Z',
+            trigger: 'RUNBOOK',
+            holding: true,
+            headline: 'Holding: no new alerts in 10 minutes.',
+            related: [],
+          },
+        })}
+      />
+    );
+    expect(screen.getByRole('heading', { name: 'After the runbook' })).toBeInTheDocument();
+    expect(screen.getByText('Holding: no new alerts in 10 minutes.')).toBeInTheDocument();
   });
 
   it('prefers AI text when present and labels it', () => {

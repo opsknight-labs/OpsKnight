@@ -62,6 +62,22 @@ Confirm the channel appears in the intended team, normal incident context and op
 
 Close/reconcile it from OpsKnight rather than manually deleting the Teams channel. To change owner destination, finish/open-room coordination, select the new service destination, and test with a new incident; do not assume existing remote rooms migrate.
 
+## Squire in the war room
+
+When Squire is enabled for chat (**Settings → Intelligence → AI**), mention the
+bot in the war-room channel to ask about the incident, or send
+`@OpsKnight investigate [focus]` to run Squire's investigation on it. Squire
+replies in the thread, edits that reply with its progress, and finishes with the
+investigation and links to the evidence, answering as the asker's linked
+OpsKnight account; unlinked people and people who cannot read the incident are
+refused.
+
+Squire also keeps an incident summary and an investigation card in the war room,
+edited in place, and replies with digests and fix verifications in that card's
+thread. Updates go only to the incident's live war room and stop when the Teams
+configuration or the destination is disabled. Teams always shows the bot as the
+sender, so each Squire card starts with a "Squire · OpsKnight assistant" header.
+
 ## Troubleshooting
 
 **Channel creation forbidden:** verify optional RSC permissions and team-level consent/package update.

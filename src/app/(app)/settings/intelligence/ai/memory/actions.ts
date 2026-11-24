@@ -80,6 +80,7 @@ export async function saveSquireServicePolicyAction(
       {
         briefingEnabled: form.get('briefingEnabled') === 'on',
         postmortemDraftEnabled: form.get('postmortemDraftEnabled') === 'on',
+        investigationEnabled: form.get('investigationEnabled') === 'on',
         nudgeAfterMinutes:
           form.get('nudgeEnabled') === 'on' && nudge ? Math.trunc(Number(nudge)) : null,
         expectedRevision: Number(text(form, 'expectedRevision')),

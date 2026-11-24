@@ -13,6 +13,24 @@ vi.mock('@/lib/intelligence/conversations/store', () => ({
   recordExchange: store.record,
 }));
 
+const background = vi.hoisted(() => ({
+  handedOff: vi.fn(),
+  complete: vi.fn(async () => undefined),
+  live: new Map<string, (handOff: Promise<string | null>) => void>(),
+}));
+vi.mock('@/lib/intelligence/conversations/background', () => ({
+  BACKGROUND_LIMITS: { runMs: 50 },
+  completeTurn: background.complete,
+  hasBackgroundHandOff: background.handedOff,
+  liveTurnKey: (userId: string, request: unknown) => `${userId}:${JSON.stringify(request)}`,
+  liveTurns: background.live,
+  runningBackgroundTurns: new Map(),
+  titleOf: (question: string) => question,
+}));
+vi.mock('@/lib/intelligence/conversations/background-run', () => ({
+  startBackgroundTurns: vi.fn(async () => undefined),
+}));
+
 const incidents = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('@/lib/intelligence/squire/deterministic', () => ({
   readIncidentForActor: incidents.read,
@@ -39,6 +57,9 @@ beforeEach(() => {
   turns.run.mockReset().mockImplementation(events);
   store.status.mockReset().mockResolvedValue({ enabled: false, retentionDays: 30 });
   store.record.mockReset().mockResolvedValue('conv1');
+  background.handedOff.mockReset().mockResolvedValue(false);
+  background.complete.mockClear();
+  background.live.clear();
   incidents.read
     .mockReset()
     .mockImplementation(async (_actor: unknown, id: string) => (id === 'inc1' ? { id } : null));
@@ -106,6 +127,28 @@ describe('POST /api/intelligence/squire', () => {
     expect(turns.run).not.toHaveBeenCalled();
   });
 
+  it('accepts at most five @-mentions of known kinds, as bare kind and id', async () => {
+    const mention = (kind: string, id = 'svc_1') => ({ kind, id });
+    const bad = [
+      [mention('alert')],
+      [mention('service', '')],
+      [mention('service', 'x'.repeat(65))],
+      [{ ...mention('service'), label: 'Checkout API' }],
+      Array.from({ length: 6 }, (_, i) => mention('team', `t${i}`)),
+    ];
+    for (const mentions of bad)
+      expect((await POST(make({ message: 'x', mentions }))).status).toBe(400);
+    expect(turns.run).not.toHaveBeenCalled();
+
+    const mentions = [mention('service'), mention('person', 'u2'), mention('incident', 'inc1')];
+    expect((await POST(make({ message: 'x', mentions }))).status).toBe(200);
+    expect(turns.run).toHaveBeenCalledWith(
+      expect.anything(),
+      { message: 'x', history: [], mentions },
+      expect.any(AbortSignal)
+    );
+  });
+
   it('aborts the turn when the client disconnects', async () => {
     let signal: AbortSignal | undefined;
     turns.run.mockImplementation(async function* (
@@ -154,6 +197,152 @@ describe('POST /api/intelligence/squire', () => {
     expect(turns.run).not.toHaveBeenCalled();
   });
 
+  it('keeps a partial answer as interrupted when the client disconnects', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    turns.run.mockImplementation(async function* () {
+      yield { type: 'delta', text: 'partial answer' };
+      await new Promise(() => undefined);
+    });
+    const response = await POST(
+      make({ message: 'hello', incidentId: 'inc1', conversationId: 'c-interrupted' })
+    );
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    // It first waits briefly for a hand-off sent as the tab closed. (Earlier tests' cancelled streams
+    // may still be finishing, so this looks for this request's save rather than counting calls.)
+    await vi.waitFor(
+      () =>
+        expect(store.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            incidentId: 'inc1',
+            answer: 'partial answer',
+            turn: expect.objectContaining({ completion: 'INTERRUPTED', verified: false }),
+          })
+        ),
+      { timeout: 4_000 }
+    );
+    expect(background.handedOff).toHaveBeenCalledWith('u1', 'c-interrupted', expect.any(Date));
+  });
+
+  it('does not save an interrupted first turn: the client would never learn the new conversation', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    turns.run.mockImplementation(async function* () {
+      yield { type: 'delta', text: 'partial answer' };
+      await new Promise(() => undefined);
+    });
+    const response = await POST(make({ message: 'first question' }));
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    await new Promise(resolve => setTimeout(resolve, 1_800));
+    expect(store.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ answer: 'partial answer', question: 'first question' })
+    );
+    expect(background.handedOff).not.toHaveBeenCalled();
+  });
+
+  it('keeps pinging while a slow save finishes after the answer', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+      let finishSave: (id: string) => void = () => undefined;
+      store.record.mockImplementation(() => new Promise<string>(resolve => (finishSave = resolve)));
+      const response = await POST(make({ message: 'hello' }));
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      const lines: string[] = [];
+      const readLine = async () => {
+        const { value } = await reader.read();
+        lines.push(decoder.decode(value));
+      };
+      // meta, delta, done
+      for (let i = 0; i < 3; i += 1) await readLine();
+      const ping = readLine();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await ping;
+      expect(lines.at(-1)).toContain('"ping"');
+      finishSave('conv1');
+      await readLine();
+      expect(lines.at(-1)).toContain('"conversation"');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not save a cut-off copy of an answer handed to the background', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    background.handedOff.mockResolvedValue(true);
+    turns.run.mockImplementation(async function* () {
+      yield { type: 'delta', text: 'partial answer' };
+      await new Promise(() => undefined);
+    });
+    const response = await POST(make({ message: 'hello', conversationId: 'c1' }));
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    await vi.waitFor(
+      () => expect(background.handedOff).toHaveBeenCalledWith('u1', 'c1', expect.any(Date)),
+      { timeout: 4_000 }
+    );
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(store.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'c1' })
+    );
+  });
+
+  it('keeps a turn handed to the background going after the browser leaves, up to the time limit', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    turns.run.mockImplementation(async function* () {
+      yield { type: 'delta', text: 'partial answer' };
+      // Never ends and ignores the abort: only the deadline stops it.
+      await new Promise(() => undefined);
+    });
+    const response = await POST(make({ message: 'hello', conversationId: 'c1' }));
+    const reader = response.body!.getReader();
+    await reader.read();
+    const adopt = [...background.live.values()].at(-1)!;
+    adopt(Promise.resolve('bg1'));
+    await reader.cancel();
+    await vi.waitFor(() =>
+      expect(background.complete).toHaveBeenCalledWith('bg1', 'u1', 'hello', {
+        conversationId: 'conv1',
+        failure: 'TIMED_OUT',
+      })
+    );
+    expect(store.record).toHaveBeenCalledTimes(1);
+    expect(store.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        answer: 'partial answer',
+        turn: expect.objectContaining({ completion: 'INTERRUPTED' }),
+      })
+    );
+    expect(background.handedOff).not.toHaveBeenCalled();
+    expect(background.live.size).toBe(0);
+  });
+
+  it('pings while a step is slow so the client can tell slow from stalled', async () => {
+    vi.useFakeTimers();
+    try {
+      let release: () => void = () => undefined;
+      turns.run.mockImplementation(async function* () {
+        await new Promise<void>(resolve => {
+          release = resolve;
+        });
+        yield { type: 'done' };
+      });
+      const reader = (await POST(make({ message: 'hello' }))).body!.getReader();
+      const first = reader.read();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(new TextDecoder().decode((await first).value)).toBe('{"type":"ping"}\n');
+      release();
+      const next = await reader.read();
+      expect(new TextDecoder().decode(next.value)).toBe('{"type":"done"}\n');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('saves nothing while history is off', async () => {
     const lines = (await (await POST(make({ message: 'hello' }))).text())
       .trim()
@@ -178,9 +367,16 @@ describe('POST /api/intelligence/squire', () => {
       conversationId: 'conv0',
       incidentId: 'inc1',
       question: 'hello',
+      replaceLastExchange: false,
       answer: 'hi',
       dataClass: undefined,
-      turn: { completion: 'COMPLETED', citations: [], actions: [], notices: [] },
+      turn: {
+        completion: 'COMPLETED',
+        context: { kind: 'incident', id: 'inc1' },
+        citations: [],
+        actions: [],
+        notices: [],
+      },
     });
   });
 

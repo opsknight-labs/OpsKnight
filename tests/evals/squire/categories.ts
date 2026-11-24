@@ -12,5 +12,10 @@ export const SQUIRE_EVAL_CATEGORIES = [
   'permission-scope',
   'data-class',
   'cost-ceiling',
+  'conversation',
+  'product-help',
+  'page-context',
+  'role-limits',
+  'operations',
 ] as const;
 export type SquireEvalCategory = (typeof SQUIRE_EVAL_CATEGORIES)[number];

@@ -71,7 +71,8 @@ describe('Squire evaluation catalogue', () => {
       const { mode: _mode, ...checks } = c.expect;
       expect(Object.keys(checks).length, c.id).toBeGreaterThan(0);
       // Placeholders must name seeded entities; a typo would silently send a literal "$name".
-      const text = JSON.stringify([c.script, c.then?.script, c.expect]);
+      // `"$from"` is a plan step reference key (plans.ts), not a placeholder.
+      const text = JSON.stringify([c.script, c.then?.script, c.expect]).replaceAll('"$from"', '');
       for (const [placeholder] of text.matchAll(/\$[a-zA-Z]+/g))
         expect(
           [

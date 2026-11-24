@@ -1,15 +1,16 @@
 'use client';
 
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Copy, Loader2, Pencil, RefreshCw, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ChevronRight, Copy, Loader2, Pencil, RefreshCw, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import SquireProposalCard from './SquireProposalCard';
 import SquireSavedAction from './SquireSavedAction';
 import SquireAvatar from './SquireAvatar';
 import SquireInvestigationSteps from './SquireInvestigationSteps';
 import type { Citation, Turn } from './chat-types';
+import type { SquireTrace } from '@/lib/intelligence/squire/contract';
 import { incidentRef } from '@/lib/intelligence/incident-ux/explain';
 import { SquireCitationFindingLink } from './SquireSurfaceControls';
 
@@ -21,6 +22,32 @@ const Markdown = memo(
   })
 );
 
+// recharts is heavy and only answers with charts need it, so it stays out of the launcher's chunk.
+const SquireChart = dynamic(() => import('./SquireChart'), {
+  ssr: false,
+  loading: () => <div className="h-40 rounded-lg border border-border bg-card" />,
+});
+
+/** Why a 👎 answer missed; the server keeps the reason, never the answer text. */
+export const FEEDBACK_REASON_CHIPS = [
+  { value: 'wrong_facts', label: 'Wrong facts' },
+  { value: 'missed_point', label: 'Missed the point' },
+  { value: 'too_long', label: 'Too long' },
+  { value: 'wrong_action', label: 'Wrong action' },
+  { value: 'other', label: 'Other' },
+] as const;
+const FEEDBACK_NOTE_MAX = 300;
+
+/** The incident and service a turn was asked about, from its page; the server re-checks both. */
+export function feedbackSubject(turn: Pick<Turn, 'incidentId' | 'context'>) {
+  const [kind, id] = (turn.context ?? '').split(':');
+  const incidentId = turn.incidentId ?? (kind === 'incident' && id ? id : undefined);
+  return {
+    ...(incidentId ? { incidentId } : {}),
+    ...(kind === 'service' && id ? { serviceId: id } : {}),
+  };
+}
+
 /** One chip per source; records that share a title (five "Workflow failed: Tests") carry their short id. */
 export function distinctCitations(citations: readonly Citation[]) {
   const unique = [...new Map(citations.map(citation => [citation.href, citation])).values()];
@@ -30,6 +57,50 @@ export function distinctCitations(citations: readonly Citation[]) {
     citation,
     ref: (shared.get(citation.label) ?? 0) > 1 ? incidentRef(citation.id) : null,
   }));
+}
+
+/** "How I got this": what the answer read, which model wrote it, and what it cost. Collapsed by default. */
+export function SquireTracePanel({ trace }: { trace: SquireTrace }) {
+  const { tokens } = trace;
+  const rows: Array<[string, string | undefined]> = [
+    ['Mode', trace.mode === 'ai' ? 'AI' : 'Basic (no AI)'],
+    [
+      'Model',
+      trace.model && [trace.model, trace.provider && `(${trace.provider})`].join(' ').trim(),
+    ],
+    ['Looked up', trace.tools.join(' · ') || 'Nothing'],
+    ['Sources', trace.sources.join(' · ') || 'None cited'],
+    [
+      'Tokens',
+      tokens &&
+        `${tokens.input.toLocaleString()} in · ${tokens.output.toLocaleString()} out${
+          tokens.cacheRead ? ` · ${tokens.cacheRead.toLocaleString()} from cache` : ''
+        }`,
+    ],
+    ['Time', `${(trace.durationMs / 1000).toFixed(1)} s`],
+    ['Verified', trace.verified ? 'Yes, every record read is kept as evidence' : 'No'],
+  ];
+  return (
+    <details className="group/trace text-xs text-muted-foreground" data-testid="squire-trace">
+      <summary className="inline-flex min-h-11 cursor-pointer select-none list-none items-center gap-1.5 rounded-md pr-1.5 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-6 [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          aria-hidden
+          className="h-3.5 w-3.5 shrink-0 motion-safe:transition-transform group-open/trace:rotate-90"
+        />
+        How I got this
+      </summary>
+      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 ps-5">
+        {rows
+          .filter(([, value]) => value)
+          .map(([term, value]) => (
+            <div key={term} className="contents">
+              <dt className="font-medium">{term}</dt>
+              <dd className="min-w-0 break-words">{value}</dd>
+            </div>
+          ))}
+      </dl>
+    </details>
+  );
 }
 
 // Phones get 44 px targets; the desktop panel uses compact icon buttons.
@@ -46,7 +117,6 @@ export default memo(function SquireMessage({
   busy,
   last,
   animated,
-  contextValid,
   onOutcome,
   onRetry,
   onEdit,
@@ -61,7 +131,6 @@ export default memo(function SquireMessage({
   busy: boolean;
   last: boolean;
   animated: boolean;
-  contextValid: boolean;
   onOutcome: (outcome: 'success' | 'error') => void;
   onRetry: (index: number) => void;
   onEdit: (index: number) => void;
@@ -76,6 +145,11 @@ export default memo(function SquireMessage({
   const [copyNotice, setCopyNotice] = useState('');
   const [feedback, setFeedback] = useState<'UP' | 'DOWN' | 'sent' | 'failed' | null>(null);
   const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
+  const [sending, setSending] = useState(false);
+  const thumbsDown = useRef<HTMLButtonElement>(null);
+  // Once the rating controls go away, focus moves to the status line instead of dropping to <body>.
+  const focusStatus = useRef(false);
   const [cheered, setCheered] = useState(false);
   const assistant = turn.role === 'assistant';
   const streaming = busy && last;
@@ -83,7 +157,13 @@ export default memo(function SquireMessage({
     () => (turn.citations ?? []).map(citation => citation.href),
     [turn.citations]
   );
-  const sendFeedback = async (rating: 'UP' | 'DOWN', chosenReason?: string) => {
+  const sendFeedback = async (
+    rating: 'UP' | 'DOWN',
+    chosenReason?: string,
+    chosenNote?: string
+  ) => {
+    if (sending) return;
+    setSending(true);
     try {
       const response = await fetch('/api/intelligence/squire/feedback', {
         method: 'POST',
@@ -93,19 +173,28 @@ export default memo(function SquireMessage({
           mode: turn.mode ?? 'basic',
           ...(turn.intent ? { intent: turn.intent } : {}),
           ...(chosenReason ? { reason: chosenReason } : {}),
+          ...(chosenNote?.trim() ? { note: chosenNote.trim().slice(0, FEEDBACK_NOTE_MAX) } : {}),
+          ...feedbackSubject(turn),
           ...(question ? { question } : {}),
           ...(conversationId ? { conversationId } : {}),
         }),
       });
+      focusStatus.current = true;
       setFeedback(response.ok ? 'sent' : 'failed');
     } catch {
+      focusStatus.current = true;
       setFeedback('failed');
+    } finally {
+      setSending(false);
     }
   };
   if (!assistant) {
     return (
-      <article aria-label="Your question" className="group ml-10 flex flex-col items-end gap-1">
-        <div className="max-w-full whitespace-pre-wrap wrap-break-word rounded-2xl rounded-br-md border border-border bg-muted px-3.5 py-2 text-sm">
+      <article aria-label="Your question" className="group ms-10 flex flex-col items-end gap-1">
+        <div
+          dir="auto"
+          className="max-w-full whitespace-pre-wrap wrap-break-word rounded-2xl rounded-ee-md border border-border bg-muted px-3.5 py-2 text-sm"
+        >
           {turn.notice && <p className="mb-1 text-xs text-muted-foreground">{turn.notice}</p>}
           {turn.content}
         </div>
@@ -114,7 +203,7 @@ export default memo(function SquireMessage({
             size="sm"
             variant="ghost"
             className={`${ACTION_BUTTON} ${REVEAL}`}
-            disabled={busy || !contextValid}
+            disabled={busy}
             onClick={() => onEdit(index)}
           >
             <Pencil aria-hidden="true" />
@@ -139,7 +228,9 @@ export default memo(function SquireMessage({
           <SquireInvestigationSteps steps={turn.investigation} streaming={streaming} />
         )}
         {turn.content ? (
-          <Markdown text={turn.content} allowed={allowed} references={turn.citations} />
+          <div dir="auto">
+            <Markdown text={turn.content} allowed={allowed} references={turn.citations} />
+          </div>
         ) : streaming && (!turn.investigation?.length || turn.activity) ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 shrink-0 motion-safe:animate-spin" aria-hidden="true" />
@@ -157,6 +248,9 @@ export default memo(function SquireMessage({
             {turn.error}
           </p>
         )}
+        {turn.charts?.map((chart, position) => (
+          <SquireChart key={position} chart={chart} />
+        ))}
         {!!turn.citations?.length && (
           <ul aria-label="Sources" className="flex flex-wrap gap-1.5">
             {distinctCitations(turn.citations).map(({ citation, ref }, position) => (
@@ -190,15 +284,16 @@ export default memo(function SquireMessage({
           <SquireProposalCard
             key={proposal.token}
             proposal={proposal}
-            reviewContextValid={contextValid}
             onOutcome={onOutcome}
+            assistantName={name}
           />
         ))}
         {turn.savedActions?.map(action => (
           <SquireSavedAction key={action.receiptId} action={action} />
         ))}
+        {turn.trace && !streaming && <SquireTracePanel trace={turn.trace} />}
         {!!turn.content && !streaming && (
-          <div className={`-ml-1.5 flex flex-wrap items-center gap-0.5 ${last ? '' : REVEAL}`}>
+          <div className={`-ms-1.5 flex flex-wrap items-center gap-0.5 ${last ? '' : REVEAL}`}>
             <Button
               size="sm"
               variant="ghost"
@@ -223,7 +318,7 @@ export default memo(function SquireMessage({
                 className={ACTION_BUTTON}
                 aria-label={turn.failed ? undefined : 'Regenerate'}
                 title={turn.failed ? undefined : 'Regenerate'}
-                disabled={busy || !contextValid}
+                disabled={busy}
                 onClick={() => onRetry(index)}
               >
                 <RefreshCw aria-hidden="true" />
@@ -231,7 +326,11 @@ export default memo(function SquireMessage({
               </Button>
             )}
             {!turn.failed && feedback !== 'sent' && (
-              <span className="flex items-center gap-0.5" aria-label="Rate this answer">
+              <span
+                role="group"
+                className="flex items-center gap-0.5"
+                aria-label="Rate this answer"
+              >
                 <Button
                   size="sm"
                   variant="ghost"
@@ -252,6 +351,7 @@ export default memo(function SquireMessage({
                   size="sm"
                   variant="ghost"
                   className={ACTION_BUTTON}
+                  ref={thumbsDown}
                   aria-label="Unhelpful answer"
                   title="Not helpful"
                   aria-pressed={feedback === 'DOWN'}
@@ -262,7 +362,7 @@ export default memo(function SquireMessage({
               </span>
             )}
             {turn.mode === 'basic' && (
-              <span className="ml-1 text-2xs text-muted-foreground">
+              <span className="ms-1 text-2xs text-muted-foreground">
                 Basic answer from your incident data
               </span>
             )}
@@ -270,41 +370,84 @@ export default memo(function SquireMessage({
         )}
         {feedback === 'DOWN' && (
           <form
-            className="flex w-full flex-wrap items-center gap-2"
+            aria-label="Why was this answer not helpful?"
+            className="w-full space-y-2 rounded-lg border border-border bg-card p-3"
             onSubmit={event => {
               event.preventDefault();
-              void sendFeedback('DOWN', reason || 'other');
+              void sendFeedback('DOWN', reason || (note.trim() ? 'other' : undefined), note);
             }}
           >
-            <label className="text-xs text-muted-foreground" htmlFor={`feedback-reason-${index}`}>
-              What was wrong?
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-medium">What went wrong? (optional)</legend>
+              <div className="flex flex-wrap gap-1.5">
+                {FEEDBACK_REASON_CHIPS.map(chip => (
+                  <button
+                    key={chip.value}
+                    type="button"
+                    aria-pressed={reason === chip.value}
+                    onClick={() => setReason(reason === chip.value ? '' : chip.value)}
+                    className={`inline-flex min-h-11 items-center rounded-full border px-3 text-xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-7 ${
+                      reason === chip.value
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-background hover:bg-accent'
+                    }`}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <label
+              className="block text-xs text-muted-foreground"
+              htmlFor={`feedback-note-${index}`}
+            >
+              Anything else? Don’t include secrets.
             </label>
-            <select
-              id={`feedback-reason-${index}`}
-              className="min-h-11 rounded-md border border-border bg-background px-2 text-xs sm:min-h-8"
-              value={reason}
-              onChange={event => setReason(event.target.value)}
-            >
-              <option value="">Choose a reason</option>
-              <option value="wrong">Wrong</option>
-              <option value="incomplete">Incomplete</option>
-              <option value="outdated">Out of date</option>
-              <option value="unclear">Unclear</option>
-              <option value="unsafe">Unsafe or risky</option>
-              <option value="other">Other</option>
-            </select>
-            <Button
-              size="sm"
-              variant="outline"
-              type="submit"
-              className="min-h-11 text-xs sm:min-h-8"
-            >
-              Send
-            </Button>
+            <textarea
+              id={`feedback-note-${index}`}
+              rows={2}
+              maxLength={FEEDBACK_NOTE_MAX}
+              value={note}
+              onChange={event => setNote(event.target.value)}
+              className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                type="button"
+                className="min-h-11 text-xs sm:min-h-8"
+                onClick={() => {
+                  setFeedback(null);
+                  thumbsDown.current?.focus();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                type="submit"
+                disabled={sending}
+                className="min-h-11 text-xs sm:min-h-8"
+              >
+                {sending ? 'Sending…' : 'Send feedback'}
+              </Button>
+            </div>
           </form>
         )}
         {(feedback === 'sent' || feedback === 'failed' || copyNotice) && (
-          <p role="status" className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+          <p
+            role="status"
+            tabIndex={-1}
+            ref={node => {
+              if (node && focusStatus.current) {
+                focusStatus.current = false;
+                node.focus();
+              }
+            }}
+            className="flex items-center gap-1.5 text-2xs text-muted-foreground focus-visible:outline-hidden"
+          >
             {/* The salute happens where the person clicked, not on a mascot hidden behind the panel. */}
             {feedback === 'sent' && cheered && (
               <SquireAvatar size="xs" state="success" animated={animated} />

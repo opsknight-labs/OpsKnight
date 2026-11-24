@@ -118,7 +118,40 @@ describe('saved assistant conversations', () => {
     expect((await getConversation(admin.id, id))?.messages).toHaveLength(4);
   });
 
-  it('starts a separate conversation when the requested context changes', async () => {
+  it('replaces only the owner’s latest exchange on a retry of the same question', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const other = await createTestUser({ role: 'RESPONDER' });
+    await configure(admin.id, { enabled: true });
+    const id = await recordExchange({ userId: admin.id, question: 'First?', answer: 'One.' });
+    await recordExchange({
+      userId: admin.id,
+      conversationId: id,
+      question: 'Why?',
+      answer: 'Old.',
+    });
+    const retry = { conversationId: id, question: 'Why?', replaceLastExchange: true };
+
+    expect(await recordExchange({ userId: admin.id, ...retry, answer: 'New.' })).toBe(id);
+    const contents = async () =>
+      (await getConversation(admin.id, id))?.messages.map(message => message.content);
+    expect(await contents()).toEqual(['First?', 'One.', 'Why?', 'New.']);
+    expect((await db.squireConversation.findUniqueOrThrow({ where: { id } })).messageCount).toBe(4);
+
+    // Another question is not the latest exchange retried: appended.
+    await recordExchange({ userId: admin.id, ...retry, question: 'Other?', answer: 'Two.' });
+    expect(await contents()).toHaveLength(6);
+    // Someone else cannot replace (or reach) it: their retry starts a conversation of their own.
+    const theirs = await recordExchange({
+      userId: other.id,
+      ...retry,
+      question: 'Other?',
+      answer: 'Theirs.',
+    });
+    expect(theirs).not.toBe(id);
+    expect(await contents()).toEqual(['First?', 'One.', 'Why?', 'New.', 'Other?', 'Two.']);
+  });
+
+  it('continues one conversation when the page changes, keeping the incident it started on', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     await configure(admin.id, { enabled: true });
     const first = await recordExchange({
@@ -140,10 +173,9 @@ describe('saved assistant conversations', () => {
       question: 'Global?',
       answer: 'Global.',
     });
-    expect(new Set([first, second, global]).size).toBe(3);
-    expect((await getConversation(admin.id, first))?.messages).toHaveLength(2);
-    expect((await getConversation(admin.id, second))?.incidentId).toBe('inc-b');
-    expect((await getConversation(admin.id, global))?.incidentId).toBeNull();
+    expect(new Set([first, second, global]).size).toBe(1);
+    expect((await getConversation(admin.id, first))?.messages).toHaveLength(6);
+    expect((await getConversation(admin.id, first))?.incidentId).toBe('inc-a');
   });
 
   it('serves owner-only HTTP endpoints, refuses cross-site and API-key callers, and deletes on request', async () => {
@@ -386,4 +418,59 @@ it('keeps 89-day chats readable without extending retention and rejects expired 
   expect(replacement).not.toBe(expired);
   expect(await purgeConversations()).toMatchObject({ deleted: 1 });
   expect((await list(request('?cursor=not-valid-json'))).status).toBe(400);
+});
+
+describe('replaying earlier answers', () => {
+  it('replays completed answers that were unverified, keeps catalog receipts, and never replays interrupted ones', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    await configure(admin.id, { enabled: true });
+    const { resolveUserActor } = await import('@/lib/authorization-actors');
+    const { getConversationForActor } = await import('@/lib/intelligence/conversations/view');
+    const { authorizationContextHash, readBrowserContext } =
+      await import('@/lib/intelligence/squire/context-proof');
+    const actor = (await resolveUserActor(admin.id))!;
+    const authorizationHash = authorizationContextHash(actor);
+    const receiptId = 'b6a4c9e2-1f3d-4e5a-9b7c-2d8e0f1a3b4c';
+    const id = await recordExchange({
+      userId: admin.id,
+      question: 'Can you snooze the maintenance window?',
+      answer: 'I can propose extending the window by an hour.',
+      turn: {
+        mode: 'ai',
+        verified: false,
+        authorizationHash,
+        // A catalog change has no incident: the receipt is the owner's own.
+        actions: [{ receiptId, action: 'run_operation', title: 'Extend maintenance' }],
+      },
+    });
+    await recordExchange({
+      userId: admin.id,
+      conversationId: id,
+      question: 'And the other one?',
+      answer: 'Partial',
+      turn: { mode: 'ai', completion: 'INTERRUPTED', verified: false, authorizationHash },
+    });
+
+    const saved = (await getConversationForActor(actor, id))!;
+    const [, unverified, , interrupted] = saved.messages;
+    expect(unverified.replayable).toBe(true);
+    expect(unverified.envelope?.actions).toEqual([
+      { receiptId, action: 'run_operation', title: 'Extend maintenance' },
+    ]);
+    expect(unverified.contextProof).toBeTruthy();
+    expect(interrupted.replayable).toBe(false);
+    expect(interrupted.contextProof).toBeUndefined();
+
+    // The browser copy replays it too, labelled as unverified.
+    const replay = await readBrowserContext(actor, null, [
+      { role: 'user', content: saved.messages[0].content },
+      {
+        role: 'assistant',
+        content: unverified.content,
+        contextProof: unverified.contextProof,
+      },
+    ]);
+    expect(replay.omitted).toBe(false);
+    expect(replay.messages[1].content).toContain('[Earlier answer, sources not verified');
+  });
 });

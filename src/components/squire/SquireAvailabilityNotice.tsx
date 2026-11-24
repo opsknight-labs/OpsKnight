@@ -90,7 +90,11 @@ export default function SquireAvailabilityNotice({
   // Waiting is a warning; basic mode is information.
   const tone = toneClasses(state === 'rate_limited' || state === 'budget' ? 'elevated' : 'info');
   const pill =
-    state === 'rate_limited' ? 'Rate limited' : state === 'budget' ? 'Budget reached' : 'Basic mode';
+    state === 'rate_limited'
+      ? 'Rate limited'
+      : state === 'budget'
+        ? 'Budget reached'
+        : 'Basic mode';
   const title =
     state === 'rate_limited'
       ? 'Too many requests'
@@ -118,7 +122,6 @@ export default function SquireAvailabilityNotice({
   const sentence = `${title} · ${detail}`;
   return (
     <div
-      role="status"
       data-testid="squire-availability"
       data-state={state}
       className="flex min-h-9 shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 text-xs text-muted-foreground"
@@ -129,8 +132,10 @@ export default function SquireAvailabilityNotice({
         <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${tone.solid}`} />
         {pill}
       </span>
-      <p className="min-w-0 flex-1 truncate" title={sentence}>
-        {sentence}
+      {/* Only stable text is live: a per-second countdown inside it would be announced every second. */}
+      <p className="line-clamp-2 min-w-0 flex-1 sm:truncate" title={sentence}>
+        <span role="status">{state === 'rate_limited' ? title : sentence}</span>
+        {state === 'rate_limited' && ` · ${detail}`}
       </p>
       {(state === 'rate_limited' || (state === 'basic' && !reason)) && canRetry && (
         <button

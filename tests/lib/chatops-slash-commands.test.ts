@@ -81,7 +81,10 @@ describe('ChatOps Slash Command Dispatcher', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(retryModule.retryFetch).mockResolvedValue({
-      json: async () => ({ ok: true, user: { profile: { email: 'alice@test.com' } } }),
+      json: async () => ({
+        ok: true,
+        user: { team_id: 'T111222', profile: { email: 'alice@test.com' } },
+      }),
     } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
     vi.mocked(prisma.user.findFirst).mockResolvedValue({
       id: 'usr-alice',

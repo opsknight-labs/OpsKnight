@@ -57,8 +57,12 @@ function fallbackSimilarity(name: string, term: string): number {
   let prefix = 0;
   // eslint-disable-next-line security/detect-object-injection -- numeric index into a string
   while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix += 1;
-  return prefix >= 3 ? 0.4 + prefix / (2 * Math.max(a.length, b.length)) : 0;
+  // A shared 3-letter prefix alone is a hint, below the bar for acting without asking.
+  return prefix > 3 ? 0.4 + prefix / (2 * Math.max(a.length, b.length)) : prefix === 3 ? 0.4 : 0;
 }
+
+/** The term as a literal LIKE pattern: "%", "_" and the escape character match only themselves. */
+const like = (term: string) => term.replace(/[\\%_]/g, '\\$&');
 
 type Table = { table: 'Service' | 'Team' | 'OnCallSchedule' | 'User'; kind: EntityKind };
 const TABLES: Table[] = [
@@ -89,7 +93,7 @@ async function candidates(
   }
   const rows = await prisma.$queryRaw<Array<{ id: string; name: string }>>(Prisma.sql`
     SELECT "id", "name" FROM ${relation}
-    WHERE "name" IS NOT NULL AND (lower("name") LIKE ${`%${term.toLowerCase()}%`} OR lower("name") LIKE ${`${term.slice(0, 3).toLowerCase()}%`})
+    WHERE "name" IS NOT NULL AND (lower("name") LIKE ${`%${like(term.toLowerCase())}%`} ESCAPE '\\' OR lower("name") LIKE ${`${like(term.slice(0, 3).toLowerCase())}%`} ESCAPE '\\')
     ORDER BY "name" ASC LIMIT ${CANDIDATES * 4}`);
   return rows
     .map(row => ({ ...row, similarity: fallbackSimilarity(row.name, term) }))

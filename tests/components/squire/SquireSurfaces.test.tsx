@@ -412,23 +412,3 @@ describe('pinned incident briefing', () => {
     ).not.toBeInTheDocument();
   });
 });
-
-describe('touch targets', () => {
-  it('gives the context-mismatch "New chat here" button a 44 px target', async () => {
-    nav.pathname = '/incidents/incident-a';
-    fetchMock.mockResolvedValue(streamOf([{ type: 'delta', text: 'A answer' }, { type: 'done' }]));
-    const { rerender } = render(<SquireLauncher name="Pip" />);
-    fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
-    fireEvent.change(screen.getByLabelText('Message Pip'), { target: { value: 'first' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(await screen.findByText('A answer')).toBeInTheDocument();
-    nav.pathname = '/incidents/incident-b';
-    rerender(<SquireLauncher name="Pip" />);
-    const button = await screen.findByRole('button', { name: 'New chat here' });
-    expect(button.className).toContain('min-h-11');
-    expect(button.className).not.toContain('min-h-8');
-    expect(screen.getByRole('link', { name: 'Return to original context' }).className).toContain(
-      'min-h-11'
-    );
-  });
-});

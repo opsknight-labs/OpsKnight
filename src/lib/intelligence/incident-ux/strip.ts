@@ -273,7 +273,14 @@ export function insightsSections(insights: IncidentInsights): InsightsSectionId[
   const has = new Map<InsightsSectionId, boolean>([
     [
       'briefing',
-      Boolean(proactive && (proactive.briefing || proactive.nudge || proactive.postmortemDraft)),
+      Boolean(
+        proactive &&
+        (proactive.briefing ||
+          proactive.nudge ||
+          proactive.postmortemDraft ||
+          proactive.investigation ||
+          proactive.verification)
+      ),
     ],
     ['triage', Boolean(insights.triage?.suggestions.length)],
     ['similar', Boolean(insights.similar?.length)],
@@ -366,6 +373,14 @@ export function buildStripChips(insights: IncidentInsights): StripChip[] {
         label: `Impact: ${parts.join(', ')}`,
       });
   }
+
+  if (insights.proactive?.verification && !insights.proactive.verification.holding)
+    chips.push({
+      id: 'verification',
+      target: { section: 'briefing' },
+      tone: 'critical',
+      label: 'Fix not holding',
+    });
 
   if (insights.proactive?.briefing)
     chips.push({

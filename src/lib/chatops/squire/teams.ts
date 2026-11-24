@@ -2,7 +2,10 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { normalizeTrustedMicrosoftTeamsServiceUrl } from '@/lib/microsoft-teams/service-url';
 import { resolveMicrosoftTeamsUser } from '@/lib/microsoft-teams/identity';
-import { replyToMicrosoftTeamsActivity } from '@/lib/microsoft-teams/client';
+import {
+  replyToMicrosoftTeamsActivity,
+  updateMicrosoftTeamsChannelCard,
+} from '@/lib/microsoft-teams/client';
 import {
   teamsActionError,
   teamsActionSuccess,
@@ -14,8 +17,17 @@ import {
   chatBaseUrl,
   confirmChatProposal,
   isSquireChatOpsEnabled,
+  progressEditor,
+  recalledPlaceholder,
+  rememberPlaceholder,
 } from './handler';
-import { parseTeamsSquireAction, questionFromMention, renderTeamsAnswer } from './render';
+import { loadSquireIdentity, withTeamsSquireHeader, type SquireIdentity } from './identity';
+import {
+  markdownToTeams,
+  parseTeamsSquireAction,
+  questionFromMention,
+  renderTeamsAnswer,
+} from './render';
 
 /**
  * Microsoft Teams transport for Squire: an @mention of the bot in an incident war-room channel, and the
@@ -51,10 +63,14 @@ export interface TeamsSquireMentionPayload {
   aadObjectId: string | null;
   fromName: string | null;
   text: string;
+  /** Added by the intent worker; keys the remembered progress message of a retried answer. */
+  __opsknightIntentId?: string;
 }
 
 export interface TeamsSquireReply {
   card: Record<string, unknown>;
+  /** The "looking into it" reply posted while answering; the answer replaces it. */
+  placeholderId?: string;
 }
 
 /** True when the message @mentions the bot that received it. */
@@ -157,42 +173,118 @@ async function resolveTeamsUser(input: {
   }
 }
 
-/** Worker: answers one mention and returns the card to reply with. */
+/** A one-line Squire card (the progress message while an answer is written). */
+function teamsProgressCard(text: string, identity: SquireIdentity): Record<string, unknown> {
+  return withTeamsSquireHeader(
+    {
+      type: 'AdaptiveCard',
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      version: '1.5',
+      body: [{ type: 'TextBlock', wrap: true, text: markdownToTeams(text, chatBaseUrl()) }],
+    },
+    identity
+  );
+}
+
+/**
+ * Worker: answers one mention and returns the card to reply with. While it works, a "looking into it"
+ * reply is posted and edited with progress (investigation steps, the answer so far); the answer replaces it.
+ */
 export async function answerTeamsSquireMention(
   payload: TeamsSquireMentionPayload
 ): Promise<TeamsSquireReply> {
   const baseUrl = chatBaseUrl();
+  const identity = await loadSquireIdentity();
   const incidentId = await findTeamsWarRoomIncident(payload.tenantId, payload.channelIds);
   if (!incidentId)
     return {
-      card: renderTeamsAnswer(
-        {
-          name: 'Squire',
-          mode: 'basic',
-          text: '',
-          notices: [],
-          citations: [],
-          proposals: [],
-          error: NOT_A_WAR_ROOM,
-        },
-        { baseUrl, ownerUserId: '' }
+      card: withTeamsSquireHeader(
+        renderTeamsAnswer(
+          {
+            name: 'Squire',
+            mode: 'basic',
+            text: '',
+            notices: [],
+            citations: [],
+            proposals: [],
+            error: NOT_A_WAR_ROOM,
+          },
+          { baseUrl, ownerUserId: '' }
+        ),
+        identity
       ),
     };
   const user = await resolveTeamsUser(payload);
+  // A retried answer edits the progress reply its earlier attempt posted instead of posting another.
+  const remembered = user ? await recalledPlaceholder(payload.__opsknightIntentId) : null;
+  const placeholder =
+    remembered ??
+    (user
+      ? await replyToMicrosoftTeamsActivity({
+          tenantId: payload.tenantId,
+          serviceUrl: payload.serviceUrl,
+          conversationId: payload.conversationId,
+          replyToId: payload.activityId,
+          card: teamsProgressCard(`${identity.name} is looking into it…`, identity),
+        })
+          .then(result => (result.success ? result.providerMessageId : undefined))
+          .catch(() => undefined)
+      : undefined);
+  if (placeholder && !remembered)
+    await rememberPlaceholder(payload.__opsknightIntentId, placeholder);
+  const editor = placeholder
+    ? progressEditor(text =>
+        updateMicrosoftTeamsChannelCard({
+          tenantId: payload.tenantId,
+          channelId: payload.channelIds[0],
+          conversationId: payload.conversationId,
+          messageId: placeholder,
+          serviceUrl: payload.serviceUrl,
+          incidentId,
+          card: teamsProgressCard(text, identity),
+        })
+      )
+    : null;
   const answer = await answerChatQuestion({
     provider: 'MICROSOFT_TEAMS',
     userId: user?.userId ?? null,
     question: questionFromMention(payload.text),
     incidentId,
+    inChannel: true,
+    ...(editor ? { onProgress: (text: string) => editor.push(text) } : {}),
   });
-  return { card: renderTeamsAnswer(answer, { baseUrl, ownerUserId: user?.userId ?? '' }) };
+  await editor?.settle();
+  return {
+    card: withTeamsSquireHeader(
+      renderTeamsAnswer(answer, { baseUrl, ownerUserId: user?.userId ?? '' }),
+      identity
+    ),
+    ...(placeholder ? { placeholderId: placeholder } : {}),
+  };
 }
 
-/** Worker: posts the stored card in the thread. A failure is retried by the intent pipeline. */
+/**
+ * Worker: posts the stored card in the thread. A failure throws so the intent pipeline retries; a new reply
+ * is posted only when the progress reply it would replace is gone, never as a second copy.
+ */
 export async function deliverTeamsSquireReply(
   payload: TeamsSquireMentionPayload,
   reply: TeamsSquireReply
 ): Promise<void> {
+  if (reply.placeholderId) {
+    const updated = await updateMicrosoftTeamsChannelCard({
+      tenantId: payload.tenantId,
+      channelId: payload.channelIds[0] ?? '',
+      conversationId: payload.conversationId,
+      messageId: reply.placeholderId,
+      serviceUrl: payload.serviceUrl,
+      incidentId: '',
+      card: reply.card,
+    });
+    if (updated.success) return;
+    if (updated.errorCode !== 'MESSAGE_NOT_FOUND')
+      throw new Error(`Teams reply update failed (${updated.errorCode ?? updated.error})`);
+  }
   const result = await replyToMicrosoftTeamsActivity({
     tenantId: payload.tenantId,
     serviceUrl: payload.serviceUrl,

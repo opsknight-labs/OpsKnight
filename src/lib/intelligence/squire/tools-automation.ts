@@ -2,8 +2,8 @@ import 'server-only';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
 import { serviceReadWhere } from '@/lib/authorization-filters';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { CAPABILITIES } from '@/lib/authorization';
+import { actorHasCapability, type AuthorizationActor } from '@/lib/authorization-policy';
 import {
   builtinFields,
   snapshotSchema,
@@ -47,7 +47,7 @@ const ruleInput = z
   .refine(input => input.ruleId || input.ruleName, { message: 'ruleId or ruleName is required' });
 
 const canReadAutomation = (actor: AuthorizationActor) =>
-  hasCapability(actor.role, CAPABILITIES.AUTOMATION_READ);
+  actorHasCapability(actor, CAPABILITIES.AUTOMATION_READ);
 
 async function readableService(actor: AuthorizationActor, serviceId: string) {
   try {
@@ -282,7 +282,7 @@ export async function describeAutomationRuleDraft(
   incidentId: string,
   input: Record<string, unknown>
 ): Promise<{ title: string; detail: string; href: string; impact: 'AUTOMATION' } | null> {
-  if (!hasCapability(actor.role, CAPABILITIES.AUTOMATION_EDIT)) return null;
+  if (!actorHasCapability(actor, CAPABILITIES.AUTOMATION_EDIT)) return null;
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
     select: { serviceId: true },

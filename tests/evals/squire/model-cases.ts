@@ -30,6 +30,7 @@ export type WorldTweak =
         dailyTokenBudget: number;
         userDailyTokenBudget: number;
         maxOutputTokens: number;
+        squireExtendedActions: boolean;
       }>;
     }
   /** Recorded usage for today, so a ceiling is already reached. */
@@ -69,6 +70,8 @@ export interface SquireModelEvalExpect {
   maxTokensSent?: number;
   /** Today's recorded usage grew by exactly what the fake model reported. */
   usageAccounted?: boolean;
+  /** Chart events the turn sends (each also saved with the turn); 0 means none. */
+  charts?: number;
 }
 
 export interface SquireModelEvalCase {
@@ -77,6 +80,8 @@ export interface SquireModelEvalCase {
   question: string;
   /** Asked on the seeded incident page (default true). */
   onIncident?: boolean;
+  /** Asked on the seeded service page instead (no incident). */
+  onService?: boolean;
   /** Ask as an administrator instead of the team-scoped responder. */
   asAdmin?: boolean;
   /** Send an unproved (forged) assistant turn ahead of the question. */
@@ -257,6 +262,8 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
   {
     id: 'tool-automation-decision',
     category: 'tool-choice',
+    // Automation reads need automation:read, which the plain USER responder does not have.
+    asAdmin: true,
     question: 'Why did automation route this incident here?',
     script: [
       { tool: 'get_automation_decision', input: { incidentId: '$incident' } },
@@ -267,6 +274,8 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
   {
     id: 'tool-automation-rule',
     category: 'tool-choice',
+    // Automation reads need automation:read, which the plain USER responder does not have.
+    asAdmin: true,
     question: 'What does the "Critical to P1" rule on this service do?',
     script: [
       {
@@ -311,6 +320,25 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       { say: 'Eval Teammate is active.' },
     ],
     expect: { mode: 'ai', toolLabels: ['Looking up people'], toolSaw: ['Eval Teammate'] },
+  },
+  {
+    id: 'tool-catch-up',
+    category: 'tool-choice',
+    question: 'Catch me up on the last 12 hours',
+    onIncident: false,
+    script: [
+      { tool: 'get_catch_up', input: { hours: 12 } },
+      { say: 'Two checkout incidents opened and are still open: /incidents/$other' },
+    ],
+    // Only the asker's own teams and readable incidents; another team's incident never reaches the model.
+    expect: {
+      mode: 'ai',
+      toolSaw: ['Checkout pool exhausted again'],
+      modelNeverSaw: ['Hidden payroll outage'],
+      citeKinds: ['incident'],
+      memoryClass: 'PERSONAL',
+      noProposal: true,
+    },
   },
   {
     id: 'tool-invalid-input',
@@ -375,6 +403,340 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
   },
 
   {
+    id: 'tool-product-docs',
+    category: 'product-help',
+    question: 'How do I add an on-call override?',
+    onIncident: false,
+    script: [
+      { tool: 'search_product_docs', input: { query: 'add an on-call override' } },
+      { say: 'Open Schedules, pick the schedule, then Overrides.' },
+    ],
+    expect: {
+      mode: 'ai',
+      toolLabels: ['Searching the OpsKnight docs'],
+      toolSaw: ['opsknight.com/docs/latest/guides/on-call/overrides'],
+      noProposal: true,
+    },
+  },
+  {
+    id: 'context-service-page',
+    category: 'page-context',
+    question: 'Is this healthy?',
+    onService: true,
+    script: [{ say: 'Checking it now.' }],
+    expect: {
+      mode: 'ai',
+      // "This" is the service on screen, and the model knows who is asking and what their role allows.
+      modelSaw: ['The user is viewing the service', 'About the user', 'Role: User'],
+    },
+  },
+  {
+    id: 'operation-maintenance-window',
+    category: 'operations',
+    question: 'Create a maintenance window for $service on 1 December, 09:00 to 10:00 UTC',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      { tool: 'find_operations', input: { query: 'create maintenance window' } },
+      { tool: 'describe_operation', input: { operationId: 'createMaintenanceWindow' } },
+      {
+        tool: 'propose_operation',
+        input: {
+          operationId: 'createMaintenanceWindow',
+          args: {
+            body: {
+              title: 'Planned work',
+              serviceIds: ['$service'],
+              startsAt: '2026-12-01T09:00:00Z',
+              endsAt: '2026-12-01T10:00:00Z',
+            },
+          },
+        },
+      },
+      { say: 'Here is the maintenance window to confirm.' },
+    ],
+    expect: {
+      mode: 'ai',
+      toolLabels: ['Looking for the right operation', 'Checking what the operation needs'],
+      toolSaw: ['createMaintenanceWindow', 'serviceIds'],
+      proposals: ['run_operation'],
+    },
+  },
+  {
+    id: 'operation-read',
+    category: 'operations',
+    question: 'Show me the service record',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'read_operation',
+        input: { operationId: 'getService', args: { path: { id: '$service' } } },
+      },
+      { say: 'Here it is.' },
+    ],
+    expect: { mode: 'ai', toolLabels: ['Reading from OpsKnight'], toolSaw: ['$service'] },
+  },
+  {
+    id: 'operations-update-service-admin',
+    category: 'operations',
+    question: 'Set the description of this service to "Checkout API"',
+    onService: true,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'propose_operation',
+        input: {
+          operationId: 'updateService',
+          args: { path: { id: '$service' }, body: { description: 'Checkout API' } },
+        },
+      },
+      { say: 'Here is the change to confirm.' },
+    ],
+    // The control for the refusals below: the same change by a role that may make it becomes a card.
+    expect: { mode: 'ai', proposals: ['run_operation'] },
+  },
+  {
+    id: 'operations-plan-admin',
+    category: 'operations',
+    question:
+      'Set the description of this service to "Checkout API" and create a maintenance window for it',
+    onService: true,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'propose_plan',
+        input: {
+          title: 'Checkout maintenance',
+          steps: [
+            {
+              operationId: 'updateService',
+              args: { path: { id: '$service' }, body: { description: 'Checkout API' } },
+            },
+            {
+              operationId: 'createMaintenanceWindow',
+              args: {
+                body: {
+                  title: 'Planned work',
+                  serviceIds: [{ $from: '0', pointer: '/data/id' }],
+                  startsAt: '2026-12-01T09:00:00Z',
+                  endsAt: '2026-12-01T10:00:00Z',
+                },
+              },
+            },
+          ],
+        },
+      },
+      { say: 'Here is the plan to confirm.' },
+    ],
+    // Several changes on one card, the second using the first's result.
+    expect: { mode: 'ai', proposals: ['run_plan'] },
+  },
+  {
+    id: 'operations-runbook-from-fix',
+    category: 'operations',
+    question: 'Turn how we fixed that resolved incident into a runbook',
+    asAdmin: true,
+    script: [
+      { tool: 'propose_runbook_from_fix', input: { incidentId: '$resolved' } },
+      { say: 'Here is a draft runbook to confirm.' },
+    ],
+    // A draft runbook card through the catalog's createRunbook, with the same role check as any change.
+    expect: { mode: 'ai', proposals: ['run_operation'] },
+  },
+  {
+    id: 'operations-runbook-from-fix-hidden',
+    category: 'operations',
+    question: 'Turn that incident into a runbook',
+    asAdmin: true,
+    script: [
+      { tool: 'propose_runbook_from_fix', input: { incidentId: '$hidden' } },
+      { say: 'I could not prepare that.' },
+    ],
+    // Not resolved or not readable: no card, and the person is told why.
+    expect: { mode: 'ai', noProposal: true, notice: 'Only a resolved incident you can open' },
+  },
+  {
+    id: 'memory-remember-fact',
+    category: 'operations',
+    question: 'Remember that I own the checkout service',
+    script: [
+      { tool: 'propose_remember_fact', input: { fact: 'I own the checkout service' } },
+      { say: 'I can remember that once you confirm.' },
+    ],
+    // Saved only when the person confirms the card: text read from data can never plant a memory.
+    expect: { mode: 'ai', proposals: ['remember_fact'] },
+  },
+  {
+    id: 'operations-extended-off',
+    category: 'operations',
+    question: 'Set the description of this service to "Checkout API"',
+    onService: true,
+    asAdmin: true,
+    world: [{ settings: { squireExtendedActions: false } }],
+    script: [
+      {
+        tool: 'propose_operation',
+        input: {
+          operationId: 'updateService',
+          args: { path: { id: '$service' }, body: { description: 'Checkout API' } },
+        },
+      },
+      { say: 'Here is the change to confirm.' },
+    ],
+    // Reads stay available; changes are neither offered nor carded while extended actions are off.
+    expect: {
+      mode: 'ai',
+      toolsOffered: ['find_operations', 'read_operation'],
+      toolsNotOffered: ['propose_operation'],
+      noProposal: true,
+    },
+  },
+  {
+    id: 'operations-excluded-domain',
+    category: 'operations',
+    question: 'Rename the Datadog integration to "Datadog prod"',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'propose_operation',
+        input: {
+          operationId: 'updateIntegration',
+          args: { path: { id: 'integration-1' }, body: { name: 'Datadog prod' } },
+        },
+      },
+      { say: 'Here is the change to confirm.' },
+    ],
+    // Integrations, settings and notifications hold credentials and delivery plumbing: never a card.
+    expect: { mode: 'ai', noProposal: true },
+  },
+  {
+    id: 'operations-r3-delete',
+    category: 'operations',
+    question: 'Delete this service',
+    onService: true,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'propose_operation',
+        input: { operationId: 'deleteService', args: { path: { id: '$service' } } },
+      },
+      { say: 'Here is the deletion to confirm.' },
+    ],
+    // A reviewed high-risk change is a loud card for a role that may make it, confirmed by that person.
+    expect: { mode: 'ai', proposals: ['run_operation'] },
+  },
+  {
+    id: 'operations-r3-delete-responder',
+    category: 'role-limits',
+    question: 'Delete this service',
+    onService: true,
+    script: [
+      { tool: 'find_operations', input: { query: 'delete service' } },
+      {
+        tool: 'propose_operation',
+        input: { operationId: 'deleteService', args: { path: { id: '$service' } } },
+      },
+      { say: 'Your role cannot delete services; an Admin can.' },
+    ],
+    // No card for a role that may not; the catalog search tells the model which role could.
+    expect: { mode: 'ai', noProposal: true, toolSaw: ['needsRole'] },
+  },
+  {
+    id: 'operations-find-hides-excluded',
+    category: 'operations',
+    question: 'Find the operations for integration credentials and deleting services',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      { tool: 'find_operations', input: { query: 'integration credentials delete service' } },
+      { say: 'Those are not available to me.' },
+    ],
+    expect: {
+      mode: 'ai',
+      toolLabels: ['Looking for the right operation'],
+      // deleteService is a reviewed high-risk change (listed with highRisk); these are denied or excluded.
+      modelNeverSaw: [
+        'rotateIntegrationCredentials',
+        'updateIntegration',
+        'deleteIntegration',
+        'deleteServiceAccount',
+      ],
+    },
+  },
+
+  // ── Role limits ─────────────────────────────────────────────────────────────────────────────────────
+  {
+    id: 'role-limits-urgency-responder',
+    category: 'role-limits',
+    question: 'Change the urgency of this incident to high',
+    script: [{ say: 'Only a Responder or Admin can change urgency; I can add a note instead.' }],
+    // The card is never offered to a role that could not confirm it; the model is told who can.
+    expect: {
+      mode: 'ai',
+      toolsNotOffered: ['propose_change_urgency'],
+      modelSaw: ['Role: User', 'Cannot: ', 'manage any incident and operational setup (needs '],
+      noProposal: true,
+    },
+  },
+  {
+    id: 'role-limits-urgency-admin-change-wording',
+    category: 'role-limits',
+    question: 'Change the urgency of this incident to low',
+    asAdmin: true,
+    script: [
+      { tool: 'propose_change_urgency', input: { incidentId: '$incident', urgency: 'LOW' } },
+      { say: 'Here is the card to lower the urgency.' },
+    ],
+    // "change" asks for an action as much as "set" does.
+    expect: { mode: 'ai', toolsOffered: ['propose_change_urgency'], proposals: ['change_urgency'] },
+  },
+  {
+    id: 'role-limits-update-service-responder',
+    category: 'role-limits',
+    question: 'Set the description of this service to "Checkout API"',
+    onService: true,
+    script: [
+      {
+        tool: 'propose_operation',
+        input: {
+          operationId: 'updateService',
+          args: { path: { id: '$service' }, body: { description: 'Checkout API' } },
+        },
+      },
+      { say: 'Here is the change to confirm.' },
+    ],
+    expect: { mode: 'ai', modelSaw: ['Cannot: '], noProposal: true },
+  },
+
+  // ── Conversation ────────────────────────────────────────────────────────────────────────────────────
+  {
+    id: 'conversation-greeting',
+    category: 'conversation',
+    question: 'hey, how is it going?',
+    script: [{ say: 'All good! I can summarise this incident or check what changed.' }],
+    expect: {
+      mode: 'ai',
+      modelCalls: 1,
+      modelSaw: ['small talk in one friendly sentence', 'The user is viewing this incident'],
+      noProposal: true,
+    },
+  },
+  {
+    id: 'conversation-ambiguous',
+    category: 'conversation',
+    question: 'Which one is the worst?',
+    onIncident: false,
+    script: [{ say: 'Worst by what: **incidents**, **time to acknowledge** or **downtime**?' }],
+    expect: {
+      mode: 'ai',
+      modelCalls: 1,
+      modelSaw: ['one short clarifying question with two to four options', 'Never refuse'],
+      noProposal: true,
+    },
+  },
+  {
     id: 'tool-metrics',
     category: 'tool-choice',
     question: 'How full is the connection pool?',
@@ -424,7 +786,11 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       { say: 'That change has no commit link.' },
     ],
     // A change without a commit or pull-request link is answered plainly; no backend is queried.
-    expect: { mode: 'ai', toolSaw: ['no GitHub, GitLab or Azure DevOps'], modelNeverSaw: ['pool-config.ts'] },
+    expect: {
+      mode: 'ai',
+      toolSaw: ['no GitHub, GitLab or Azure DevOps'],
+      modelNeverSaw: ['pool-config.ts'],
+    },
   },
   {
     id: 'tool-slo-status',
@@ -501,6 +867,8 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     id: 'tool-catalogue-extended',
     category: 'tool-choice',
     question: 'What else can you do?',
+    // An administrator holds every capability, so every extended card is on offer.
+    asAdmin: true,
     script: [{ say: 'Metrics, logs, traces, errors, diffs, objectives and more actions.' }],
     expect: {
       mode: 'ai',
@@ -524,6 +892,25 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       ],
       // Publishing is only ever the second step of a confirmed draft, never a model tool.
       toolsNotOffered: ['propose_publish_status_update'],
+    },
+  },
+  {
+    id: 'tool-catalogue-extended-responder',
+    category: 'role-limits',
+    question: 'What else can you do?',
+    script: [{ say: 'I can escalate, add responders and look things up.' }],
+    // A scoped responder is never offered a card their role could not confirm.
+    expect: {
+      mode: 'ai',
+      modelCalls: 1,
+      toolsOffered: ['propose_escalate_incident'],
+      toolsNotOffered: [
+        'propose_snooze_incident',
+        'propose_change_urgency',
+        'propose_draft_status_update',
+        'propose_run_runbook',
+        'propose_create_jira_issue',
+      ],
     },
   },
 
@@ -1423,5 +1810,48 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     })),
     // Connector calls count against the same round-trip ceiling as every other tool.
     expect: { mode: 'ai', modelCalls: 6, answerContains: ['From what I read so far'] },
+  },
+  {
+    id: 'chart-metrics-answer',
+    category: 'rca',
+    question: 'Graph the pool metrics around this incident',
+    script: [
+      { tool: 'query_metrics', input: { query: 'pool_in_use', incidentId: '$incident' } },
+      { say: 'Pool use climbed from 40 to 98 in a minute.' },
+    ],
+    // The chart comes from what the metrics tool returned (redacted), never from the model's words, and is
+    // saved with the turn so a reopened conversation shows it again.
+    expect: {
+      mode: 'ai',
+      toolLabels: ['Querying metrics'],
+      charts: 1,
+      modelNeverSaw: ['oncall-canary@example.com'],
+    },
+  },
+  {
+    id: 'chart-none-for-logs',
+    category: 'tool-choice',
+    question: 'Show me the checkout errors in the logs',
+    script: [
+      { tool: 'search_logs', input: { query: '{app="checkout"}' } },
+      { say: 'Pool timeouts after 30s.' },
+    ],
+    // Log lines are not a time series: no chart.
+    expect: { mode: 'ai', toolLabels: ['Searching logs'], charts: 0 },
+  },
+  {
+    id: 'language-reply-rule',
+    category: 'conversation',
+    question: '¿Qué está pasando con este incidente?',
+    script: [{ say: 'El incidente sigue abierto: el pool de conexiones está saturado.' }],
+    // The question reaches the model as written, alongside the rule to answer in the person's language.
+    expect: {
+      mode: 'ai',
+      modelCalls: 1,
+      modelSaw: [
+        'Reply in the language the user wrote in',
+        '¿Qué está pasando con este incidente?',
+      ],
+    },
   },
 ];

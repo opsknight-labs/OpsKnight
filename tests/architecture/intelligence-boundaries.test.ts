@@ -192,9 +192,56 @@ describe('intelligence architecture boundaries', () => {
     const executor = join(squireDir, 'actions/execute.ts');
     const writes =
       /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$executeRaw|\$transaction/;
+    // Operation-catalog changes and plans keep only their own receipts; every change
+    // they make runs through the REST v2 handler of that operation, as the person (operations.ts invoke).
+    const recordKeepers = new Map([
+      [join(squireDir, 'operations.ts'), ['squireActionReceipt']],
+      [join(squireDir, 'plans.ts'), ['squireActionReceipt']],
+    ]);
+    const tables = (source: string) => [
+      ...new Set(
+        [
+          ...source.matchAll(
+            /\b(?:prisma|tx)\.(\w+)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g
+          ),
+        ].map(match => match[1])
+      ),
+    ];
+    for (const [file, allowed] of recordKeepers) {
+      const source = read(file);
+      expect(source, relative(root, file)).not.toMatch(/\$executeRaw|\$transaction/);
+      expect(
+        tables(source).filter(table => !allowed.includes(table)),
+        relative(root, file)
+      ).toEqual([]);
+    }
+    // The person's own Squire data (remembered facts and their switch, sent heads-ups): no workspace records.
+    const personalStores = new Map([
+      [join(squireDir, 'memory.ts'), ['squireUserMemory', 'squireUserSettings']],
+      [join(squireDir, 'heads-up.ts'), ['squireHeadsUp']],
+    ]);
+    for (const [file, allowed] of personalStores) {
+      const source = read(file);
+      expect(
+        tables(
+          source.replace(/\.\s*\n\s*\./g, '.').replace(/(prisma|tx)\s*\n\s*\./g, '$1.')
+        ).filter(table => !allowed.includes(table)),
+        relative(root, file)
+      ).toEqual([]);
+      // Raw SQL only for the per-person advisory lock that keeps the memory cap under concurrent saves.
+      const raw = [...source.matchAll(/\$executeRaw`([^`]*)`/g)].map(match => match[1]);
+      expect(
+        raw.every(sql => /^SELECT pg_advisory_xact_lock\(/.test(sql)),
+        relative(root, file)
+      ).toBe(true);
+    }
     // Reading, proposing and answering never write anything.
     const offenders = sourceFiles(squireDir).filter(
-      file => file !== executor && writes.test(read(file))
+      file =>
+        file !== executor &&
+        !recordKeepers.has(file) &&
+        !personalStores.has(file) &&
+        writes.test(read(file))
     );
     expect(offenders.map(file => relative(root, file))).toEqual([]);
 
@@ -215,9 +262,25 @@ describe('intelligence architecture boundaries', () => {
 
     // Proposal tools are declared in one place and never carry an executor of their own.
     const proposing = sourceFiles(squireDir).filter(file => /PROPOSE_WRITE/.test(read(file)));
-    expect(proposing.map(file => relative(root, file))).toEqual([
+    expect(proposing.map(file => relative(root, file)).sort()).toEqual([
+      'src/lib/intelligence/squire/memory.ts',
+      'src/lib/intelligence/squire/operations.ts',
+      'src/lib/intelligence/squire/plans.ts',
       'src/lib/intelligence/squire/tools.ts',
     ]);
+    // The catalog proposal tools are plain declarations too: no executor of their own.
+    for (const [file, name] of [
+      ['operations.ts', 'PROPOSE_OPERATION_TOOL'],
+      ['plans.ts', 'PROPOSE_PLAN_TOOL'],
+    ]) {
+      const declaration =
+        read(join(squireDir, file)).match(
+          // eslint-disable-next-line security/detect-non-literal-regexp -- name is one of two fixed identifiers above
+          new RegExp(`export const ${name}: AiToolDefinition = \\{[\\s\\S]*?\\n\\};`)
+        )?.[0] ?? '';
+      expect(declaration).toContain("kind: 'PROPOSE_WRITE'");
+      expect(declaration).not.toMatch(/execute/);
+    }
     const proposalTool =
       read(join(squireDir, 'tools.ts')).match(/function proposalTool[\s\S]*?\n\}/)?.[0] ?? '';
     expect(proposalTool).toContain("kind: 'PROPOSE_WRITE'");
@@ -249,8 +312,12 @@ describe('intelligence architecture boundaries', () => {
 
   it('lets Squire outside the app (chat, MCP) change things only through the sealed proposal executor', () => {
     const chatDir = join(root, 'src/lib/chatops/squire');
+    // The channel publisher writes only its own bookkeeping rows (checked below).
+    const publisher = join(chatDir, 'publish.ts');
+    // The progress placeholder id is kept on its own chat intent row so a retry edits it (checked below).
+    const placeholder = join(chatDir, 'placeholder.ts');
     const surfaces = [
-      ...sourceFiles(chatDir),
+      ...sourceFiles(chatDir).filter(file => file !== publisher && file !== placeholder),
       join(root, 'src/lib/mcp/core/ask-squire.ts'),
       join(root, 'src/lib/mcp/core/ask-squire-contract.ts'),
       join(intelligenceDir, 'squire/surfaces.ts'),
@@ -268,6 +335,42 @@ describe('intelligence architecture boundaries', () => {
     expect(executorImports.map(file => relative(root, file))).toEqual([
       'src/lib/chatops/squire/handler.ts',
     ]);
+    const publish = read(publisher);
+    expect([
+      ...new Set(
+        [...publish.matchAll(/\bprisma\.(\w+)\s*\.(?:create|update|upsert|delete)\w*\(/g)].map(
+          match => match[1]
+        )
+      ),
+    ]).toEqual(
+      // Its own post records, the shared backoff, retry jobs, and the war room's health flag for a missing scope.
+      expect.arrayContaining(['squireChannelMessage'])
+    );
+    expect(
+      [...publish.matchAll(/\bprisma\.(\w+)\s*\.(?:create|update|upsert|delete)\w*\(/g)]
+        .map(match => match[1])
+        .filter(
+          table =>
+            ![
+              'squireChannelMessage',
+              'squireChannelBackoff',
+              'backgroundJob',
+              'incidentWarRoom',
+            ].includes(table)
+        )
+    ).toEqual([]);
+    expect(publish).not.toMatch(/\$executeRaw|\$transaction|\.token\b/);
+    const placeholderSource = read(placeholder);
+    expect([
+      ...new Set(
+        [
+          ...placeholderSource.matchAll(
+            /\bprisma\.(\w+)\s*\.(?:create|update|upsert|delete)\w*\(/g
+          ),
+        ].map(match => match[1])
+      ),
+    ]).toEqual(['chatOpsIntent']);
+    expect(placeholderSource).not.toMatch(/\$executeRaw|\$transaction/);
     // MCP is read-only: it never imports the executor and never hands out a sealed token.
     const mcp = read(join(root, 'src/lib/mcp/core/ask-squire.ts'));
     expect(mcp).not.toMatch(/actions\/execute|executeSquireAction/);
@@ -421,7 +524,13 @@ describe('intelligence architecture boundaries', () => {
       ].map(match => match[1])
     );
     expect(delegates.length).toBeGreaterThan(0);
-    expect([...new Set(delegates)].sort()).toEqual(['squireConversation', 'squireMessage']);
+    // Background answers (background.ts) keep their own queue rows; the answer itself is saved through
+    // recordExchange like any other turn.
+    expect([...new Set(delegates)].sort()).toEqual([
+      'squireBackgroundTurn',
+      'squireConversation',
+      'squireMessage',
+    ]);
     for (const file of sourceFiles(dir)) expect(read(file)).not.toMatch(/\$executeRaw/);
   });
 

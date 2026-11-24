@@ -164,12 +164,14 @@ describe('extended Squire actions are opt-in', () => {
     );
   });
 
-  it('declares the new proposal tools when on, but never the publish follow-up', async () => {
-    const { responder } = await world();
+  it('declares the new proposal tools when on, only for roles that could confirm them, never the publish follow-up', async () => {
+    const { admin, responder, member } = await world();
     const actor = await actorOf(responder.id);
-    const names = buildSquireTools(actor, { personal: true, extendedActions: true }).map(
-      tool => tool.name
-    );
+    const offered = async (userId: string) =>
+      buildSquireTools(await actorOf(userId), { personal: true, extendedActions: true }).map(
+        tool => tool.name
+      );
+    const names = await offered(responder.id);
     for (const name of [
       'escalate_incident',
       'change_urgency',
@@ -177,11 +179,17 @@ describe('extended Squire actions are opt-in', () => {
       'unlink_related_incident',
       'add_responder',
       'create_jira_issue',
-      'draft_status_update',
       'run_runbook',
     ])
       expect(names).toContain(`propose_${name}`);
     expect(names).not.toContain('propose_publish_status_update');
+    // Status-page drafts need an administrator; scoped members cannot change urgency or snooze.
+    expect(names).not.toContain('propose_draft_status_update');
+    expect(await offered(admin.id)).toContain('propose_draft_status_update');
+    const memberNames = await offered(member.id);
+    expect(memberNames).not.toContain('propose_change_urgency');
+    expect(memberNames).not.toContain('propose_snooze_incident');
+    expect(memberNames).toContain('propose_escalate_incident');
     // Naming a person needs Personal clearance, like reassigning.
     expect(
       buildSquireTools(actor, { personal: false, extendedActions: true }).map(tool => tool.name)
@@ -829,6 +837,12 @@ describe('run_runbook', () => {
     const executions = await db.runbookExecution.findMany({ where: { incidentId: incident.id } });
     expect(executions).toHaveLength(1);
     expect(executions[0].triggeredByUserId).toBe(responder.id);
+    // "Did the fix hold?" is checked later for the person who started it, once (the replay adds nothing).
+    const checks = (
+      await db.intelligenceWorkItem.findMany({ select: { subjectKey: true } })
+    ).filter(row => row.subjectKey.startsWith(`VERIFICATION:${incident.id}:${responder.id}:`));
+    expect(checks).toHaveLength(1);
+    expect(checks[0].subjectKey).toMatch(/:B$/);
   });
 
   it('is not offered for a runbook that is not bound to the service, nor to someone who may not run runbooks', async () => {

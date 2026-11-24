@@ -3,15 +3,23 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, runbookReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { readSourceStates, sourceKey, type SourceIdentity } from '../squire/evidence-access';
 import {
   aiInputsVisible,
   briefingContentSchema,
   filterProactiveRefs,
+  investigationContentSchema,
   nudgeContentSchema,
   postmortemDraftContentSchema,
   suggestNextSteps,
   type ProactiveRefs,
 } from './proactive-content';
+import type { InvestigationDigest } from './proactive-digest';
+import {
+  verificationContentSchema,
+  verificationHeadline,
+  type VerificationContent,
+} from './proactive-verification';
 
 export interface BriefingView {
   createdAt: Date;
@@ -51,10 +59,39 @@ export interface PostmortemDraftView {
   refs: ProactiveRefs;
 }
 
+export interface InvestigationView {
+  createdAt: Date;
+  partial: boolean;
+  /**
+   * The markdown diagnosis, or null when the viewer cannot open one or more of the sources it was built from
+   * (the text could quote them, so it is withheld whole).
+   */
+  answer: string | null;
+  citations: Array<{ kind: string; id: string; label: string; href: string }>;
+  /** When the latest conclusion was written, and how many runs produced it (1 = the first investigation). */
+  updatedAt: Date;
+  revision: number;
+  /** "What changed" digests, newest first; each only when the viewer can open every source it compares. */
+  updates: Array<Omit<InvestigationDigest, 'sources'>>;
+}
+
+export interface VerificationView {
+  checkedAt: string;
+  trigger: VerificationContent['trigger'];
+  holding: boolean;
+  /** The verdict, built only from facts this viewer may read. */
+  headline: string;
+  related: VerificationContent['related'];
+}
+
 export interface ProactiveNotesView {
   briefing: BriefingView | null;
   nudge: NudgeView | null;
   postmortemDraft: PostmortemDraftView | null;
+  /** Absent in views built before automatic investigations existed. */
+  investigation?: InvestigationView | null;
+  /** Absent in views built before fix checks existed. */
+  verification?: VerificationView | null;
 }
 
 async function ids<T extends { id: string }>(load: () => Promise<T[]>): Promise<Set<string>> {
@@ -102,12 +139,17 @@ export async function getProactiveNotesForActor(
     briefing: notes.find(note => note.kind === 'BRIEFING'),
     nudge: notes.find(note => note.kind === 'STAKEHOLDER_NUDGE'),
     draft: notes.find(note => note.kind === 'POSTMORTEM_DRAFT'),
+    investigation: notes.find(note => note.kind === 'INVESTIGATION'),
+    verification: notes.find(note => note.kind === 'VERIFICATION'),
   };
   const briefing = parsed.briefing
     ? briefingContentSchema.safeParse(parsed.briefing.content)
     : null;
   const nudge = parsed.nudge ? nudgeContentSchema.safeParse(parsed.nudge.content) : null;
   const draft = parsed.draft ? postmortemDraftContentSchema.safeParse(parsed.draft.content) : null;
+  const verification = parsed.verification
+    ? verificationContentSchema.safeParse(parsed.verification.content)
+    : null;
 
   const wanted = {
     incidents: new Set<string>(),
@@ -127,6 +169,8 @@ export async function getProactiveNotesForActor(
   };
   if (briefing?.success) collect(briefing.data.refs, briefing.data.ai?.inputRefs);
   if (draft?.success) collect(draft.data.refs, draft.data.ai?.inputRefs);
+  if (verification?.success)
+    verification.data.related.forEach(item => wanted.incidents.add(item.id));
 
   let services: ReturnType<typeof serviceReadWhere> | null = null;
   try {
@@ -241,6 +285,59 @@ export async function getProactiveNotesForActor(
     };
   }
 
-  if (!briefingView && !nudgeView && !draftView) return null;
-  return { briefing: briefingView, nudge: nudgeView, postmortemDraft: draftView };
+  let investigationView: InvestigationView | null = null;
+  const investigation = parsed.investigation
+    ? investigationContentSchema.safeParse(parsed.investigation.content)
+    : null;
+  if (investigation?.success && parsed.investigation) {
+    // Every source the investigation (and each digest) read, re-checked under the viewer's own permissions;
+    // any miss withholds that text whole.
+    const { sources, updates = [] } = investigation.data;
+    const all = new Map(
+      [...sources, ...updates.flatMap(update => update.sources)].map(source => [
+        sourceKey(source as SourceIdentity),
+        source as SourceIdentity,
+      ])
+    );
+    const states = await readSourceStates(actor, [...all.values()]);
+    const readable = (list: typeof sources) =>
+      list.every(source => states.has(sourceKey(source as SourceIdentity)));
+    const answerReadable = readable(sources);
+    investigationView = {
+      createdAt: parsed.investigation.createdAt,
+      // When the conclusion was last written; a failed retry also touches the row, so updatedAt would lie.
+      updatedAt: Number.isFinite(Date.parse(investigation.data.assessedAt ?? ''))
+        ? new Date(investigation.data.assessedAt!)
+        : parsed.investigation.updatedAt,
+      revision: investigation.data.revision ?? 1,
+      partial: investigation.data.partial,
+      answer: answerReadable ? investigation.data.answer : null,
+      citations: answerReadable ? investigation.data.citations : [],
+      updates: updates
+        .filter(update => readable(update.sources))
+        .map(({ sources: _sources, ...update }) => update),
+    };
+  }
+
+  let verificationView: VerificationView | null = null;
+  if (verification?.success) {
+    const related = verification.data.related.filter(item => visible.incidents.has(item.id));
+    verificationView = {
+      checkedAt: verification.data.checkedAt,
+      trigger: verification.data.trigger,
+      holding: verification.data.holding,
+      headline: verificationHeadline({ ...verification.data, related }),
+      related,
+    };
+  }
+
+  if (!briefingView && !nudgeView && !draftView && !investigationView && !verificationView)
+    return null;
+  return {
+    briefing: briefingView,
+    nudge: nudgeView,
+    postmortemDraft: draftView,
+    investigation: investigationView,
+    verification: verificationView,
+  };
 }

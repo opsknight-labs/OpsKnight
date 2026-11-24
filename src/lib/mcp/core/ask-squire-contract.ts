@@ -37,6 +37,8 @@ export const ASK_SQUIRE_CORE_TOOLS = [
   'get_runbook',
   'get_runbook_steps',
   'search_postmortems',
+  // Public product documentation: no workspace data, so no scope is needed.
+  'search_product_docs',
 ] as const;
 
 /** Read tools for an area outside ASK_SQUIRE_SCOPES, with the scope that unlocks each. */
@@ -59,6 +61,19 @@ export const ASK_SQUIRE_SENSITIVE_TOOLS = ['get_alert_payload', 'search_knowledg
 // Observability connector tools (query_metrics, search_logs, get_traces, get_error_events,
 // get_change_diff) reach external backends whose logs can hold customer personal data. No MCP scope
 // covers them, so they are deliberately in none of the lists above and never run over MCP.
+
+/**
+ * Squire's generic operation-catalog tools. An MCP client reaches the same catalog directly, under the
+ * MCP policy's capability controls; through ask_squire they would sidestep those, so they never run over
+ * MCP.
+ */
+export const ASK_SQUIRE_EXCLUDED_TOOLS = [
+  'find_operations',
+  'describe_operation',
+  'read_operation',
+  // The person's own shift hand-off; an MCP client has getMyCatchUp under its own scopes.
+  'get_catch_up',
+] as const;
 
 /** The Squire read tools an MCP turn may use, given the connection's scopes and the MCP policy. */
 export function askSquireAllowedTools(

@@ -9,6 +9,7 @@ import {
 import type { IntelligenceSettingsView } from '../settings/service';
 import { KNOWLEDGE_LIMITS, PROACTIVE_LIMITS } from './contract';
 import { PROACTIVE_SCAN_SUBJECT, runProactiveJob, scanProactiveWork } from './proactive';
+import { isVerificationSubject, runVerificationJob } from './proactive-verification';
 import { squireKnowledgeEnabled } from './settings';
 import { KNOWLEDGE_SUBJECT, syncKnowledgePass } from './sync';
 
@@ -33,7 +34,10 @@ export const SQUIRE_MEMORY_HANDLERS: Partial<Record<WorkKind, Handler>> = {
     await scanProactiveWork(settings);
   },
   [WORK_KINDS.SQUIRE_PROACTIVE]: async (item, { settings, signal }) => {
-    await runProactiveJob(item.subjectKey, item.generation, settings, signal);
+    // Fix checks are scheduled by a person's confirmed resolve or runbook, not by a service opt-in.
+    if (isVerificationSubject(item.subjectKey))
+      await runVerificationJob(item.subjectKey, item.generation, settings);
+    else await runProactiveJob(item.subjectKey, item.generation, settings, signal);
   },
 };
 
@@ -73,6 +77,7 @@ export async function scheduleSquireMemoryWork(
           { briefingEnabled: true },
           { nudgeAfterMinutes: { not: null } },
           { postmortemDraftEnabled: true },
+          { investigationEnabled: true },
         ],
       },
       select: { serviceId: true },

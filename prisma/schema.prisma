@@ -507,6 +507,10 @@ model UserEmailReservation {
 }
 
 model User {
+  squireMemories         SquireUserMemory[]
+  squireSettings         SquireUserSettings?
+  squireHeadsUps         SquireHeadsUp[]
+  squireBackgroundTurns  SquireBackgroundTurn[]
   // True only after an approved group role mapping has adopted this account.
   scimRoleMappingAdopted Boolean @default(false)
   scimGivenName String?
@@ -1474,6 +1478,7 @@ model Alert {
 }
 
 model Incident {
+  squireChannelMessages  SquireChannelMessage[]
   prePagingDecisions                  PrePagingDecision[]
   automationSourceRestricted          Boolean @default(false)
   automationDecision                  IncidentAutomationDecision?
@@ -6318,9 +6323,15 @@ model SquireFeedback {
   rating         String
   reason         String?
   questionHash   String?
+  /// The incident and service the rated answer was about, when it was asked on one (for learning per service).
+  incidentId     String?
+  serviceId      String?
+  /// Review state for administrators: NEW, LEARNED (became a memory candidate or eval case) or DISMISSED.
+  reviewStatus   String   @default("NEW")
   createdAt      DateTime @default(now())
 
   @@index([createdAt], map: "idx_squire_feedback_recent")
+  @@index([reviewStatus, createdAt], map: "idx_squire_feedback_review")
   @@index([userId, createdAt], map: "idx_squire_feedback_owner")
 }
 
@@ -6388,6 +6399,8 @@ model SquireActionReceipt {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   action          String
   incidentId      String?
+  /// Every incident a multi-step plan touched (incidentId is the first); all must stay readable to show it.
+  incidentIds     String[] @default([])
   version         Int      @default(1)
   status          String   @default("UNKNOWN")
   intentEncrypted String?
@@ -6399,6 +6412,7 @@ model SquireActionReceipt {
   createdAt       DateTime @default(now())
 
   @@index([createdAt], map: "idx_squire_action_receipt_retention")
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)], map: "idx_squire_action_receipt_owner")
 }
 
 // Tokens one person used on one UTC day, for the per-user budget. Counts only; deleted with the person.
@@ -6907,6 +6921,8 @@ enum KnowledgeSourceKind {
   RESOLUTION_NOTE
   INCIDENT_NOTE
   SERVICE_FACT
+  /// A section of the organisation's own documentation (KnowledgeDocSource).
+  DOCUMENT
 }
 
 /// Bounded, secret-redacted text chunks Squire can search. Everything except SERVICE_FACT is derived in the
@@ -6971,13 +6987,131 @@ model SquireServicePolicy {
   /// Minutes without a stakeholder update before a nudge; null turns nudges off.
   nudgeAfterMinutes      Int?
   postmortemDraftEnabled Boolean  @default(false)
+  /// Start a Squire investigation by itself when a high-urgency incident opens on this service.
+  investigationEnabled   Boolean  @default(false)
   revision               Int      @default(0)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }
 
+/// A Squire message posted in an incident's Slack or Teams channel, remembered so it is edited in place.
+model SquireChannelMessage {
+  id          String   @id @default(cuid())
+  incidentId  String
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  /// SLACK or TEAMS.
+  provider    String
+  channelId   String
+  messageId   String
+  /// SUMMARY, INVESTIGATION, DIGEST or VERIFICATION.
+  kind        String
+  /// Digest of the last posted content, so an unchanged update is not re-sent.
+  contentHash String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([incidentId, provider, kind], map: "uq_squire_channel_message")
+}
+
+/// A question answered in the background after the person left the page; the answer joins their conversation.
+model SquireBackgroundTurn {
+  id                   String    @id
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId       String?
+  incidentId           String?
+  /// The request (question, page, mentions), encrypted.
+  requestEncrypted     String
+  /// QUEUED, RUNNING, DONE, FAILED or CANCELLED.
+  status               String    @default("QUEUED")
+  resultConversationId String?
+  failureCode          String?
+  createdAt            DateTime  @default(now())
+  startedAt            DateTime?
+  completedAt          DateTime?
+  updatedAt            DateTime  @updatedAt
+
+  @@index([status, createdAt], map: "idx_squire_background_status")
+  @@index([userId, createdAt], map: "idx_squire_background_owner")
+}
+
 /// A briefing, stakeholder-update nudge or postmortem draft written by a lane job for one incident. Rendered on
-/// the incident page, filtered through the viewer's read rules; never a note, never published, never paged.
+/// the incident page, filtered through the viewer's read rules; never a note, never paged. Only a title-level
+/// summary (no evidence) may be posted to the incident's chat channel (chatops/squire/publish.ts).
+/// Something a person asked Squire to remember about them ("I own payments"), encrypted, owner-only.
+model SquireUserMemory {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  textEncrypted String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, createdAt], map: "idx_squire_user_memory_owner")
+}
+
+/// A person's own Squire preferences.
+model SquireUserSettings {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// On-call heads-up before a shift starts.
+  headsUpEnabled     Boolean  @default(true)
+  headsUpLeadMinutes Int      @default(60)
+  /// Use what the person asked Squire to remember in answers.
+  memoryEnabled      Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+}
+
+/// One on-call heads-up delivered for one shift, so it is never sent twice.
+model SquireHeadsUp {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Stable key of the shift (schedule id and start time).
+  shiftKey    String
+  /// Channels it went to, e.g. ["IN_APP","SLACK"].
+  channels    String[] @default([])
+  deliveredAt DateTime @default(now())
+
+  @@unique([userId, shiftKey], map: "uq_squire_heads_up_shift")
+  @@index([deliveredAt], map: "idx_squire_heads_up_retention")
+}
+
+/// A documentation source the organisation connected (a Git repository or a markdown archive URL).
+model KnowledgeDocSource {
+  id             String    @id @default(cuid())
+  name           String
+  /// GIT or ARCHIVE.
+  kind           String
+  url            String
+  /// Branch or tag (Git), and a folder inside the repository or archive.
+  ref            String?
+  path           String?
+  /// Access token for a private repository, encrypted.
+  tokenEncrypted String?
+  /// Readers: one team, or everyone signed in when null.
+  teamId         String?
+  enabled        Boolean   @default(true)
+  lastSyncedAt   DateTime?
+  /// OK, FAILED or SYNCING.
+  lastStatus     String?
+  lastError      String?
+  documentCount  Int       @default(0)
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([enabled, lastSyncedAt], map: "idx_knowledge_doc_source_sync")
+}
+
+/// A chat workspace or tenant Squire must not post to until a time (revoked token, repeated rate limits).
+model SquireChannelBackoff {
+  key       String   @id
+  until     DateTime
+  reason    String
+  updatedAt DateTime @updatedAt
+}
+
 model SquireProactiveNote {
   id         String   @id @default(cuid())
   incidentId String

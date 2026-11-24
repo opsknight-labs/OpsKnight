@@ -292,7 +292,7 @@ describe('gateway routing and degradation', () => {
     expect((await getTodayUsage()).inputTokens).toBe(60);
   });
 
-  it('stops the loop when a top-up is refused, without another (unfunded) model call', async () => {
+  it('stops the tool loop when a top-up is refused, answering once more from what was already read', async () => {
     const admin = await configure(2_000);
     // 800 tokens left: the first step's hold fits, a second one on top of it does not.
     await recordAiUsage({ inputTokens: 1_200, outputTokens: 0 }, new Date(), 'system:other');
@@ -315,10 +315,11 @@ describe('gateway routing and degradation', () => {
         },
       ],
     });
-    // Only the funded first step reached the provider: the scripted second answer was never requested.
-    expect(server.script).toHaveLength(1);
-    expect(result.text).toBe('');
-    server.script.length = 0;
+    // No further tool step: one closing answer without tools, and the result says it was cut short.
+    expect(server.script).toHaveLength(0);
+    expect(result.text).toBe('answered without more tools');
+    expect(result.budgetLimited).toBe(true);
+    expect(result.toolCalls ?? []).toEqual([]);
   });
 
   it('switches to the small model with a shorter answer from 80% and does not cache it', async () => {

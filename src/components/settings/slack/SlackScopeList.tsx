@@ -41,6 +41,9 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   'users:read.email': 'Match Slack users with OpsKnight responders for automated on-call paging',
   'im:read': 'Support 1-on-1 direct message triage notifications',
   'mpim:read': 'Support multi-party group direct message notifications',
+  'app_mentions:read': 'Receive @OpsKnight mentions so Squire can answer in incident channels',
+  'chat:write.customize':
+    'Post Squire messages under the Squire name and avatar (without it they post as OpsKnight with a Squire header)',
 };
 
 function getScopeDescription(scope: string): string {

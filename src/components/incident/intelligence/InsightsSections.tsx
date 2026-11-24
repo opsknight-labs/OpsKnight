@@ -164,6 +164,7 @@ export default function InsightsSections({
         >
           <ProactiveNotes
             incidentId={incidentId}
+            assistantName={assistantName}
             notes={insights.proactive}
             routePrefix={routePrefix}
             action={ask('this briefing', 'Summarise this incident', {

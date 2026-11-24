@@ -52,6 +52,30 @@ also require the optional group scopes described in
 
 Close/reconcile through OpsKnight instead of manually deleting the Slack channel. If a remote room was changed/deleted, inspect the collaboration operation before retrying to avoid duplicate rooms.
 
+## Squire in the incident channel
+
+When Squire is enabled for chat (**Settings → Intelligence → AI**, the assistant
+and its chat switch), it works inside the war-room channel:
+
+- **Ask or investigate.** Mention the app (`@OpsKnight what changed?`), or type
+  `@Squire …` as plain text at the start of a message. `@OpsKnight investigate`
+  (optionally `investigate <focus>`) runs Squire's investigation on the
+  channel's incident. Squire replies in the thread, edits that reply with its
+  progress, and ends with the investigation and links to the evidence.
+  `/incident investigate [focus]` does the same privately. Squire answers as the
+  asker's linked OpsKnight account: an unlinked Slack account, or a person who
+  cannot read the incident in OpsKnight, is refused.
+- **Automatic updates.** Squire keeps one incident summary and one
+  investigation message in the channel and edits them in place as they change;
+  an unchanged update is not re-sent. Digests and fix verifications are posted
+  as replies in the investigation's thread (or the summary's). Updates go only
+  to the incident's live war room, never to a service alert channel, and are
+  skipped when ChatOps or the Slack installation is disabled. Slack rate limits
+  pause updates for that channel briefly instead of retrying in a loop.
+- **Identity.** With the optional `chat:write.customize` scope, Squire posts
+  under its own name and avatar; otherwise its messages start with a Squire
+  header. See [permissions and scopes](./permissions-and-scopes).
+
 ## Troubleshooting
 
 **Creation forbidden:** verify `channels:manage`; private rooms also need the documented `groups:*` permissions and bot access.

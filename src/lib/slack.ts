@@ -143,6 +143,27 @@ export async function getSlackBotToken(serviceId?: string): Promise<string | nul
 }
 
 /**
+ * Bot scopes granted to the installation whose token getSlackBotToken returns for this service (same
+ * precedence: the service's own integration, then the global one). Empty for the environment-variable
+ * token, whose scopes OpsKnight never saw.
+ */
+export async function getSlackBotScopes(serviceId?: string): Promise<string[]> {
+  if (serviceId) {
+    const service = await prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { slackIntegration: { select: { enabled: true, botToken: true, scopes: true } } },
+    });
+    const own = service?.slackIntegration;
+    if (own?.enabled && own.botToken) return own.scopes;
+  }
+  const global = await prisma.slackIntegration.findFirst({
+    where: { enabled: true, services: { none: {} } },
+    select: { botToken: true, scopes: true },
+  });
+  return global?.botToken ? global.scopes : [];
+}
+
+/**
  * Send a Slack webhook notification for incident events
  */
 export async function sendSlackNotification(

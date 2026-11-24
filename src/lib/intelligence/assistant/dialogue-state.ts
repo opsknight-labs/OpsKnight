@@ -17,6 +17,16 @@ export const DIALOGUE_STATE_TTL_MS = 10 * 60_000;
 
 const intentSchema = z.string().min(1).max(40);
 
+const pageFiltersSchema = z
+  .object({
+    teamIds: z.array(z.string().max(64)).max(20).optional(),
+    assigneeId: z.string().max(64).optional(),
+    limit: z.number().int().min(1).max(20).optional(),
+    groupBy: z.enum(['service', 'team', 'urgency', 'status', 'priority', 'day', 'hour']).optional(),
+  })
+  .strict();
+export type PageFilters = z.infer<typeof pageFiltersSchema>;
+
 export const dialogueStateSchema = z
   .object({
     v: z.literal(1),
@@ -42,6 +52,8 @@ export const dialogueStateSchema = z
         question: z.string().max(2_000),
         offset: z.number().int().min(0).max(10_000),
         total: z.number().int().min(0).optional(),
+        /** Filters already resolved for the first page (ids checked for visibility then; reads re-check). */
+        filters: pageFiltersSchema.optional(),
         expiresAt: z.string().datetime(),
       })
       .strict()
@@ -175,11 +187,19 @@ export function pageState(
   question: string,
   offset: number,
   total: number | undefined,
-  now: Date = new Date()
+  now: Date = new Date(),
+  filters?: PageFilters
 ): DialogueState {
   return {
     v: 1,
-    page: { intent, question: question.slice(0, 2_000), offset, total, expiresAt: expiry(now) },
+    page: {
+      intent,
+      question: question.slice(0, 2_000),
+      offset,
+      total,
+      ...(filters && Object.keys(filters).length ? { filters } : {}),
+      expiresAt: expiry(now),
+    },
     lastIntent: intent,
     lastQuestion: question.slice(0, 2_000),
   };

@@ -69,7 +69,13 @@ export const KNOWLEDGE_LIMITS = {
 export const factStaleBefore = (now: Date = new Date()) =>
   new Date(now.getTime() - KNOWLEDGE_LIMITS.factTtlMs);
 
-export const PROACTIVE_KINDS = ['BRIEFING', 'STAKEHOLDER_NUDGE', 'POSTMORTEM_DRAFT'] as const;
+export const PROACTIVE_KINDS = [
+  'BRIEFING',
+  'STAKEHOLDER_NUDGE',
+  'POSTMORTEM_DRAFT',
+  'INVESTIGATION',
+  'VERIFICATION',
+] as const;
 export type ProactiveKind = (typeof PROACTIVE_KINDS)[number];
 
 export const PROACTIVE_LIMITS = {
@@ -81,6 +87,8 @@ export const PROACTIVE_LIMITS = {
   analysisGraceMs: 5 * 60_000,
   /** Postmortem drafts are written for incidents resolved within this window. */
   draftWindowMs: 24 * 3_600_000,
+  /** Automatic investigations start only for high-urgency incidents opened within this window. */
+  investigationWindowMs: 30 * 60_000,
   /** Incidents considered per kind per scan. */
   scanBatch: 50,
   /** Services with any proactive switch on, read per scan. */
@@ -88,10 +96,30 @@ export const PROACTIVE_LIMITS = {
   minNudgeMinutes: 5,
   maxNudgeMinutes: 24 * 60,
   maxListItems: 5,
+  /** An open incident's investigation is re-run at most this often, and only after new signals. */
+  reassessDebounceMs: 10 * 60_000,
+  /** Re-runs (attempts included) per incident per rolling day. */
+  reassessPerIncidentDaily: 12,
+  /** Only incidents opened within this window are re-assessed: a long-running incident stops costing. */
+  reassessWindowMs: 24 * 3_600_000,
+  /** Re-assessments enqueued per scan across all services (a global cap on concurrent re-runs). */
+  reassessPerScan: 10,
+  /** An investigation concludes by this long after the job starts: the lane's 120 s job budget less ~30 s. */
+  investigationDeadlineMs: 90_000,
+  /** "What changed" digests kept on the note, newest first. */
+  maxDigests: 5,
+  /** How long after a fix Squire checks whether it held. */
+  verificationDelayMs: 10 * 60_000,
 } as const;
 
 /** Background identity for proactive AI calls: never a person, so it never spends anyone's personal share. */
 export const PROACTIVE_AI_ACTOR = 'squire:proactive';
+
+/**
+ * The AI-call identity of one incident's proactive work: its own per-minute rate bucket (so concurrent incidents
+ * never share one), still attributable to the proactive actor by prefix and to the incident's team by incident.
+ */
+export const proactiveAiActor = (incidentId: string) => `${PROACTIVE_AI_ACTOR}:${incidentId}`;
 
 export const sha256Hex = (text: string): string => createHash('sha256').update(text).digest('hex');
 

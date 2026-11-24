@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import { incidentBrief } from '../ai/brief';
 import { redactSecrets } from '../ai/redact';
 import { PROACTIVE_LIMITS } from './contract';
+import { investigationDigestSchema } from './proactive-digest';
 
 /**
  * The stored shape of proactive notes and the deterministic writers behind them. Pure: the lane gathers the facts,
@@ -311,3 +312,43 @@ export function aiInputsVisible(
     inputs.runbooks.every(id => visible.runbooks.has(id))
   );
 }
+
+/**
+ * An automatic investigation: the engine's markdown diagnosis plus every source it read. The answer is only shown
+ * to a viewer who can still open every one of those sources (see proactive-view.ts).
+ */
+export const investigationContentSchema = z
+  .object({
+    v: z.literal(1),
+    answer: text(20_000),
+    partial: z.boolean(),
+    /** The team whose read access bounded the investigation. */
+    teamId: z.string().max(64),
+    sources: z
+      .array(z.object({ kind: z.string().max(32), id: z.string().max(128) }).strict())
+      .max(64),
+    citations: z
+      .array(
+        z
+          .object({
+            kind: z.string().max(32),
+            id: z.string().max(128),
+            label: text(300),
+            href: z.string().max(300),
+          })
+          .strict()
+      )
+      .max(32),
+    /** Live updates (absent on notes written before them): when the evidence was last read, and the run count. */
+    assessedAt: z.iso.datetime().optional(),
+    revision: z.number().int().min(1).optional(),
+    /** Start times of recent re-runs, attempts included, oldest first: the per-incident daily cap. */
+    reassessedAt: z
+      .array(z.iso.datetime())
+      .max(PROACTIVE_LIMITS.reassessPerIncidentDaily)
+      .optional(),
+    /** "What changed" digests, newest first. */
+    updates: z.array(investigationDigestSchema).max(PROACTIVE_LIMITS.maxDigests).optional(),
+  })
+  .strict();
+export type InvestigationContent = z.infer<typeof investigationContentSchema>;

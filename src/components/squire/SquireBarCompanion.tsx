@@ -100,6 +100,9 @@ export default function SquireBarCompanion({
   const busy = useRef(false);
   const cancelled = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
+  // The note's clock stops while the pointer or focus is on it; "Got it" ends it at once.
+  const holding = useRef(false);
+  const ended = useRef(false);
   // Pending waits of the current round; cancelling the round resolves them all at once.
   const waiters = useRef(new Set<() => void>());
   const wait = useCallback(
@@ -247,7 +250,7 @@ export default function SquireBarCompanion({
       if (busy.current || home === null || open) return false;
       busy.current = true;
       cancelled.current = false;
-      markDelivered(next);
+      ended.current = false;
       setDozing(false);
       try {
         setMood('greeting');
@@ -260,7 +263,14 @@ export default function SquireBarCompanion({
         setShield(false);
         setPose('message');
         setScrollOpen(true);
-        await wait(next.id === 'intro' ? INTRO_MS : NOTE_MS);
+        // Delivered only once it is on screen; a note cut short on the way is offered again.
+        markDelivered(next);
+        let left = next.id === 'intro' ? INTRO_MS : NOTE_MS;
+        while (left > 0 && !ended.current && !cancelled.current) {
+          const started = Date.now();
+          await wait(Math.min(left, 250));
+          if (!holding.current) left -= Date.now() - started;
+        }
       } finally {
         setScrollOpen(false);
         setMood('idle');
@@ -279,6 +289,7 @@ export default function SquireBarCompanion({
 
   /** Roll the scroll away now: ends the current wait, so he walks back as after a timeout. */
   const dismiss = useCallback(() => {
+    ended.current = true;
     for (const done of [...waiters.current]) done();
   }, []);
 
@@ -475,15 +486,23 @@ export default function SquireBarCompanion({
           </span>
         </button>
       </div>
+      {/* Always mounted, so screen readers hear each note when it arrives. */}
+      <p role="status" className="sr-only">
+        {scrollOpen && note ? [note.title, note.text].filter(Boolean).join('. ') : ''}
+      </p>
       <div
         className={`sqbar-scroll${scrollOpen ? ' open' : ''}${animated ? '' : ' still'}`}
         aria-hidden={!scrollOpen}
+        // A note waits while the pointer or focus is on it (WCAG 2.2.1), so it is never timed out mid-read.
+        onPointerEnter={() => (holding.current = true)}
+        onPointerLeave={() => (holding.current = false)}
+        onFocus={() => (holding.current = true)}
+        onBlur={() => (holding.current = false)}
         // The bubble ends just past his right edge, so its tail points at him and it stays on the bar.
         style={{ transform: `translateX(${x + 50}px) translateX(-100%)` }}
       >
         <div
           className={`sqbar-bubble ok-inverse-surface relative ${note?.asks ? 'w-76' : 'w-max max-w-76'} rounded-2xl border border-border bg-card px-4 pb-3 pt-5 text-card-foreground shadow-[0_18px_40px_-12px_rgb(0_0_0/0.55)]`}
-          role={note ? 'status' : undefined}
         >
           {/* His pennant: the one heraldic touch, in his plume's crimson. */}
           <span className="sqbar-pennant absolute -top-3 left-4 font-display text-xs font-semibold text-white">

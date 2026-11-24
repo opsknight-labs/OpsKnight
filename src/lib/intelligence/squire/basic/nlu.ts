@@ -1,5 +1,6 @@
 /* eslint-disable security/detect-unsafe-regex, security/detect-object-injection -- every pattern here is a fixed literal with bounded quantifiers run over a message capped at 2,000 characters (see the ReDoS timing test), and indexes are numeric or come from closed tables */
 import { routeIntent, type SquireIntent } from '../intents';
+import { isQueryWord } from './query';
 
 /**
  * Deterministic understanding for basic mode: no model, no network. Text is normalised, obvious typos are
@@ -16,7 +17,12 @@ export const SLASH_COMMANDS = [
   'snooze',
   'oncall',
   'incidents',
+  'tag',
+  'maintenance',
+  'override',
+  'rename',
   'help',
+  'catchup',
 ] as const;
 export type SlashCommand = (typeof SLASH_COMMANDS)[number];
 
@@ -26,7 +32,7 @@ export interface ParsedSlashCommand {
 }
 
 export function parseSlashCommand(message: string): ParsedSlashCommand | null {
-  const match = message.trim().match(/^\/([a-z]{2,12})(?:\s+([\s\S]{0,1800}))?$/i);
+  const match = message.trim().match(/^\/([a-z][a-z_-]{1,11})(?:\s+([\s\S]{0,1800}))?$/i);
   if (!match) return null;
   const name = match[1].toLowerCase();
   const alias: Record<string, SlashCommand> = {
@@ -37,11 +43,26 @@ export function parseSlashCommand(message: string): ParsedSlashCommand | null {
     comment: 'note',
     search: 'incidents',
     find: 'incidents',
+    maint: 'maintenance',
+    handoff: 'catchup',
   };
   const command = (SLASH_COMMANDS as readonly string[]).includes(name)
     ? (name as SlashCommand)
     : alias[name];
   return command ? { command, args: (match[2] ?? '').trim() } : null;
+}
+
+const DURATION_UNIT_MS = { m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
+
+/** A compact duration ("30m", "2h", "1d") in milliseconds; null for anything else or zero. */
+export function parseDuration(text: string): number | null {
+  const match = text
+    .trim()
+    .toLowerCase()
+    .match(/^(\d{1,4})([mhd])$/);
+  if (!match) return null;
+  const ms = Number(match[1]) * DURATION_UNIT_MS[match[2] as keyof typeof DURATION_UNIT_MS];
+  return ms > 0 ? ms : null;
 }
 
 /** Words the assistant understands; misspellings within edit distance 1–2 are corrected to these. */
@@ -169,6 +190,12 @@ export const DOMAIN_VOCABULARY: readonly string[] = [
   'budget',
   'quota',
   'timezone',
+  // Catch-up (shift hand-off).
+  'catch',
+  'catchup',
+  'missed',
+  'overnight',
+  'shift',
 ];
 
 /** Ordinary words that must never be "corrected" into a domain word (e.g. last→list, thanks→tasks). */
@@ -226,13 +253,33 @@ const CONTRACTIONS: ReadonlyArray<[RegExp, string]> = [
 export function normalizeMessage(message: string): string {
   let text = message.replace(/\s+/g, ' ').trim().toLowerCase();
   for (const [pattern, replacement] of CONTRACTIONS) text = text.replace(pattern, replacement);
+  // "What's up with checkout?" asks about checkout; it is not a greeting.
+  text = text.replace(/^(?:what is up|how is it going) with\b/, 'what is going on with');
+  // A bare duration ("24h") is a look-back window, except in a snooze ("snooze 2h"), a future window ("in
+  // 2 hours", "next 3 days") or a decimal ("1.5h"), which keep their own meaning.
+  const bare =
+    !/^(?:please |pls |ok |can you |could you |go ahead and )?(?:snooze|pause|silence|mute)\b/.test(
+      text
+    );
   text = text
     .replace(/\b(?:last|past) (\d{1,3})\s?h(?:rs?|ours?)?\b/g, 'past $1 hours')
     .replace(/\b(?:last|past) (\d{1,3})\s?d(?:ays?)?\b/g, 'past $1 days')
-    .replace(/\b(?:last|past) (\d{1,2})\s?w(?:ks?|eeks?)?\b/g, 'past $1 weeks')
-    .replace(/\b(\d{1,3})\s?h(?:rs?|ours?)?\b(?!\s?(?:ago|before))/g, 'past $1 hours')
-    .replace(/\b(\d{1,3})\s?d(?:ays?)?\b(?!\s?(?:ago|before))/g, 'past $1 days')
-    .replace(/\b(\d{1,2})\s?w(?:ks?|eeks?)?\b(?!\s?(?:ago|before))/g, 'past $1 weeks')
+    .replace(/\b(?:last|past) (\d{1,2})\s?w(?:ks?|eeks?)?\b/g, 'past $1 weeks');
+  if (bare)
+    text = text
+      .replace(
+        /(?<![\d.])(?<!\b(?:next|in|within|coming) )\b(\d{1,3})\s?h(?:rs?|ours?)?\b(?!\s?(?:ago|before))/g,
+        'past $1 hours'
+      )
+      .replace(
+        /(?<![\d.])(?<!\b(?:next|in|within|coming) )\b(\d{1,3})\s?d(?:ays?)?\b(?!\s?(?:ago|before))/g,
+        'past $1 days'
+      )
+      .replace(
+        /(?<![\d.])(?<!\b(?:next|in|within|coming) )\b(\d{1,2})\s?w(?:ks?|eeks?)?\b(?!\s?(?:ago|before))/g,
+        'past $1 weeks'
+      );
+  text = text
     .replace(/\b(?:last|past) hour\b/g, 'past 1 hours')
     .replace(/\b(?:last|past) day\b/g, 'past 1 days')
     .replace(/\bpast past\b/g, 'past')
@@ -320,6 +367,8 @@ const FEATURES: ReadonlyArray<[SquireIntent, ReadonlyArray<[RegExp, number]>]> =
         2,
       ],
       [/\b(active|open|unresolved)\b/, 1],
+      // "What's up with checkout?" (normalised to "what is going on with") asks for its live state.
+      [/\bgoing on with\b/, 1],
       [/\b(incidents?|problems?|issues?|outages?)\b/, 0.5],
     ],
   ],
@@ -330,7 +379,7 @@ const FEATURES: ReadonlyArray<[SquireIntent, ReadonlyArray<[RegExp, number]>]> =
         /\b(how many|number of|count|total|volume|statistics|stats|analytics|trend|trends|report|breakdown|busiest|noisiest|noisy|most|compare|comparison|versus|vs)\b/,
         2.5,
       ],
-      [/\b(?:per|by)\s+(team|teams|service|services|urgency|day|hour|status|priority|week)\b/, 3.5],
+      [/\b(?:per|by)\s+(team|teams|service|services|urgency|day|hour|status|priority|week)\b/, 4.5],
       [/\b(mttr|mtta|mean time|average|avg|time to (resolve|acknowledge|resolution|ack))\b/, 3],
       [/\b(incidents?|outages?|services?|alerts?)\b/, 0.5],
     ],
@@ -406,7 +455,9 @@ const FEATURES: ReadonlyArray<[SquireIntent, ReadonlyArray<[RegExp, number]>]> =
         /\b(search|find|look up|lookup|list|show|any|were there|have there been|did we have)\b/,
         1.5,
       ],
-      [/\b(incidents?|outages?|tickets?)\b/, 1.5],
+      [/\b(incidents?|outages?|tickets?)\b/, 2],
+      // A severity or urgency filter names a list of incidents ("p1 incidents", "high urgency incidents").
+      [/\b(p[0-5]|sev(?:erity)? ?[0-5]|high|critical|urgent|urgency|priority)\b/, 1.5],
       [/\b(?:incidents?|outages?)\b.{0,40}\b(?:for|of|on|assigned to|owned by|about)\b/, 1],
       [
         /\b(resolved|closed|last week|past week|yesterday|today|this (week|month)|past \d+ (hours|days|weeks|months)|since|between|on (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(last |this )?(monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/,
@@ -461,7 +512,7 @@ const INCIDENT_FEATURES: ReadonlyArray<[SquireIntent, ReadonlyArray<[RegExp, num
     'RESPONDERS',
     [
       [
-        /\b(who is (working|on this|handling|assigned)|assignee|responders?|who owns this|escalat(ed|ion status))\b/,
+        /\b(who is (working|on this|handling|assigned)|assignee|responders?|who owns this|escalat(ed|ion status))\b(?! incidents)/,
         3,
       ],
     ],
@@ -482,6 +533,8 @@ const INCIDENT_FEATURES: ReadonlyArray<[SquireIntent, ReadonlyArray<[RegExp, num
  * guidance; "briefing" is not "brief"). Checked before the rules; deliberately short.
  */
 const OVERRIDES: ReadonlyArray<[SquireIntent, RegExp, boolean | null]> = [
+  // "What is MTTR?" asks for the definition; "what is our MTTR this week?" for the number.
+  ['GUIDANCE', /^what (?:is|does) (?:mttr|mtta)(?: mean| stand for)?[\s?!.]*$/, null],
   [
     'INCIDENT_STATS',
     /\b(mttr|mtta|mean time to (?:resolve|acknowledge|resolution|ack)|average time to (?:resolve|acknowledge))\b/,
@@ -554,6 +607,22 @@ export function classifyIntent(text: string, onIncident: boolean): IntentPredict
       };
 }
 
+/**
+ * "Who is on call and how many incidents are open?" as its questions, when each is a different known
+ * question; otherwise the message alone. "Acknowledge and resolve" or "between Monday and Friday" stay whole.
+ */
+export function splitQuestions(message: string, onIncident: boolean): string[] {
+  const parts = message
+    .split(
+      /\?\s+|;\s+|\s+(?:and|also|plus|then)\s+(?=(?:who|what|how|when|where|which|is|are|am|any|show|list|find|give)\b)/i
+    )
+    .map(part => part.trim())
+    .filter(part => /[\p{L}\p{N}]/u.test(part));
+  if (parts.length < 2 || parts.length > 3) return [message];
+  const intents = parts.map(part => classifyIntent(normalizeMessage(part), onIncident).intent);
+  return intents.includes('UNKNOWN') || new Set(intents).size < parts.length ? [message] : parts;
+}
+
 export interface Slots {
   /** Row limit asked for ("top 10", "show 20"), capped by the reader. */
   limit?: number;
@@ -579,30 +648,48 @@ const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'frida
 const QUESTION =
   /\b(how (do|can|to|does|should)|what (is|are|does)|explain|where (do|can)|^does|\?$)/;
 
+const ACTION_LEAD = '^(?:please |ok |okay |can you |could you |go ahead and )?';
+const EXTENDED_ACTION = new RegExp(
+  `${ACTION_LEAD}(?:(escalate|page the next (?:level|tier)|page next (?:level|tier))|((?:set|change|make|raise|lower|bump|drop|downgrade|upgrade)(?: the)? urgency|(?:set|make|mark|change)(?: this| it| the incident| this incident)?(?: urgency)? (?:to |as )?(?:high|medium|low)(?: urgency)?))\\b`
+);
+const ACTION = new RegExp(
+  `${ACTION_LEAD}(?:(ack(?:nowledge)?)|(resolve|close|mark (?:as )?resolved)|(add (?:a )?note|note|comment|log)|(assign|reassign|hand(?: it)? to)|(snooze|pause|silence|mute)|(link|mark (?:as )?related|relate))\\b`
+);
+const ACTION_OBJECT = /^\s*(?:this incident|the incident|this|it|that|incident(?!s))\b/;
+/** A verb followed by these starts a list or a question ("close incidents older than…", "resolve time"). */
+const NOT_AN_ACTION =
+  /^\s*(?:to\s+)?(?:the\s+)?(?:incidents|alerts|services|tickets|outages|runbooks?|playbooks?|times?|rates?|of|older|newer|than|polic(?:y|ies)|status|history|queue|list|levels?|stats|counts?|trends?|by|per)\b/;
+
 /** Slots other than the status/urgency/time filters that `parseBasicQuery` already handles. */
 export function extractSlots(normalized: string, original: string): Slots {
   const slots: Slots = { more: false };
   const text = normalized.replace(/["“][^"”]{1,120}["”]/g, ' ');
   const limit =
     text.match(/\b(?:top|first|show|list|latest|last)\s+(\d{1,2})\b/)?.[1] ??
+    // "sev 1 incidents" and "priority 1 incidents" are a filter, not a row count.
     text.match(
-      /\b(\d{1,2})\s+(?:incidents?|services?|alerts?|runbooks?|changes?|postmortems?|results?|rows?)\b/
+      /(?<!\b(?:sev|severity|priority|p|level)\s?)\b(\d{1,2})\s+(?:incidents?|services?|alerts?|runbooks?|changes?|postmortems?|results?|rows?)\b/
     )?.[1];
   if (limit) slots.limit = Math.min(20, Math.max(1, Number(limit)));
   const group = text.match(
     /\b(?:by|per|grouped by|group by|breakdown by)\s+(team|urgency|service|status|priority|day|hour|week)\b/
   )?.[1];
   if (group) slots.groupBy = group === 'week' ? 'day' : (group as Slots['groupBy']);
-  const team =
-    text.match(/\b(?:for|of|in|on)\s+(?:the\s+)?([a-z0-9][a-z0-9 _.-]{1,40}?)\s+team\b/)?.[1] ??
-    text.match(/\bteam\s+([a-z0-9][a-z0-9_.-]{1,40})\b/)?.[1];
-  if (team && !/^(my|our|your|the|a|this|that|which|what)$/.test(team)) slots.team = team.trim();
-  const handle = original.match(/@([a-z0-9._-]{2,40})/i)?.[1];
+  // A team name is one or two words right before "team" ("for the payments team"), or the word after
+  // "team" ("team payments"); words that shape the question ("owns", "on-call", "my") are never a name.
+  const team = [
+    text.match(
+      /\b(?:for|of|in|on)\s+(?:the\s+)?((?:[a-z0-9][a-z0-9_.-]*\s+)?[a-z0-9][a-z0-9_.-]*)\s+team\b/
+    )?.[1],
+    text.match(/\bteam\s+([a-z0-9][a-z0-9_.-]{1,40})\b/)?.[1],
+  ].find(name => name && !name.split(/\s+/).some(isQueryWord));
+  if (team) slots.team = team.trim();
+  const handle = original.match(/(?<![\w.])@([a-z0-9._-]{2,40})/i)?.[1]?.replace(/[._-]+$/, '');
   if (handle) slots.person = handle;
   else if (/\b(assigned to me|for me|mine|my)\b/.test(text)) slots.person = 'me';
   else {
     const name = original.match(
-      /\b(?:assigned to|owned by|reassign(?: it| this)? to|assign(?: it| this)? to|hand(?: it)? to)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\b/
+      /\b(?:assigned to|owned by|reassign(?: it| this)? to|assign(?: it| this)? to|hand(?: it)? to)\s+(\p{Lu}[\p{L}'’-]+(?:\s\p{Lu}[\p{L}'’-]+){0,2})/u
     )?.[1];
     if (name) slots.person = name;
   }
@@ -611,55 +698,74 @@ export function extractSlots(normalized: string, original: string): Slots {
   const id = text.match(/\bincidents?\s+([a-z0-9]{20,32})\b/)?.[1];
   if (id) slots.incidentRef = id;
   slots.more =
-    /^(?:show |see |give me )?(?:more|next(?: \d{1,2})?|next page|continue|the rest|others)\b[\s!.]*$/.test(
+    /^(?:(?:ok|okay|sure|yes|yeah|please) )?(?:(?:show|see|give|load|display|get)(?: me)? )?(?:more|next(?: \d{1,2})?|next page|continue|the rest|others)(?: please| results| rows)?[\s!.]*$/.test(
       text
     );
-  if (!QUESTION.test(text)) {
-    const action = text.match(
-      /^(?:please |pls |ok |can you |could you |go ahead and )?(?:(ack(?:nowledge)?)|(resolve|close|mark (?:as )?resolved)|(add (?:a )?note|note|comment|log)|(assign|reassign|hand(?: it)? to)|(snooze|pause|silence|mute)|(link|mark (?:as )?related|relate))\b/
-    );
-    // Extended action verbs (F3), checked first so "escalate" / "set urgency" are not read as other verbs.
-    const extended = text.match(
-      /^(?:please |pls |ok |can you |could you |go ahead and )?(?:(escalate|page the next (?:level|tier)|page next (?:level|tier))|((?:set|change|make|raise|lower|bump|drop|downgrade|upgrade)(?: the)? urgency|(?:set|make|mark|change)(?: this| it| the incident| this incident)?(?: urgency)? (?:to |as )?(?:high|medium|low)(?: urgency)?\b))/
-    );
-    if (extended) {
-      slots.action = extended[1] ? 'escalate' : 'urgency';
-      if (slots.action === 'urgency') {
-        const level = text.match(/\b(high|medium|low)\b/)?.[1];
-        if (level) slots.targetUrgency = level.toUpperCase() as Slots['targetUrgency'];
-      }
-      return slots;
+  if (QUESTION.test(text)) return slots;
+  const extended = text.match(EXTENDED_ACTION);
+  const action = extended ? null : text.match(ACTION);
+  const verb = extended ?? action;
+  if (!verb || NOT_AN_ACTION.test(text.slice(verb[0].length).replace(ACTION_OBJECT, '')))
+    return slots;
+  // Extended action verbs (F3), checked first so "escalate" / "set urgency" are not read as other verbs.
+  if (extended) {
+    slots.action = extended[1] ? 'escalate' : 'urgency';
+    if (slots.action === 'urgency') {
+      const level = text.match(/\b(high|medium|low)\b/)?.[1];
+      if (level) slots.targetUrgency = level.toUpperCase() as Slots['targetUrgency'];
     }
-    if (action) {
-      slots.action = action[1]
-        ? 'acknowledge'
-        : action[2]
-          ? 'resolve'
-          : action[3]
-            ? 'note'
-            : action[4]
-              ? 'reassign'
-              : action[5]
-                ? 'snooze'
-                : 'link';
-      const rest = original
-        .replace(/^(?:please |pls |ok |can you |could you |go ahead and )/i, '')
-        .replace(
-          /^(?:ack(?:nowledge)?|resolve|close|mark (?:as )?resolved|add (?:a )?note|note|comment|log|assign|reassign|hand(?: it)? to|snooze|pause|silence|mute|link|mark (?:as )?related|relate)\b\s*(?:this incident|this|it|the incident|incident)?\s*(?:[:\-–]\s*|with\s+|as\s+|to\s+|for\s+|saying\s+)?/i,
-          ''
-        )
-        .trim();
-      if (rest) slots.actionText = rest.slice(0, 1000);
-      if (slots.action === 'snooze') {
-        const duration = text.match(/\b(\d{1,3})\s*(minutes?|mins?|m|hours?|hrs?|h|days?|d)\b/);
-        if (duration) {
-          const unit = duration[2];
-          const factor = /^d/.test(unit) ? 1440 : /^h/.test(unit) ? 60 : 1;
-          slots.snoozeMinutes = Math.min(7 * 1440, Math.max(5, Number(duration[1]) * factor));
-        } else if (/\b(an hour|one hour)\b/.test(text)) slots.snoozeMinutes = 60;
-        else if (/\b(tomorrow|a day|one day)\b/.test(text)) slots.snoozeMinutes = 1440;
-      }
-    }
+    return slots;
+  }
+  if (!action) return slots;
+  slots.action = action[1]
+    ? 'acknowledge'
+    : action[2]
+      ? 'resolve'
+      : action[3]
+        ? 'note'
+        : action[4]
+          ? 'reassign'
+          : action[5]
+            ? 'snooze'
+            : 'link';
+  const rest = original
+    .replace(/^(?:please |pls |ok |okay |can you |could you |go ahead and )/i, '')
+    .replace(
+      /^(?:ack(?:nowledge)?|resolve|close|mark (?:as )?resolved|add (?:a )?note|note|comment|log|assign|reassign|hand(?: it)? to|snooze|pause|silence|mute|link|mark (?:as )?related|relate)\b\s*(?:this incident|this|it|the incident|incident)?\s*(?:[:\-–]\s*|with\s+|as\s+|to\s+|for\s+|saying\s+)?/i,
+      ''
+    )
+    .trim();
+  if (rest) slots.actionText = rest.slice(0, 1000);
+  if (slots.action === 'reassign') {
+    // The assignee is whoever follows "to" (or "assign me"), never a "my" elsewhere in the sentence.
+    const target = rest.replace(/^(?:to\s+)/i, '').trim();
+    if (/^(?:me|myself)[\s!.]*$/i.test(target)) slots.person = 'me';
+    else if (target)
+      slots.person = target
+        .replace(/\s+(?:from|on|in|of|please|now)\b.*$/i, '')
+        .replace(/[\s!.,]+$/, '')
+        .slice(0, 80);
+    else delete slots.person;
+  }
+  if (slots.action === 'snooze') {
+    const duration = text.match(
+      /(?<![\d.])(\d{1,3}(?:\.\d{1,2})?)\s*(minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|wks?|w)\b/
+    );
+    // A bare number ("snooze 30") is minutes; the card states the duration before anything happens.
+    const bareMinutes = text.match(
+      /\b(?:snooze|pause|silence|mute)(?: this incident| the incident| this| it)?(?: for)? (\d{1,4})[\s!.]*$/
+    )?.[1];
+    if (duration) {
+      const unit = duration[2];
+      const factor = /^w/.test(unit) ? 7 * 1440 : /^d/.test(unit) ? 1440 : /^h/.test(unit) ? 60 : 1;
+      slots.snoozeMinutes = Math.min(
+        7 * 1440,
+        Math.max(5, Math.round(Number(duration[1]) * factor))
+      );
+    } else if (bareMinutes)
+      slots.snoozeMinutes = Math.min(7 * 1440, Math.max(5, Number(bareMinutes)));
+    else if (/\b(an hour|one hour)\b/.test(text)) slots.snoozeMinutes = 60;
+    else if (/\b(tomorrow|a day|one day)\b/.test(text)) slots.snoozeMinutes = 1440;
   }
   return slots;
 }

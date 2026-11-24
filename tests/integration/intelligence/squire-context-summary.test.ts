@@ -99,7 +99,9 @@ describe('earlier-turn summary in AI conversations', () => {
     const chat = model.requests[0].body as unknown as Body;
     expect(chat.stream).toBe(true);
     expect(chat.messages[0].role).toBe('system');
-    expect(chat.messages[1].role).toBe('system');
+    // Earlier turns are untrusted data: never sent with system authority.
+    expect(chat.messages[1].role).toBe('user');
+    expect(chat.messages[1].content).toContain('[Untrusted data');
     expect(chat.messages[1].content).toContain('Summary of earlier conversation turns');
     expect(chat.messages[1].content).toContain(
       '- Asked: Question number 1 about the checkout pool'

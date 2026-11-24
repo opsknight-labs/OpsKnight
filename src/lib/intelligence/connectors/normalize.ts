@@ -13,6 +13,7 @@ export interface TimeWindow {
 export const LIMITS = {
   series: 8,
   samplesPerSeries: 5,
+  chartSamplesPerSeries: 120,
   labelsPerSeries: 6,
   labelsPerLogLine: 3,
   labelValueLength: 80,
@@ -65,6 +66,11 @@ export interface MetricsSummary {
     /** The largest absolute change between consecutive samples and when it happened. */
     biggestChange: { at: string | null; delta: number | null } | null;
     samples: Array<{ at: string | null; value: number | null }>;
+    /**
+     * Denser points for drawing a chart in the person's answer. Removed before the result reaches a model
+     * (squire/tools-observability.ts splitChartSamples), so it costs no tokens.
+     */
+    chartSamples?: Array<{ at: string | null; value: number | null }>;
   }>;
   truncated: boolean;
 }
@@ -118,6 +124,10 @@ export function summarizeSeries(
       mean: values.length ? round(values.reduce((a, b) => a + b, 0) / values.length) : null,
       biggestChange: biggest ? { at: iso(biggest.at), delta: round(biggest.delta) } : null,
       samples: spread(points, LIMITS.samplesPerSeries).map(([at, value]) => ({
+        at: iso(at),
+        value: round(value),
+      })),
+      chartSamples: spread(points, LIMITS.chartSamplesPerSeries).map(([at, value]) => ({
         at: iso(at),
         value: round(value),
       })),

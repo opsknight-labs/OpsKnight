@@ -115,8 +115,28 @@ describe('default model tiers', () => {
       'my-deployment',
     ]);
     expect(applyDefaultTiers(providers, 'SUMMARIZE')[0].model).toBe('claude-haiku-5-5');
+    // The strong tier never moves a capability up: the configured model answers.
     for (const capability of ['DIAGNOSE', 'POSTMORTEM', 'SQUIRE_CHAT'] as const)
-      expect(applyDefaultTiers(providers, capability)[0].model).toBe('claude-opus-5-5');
+      expect(applyDefaultTiers(providers, capability)[0].model).toBe('claude-sonnet-5-5');
+  });
+
+  it('only ever moves down, within the provider family', () => {
+    const kept = (kind: 'ANTHROPIC' | 'OPENAI' | 'GROQ', model: string) =>
+      applyDefaultTiers([{ id: 'x', kind, model }], 'CLASSIFY')[0].model;
+    // Already small, or smaller than the small default: never upgraded.
+    expect(kept('ANTHROPIC', 'claude-haiku-4-5')).toBe('claude-haiku-4-5');
+    expect(kept('OPENAI', 'gpt-5-nano')).toBe('gpt-5-nano');
+    // An administrator's model outside the known family (a fine-tune) is kept.
+    expect(kept('OPENAI', 'ft:gpt-4o:acme:ops')).toBe('ft:gpt-4o:acme:ops');
+    // A big in-family model goes down to the small one.
+    expect(kept('OPENAI', 'gpt-5')).toBe('gpt-5-mini');
+    expect(kept('GROQ', 'llama-3.3-70b-versatile')).toBe('llama-3.1-8b-instant');
+    expect(
+      applyDefaultTiers(
+        [{ id: 'x', kind: 'ANTHROPIC' as const, model: 'claude-haiku-5-5' }],
+        'DIAGNOSE'
+      )[0].model
+    ).toBe('claude-haiku-5-5');
   });
 
   it('forces the small tier for degradation and keeps embeddings and unknown hosts untouched', () => {

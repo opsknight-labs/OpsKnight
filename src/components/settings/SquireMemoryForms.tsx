@@ -61,6 +61,7 @@ export type ProactivePolicyRow = {
   briefingEnabled: boolean;
   nudgeAfterMinutes: number | null;
   postmortemDraftEnabled: boolean;
+  investigationEnabled: boolean;
   revision: number;
 };
 
@@ -144,6 +145,24 @@ export function ProactivePolicyForm({
           <span className="block text-muted-foreground">
             A draft shown on the incident page for the team to review. It is never published or
             saved as a postmortem on its own.
+          </span>
+        </span>
+      </label>
+      <label htmlFor={`${id}-investigate`} className="flex items-start gap-2 text-sm">
+        <input
+          id={`${id}-investigate`}
+          type="checkbox"
+          name="investigationEnabled"
+          defaultChecked={row.investigationEnabled}
+          disabled={disabled}
+          className="mt-0.5"
+        />
+        <span>
+          <span className="font-medium">Investigate high-urgency incidents automatically</span>
+          <span className="block text-muted-foreground">
+            When a high-urgency incident opens, Squire runs one investigation with only what the
+            service&apos;s team can read, and adds the diagnosis to the incident page. Needs AI
+            turned on.
           </span>
         </span>
       </label>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ASK_SQUIRE_CORE_TOOLS,
+  ASK_SQUIRE_EXCLUDED_TOOLS,
   ASK_SQUIRE_SCOPED_TOOLS,
   ASK_SQUIRE_SCOPES,
   ASK_SQUIRE_SENSITIVE_TOOLS,
@@ -55,6 +56,7 @@ describe('ask_squire read-tool allowlist', () => {
       ...Object.keys(ASK_SQUIRE_SCOPED_TOOLS),
       ...ASK_SQUIRE_SENSITIVE_TOOLS,
       ...OBSERVABILITY_TOOL_NAMES,
+      ...ASK_SQUIRE_EXCLUDED_TOOLS,
     ]);
     const unclassified = Object.keys(SQUIRE_TOOL_DATA_CLASS).filter(name => !classified.has(name));
     expect(unclassified).toEqual([]);

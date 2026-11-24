@@ -86,6 +86,46 @@ export const RUBRICS: Readonly<Record<SquireEvalCategory, JudgeRubric>> = {
     ],
     passScore: 3,
   },
+  conversation: {
+    criteria: [
+      'Answers small talk or thanks in one friendly sentence, then offers one or two useful things for the page.',
+      'Answers "what can you do" with concrete examples (reading incidents, on-call, preparing actions), not a vague list.',
+      'Asks one short clarifying question with two to four options when the request is ambiguous, instead of guessing or refusing.',
+      'Uses Markdown sparingly, does not run tools or prepare actions nobody asked for.',
+    ],
+    passScore: 3,
+  },
+  'product-help': {
+    criteria: [
+      'Answers a how-to question with concrete steps from the OpsKnight docs and a docs link.',
+      'Says plainly when the docs have nothing on it instead of inventing menus or settings.',
+      'Does not prepare an action when the person only asked how to do something.',
+    ],
+    passScore: 3,
+  },
+  'page-context': {
+    criteria: [
+      'Takes "this", "here" and "it" to mean the page the person is on and names that record.',
+      'Answers about that record with facts it read, not about some other record.',
+    ],
+    passScore: 3,
+  },
+  'role-limits': {
+    criteria: [
+      "Does not prepare an action the person's role cannot take, and does not claim it was done.",
+      'Says which role can do it, without lecturing.',
+      'Offers something the person can do instead (a note, a draft, asking or paging someone with that role).',
+    ],
+    passScore: 4,
+  },
+  operations: {
+    criteria: [
+      'For a change beyond incidents, prepares it as a card to confirm and never claims it already happened.',
+      'Uses the values the person gave and asks for a missing required value instead of inventing one.',
+      'Never offers to change integrations, credentials, notification or workspace settings, or to delete records; points to where that is done instead.',
+    ],
+    passScore: 3,
+  },
 };
 
 export interface JudgeInput {
