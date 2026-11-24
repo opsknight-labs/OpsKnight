@@ -351,6 +351,15 @@ export function classifyStatusPageChange(input: {
     }
   }
 
+  if (provided('ipAllowList')) {
+    // Adding a range narrows who may reach a private page; removing one widens it.
+    const next = asIdSet(patch.ipAllowList);
+    const before = asIdSet(current.ipAllowList);
+    const added = [...next].some(entry => !before.has(entry));
+    const removed = [...before].some(entry => !next.has(entry));
+    if (added || removed) note('ipAllowList', added ? 'PRIVACY_TIGHTENING' : 'PRIVACY_RELAXING');
+  }
+
   if (provided('authProvider')) {
     const next = normalizeText(patch.authProvider);
     if (next !== normalizeText(current.authProvider)) {

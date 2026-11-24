@@ -1,0 +1,1 @@
+ALTER TABLE "StatusPage" ADD COLUMN "ipAllowList" TEXT[] DEFAULT ARRAY[]::TEXT[];

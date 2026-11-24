@@ -2725,6 +2725,8 @@ model StatusPage {
   dataRetentionDays           Int?
   requireAuth                 Boolean                    @default(false)
   authProvider                String?
+  /// Optional CIDR allow-list for private pages; empty means no network restriction.
+  ipAllowList                 String[]                   @default([])
   emailProvider               String?
   enableUptimeExports         Boolean                    @default(false)
   statusApiRequireToken       Boolean                    @default(false)

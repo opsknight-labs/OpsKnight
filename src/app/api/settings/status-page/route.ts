@@ -1,3 +1,4 @@
+import { normalizeIpAllowList } from '@/lib/status-pages/ip-allow-list';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
@@ -127,6 +128,7 @@ export async function POST(req: NextRequest) {
       dataRetentionDays,
       requireAuth,
       authProvider,
+      ipAllowList,
       emailProvider,
       enableUptimeExports,
       statusApiRequireToken,
@@ -290,6 +292,7 @@ export async function POST(req: NextRequest) {
     if (requireAuth !== undefined) updateData.requireAuth = requireAuth;
     if (authProvider !== undefined)
       updateData.authProvider = authProvider && authProvider.trim() ? authProvider.trim() : null;
+    if (ipAllowList !== undefined) updateData.ipAllowList = normalizeIpAllowList(ipAllowList);
     if (emailProvider !== undefined)
       updateData.emailProvider =
         emailProvider && emailProvider.trim() ? emailProvider.trim() : null;

@@ -1,3 +1,4 @@
+import { isStatusPageIpAllowed } from '@/lib/status-pages/ip-allow-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
@@ -76,6 +77,8 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
     // Check if authentication is required
     if (statusPage.requireAuth) {
       const cookieHeader = req.headers.get('cookie');
+      if (!(await isStatusPageIpAllowed(statusPage.id, req.headers)))
+        return new NextResponse('Access restricted', { status: 403 });
       const statusToken = extractStatusSessionToken(cookieHeader);
       const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
       const appUrl = await getAppUrl();

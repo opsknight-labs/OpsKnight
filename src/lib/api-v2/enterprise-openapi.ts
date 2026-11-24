@@ -204,20 +204,22 @@ const statusPageSectionProperties = (section: string): Record<string, Schema> =>
           ? { type: ['object', 'null'], additionalProperties: true }
           : key === 'allowedCustomFields'
             ? { type: ['array', 'null'], items: string() }
-            : key.startsWith('show') || ['enabled', 'requireAuth'].includes(key)
-              ? { type: 'boolean' }
-              : key.includes('Threshold')
-                ? { type: 'number', minimum: 0, maximum: 100 }
-                : [
-                      'incidentHistoryDetailDays',
-                      'maxIncidentsToShow',
-                      'incidentHistoryDays',
-                      'dataRetentionDays',
-                    ].includes(key)
-                  ? { type: ['integer', 'null'], minimum: 1 }
-                  : key === 'name'
-                    ? string(200)
-                    : { type: ['string', 'null'] },
+            : key === 'ipAllowList'
+              ? { type: 'array', items: string(60), maxItems: 50 }
+              : key.startsWith('show') || ['enabled', 'requireAuth'].includes(key)
+                ? { type: 'boolean' }
+                : key.includes('Threshold')
+                  ? { type: 'number', minimum: 0, maximum: 100 }
+                  : [
+                        'incidentHistoryDetailDays',
+                        'maxIncidentsToShow',
+                        'incidentHistoryDays',
+                        'dataRetentionDays',
+                      ].includes(key)
+                    ? { type: ['integer', 'null'], minimum: 1 }
+                    : key === 'name'
+                      ? string(200)
+                      : { type: ['string', 'null'] },
       ])
   );
 const statusPageSectionRepresentations = Object.fromEntries(

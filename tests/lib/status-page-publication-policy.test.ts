@@ -66,6 +66,11 @@ describe('classifyStatusPageChange', () => {
     expect(result.revocationReason).toBe('SUPERSEDED');
   });
 
+  it('treats adding an IP allow-list entry as tightening and removing one as relaxing', () => {
+    expect(classify({ ipAllowList: ['10.0.0.0/8'] }).classes).toEqual(['PRIVACY_TIGHTENING']);
+    expect(classify({ ipAllowList: ['10.0.0.0/8'] }).failClosed).toBe(true);
+  });
+
   it('reports no change for a patch that matches current state', () => {
     const result = classify({
       branding: { layout: 'default', primaryColor: '#111111' },

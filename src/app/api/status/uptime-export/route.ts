@@ -1,3 +1,4 @@
+import { isStatusPageIpAllowed } from '@/lib/status-pages/ip-allow-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
@@ -54,6 +55,8 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
       return new NextResponse('Unauthorized', { status: 403 });
     }
     if (targetPage.requireAuth || targetPage.privacyMode === 'PRIVATE') {
+      if (targetPage.requireAuth && !(await isStatusPageIpAllowed(targetPage.id, req.headers)))
+        return new NextResponse('Access restricted', { status: 403 });
       const cookieHeader = req.headers.get('cookie');
       const statusToken = extractStatusSessionToken(cookieHeader);
       const host = req.headers.get('x-forwarded-host') || req.headers.get('host');

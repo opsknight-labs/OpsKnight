@@ -17,6 +17,7 @@ import {
   hasStatusPageAccess,
   isRequestToAppHost,
 } from '@/lib/status-pages/status-auth';
+import { isStatusPageIpAllowed } from '@/lib/status-pages/ip-allow-gate';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -30,6 +31,7 @@ async function checkStatusPageAuthorization(
   const cookieStore = await cookies();
   const statusCookie = cookieStore.get(STATUS_SESSION_COOKIE_NAME)?.value;
   const headerStore = await headers();
+  if (!(await isStatusPageIpAllowed(statusPage.id, headerStore))) return false;
   const host =
     headerStore
       .get('x-forwarded-host')
@@ -160,6 +162,14 @@ export async function renderPublicStatusPage(slug?: string) {
     );
   }
   if (statusPage.requireAuth) {
+    if (!(await isStatusPageIpAllowed(statusPage.id, await headers()))) {
+      return (
+        <Unavailable
+          title="Access restricted"
+          message="This status page is not available from your network."
+        />
+      );
+    }
     const isAuthorized = await checkStatusPageAuthorization(statusPage, slug);
     if (!isAuthorized) {
       const headerStore = await headers();

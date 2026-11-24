@@ -36,6 +36,7 @@ const sectionFields = new Map<string, readonly string[]>([
       'privacyMode',
       'requireAuth',
       'authProvider',
+      'ipAllowList',
       'showIncidentDetails',
       'showIncidentTitles',
       'showIncidentDescriptions',

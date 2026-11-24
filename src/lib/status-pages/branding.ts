@@ -33,6 +33,7 @@ export function projectPublicBranding(value: unknown): PublicStatusBranding | nu
   const themeDensity = str(source.themeDensity);
   // Branding images must be short asset URLs, never inline data URLs in the snapshot.
   // A 2.8 MB data:image in the snapshot bloats RSC + hydration props for every visitor.
+  const colorScheme = str(source.colorScheme);
   // Uploaded logos are normalized to /api/status-assets/* via status-page asset handling;
   // any data URL that survived normalization (e.g. preview draft) is dropped here.
   const rawLogo = str(source.logoUrl) ?? str(source.logo);
@@ -62,6 +63,9 @@ export function projectPublicBranding(value: unknown): PublicStatusBranding | nu
       : {}),
     ...(layout && LAYOUTS.has(layout) ? { layout: layout as PublicStatusBranding['layout'] } : {}),
     ...(bool(source.showHeader) !== undefined ? { showHeader: bool(source.showHeader) } : {}),
+    ...(colorScheme && COLOR_SCHEMES.has(colorScheme)
+      ? { colorScheme: colorScheme as PublicStatusBranding['colorScheme'] }
+      : {}),
     ...(bool(source.showFooter) !== undefined ? { showFooter: bool(source.showFooter) } : {}),
     ...(bool(source.autoRefresh) !== undefined ? { autoRefresh: bool(source.autoRefresh) } : {}),
     ...(num(source.refreshInterval) !== undefined
@@ -90,6 +94,7 @@ export function projectPublicPresentation(
     ...(typeof branding.showFooter === 'boolean' ? { showFooter: branding.showFooter } : {}),
     ...(typeof branding.autoRefresh === 'boolean' ? { autoRefresh: branding.autoRefresh } : {}),
     ...(typeof branding.refreshInterval === 'number'
+    ...(branding.colorScheme ? { colorScheme: branding.colorScheme } : {}),
       ? { refreshInterval: branding.refreshInterval }
       : {}),
     ...(typeof branding.showApiLink === 'boolean' ? { showApiLink: branding.showApiLink } : {}),

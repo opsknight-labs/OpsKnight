@@ -1,3 +1,4 @@
+import { isStatusPageIpAllowed } from '@/lib/status-pages/ip-allow-gate';
 import prisma from '@/lib/prisma';
 import { notFound, redirect } from 'next/navigation';
 import PostmortemDetailView from '@/components/postmortem/PostmortemDetailView';
@@ -42,6 +43,7 @@ export async function renderPublicPostmortem(incidentId: string, slug?: string) 
     const cookieStore = await cookies();
     const statusCookie = cookieStore.get(STATUS_SESSION_COOKIE_NAME)?.value;
     const headerStore = await headers();
+    if (!(await isStatusPageIpAllowed(statusPage.id, headerStore))) notFound();
     const host =
       headerStore
         .get('x-forwarded-host')

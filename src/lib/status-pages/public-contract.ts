@@ -188,6 +188,10 @@ export interface PublicStatusBranding {
   showSlaMetrics?: boolean;
   /** Show service tier and owning team chips; off by default. */
   showServiceMeta?: boolean;
+  /** Visitor colour scheme; unset behaves as `light`. */
+  colorScheme?: 'light' | 'dark' | 'auto';
+  /** Public chrome language (en, es, fr, de, pt, ja); defaults to en. */
+  locale?: 'en' | 'es' | 'fr' | 'de' | 'pt' | 'ja';
 }
 
 /** Chrome and layout that the public renderer reads; kept in sync with branding. */
@@ -202,6 +206,10 @@ export interface PublicPagePresentation {
   showSlaMetrics?: boolean;
   /** Show service tier and owning team chips; off by default. */
   showServiceMeta?: boolean;
+  /** Visitor colour scheme; unset behaves as `light`. */
+  colorScheme?: 'light' | 'dark' | 'auto';
+  /** Public chrome language (en, es, fr, de, pt, ja); defaults to en. */
+  locale?: 'en' | 'es' | 'fr' | 'de' | 'pt' | 'ja';
 }
 
 /** What this page's engine supports, independent of what the admin chose to show. */
