@@ -214,7 +214,8 @@ describe('Squire action history', () => {
     const all = (await listSquireActionHistory(w.adminActor, { scope: 'everyone' }))!;
     expect(all.rows).toHaveLength(1);
     expect(all.rows[0]).toMatchObject({ who: 'Uma User', status: 'SUCCEEDED' });
-    expect(all.rows[0].message).toMatch(/^The action completed/);
+    // A catalog change is not about an incident, so the generic wording does not send them to one.
+    expect(all.rows[0].message).toBe('The action completed. Open the record to review the result.');
     expect(JSON.stringify(all)).not.toContain('Secret name');
   });
 

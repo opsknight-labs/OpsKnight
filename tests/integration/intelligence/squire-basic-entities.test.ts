@@ -250,7 +250,7 @@ describe('everyday questions in basic mode', () => {
       ['thanks!', 'THANKS'],
       ['am I on call', 'CATCH_UP', 'You are on call now for Primary Rotation'],
       ["what's my next on-call shift", 'CATCH_UP', 'Primary Rotation'],
-      ['who is on call and how many incidents are open?', 'ON_CALL', 'Incident report'],
+      ['who is on call and how many incidents are open?', 'ON_CALL', 'Open incidents right now'],
       ['tell me a joke', 'UNKNOWN'],
     ];
     for (const [message, intent, text] of cases) {

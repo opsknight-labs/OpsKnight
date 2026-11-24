@@ -221,10 +221,8 @@ export class SquireEvidenceRegistry {
       add(kind, { ...object, id: row(input).id, snapshot: result });
     switch (name) {
       case 'semantic_search_incidents':
-        rows(object.items ?? result).forEach(data => add('incident', data));
-        break;
       case 'search_incidents':
-        rows(result).forEach(data => add('incident', data));
+        rows(object.items ?? result).forEach(data => add('incident', data));
         break;
       case 'get_incident':
         add('incident', object);

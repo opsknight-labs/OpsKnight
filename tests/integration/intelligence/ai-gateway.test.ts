@@ -5,6 +5,7 @@ import {
   guardedFetchFor,
   invalidateGatewayCache,
   resolveGatewayPort,
+  REASONING_ROOM_TOKENS,
 } from '@/lib/intelligence/ai/gateway';
 import { getTodayUsage, getUsageHistory, recordAiUsage } from '@/lib/intelligence/ai/budget';
 import {
@@ -297,6 +298,9 @@ describe('gateway', () => {
     expect(result.text).toBe('Looks like a bad deploy.');
     expect(result.usage).toEqual({ inputTokens: 20, outputTokens: 9 });
     expect(result.served).toMatchObject({ model: 'test-model', fallbackDepth: 0 });
+    // The answer setting (512) plus room to think: thinking counts against the same output cap.
+    const capped = primary.requests.at(-1)!.body;
+    expect(capped.max_tokens ?? capped.max_completion_tokens).toBe(512 + REASONING_ROOM_TOKENS);
 
     expect(primary.requests).toHaveLength(1);
     expect(primary.requests[0].auth).toBe('Bearer sk-test-secret-key-value-1234567890');
@@ -446,6 +450,9 @@ describe('gateway', () => {
     invalidateGatewayCache();
     const port = (await resolveGatewayPort('INTERNAL'))!;
     await port.generate(request(admin.id));
+    // A 1,000-token day cannot hold the thinking room too: the call goes out without it, never over budget.
+    const lean = primary.requests.at(-1)!.body;
+    expect(lean.max_tokens ?? lean.max_completion_tokens).toBe(512);
     await port.generate(request(admin.id));
     await expect(port.generate(request(admin.id))).rejects.toMatchObject({ code: 'RATE_LIMITED' });
     const other = await createTestUser({ role: 'ADMIN' });

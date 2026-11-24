@@ -86,6 +86,7 @@ describe('Squire evaluation catalogue', () => {
             '$alert',
             '$teammate',
             '$runbook',
+            '$draft',
             '$diffChange',
             '$statusPage',
             '$self',

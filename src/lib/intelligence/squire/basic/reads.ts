@@ -67,11 +67,26 @@ const safe = (value: string | null | undefined, limit = 240) =>
     .replace(/[\\`*_{}\[\]()<>|#]/g, '\\$&');
 const stamp = (ctx: Context) =>
   `As of ${new Intl.DateTimeFormat('en-GB', { timeZone: ctx.timeZone, dateStyle: 'medium', timeStyle: 'short' }).format(ctx.now)} (${ctx.timeZone}). Only data you can read is included.`;
-const date = (value: Date, ctx: Context) =>
-  `${new Intl.DateTimeFormat('en-GB', { timeZone: ctx.timeZone, dateStyle: 'medium', timeStyle: 'short' }).format(value)} (${ctx.timeZone})`;
+/** A time in the person's zone, as every basic answer states it: "24 Nov 2026, 12:44 (Europe/Paris)". */
+export const formatWhen = (value: Date, timeZone: string) =>
+  `${new Intl.DateTimeFormat('en-GB', { timeZone, dateStyle: 'medium', timeStyle: 'short' }).format(value)} (${timeZone})`;
+const date = (value: Date, ctx: Context) => formatWhen(value, ctx.timeZone);
+/** The incidents a list or report counts: the query, under the person's visibility, on the page's service. */
+function incidentWhere(ctx: Context, query: BasicQuery = ctx.query): Prisma.IncidentWhereInput {
+  const where = incidentQueryWhere(
+    query,
+    ctx.actor.id,
+    incidentReadWhere(ctx.actor),
+    ctx.actor.teamIds
+  );
+  return ctx.options.contextService
+    ? { AND: [where, { service: { name: ctx.options.contextService } }] }
+    : where;
+}
 function filters(ctx: Context): string {
   return `Filters: ${
     [
+      ctx.options.contextService ? `service: ${safe(ctx.options.contextService)}` : '',
       ctx.query.mine ? 'assigned to you' : '',
       ctx.query.myTeams ? 'your teams' : '',
       ctx.query.unassigned ? 'no person or team assigned' : '',
@@ -142,12 +157,7 @@ function namedService(rows: ServiceRow[], ctx: Context): ServiceRow | undefined 
 
 async function incidentList(ctx: Context): Promise<BasicReadResult> {
   if (ctx.query.mine && !ctx.query.status) ctx.query.active = true;
-  const where = incidentQueryWhere(
-    ctx.query,
-    ctx.actor.id,
-    incidentReadWhere(ctx.actor),
-    ctx.actor.teamIds
-  );
+  const where = incidentWhere(ctx);
   const [total, rows] = await Promise.all([
     prisma.incident.count({ where }),
     prisma.incident.findMany({
@@ -289,19 +299,86 @@ async function breakdown(
   return `### By ${GROUP_LABEL[by]}\n${lines.join('\n') || 'No incidents in this window.'}`;
 }
 
+/** A minute count people can read at a glance: "42 min", "3 h 5 min". */
+export const duration = (minutes: number) => {
+  if (minutes < 90) return `${minutes.toFixed(minutes < 10 ? 1 : 0)} min`;
+  // Round once, then split, so 119.5 reads "2 h 0 min", never "1 h 60 min".
+  const whole = Math.round(minutes);
+  return `${Math.floor(whole / 60)} h ${whole % 60} min`;
+};
+
+/** "How many incidents are open?": everything unresolved now, whenever it was opened; not a created-in report. */
+async function openNow(ctx: Context): Promise<string> {
+  const where = incidentWhere(ctx);
+  const [total, statuses, top, grouped] = await Promise.all([
+    prisma.incident.count({ where }),
+    prisma.incident.groupBy({ by: ['status'], where, _count: { id: true } }),
+    prisma.incident.groupBy({
+      by: ['serviceId'],
+      where,
+      _count: { id: true },
+      orderBy: [{ _count: { id: 'desc' } }, { serviceId: 'asc' }],
+      take: LIMIT,
+    }),
+    ctx.options.groupBy && ctx.options.groupBy !== 'service'
+      ? breakdown(ctx, where, ctx.options.groupBy)
+      : Promise.resolve(null),
+  ]);
+  const visible = await prisma.service.findMany({
+    where: { AND: [serviceReadWhere(ctx.actor), { id: { in: top.map(row => row.serviceId) } }] },
+    select: { id: true, name: true, updatedAt: true },
+  });
+  visible.forEach(row =>
+    ctx.collect?.({ kind: 'service', id: row.id, label: row.name, data: row })
+  );
+  const what =
+    ctx.query.status === 'OPEN'
+      ? 'unacknowledged'
+      : ctx.query.status === 'ACKNOWLEDGED'
+        ? 'acknowledged and not yet resolved'
+        : 'unresolved (open or acknowledged)';
+  return [
+    '## Open incidents right now',
+    `**${total} incident${total === 1 ? ' is' : 's are'} ${what}**, whenever they were opened.`,
+    filters(ctx),
+    statuses.map(row => `${row.status.toLowerCase()}: ${row._count.id}`).join(' · '),
+    grouped ?? '',
+    `### Services with the most\n${
+      top
+        .flatMap(row => {
+          const service = visible.find(item => item.id === row.serviceId);
+          return service
+            ? [`- ${safe(service.name)}: ${row._count.id} — /services/${service.id}`]
+            : [];
+        })
+        .join('\n') || 'No readable service breakdown is available.'
+    }`,
+    stamp(ctx),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+const ASKED_MTTR =
+  /\b(mttr|mean time to (?:resolve|resolution|recover\w*)|average (?:time to )?resol\w*|resolution times?|time to resol\w*)\b/i;
+const ASKED_MTTA =
+  /\b(mtta|mean time to ack\w*|average (?:time to )?ack\w*|time to ack\w*|ack(?:nowledge)? times?)\b/i;
+
 async function statistics(ctx: Context): Promise<string> {
+  const metric = ASKED_MTTR.test(ctx.message) || ASKED_MTTA.test(ctx.message);
+  if (
+    !ctx.query.window &&
+    !metric &&
+    (ctx.query.active || ctx.query.status === 'OPEN' || ctx.query.status === 'ACKNOWLEDGED')
+  )
+    return openNow(ctx);
   if (!ctx.query.window)
     ctx.query.window = {
       gte: new Date(ctx.now.getTime() - 7 * 86400000),
       lt: ctx.now,
       label: 'the past 7 days',
     };
-  const where = incidentQueryWhere(
-    ctx.query,
-    ctx.actor.id,
-    incidentReadWhere(ctx.actor),
-    ctx.actor.teamIds
-  );
+  const where = incidentWhere(ctx);
   const window = ctx.query.window;
   const previous = {
     ...ctx.query,
@@ -315,14 +392,7 @@ async function statistics(ctx: Context): Promise<string> {
   const [total, statuses, prior, top, resolved, acknowledged, grouped] = await Promise.all([
     prisma.incident.count({ where }),
     prisma.incident.groupBy({ by: ['status'], where, _count: { id: true } }),
-    prisma.incident.count({
-      where: incidentQueryWhere(
-        previous,
-        ctx.actor.id,
-        incidentReadWhere(ctx.actor),
-        ctx.actor.teamIds
-      ),
-    }),
+    prisma.incident.count({ where: incidentWhere(ctx, previous) }),
     prisma.incident.groupBy({
       by: ['serviceId'],
       where,
@@ -380,8 +450,22 @@ async function statistics(ctx: Context): Promise<string> {
         ]
       : [];
   });
+  // A metric question gets its number (or why there is none) first; the report follows as context.
+  const lead = [
+    ASKED_MTTR.test(ctx.message)
+      ? average === null
+        ? `**MTTR (${window.label}): not enough data.** None of the matching incidents opened in this window has been resolved yet.`
+        : `**MTTR (${window.label}): ${duration(average)}** across ${valid.length} resolved incident${valid.length === 1 ? '' : 's'}.`
+      : '',
+    ASKED_MTTA.test(ctx.message)
+      ? mtta === null
+        ? `**MTTA (${window.label}): not enough data.** None of the matching incidents opened in this window has been acknowledged yet.`
+        : `**MTTA (${window.label}): ${duration(mtta)}** across ${acked.length} acknowledged incident${acked.length === 1 ? '' : 's'}.`
+      : '',
+  ].filter(Boolean);
   return [
     `## Incident report — ${window.label}`,
+    ...lead,
     filters(ctx),
     `**${total} incident${total === 1 ? '' : 's'} ${ctx.query.dateField === 'resolvedAt' ? 'resolved' : ctx.query.dateField === 'acknowledgedAt' ? 'acknowledged' : 'created'}** matching your filters; previous equal-length period: **${prior}** (${total - prior >= 0 ? '+' : ''}${total - prior}).`,
     statuses.map(row => `${row.status.toLowerCase()}: ${row._count.id}`).join(' · ') ||
@@ -403,7 +487,7 @@ async function statistics(ctx: Context): Promise<string> {
 
 async function serviceOverview(ctx: Context): Promise<string> {
   const inventory =
-    (!ctx.query.terms.length && !ctx.incident) ||
+    (!ctx.query.terms.length && !ctx.incident && !ctx.options.contextService) ||
     /\b(list|show|all|how many|count)\b.*\bservices?\b/i.test(ctx.message);
   const rows = await services(ctx, !inventory);
   if (inventory) {

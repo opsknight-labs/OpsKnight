@@ -35,11 +35,12 @@ export interface ActionHistoryPage {
 const resultSchema = z.object({ ok: z.boolean(), message: z.string().max(2_000) });
 
 /** The same per-status wording outcomes.ts falls back to when no result message can be read. */
-function genericMessage(status: SquireActionStatus): string {
-  if (status === 'SUCCEEDED')
-    return 'The action completed. Open the incident to review the result.';
+function genericMessage(status: SquireActionStatus, onIncident: boolean): string {
+  // A catalog change (a runbook, a schedule) is not about an incident: say "the record" there.
+  const record = onIncident ? 'the incident' : 'the record';
+  if (status === 'SUCCEEDED') return `The action completed. Open ${record} to review the result.`;
   if (status === 'FAILED')
-    return 'The action did not complete. Review the incident before requesting a new suggestion.';
+    return `The action did not complete. Review ${record} before requesting a new suggestion.`;
   if (status === 'UNKNOWN') return UNKNOWN_ACTION_MESSAGE;
   return 'This action has not reported a result yet. Check its result; do not submit it again.';
 }
@@ -199,7 +200,7 @@ export async function listSquireActionHistory(
       message:
         (receipt.userId === actor.id
           ? await resultMessage(receipt.resultEncrypted, rowStatus)
-          : null) ?? genericMessage(rowStatus),
+          : null) ?? genericMessage(rowStatus, incidentsOf(receipt).length > 0),
       ...(receipt.incidentId ? { href: `/incidents/${receipt.incidentId}` } : {}),
     });
   }

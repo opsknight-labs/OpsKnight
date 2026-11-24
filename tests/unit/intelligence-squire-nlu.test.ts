@@ -4,13 +4,21 @@ import {
   correctSpelling,
   editDistance,
   extractSlots,
+  fixedRequest,
   normalizeMessage,
   parseSlashCommand,
 } from '@/lib/intelligence/squire/basic/nlu';
 import { keywords, parseBasicQuery, resolveDayKey } from '@/lib/intelligence/squire/basic/query';
 import { suggestFollowUps } from '@/lib/intelligence/squire/basic/suggestions';
 import { productGuidance } from '@/lib/intelligence/squire/basic/guidance';
-import { routeIntent, stripGreeting, type SquireIntent } from '@/lib/intelligence/squire/intents';
+import {
+  FIX_QUESTION,
+  NAMED_INCIDENT,
+  RUNBOOK_FROM_FIX,
+  routeIntent,
+  stripGreeting,
+  type SquireIntent,
+} from '@/lib/intelligence/squire/intents';
 
 type Case = {
   text: string;
@@ -772,5 +780,61 @@ describe('adversarial review regressions', () => {
     ];
     expect(chips).not.toContain('Incidents since those changes');
     for (const chip of chips) expect(keywords(chip), chip).toEqual([]);
+  });
+});
+
+describe('answer-quality routing', () => {
+  const classify = (text: string, onIncident = false) =>
+    classifyIntent(normalizeMessage(text), onIncident).intent;
+
+  it('reads a polite or misspelt request as the action, not a question', () => {
+    const slots = extractSlots(
+      normalizeMessage('can you resolve this incident?'),
+      'can you resolve this icnident?'
+    );
+    expect(slots.action).toBe('resolve');
+    // The misspelt object is not taken as the resolution note.
+    expect(slots.actionText).toBeUndefined();
+    expect(extractSlots('set priority p1', 'set priority P1').action).toBe('priority');
+    expect(extractSlots('how do i resolve this?', 'how do I resolve this?').action).toBeUndefined();
+  });
+
+  it('gives an incident briefing for "what is the issue" phrasings on an incident', () => {
+    expect(classify('what thnissue in short', true)).toBe('INCIDENT_SUMMARY');
+    expect(classify('whats the issue why we got incident', true)).toBe('INCIDENT_SUMMARY');
+    expect(classify('why did this break?', true)).toBe('CAUSES');
+  });
+
+  it('reads "how is <service> doing" as that service, and "status pages" as guidance', () => {
+    expect(classify('how is checkout api doing')).toBe('SERVICE_HEALTH');
+    expect(classify('is anything wrong with Checkout API?')).toBe('SERVICE_HEALTH');
+    expect(keywords(normalizeMessage('how is checkout api doing'))).toEqual(['checkout', 'api']);
+    expect(classify('status pages')).toBe('GUIDANCE');
+  });
+
+  it('spots requests with a fixed reply', () => {
+    expect(fixedRequest('what is the weather today', false)).toBe('off_topic');
+    expect(fixedRequest('write me a poem', false)).toBe('off_topic');
+    expect(fixedRequest('write me a summary of open incidents', false)).toBeNull();
+    expect(fixedRequest('delete the github alert service', false)).toBe('destructive');
+    expect(fixedRequest('create an incident for checkout api: payments failing', false)).toBe(
+      'create_incident'
+    );
+    expect(fixedRequest('open incidents', false)).toBeNull();
+    expect(fixedRequest('how do i add a service', false)).toBe('how_to');
+    expect(fixedRequest('how do i fix this', true)).toBeNull();
+  });
+
+  it('recognises fix, fix-to-runbook and named-incident questions', () => {
+    expect(FIX_QUESTION.test('how was this fixed?')).toBe(true);
+    expect(FIX_QUESTION.test('what fixed it')).toBe(true);
+    expect(FIX_QUESTION.test('how do we fix this')).toBe(false);
+    expect(RUNBOOK_FROM_FIX.test('turn this fix into a runbook')).toBe(true);
+    expect(RUNBOOK_FROM_FIX.test('which runbook fits')).toBe(false);
+    expect(NAMED_INCIDENT.test('why did the checkout latency incident happen')).toBe(true);
+    expect(keywords('why did the checkout latency incident happen')).toEqual([
+      'checkout',
+      'latency',
+    ]);
   });
 });

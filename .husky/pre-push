@@ -69,5 +69,34 @@ if [ "$OUTDATED" -gt 0 ]; then
   echo "   ⚠️  $OUTDATED package(s) have updates available"
 fi
 
+# Database checks: pull requests no longer run them in CI (Actions volume), so they run here
+# whenever the push changes something a database test can see (same rule as CI's change detection).
+echo ""
+echo "🗄️  Database checks..."
+BASE=$(git merge-base HEAD origin/develop 2>/dev/null || git merge-base HEAD origin/main 2>/dev/null || true)
+BACKEND=true
+if [ -n "$BASE" ] && CHANGED=$(git diff --name-only "$BASE" HEAD) && [ -n "$CHANGED" ]; then
+  BACKEND=false
+  while IFS= read -r f; do
+    case "$f" in
+      docs/*|plans/*|artifacts/*|reports/*|public/*|*.md|.github/*) ;;
+      src/components/*|tests/components/*|*.css|*.svg|*.png|*.jpg|*.jpeg|*.webp|*.gif|*.woff|*.woff2) ;;
+      *) BACKEND=true ;;
+    esac
+  done <<EOF_CHANGED
+$CHANGED
+EOF_CHANGED
+fi
+if [ "$BACKEND" = false ]; then
+  echo "   ⏭️  No backend changes since $(git rev-parse --short "$BASE"); skipped."
+elif [ "${SKIP_DB_TESTS:-}" = 1 ]; then
+  echo "   ⚠️  SKIP_DB_TESTS=1: database checks skipped. CI does not run them on pull requests."
+else
+  bash scripts/local-db-tests.sh || {
+    echo "❌ Database checks failed. Fix them before pushing (SKIP_DB_TESTS=1 skips once)."
+    exit 1
+  }
+fi
+
 echo ""
 echo "✅ Pre-push checks passed! Your code is ready to push."

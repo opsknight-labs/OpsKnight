@@ -14,7 +14,7 @@ const STOP = new Set(
 );
 /** Words that only shape the question (time, filler), never a title or service name to filter on. */
 const FILLER = new Set(
-  'monday tuesday wednesday thursday friday saturday sunday mon tue tues wed thu thur thurs fri sat sun january february march april may june july august september october november december jan feb mar apr jun jul aug sep sept oct nov dec night tonight weekend morning evening afternoon anything something going issues issue problems problem errors error only them previous break like seen before started fits give sev severity urgent'.split(
+  'monday tuesday wednesday thursday friday saturday sunday mon tue tues wed thu thur thurs fri sat sun january february march april may june july august september october november december jan feb mar apr jun jul aug sep sept oct nov dec night tonight weekend morning evening afternoon anything something going issues issue problems problem errors error only them previous break like seen before started fits give sev severity urgent doing wrong here why happen'.split(
     ' '
   )
 );

@@ -180,13 +180,12 @@ async function sendHeadsUp(
 ): Promise<boolean> {
   const shiftKey = shiftKeyOf(shift.scheduleId, shift.start);
   // Claimed before sending: a heads-up may be lost to a crash, but is never sent twice.
-  const claim = await prisma.squireHeadsUp
-    .create({ data: { userId: shift.userId, shiftKey }, select: { id: true } })
-    .catch(error => {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
-        return null;
-      throw error;
-    });
+  // ON CONFLICT DO NOTHING: a shift already claimed is the normal case on every later run, not an error to log.
+  const [claim] = await prisma.squireHeadsUp.createManyAndReturn({
+    data: [{ userId: shift.userId, shiftKey }],
+    skipDuplicates: true,
+    select: { id: true },
+  });
   if (!claim) return false;
   const actor = await resolveUserActor(shift.userId);
   if (!actor || actor.status !== 'ACTIVE') return false;

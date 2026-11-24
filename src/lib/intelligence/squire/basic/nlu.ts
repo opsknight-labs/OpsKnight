@@ -636,7 +636,15 @@ export interface Slots {
   more: boolean;
   /** Explicit action verbs that may become a proposal in basic mode. */
   action?:
-    'acknowledge' | 'resolve' | 'note' | 'reassign' | 'snooze' | 'link' | 'escalate' | 'urgency';
+    | 'acknowledge'
+    | 'resolve'
+    | 'note'
+    | 'reassign'
+    | 'snooze'
+    | 'link'
+    | 'escalate'
+    | 'urgency'
+    | 'priority';
   actionText?: string;
   /** Snooze duration in minutes when an action is snooze. */
   snoozeMinutes?: number;
@@ -655,6 +663,12 @@ const EXTENDED_ACTION = new RegExp(
 const ACTION = new RegExp(
   `${ACTION_LEAD}(?:(ack(?:nowledge)?)|(resolve|close|mark (?:as )?resolved)|(add (?:a )?note|note|comment|log)|(assign|reassign|hand(?: it)? to)|(snooze|pause|silence|mute)|(link|mark (?:as )?related|relate))\\b`
 );
+/** Setting priority has no card; it is answered with a pointer to the incident page. */
+const PRIORITY_ACTION = new RegExp(
+  `${ACTION_LEAD}(?:(?:set|change|make|raise|lower|bump|update)(?: the| this| its)?(?: incident)? priority|(?:make|mark|set)(?: it| this)?(?: as| to)? p[0-5])\\b`
+);
+/** "Can you resolve this?" is a request, not a question about resolving. */
+const POLITE_REQUEST = /^(?:please |can you |could you |would you |will you )/;
 const ACTION_OBJECT = /^\s*(?:this incident|the incident|this|it|that|incident(?!s))\b/;
 /** A verb followed by these starts a list or a question ("close incidents older than…", "resolve time"). */
 const NOT_AN_ACTION =
@@ -701,7 +715,11 @@ export function extractSlots(normalized: string, original: string): Slots {
     /^(?:(?:ok|okay|sure|yes|yeah|please) )?(?:(?:show|see|give|load|display|get)(?: me)? )?(?:more|next(?: \d{1,2})?|next page|continue|the rest|others)(?: please| results| rows)?[\s!.]*$/.test(
       text
     );
-  if (QUESTION.test(text)) return slots;
+  if (QUESTION.test(text) && !POLITE_REQUEST.test(text)) return slots;
+  if (PRIORITY_ACTION.test(text)) {
+    slots.action = 'priority';
+    return slots;
+  }
   const extended = text.match(EXTENDED_ACTION);
   const action = extended ? null : text.match(ACTION);
   const verb = extended ?? action;
@@ -734,6 +752,11 @@ export function extractSlots(normalized: string, original: string): Slots {
       /^(?:ack(?:nowledge)?|resolve|close|mark (?:as )?resolved|add (?:a )?note|note|comment|log|assign|reassign|hand(?: it)? to|snooze|pause|silence|mute|link|mark (?:as )?related|relate)\b\s*(?:this incident|this|it|the incident|incident)?\s*(?:[:\-–]\s*|with\s+|as\s+|to\s+|for\s+|saying\s+)?/i,
       ''
     )
+    // A misspelt object ("resolve this icnident?") is not the resolution note or note text.
+    .replace(/^(\p{L}{5,12})[\s?!.]*$/u, (all, word: string) =>
+      editDistance(word.toLowerCase(), 'incident') <= 2 ? '' : all
+    )
+    .replace(/^[\s?!.]+$/, '')
     .trim();
   if (rest) slots.actionText = rest.slice(0, 1000);
   if (slots.action === 'reassign') {
@@ -774,4 +797,30 @@ export function extractSlots(normalized: string, original: string): Slots {
 export function weekdayIndex(name: string): number {
   const prefix = name.slice(0, 3);
   return WEEKDAYS.findIndex(day => day.startsWith(prefix));
+}
+
+/** Requests basic mode answers with a fixed, honest reply instead of a data read. */
+export type FixedRequest = 'off_topic' | 'destructive' | 'create_incident' | 'how_to';
+const OFF_TOPIC =
+  /\b(weather|forecast|poems?|poetry|haiku|limerick|jokes?|songs?|lyrics|recipes?|horoscope|movies?|football|cricket|bitcoin|stock prices?)\b|^(?:write|compose|sing|tell) me (?:a|an|some)\b/;
+const IN_SCOPE =
+  /\b(incidents?|alerts?|services?|runbooks?|postmortems?|on-call|schedules?|teams?|escalation|status pages?|opsknight|squire|outages?|deploy\w*|changes?|summary|note|report)\b/;
+const REQUEST_LEAD = '^(?:please |can you |could you |would you |go ahead and )?';
+const DESTRUCTIVE = new RegExp(
+  `${REQUEST_LEAD}(?:delete|remove|archive|destroy|purge|wipe|deactivate|disable|erase)\\b`
+);
+const CREATE_INCIDENT = new RegExp(
+  `${REQUEST_LEAD}(?:(?:create|raise|declare|file|log|trigger|open|start) (?:a |an )(?:new )?|create (?:new )?)incident\\b`
+);
+const HOW_TO =
+  /^(?:how (?:do|can|should|would) (?:i|we|you)|how to|where (?:do|can) i|is it possible to)\b/;
+
+/** Which fixed reply a normalised message needs, or null when it is a data question. */
+export function fixedRequest(text: string, onIncident: boolean): FixedRequest | null {
+  if (OFF_TOPIC.test(text) && !IN_SCOPE.test(text)) return 'off_topic';
+  if (CREATE_INCIDENT.test(text)) return 'create_incident';
+  if (DESTRUCTIVE.test(text)) return 'destructive';
+  // "How do I fix this?" on an incident asks about that incident, not the product docs.
+  if (HOW_TO.test(text) && !(onIncident && /\b(this|it|that)\b/.test(text))) return 'how_to';
+  return null;
 }

@@ -6,6 +6,8 @@ import { decrypt, encrypt } from '@/lib/encryption';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { runbookReadWhere } from '@/lib/authorization-filters';
+import { EditDraftV2Schema, editableDraftResult } from '@/lib/api-v2/runbook-authoring';
 import { isMcpApprovalGated } from '@/lib/mcp/catalog';
 import { validateOperationArgs } from '@/lib/mcp/core/execution';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
@@ -417,22 +419,31 @@ export const runbookFromFixInput = z
   .strict();
 type FixStep = z.infer<typeof fixStepSchema>;
 
-/** Timeline entries that say what someone did, not lifecycle bookkeeping. */
-const FIX_EVENT_TYPES = ['COMMENT', 'RUNBOOK_COMPLETED', 'MANUAL_RESOLVED'] as const;
+/** How the resolve command stores the resolution note (lifecycle.ts). */
+const RESOLUTION_PREFIX = 'Resolution: ';
 
 /**
  * Manual runbook steps for how a resolved incident the person can read was fixed: check the symptom, then
- * the notes and Squire actions in the order they happened, then the resolution. Null when not resolved.
+ * the notes, completed runbooks and Squire actions in the order they happened, then the resolution note as
+ * "confirm the fix holds". Note text is what people wrote (timeline COMMENT events only say "Note added by
+ * X"); it is third-party text, so the card is marked as such. Null when not resolved.
  */
 export async function draftRunbookFromFix(actor: AuthorizationActor, incidentId: string) {
   const incident = await readIncidentForActor(actor, incidentId);
   if (!incident || incident.status !== 'RESOLVED') return null;
-  const [events, receipts] = await Promise.all([
+  const [notes, events, receipts] = await Promise.all([
+    // The latest notes (the resolution note is among the last), put back in time order below.
+    prisma.incidentNote.findMany({
+      where: { incidentId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 20,
+      select: { content: true, createdAt: true },
+    }),
     prisma.incidentEvent.findMany({
-      where: { incidentId, type: { in: [...FIX_EVENT_TYPES] } },
+      where: { incidentId, type: 'RUNBOOK_COMPLETED' },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: 20,
-      select: { type: true, message: true, createdAt: true },
+      select: { message: true, createdAt: true },
     }),
     prisma.squireActionReceipt.findMany({
       where: { status: 'SUCCEEDED', OR: [{ incidentId }, { incidentIds: { has: incidentId } }] },
@@ -441,12 +452,20 @@ export async function draftRunbookFromFix(actor: AuthorizationActor, incidentId:
       select: { action: true, createdAt: true },
     }),
   ]);
+  notes.reverse();
   const text = (message: string) => redactSecrets(message).trim().slice(0, 2_000);
-  const resolution = events.findLast(event => event.type === 'MANUAL_RESOLVED');
-  const done = [
-    ...events
-      .filter(event => event.type !== 'MANUAL_RESOLVED')
-      .map(event => ({ at: event.createdAt, name: text(event.message).slice(0, 200) })),
+  const resolution = notes.findLast(note => note.content.startsWith(RESOLUTION_PREFIX));
+  // A note's first line names the step; a longer note keeps its whole text as the description.
+  const fromText = (at: Date, message: string) => {
+    const body = text(message);
+    const name = body.split('\n')[0].trim().slice(0, 200);
+    return { at, name, ...(body !== name ? { description: body } : {}) };
+  };
+  const done: Array<{ at: Date; name: string; description?: string }> = [
+    ...notes
+      .filter(note => note !== resolution)
+      .map(note => fromText(note.createdAt, note.content)),
+    ...events.map(event => fromText(event.createdAt, event.message)),
     // Only the action's label: the confirmed arguments and outcome text stay with the person who confirmed.
     ...receipts
       .filter(receipt => !/resolve_?incident$/i.test(receipt.action))
@@ -462,11 +481,12 @@ export async function draftRunbookFromFix(actor: AuthorizationActor, incidentId:
         `Check for what was seen in "${incident.title}" on ${incident.serviceName}.`
       ),
     },
-    ...done.map(({ name }) => ({ name })),
+    ...done.map(({ name, description }) => ({ name, ...(description ? { description } : {}) })),
     {
       name: 'Confirm the fix holds',
       description: resolution
-        ? text(resolution.message)
+        ? text(resolution.content.slice(RESOLUTION_PREFIX.length)) ||
+          'Check the symptom is gone before resolving.'
         : 'Check the symptom is gone before resolving.',
     },
   ];
@@ -537,6 +557,8 @@ export async function buildRunbookFromFixProposal(
     title: 'Turn this fix into a runbook',
     detail: `Creates an unpublished runbook draft with ${steps.length} manual steps from how this incident was fixed. Review and publish it from Runbooks.`,
     confirmLabel: 'Create draft runbook',
+    // Steps quote notes people wrote.
+    untrustedContext: true,
     preview: steps.slice(0, 10).map((step, index) => ({
       label: `Step ${index + 1}`,
       value: [step.name, step.description].filter(Boolean).join(': ').slice(0, 1_000),
@@ -547,5 +569,157 @@ export async function buildRunbookFromFixProposal(
 /** The runbook card offered after a resolve, or undefined when there is none to offer. */
 export async function offerRunbookFromFix(actor: AuthorizationActor, incidentId: string) {
   const card = await buildRunbookFromFixProposal(actor, { incidentId }).catch(() => null);
-  return card && 'token' in card ? card : undefined;
+  // Only with a real fix step between the generic first and last ones: a stale alert closed with just a
+  // resolution note gets no runbook offer.
+  return card && 'token' in card && (card.preview?.length ?? 0) > 2 ? card : undefined;
+}
+
+// ── Runbook draft steps ───────────────────────────────────────────────────────────────────────────────
+
+export const PROPOSE_RUNBOOK_STEPS_TOOL: AiToolDefinition = {
+  name: 'propose_runbook_steps',
+  description:
+    'Suggest steps for a runbook\'s unpublished draft (not propose_operation). Pass { runbookId, steps: [{ name, description }], mode }: "append" (default) adds them after the draft\'s steps, "replace" makes them the whole list, keeping an existing step of the same name. Squire reads the draft itself; the user confirms a card, and nothing runs or is published.',
+  kind: 'PROPOSE_WRITE',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      runbookId: { type: 'string', maxLength: 64 },
+      steps: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 20,
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', maxLength: 200 },
+            description: { type: 'string', maxLength: 2000 },
+          },
+          required: ['name'],
+          additionalProperties: false,
+        },
+      },
+      mode: { type: 'string', enum: ['append', 'replace'] },
+    },
+    required: ['runbookId', 'steps'],
+    additionalProperties: false,
+  },
+};
+
+export const runbookStepsInput = z
+  .object({
+    runbookId: z.string().min(1).max(64),
+    steps: z.array(fixStepSchema).min(1).max(20),
+    mode: z.enum(['append', 'replace']).default('append'),
+  })
+  .strict();
+
+type DraftStep = { key: string; name: string; description?: string } & Record<string, unknown>;
+
+/**
+ * The "change the draft's steps" card: the runbook's current unpublished draft with the suggested steps,
+ * saved through the catalog's own updateRunbookDraft (same role check, sealed card, receipt and audit as any
+ * change). Read here, not trusted from the model: the draft, its revision (If-Match) and its inputs. Kept
+ * steps carry no configuration on the card; the route restores it by step key (preserveConfiguration).
+ * Returns a refusal in words (naming the role it needs, or where to create a draft) when there is no card.
+ */
+export async function buildRunbookStepsProposal(
+  actor: AuthorizationActor,
+  rawInput: unknown,
+  now: Date = new Date()
+): Promise<(SquireProposal & { href?: string }) | { refusal: string }> {
+  const operation = squireOperation('updateRunbookDraft');
+  if (operation && !mayCall(actor, operation))
+    return {
+      refusal: `Changing runbook steps needs ${rolesAllowing(actor, operation)}. Ask someone with that role, or an administrator to change your role. Nothing was prepared.`,
+    };
+  const parsed = runbookStepsInput.safeParse(rawInput);
+  let readable: ReturnType<typeof runbookReadWhere> | null = null;
+  try {
+    readable = runbookReadWhere(actor);
+  } catch {
+    readable = null;
+  }
+  const runbook =
+    operation && parsed.success && readable
+      ? await prisma.runbook.findFirst({
+          where: { AND: [{ id: parsed.data.runbookId, archivedAt: null }, readable] },
+          select: {
+            id: true,
+            name: true,
+            draftVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
+          },
+        })
+      : null;
+  if (!operation || !parsed.success || !runbook)
+    return { refusal: 'Only a runbook you can open can be changed. Nothing was prepared.' };
+  const href = `/runbooks/${runbook.id}`;
+  const draft = runbook.draftVersion;
+  if (!draft)
+    return {
+      refusal: `“${runbook.name}” has no unpublished draft to change. Create the next editable draft in the runbook editor (${href}), then ask again. Nothing was prepared.`,
+    };
+  // The draft as its editor API hands it out: every step's configuration emptied, restored by key on save.
+  const editable = editableDraftResult(draft).data.editable;
+  const current = ((editable.definition as { steps?: unknown })?.steps ?? []) as DraftStep[];
+  const used = new Set(current.map(step => step.key));
+  const nextKey = () => {
+    let n = used.size + 1;
+    while (used.has(`step_${n}`)) n += 1;
+    used.add(`step_${n}`);
+    return `step_${n}`;
+  };
+  const byName = new Map(current.map(step => [step.name.trim().toLowerCase(), step]));
+  const suggested = parsed.data.steps.map((step): DraftStep => {
+    const kept = parsed.data.mode === 'replace' && byName.get(step.name.toLowerCase());
+    if (kept) return { ...kept, ...(step.description ? { description: step.description } : {}) };
+    return {
+      key: nextKey(),
+      name: step.name,
+      ...(step.description ? { description: step.description } : {}),
+      type: 'MANUAL',
+      riskClass: 'READ_ONLY',
+      config: {},
+    };
+  });
+  const steps = parsed.data.mode === 'replace' ? suggested : [...current, ...suggested];
+  const body = {
+    definition: { ...(editable.definition as object), steps },
+    inputs: editable.inputs,
+    preserveConfiguration: true,
+  };
+  // What the route itself checks, so the card can never save an invalid draft.
+  if (!EditDraftV2Schema.safeParse(body).success)
+    return {
+      refusal: `Those steps would not make a valid draft for “${runbook.name}”. Edit it in the runbook editor (${href}). Nothing was prepared.`,
+    };
+  const card = await buildOperationProposal(
+    actor,
+    {
+      operationId: 'updateRunbookDraft',
+      args: {
+        path: { id: runbook.id, versionId: draft.id },
+        body,
+        ifMatch: String(draft.draftRevision),
+      },
+    },
+    now,
+    { target: null }
+  );
+  if (!card)
+    return {
+      refusal:
+        'Runbook changes are not available right now: an administrator may have turned off "Extended assistant actions". Nothing was prepared.',
+    };
+  return {
+    ...card,
+    title: `Update the draft steps of “${runbook.name}”`.slice(0, 120),
+    detail: `Saves ${steps.length} steps to the unpublished draft (v${draft.version}). Nothing runs and the published version is unchanged; review and publish it from the runbook editor.`,
+    confirmLabel: 'Save draft steps',
+    href,
+    preview: steps.slice(0, 10).map((step, index) => ({
+      label: `Step ${index + 1}`,
+      value: [step.name, step.description].filter(Boolean).join(' — ').slice(0, 1_000),
+    })),
+  };
 }

@@ -128,7 +128,9 @@ describe('earlier-turn summary in AI conversations', () => {
     // Same summary block, and every turn replayed before still opens the request the same way.
     expect(after[1]).toEqual(before[1]);
     expect(after.slice(0, before.length - 1)).toEqual(before.slice(0, -1));
-    expect(after.at(-2)?.content).toBe('Question number 8 about the checkout pool');
+    // The recorded answer has no completion record, so it is replayed as a placeholder, keeping the turn order.
+    expect(after.at(-3)?.content).toBe('Question number 8 about the checkout pool');
+    expect(after.at(-2)?.content).toMatch(/^\[Earlier answer not included/);
   });
 
   it('still answers in one model call when a person is limited to one request per minute', async () => {

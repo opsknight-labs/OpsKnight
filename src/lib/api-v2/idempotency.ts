@@ -46,7 +46,10 @@ export async function runV2IdempotentMutation<T>(
       });
     });
   } catch (error) {
-    if (!isUniqueConstraintError(error)) throw error;
+    // A retry with the same key and If-Match can lose the race to its own first attempt: it waits on the
+    // row lock, then sees the revision that attempt just wrote. That attempt's receipt is the answer.
+    const precondition = error instanceof AppError && error.code === 'PRECONDITION_FAILED';
+    if (!isUniqueConstraintError(error) && !precondition) throw error;
     // Concurrent requests can race on a business unique key or on the durable
     // idempotency receipt itself. Re-read in a fresh snapshot: if the same key
     // committed, return that receipt; otherwise report a resource conflict.
@@ -54,6 +57,8 @@ export async function runV2IdempotentMutation<T>(
       readIdempotentOperationResult<T>(tx, { scope, context, payload, onReplay })
     );
     if (replay) return replay;
+    // A real stale revision (another key changed it) stays a 412.
+    if (precondition) throw error;
     throw new AppError({
       code: 'RESOURCE_CONFLICT',
       userMessage: 'The requested resource conflicts with a concurrent change.',

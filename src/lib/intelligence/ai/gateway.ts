@@ -257,6 +257,8 @@ export function capOutput(value: unknown): unknown {
 
 /** One slow lookup (a stuck backend, a heavy query) must not hold the whole answer. */
 export const TOOL_DEADLINE_MS = 20_000;
+/** Output room for a model's own thinking on top of the answer-length setting (see answerCap). */
+export const REASONING_ROOM_TOKENS = 8_192;
 const TOOL_TIMED_OUT =
   'This lookup took too long and was stopped. Answer from what you already have and say this one timed out.';
 
@@ -345,6 +347,9 @@ export function toToolSet(
 /** The caller still checks the card (permissions, current state), so the model is not told it was shown. */
 export const PROPOSAL_ACKNOWLEDGEMENT =
   'Sent as a suggestion card: it is shown to the user if it is still valid, and happens only if they confirm it. Do not say it has been done or shown.';
+/** The nudge for the one extra call after a tool loop that ended without a word (answerFromReads). */
+export const ANSWER_FROM_READS =
+  'Answer my question now from what the tools returned above, without calling any more tools. If they did not return what is needed, say so plainly.';
 export const PROPOSAL_INVALID =
   'That suggestion was not valid (check the required fields and ids) and nothing was shown. Correct it, or tell the user what you would suggest instead.';
 
@@ -605,6 +610,19 @@ class GatewayPort implements LanguageModelPort {
   /** Requests admitted past the degradation point: small model, shorter answers. */
   private readonly degraded = new WeakSet<AiGenerateRequest>();
 
+  /**
+   * The output cap sent for an answer: its length setting plus room to think. Current models think by default
+   * and count it against the same cap, so a 1,024-token answer setting could be spent entirely on thinking after
+   * a tool step, ending the answer with no text. The hold reserves this cap (see hold).
+   */
+  private answerCap(request: AiGenerateRequest): number {
+    const answer = this.outputLimit(request, this.data.settings.maxOutputTokens);
+    return this.lean.has(request) ? answer : answer + REASONING_ROOM_TOKENS;
+  }
+
+  /** Requests whose budget covered only the answer: they are sent without thinking room (see hold). */
+  private readonly lean = new WeakSet<AiGenerateRequest>();
+
   /** Answer-length ceiling for this request; halved while the day's spend is past the degradation point. */
   private outputLimit(request: AiGenerateRequest, ceiling: number): number {
     const limit = Math.min(request.maxOutputTokens ?? this.data.settings.maxOutputTokens, ceiling);
@@ -629,9 +647,33 @@ class GatewayPort implements LanguageModelPort {
     structured: boolean,
     extend?: AiReservation
   ): Promise<AiReservation | null> {
-    const output = structured
-      ? this.outputLimit(request, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
-      : this.outputLimit(request, this.data.settings.maxOutputTokens);
+    // The hold covers everything the call may send back (answer plus thinking room), so a hard budget is never
+    // overshot. When only the answer fits, the first hold is retried without the room and the call is sent
+    // without it (`lean`), so a small budget still answers; a top-up is never retried smaller.
+    const roomy = !structured && !this.lean.has(request);
+    if (roomy && !extend) {
+      const full = await this.holdTokens(request, provider, input, this.answerCap(request));
+      if (full) return full;
+      this.lean.add(request);
+    }
+    return this.holdTokens(
+      request,
+      provider,
+      input,
+      structured
+        ? this.outputLimit(request, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
+        : this.answerCap(request),
+      extend
+    );
+  }
+
+  private async holdTokens(
+    request: AiGenerateRequest,
+    provider: GatewayProvider,
+    input: number,
+    output: number,
+    extend?: AiReservation
+  ): Promise<AiReservation | null> {
     const inputEstimate =
       input +
       estimateTokens(
@@ -727,6 +769,78 @@ class GatewayPort implements LanguageModelPort {
       if (!funded) loop.budgetLimited = true;
       return false;
     };
+  }
+
+  /**
+   * One more call, with no tool allowed, when a tool loop read something but ended without a word (an empty
+   * final step, a stop mid tool call): the person gets an answer from what was read instead of a fallback.
+   * Topped up like any further step; a refused top-up or a failed call returns nothing more, never throws
+   * (except on cancellation). Returns the extra text and its usage, or null when it did not run.
+   */
+  private async *answerFromReads(
+    request: AiGenerateRequest,
+    provider: GatewayProvider,
+    reservation: AiReservation,
+    loop: LoopState,
+    transcript: ModelMessage[]
+  ): AsyncGenerator<AiStreamEvent, { text: string; usage: AiUsage } | null> {
+    const messages = [
+      // An empty assistant turn (the step that said nothing) is refused mid-conversation by some providers.
+      ...transcript.filter(
+        message =>
+          message.role !== 'assistant' ||
+          (typeof message.content === 'string' ? message.content.trim() : message.content.length)
+      ),
+      { role: 'user', content: ANSWER_FROM_READS },
+    ] as ModelMessage[];
+    const sent = estimateTokens(JSON.stringify(messages));
+    const funded = await this.hold(
+      request,
+      provider,
+      stepInputEstimate(sent, loop.lastPrompt, loop.caching || Boolean(CACHE_HINTS[provider.kind])),
+      false,
+      reservation
+    ).catch(() => null);
+    if (!funded) return null;
+    // The transcript holds tool calls, so the tools are declared (providers require it), without executors.
+    const tools = Object.fromEntries(
+      Object.entries(toToolSet(request.tools, provider.kind) ?? {}).map(([name, definition]) => [
+        name,
+        { ...definition, execute: undefined },
+      ])
+    ) as ToolSet;
+    let text = '';
+    try {
+      const run = streamText({
+        onError: () => undefined,
+        model: await buildModel(provider),
+        messages: withRollingCacheBreakpoint(messages, provider.kind),
+        tools,
+        toolChoice: 'none',
+        maxOutputTokens: this.answerCap(request),
+        abortSignal: this.signalFor(request),
+        timeout: timeouts(this.data.settings.requestTimeoutMs, 1, true),
+        maxRetries: 0,
+      });
+      for await (const part of run.fullStream) {
+        if (part.type === 'text-delta') {
+          text += part.text;
+          yield { type: 'text-delta', delta: part.text };
+        } else if (part.type === 'error') {
+          throw part.error instanceof Error ? part.error : new Error('stream error');
+        } else if (part.type === 'abort') {
+          throw new DOMException('AI request timed out', 'TimeoutError');
+        }
+      }
+      return { text, usage: usageOf(await run.totalUsage) };
+    } catch (error) {
+      if (request.context.signal?.aborted) throw error;
+      logger.warn('[AI] Answer from reads failed', {
+        providerKind: provider.kind,
+        error: error instanceof Error ? error.name : 'error',
+      });
+      return { text, usage: { inputTokens: sent, outputTokens: estimateTokens(text) } };
+    }
   }
 
   /**
@@ -959,7 +1073,7 @@ class GatewayPort implements LanguageModelPort {
               stopWhen: this.stopper(request, provider, reservation, loop),
               prepareStep: this.stepper(provider, request, loop),
               onStepFinish: step => recordStep(loop, step),
-              maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
+              maxOutputTokens: this.answerCap(request),
               abortSignal: this.signalFor(request),
               timeout: timeouts(this.data.settings.requestTimeoutMs, request.maxSteps, false),
               maxRetries: 1,
@@ -1080,7 +1194,7 @@ class GatewayPort implements LanguageModelPort {
             recordStep(loop, step);
             pendingText = '';
           },
-          maxOutputTokens: this.outputLimit(request, this.data.settings.maxOutputTokens),
+          maxOutputTokens: this.answerCap(request),
           abortSignal: this.signalFor(request),
           timeout: timeouts(this.data.settings.requestTimeoutMs, request.maxSteps, true),
           maxRetries: 0,
@@ -1112,11 +1226,32 @@ class GatewayPort implements LanguageModelPort {
         }
         breakers.recordSuccess(provider.id);
         const steps = await run.steps;
-        const totalUsage = await run.totalUsage;
+        let usage = usageOf(await run.totalUsage);
+        const toolCalls = proposedCalls(steps, request.tools);
+        if (!text.trim()) {
+          // Never the person's text: enough to tell an empty final step from a cut-off or a stop without words.
+          logger.warn('[AI] Tool loop finished without an answer', {
+            capability: request.context.capability,
+            providerKind: provider.kind,
+            finishReason: steps.at(-1)?.finishReason ?? 'none',
+            steps: steps.length,
+            toolsRan: loop.toolsRan,
+          });
+          if (loop.toolsRan && toolCalls.length === 0) {
+            const extra = yield* this.answerFromReads(request, provider, reservation, loop, [
+              ...toMessages(request, provider.kind),
+              ...(await run.response).messages,
+            ]);
+            if (extra) {
+              text += extra.text;
+              usage = addUsage(usage, extra.usage);
+            }
+          }
+        }
         const result: AiGenerateResult = {
           text,
-          toolCalls: proposedCalls(steps, request.tools),
-          usage: usageOf(totalUsage),
+          toolCalls,
+          usage,
           served: {
             providerId: provider.id,
             model: provider.model,
