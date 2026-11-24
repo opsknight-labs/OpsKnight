@@ -76,8 +76,11 @@ jobs:
           export GIT_LFS_SKIP_PUSH=1
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             git push --force "$remote" 'refs/tags/*:refs/tags/*'
-          else
+          elif [[ "$GITHUB_REF" == refs/heads/develop ]]; then
             git push --force "$remote" "${GITHUB_SHA}:refs/heads/main" 'refs/tags/*:refs/tags/*'
+          else
+            echo "::error::Refusing to mirror ${GITHUB_REF}; only develop and release tags are mirrored."
+            exit 1
           fi
           # GitHub registers workflows added by this push a few seconds later; disabling
           # right away missed them, so wait first.
