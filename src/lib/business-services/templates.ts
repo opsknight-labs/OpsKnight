@@ -218,23 +218,24 @@ export async function deleteBusinessServiceTemplate(
 }
 
 /** Template defaults as a business-service input; explicit overrides win. Pure. */
+type TemplateDefaults = {
+  description?: string | null;
+  criticality?: string | null;
+  sloTarget?: number | null;
+  sloWindowDays?: number;
+  quorumPartialPct?: number | null;
+  quorumMajorPct?: number | null;
+  tags?: readonly string[];
+  environment?: string | null;
+  lifecycle?: string;
+  links?: readonly unknown[] | null;
+  impactMinUrgency?: string | null;
+  impactMaxPriority?: string | null;
+  ownerTeamId?: string | null;
+};
+
 export function templateToInput(
-  template: Pick<
-    z.output<typeof BusinessServiceTemplateInputSchema>,
-    | 'description'
-    | 'criticality'
-    | 'sloTarget'
-    | 'sloWindowDays'
-    | 'quorumPartialPct'
-    | 'quorumMajorPct'
-    | 'tags'
-    | 'environment'
-    | 'lifecycle'
-    | 'links'
-    | 'impactMinUrgency'
-    | 'impactMaxPriority'
-    | 'ownerTeamId'
-  >,
+  template: TemplateDefaults,
   overrides: Partial<BusinessServiceInput> & { name: string }
 ): BusinessServiceInput {
   const defaults = Object.fromEntries(
@@ -271,7 +272,7 @@ export async function createBusinessServiceFromTemplate(
   client?: Prisma.TransactionClient
 ) {
   assertCanManageBusinessServices(context.actor);
-  const db = client ?? prisma;
+  const db: Prisma.TransactionClient = client ?? prisma;
   const template = await db.businessServiceTemplate.findUnique({
     where: { id: templateId },
     select: TEMPLATE_SELECT,
