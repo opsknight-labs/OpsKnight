@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import UserAvatar from '@/components/UserAvatar';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/shadcn/hover-card';
+import { cn } from '@/lib/utils';
+import { CHIP_CLASS } from '../field-styles';
 import type { PresenceViewer } from '@/lib/incidents/presence';
 import { heartbeatIncidentPresence } from '../presence-actions';
 
 const BEAT_MS = 30_000;
 /** Never beat more often than this, however often the tab flips visible. */
 const MIN_GAP_MS = 20_000;
-const SHOWN = 4;
-const NAMED = 10;
+const SHOWN = 3;
 
 /**
  * Who else has this incident open right now. Heartbeats only while the tab is visible; each heartbeat
@@ -23,6 +25,8 @@ export default function IncidentViewers({
   currentUserId: string;
 }) {
   const [viewers, setViewers] = useState<PresenceViewer[]>([]);
+  // Controlled so a tap opens it too (touch has no hover, and iOS does not focus buttons on tap).
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -58,32 +62,57 @@ export default function IncidentViewers({
 
   const others = viewers.filter(viewer => viewer.id !== currentUserId);
   if (!others.length) return null;
-  const names = others.slice(0, NAMED).map(viewer => viewer.name || 'Someone');
-  const label = `${names.join(', ')}${others.length > NAMED ? ` and ${others.length - NAMED} more` : ''} viewing now`;
-  const extra = others.length - SHOWN;
+  const nameOf = (viewer: PresenceViewer) => viewer.name?.trim() || 'Someone';
+  const short =
+    others.length === 1
+      ? `${nameOf(others[0]).split(/\s+/)[0]} viewing`
+      : `${others.length} viewing`;
+  const label = `Viewing now: ${others.map(nameOf).join(', ')}`;
 
   return (
-    <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title={label}>
-      <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-ok" />
-      <span aria-hidden className="flex -space-x-1.5">
-        {others.slice(0, SHOWN).map(viewer => (
-          <UserAvatar
-            key={viewer.id}
-            userId={viewer.id}
-            name={viewer.name}
-            avatarUrl={viewer.avatarUrl}
-            size="xs"
-            aria-hidden
-            className="ring-2 ring-background"
-          />
-        ))}
-      </span>
-      {extra > 0 && (
-        <span aria-hidden className="text-2xs font-medium tabular-nums">
-          +{extra}
-        </span>
-      )}
-      <span className="sr-only">{label}</span>
-    </p>
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={150} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          onClick={() => setOpen(value => !value)}
+          className={cn(CHIP_CLASS, 'cursor-default text-muted-foreground hover:bg-muted/60')}
+        >
+          <span aria-hidden className="flex -space-x-1.5">
+            {others.slice(0, SHOWN).map(viewer => (
+              <UserAvatar
+                key={viewer.id}
+                userId={viewer.id}
+                name={viewer.name}
+                avatarUrl={viewer.avatarUrl}
+                size="xs"
+                className="ring-2 ring-background"
+              />
+            ))}
+          </span>
+          <span aria-hidden className="max-w-28 truncate text-foreground">
+            {short}
+          </span>
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent align="end" className="w-64 max-w-[calc(100vw-2rem)] p-0">
+        <p className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+          Viewing now · {others.length}
+        </p>
+        <ul className="max-h-64 overflow-y-auto py-1">
+          {others.map(viewer => (
+            <li key={viewer.id} className="flex items-center gap-2 px-3 py-1.5">
+              <UserAvatar
+                userId={viewer.id}
+                name={viewer.name}
+                avatarUrl={viewer.avatarUrl}
+                size="xs"
+              />
+              <span className="min-w-0 truncate text-sm text-foreground">{nameOf(viewer)}</span>
+            </li>
+          ))}
+        </ul>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
