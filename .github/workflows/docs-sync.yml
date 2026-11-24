@@ -12,10 +12,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   sync:
     if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip docs-sync]') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout app repo
         uses: actions/checkout@v7

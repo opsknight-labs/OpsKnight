@@ -9,9 +9,14 @@ permissions:
   issues: write
   pull-requests: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   stale:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/stale@v11
         with:

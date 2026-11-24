@@ -26,6 +26,7 @@ jobs:
   codeql:
     name: CodeQL
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     steps:
       - name: Checkout repository
@@ -54,6 +55,7 @@ jobs:
   eslint:
     name: ESLint Security
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     steps:
       - name: Checkout repository
@@ -133,6 +135,7 @@ jobs:
     needs: [codeql, eslint]
     if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Verify SAST jobs
         env:
@@ -177,6 +180,7 @@ jobs:
   sca:
     name: SCA (Dependencies & Containers)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     steps:
       - name: Checkout repository
@@ -317,6 +321,7 @@ jobs:
   secrets:
     name: Secret Scanning (TruffleHog)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     steps:
       - name: Checkout repository
@@ -333,6 +338,7 @@ jobs:
   iac:
     name: IaC Security (Checkov)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     steps:
       - name: Checkout repository
@@ -369,6 +375,7 @@ jobs:
     name: DAST (OWASP ZAP)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -399,6 +406,7 @@ jobs:
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [sast, sca, iac, secrets, dast]
     if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     steps:

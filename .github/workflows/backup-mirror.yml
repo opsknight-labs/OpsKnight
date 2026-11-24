@@ -23,7 +23,8 @@ env:
 
 jobs:
   mirror:
-    if: github.repository == 'opsknight-labs/OpsKnight'
+    # A manual run from another branch would force-push that branch over the backup's main.
+    if: github.repository == 'opsknight-labs/OpsKnight' && (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/'))
     # Shows the staging build as a deployment; no approval (develop is staging).
     environment:
       name: staging

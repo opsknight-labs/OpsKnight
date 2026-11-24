@@ -252,6 +252,7 @@ jobs:
   e2e-summary:
     name: Browser E2E summary
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [build, auth-e2e, mobile-e2e, dashboard-e2e]
     if: always() && needs.build.result != 'skipped'
     steps:
