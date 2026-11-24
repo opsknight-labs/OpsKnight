@@ -27,9 +27,11 @@ export default async function SquireActionHistoryPage({
   await requirePageAccess('/settings/intelligence/ai/actions');
   const params = await searchParams;
   const status = one(params?.status);
+  const incident = one(params?.incident);
   const page = await listSquireActionHistory(await getCurrentAuthorizationActor(), {
     scope: one(params?.scope),
     status,
+    incident,
   });
 
   return (
@@ -52,6 +54,7 @@ export default async function SquireActionHistoryPage({
           contentClassName="p-0"
           action={
             <form method="get" className="flex flex-wrap items-end gap-2">
+              {incident && <input type="hidden" name="incident" value={incident} />}
               {page.canSeeEveryone && (
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   Show
@@ -77,9 +80,10 @@ export default async function SquireActionHistoryPage({
           }
         >
           <SquireActionHistory
-            key={`${page.scope}:${status ?? ''}`}
+            key={`${page.scope}:${status ?? ''}:${incident ?? ''}`}
             initial={page}
             status={status}
+            incident={incident}
             loadMore={loadMoreSquireActions}
           />
         </SettingsSection>

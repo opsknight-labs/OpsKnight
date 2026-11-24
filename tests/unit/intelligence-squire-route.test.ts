@@ -13,9 +13,19 @@ vi.mock('@/lib/intelligence/conversations/store', () => ({
   recordExchange: store.record,
 }));
 
-const background = vi.hoisted(() => ({ handedOff: vi.fn() }));
+const background = vi.hoisted(() => ({
+  handedOff: vi.fn(),
+  complete: vi.fn(async () => undefined),
+  live: new Map<string, (handOff: Promise<string | null>) => void>(),
+}));
 vi.mock('@/lib/intelligence/conversations/background', () => ({
+  BACKGROUND_LIMITS: { runMs: 50 },
+  completeTurn: background.complete,
   hasBackgroundHandOff: background.handedOff,
+  liveTurnKey: (userId: string, request: unknown) => `${userId}:${JSON.stringify(request)}`,
+  liveTurns: background.live,
+  runningBackgroundTurns: new Map(),
+  titleOf: (question: string) => question,
 }));
 vi.mock('@/lib/intelligence/conversations/background-run', () => ({
   startBackgroundTurns: vi.fn(async () => undefined),
@@ -48,6 +58,8 @@ beforeEach(() => {
   store.status.mockReset().mockResolvedValue({ enabled: false, retentionDays: 30 });
   store.record.mockReset().mockResolvedValue('conv1');
   background.handedOff.mockReset().mockResolvedValue(false);
+  background.complete.mockClear();
+  background.live.clear();
   incidents.read
     .mockReset()
     .mockImplementation(async (_actor: unknown, id: string) => (id === 'inc1' ? { id } : null));
@@ -279,6 +291,36 @@ describe('POST /api/intelligence/squire', () => {
     );
   });
 
+  it('keeps a turn handed to the background going after the browser leaves, up to the time limit', async () => {
+    store.status.mockResolvedValue({ enabled: true, retentionDays: 30 });
+    turns.run.mockImplementation(async function* () {
+      yield { type: 'delta', text: 'partial answer' };
+      // Never ends and ignores the abort: only the deadline stops it.
+      await new Promise(() => undefined);
+    });
+    const response = await POST(make({ message: 'hello', conversationId: 'c1' }));
+    const reader = response.body!.getReader();
+    await reader.read();
+    const adopt = [...background.live.values()].at(-1)!;
+    adopt(Promise.resolve('bg1'));
+    await reader.cancel();
+    await vi.waitFor(() =>
+      expect(background.complete).toHaveBeenCalledWith('bg1', 'u1', 'hello', {
+        conversationId: 'conv1',
+        failure: 'TIMED_OUT',
+      })
+    );
+    expect(store.record).toHaveBeenCalledTimes(1);
+    expect(store.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        answer: 'partial answer',
+        turn: expect.objectContaining({ completion: 'INTERRUPTED' }),
+      })
+    );
+    expect(background.handedOff).not.toHaveBeenCalled();
+    expect(background.live.size).toBe(0);
+  });
+
   it('pings while a step is slow so the client can tell slow from stalled', async () => {
     vi.useFakeTimers();
     try {
@@ -325,6 +367,7 @@ describe('POST /api/intelligence/squire', () => {
       conversationId: 'conv0',
       incidentId: 'inc1',
       question: 'hello',
+      replaceLastExchange: false,
       answer: 'hi',
       dataClass: undefined,
       turn: {

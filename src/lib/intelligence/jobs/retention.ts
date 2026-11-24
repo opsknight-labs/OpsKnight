@@ -255,17 +255,28 @@ export async function purgeExpiredIntelligenceData(
     );
     // Cached AI answers carry their own expiry; expired ones are useless and go first-come.
     const aiResults = await step('AiResultCache', tx => purgeExpiredAiResults(tx, { limit }));
-    const actionReceipts = await step('SquireActionReceipt', tx =>
-      tx.$executeRaw(Prisma.sql`
+    // Squire action history is kept 30 days; the confirmed request (arguments, free text) only one.
+    const actionReceipts = await step('SquireActionReceipt', async tx => {
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "SquireActionReceipt" SET "intentEncrypted" = NULL WHERE id IN (
+          SELECT id FROM "SquireActionReceipt"
+          WHERE "intentEncrypted" IS NOT NULL AND "createdAt" < ${cutoff(1)} LIMIT ${limit})`);
+      return tx.$executeRaw(Prisma.sql`
         DELETE FROM "SquireActionReceipt" WHERE id IN (
-          SELECT id FROM "SquireActionReceipt" WHERE "createdAt" < ${cutoff(1)} LIMIT ${limit})`)
-    );
+          SELECT id FROM "SquireActionReceipt" WHERE "createdAt" < ${cutoff(30)} LIMIT ${limit})`);
+    });
     // Squire answers finished in the background: a day in the launcher's list, then gone (their encrypted
     // question with them). The background sweep does the same while intelligence is unconfigured.
     const backgroundTurns = await step('SquireBackgroundTurn', tx =>
       tx.$executeRaw(Prisma.sql`
         DELETE FROM "SquireBackgroundTurn" WHERE id IN (
           SELECT id FROM "SquireBackgroundTurn" WHERE "createdAt" < ${cutoff(1)} LIMIT ${limit})`)
+    );
+    // Sent heads-ups only dedupe a shift that is about to start; a week covers any shift.
+    await step('SquireHeadsUp', tx =>
+      tx.$executeRaw(Prisma.sql`
+        DELETE FROM "SquireHeadsUp" WHERE id IN (
+          SELECT id FROM "SquireHeadsUp" WHERE "deliveredAt" < ${cutoff(7)} LIMIT ${limit})`)
     );
     const dependencyObservations = await step('DependencyObservationBucket', tx =>
       tx.$executeRaw(Prisma.sql`

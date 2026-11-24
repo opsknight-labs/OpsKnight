@@ -394,7 +394,7 @@ it('commits an encrypted note outcome atomically and recovers it after the propo
   const receipt = await db.squireActionReceipt.findUniqueOrThrow({
     where: { id: proposal!.receiptId! },
   });
-  expect(receipt.status).toBe('SUCCEEDED');
+  expect(receipt).toMatchObject({ status: 'SUCCEEDED', incidentIds: [mine.id] });
   expect(receipt.intentEncrypted).not.toContain('recovery-private-canary-41');
   expect(receipt.resultEncrypted).not.toContain('Note added.');
   const future = new Date(Date.now() + 20 * 60_000);

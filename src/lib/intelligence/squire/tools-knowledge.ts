@@ -3,9 +3,15 @@ import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import type { AiDataClass, AiToolDefinition } from '../ai/port';
-import { KNOWLEDGE_SOURCE_KINDS, validateServiceFact } from '../memory/contract';
+import {
+  KNOWLEDGE_LIMITS,
+  KNOWLEDGE_SOURCE_KINDS,
+  validateServiceFact,
+  type KnowledgeSourceKindValue,
+} from '../memory/contract';
 import { canCurateServiceKnowledge } from '../memory/facts';
 import { searchKnowledgeForActor } from '../memory/search';
+import { searchDocumentsForActor } from '../knowledge/doc-sources/service';
 import { getSquireMemorySettings } from '../memory/settings';
 
 /**
@@ -19,10 +25,13 @@ export const KNOWLEDGE_TOOL_DATA_CLASS: Readonly<Record<string, AiDataClass>> = 
   search_knowledge: 'PERSONAL',
 };
 
+/** The organisation's own documentation (KnowledgeDocSource) is searched beside the knowledge memory. */
+const SEARCH_KINDS = [...KNOWLEDGE_SOURCE_KINDS, 'DOCUMENT'] as const;
+
 const inputSchema = z
   .object({
     query: z.string().trim().min(2).max(300),
-    kinds: z.array(z.enum(KNOWLEDGE_SOURCE_KINDS)).max(5).optional(),
+    kinds: z.array(z.enum(SEARCH_KINDS)).max(6).optional(),
     serviceId: z.string().trim().min(1).max(64).optional(),
   })
   .strict();
@@ -35,7 +44,7 @@ export function buildKnowledgeTools(
     {
       name: 'search_knowledge',
       description:
-        'Search what the organisation already learned: postmortems, resolution notes, incident notes, runbook steps and confirmed facts about services. Returns at most 8 short passages, each with the record it came from, so you can cite it. Use it before guessing a fix.',
+        'Search what the organisation already learned: postmortems, resolution notes, incident notes, runbook steps, confirmed facts about services and its own documentation. Returns at most 8 short passages, each with the record it came from (for a document, its path and link), so you can cite it. Use it before guessing a fix.',
       kind: 'READ',
       dataClass: options.personal ? 'PERSONAL' : 'INTERNAL',
       inputSchema: {
@@ -44,8 +53,8 @@ export function buildKnowledgeTools(
           query: { type: 'string', minLength: 2, maxLength: 300 },
           kinds: {
             type: 'array',
-            maxItems: 5,
-            items: { type: 'string', enum: [...KNOWLEDGE_SOURCE_KINDS] },
+            maxItems: 6,
+            items: { type: 'string', enum: [...SEARCH_KINDS] },
           },
           serviceId: { type: 'string', minLength: 1, maxLength: 64 },
         },
@@ -55,16 +64,33 @@ export function buildKnowledgeTools(
       execute: async input => {
         const parsed = inputSchema.safeParse(input);
         if (!parsed.success) return { error: 'Invalid input' };
-        const result = await searchKnowledgeForActor(actor, {
-          query: parsed.data.query,
-          kinds: parsed.data.kinds,
-          serviceId: parsed.data.serviceId,
-          personal: options.personal,
-          signal: options.signal,
-        });
+        const { kinds, query } = parsed.data;
+        const memoryKinds = kinds?.filter(
+          (kind): kind is KnowledgeSourceKindValue => kind !== 'DOCUMENT'
+        );
+        const [result, documents] = await Promise.all([
+          memoryKinds?.length === 0
+            ? { items: [], coverage: 'LEXICAL' as const }
+            : searchKnowledgeForActor(actor, {
+                query,
+                kinds: memoryKinds,
+                serviceId: parsed.data.serviceId,
+                personal: options.personal,
+                signal: options.signal,
+              }),
+          kinds && !kinds.includes('DOCUMENT') ? [] : searchDocumentsForActor(actor, query),
+        ]);
         if (result.coverage === 'OFF')
           return { items: [], note: 'The knowledge index is turned off.' };
-        return result;
+        // Interleaved rather than sorted: fused semantic scores and lexical document scores are not comparable.
+        const items: Array<(typeof result.items)[number] | (typeof documents)[number]> = [];
+        for (let index = 0; index < Math.max(result.items.length, documents.length); index += 1) {
+          const memory = result.items.at(index);
+          const document = documents.at(index);
+          if (memory) items.push(memory);
+          if (document) items.push(document);
+        }
+        return { ...result, items: items.slice(0, KNOWLEDGE_LIMITS.resultLimit) };
       },
     },
   ];

@@ -26,7 +26,13 @@ import { Button } from '@/components/ui/shadcn/button';
 import type { StoredTurnEnvelope } from '@/lib/intelligence/conversations/contract';
 import type { SquireProposalView } from './SquireProposalCard';
 
-import { mergeChart, mergeInvestigationStep, type Turn, type Citation } from './chat-types';
+import {
+  mergeChart,
+  mergeInvestigationStep,
+  parseTrace,
+  type Turn,
+  type Citation,
+} from './chat-types';
 import {
   describeSquireContext,
   incidentIdFromPath,
@@ -564,6 +570,8 @@ export default function SquireLauncher({
             ? { mentions: sentMentions.map(({ kind, id }) => ({ kind, id })) }
             : {}),
           ...(conversationId && !fork ? { conversationId } : {}),
+          // Only the latest answer can be retried; its new answer replaces that saved exchange.
+          ...(retry ? { replaceLastExchange: true } : {}),
         };
         // Bound the serialized UTF-8 request, including integrity proofs and multibyte text.
         while (
@@ -638,6 +646,7 @@ export default function SquireLauncher({
             items?: unknown[];
             step?: unknown;
             chart?: unknown;
+            trace?: unknown;
           };
           try {
             event = JSON.parse(line);
@@ -701,6 +710,8 @@ export default function SquireLauncher({
             }));
           else if (event.type === 'citations' && Array.isArray(event.items))
             patch(turn => ({ ...turn, citations: event.items as Citation[] }));
+          else if (event.type === 'trace')
+            patch(turn => ({ ...turn, trace: parseTrace(event.trace) }));
           else if (event.type === 'suggestions' && Array.isArray(event.items))
             patch(turn => ({
               ...turn,
@@ -1026,6 +1037,7 @@ export default function SquireLauncher({
               : {}),
             citations: envelope?.citations,
             charts: envelope?.charts,
+            trace: parseTrace(envelope?.trace),
             savedActions: envelope?.actions,
             notice:
               [...new Set([...(envelope?.notices ?? []), ...(notice ? [notice] : [])])].join(' ') ||

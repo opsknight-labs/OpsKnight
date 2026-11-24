@@ -21,6 +21,7 @@ export type SquireIntent =
   | 'ON_CALL'
   | 'INCIDENT_SUMMARY'
   | 'CATCH_UP'
+  | 'IDENTITY'
   | 'UNKNOWN';
 
 const INCIDENT_PATTERNS: ReadonlyArray<readonly [SquireIntent, RegExp]> = [
@@ -88,6 +89,10 @@ export function stripGreeting(
   return { greeted, rest: message.slice(at).trim() };
 }
 
+/** A question about the asker's own on-call shift, answered from their catch-up. */
+export const SHIFT_QUESTION =
+  /\b(am i (?:on-call|on call|oncall)|when am i (?:next )?(?:on-call|on call|oncall)|my (?:next )?(?:on-call |on call |oncall )?shift)\b/;
+
 /** Small, bounded intent rules select fresh actor-scoped reads; user text never supplies facts. */
 export function routeIntent(message: string, onIncident: boolean): SquireIntent {
   const text = message.toLowerCase().trim();
@@ -99,6 +104,22 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
     )
   )
     return 'HELP';
+  // About the person asking: "who am I", "what's my role", "what permissions do I have", "list my teams".
+  if (
+    /\b(who am i|what (?:is|are) my (?:role|permissions?|access|access level|teams?)|what (?:permissions?|access|roles?) do i have|(?:which|what) teams? (?:am i|do i belong)|am i an? (?:admin|administrator|responder|auditor|stakeholder))\b|^(?:please )?(?:list|show|list me|show me) my teams[\s?!.]*$/.test(
+      text
+    )
+  )
+    return 'IDENTITY';
+  // The person's own shift ("am I on call?", "when is my next shift?") is part of their catch-up.
+  if (SHIFT_QUESTION.test(text)) return 'CATCH_UP';
+  // Definitions of severity labels and response metrics: "what does SEV1 mean", "what is MTTR".
+  if (
+    /^what (?:is|does) (?:a |an )?(?:sev[0-5]|sev [0-5]|p[0-5]|mttr|mtta)(?: mean| stand for)?[\s?!.]*$/.test(
+      text
+    )
+  )
+    return 'GUIDANCE';
   // About the incident on screen: its state ("is it resolved?") and who moved it ("who resolved it").
   if (
     onIncident &&
@@ -115,7 +136,7 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
     /\b(how (do|can|to|does|should|long)|what (is|are|does)|explain|where (do|can)|difference between|guide|instructions|configure|set up|enable|disable|understand|^does)\b/.test(
       text
     ) &&
-    /\b(opsknight|acknowledge|ack|create|assign|escalate|escalation(?: polic(?:y|ies))?|snooze|resolve|runbooks?|on[- ]?call|schedules?|rotation|overrides?|handoff|urgency|priority|severity|integration|dedup|webhook|notifications?|status pages?|postmortem|history|retention|privacy|permission|roles?|sso|scim|oidc|mcp|api key|basic mode|squire|ai|provider|quota|budget|timezone|time zone)\b/.test(
+    /\b(opsknight|acknowledge|ack|create|assign|escalate|escalation(?: polic(?:y|ies))?|snooze|resolve|runbooks?|on[- ]?call|schedules?|rotation|overrides?|handoff|urgency|priority|severity|integration|dedup|webhook|notifications?|status pages?|postmortem|history|retention|privacy|permission|roles?|sso|scim|oidc|mcp|api key|basic mode|squire|ai|provider|quota|budget|timezone|time zone|sev[0-5]|sev [0-5]|silenc\w*|mute|suppress\w*|maintenance)\b/.test(
       text
     ) &&
     !/\b(health|status|owner|owns|on[- ]?call|assigned|assignee|priority|severity|urgency|history|timeline|escalation polic(?:y|ies)) (of|for|to|on) (?!(?:an?|incidents|each|every|new)\b)/.test(
@@ -125,6 +146,12 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
       text
     ) &&
     !/^(?:please )?(?:help me |can you |could you )?(?:find|search|show|list)\b/.test(text)
+  )
+    return 'GUIDANCE';
+  if (
+    /^what (?:is|are) (?:a |an )?(?:services?|teams?|incidents?|alerts?|schedules?|runbooks?|postmortems?|escalation polic(?:y|ies)|status pages?|overrides?|integrations?|change events?|business services?)[\s?!.]*$/.test(
+      text
+    )
   )
     return 'GUIDANCE';
   // A shift hand-off for the person asking: "catch me up", "what did I miss", "since my last shift".

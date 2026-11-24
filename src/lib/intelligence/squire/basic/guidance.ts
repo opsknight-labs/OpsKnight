@@ -13,16 +13,34 @@ const GUIDES: ReadonlyArray<{ match: RegExp; title: string; answer: string }> = 
       'Open an incident and review its service, impact and assignee. Acknowledge it when a responder takes ownership; acknowledgement does not mean the service recovered. Resolve it after recovery is verified and record what fixed it. The incident page applies your permissions and the normal domain checks. Basic mode does not change incident state.',
   },
   {
-    match: /\b(urgency|severity|priority)\b/,
+    match: /\b(urgency|severity|priority|sev[0-5]|sev [0-5]|p[0-5])\b/,
     title: 'Urgency and priority',
     answer:
-      'Urgency uses HIGH, MEDIUM and LOW. Priority is a separate classification and can be set by policy. Review the incident’s recorded impact and your organization’s policy before changing either. A high-urgency incident is not proof of a confirmed root cause.',
+      'Urgency uses HIGH, MEDIUM and LOW. Priority is a separate classification and can be set by policy. Labels such as SEV1 or P1 are your organization’s own scale: the lower the number, the more severe, and SEV1/P1 usually means a critical, customer-facing outage. Review the incident’s recorded impact and your organization’s policy before changing either. A high-urgency incident is not proof of a confirmed root cause.',
   },
   {
     match: /\b((create|trigger).*incident|new incident)\b/,
     title: 'Create an incident',
     answer:
       'Open Incidents and choose Create incident. Select the affected service, describe the symptom and impact, and review urgency and ownership. Integrations can also create incidents through the event ingestion API. Basic mode can find existing incidents but does not create or page one.',
+  },
+  {
+    match: /\b(mttr|mtta|mean time to (?:resolve|acknowledge|resolution|ack))\b/,
+    title: 'MTTA and MTTR',
+    answer:
+      'MTTA (mean time to acknowledge) is the average time from an incident opening to a responder acknowledging it. MTTR (mean time to resolve) is the average time from opening to resolution. Both are measured over a reporting window on incidents you can see. Ask “What is our MTTR this week?” for live numbers.',
+  },
+  {
+    match: /\b(services?|business services?)\b/,
+    title: 'Services',
+    answer:
+      'A service is something your teams operate, such as an API, a worker or a database. Alerts and incidents are raised against a service, and its owning team, escalation policy and integrations decide who is paged. Open Services to see ownership, routing, dependencies and active incidents. Ask “Who owns Checkout API?” for a live answer.',
+  },
+  {
+    match: /\b(maintenance|silenc\w*|mute|suppress\w*)\b/,
+    title: 'Maintenance windows',
+    answer:
+      'Open Services, select the service and use the Maintenance tab to schedule a window for planned work such as a deploy. While it is active, a new alert for the service opens a Suppressed incident: nobody is paged and the SLA clock is paused. Incidents that were already open keep escalating. End the window early with End now when the work finishes.',
   },
   {
     match: /\b(snooze)\b/,

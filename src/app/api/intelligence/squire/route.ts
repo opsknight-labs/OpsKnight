@@ -4,7 +4,15 @@ import type { SquireEvent } from '@/lib/intelligence/squire/contract';
 import { readSquireRequest } from '@/lib/intelligence/squire/request';
 import { getHistoryStatus } from '@/lib/intelligence/conversations/store';
 import { SquireTurnRecorder } from '@/lib/intelligence/conversations/turn-record';
-import { hasBackgroundHandOff } from '@/lib/intelligence/conversations/background';
+import {
+  BACKGROUND_LIMITS,
+  completeTurn,
+  hasBackgroundHandOff,
+  liveTurnKey,
+  liveTurns,
+  runningBackgroundTurns,
+  titleOf,
+} from '@/lib/intelligence/conversations/background';
 import { startBackgroundTurns } from '@/lib/intelligence/conversations/background-run';
 import { readIncidentForActor } from '@/lib/intelligence/squire/deterministic';
 import { logger } from '@/lib/logger';
@@ -30,7 +38,29 @@ export async function POST(request: NextRequest) {
 
   const startedAt = new Date();
   const controller = new AbortController();
-  request.signal.addEventListener('abort', () => controller.abort(), { once: true });
+  /** Set when the person hands this turn to the background: it then runs to the end here, without them. */
+  let handOff: Promise<string | null> | null = null;
+  let timedOut = false;
+  let ended!: () => void;
+  const done = new Promise<void>(resolve => (ended = resolve));
+  const liveKey = liveTurnKey(actor.id, body);
+  const adopt = (row: Promise<string | null>) => {
+    handOff = row;
+    void row.then(id => id && runningBackgroundTurns.set(id, { controller, done }));
+  };
+  const unlist = () => {
+    if (liveTurns.get(liveKey) === adopt) liveTurns.delete(liveKey);
+  };
+  liveTurns.set(liveKey, adopt);
+  request.signal.addEventListener(
+    'abort',
+    () => {
+      if (handOff) return;
+      unlist();
+      controller.abort();
+    },
+    { once: true }
+  );
   const encoder = new TextEncoder();
   const events = streamSquire(actor, body, controller.signal);
   const turn = new SquireTurnRecorder();
@@ -85,11 +115,71 @@ export async function POST(request: NextRequest) {
   const PING = encoder.encode('{"type":"ping"}\n');
   let pending: ReturnType<typeof events.next> | null = null;
   let finishing: Promise<SquireEvent | null> | null = null;
+  let cancelled = false;
+
+  /** Saves the turn once, however it ended, and settles the background answer it was handed to. */
+  const end = (completion?: 'COMPLETED' | 'INTERRUPTED' | 'CANCELLED') =>
+    (finishing ??= (completion === 'CANCELLED' ? Promise.resolve(null) : save(completion)).then(
+      async event => {
+        unlist();
+        const id = await handOff;
+        if (id) {
+          const conversationId = event?.type === 'conversation' ? event.id : null;
+          await completeTurn(id, actor.id, titleOf(body.message), {
+            conversationId,
+            failure: timedOut
+              ? 'TIMED_OUT'
+              : conversationId && turn.completed && !turn.failed
+                ? undefined
+                : 'NO_ANSWER',
+          }).catch(() => undefined);
+          runningBackgroundTurns.delete(id);
+        }
+        ended();
+        return event;
+      }
+    ));
+
+  /** The person left after handing the turn over: finish it here, within the background time limit. */
+  const drain = async (inFlight: typeof pending) => {
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, BACKGROUND_LIMITS.runMs);
+    // A turn that ignores the abort still ends at the deadline.
+    const stopped = new Promise<IteratorReturnResult<undefined>>(resolve => {
+      const stop = () => resolve({ done: true, value: undefined });
+      if (controller.signal.aborted) stop();
+      controller.signal.addEventListener('abort', stop, { once: true });
+    });
+    try {
+      for (let next = inFlight ?? events.next(); ; next = events.next()) {
+        const result = await Promise.race([next, stopped]);
+        if (result.done) break;
+        turn.observe(result.value);
+      }
+    } catch {
+      turn.failed = true;
+    } finally {
+      clearTimeout(deadline);
+    }
+    if (controller.signal.aborted) void events.return(undefined).catch(() => undefined);
+    // Aborted without the deadline: the person cancelled the background answer, so nothing is saved.
+    await end(
+      controller.signal.aborted && !timedOut
+        ? 'CANCELLED'
+        : turn.completed && !turn.failed && !timedOut
+          ? 'COMPLETED'
+          : 'INTERRUPTED'
+    );
+  };
+
   const stream = new ReadableStream<Uint8Array>({
     async pull(streamController) {
       for (;;) {
         if (finishing) {
           const saved = await orPing(finishing);
+          if (cancelled) return;
           if (saved === 'ping') {
             streamController.enqueue(PING);
             return;
@@ -100,13 +190,15 @@ export async function POST(request: NextRequest) {
         }
         pending ??= events.next();
         const next = await orPing(pending);
+        // Cancelled meanwhile: the event belongs to whoever finishes the turn now.
+        if (cancelled) return;
         if (next === 'ping') {
           streamController.enqueue(PING);
           return;
         }
         pending = null;
         if (next.done) {
-          finishing = save();
+          end();
           continue;
         }
         const event = next.value;
@@ -116,6 +208,12 @@ export async function POST(request: NextRequest) {
       }
     },
     async cancel() {
+      cancelled = true;
+      if (handOff) {
+        void drain(pending).catch(() => undefined);
+        return;
+      }
+      unlist();
       controller.abort();
       // Let the turn finish its own cleanup (usage accounting, spans) instead of being abandoned mid-await.
       await events.return(undefined).catch(() => undefined);

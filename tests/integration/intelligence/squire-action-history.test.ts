@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { encrypt } from '@/lib/encryption';
 import { listSquireActionHistory } from '@/lib/intelligence/squire/actions/history';
+import { readSquireActionOutcome } from '@/lib/intelligence/squire/actions/outcomes';
 import {
   createTestIncident,
   createTestService,
@@ -16,6 +17,7 @@ async function receipt(input: {
   userId: string;
   action: string;
   incidentId?: string;
+  incidentIds?: string[];
   status?: string;
   result?: unknown;
   intent?: unknown;
@@ -27,6 +29,7 @@ async function receipt(input: {
       userId: input.userId,
       action: input.action,
       incidentId: input.incidentId ?? null,
+      incidentIds: input.incidentIds ?? [],
       status: input.status ?? 'SUCCEEDED',
       resultEncrypted: input.result ? await encrypt(JSON.stringify(input.result)) : null,
       intentEncrypted: input.intent ? await encrypt(JSON.stringify(input.intent)) : null,
@@ -133,6 +136,41 @@ describe('Squire action history', () => {
       }),
     ]);
     expect(page.rows[0]).not.toHaveProperty('href');
+  });
+
+  it('covers every incident a plan touched: filter by any, hidden if any is unreadable', async () => {
+    const w = await world();
+    const team = w.visible.teamId!;
+    const other = await createTestIncident(
+      'Checkout latency',
+      (await createTestService('Checkout API', team)).id,
+      { teamId: team }
+    );
+    const both = await receipt({
+      userId: w.member.id,
+      action: 'plan:2 steps',
+      incidentId: w.visible.id,
+      incidentIds: [w.visible.id, other.id],
+    });
+    const leaky = await receipt({
+      userId: w.member.id,
+      action: 'plan:2 steps',
+      incidentId: w.visible.id,
+      incidentIds: [w.visible.id, w.hidden.id],
+    });
+    const ids = async (incident?: string) =>
+      (await listSquireActionHistory(w.memberActor, { incident }))!.rows.map(row => row.id);
+    expect(await ids()).toEqual([both.id]);
+    // The second incident of the plan finds it too; an unrelated incident finds nothing.
+    expect(await ids(other.id)).toEqual([both.id]);
+    expect(await ids(w.hidden.id)).toEqual([]);
+    expect(await readSquireActionOutcome(w.memberActor, both.id)).toMatchObject({
+      status: 'SUCCEEDED',
+    });
+    expect(await readSquireActionOutcome(w.memberActor, leaky.id)).toBeNull();
+    // An admin reads every incident, so the plan over a hidden one is listed and checked for them.
+    const adminIds = (await listSquireActionHistory(w.adminActor, { scope: 'everyone' }))!.rows;
+    expect(adminIds.map(row => row.id)).toContain(leaky.id);
   });
 
   it('lets an intelligence manager see everyone, with names, and filter by status', async () => {

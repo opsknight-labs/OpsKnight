@@ -1,6 +1,6 @@
 import { z } from 'zod/v4';
 import { AI_DATA_CLASSES } from '../ai/port';
-import { SQUIRE_CHART_LIMITS, squireChartSchema } from '../squire/contract';
+import { SQUIRE_CHART_LIMITS, squireChartSchema, squireTraceSchema } from '../squire/contract';
 
 export const conversationScopeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('GLOBAL') }).strict(),
@@ -110,6 +110,8 @@ export const savedTurnInputSchema = z
     actions: z.array(savedActionReferenceSchema).max(2).default([]),
     /** Charts drawn under the answer, from the tool results it read (absent on older turns). */
     charts: z.array(squireChartSchema).max(SQUIRE_CHART_LIMITS.perTurn).optional(),
+    /** How the answer was made ("How I got this"); absent on older turns. */
+    trace: squireTraceSchema.optional(),
     verified: z.boolean().default(false),
     authorizationHash: z
       .string()

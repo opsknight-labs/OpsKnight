@@ -75,6 +75,7 @@ function filters(ctx: Context): string {
       ctx.query.mine ? 'assigned to you' : '',
       ctx.query.myTeams ? 'your teams' : '',
       ctx.query.unassigned ? 'no person or team assigned' : '',
+      ctx.query.escalated ? 'escalated' : '',
       ctx.query.status ?? (ctx.query.active ? 'unresolved (OPEN or ACKNOWLEDGED)' : ''),
       ctx.query.urgency ? `${ctx.query.urgency} urgency` : '',
       ctx.query.priority ?? '',

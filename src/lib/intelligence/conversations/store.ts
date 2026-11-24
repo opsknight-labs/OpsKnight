@@ -107,6 +107,8 @@ export async function recordExchange(input: {
   turn?: SavedTurnInput;
   question: string;
   answer: string;
+  /** A retry: replaces the conversation's latest exchange when it is this same question. */
+  replaceLastExchange?: boolean;
 }): Promise<string> {
   const scope = conversationScopeSchema.parse(input.scope ?? scopeForIncident(input.incidentId));
   const incidentId = scope.kind === 'INCIDENT' ? scope.incidentId : null;
@@ -139,6 +141,35 @@ export async function recordExchange(input: {
   const cutoff = new Date(Date.now() - settings.squireHistoryRetentionDays * 86_400_000);
   return prisma.$transaction(async tx => {
     let conversationId: string | null = null;
+    if (input.conversationId && input.replaceLastExchange) {
+      // Owner-scoped like the claim below; any other shape (or another question) is a normal append.
+      const [answer, question] = await tx.squireMessage.findMany({
+        where: {
+          conversation: {
+            id: input.conversationId,
+            userId: input.userId,
+            updatedAt: { gt: cutoff },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 2,
+        select: { id: true, role: true, contentEncrypted: true },
+      });
+      if (
+        answer?.role === 'assistant' &&
+        question?.role === 'user' &&
+        (await readable(question.contentEncrypted)) === questionText
+      ) {
+        const { count } = await tx.squireMessage.deleteMany({
+          where: { id: { in: [answer.id, question.id] } },
+        });
+        if (count)
+          await tx.squireConversation.update({
+            where: { id: input.conversationId },
+            data: { messageCount: { decrement: count } },
+          });
+      }
+    }
     if (input.conversationId) {
       // Owner-scoped and capacity-checked in one statement, so a race can never overfill a conversation.
       const claimed = await tx.squireConversation.updateMany({

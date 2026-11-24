@@ -218,6 +218,10 @@ domains:
         optional-passage-embedding-vectors,
         proactive-briefings-nudges-and-postmortem-drafts,
         chat-provider-message-ids-of-proactive-channel-updates,
+        encrypted-personal-facts-a-person-asked-the-assistant-to-remember,
+        per-person-assistant-settings-and-on-call-heads-up-delivery-records,
+        admin-connected-documentation-passages-and-encrypted-repository-tokens,
+        chat-workspace-backoff-keys,
       ]
     purpose:
       [
@@ -225,6 +229,10 @@ domains:
         reuse-of-person-confirmed-service-facts,
         opt-in-proactive-incident-briefings-nudges-and-drafts,
         editing-proactive-channel-updates-in-place,
+        personal-preferences-the-owner-can-view-edit-delete-or-switch-off,
+        optional-heads-up-before-an-on-call-shift,
+        searching-documentation-an-administrator-connected,
+        pausing-posts-to-a-rate-limited-or-disconnected-chat-workspace,
       ]
     storage: [postgresql]
     recipients:

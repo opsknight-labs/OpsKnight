@@ -3,7 +3,9 @@ import type { SquireProposalView } from './SquireProposalCard';
 import {
   SQUIRE_CHART_LIMITS,
   squireChartSchema,
+  squireTraceSchema,
   type SquireChart,
+  type SquireTrace,
 } from '@/lib/intelligence/squire/contract';
 export type Citation = {
   kind: 'incident' | 'runbook' | 'change' | 'alert' | 'service' | 'schedule' | 'postmortem';
@@ -39,7 +41,13 @@ export type Turn = {
   investigation?: InvestigationStepView[];
   /** Charts of the time series the answer read (from `chart` events, or the saved turn). */
   charts?: SquireChart[];
+  /** How the answer was made (from the `trace` event, or the saved turn). */
+  trace?: SquireTrace;
 };
+
+/** A streamed or saved trace, checked; anything malformed is dropped. */
+export const parseTrace = (trace: unknown): SquireTrace | undefined =>
+  squireTraceSchema.safeParse(trace).data;
 
 /** Adds a streamed chart after checking its shape; anything malformed or over the per-answer cap is ignored. */
 export function mergeChart(

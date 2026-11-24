@@ -84,8 +84,11 @@ export async function readSquireActionOutcome(
   });
   if (!receipt) return null;
   // An operation-catalog change has no incident; the receipt is owner-scoped like every other.
-  if (receipt.incidentId) {
-    if (!(await readIncidentForActor(actor, receipt.incidentId))) return null;
+  // Every incident the action touched (a plan may touch several) must still be readable.
+  const incidentIds = [...new Set([receipt.incidentId ?? [], receipt.incidentIds].flat())];
+  if (incidentIds.length) {
+    for (const incidentId of incidentIds)
+      if (!(await readIncidentForActor(actor, incidentId))) return null;
   } else if (!/^(?:operation|plan):/.test(receipt.action)) return null;
   let status = ACTION_OUTCOME_STATES.find(state => state === receipt.status) ?? 'UNKNOWN';
   // A crashed executor cannot leave the UI claiming "still running" forever. This is informational:

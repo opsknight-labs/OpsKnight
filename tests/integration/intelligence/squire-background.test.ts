@@ -17,6 +17,7 @@ import {
 } from '@/lib/intelligence/conversations/background-run';
 import { getConversation } from '@/lib/intelligence/conversations/store';
 import { POST, GET } from '@/app/api/intelligence/squire/background/route';
+import { POST as chat } from '@/app/api/intelligence/squire/route';
 import { DELETE } from '@/app/api/intelligence/squire/background/[id]/route';
 import {
   createTestIncident,
@@ -114,7 +115,7 @@ describe('answers that finish in the background', () => {
     expect(conversation?.messages[1].content).toContain(incident.id);
 
     const [notification] = await db.inAppNotification.findMany({ where: { userId: user.id } });
-    expect(notification.title).toBe('Pip finished: My open incidents');
+    expect(notification.title).toBe('Pip finished your answer');
     expect(inAppNotificationHref(notification)).toBe(
       `/?squire=open&conversation=${row.resultConversationId}`
     );
@@ -243,6 +244,46 @@ describe('answers that finish in the background', () => {
     expect(await db.inAppNotification.count()).toBe(0);
   });
 
+  it('keeps a live answer going when it is handed over, instead of asking the model again', async () => {
+    const { user } = await world();
+    let runs = 0;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    turn.override = () => {
+      runs += 1;
+      return (async function* (): AsyncGenerator<SquireEvent> {
+        yield { type: 'delta', text: 'Checked the pool. ' };
+        await gate;
+        yield { type: 'delta', text: 'It is exhausted.' };
+        yield { type: 'done' };
+      })();
+    };
+    const body = { message: 'Investigate checkout', history: [] };
+    const reader = (await chat(post(body))).body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain('Checked the pool');
+
+    const handed = await POST(post(body));
+    const { data } = (await handed.json()) as { data: { id: string } };
+    expect(
+      (await db.squireBackgroundTurn.findUniqueOrThrow({ where: { id: data.id } })).status
+    ).toBe('RUNNING');
+    // The browser leaves; the answer goes on without it.
+    await reader.cancel();
+    release();
+    await settleBackgroundTurns();
+
+    expect(runs).toBe(1);
+    const row = await db.squireBackgroundTurn.findUniqueOrThrow({ where: { id: data.id } });
+    expect(row).toMatchObject({ status: 'DONE', failureCode: null });
+    const conversation = await getConversation(user.id, row.resultConversationId!);
+    expect(conversation?.messages.map(message => message.content)).toEqual([
+      'Investigate checkout',
+      'Checked the pool. It is exhausted.',
+    ]);
+    expect(await db.squireConversation.count()).toBe(1);
+    expect(await db.inAppNotification.count()).toBe(1);
+  });
+
   it('tells the chat route a question was handed over, so it skips its cut-off copy', async () => {
     const { user } = await world();
     const since = new Date(Date.now() - 1_000);
@@ -273,7 +314,7 @@ describe('answers that finish in the background', () => {
       await db.squireBackgroundTurn.findUniqueOrThrow({ where: { id: orphan.id } })
     ).toMatchObject({ status: 'FAILED', failureCode: 'INTERRUPTED' });
     const [notification] = await db.inAppNotification.findMany({ where: { userId: user.id } });
-    expect(notification.title).toBe('Pip could not finish: Orphaned question');
+    expect(notification.title).toBe('Pip could not finish your answer');
     expect(inAppNotificationHref(notification)).toBe('/?squire=open');
     const listed = await listBackgroundTurns(user.id);
     expect(listed[0].failure).toMatch(/restarted/);

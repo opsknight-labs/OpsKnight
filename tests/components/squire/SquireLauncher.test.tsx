@@ -697,10 +697,12 @@ describe('chat editing and recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
     await screen.findByText('Fresh response');
     const payload = JSON.parse(fetchMock.mock.calls[1][1].body);
+    // The latest answer: the retry replaces that exchange in the saved thread.
     expect(payload).toEqual({
       message: 'Help me investigate',
       history: [],
       conversationId: 'original-thread',
+      replaceLastExchange: true,
     });
     expect(screen.queryByText('Original response')).not.toBeInTheDocument();
     expect(screen.queryByText(/Existing saved chats are unchanged/)).not.toBeInTheDocument();

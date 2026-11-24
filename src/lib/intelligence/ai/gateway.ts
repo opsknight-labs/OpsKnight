@@ -295,19 +295,28 @@ export function runWithDeadline<T>(
   });
 }
 
-function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undefined {
+export function toToolSet(
+  definitions: AiToolDefinition[] | undefined,
+  kind?: GatewayProvider['kind']
+): ToolSet | undefined {
   if (!definitions || definitions.length === 0) return undefined;
   const set: ToolSet = {};
+  const last = definitions.at(-1);
   for (const definition of definitions) {
     const execute = definition.kind === 'READ' ? definition.execute : undefined;
     const validate = definition.validate;
     const inputSchema = jsonSchema<unknown>(
       compactToolSchema(definition.inputSchema) as Parameters<typeof jsonSchema>[0]
     );
+    // The tool list opens the prompt: a marker on its last tool caches it even when the system prompt changes.
+    // Only Anthropic reads tool-level cache options (Bedrock's tool config has no cache point).
+    const providerOptions =
+      definition === last && kind === 'ANTHROPIC' ? CACHE_HINTS.ANTHROPIC : undefined;
     set[definition.name] = execute
       ? tool<unknown, unknown>({
           description: definition.description,
           inputSchema,
+          ...(providerOptions ? { providerOptions } : {}),
           execute: async (input: unknown, { abortSignal }) => {
             try {
               return capOutput(
@@ -325,6 +334,7 @@ function toToolSet(definitions: AiToolDefinition[] | undefined): ToolSet | undef
         tool<unknown, string>({
           description: definition.description,
           inputSchema,
+          ...(providerOptions ? { providerOptions } : {}),
           execute: async (input: unknown) =>
             validate && !validate(input) ? PROPOSAL_INVALID : PROPOSAL_ACKNOWLEDGEMENT,
         });
@@ -353,20 +363,27 @@ const proposalTools = (definitions: AiToolDefinition[] | undefined) =>
 
 /**
  * The system prompt is the stable prefix of every request (rules, guidance, incident context), so providers
- * that cache prompts explicitly are told to cache it; OpenAI-style providers cache long prefixes on their own.
+ * that cache prompts explicitly are told to cache it, as is a message the caller marks as the end of a stable
+ * prefix (`cache`, e.g. the replayed history). OpenAI-style providers cache long prefixes on their own.
  */
 const CACHE_HINTS: Partial<
-  Record<GatewayProvider['kind'], Record<string, Record<string, unknown>>>
+  Record<GatewayProvider['kind'], NonNullable<ModelMessage['providerOptions']>>
 > = {
   ANTHROPIC: { anthropic: { cacheControl: { type: 'ephemeral' } } },
   BEDROCK: { bedrock: { cachePoint: { type: 'default' } } },
 };
 
-const toMessages = (request: AiGenerateRequest, kind?: GatewayProvider['kind']): ModelMessage[] =>
+export const toMessages = (
+  request: AiGenerateRequest,
+  kind?: GatewayProvider['kind']
+): ModelMessage[] =>
   request.messages.map(message => {
     const content = redactSecrets(message.content);
-    // eslint-disable-next-line security/detect-object-injection -- kind is a member of the closed provider-kind union
-    const hint = message.role === 'system' && kind ? CACHE_HINTS[kind] : undefined;
+    const hint =
+      (message.role === 'system' || message.cache) && kind
+        ? // eslint-disable-next-line security/detect-object-injection -- kind is a member of the closed provider-kind union
+          CACHE_HINTS[kind]
+        : undefined;
     return (
       hint
         ? { role: message.role, content, providerOptions: hint }
@@ -376,8 +393,8 @@ const toMessages = (request: AiGenerateRequest, kind?: GatewayProvider['kind']):
 
 /**
  * Rolling cache breakpoint: besides the system prompt's marker, the newest message of every step is marked, so
- * the next step (and the next turn) reads the whole conversation so far from cache. At most two markers are
- * live per request, within Anthropic's four.
+ * the next step (and the next turn) reads the whole conversation so far from cache. With the last tool's and
+ * the history's markers at most four are live per request, Anthropic's limit.
  */
 export function withRollingCacheBreakpoint(
   messages: ModelMessage[],
@@ -938,7 +955,7 @@ class GatewayPort implements LanguageModelPort {
             const generated = await generateText({
               model: await buildModel(provider),
               messages: toMessages(request, provider.kind),
-              tools: toToolSet(request.tools),
+              tools: toToolSet(request.tools, provider.kind),
               stopWhen: this.stopper(request, provider, reservation, loop),
               prepareStep: this.stepper(provider, request, loop),
               onStepFinish: step => recordStep(loop, step),
@@ -957,7 +974,12 @@ class GatewayPort implements LanguageModelPort {
           text: result.text,
           toolCalls: proposedCalls(result.steps, request.tools),
           usage: usageOf(result.totalUsage),
-          served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
+          served: {
+            providerId: provider.id,
+            model: provider.model,
+            fallbackDepth: depth,
+            kind: provider.kind,
+          },
           finishReason: result.finishReason,
           ...(loop.budgetLimited ? { budgetLimited: true } : {}),
         };
@@ -1051,7 +1073,7 @@ class GatewayPort implements LanguageModelPort {
           onError: () => undefined,
           model: await buildModel(provider),
           messages: toMessages(request, provider.kind),
-          tools: toToolSet(request.tools),
+          tools: toToolSet(request.tools, provider.kind),
           stopWhen: this.stopper(request, provider, reservation, loop),
           prepareStep: this.stepper(provider, request, loop),
           onStepFinish: step => {
@@ -1095,7 +1117,12 @@ class GatewayPort implements LanguageModelPort {
           text,
           toolCalls: proposedCalls(steps, request.tools),
           usage: usageOf(totalUsage),
-          served: { providerId: provider.id, model: provider.model, fallbackDepth: depth },
+          served: {
+            providerId: provider.id,
+            model: provider.model,
+            fallbackDepth: depth,
+            kind: provider.kind,
+          },
           ...(loop.budgetLimited ? { budgetLimited: true } : {}),
         };
         span.setAttribute('ai.tokens.input', result.usage.inputTokens);

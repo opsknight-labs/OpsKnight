@@ -115,6 +115,24 @@ describe('Squire change plans', () => {
     expect(await db.service.count({ where: { name: 'Payments' } })).toBe(1);
   });
 
+  it('records every incident a plan touches, first one first', async () => {
+    const { admin, service } = await world();
+    const first = await createTestIncident('Checkout errors', service.id);
+    const second = await createTestIncident('Checkout latency', service.id);
+    const tag = (id: string) => ({
+      operationId: 'addIncidentTag',
+      args: { path: { id }, body: { name: 'checkout' } },
+    });
+    const proposal = await buildPlanProposal(admin, {
+      title: 'Tag both',
+      steps: [tag(first.id), tag(second.id), tag(first.id)],
+    });
+    expect((await executeSquireAction(admin, proposal!.token)).ok).toBe(true);
+    expect(
+      await db.squireActionReceipt.findUniqueOrThrow({ where: { id: proposal!.receiptId! } })
+    ).toMatchObject({ incidentId: first.id, incidentIds: [first.id, second.id] });
+  });
+
   it('stops at the first refused step and reports what was done and what was not', async () => {
     const { admin, team, policy, service } = await world();
     const proposal = await buildPlanProposal(admin, {

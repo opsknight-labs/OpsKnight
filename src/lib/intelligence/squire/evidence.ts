@@ -351,7 +351,8 @@ export class SquireEvidenceRegistry {
             kind === 'service'
           )
             add(kind, { ...data, id: source.id });
-          else this.complete = false;
+          // Admin-connected docs, already team-scoped by the search: like product docs, nothing to re-verify.
+          else if (kind !== 'document') this.complete = false;
         });
         break;
       // Public product documentation: no workspace record to verify or cite.

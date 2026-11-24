@@ -1470,6 +1470,12 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           await markJobCompleted(job.id, claimAttempt, job.claimToken);
           return true;
         }
+        if (payloadValue(job.payload, 'task') === 'SQUIRE_CHANNEL_RETRY') {
+          const { processSquireChannelRetry } = await import('../chatops/squire/publish');
+          await processSquireChannelRetry(job.payload);
+          await markJobCompleted(job.id, claimAttempt, job.claimToken);
+          return true;
+        }
         if (
           [
             'AUTOMATION_NOTIFY',

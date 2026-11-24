@@ -3,13 +3,14 @@
 import { memo, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Copy, Loader2, Pencil, RefreshCw, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ChevronRight, Copy, Loader2, Pencil, RefreshCw, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import SquireProposalCard from './SquireProposalCard';
 import SquireSavedAction from './SquireSavedAction';
 import SquireAvatar from './SquireAvatar';
 import SquireInvestigationSteps from './SquireInvestigationSteps';
 import type { Citation, Turn } from './chat-types';
+import type { SquireTrace } from '@/lib/intelligence/squire/contract';
 import { incidentRef } from '@/lib/intelligence/incident-ux/explain';
 import { SquireCitationFindingLink } from './SquireSurfaceControls';
 
@@ -56,6 +57,50 @@ export function distinctCitations(citations: readonly Citation[]) {
     citation,
     ref: (shared.get(citation.label) ?? 0) > 1 ? incidentRef(citation.id) : null,
   }));
+}
+
+/** "How I got this": what the answer read, which model wrote it, and what it cost. Collapsed by default. */
+export function SquireTracePanel({ trace }: { trace: SquireTrace }) {
+  const { tokens } = trace;
+  const rows: Array<[string, string | undefined]> = [
+    ['Mode', trace.mode === 'ai' ? 'AI' : 'Basic (no AI)'],
+    [
+      'Model',
+      trace.model && [trace.model, trace.provider && `(${trace.provider})`].join(' ').trim(),
+    ],
+    ['Looked up', trace.tools.join(' · ') || 'Nothing'],
+    ['Sources', trace.sources.join(' · ') || 'None cited'],
+    [
+      'Tokens',
+      tokens &&
+        `${tokens.input.toLocaleString()} in · ${tokens.output.toLocaleString()} out${
+          tokens.cacheRead ? ` · ${tokens.cacheRead.toLocaleString()} from cache` : ''
+        }`,
+    ],
+    ['Time', `${(trace.durationMs / 1000).toFixed(1)} s`],
+    ['Verified', trace.verified ? 'Yes, every record read is kept as evidence' : 'No'],
+  ];
+  return (
+    <details className="group/trace text-xs text-muted-foreground" data-testid="squire-trace">
+      <summary className="inline-flex min-h-11 cursor-pointer select-none list-none items-center gap-1.5 rounded-md pr-1.5 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-6 [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          aria-hidden
+          className="h-3.5 w-3.5 shrink-0 motion-safe:transition-transform group-open/trace:rotate-90"
+        />
+        How I got this
+      </summary>
+      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 ps-5">
+        {rows
+          .filter(([, value]) => value)
+          .map(([term, value]) => (
+            <div key={term} className="contents">
+              <dt className="font-medium">{term}</dt>
+              <dd className="min-w-0 break-words">{value}</dd>
+            </div>
+          ))}
+      </dl>
+    </details>
+  );
 }
 
 // Phones get 44 px targets; the desktop panel uses compact icon buttons.
@@ -246,6 +291,7 @@ export default memo(function SquireMessage({
         {turn.savedActions?.map(action => (
           <SquireSavedAction key={action.receiptId} action={action} />
         ))}
+        {turn.trace && !streaming && <SquireTracePanel trace={turn.trace} />}
         {!!turn.content && !streaming && (
           <div className={`-ms-1.5 flex flex-wrap items-center gap-0.5 ${last ? '' : REVEAL}`}>
             <Button

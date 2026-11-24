@@ -11,6 +11,7 @@ const inputSchema = z.object({
   scope: z.string().max(16).optional(),
   status: z.string().max(16).optional(),
   cursor: z.string().max(64).optional(),
+  incident: z.string().max(64).optional(),
 });
 
 /** The next page of the Squire action history; scoping is enforced by the view, not the caller. */

@@ -215,9 +215,33 @@ describe('intelligence architecture boundaries', () => {
         relative(root, file)
       ).toEqual([]);
     }
+    // The person's own Squire data (remembered facts and their switch, sent heads-ups): no workspace records.
+    const personalStores = new Map([
+      [join(squireDir, 'memory.ts'), ['squireUserMemory', 'squireUserSettings']],
+      [join(squireDir, 'heads-up.ts'), ['squireHeadsUp']],
+    ]);
+    for (const [file, allowed] of personalStores) {
+      const source = read(file);
+      expect(
+        tables(
+          source.replace(/\.\s*\n\s*\./g, '.').replace(/(prisma|tx)\s*\n\s*\./g, '$1.')
+        ).filter(table => !allowed.includes(table)),
+        relative(root, file)
+      ).toEqual([]);
+      // Raw SQL only for the per-person advisory lock that keeps the memory cap under concurrent saves.
+      const raw = [...source.matchAll(/\$executeRaw`([^`]*)`/g)].map(match => match[1]);
+      expect(
+        raw.every(sql => /^SELECT pg_advisory_xact_lock\(/.test(sql)),
+        relative(root, file)
+      ).toBe(true);
+    }
     // Reading, proposing and answering never write anything.
     const offenders = sourceFiles(squireDir).filter(
-      file => file !== executor && !recordKeepers.has(file) && writes.test(read(file))
+      file =>
+        file !== executor &&
+        !recordKeepers.has(file) &&
+        !personalStores.has(file) &&
+        writes.test(read(file))
     );
     expect(offenders.map(file => relative(root, file))).toEqual([]);
 
@@ -239,6 +263,7 @@ describe('intelligence architecture boundaries', () => {
     // Proposal tools are declared in one place and never carry an executor of their own.
     const proposing = sourceFiles(squireDir).filter(file => /PROPOSE_WRITE/.test(read(file)));
     expect(proposing.map(file => relative(root, file)).sort()).toEqual([
+      'src/lib/intelligence/squire/memory.ts',
       'src/lib/intelligence/squire/operations.ts',
       'src/lib/intelligence/squire/plans.ts',
       'src/lib/intelligence/squire/tools.ts',
@@ -317,7 +342,23 @@ describe('intelligence architecture boundaries', () => {
           match => match[1]
         )
       ),
-    ]).toEqual(['squireChannelMessage']);
+    ]).toEqual(
+      // Its own post records, the shared backoff, retry jobs, and the war room's health flag for a missing scope.
+      expect.arrayContaining(['squireChannelMessage'])
+    );
+    expect(
+      [...publish.matchAll(/\bprisma\.(\w+)\s*\.(?:create|update|upsert|delete)\w*\(/g)]
+        .map(match => match[1])
+        .filter(
+          table =>
+            ![
+              'squireChannelMessage',
+              'squireChannelBackoff',
+              'backgroundJob',
+              'incidentWarRoom',
+            ].includes(table)
+        )
+    ).toEqual([]);
     expect(publish).not.toMatch(/\$executeRaw|\$transaction|\.token\b/);
     const placeholderSource = read(placeholder);
     expect([

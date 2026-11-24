@@ -16,6 +16,7 @@ export class SquireTurnRecorder {
   private readonly notices: string[] = [];
   private readonly actions: SavedActionReference[] = [];
   private citations: Extract<SquireEvent, { type: 'citations' }>['items'] = [];
+  private trace?: Extract<SquireEvent, { type: 'trace' }>['trace'];
 
   /** Takes in one event. Returns false for server-only events, which must never reach the browser. */
   observe(event: SquireEvent): boolean {
@@ -29,6 +30,7 @@ export class SquireTurnRecorder {
     else if (event.type === 'notice' && this.notices.length < 4)
       this.notices.push(event.text.slice(0, 1_000));
     else if (event.type === 'citations') this.citations = event.items.slice(0, 8);
+    else if (event.type === 'trace') this.trace = event.trace;
     else if (
       event.type === 'proposal' &&
       event.proposal.kind === 'WRITE' &&
@@ -66,6 +68,7 @@ export class SquireTurnRecorder {
       conversationId: request.conversationId,
       incidentId: input.incidentId,
       question: request.message,
+      replaceLastExchange: 'replaceLastExchange' in request && request.replaceLastExchange === true,
       answer: this.answer.trim() ? this.answer : 'Review the suggested action.',
       dataClass: this.memory?.dataClass,
       turn: {
@@ -79,6 +82,7 @@ export class SquireTurnRecorder {
         citations: this.citations,
         actions: this.actions,
         notices: [...new Set([...(this.memory?.notices ?? []), ...this.notices])].slice(0, 4),
+        ...(this.trace ? { trace: this.trace } : {}),
       },
     });
   }

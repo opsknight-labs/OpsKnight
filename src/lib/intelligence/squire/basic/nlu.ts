@@ -533,6 +533,8 @@ const INCIDENT_FEATURES: ReadonlyArray<[SquireIntent, ReadonlyArray<[RegExp, num
  * guidance; "briefing" is not "brief"). Checked before the rules; deliberately short.
  */
 const OVERRIDES: ReadonlyArray<[SquireIntent, RegExp, boolean | null]> = [
+  // "What is MTTR?" asks for the definition; "what is our MTTR this week?" for the number.
+  ['GUIDANCE', /^what (?:is|does) (?:mttr|mtta)(?: mean| stand for)?[\s?!.]*$/, null],
   [
     'INCIDENT_STATS',
     /\b(mttr|mtta|mean time to (?:resolve|acknowledge|resolution|ack)|average time to (?:resolve|acknowledge))\b/,
@@ -603,6 +605,22 @@ export function classifyIntent(text: string, onIncident: boolean): IntentPredict
           .map(entry => ({ intent: entry.intent, confidence: share(entry.score) })),
         scored: true,
       };
+}
+
+/**
+ * "Who is on call and how many incidents are open?" as its questions, when each is a different known
+ * question; otherwise the message alone. "Acknowledge and resolve" or "between Monday and Friday" stay whole.
+ */
+export function splitQuestions(message: string, onIncident: boolean): string[] {
+  const parts = message
+    .split(
+      /\?\s+|;\s+|\s+(?:and|also|plus|then)\s+(?=(?:who|what|how|when|where|which|is|are|am|any|show|list|find|give)\b)/i
+    )
+    .map(part => part.trim())
+    .filter(part => /[\p{L}\p{N}]/u.test(part));
+  if (parts.length < 2 || parts.length > 3) return [message];
+  const intents = parts.map(part => classifyIntent(normalizeMessage(part), onIncident).intent);
+  return intents.includes('UNKNOWN') || new Set(intents).size < parts.length ? [message] : parts;
 }
 
 export interface Slots {

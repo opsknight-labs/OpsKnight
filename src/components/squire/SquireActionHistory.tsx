@@ -23,14 +23,17 @@ const STATUS: Record<ActionHistoryRow['status'], { label: string; tone: ToneKey 
 export default function SquireActionHistory({
   initial,
   status,
+  incident,
   loadMore,
 }: {
   initial: ActionHistoryPage;
   status?: string;
+  incident?: string;
   loadMore: (input: {
     scope?: string;
     status?: string;
     cursor?: string;
+    incident?: string;
   }) => Promise<ActionHistoryPage | null>;
 }) {
   const [rows, setRows] = useState(initial.rows);
@@ -43,7 +46,12 @@ export default function SquireActionHistory({
   const more = () =>
     startTransition(async () => {
       try {
-        const next = await loadMore({ scope: initial.scope, status, cursor: cursor ?? undefined });
+        const next = await loadMore({
+          scope: initial.scope,
+          status,
+          incident,
+          cursor: cursor ?? undefined,
+        });
         if (!next) throw new Error('unavailable');
         setRows(current => [...current, ...next.rows]);
         setCursor(next.nextCursor);

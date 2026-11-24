@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ModelMessage } from 'ai';
-import { withRollingCacheBreakpoint } from '@/lib/intelligence/ai/gateway';
+import { toMessages, toToolSet, withRollingCacheBreakpoint } from '@/lib/intelligence/ai/gateway';
+import type { AiGenerateRequest, AiToolDefinition } from '@/lib/intelligence/ai/port';
 
 const anthropic = { anthropic: { cacheControl: { type: 'ephemeral' } } };
 const step: ModelMessage[] = [
@@ -47,5 +48,55 @@ describe('rolling cache breakpoint', () => {
 
   it('leaves providers that cache on their own untouched', () => {
     expect(withRollingCacheBreakpoint(step, 'OPENAI')).toBe(step);
+  });
+});
+
+describe('cache markers on the stable prefix', () => {
+  const tools: AiToolDefinition[] = ['get_incident', 'list_alerts', 'propose_note'].map(
+    (name): AiToolDefinition => ({
+      name,
+      description: name,
+      kind: name.startsWith('propose_') ? 'PROPOSE_WRITE' : 'READ',
+      dataClass: 'INTERNAL',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => ({}),
+    })
+  );
+  const request = {
+    context: { actorId: 'a', capability: 'SQUIRE_CHAT', callSite: 'interactive' },
+    messages: [
+      { role: 'system', content: 'rules' },
+      { role: 'user', content: 'Earlier question' },
+      { role: 'assistant', content: 'Earlier answer', cache: true },
+      { role: 'user', content: 'New question' },
+    ],
+  } as AiGenerateRequest;
+  const options = (set: ReturnType<typeof toToolSet>) =>
+    Object.values(set ?? {}).map(definition => definition.providerOptions);
+
+  it('marks the system prompt, the end of the history and the last tool (Anthropic)', () => {
+    expect(toMessages(request, 'ANTHROPIC').map(message => message.providerOptions)).toEqual([
+      anthropic,
+      undefined,
+      anthropic,
+      undefined,
+    ]);
+    expect(options(toToolSet(tools, 'ANTHROPIC'))).toEqual([undefined, undefined, anthropic]);
+  });
+
+  it('uses message cache points on Bedrock, whose tool config has none', () => {
+    const bedrock = { bedrock: { cachePoint: { type: 'default' } } };
+    expect(toMessages(request, 'BEDROCK').map(message => message.providerOptions)).toEqual([
+      bedrock,
+      undefined,
+      bedrock,
+      undefined,
+    ]);
+    expect(options(toToolSet(tools, 'BEDROCK'))).toEqual([undefined, undefined, undefined]);
+  });
+
+  it('adds nothing for providers that cache on their own', () => {
+    expect(toMessages(request, 'OPENAI').every(message => !message.providerOptions)).toBe(true);
+    expect(options(toToolSet(tools, 'OPENAI'))).toEqual([undefined, undefined, undefined]);
   });
 });

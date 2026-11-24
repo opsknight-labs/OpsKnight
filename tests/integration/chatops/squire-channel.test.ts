@@ -50,8 +50,11 @@ import {
 } from '@/lib/chatops/squire/handler';
 import {
   __resetSquirePublishBackoffForTests,
+  processSquireChannelRetry,
   publishSquireUpdate,
+  SQUIRE_CHANNEL_RETRY_ATTEMPTS,
 } from '@/lib/chatops/squire/publish';
+import { markJobFailed } from '@/lib/jobs/queue';
 import { deliverSlackSquireReply } from '@/lib/chatops/squire/slack';
 import { enqueueSlackSquireMention } from '@/lib/chatops/squire/slack-events';
 import { answerTeamsSquireMention, deliverTeamsSquireReply } from '@/lib/chatops/squire/teams';
@@ -82,7 +85,7 @@ beforeEach(async () => {
     throw new Error('Dedicated test DB required');
   await resetDatabase();
   vi.stubEnv('NEXT_PUBLIC_APP_URL', BASE);
-  __resetSquirePublishBackoffForTests();
+  await __resetSquirePublishBackoffForTests();
   slackEmails.clear();
   slackCalls.length = 0;
   slackOverrides.clear();
@@ -398,7 +401,11 @@ describe('publishSquireUpdate', () => {
     expect(await db.squireChannelMessage.count()).toBe(0);
     await publishSquireUpdate(update(incident.id, 'SUMMARY'));
     expect(calls('chat.postMessage')).toHaveLength(1);
-    __resetSquirePublishBackoffForTests();
+    // The backoff is a row, so every instance honours it.
+    expect(
+      await db.squireChannelBackoff.findUniqueOrThrow({ where: { key: `SLACK:${CHANNEL}` } })
+    ).toMatchObject({ reason: 'rate_limited' });
+    await __resetSquirePublishBackoffForTests();
     await publishSquireUpdate(update(incident.id, 'SUMMARY'));
     expect(calls('chat.postMessage')).toHaveLength(2);
     expect(await db.squireChannelMessage.count()).toBe(1);
@@ -636,5 +643,71 @@ describe('publishSquireUpdate robustness', () => {
     expect(resent.body.blocks).toEqual([]);
     expect(String(resent.body.text)).toContain('Errors began');
     expect(await db.squireChannelMessage.count()).toBe(1);
+  });
+
+  it('retries a failed update from a background job until it is delivered', async () => {
+    const { incident } = await world();
+    slackOverrides.set('chat.postMessage', { ok: false, error: 'internal_error' });
+    await publishSquireUpdate(update(incident.id, 'SUMMARY'));
+    slackOverrides.set('chat.postMessage', { ok: false, error: 'internal_error' });
+    await publishSquireUpdate(update(incident.id, 'SUMMARY', 'Newer text'));
+    // One stored retry per update, carrying the newest content, bounded in attempts.
+    const job = await db.backgroundJob.findFirstOrThrow({ where: { type: 'SCHEDULED_TASK' } });
+    expect(await db.backgroundJob.count()).toBe(1);
+    expect(job.maxAttempts).toBe(SQUIRE_CHANNEL_RETRY_ATTEMPTS);
+    expect(job.scheduledAt.getTime()).toBeGreaterThan(Date.now());
+    expect(job.payload).toMatchObject({ task: 'SQUIRE_CHANNEL_RETRY', markdown: 'Newer text' });
+
+    slackOverrides.set('chat.postMessage', { ok: false, error: 'internal_error' });
+    await expect(processSquireChannelRetry(job.payload)).rejects.toThrow(/not delivered/);
+    await processSquireChannelRetry(job.payload);
+    expect(blockTexts(calls('chat.postMessage').at(-1)!.body)).toContain('Newer text');
+    expect(await db.squireChannelMessage.count()).toBe(1);
+  });
+
+  it('gives up after the bounded attempts and records the failure on the job', async () => {
+    const { incident } = await world();
+    slackOverrides.set('chat.postMessage', { ok: false, error: 'internal_error' });
+    await publishSquireUpdate(update(incident.id, 'SUMMARY'));
+    const job = await db.backgroundJob.findFirstOrThrow();
+    await db.backgroundJob.update({
+      where: { id: job.id },
+      data: { attempts: SQUIRE_CHANNEL_RETRY_ATTEMPTS },
+    });
+    await markJobFailed(job.id, 'Squire channel update not delivered (failed)');
+    expect(await db.backgroundJob.findUniqueOrThrow({ where: { id: job.id } })).toMatchObject({
+      status: 'FAILED',
+      error: 'Squire channel update not delivered (failed)',
+    });
+  });
+
+  it('flags the war room for an administrator when the Slack app lacks a scope, without retrying', async () => {
+    const { incident } = await world();
+    slackOverrides.set('chat.postMessage', {
+      ok: false,
+      error: 'missing_scope',
+      needed: 'chat:write',
+    });
+    await publishSquireUpdate(update(incident.id, 'SUMMARY'));
+    const room = await db.incidentWarRoom.findFirstOrThrow({ where: { incidentId: incident.id } });
+    expect(room).toMatchObject({
+      health: 'PERMISSION_ERROR',
+      lastErrorCode: 'SQUIRE_MISSING_SCOPE',
+    });
+    expect(room.lastError).toContain('missing the chat:write scope');
+    expect(await db.backgroundJob.count()).toBe(0);
+    expect(
+      await db.squireChannelBackoff.count({ where: { key: `SLACK:installation:${WORKSPACE}` } })
+    ).toBe(1);
+  });
+
+  it('says the app must be invited when it is not in the channel', async () => {
+    const { incident } = await world();
+    slackOverrides.set('chat.postMessage', { ok: false, error: 'not_in_channel' });
+    await publishSquireUpdate(update(incident.id, 'SUMMARY'));
+    const room = await db.incidentWarRoom.findFirstOrThrow({ where: { incidentId: incident.id } });
+    expect(room.health).toBe('PERMISSION_ERROR');
+    expect(room.lastError).toContain('Invite it to the channel');
+    expect(await db.backgroundJob.count()).toBe(0);
   });
 });

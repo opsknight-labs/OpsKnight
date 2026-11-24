@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { KnowledgeSwitchForm } from '@/components/settings/SquireMemoryForms';
 import EmptyState from '@/components/patterns/EmptyState';
@@ -27,6 +29,7 @@ const KIND_LABEL: Record<string, string> = {
   RESOLUTION_NOTE: 'Resolution notes',
   INCIDENT_NOTE: 'Incident notes',
   SERVICE_FACT: 'Confirmed service facts',
+  DOCUMENT: 'Documentation passages',
 };
 
 /** Squire's knowledge index, for the Assistant page. The caller checked `intelligence.read`. */
@@ -74,6 +77,13 @@ export default async function KnowledgeMemorySection({ canManage }: { canManage:
               ))
             )}
           </ul>
+          <Link
+            href="/settings/intelligence/ai/docs"
+            className="mb-4 inline-flex min-h-11 items-center gap-1 text-sm font-medium underline underline-offset-4"
+          >
+            Documentation sources
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
         </>
       )}
     </SettingsSection>

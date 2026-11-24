@@ -256,6 +256,24 @@ describe('paging and breakdowns', () => {
     expect(person.text).toContain('7 matches');
     expect(person.text).not.toContain('Other person incident');
   });
+
+  it('lists escalated incidents from real escalation events, not titles that say "escalated"', async () => {
+    const w = await world();
+    await db.incidentEvent.create({
+      data: { incidentId: w.incidents[0].id, type: 'ESCALATED', message: 'Escalated to level 2' },
+    });
+    await createTestIncident('Escalated by customer', w.checkout.id, {
+      assigneeId: w.responder.id,
+    });
+    const turn = await planBasicTurn({
+      actor: w.actor,
+      message: 'escalated incidents this week',
+      incident: null,
+    });
+    expect(turn.text).toContain('Pool exhausted 1');
+    expect(turn.text).not.toContain('Pool exhausted 2');
+    expect(turn.text).not.toContain('Escalated by customer');
+  });
 });
 
 describe('page context', () => {

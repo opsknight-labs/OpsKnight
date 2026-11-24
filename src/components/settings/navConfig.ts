@@ -54,6 +54,14 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         ],
       },
       {
+        id: 'squire',
+        label: 'Squire Memory',
+        description: 'What Squire remembers about you: view, edit, delete, or turn memory off',
+        href: '/settings/squire',
+        icon: 'brain',
+        keywords: ['squire', 'assistant', 'memory', 'remember', 'ai', 'preferences'],
+      },
+      {
         id: 'security',
         label: 'Security & Sessions',
         description: 'Password credentials, active login sessions, and session revocation',

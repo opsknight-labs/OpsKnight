@@ -10,10 +10,14 @@ import { isMcpApprovalGated } from '@/lib/mcp/catalog';
 import { validateOperationArgs } from '@/lib/mcp/core/execution';
 import { McpBoundaryError } from '@/lib/mcp/core/errors';
 import type { AiToolDefinition } from '../ai/port';
+import { redactSecrets } from '../ai/redact';
 import type { SquireProposal } from './actions/catalog';
+import { actionLabel } from './actions/history';
 import { UNKNOWN_ACTION_MESSAGE, type SquireActionResult } from './actions/outcomes';
+import { readIncidentForActor } from './deterministic';
 import {
   argsSchema,
+  buildOperationProposal,
   changesOf,
   displayName,
   extendedOn,
@@ -24,6 +28,7 @@ import {
   mayCall,
   receiptRefusal,
   refusal,
+  rolesAllowing,
   squireOperation,
   summaryOf,
   webPath,
@@ -265,13 +270,17 @@ export async function executePlanProposal(
   if (!steps)
     return fail('Your role does not allow every change in this plan, or it is no longer valid.');
   const context = { name: await displayName(actor.id) };
+  const incidentIds = [
+    ...new Set(steps.flatMap(step => incidentOf(step.operation, step.args) ?? [])),
+  ];
   try {
     await prisma.squireActionReceipt.create({
       data: {
         id: sealed.id,
         userId: actor.id,
         action: `plan:${steps.length} steps`,
-        incidentId: steps.map(step => incidentOf(step.operation, step.args)).find(Boolean),
+        incidentId: incidentIds[0],
+        incidentIds,
         status: 'RUNNING',
         startedAt: new Date(),
         intentEncrypted: await encrypt(
@@ -359,4 +368,184 @@ export async function executePlanProposal(
     },
   }).catch(() => undefined);
   return result;
+}
+
+// ── Fix → runbook ─────────────────────────────────────────────────────────────────────────────────────
+
+export const PROPOSE_RUNBOOK_FROM_FIX_TOOL: AiToolDefinition = {
+  name: 'propose_runbook_from_fix',
+  description:
+    'Offer to turn how a resolved incident was fixed into a draft runbook (after it is resolved, or when a resolved incident is in view). Pass { incidentId }; Squire drafts manual steps from its notes, resolution and the actions confirmed in Squire. You may refine them with { name, steps: [{ name, description }] } (1 to 12 steps) using only what the timeline shows. The user sees the steps and decides; confirming creates an unpublished draft.',
+  kind: 'PROPOSE_WRITE',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      incidentId: { type: 'string', maxLength: 64 },
+      name: { type: 'string', maxLength: 120 },
+      steps: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 12,
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', maxLength: 200 },
+            description: { type: 'string', maxLength: 2000 },
+          },
+          required: ['name'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['incidentId'],
+    additionalProperties: false,
+  },
+};
+
+const fixStepSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(2_000).optional(),
+  })
+  .strict();
+export const runbookFromFixInput = z
+  .object({
+    incidentId: z.string().min(1).max(64),
+    name: z.string().trim().min(1).max(120).optional(),
+    steps: z.array(fixStepSchema).min(1).max(12).optional(),
+  })
+  .strict();
+type FixStep = z.infer<typeof fixStepSchema>;
+
+/** Timeline entries that say what someone did, not lifecycle bookkeeping. */
+const FIX_EVENT_TYPES = ['COMMENT', 'RUNBOOK_COMPLETED', 'MANUAL_RESOLVED'] as const;
+
+/**
+ * Manual runbook steps for how a resolved incident the person can read was fixed: check the symptom, then
+ * the notes and Squire actions in the order they happened, then the resolution. Null when not resolved.
+ */
+export async function draftRunbookFromFix(actor: AuthorizationActor, incidentId: string) {
+  const incident = await readIncidentForActor(actor, incidentId);
+  if (!incident || incident.status !== 'RESOLVED') return null;
+  const [events, receipts] = await Promise.all([
+    prisma.incidentEvent.findMany({
+      where: { incidentId, type: { in: [...FIX_EVENT_TYPES] } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: 20,
+      select: { type: true, message: true, createdAt: true },
+    }),
+    prisma.squireActionReceipt.findMany({
+      where: { status: 'SUCCEEDED', OR: [{ incidentId }, { incidentIds: { has: incidentId } }] },
+      orderBy: { createdAt: 'asc' },
+      take: 20,
+      select: { action: true, createdAt: true },
+    }),
+  ]);
+  const text = (message: string) => redactSecrets(message).trim().slice(0, 2_000);
+  const resolution = events.findLast(event => event.type === 'MANUAL_RESOLVED');
+  const done = [
+    ...events
+      .filter(event => event.type !== 'MANUAL_RESOLVED')
+      .map(event => ({ at: event.createdAt, name: text(event.message).slice(0, 200) })),
+    // Only the action's label: the confirmed arguments and outcome text stay with the person who confirmed.
+    ...receipts
+      .filter(receipt => !/resolve_?incident$/i.test(receipt.action))
+      .map(receipt => ({ at: receipt.createdAt, name: actionLabel(receipt.action).slice(0, 200) })),
+  ]
+    .sort((a, b) => a.at.getTime() - b.at.getTime())
+    .filter((step, index, all) => step.name && all.findIndex(o => o.name === step.name) === index)
+    .slice(0, 10);
+  const steps: FixStep[] = [
+    {
+      name: 'Confirm the symptom',
+      description: text(
+        `Check for what was seen in "${incident.title}" on ${incident.serviceName}.`
+      ),
+    },
+    ...done.map(({ name }) => ({ name })),
+    {
+      name: 'Confirm the fix holds',
+      description: resolution
+        ? text(resolution.message)
+        : 'Check the symptom is gone before resolving.',
+    },
+  ];
+  return { incident, steps };
+}
+
+/**
+ * The "Turn this fix into a runbook" card: an unpublished runbook draft made through the catalog's own
+ * createRunbook operation, so the same role check, confirmation and receipt apply as for any change.
+ * Returns a refusal in words (naming the role it needs) when there is no card to offer.
+ */
+export async function buildRunbookFromFixProposal(
+  actor: AuthorizationActor,
+  rawInput: unknown,
+  now: Date = new Date()
+): Promise<(SquireProposal & { href?: string }) | { refusal: string }> {
+  const operation = squireOperation('createRunbook');
+  if (operation && !mayCall(actor, operation))
+    return {
+      refusal: `Turning a fix into a runbook needs ${rolesAllowing(actor, operation)}. Ask someone with that role, or an administrator to change your role. Nothing was prepared.`,
+    };
+  const parsed = runbookFromFixInput.safeParse(rawInput);
+  const draft = parsed.success ? await draftRunbookFromFix(actor, parsed.data.incidentId) : null;
+  if (!operation || !parsed.success || !draft)
+    return {
+      refusal:
+        'Only a resolved incident you can open can be turned into a runbook. Nothing was prepared.',
+    };
+  const { incident } = draft;
+  const steps = parsed.data.steps ?? draft.steps;
+  const words = incident.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .slice(0, 60)
+    .replace(/^-+|-+$/g, '');
+  const card = await buildOperationProposal(
+    actor,
+    {
+      operationId: 'createRunbook',
+      args: {
+        body: {
+          name: parsed.data.name ?? `Fix: ${incident.title}`.slice(0, 120),
+          slug: ['fix', words, incident.id.slice(-8).toLowerCase()].filter(Boolean).join('-'),
+          description: `Drafted by Squire from how "${incident.title}" was fixed. Review before publishing.`,
+          definition: {
+            steps: steps.map((step, index) => ({
+              key: `step_${index + 1}`,
+              name: step.name,
+              ...(step.description ? { description: step.description } : {}),
+              type: 'MANUAL',
+              riskClass: 'READ_ONLY',
+              config: {},
+            })),
+          },
+        },
+      },
+    },
+    now,
+    { target: null }
+  );
+  if (!card)
+    return {
+      refusal:
+        'Runbook drafts are not available right now: an administrator may have turned off "Extended assistant actions". Nothing was prepared.',
+    };
+  return {
+    ...card,
+    title: 'Turn this fix into a runbook',
+    detail: `Creates an unpublished runbook draft with ${steps.length} manual steps from how this incident was fixed. Review and publish it from Runbooks.`,
+    confirmLabel: 'Create draft runbook',
+    preview: steps.slice(0, 10).map((step, index) => ({
+      label: `Step ${index + 1}`,
+      value: [step.name, step.description].filter(Boolean).join(': ').slice(0, 1_000),
+    })),
+  };
+}
+
+/** The runbook card offered after a resolve, or undefined when there is none to offer. */
+export async function offerRunbookFromFix(actor: AuthorizationActor, incidentId: string) {
+  const card = await buildRunbookFromFixProposal(actor, { incidentId }).catch(() => null);
+  return card && 'token' in card ? card : undefined;
 }

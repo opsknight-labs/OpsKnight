@@ -35,6 +35,7 @@ import { getConversationForActor } from '../conversations/view';
 import { getPinnedBriefingForActor } from './briefing-view';
 import { buildProposal } from './actions/proposals';
 import {
+  AI_PROVIDER_LABELS,
   SQUIRE_CHART_LIMITS,
   SQUIRE_LIMITS,
   aiLimitFrom,
@@ -43,6 +44,7 @@ import {
   type SquireCitation,
   type SquireEvent,
   type SquireRequest,
+  type SquireTrace,
 } from './contract';
 import {
   mentionedIncident,
@@ -64,12 +66,24 @@ import {
   rolesAllowing,
   squireOperation,
 } from './operations';
-import { buildPlanProposal, PROPOSE_PLAN_TOOL } from './plans';
+import {
+  buildPlanProposal,
+  buildRunbookFromFixProposal,
+  PROPOSE_PLAN_TOOL,
+  PROPOSE_RUNBOOK_FROM_FIX_TOOL,
+  runbookFromFixInput,
+} from './plans';
+import { buildRememberProposal, memoriesForPrompt, REMEMBER_FACT_TOOL } from './memory';
+import {
+  detectEntityReferences,
+  entityHintsForPrompt,
+  resolveEntityReferences,
+} from './entity-refs';
 import { readDialogueState, writeDialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
 import type { SquireIntent } from './intents';
 import { buildSystemPrompt, type IncidentBriefing } from './prompt';
-import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS, toolsForMessage } from './tools';
+import { actionForTool, buildSquireTools, SQUIRE_TOOL_DATA_CLASS } from './tools';
 import {
   metricsChart,
   splitChartSamples,
@@ -104,6 +118,10 @@ const planInput = z
 const PROPOSAL_EXTRA_TOOLS: AiToolDefinition[] = [
   { ...PROPOSE_OPERATION_TOOL, validate: input => argsSchema.safeParse(input).success },
   { ...PROPOSE_PLAN_TOOL, validate: input => planInput.safeParse(input).success },
+  {
+    ...PROPOSE_RUNBOOK_FROM_FIX_TOOL,
+    validate: input => runbookFromFixInput.safeParse(input).success,
+  },
 ];
 const MAX_CITATIONS = 8;
 
@@ -201,14 +219,56 @@ export function streamSquire(
   signal?: AbortSignal,
   scope: SquireTurnScope = {}
 ): AsyncGenerator<SquireEvent> {
-  return traceTurn(squireTurn(actor, request, signal, scope), signal);
+  const served: ServedTrace = {};
+  return traceTurn(withTrace(squireTurn(actor, request, signal, scope, served), served), signal);
+}
+
+/** What the AI answer's model call reported, for the trace. */
+type ServedTrace = Pick<SquireTrace, 'model' | 'provider' | 'tokens'>;
+
+/**
+ * Passes a turn's events through and, just before `done`, sends how the answer was made. Built from the
+ * events themselves, so every path (AI, investigation, basic) gets one; model and tokens come from `served`.
+ */
+export async function* withTrace(
+  events: AsyncGenerator<SquireEvent>,
+  served: ServedTrace,
+  startedAt = Date.now()
+): AsyncGenerator<SquireEvent> {
+  let mode: SquireTrace['mode'] = 'basic';
+  let verified = false;
+  let sources: string[] = [];
+  const tools = new Set<string>();
+  for await (const event of events) {
+    if (event.type === 'meta') mode = event.mode;
+    else if (event.type === 'tool') tools.add(event.label);
+    else if (event.type === 'investigation')
+      for (const call of event.step.calls) tools.add(call.label);
+    else if (event.type === 'citations') sources = event.items.map(item => item.label);
+    else if (event.type === 'memory') verified = event.turn.verified === true;
+    else if (event.type === 'done')
+      yield {
+        type: 'trace',
+        trace: {
+          mode,
+          tools: [...tools].slice(0, 24).map(label => label.slice(0, 200)),
+          sources: sources.slice(0, 8).map(label => label.slice(0, 200)),
+          // A basic answer after a failed or empty model call was not written by that model.
+          ...(mode === 'ai' ? served : {}),
+          durationMs: Date.now() - startedAt,
+          verified,
+        },
+      };
+    yield event;
+  }
 }
 
 async function* squireTurn(
   actor: AuthorizationActor,
   request: SquireRequest,
   signal: AbortSignal | undefined,
-  scope: SquireTurnScope
+  scope: SquireTurnScope,
+  served: ServedTrace = {}
 ): AsyncGenerator<SquireEvent> {
   try {
     const reading = getAiSettings();
@@ -321,6 +381,17 @@ async function* squireTurn(
         : await resolveLanguageModel('SQUIRE_CHAT', dataClass);
     const personal = dataClassAllows(dataClass, 'PERSONAL');
     const question = personal ? request.message : redactPersonalData(request.message);
+    // Remembered facts are personal data: only for a provider cleared for it, and never fatal.
+    const memories = port && personal ? await memoriesForPrompt(actor.id).catch(() => []) : [];
+    // Records the question names by link, id or name, each loaded only if the person may read it.
+    const hints = port
+      ? entityHintsForPrompt(
+          await resolveEntityReferences(actor, detectEntityReferences(request.message)).catch(
+            () => []
+          ),
+          { personal }
+        )
+      : '';
 
     if (port) {
       yield {
@@ -368,12 +439,14 @@ async function* squireTurn(
             // A name is personal data: only sent to a provider cleared for it.
             firstName: personal ? viewer?.name?.trim().split(/\s+/)[0] : null,
             teams: teams.map(team => team.name),
+            memories,
           }),
           ...(page && !incident ? { viewing: viewingLine(page) } : {}),
           // A person's name is personal data, like the first name above.
-          mentions: mentioned
-            .filter(mention => personal || mention.kind !== 'person')
-            .map(mentionLine),
+          mentions: [
+            ...mentioned.filter(mention => personal || mention.kind !== 'person').map(mentionLine),
+            ...(hints ? [hints] : []),
+          ],
         }
       );
       const system: AiMessage = { role: 'system', content: prompt.system, dataClass };
@@ -386,18 +459,22 @@ async function* squireTurn(
       // The ordinary AI answer: the model with tools. Also what an investigation falls back to when its
       // planner fails before reading anything, so a basic answer never replaces an available model.
       const ordinary = async function* (): AsyncGenerator<SquireEvent> {
+        const replay = personal
+          ? history
+          : history
+              // Questions only: no earlier answers, and no summary of them.
+              .filter(message => message.role === 'user' && message !== context.summary)
+              .map(message => ({
+                ...message,
+                content: redactPersonalData(message.content),
+                dataClass: 'INTERNAL' as const,
+              }));
         const messages: AiMessage[] = [
           system,
-          ...(personal
-            ? history
-            : history
-                // Questions only: no earlier answers, and no summary of them.
-                .filter(message => message.role === 'user' && message !== context.summary)
-                .map(message => ({
-                  ...message,
-                  content: redactPersonalData(message.content),
-                  dataClass: 'INTERNAL' as const,
-                }))),
+          // The history is append-only, so the next turn sends it again unchanged: cache up to its end.
+          ...replay.map((message, index) =>
+            index === replay.length - 1 ? { ...message, cache: true } : message
+          ),
           ...volatile,
           { role: 'user', content: question, dataClass },
         ];
@@ -421,31 +498,29 @@ async function* squireTurn(
             prompt: prompt.meta,
           },
           messages,
-          tools: toolsForMessage(
-            buildSquireTools(actor, {
-              personal,
-              extendedActions: settings.squireExtendedActions,
-              knowledge,
-              dataClass,
-              signal,
-              observability,
-              // The operation catalog: reads for everyone, changes (confirmable cards) with extended actions.
-              extraTools: [
-                ...buildOperationTools(actor, { signal }),
-                ...(settings.squireExtendedActions ? PROPOSAL_EXTRA_TOOLS : []),
-              ],
-              observe: (name, input, result) => {
-                // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
-                ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
-                readUntrusted = true;
-                return evidence.observe(name, input, result);
-              },
-            })
-              .filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name))
-              .map(traceReadTool),
-            request.message,
-            Boolean(incident)
-          ),
+          // The same tools in the same order every turn (not narrowed per question), so the cached prefix holds.
+          tools: buildSquireTools(actor, {
+            personal,
+            extendedActions: settings.squireExtendedActions,
+            knowledge,
+            dataClass,
+            signal,
+            observability,
+            // The operation catalog: reads for everyone, changes (confirmable cards) with extended actions.
+            extraTools: [
+              ...buildOperationTools(actor, { signal }),
+              ...(settings.squireExtendedActions ? PROPOSAL_EXTRA_TOOLS : []),
+              REMEMBER_FACT_TOOL,
+            ],
+            observe: (name, input, result) => {
+              // eslint-disable-next-line security/detect-object-injection -- lookup in a fixed table; unknown names fall back
+              ranClasses.push(SQUIRE_TOOL_DATA_CLASS[name] ?? 'INTERNAL');
+              readUntrusted = true;
+              return evidence.observe(name, input, result);
+            },
+          })
+            .filter(tool => tool.kind !== 'READ' || mayRead(scope, tool.name))
+            .map(traceReadTool),
           maxSteps: SQUIRE_LIMITS.maxSteps,
         })) {
           for (const text of evidence.notices()) {
@@ -458,6 +533,16 @@ async function* squireTurn(
             answer += event.delta;
             yield { type: 'delta', text: event.delta };
           } else if (event.type === 'finish') {
+            const { usage, served: by } = event.result;
+            Object.assign(served, {
+              model: by.model,
+              ...(by.kind ? { provider: AI_PROVIDER_LABELS[by.kind] ?? by.kind } : {}),
+              tokens: {
+                input: usage.inputTokens,
+                output: usage.outputTokens,
+                ...(usage.cacheReadTokens ? { cacheRead: usage.cacheReadTokens } : {}),
+              },
+            });
             if (event.result.degraded) yield { type: 'notice', text: AI_LEAN_NOTICE };
             if (event.result.budgetLimited) yield { type: 'notice', text: BUDGET_CUT_NOTICE };
           } else if (event.type === 'tool-start') {
@@ -467,19 +552,37 @@ async function* squireTurn(
             const action = actionForTool(event.call.name);
             const operation = event.call.name === PROPOSE_OPERATION_TOOL.name;
             const plan = event.call.name === PROPOSE_PLAN_TOOL.name;
-            if (!action && !operation && !plan) continue;
+            const remember = event.call.name === REMEMBER_FACT_TOOL.name;
+            const fix = event.call.name === PROPOSE_RUNBOOK_FROM_FIX_TOOL.name;
+            if (!action && !operation && !plan && !remember && !fix) continue;
             // The model was told a card is shown only if still valid: say so when one is not.
             if (proposals >= MAX_PROPOSALS) {
               if (!droppedNotice) yield { type: 'notice', text: PROPOSAL_CAP_NOTICE };
               droppedNotice = true;
               continue;
             }
+            if (fix) {
+              // The fix card refuses with a reason (role needed, not resolved): say it rather than a generic drop.
+              const built = await buildRunbookFromFixProposal(actor, event.call.input).catch(
+                () => null
+              );
+              if (built && 'token' in built) {
+                proposals += 1;
+                yield {
+                  type: 'proposal',
+                  proposal: { ...built, ...(readUntrusted ? { untrustedContext: true } : {}) },
+                };
+              } else yield { type: 'notice', text: built?.refusal ?? PROPOSAL_DROPPED_NOTICE };
+              continue;
+            }
             const proposal = await (
-              plan
-                ? buildPlanProposal(actor, event.call.input)
-                : operation
-                  ? buildOperationProposal(actor, event.call.input)
-                  : buildProposal(actor, action!, event.call.input)
+              remember
+                ? buildRememberProposal(actor, event.call.input)
+                : plan
+                  ? buildPlanProposal(actor, event.call.input)
+                  : operation
+                    ? buildOperationProposal(actor, event.call.input)
+                    : buildProposal(actor, action!, event.call.input)
             ).catch(() => null);
             if (proposal) {
               proposals += 1;
@@ -885,18 +988,6 @@ async function brief(
 
 /** Messages summarised together: the replay boundary moves in steps of this many (three exchanges). */
 const HISTORY_BLOCK = 6;
-const SOURCE_LINK =
-  /\/(?:incidents|runbooks|changes|alerts|services|schedules|postmortems)\/[A-Za-z0-9_-]{1,64}(?![A-Za-z0-9_-])/g;
-
-/** An older answer as history: its first sentence plus the in-app sources it cited. */
-export function replayDigest(answer: string): string {
-  const text = answer.trim();
-  const first = (text.match(/^[\s\S]*?[.!?](?=\s|$)/)?.[0] ?? text).slice(0, 400);
-  const sources = [...new Set(text.match(SOURCE_LINK) ?? [])]
-    .filter(link => !first.includes(link))
-    .slice(0, 8);
-  return sources.length ? `${first} Sources: ${sources.join(' ')}` : first;
-}
 
 /**
  * Earlier turns. A saved conversation is the source of truth when history is on (the person's own, read
@@ -957,7 +1048,7 @@ async function priorTurns(
       ...(summary ? { summary } : {}),
       messages: [
         ...(summary ? [summary] : []),
-        ...replayable.map((message, index) => ({
+        ...replayable.map(message => ({
           role: message.role,
           content:
             message.role === 'assistant'
@@ -966,10 +1057,8 @@ async function priorTurns(
                     ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]`
                     : earlierAnswerLabel(message.createdAt.toISOString(), false)
                 }\n${
-                  // Only the latest answer is replayed in full; older ones as their gist and sources.
-                  replayable.slice(index + 1).some(later => later.role === 'assistant')
-                    ? replayDigest(message.content)
-                    : message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)
+                  // Every answer the same way, whatever its position, so the replayed prefix is append-only.
+                  message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)
                 }`
               : `${askedOn(message)}${message.content}`.slice(0, SQUIRE_LIMITS.historyTurnMax),
           dataClass: message.dataClass,

@@ -13,7 +13,8 @@ import { getHistoryStatus } from './store';
  * Answers that finish in the background: storage, listing, cancelling and housekeeping. Running them is in
  * background-run.ts, which needs the whole assistant; this file stays small enough for the jobs runner.
  * When someone leaves an answer running (closes the tab, or asks
- * Squire to keep working), the question is stored encrypted, run again on the server as that person, saved to
+ * Squire to keep working), the question is stored encrypted and finished on the server as that person (the live
+ * answer keeps going when it is streaming in this process; otherwise it is run again), saved to
  * their conversation history and announced with an in-app notification. Only with saved history on, since the
  * answer has nowhere else to go; only for the person who asked; at most three at a time per person.
  *
@@ -108,13 +109,30 @@ export async function enqueueBackgroundTurn(
   userId: string,
   request: SquireRequest
 ): Promise<{ id: string }> {
+  // Taken before any await, so the live turn keeps going even if the browser disconnects right after.
+  const key = liveTurnKey(userId, request);
+  const adopt = liveTurns.get(key);
+  liveTurns.delete(key);
+  let handedOver: (id: string | null) => void = () => undefined;
+  adopt?.(new Promise(resolve => (handedOver = resolve)));
+  const id = randomUUID();
+  try {
+    await store(id, userId, request, Boolean(adopt));
+  } catch (error) {
+    handedOver(null);
+    throw error;
+  }
+  handedOver(id);
+  return { id };
+}
+
+async function store(id: string, userId: string, request: SquireRequest, live: boolean) {
   if (!(await getHistoryStatus()).enabled)
     throw new BackgroundTurnRefused(
       409,
       'Answers can only finish in the background when saved conversations are on. Keep this chat open, or ask an administrator to turn on saved conversations.'
     );
   const requestEncrypted = await encrypt(JSON.stringify(request));
-  const id = randomUUID();
   await prisma.$transaction(async tx => {
     // One person's hand-offs are taken one at a time, so two at once cannot both slip under the cap.
     await acquireTextAdvisoryLocks(tx, [`squire-background:${userId}`]);
@@ -133,10 +151,11 @@ export async function enqueueBackgroundTurn(
         conversationId: request.conversationId ?? null,
         incidentId: request.incidentId ?? null,
         requestEncrypted,
+        // A live turn is already running: it is never queued, so it cannot be run a second time.
+        ...(live ? { status: 'RUNNING', startedAt: new Date() } : {}),
       },
     });
   });
-  return { id };
 }
 
 /** The person's background answers from the last day, newest first. */
@@ -213,6 +232,16 @@ export const runningBackgroundTurns = new Map<
   { controller: AbortController; done: Promise<void> }
 >();
 
+/**
+ * Answers the chat route is streaming in this process, by person and request. Handing one of these over
+ * keeps that turn going (the chat route saves it) instead of asking the model again; it is given the
+ * background answer's id, or null when the hand-off was refused. Elsewhere (another server process) the
+ * question is queued and run again.
+ */
+export const liveTurns = new Map<string, (handOff: Promise<string | null>) => void>();
+export const liveTurnKey = (userId: string, request: SquireRequest) =>
+  `${userId}:${JSON.stringify(request)}`;
+
 export async function notify(
   userId: string,
   id: string,
@@ -224,7 +253,9 @@ export async function notify(
     userIds: [userId],
     type: 'SYSTEM',
     // The question stays encrypted: notifications outlive history retention, so they never repeat it.
-    title: outcome.failure ? `${name} could not finish your answer` : `${name} finished your answer`,
+    title: outcome.failure
+      ? `${name} could not finish your answer`
+      : `${name} finished your answer`,
     message: outcome.failure
       ? FAILURE_TEXT[outcome.failure]
       : 'Your answer is ready. Open it to read it in your conversation.',
@@ -251,6 +282,21 @@ export async function finish(
     },
   });
   return count === 1;
+}
+
+/** Records how a background answer ended and tells the person; a cancelled one stays silent. */
+export async function completeTurn(
+  id: string,
+  userId: string,
+  title: string,
+  outcome: { conversationId: string | null; failure?: BackgroundFailure }
+) {
+  if (!(await finish(id, outcome.failure ? 'FAILED' : 'DONE', outcome))) return;
+  await notify(userId, id, title, outcome).catch(error =>
+    logger.warn('[Squire] Could not announce a finished background answer', {
+      error: error instanceof Error ? error.name : 'error',
+    })
+  );
 }
 
 export async function failTurn(id: string, failure: BackgroundFailure, error?: unknown) {

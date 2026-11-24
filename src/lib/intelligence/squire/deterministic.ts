@@ -16,11 +16,22 @@ import {
 } from '@/lib/authorization-filters';
 import { readChangeReference } from './references';
 import { actorHasCapability, type AuthorizationActor } from '@/lib/authorization-policy';
-import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
+import {
+  AuthorizationError,
+  CAPABILITIES,
+  ROLE_DESCRIPTIONS,
+  roleLabel,
+} from '@/lib/authorization';
 import { getRelatedIncidentsForActor } from '../correlation/view';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
-import { routeIntent, incidentIntents, stripGreeting, type SquireIntent } from './intents';
+import {
+  routeIntent,
+  incidentIntents,
+  SHIFT_QUESTION,
+  stripGreeting,
+  type SquireIntent,
+} from './intents';
 import {
   answerBasicReadDetailed,
   BASIC_PAGE_SIZE,
@@ -39,6 +50,7 @@ import {
   normalizeMessage,
   parseDuration,
   parseSlashCommand,
+  splitQuestions,
   type Slots,
   type SpellingCorrection,
 } from './basic/nlu';
@@ -49,6 +61,16 @@ import { suggestFollowUps } from './basic/suggestions';
 import { BASIC_ANSWER_TTL_MS, TtlCache } from '../assistant/cache';
 import type { SquireActionName } from './actions/catalog';
 import type { SquireRequest } from './contract';
+import {
+  detectEntityReferences,
+  ENTITY_LABEL,
+  entityLink,
+  questionWithout,
+  resolveEntityReferences,
+  type EntityRef,
+} from './entity-refs';
+import type { ResolvedEntity } from './mentions';
+import { handleRememberCommand } from './memory';
 
 export interface ReadableIncident {
   id: string;
@@ -593,6 +615,25 @@ async function catchUpAnswer(
   }
 }
 
+/** "Am I on call?": the person's current or next shift, from the same reads as their catch-up. */
+async function shiftAnswer(actor: AuthorizationActor, now: Date): Promise<string> {
+  const timeZone = await timeZoneFor(actor.id);
+  const when = (at: string) =>
+    new Date(at).toLocaleString('en-GB', { timeZone, dateStyle: 'medium', timeStyle: 'short' });
+  try {
+    const { onCallNow, nextShift } = await buildCatchUp(actor, { now });
+    return onCallNow
+      ? `Yes. You are on call now for ${short(onCallNow.scheduleName)} until ${when(onCallNow.until)} (${timeZone}). /schedules/${onCallNow.scheduleId}`
+      : nextShift
+        ? `You are not on call right now. Your next shift: ${short(nextShift.scheduleName)}, ${when(nextShift.start)} to ${when(nextShift.end)} (${timeZone}). /schedules/${nextShift.scheduleId}`
+        : 'You are not on call right now, and you have no shift in the next 7 days on schedules you can see.';
+  } catch (error) {
+    if (error instanceof AuthorizationError)
+      return 'You do not have permission to read incidents, so I cannot check your shifts. Ask an administrator to review your access.';
+    throw error;
+  }
+}
+
 const MAX_CHANGE_MS = 7 * 86_400_000;
 const OPERATION_USAGE = {
   tag: 'Usage: /tag <name>, on an incident page. Example: /tag database',
@@ -709,20 +750,153 @@ const INCIDENT_LIST_INTENTS: ReadonlySet<SquireIntent> = new Set([
  * collision-resistant id (cuid). Returns the id and the question without it, or null.
  */
 export function mentionedIncident(message: string): { id: string; rest: string } | null {
-  const text = message.slice(0, 2_000);
-  const match =
-    text.match(/\/incidents\/([A-Za-z0-9_-]{8,64})/) ??
-    text.match(/\bincidents?\s*(?:id\s*)?[:#]?\s*([a-z0-9]{20,32})\b/i) ??
-    text.match(/\b(c[a-z0-9]{20,31})\b/);
-  if (!match) return null;
-  const rest = text
-    .replace(match[0], ' ')
-    .replace(/https?:\/\/\S*/gi, ' ')
-    .replace(/\b(?:its|it'?s|the|this|an?)\s+incident\s+(?:id|link|url)\b.*$/i, ' ')
-    .replace(/\bfrom (?:its|the) (?:url|link)\b/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return { id: match[1], rest };
+  const ref = detectEntityReferences(message).find(
+    entry => entry.id && (entry.kind === 'incident' || entry.kind === null)
+  );
+  return ref?.id ? { id: ref.id, rest: questionWithout(message, ref) } : null;
+}
+
+const LIST_NAME: Partial<Record<NonNullable<EntityRef['kind']>, string>> = {
+  escalation_policy: 'escalation policies',
+  person: 'users',
+};
+
+/** The same words for a record that does not exist and one the person may not open. */
+function notFound(ref: EntityRef): string {
+  if (!ref.kind)
+    return 'I can’t find anything with that id, or you can’t open it. Check the id, or open the record from its list and ask again.';
+  const label = ENTITY_LABEL[ref.kind];
+  const list = LIST_NAME[ref.kind] ?? `${label}s`;
+  return ref.name
+    ? `I can’t find a ${label} called “${short(ref.name)}” that you can open. Check the name, or open it from the ${list} list and ask again.`
+    : `I can’t find that ${label}, or you can’t open it. Check the ${ref.shortRef ? 'reference' : 'id'}, or open it from the ${list} list and ask again.`;
+}
+
+/** Who is asking: their role, what it allows and their teams, from their own account. */
+async function identityAnswer(actor: AuthorizationActor): Promise<string> {
+  const [user, teams] = await Promise.all([
+    prisma.user.findUnique({ where: { id: actor.id }, select: { name: true, email: true } }),
+    prisma.team.findMany({
+      where: { id: { in: [...actor.teamIds] } },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+      take: 20,
+    }),
+  ]);
+  return [
+    `## ${short(user?.name || user?.email || 'Your account')}`,
+    `Role: **${roleLabel(actor.role)}**. ${ROLE_DESCRIPTIONS.get(actor.role) ?? ''}`.trim(),
+    teams.length
+      ? `Your teams:\n${teams.map(team => `- ${short(team.name)} /teams/${team.id}`).join('\n')}`
+      : 'You are not a member of any team.',
+    `Your profile: /users/${actor.id}. An administrator can change your role, extra permissions or team membership.`,
+  ].join('\n\n');
+}
+
+/** What each kind's page answers when the question names it with nothing more ("services/<id>"). */
+const ENTITY_QUESTION: Partial<Record<ResolvedEntity['kind'], (name: string) => string>> = {
+  // Quoted, so the service lookup reads the one service rather than listing every visible one.
+  service: name => `service health "${name}"`,
+  team: () => 'open incidents',
+  schedule: () => 'who is on call',
+};
+const ENTITY_INTENT: Partial<Record<ResolvedEntity['kind'], SquireIntent>> = {
+  runbook: 'RUNBOOK_SEARCH',
+  postmortem: 'POSTMORTEMS',
+  change: 'RECENT_CHANGES',
+  alert: 'ALERT_STATS',
+  escalation_policy: 'SERVICE_HEALTH',
+  status_page: 'SERVICE_HEALTH',
+  person: 'RESPONDERS',
+};
+
+/** A short, linked summary of a record that has no basic reader of its own. */
+async function entitySummary(entity: ResolvedEntity, collect?: Collect): Promise<string> {
+  const label = ENTITY_LABEL[entity.kind];
+  const lines = [`## ${label.charAt(0).toUpperCase()}${label.slice(1)}: ${short(entity.name)}`];
+  if (entity.kind === 'runbook') {
+    const row = await prisma.runbook.findUnique({
+      where: { id: entity.id },
+      select: { id: true, name: true, description: true, tags: true, publishedVersionId: true },
+    });
+    if (row) collect?.({ kind: 'runbook', id: row.id, label: row.name, data: row });
+    lines.push(
+      row?.description ? short(row.description) : '',
+      `${row?.publishedVersionId ? 'A published version is available.' : 'No published version yet.'}${row?.tags.length ? ` Tags: ${row.tags.map(short).join(', ')}.` : ''}`,
+      'Review its preview, targets and approvals before running anything; I never run a runbook.'
+    );
+  }
+  if (entity.kind === 'escalation_policy') {
+    const steps = await prisma.escalationRule.findMany({
+      where: { policyId: entity.id },
+      take: 10,
+      orderBy: { stepOrder: 'asc' },
+      select: { delayMinutes: true },
+    });
+    lines.push(
+      steps.length
+        ? `${steps.length === 10 ? 'At least 10' : steps.length} step${steps.length === 1 ? '' : 's'}, delays ${steps.map(step => `${step.delayMinutes} min`).join(', ')}.`
+        : 'No escalation steps are configured.'
+    );
+  }
+  if (entity.kind === 'change' && entity.page?.serviceName)
+    lines.push(`Recorded on ${short(entity.page.serviceName)}.`);
+  if (entity.kind === 'postmortem' && entity.page?.incidentId)
+    lines.push(`Incident: /incidents/${entity.page.incidentId}`);
+  if (entity.kind === 'person')
+    lines.push(`Ask “incidents assigned to ${short(entity.name)}” for their open work.`);
+  lines.push(entityLink(entity));
+  return lines.filter(Boolean).join('\n\n');
+}
+
+/**
+ * A turn about one record the question named, already read under the person's permissions: an incident (or
+ * an alert's incident) is briefed as on its page; a service, team or schedule answers the rest of the
+ * question as on its page; anything else gets a linked summary.
+ */
+async function entityTurn(
+  input: BasicTurnInput,
+  entity: ResolvedEntity,
+  rest: string,
+  collect: Collect | undefined,
+  result: (text: string, intent: SquireIntent) => BasicTurnResult
+): Promise<BasicTurnResult> {
+  const incidentId = entity.kind === 'alert' ? entity.page?.incidentId : undefined;
+  const incident =
+    entity.incident ??
+    (incidentId ? await readIncidentForActor(input.actor, incidentId).catch(() => null) : null);
+  if (incident) {
+    const asked = rest ? classifyIntent(normalizeMessage(rest), true).intent : 'UNKNOWN';
+    return planBasicTurn(
+      {
+        ...input,
+        incident,
+        page: null,
+        state: null,
+        // A question that is only the id (or "what's going on with it") gets the briefing.
+        message: INCIDENT_LIST_INTENTS.has(asked) ? 'Summarise this incident' : rest,
+      },
+      collect
+    );
+  }
+  const question = ENTITY_QUESTION[entity.kind];
+  if (question && entity.page) {
+    const asked = rest ? classifyIntent(normalizeMessage(rest), false).intent : 'UNKNOWN';
+    // "What's going on with <it>" reads as active incidents; without the word it asks for the overview.
+    const specific =
+      READ_INTENTS.has(asked) && (asked !== 'ACTIVE_INCIDENTS' || /\bincidents?\b/i.test(rest));
+    return planBasicTurn(
+      {
+        ...input,
+        incident: null,
+        page: entity.page,
+        state: null,
+        message: specific ? rest : question(entity.name),
+      },
+      collect
+    );
+  }
+  return result(await entitySummary(entity, collect), ENTITY_INTENT[entity.kind] ?? 'UNKNOWN');
 }
 
 export async function planBasicTurn(
@@ -736,6 +910,24 @@ export async function planBasicTurn(
   if (greeting.greeted && !greetOnly) {
     const answer = await planBasicTurn({ ...input, message: greeting.rest }, collect);
     return answer.intent === 'GREETING' ? answer : { ...answer, text: `Hi! ${answer.text}` };
+  }
+  // "Who is on call and how many incidents are open?": each question answered in turn, at most three.
+  const questions =
+    input.state?.pending || parseSlashCommand(input.message)
+      ? []
+      : splitQuestions(input.message, input.incident !== null);
+  if (questions.length > 1) {
+    const answers: BasicTurnResult[] = [];
+    for (const question of questions)
+      answers.push(await planBasicTurn({ ...input, message: question, state: null }, collect));
+    return {
+      ...answers[0],
+      text: answers.map(answer => answer.text).join('\n\n---\n\n'),
+      proposals: answers.flatMap(answer => answer.proposals),
+      corrections: answers.flatMap(answer => answer.corrections),
+      nextState: null,
+      cached: answers.every(answer => answer.cached),
+    };
   }
   const { actor, name = 'Squire' } = input;
   const now = input.now ?? new Date();
@@ -763,35 +955,23 @@ export async function planBasicTurn(
     cached: extra.cached ?? false,
   });
 
-  // "What's going on with incident <id>", a pasted /incidents/<id> link or a bare id: answer about that incident
-  // as if on its page, when the person may read it. Never a keyword search for the id.
+  // "/remember I own the payments service": the person's own fact, typed by them, so saved without a card.
+  if (!input.state?.pending) {
+    const remembered = await handleRememberCommand(actor, input.message);
+    if (remembered) return result(remembered, 'UNKNOWN', { suggestions: [] });
+  }
+
+  // A record named by link, "<kind> <id>", "incident #ABCDE" or a bare id: answered about that record as if on
+  // its page, when the person may read it. Never a keyword search for the id.
   if (!parseSlashCommand(input.message)) {
-    const reference = mentionedIncident(input.message);
+    const reference = detectEntityReferences(input.message).find(ref => ref.id || ref.shortRef);
     if (reference) {
-      const found =
-        incident?.id === reference.id
-          ? incident
-          : await readIncidentForActor(actor, reference.id).catch(() => null);
-      if (!found)
-        return result(
-          'I can’t find that incident, or you can’t open it. Check the id, or open it from the incidents list and ask again.',
-          'UNKNOWN'
-        );
-      const rest = reference.rest;
-      const intentOnIncident = rest
-        ? classifyIntent(normalizeMessage(rest), true).intent
-        : 'UNKNOWN';
-      return planBasicTurn(
-        {
-          ...input,
-          incident: found,
-          page: null,
-          state: null,
-          // A question that is only the id (or "what's going on with it") gets the briefing.
-          message: INCIDENT_LIST_INTENTS.has(intentOnIncident) ? 'Summarise this incident' : rest,
-        },
-        collect
-      );
+      const [found] =
+        incident && reference.id === incident.id
+          ? [{ kind: 'incident' as const, id: incident.id, name: incident.title, incident }]
+          : await resolveEntityReferences(actor, [reference]);
+      if (!found) return result(notFound(reference), 'UNKNOWN');
+      return entityTurn(input, found, questionWithout(input.message, reference), collect, result);
     }
   }
   const change = operationSlash(input, now);
@@ -941,6 +1121,7 @@ export async function planBasicTurn(
       'THANKS'
     );
   if (intent === 'HELP') return result(HELP, 'HELP');
+  if (intent === 'IDENTITY') return result(await identityAnswer(actor), 'IDENTITY');
   if (intent === 'GUIDANCE') {
     const guide = productGuidance(text);
     const docs = await docsAnswer(text);
@@ -951,6 +1132,8 @@ export async function planBasicTurn(
     );
   }
 
+  if (intent === 'CATCH_UP' && SHIFT_QUESTION.test(text))
+    return result(await shiftAnswer(actor, now), 'CATCH_UP');
   if (intent === 'CATCH_UP')
     return result(await catchUpAnswer(actor, text, now, collect), 'CATCH_UP');
 
@@ -963,6 +1146,25 @@ export async function planBasicTurn(
       'Open the incident you mean, then ask again (for example "acknowledge this"). I only propose actions for the incident on screen, and nothing happens until you confirm the card.',
       'UNKNOWN'
     );
+
+  // A record named in words that the readers' own name matching does not cover ("the primary schedule", "the
+  // database runbook", or any kind when the question is otherwise unknown): answered as on its page.
+  if (!incident && !input.page && !forcedIntent) {
+    const named = detectEntityReferences(expanded.message).find(
+      ref => ref.name && (intent === 'UNKNOWN' || (ref.kind !== 'service' && ref.kind !== 'team'))
+    );
+    if (named) {
+      const [found] = await resolveEntityReferences(actor, [named]);
+      if (found)
+        return entityTurn(input, found, questionWithout(expanded.message, named), collect, result);
+      // An unmatched service name goes to the service lookup, which lists or asks between close names; an
+      // unmatched runbook or postmortem name falls back to the catalog search.
+      if (named.kind === 'service')
+        return planBasicTurn({ ...input, message: `service health ${named.name}` }, collect);
+      if (intent === 'UNKNOWN' || (named.kind !== 'runbook' && named.kind !== 'postmortem'))
+        return result(notFound(named), intent);
+    }
+  }
 
   // Ambiguous: offer the two best readings instead of guessing; the pick keeps this question's subject.
   if (intent === 'UNKNOWN' && prediction.alternatives.length >= 2 && !incident) {

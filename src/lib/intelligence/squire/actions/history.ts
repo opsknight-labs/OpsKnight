@@ -120,7 +120,7 @@ async function resultMessage(
  */
 export async function listSquireActionHistory(
   actor: AuthorizationActor,
-  options: { scope?: string; status?: string; cursor?: string } = {},
+  options: { scope?: string; status?: string; cursor?: string; incident?: string } = {},
   now: Date = new Date()
 ): Promise<ActionHistoryPage | null> {
   if (!canUseHistory(actor)) return null;
@@ -129,6 +129,7 @@ export async function listSquireActionHistory(
     options.scope === 'everyone' && canSeeEveryone ? 'everyone' : 'mine';
   const status = ACTION_OUTCOME_STATES.find(state => state === options.status);
   const cursor = z.string().uuid().safeParse(options.cursor).success ? options.cursor : undefined;
+  const incident = options.incident?.slice(0, 64);
 
   const fetched = await prisma.squireActionReceipt.findMany({
     where: {
@@ -143,6 +144,8 @@ export async function listSquireActionHistory(
           ],
         },
         statusWhere(status, now),
+        // A plan across incidents matches any of them; older receipts only have incidentId.
+        incident ? { OR: [{ incidentId: incident }, { incidentIds: { has: incident } }] } : {},
       ],
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -154,6 +157,7 @@ export async function listSquireActionHistory(
       userId: true,
       action: true,
       incidentId: true,
+      incidentIds: true,
       status: true,
       resultEncrypted: true,
       startedAt: true,
@@ -165,7 +169,9 @@ export async function listSquireActionHistory(
   const page = receipts.slice(0, ACTION_HISTORY_PAGE_SIZE);
   const nextCursor = receipts.length > ACTION_HISTORY_PAGE_SIZE ? page[page.length - 1]!.id : null;
 
-  const incidentIds = [...new Set(page.flatMap(r => (r.incidentId ? [r.incidentId] : [])))];
+  const incidentsOf = (receipt: { incidentId: string | null; incidentIds: string[] }) =>
+    receipt.incidentId ? [receipt.incidentId, ...receipt.incidentIds] : receipt.incidentIds;
+  const incidentIds = [...new Set(page.flatMap(incidentsOf))];
   let readable = new Set<string>();
   if (incidentIds.length) {
     try {
@@ -181,7 +187,8 @@ export async function listSquireActionHistory(
 
   const rows: ActionHistoryRow[] = [];
   for (const receipt of page) {
-    if (receipt.incidentId && !readable.has(receipt.incidentId)) continue;
+    // Every incident a plan touched must still be readable, or the whole row stays hidden.
+    if (!incidentsOf(receipt).every(id => readable.has(id))) continue;
     const rowStatus = effectiveStatus(receipt, now);
     rows.push({
       id: receipt.id,

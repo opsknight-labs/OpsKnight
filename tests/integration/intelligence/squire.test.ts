@@ -458,8 +458,9 @@ describe('AI mode', () => {
       'meta',
       'notice',
       'meta',
-      ...publicEvents.slice(3, -2).map(() => 'delta'),
+      ...publicEvents.slice(3, -3).map(() => 'delta'),
       'suggestions',
+      'trace',
       'done',
     ]);
     expect(events[1]).toMatchObject({

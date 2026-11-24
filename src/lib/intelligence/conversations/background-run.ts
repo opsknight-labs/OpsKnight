@@ -2,14 +2,13 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { isAppRole } from '@/lib/authorization';
 import { resolveUserActor } from '@/lib/authorization-actors';
-import { logger } from '@/lib/logger';
 import { streamSquire } from '../squire/chat';
 import { readIncidentForActor } from '../squire/deterministic';
 import {
   BACKGROUND_LIMITS,
+  completeTurn,
   failTurn,
   finish,
-  notify,
   readRequest,
   runningBackgroundTurns,
   titleOf,
@@ -152,10 +151,5 @@ async function runClaimed(id: string, controller: AbortController): Promise<void
     : timedOut
       ? 'TIMED_OUT'
       : 'NO_ANSWER';
-  if (!(await finish(id, answered ? 'DONE' : 'FAILED', { conversationId, failure }))) return;
-  await notify(row.userId, id, title, { conversationId, failure }).catch(error =>
-    logger.warn('[Squire] Could not announce a finished background answer', {
-      error: error instanceof Error ? error.name : 'error',
-    })
-  );
+  await completeTurn(id, row.userId, title, { conversationId, failure });
 }

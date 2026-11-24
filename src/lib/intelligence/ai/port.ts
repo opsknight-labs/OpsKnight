@@ -47,6 +47,8 @@ export interface AiMessage {
   content: string;
   /** Trusted server-side classification, never accepted from browser history. */
   dataClass?: AiDataClass;
+  /** The end of a stable prefix (e.g. the replayed history): providers that cache explicitly cache up to here. */
+  cache?: boolean;
 }
 
 /** Who is asking and for what; used for budgets, audit and data-policy checks. */
@@ -112,7 +114,7 @@ export interface AiGenerateResult {
   toolCalls: AiToolCall[];
   usage: AiUsage;
   /** Which route/provider/model actually served the request, for audit and the status chip. */
-  served: { providerId: string; model: string; fallbackDepth: number };
+  served: { providerId: string; model: string; fallbackDepth: number; kind?: string };
   /** Why the model stopped ("stop", "length", "content-filter", ...) when the provider says. */
   finishReason?: string;
   /** True when the answer came from the result cache: no model ran and `usage` is zero. */

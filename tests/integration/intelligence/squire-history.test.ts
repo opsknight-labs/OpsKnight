@@ -118,6 +118,39 @@ describe('saved assistant conversations', () => {
     expect((await getConversation(admin.id, id))?.messages).toHaveLength(4);
   });
 
+  it('replaces only the owner’s latest exchange on a retry of the same question', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const other = await createTestUser({ role: 'RESPONDER' });
+    await configure(admin.id, { enabled: true });
+    const id = await recordExchange({ userId: admin.id, question: 'First?', answer: 'One.' });
+    await recordExchange({
+      userId: admin.id,
+      conversationId: id,
+      question: 'Why?',
+      answer: 'Old.',
+    });
+    const retry = { conversationId: id, question: 'Why?', replaceLastExchange: true };
+
+    expect(await recordExchange({ userId: admin.id, ...retry, answer: 'New.' })).toBe(id);
+    const contents = async () =>
+      (await getConversation(admin.id, id))?.messages.map(message => message.content);
+    expect(await contents()).toEqual(['First?', 'One.', 'Why?', 'New.']);
+    expect((await db.squireConversation.findUniqueOrThrow({ where: { id } })).messageCount).toBe(4);
+
+    // Another question is not the latest exchange retried: appended.
+    await recordExchange({ userId: admin.id, ...retry, question: 'Other?', answer: 'Two.' });
+    expect(await contents()).toHaveLength(6);
+    // Someone else cannot replace (or reach) it: their retry starts a conversation of their own.
+    const theirs = await recordExchange({
+      userId: other.id,
+      ...retry,
+      question: 'Other?',
+      answer: 'Theirs.',
+    });
+    expect(theirs).not.toBe(id);
+    expect(await contents()).toEqual(['First?', 'One.', 'Why?', 'New.', 'Other?', 'Two.']);
+  });
+
   it('continues one conversation when the page changes, keeping the incident it started on', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     await configure(admin.id, { enabled: true });

@@ -8,6 +8,7 @@ import {
   searchOperations,
   squireOperation,
 } from '@/lib/intelligence/squire/operations';
+import { buildRunbookFromFixProposal } from '@/lib/intelligence/squire/plans';
 import { executeSquireAction } from '@/lib/intelligence/squire/actions/execute';
 import { readSquireActionOutcome } from '@/lib/intelligence/squire/actions/outcomes';
 import {
@@ -273,8 +274,70 @@ describe('Squire operation catalog', () => {
     for (const proposal of [tag, rename])
       expect((await executeSquireAction(admin, proposal!.token)).ok).toBe(true);
     const receipt = (id: string) => db.squireActionReceipt.findUniqueOrThrow({ where: { id } });
-    expect((await receipt(tag!.receiptId!)).incidentId).toBe(incident.id);
-    expect((await receipt(rename!.receiptId!)).incidentId).toBeNull();
+    expect(await receipt(tag!.receiptId!)).toMatchObject({
+      incidentId: incident.id,
+      incidentIds: [incident.id],
+    });
+    expect(await receipt(rename!.receiptId!)).toMatchObject({ incidentId: null, incidentIds: [] });
+  });
+
+  it('offers a fix → runbook card after a resolve, drafted from the timeline and Squire actions', async () => {
+    const { admin, incident } = await world();
+    const tag = await buildOperationProposal(admin, {
+      operationId: 'addIncidentTag',
+      args: { path: { id: incident.id }, body: { name: 'database' } },
+    });
+    expect((await executeSquireAction(admin, tag!.token)).ok).toBe(true);
+    await db.incidentEvent.create({
+      data: { incidentId: incident.id, type: 'COMMENT', message: 'Restarted the connection pool' },
+    });
+    // Not resolved yet: nothing to turn into a runbook.
+    expect(await buildRunbookFromFixProposal(admin, { incidentId: incident.id })).toMatchObject({
+      refusal: expect.stringContaining('resolved incident'),
+    });
+
+    const resolve = await buildOperationProposal(admin, {
+      operationId: 'resolveIncident',
+      args: { path: { id: incident.id }, body: { resolutionNote: 'Pool size raised to 50' } },
+    });
+    const resolved = await executeSquireAction(admin, resolve!.token);
+    expect(resolved.ok).toBe(true);
+    const card = resolved.ok ? resolved.followUp : undefined;
+    expect(card).toMatchObject({
+      title: 'Turn this fix into a runbook',
+      confirmLabel: 'Create draft runbook',
+    });
+    const steps = card!.preview!.map(row => row.value);
+    expect(steps[0]).toContain('Confirm the symptom');
+    expect(steps).toContain('Add a tag to an incident');
+    expect(steps).toContain('Restarted the connection pool');
+    expect(steps.at(-1)).toMatch(/^Confirm the fix holds: .*Pool size raised to 50/);
+    // Only a card: no runbook until it is confirmed, then an unpublished draft with those steps.
+    expect(await db.runbook.count()).toBe(0);
+    expect((await executeSquireAction(admin, card!.token)).ok).toBe(true);
+    const runbook = await db.runbook.findFirstOrThrow({ include: { draftVersion: true } });
+    expect(runbook).toMatchObject({ name: `Fix: ${incident.title}`, publishedVersionId: null });
+    const definition = runbook.draftVersion!.definition as {
+      steps: { name: string; type: string }[];
+    };
+    expect(definition.steps.map(step => step.type)).toEqual(steps.map(() => 'MANUAL'));
+    expect(definition.steps.map(step => step.name)).toContain('Restarted the connection pool');
+  });
+
+  it('lets the model refine the runbook steps, and names the role a person needs to create one', async () => {
+    const { admin, stakeholder, incident } = await world();
+    await db.incident.update({ where: { id: incident.id }, data: { status: 'RESOLVED' } });
+    const refined = await buildRunbookFromFixProposal(admin, {
+      incidentId: incident.id,
+      name: 'Checkout pool exhaustion',
+      steps: [{ name: 'Raise the pool size', description: 'Set it to 50.' }],
+    });
+    expect(refined).toMatchObject({
+      preview: [{ label: 'Step 1', value: 'Raise the pool size: Set it to 50.' }],
+    });
+    const refusal = await buildRunbookFromFixProposal(stakeholder, { incidentId: incident.id });
+    expect(refusal).toEqual({ refusal: expect.stringMatching(/needs .*Admin/) });
+    expect(await db.runbook.count()).toBe(0);
   });
 
   it('reports a receipt that cannot be written as not recorded, and only a duplicate as already used', async () => {

@@ -708,6 +708,7 @@ export async function executeOperationProposal(
         userId: actor.id,
         action: `operation:${operation.operationId}`,
         incidentId: incidentOf(operation, args),
+        incidentIds: [incidentOf(operation, args)].filter(id => id !== undefined),
         status: 'RUNNING',
         startedAt: new Date(),
         intentEncrypted: await encrypt(
@@ -747,13 +748,13 @@ export async function executeOperationProposal(
     const response = await invoke(actor, operation, args, context);
     // Best effort: neither the re-read nor the undo card can fail a change that has happened.
     const after = await readTarget(actor, operation, args, context);
-    const followUp = await undoFor(
-      actor,
-      operation,
-      args,
-      { before, response, after },
-      context.name
-    ).catch(() => null);
+    const resolvedId = operation.operationId === 'resolveIncident' ? args.path?.id : undefined;
+    const followUp =
+      (await undoFor(actor, operation, args, { before, response, after }, context.name).catch(
+        () => null
+      )) ??
+      // After a resolve, offer to keep the fix as a runbook draft (plans.ts imports this module).
+      (resolvedId ? await (await import('./plans')).offerRunbookFromFix(actor, resolvedId) : null);
     return finish('SUCCEEDED', {
       ok: true,
       message: `Done: ${summaryOf(operation)}.${nowSummary(changesOf(operation, args), after)}`,
