@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Check, Crosshair, Network, Route, Unlink, Waypoints, X } from 'lucide-react';
+import { ArrowUpRight, Check, Crosshair, Network, Power, Route, Unlink, Waypoints, X } from 'lucide-react';
 import { RelativeTime, SeverityBadge } from '@/components/patterns';
 import { Button } from '@/components/ui/shadcn/button';
 import type { ImpactReason } from '@/lib/business-services/contract';
@@ -30,6 +30,8 @@ type Props = {
   onImpactMode?: (mode: ImpactMode | null) => void;
   /** Start or end a path between two nodes. */
   onPathPoint?: (end: 'from' | 'to') => void;
+  /** Opens the failure simulation for this (technical) service. */
+  onWhatIf?: () => void;
   /** How many of the node's open incidents the panel lists before linking to the full list. */
   incidentsHref?: string | null;
 };
@@ -69,6 +71,7 @@ export default function GraphSidePanel({
   impactMode = null,
   onImpactMode,
   onPathPoint,
+  onWhatIf,
   incidentsHref = null,
 }: Props) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -290,6 +293,13 @@ export default function GraphSidePanel({
                 </>
               )}
             </div>
+          </section>
+        )}
+        {onWhatIf && item.kind === 'svc' && (
+          <section aria-label="Failure simulation">
+            <Button size="sm" variant="outline" onClick={onWhatIf}>
+              <Power className="h-4 w-4" aria-hidden="true" /> What if this goes down?
+            </Button>
           </section>
         )}
         {relationList('Depends on', dependsOn)}

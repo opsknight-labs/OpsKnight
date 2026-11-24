@@ -2,6 +2,10 @@ import Link from 'next/link';
 import EmptyState from '@/components/ui/EmptyState';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { DeclareDependencyForm, DependencyList } from '@/components/settings/DependencyManager';
+import GraphEmbedToggle from '@/components/settings/GraphEmbedToggle';
+import { CAPABILITIES } from '@/lib/authorization';
+import { actorHasCapability } from '@/lib/authorization-policy';
+import { isEmbedEnabled } from '@/lib/intelligence/dependencies/insights/views';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import prisma from '@/lib/prisma';
@@ -76,6 +80,8 @@ export default async function DependenciesChangesSections({ canManage }: { canMa
     )
   );
   const teams = summarizeAlertQualityByTeam(quality ?? []);
+  const isAdmin = actorHasCapability(actor, CAPABILITIES.ADMIN_MANAGE);
+  const embedEnabled = isAdmin ? Boolean(await safely('graph embeds', () => isEmbedEnabled())) : false;
 
   return (
     <>
@@ -115,6 +121,16 @@ export default async function DependenciesChangesSections({ canManage }: { canMa
           />
         )}
       </SettingsSection>
+
+      {isAdmin && (
+        <SettingsSection
+          id="graph-embeds"
+          title="Service graph sharing"
+          description="Read-only links to saved views of the service graph, for people without an account."
+        >
+          <GraphEmbedToggle initialEnabled={embedEnabled} />
+        </SettingsSection>
+      )}
 
       <SettingsSection
         id="metric-evidence"

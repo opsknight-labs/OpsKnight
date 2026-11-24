@@ -15,6 +15,7 @@ import { findServicesInMaintenance } from '@/lib/service-maintenance/windows';
 import { type GraphFocus } from '@/lib/service-graph/focus';
 import { publicStatusForIncidentUrgency } from '@/lib/status-pages/status-presentation';
 import { derivedDependencyStatuses, describeEvidence } from './graph';
+import { loadEdgeTraffic, type EdgeTraffic } from './insights/edge-stats';
 import { MAX_DEPENDENCIES } from './service';
 
 export interface GraphNode {
@@ -43,6 +44,8 @@ export interface GraphEdge {
   criticality?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
   /** One-line reading of the stored evidence. */
   evidence?: string | null;
+  /** Latest measured traffic on this edge, when an integration pushes it. */
+  traffic?: EdgeTraffic | null;
 }
 
 export interface BusinessServiceGraphNode {
@@ -303,6 +306,7 @@ export async function getServiceGraphForActor(
   );
   const visibleBusiness = new Set(business.nodes.map(node => node.id));
 
+  const traffic = await loadEdgeTraffic(edges);
   return {
     nodes: rows.map(row => {
       const entry = live.get(row.id);
@@ -321,6 +325,7 @@ export async function getServiceGraphForActor(
       ...edge,
       status: edge.status === 'ACTIVE' ? 'ACTIVE' : 'SUGGESTED',
       evidence: describeEvidence(evidence),
+      traffic: traffic.get(`${edge.upstreamServiceId}>${edge.downstreamServiceId}`) ?? null,
     })),
     boundaryIds: [...new Set(boundary)].filter(id => idSet.has(id)),
     truncated: truncated || business.truncated,

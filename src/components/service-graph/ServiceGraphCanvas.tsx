@@ -47,6 +47,7 @@ import {
 } from './layout';
 import {
   STATUS_HEX,
+  trafficStyle,
   detailLevel,
   type DetailLevel,
   edgeImpactStatus,
@@ -146,6 +147,14 @@ const ItemCard = memo(function ItemCard({ data, selected }: NodeProps<ItemNode>)
         <div className="flex min-w-0 items-center gap-1.5">
           <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="truncate text-sm font-medium text-foreground">{item.name}</span>
+          {item.spof && (
+            <span
+              className={cn('shrink-0 rounded-sm border px-1 text-2xs font-semibold', toneClasses('critical').soft)}
+              title="Single point of failure"
+            >
+              SPOF
+            </span>
+          )}
           {pinned && (
             <Pin className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Pinned position" />
           )}
@@ -369,6 +378,11 @@ export default function ServiceGraphCanvas({
         const impacted = lit ? edgeImpactStatus(link, itemByKey) : null;
         const color = impacted ? STATUS_HEX[impacted] : undefined;
         const soft = link.dependencyType === 'SOFT';
+        const traffic = trafficStyle(link.traffic);
+        const diffColor = link.diff ? STATUS_HEX[link.diff === 'added' ? 'OPERATIONAL' : 'MAJOR_OUTAGE'] : undefined;
+        const trafficColor =
+          traffic?.tone === 'bad' ? STATUS_HEX.MAJOR_OUTAGE : traffic?.tone === 'warn' ? STATUS_HEX.DEGRADED : undefined;
+        const stroke = diffColor ?? color ?? trafficColor;
         return {
           id: link.key,
           source: link.source,
@@ -380,11 +394,11 @@ export default function ServiceGraphCanvas({
             link.kind === 'dependency'
               ? `${link.suggested ? 'Suggested' : soft ? 'Soft' : 'Hard'} dependency; activate to ${link.suggested ? 'review' : 'see details'}`
               : undefined,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color },
+          markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: stroke },
           style: {
-            strokeWidth: lit ? 2.5 : link.kind === 'member' ? 1 : 1.5,
-            stroke: color,
-            strokeDasharray: link.suggested
+            strokeWidth: lit ? 2.5 : link.diff ? 2.5 : link.kind === 'member' ? 1 : (traffic?.width ?? 1.5),
+            stroke,
+            strokeDasharray: link.diff === 'removed' ? '3 4' : link.suggested || link.diff === 'added'
               ? '6 4'
               : soft
                 ? '10 3 2 3'

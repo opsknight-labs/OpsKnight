@@ -43,6 +43,8 @@ export const viewConfigSchema = z
       )
       .max(200)
       .default([]),
+    /** The explorer's client-side URL state (search, tier, impact mode…); the embed ignores it. */
+    search: z.string().max(600).optional(),
   })
   .strict();
 export type ViewConfig = z.infer<typeof viewConfigSchema>;

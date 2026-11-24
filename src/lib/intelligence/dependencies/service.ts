@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { wouldCreateCycle } from './graph';
+import { recordDependencyEvent } from './insights/history';
 import { memoizeIntelligenceRead, parseOrThrow, type IntelligenceActor } from '../settings/service';
 
 export const MAX_DEPENDENCIES = 5000;
@@ -156,6 +157,13 @@ export async function declareDependency(input: unknown, actor: IntelligenceActor
       },
       select: { id: true },
     });
+    await recordDependencyEvent(tx, {
+      upstreamServiceId,
+      downstreamServiceId,
+      state: 'ACTIVE',
+      origin: 'DECLARED',
+      actorId: actor.actorId,
+    });
     await logAudit(
       {
         action: 'intelligence.dependency.declared',
@@ -180,12 +188,19 @@ export async function reviewDependency(
   return prisma.$transaction(async tx => {
     const row = await tx.serviceDependency.findUnique({
       where: { id },
-      select: { status: true, upstreamServiceId: true, downstreamServiceId: true },
+      select: { status: true, origin: true, upstreamServiceId: true, downstreamServiceId: true },
     });
     if (!row || row.status !== 'SUGGESTED') return 'not_found';
     await tx.serviceDependency.update({
       where: { id },
       data: { status: decision === 'APPROVE' ? 'ACTIVE' : 'REJECTED' },
+    });
+    await recordDependencyEvent(tx, {
+      upstreamServiceId: row.upstreamServiceId,
+      downstreamServiceId: row.downstreamServiceId,
+      state: decision === 'APPROVE' ? 'ACTIVE' : 'REJECTED',
+      origin: row.origin,
+      actorId: actor.actorId,
     });
     await logAudit(
       {
@@ -215,10 +230,17 @@ export async function removeDependency(
   return prisma.$transaction(async tx => {
     const row = await tx.serviceDependency.findUnique({
       where: { id },
-      select: { upstreamServiceId: true, downstreamServiceId: true },
+      select: { upstreamServiceId: true, downstreamServiceId: true, origin: true },
     });
     if (!row) return 'not_found';
     await tx.serviceDependency.delete({ where: { id } });
+    await recordDependencyEvent(tx, {
+      upstreamServiceId: row.upstreamServiceId,
+      downstreamServiceId: row.downstreamServiceId,
+      state: 'REMOVED',
+      origin: row.origin,
+      actorId: actor.actorId,
+    });
     await logAudit(
       {
         action: 'intelligence.dependency.removed',

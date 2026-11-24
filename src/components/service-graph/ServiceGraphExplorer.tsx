@@ -13,7 +13,7 @@ import {
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Download, List, Network, Plus, RefreshCcw, Repeat, X } from 'lucide-react';
+import { AlertTriangle, Download, History, List, Network, Plus, RefreshCcw, Repeat, X } from 'lucide-react';
 import type { BusinessServiceTier } from '@prisma/client';
 import { FilterBar, FilterChip, FilterField } from '@/components/patterns';
 import {
@@ -63,12 +63,24 @@ import GraphLegend from './GraphLegend';
 import GraphListView from './GraphListView';
 import GraphSidePanel, { type PanelRelation } from './GraphSidePanel';
 import GraphSkeleton from './GraphSkeleton';
-import GraphViewsMenu from './GraphViewsMenu';
+import GraphInsightsPanel from './GraphInsightsPanel';
+import GraphViewsMenu, { type AppliedView } from './GraphViewsMenu';
+import GraphWhatIfDialog from './GraphWhatIfDialog';
+import {
+  markSpof,
+  overlayDiff,
+  snapshotView,
+  type GraphDiff,
+  type GraphSnapshot,
+  type SpofReport,
+} from './insights';
 import {
   GROUP_THRESHOLD,
   applyStatuses,
   buildGraphModel,
   exportGraphJson,
+  formatErrorRate,
+  formatRate,
   filterGraph,
   findPath,
   impactSubgraph,
@@ -174,12 +186,13 @@ function download(name: string, text: string, type: string) {
 export default function ServiceGraphExplorer({
   graph,
   teams,
-  canEdit,
+  canEdit: canEditPermission,
   editableTeamIds = null,
   focusName,
   initial,
   hops = 2,
   incidentUnavailable = false,
+  viewer,
 }: {
   initial: GraphExplorerParams;
   graph: ServiceGraphView;
@@ -192,6 +205,14 @@ export default function ServiceGraphExplorer({
   hops?: number;
   /** `?incident=` named an incident that is missing or that the viewer cannot read. */
   incidentUnavailable?: boolean;
+  viewer: {
+    id: string;
+    isAdmin: boolean;
+    canOrgViews: boolean;
+    seesSuggestions: boolean;
+    embedEnabled: boolean;
+    teams: ReadonlyArray<{ id: string; name: string }>;
+  };
 }) {
   const router = useRouter();
   // The loaded graph: the server's view, plus neighbours loaded on request and local edits. A new
@@ -234,6 +255,17 @@ export default function ServiceGraphExplorer({
   const [saving, startSaving] = useTransition();
   const [loadingNeighbours, setLoadingNeighbours] = useState(false);
   const [canvasAttempt, setCanvasAttempt] = useState(0);
+  // Insights: a past moment (read-only), the changes overlay, single points of failure, what-if.
+  const [travel, setTravel] = useState<{ snapshot: GraphSnapshot; at: Date } | null>(null);
+  const [diff, setDiff] = useState<GraphDiff | null>(null);
+  const [spof, setSpof] = useState<SpofReport | null>(null);
+  const [whatIf, setWhatIf] = useState<{ id: string; name: string } | null>(null);
+  // Looking at the past never edits: the edges there are a replay, not rows.
+  const canEdit = canEditPermission && !travel;
+  const onTravel = useCallback(
+    (snapshot: GraphSnapshot | null, at: Date | null) => setTravel(snapshot && at ? { snapshot, at } : null),
+    []
+  );
   const exportSvg = useRef<(() => string) | null>(null);
   const onExportReady = useCallback((fn: (() => string) | null) => {
     exportSvg.current = fn;
@@ -263,6 +295,18 @@ export default function ServiceGraphExplorer({
     window.history.replaceState(null, '', `${window.location.pathname}${next ? `?${next}` : ''}`);
   }, [filterSearch]);
 
+  const applyView = (applied: AppliedView) => {
+    const current = data.focus ? formatGraphFocus(data.focus) : null;
+    if (applied.focus !== current || (applied.focus && applied.hops && applied.hops !== hops))
+      navigate(params => {
+        if (applied.focus) params.set('focus', applied.focus);
+        else params.delete('focus');
+        if (applied.hops) params.set('hops', String(applied.hops));
+        params.delete('incident');
+      });
+    applySearch(applied.search);
+  };
+
   const applySearch = (search: string) => {
     const params = new URLSearchParams(search);
     setQuery(params.get('q') ?? '');
@@ -278,11 +322,14 @@ export default function ServiceGraphExplorer({
     setImpactMode(nextImpact === 'blast' || nextImpact === 'root' ? nextImpact : null);
   };
 
-  const baseModel = useMemo(() => buildGraphModel(data), [data]);
+  const baseModel = useMemo(
+    () => buildGraphModel(travel ? snapshotView(data, travel.snapshot) : data),
+    [data, travel]
+  );
   const model = useMemo(() => {
-    const items = live ? applyStatuses(baseModel.items, live) : baseModel.items;
+    const items = live && !travel ? applyStatuses(baseModel.items, live) : baseModel.items;
     return items === baseModel.items ? baseModel : { ...baseModel, items: [...items] };
-  }, [baseModel, live]);
+  }, [baseModel, live, travel]);
   const visible = useMemo(
     () =>
       filterGraph(model, {
@@ -507,6 +554,12 @@ export default function ServiceGraphExplorer({
       ),
     [serviceOptions, editableTeamIds]
   );
+  const spofIds = useMemo(() => new Set(spof?.singlePointsOfFailure.map(row => row.serviceId)), [spof]);
+  const canvasItems = useMemo(() => markSpof(visible.items, spofIds), [visible.items, spofIds]);
+  const canvasLinks = useMemo(
+    () => (diff ? overlayDiff(visible.items, visible.links, diff) : visible.links),
+    [visible, diff]
+  );
   const atBoundary =
     selected?.kind === 'svc' && (data.boundaryIds ?? []).includes(selected.id) ? selected : null;
   const candidateCauses =
@@ -687,7 +740,18 @@ export default function ServiceGraphExplorer({
                 <List className="h-3.5 w-3.5" aria-hidden="true" /> List
               </button>
             </div>
-            <GraphViewsMenu currentSearch={() => filterSearch().toString()} onApply={applySearch} />
+            <GraphViewsMenu
+              focus={data.focus ? formatGraphFocus(data.focus) : null}
+              hops={hops}
+              currentSearch={() => filterSearch().toString()}
+              currentMode={view}
+              onApply={applyView}
+              userId={viewer.id}
+              teams={viewer.teams}
+              canOrg={viewer.canOrgViews}
+              isAdmin={viewer.isAdmin}
+              embedEnabled={viewer.embedEnabled}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="outline">
@@ -816,6 +880,30 @@ export default function ServiceGraphExplorer({
         </InlineNotice>
       )}
 
+      {travel && (
+        <InlineNotice tone="info">
+          <span className="flex flex-wrap items-center gap-2">
+            <History className="h-4 w-4" aria-hidden="true" />
+            Viewing the graph as of <strong>{travel.at.toLocaleString()}</strong>. This is read-only.
+            <Button size="sm" variant="outline" onClick={() => setTravel(null)}>
+              Back to now
+            </Button>
+          </span>
+        </InlineNotice>
+      )}
+
+      <GraphInsightsPanel
+        focus={data.focus ? formatGraphFocus(data.focus) : null}
+        hops={hops}
+        seesSuggestions={viewer.seesSuggestions}
+        at={travel?.at ?? null}
+        onTravel={onTravel}
+        onDiff={setDiff}
+        onSpof={setSpof}
+        onShowSuggested={() => setOrigin('OBSERVED')}
+        onSelectService={serviceId => select(svcKey(serviceId))}
+      />
+
       <GraphLegend grouped={grouped} canEdit={canEdit} />
       <p className="text-2xs text-muted-foreground">
         Statuses refresh every 30 seconds while this tab is open.
@@ -843,8 +931,8 @@ export default function ServiceGraphExplorer({
                 <ServiceGraphCanvas
                   key={layoutId}
                   layoutId={layoutId}
-                  items={visible.items}
-                  links={visible.links}
+                  items={canvasItems}
+                  links={canvasLinks}
                   grouped={grouped}
                   selectedKey={selectedKey}
                   canEdit={canEdit && !saving}
@@ -858,6 +946,7 @@ export default function ServiceGraphExplorer({
                     submitDependency({ ...EMPTY_DRAFT, dependentId, dependencyId })
                   }
                   onLinkClick={link =>
+                    link.diff !== 'removed' &&
                     setPending({
                       link,
                       mode: link.suggested && canEdit ? 'review' : canEdit ? 'remove' : 'details',
@@ -887,12 +976,19 @@ export default function ServiceGraphExplorer({
                 ? `/incidents?serviceId=${encodeURIComponent(selected.id)}`
                 : `/services/business/${selected.id}`
             }
+            onWhatIf={
+              selected.kind === 'svc' && !travel
+                ? () => setWhatIf({ id: selected.id, name: selected.name })
+                : undefined
+            }
             onClose={() => select(null)}
             onDisconnect={link => setPending({ link, mode: 'remove' })}
             onReview={reviewEdge}
           />
         )}
       </div>
+
+      <GraphWhatIfDialog service={whatIf} onClose={() => setWhatIf(null)} />
 
       <GraphDependencyDialog
         open={!!dialog}
@@ -934,6 +1030,18 @@ export default function ServiceGraphExplorer({
               </dd>
               <dt className="text-muted-foreground">Origin</dt>
               <dd>{pendingDetails.origin === 'OBSERVED' ? 'Observed' : 'Declared'}</dd>
+              {pendingDetails.traffic && (
+                <>
+                  <dt className="text-muted-foreground">Traffic</dt>
+                  <dd className="tabular-nums">
+                    {formatRate(pendingDetails.traffic.requestRate)} requests,{' '}
+                    {formatErrorRate(pendingDetails.traffic.errorRate)} errors
+                    <span className="block text-xs text-muted-foreground">
+                      Window starting {new Date(pendingDetails.traffic.windowStart).toLocaleString()}
+                    </span>
+                  </dd>
+                </>
+              )}
               <dt className="text-muted-foreground">Confidence</dt>
               <dd className="tabular-nums">
                 {Math.round((pendingDetails.confidence ?? 0) * 100)}%

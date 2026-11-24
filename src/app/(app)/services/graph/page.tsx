@@ -5,6 +5,8 @@ import { EmptyState, PageHeader } from '@/components/patterns';
 import ServiceGraphExplorer from '@/components/service-graph/ServiceGraphExplorer';
 import { requirePageAccess } from '@/lib/access/server';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { actorHasCapability } from '@/lib/authorization-policy';
+import { isEmbedEnabled } from '@/lib/intelligence/dependencies/insights/views';
 import { teamReadWhere } from '@/lib/authorization-filters';
 import {
   getIncidentScopeForActor,
@@ -62,6 +64,15 @@ export default async function ServiceGraphPage({
   // they belong to (the dragged-from, dependent service decides).
   const isAdmin = actor.role === 'ADMIN';
   const editableTeamIds = isAdmin ? null : [...actor.teamIds];
+  const isInsightAdmin = actorHasCapability(actor, CAPABILITIES.ADMIN_MANAGE);
+  const viewer = {
+    id: actor.id,
+    isAdmin: isInsightAdmin,
+    canOrgViews: actorHasCapability(actor, CAPABILITIES.OPERATIONS_MANAGE),
+    seesSuggestions: actorHasCapability(actor, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ),
+    embedEnabled: isInsightAdmin ? await isEmbedEnabled() : false,
+    teams: teams.filter(team => actor.teamIds.includes(team.id)),
+  };
   const canEdit =
     hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE) &&
     (isAdmin || actor.teamIds.length > 0);
@@ -141,6 +152,7 @@ export default async function ServiceGraphPage({
           focusName={focusName}
           incidentUnavailable={!!incidentId && !incident}
           hops={hops}
+          viewer={viewer}
           initial={{
             q: first(raw?.q) ?? '',
             team: first(raw?.team) ?? '',

@@ -9,7 +9,24 @@ const actions = vi.hoisted(() => ({
   getGraphNodeDetailsAction: vi.fn(),
   getGraphStatusesAction: vi.fn().mockResolvedValue(null),
   expandNeighboursAction: vi.fn().mockResolvedValue(null),
+  getGraphAtAction: vi.fn(),
+  diffGraphAction: vi.fn().mockResolvedValue({ ok: false, message: 'x' }),
+  findSpofAction: vi.fn().mockResolvedValue({ ok: false, message: 'x' }),
+  simulateFailureAction: vi.fn().mockResolvedValue({ ok: false, message: 'x' }),
+  listGraphViewsAction: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+  createGraphViewAction: vi.fn(),
+  deleteGraphViewAction: vi.fn(),
+  shareGraphViewAction: vi.fn(),
+  revokeGraphShareAction: vi.fn(),
 }));
+const viewer = {
+  id: 'u1',
+  isAdmin: false,
+  canOrgViews: false,
+  seesSuggestions: true,
+  embedEnabled: false,
+  teams: [],
+};
 vi.mock('@/app/(app)/services/graph/actions', () => actions);
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock('@/lib/toast', () => ({ notify: { success: vi.fn(), error: vi.fn() } }));
@@ -280,6 +297,7 @@ describe('ServiceGraphExplorer list view', () => {
           { id: 't2', name: 'Data' },
         ]}
         canEdit
+        viewer={viewer}
         focusName={null}
         initial={{ q: '', team: '', impacted: false, view: 'list' }}
       />
@@ -304,6 +322,7 @@ describe('ServiceGraphExplorer list view', () => {
         graph={graph}
         teams={[]}
         canEdit
+        viewer={viewer}
         focusName={null}
         initial={{ q: '', team: '', impacted: false, view: 'list' }}
       />
@@ -317,5 +336,46 @@ describe('ServiceGraphExplorer list view', () => {
     await waitFor(() =>
       expect(actions.disconnectDependencyAction).toHaveBeenCalledWith({ dependencyId: 'e1' })
     );
+  });
+});
+
+describe('ServiceGraphExplorer insights', () => {
+  it('opens the time-travel scrubber and shows the single-points-of-failure list with a show-on-graph action', async () => {
+    actions.findSpofAction.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        threshold: 5,
+        truncated: false,
+        articulationPoints: [],
+        singlePointsOfFailure: [
+          {
+            serviceId: 'orders-db',
+            name: 'Orders DB',
+            fanOut: 6,
+            businessServiceCount: 1,
+            criticalBusinessServiceCount: 1,
+            articulationPoint: true,
+            reasons: ['NO_ON_CALL'],
+            score: 30,
+          },
+        ],
+      },
+    });
+    render(
+      <ServiceGraphExplorer
+        graph={graph}
+        teams={[]}
+        canEdit
+        viewer={viewer}
+        focusName={null}
+        initial={{ q: '', team: '', impacted: false, view: 'list' }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Time travel/ }));
+    expect(screen.getByLabelText('Time, last 90 days')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Back to now/ })).toHaveProperty('disabled', true);
+    fireEvent.click(screen.getByRole('button', { name: /Single points of failure/ }));
+    expect(await screen.findByText('Orders DB')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show on graph' })).toBeTruthy();
   });
 });

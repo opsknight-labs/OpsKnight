@@ -20,6 +20,8 @@ export type GraphItem = {
   reasons: ImpactReason[];
   criticality: BusinessServiceTier | null;
   memberCount: number | null;
+  /** Flagged by the single-points-of-failure panel; drawn with a badge. */
+  spof?: boolean;
 };
 
 export type GraphLink = {
@@ -39,6 +41,10 @@ export type GraphLink = {
   note?: string | null;
   criticality?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
   evidence?: string | null;
+  /** Latest measured traffic; absent when no integration pushes stats for this edge. */
+  traffic?: { requestRate: number; errorRate: number; windowStart: string } | null;
+  /** Set while the Changes panel highlights what moved since a past date. */
+  diff?: 'added' | 'removed';
 };
 
 export type GraphModel = { items: GraphItem[]; links: GraphLink[] };
@@ -89,6 +95,7 @@ export function buildGraphModel(view: ServiceGraphView): GraphModel {
       note: edge.note ?? null,
       criticality: edge.criticality ?? null,
       evidence: edge.evidence ?? null,
+      traffic: edge.traffic ?? null,
     })),
     ...view.memberEdges.map(edge => ({
       key: `mem:${edge.businessServiceId}:${edge.serviceId}`,
@@ -513,3 +520,17 @@ export function sortItems(
     return order * sign || a.name.localeCompare(b.name);
   });
 }
+
+/** Edge weight and tone from measured traffic: thicker with volume, amber/red with errors. Null without data. */
+export function trafficStyle(
+  traffic: GraphLink['traffic']
+): { width: number; tone: 'ok' | 'warn' | 'bad' } | null {
+  if (!traffic) return null;
+  const width = Math.min(4, 1.5 + Math.log10(1 + Math.max(traffic.requestRate, 0)) * 0.8);
+  const tone = traffic.errorRate >= 0.05 ? 'bad' : traffic.errorRate >= 0.01 ? 'warn' : 'ok';
+  return { width, tone };
+}
+
+export const formatRate = (rate: number) =>
+  rate >= 100 ? `${Math.round(rate)}/s` : rate >= 1 ? `${rate.toFixed(1)}/s` : `${rate.toFixed(2)}/s`;
+export const formatErrorRate = (rate: number) => `${(rate * 100).toFixed(rate < 0.1 ? 2 : 1)}%`;
