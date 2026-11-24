@@ -335,6 +335,15 @@ async function replaceChildren(
   );
 }
 
+/**
+ * Business-service writes have no database trigger on the realtime clock (only Incident, Service
+ * and a few rename tables do). Appending a tick in the same transaction makes every instance's
+ * health cache, keyed by that generation, recompute instead of waiting for its TTL.
+ */
+async function bumpRealtimeClock(tx: Prisma.TransactionClient) {
+  await tx.realtimeChange.create({ data: {} });
+}
+
 function conflict(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
     throw new AppError({
@@ -419,6 +428,7 @@ export async function createBusinessService(
       .create({ data: columns(input), select: { id: true } })
       .catch(conflict);
     await replaceChildren(tx, created.id, input);
+    await bumpRealtimeClock(tx);
     await audit(tx, context, 'business_service.created', created.id, auditFields(input));
     return tx.businessService.findUniqueOrThrow({
       where: { id: created.id },
@@ -469,6 +479,7 @@ export async function updateBusinessService(
     await replaceChildren(tx, id, input, currentMemberIds);
     const previousSupports = current.supportedBy.map(({ child }) => child.id).sort();
     const nextSupports = input.dependsOnBusinessServiceIds;
+    await bumpRealtimeClock(tx);
     await audit(tx, context, 'business_service.updated', id, {
       ...auditFields(input, current),
       before: {
@@ -510,6 +521,7 @@ export async function deleteBusinessService(
       where: { AND: [{ id }, businessServiceWriteWhere(context.actor)] },
     });
     if (!removed.count) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+    await bumpRealtimeClock(tx);
     await audit(tx, context, 'business_service.deleted', id);
     return { id, deleted: true as const };
   };
