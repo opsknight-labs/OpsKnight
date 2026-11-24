@@ -148,6 +148,9 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
     !/^(?:please )?(?:help me |can you |could you )?(?:find|search|show|list)\b/.test(text)
   )
     return 'GUIDANCE';
+  // "Status pages" alone asks how they work; the settings are administrator-only.
+  if (/^(?:list |show |show me )?(?:the |our |my |all )?status pages?[\s?!.]*$/.test(text))
+    return 'GUIDANCE';
   if (
     /^what (?:is|are) (?:a |an )?(?:services?|teams?|incidents?|alerts?|schedules?|runbooks?|postmortems?|escalation polic(?:y|ies)|status pages?|overrides?|integrations?|change events?|business services?)[\s?!.]*$/.test(
       text
@@ -195,6 +198,10 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
     return 'RESPONDERS';
   if (/\bon[- ]?call\b|\bwho('?s| is) (up|available|responding)\b/.test(text)) return 'ON_CALL';
   if (
+    // "How is checkout api doing?", "is anything wrong with Checkout API?": that service's live state.
+    /\bhow is (?!it\b|this\b|that\b|everything\b)[a-z0-9][\w .-]{1,40} doing\b|\b(?:anything|something) (?:wrong|broken|off) with\b|\bwhat is (?:wrong|going wrong) with\b/.test(
+      text
+    ) ||
     /\b(service (health|status|owner|ownership|dependencies|routing)|who (owns|maintains)|owning team|which team|dependencies|upstream|downstream|escalation policy|list services|show services|services? overview)\b/.test(
       text
     ) ||
@@ -233,6 +240,14 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
       )
     )
       return 'TIMELINE';
+    // "What's the issue?", "what thnissue in short", "why we got this incident": what fired, not causes.
+    if (
+      /issues?\b|\bproblem\b|\bin short\b|\bwhat fired\b|\bwhy (?:did )?we (?:got|get|have|had)\b/.test(
+        text
+      ) &&
+      !/\b(caus\w*|root|deploy\w*|changed?|broke)\b/.test(text)
+    )
+      return 'INCIDENT_SUMMARY';
     const matched = incidentIntents(text);
     if (matched.length) return matched[0];
     if (
@@ -253,3 +268,15 @@ export function routeIntent(message: string, onIncident: boolean): SquireIntent 
       : 'SEARCH_INCIDENTS';
   return 'UNKNOWN';
 }
+
+/** "How was this fixed?", "what fixed it?": what responders recorded on the incident in view. */
+export const FIX_QUESTION =
+  /\bhow (?:was|did|were) (?:this|it|that|they|we|you|the incident)\b.{0,40}\b(?:fix|fixed|resolv\w*|solv\w*|mitigat\w*|recover\w*)\b|\b(?:what|who) (?:fixed|resolved|solved)\b|\bresolution (?:note|summary)\b|\bhow .{0,60}\bwas (?:fixed|resolved|solved|mitigated)\b/;
+
+/** "Turn this fix into a runbook": the draft-runbook card, on a resolved incident. */
+export const RUNBOOK_FROM_FIX =
+  /\b(?:turn|make|convert|save|create|write|draft|capture)\b.{0,40}\b(?:fix|resolution|this|it)\b.{0,30}\b(?:into|as|to) (?:a |an )?(?:new )?runbook\b|\brunbook (?:from|out of) (?:this|the|that|how)\b/;
+
+/** A question about one incident named by its title ("why did the checkout latency incident happen"). */
+export const NAMED_INCIDENT =
+  /\b(?:why|what caused|cause of|root cause|tell me about|explain|summari[sz]e|how was)\b.{0,80}\bincident\b|\bincident\b.{0,80}\b(?:happen|happened|fixed|resolved)\b/;

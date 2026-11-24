@@ -69,9 +69,12 @@ import {
 import {
   buildPlanProposal,
   buildRunbookFromFixProposal,
+  buildRunbookStepsProposal,
   PROPOSE_PLAN_TOOL,
   PROPOSE_RUNBOOK_FROM_FIX_TOOL,
+  PROPOSE_RUNBOOK_STEPS_TOOL,
   runbookFromFixInput,
+  runbookStepsInput,
 } from './plans';
 import { buildRememberProposal, memoriesForPrompt, REMEMBER_FACT_TOOL } from './memory';
 import {
@@ -121,6 +124,10 @@ const PROPOSAL_EXTRA_TOOLS: AiToolDefinition[] = [
   {
     ...PROPOSE_RUNBOOK_FROM_FIX_TOOL,
     validate: input => runbookFromFixInput.safeParse(input).success,
+  },
+  {
+    ...PROPOSE_RUNBOOK_STEPS_TOOL,
+    validate: input => runbookStepsInput.safeParse(input).success,
   },
 ];
 const MAX_CITATIONS = 8;
@@ -361,12 +368,9 @@ async function* squireTurn(
         [],
         null,
       ];
+    // No notice for omitted earlier turns: once one exists it repeated on every later turn, and the person
+    // can do nothing about it. A saved conversation keeps a placeholder in its place (priorTurns).
     const history = context.messages;
-    if (context.omitted)
-      yield {
-        type: 'notice',
-        text: 'Some earlier answers were omitted because their context could not be verified. Ask about the current evidence again if needed.',
-      };
     // A conversation turn is Personal: free text can name people and customers, and redaction only removes
     // emails, phones and IPs. Without a provider cleared for Personal data the turn gets a basic answer.
     const historyClass = highestDataClass([
@@ -486,6 +490,8 @@ async function* squireTurn(
         // whether a proposal was made after reading third-party text (alerts, notes, payloads).
         const ranClasses: AiDataClass[] = [];
         let readUntrusted = false;
+        // Text before a tool call and text after it are separate paragraphs, never glued together.
+        let stepEnded = false;
         const emittedCoverage = new Set<string>();
         for await (const event of chatPort.stream({
           context: {
@@ -530,8 +536,13 @@ async function* squireTurn(
             }
           }
           if (event.type === 'text-delta') {
-            answer += event.delta;
-            yield { type: 'delta', text: event.delta };
+            const text =
+              stepEnded && answer.trim() && !/\s$/.test(answer)
+                ? `\n\n${event.delta}`
+                : event.delta;
+            stepEnded = false;
+            answer += text;
+            yield { type: 'delta', text };
           } else if (event.type === 'finish') {
             const { usage, served: by } = event.result;
             Object.assign(served, {
@@ -546,26 +557,30 @@ async function* squireTurn(
             if (event.result.degraded) yield { type: 'notice', text: AI_LEAN_NOTICE };
             if (event.result.budgetLimited) yield { type: 'notice', text: BUDGET_CUT_NOTICE };
           } else if (event.type === 'tool-start') {
+            stepEnded = true;
             const label = TOOL_LABELS[event.name];
             if (label) yield { type: 'tool', label };
           } else if (event.type === 'tool-call') {
+            stepEnded = true;
             const action = actionForTool(event.call.name);
             const operation = event.call.name === PROPOSE_OPERATION_TOOL.name;
             const plan = event.call.name === PROPOSE_PLAN_TOOL.name;
             const remember = event.call.name === REMEMBER_FACT_TOOL.name;
             const fix = event.call.name === PROPOSE_RUNBOOK_FROM_FIX_TOOL.name;
-            if (!action && !operation && !plan && !remember && !fix) continue;
+            const runbookSteps = event.call.name === PROPOSE_RUNBOOK_STEPS_TOOL.name;
+            if (!action && !operation && !plan && !remember && !fix && !runbookSteps) continue;
             // The model was told a card is shown only if still valid: say so when one is not.
             if (proposals >= MAX_PROPOSALS) {
               if (!droppedNotice) yield { type: 'notice', text: PROPOSAL_CAP_NOTICE };
               droppedNotice = true;
               continue;
             }
-            if (fix) {
-              // The fix card refuses with a reason (role needed, not resolved): say it rather than a generic drop.
-              const built = await buildRunbookFromFixProposal(actor, event.call.input).catch(
-                () => null
-              );
+            if (fix || runbookSteps) {
+              // These cards refuse with a reason (role needed, not resolved, no draft): say it, not a generic drop.
+              const built = await (fix ? buildRunbookFromFixProposal : buildRunbookStepsProposal)(
+                actor,
+                event.call.input
+              ).catch(() => null);
               if (built && 'token' in built) {
                 proposals += 1;
                 yield {
@@ -609,10 +624,13 @@ async function* squireTurn(
             // Nothing shown yet: answer from the intelligence data instead.
             yield {
               type: 'notice',
+              // A limit says which one, whether or not the gateway marked it retryable: "unavailable" misleads.
               text:
-                event.retryable && /Too many|budget/i.test(event.message)
-                  ? `${event.message}. Showing a basic answer.`
-                  : 'AI is unavailable right now. Showing a basic answer.',
+                limit === 'rate'
+                  ? 'You have reached the per-minute AI limit. Showing a basic answer; try again in a minute.'
+                  : limit === 'budget'
+                    ? "Today's AI budget is used up. Showing a basic answer."
+                    : 'AI is unavailable right now. Showing a basic answer.',
             };
             yield* basicAnswer(
               actor,
@@ -883,6 +901,7 @@ async function* basicAnswer(
   const citations = evidence.citations(text);
   if (citations.length > 0) yield { type: 'citations', items: citations };
   if (operationCard && readable) yield { type: 'proposal', proposal: operationCard };
+  if (readable) for (const card of plan.cards ?? []) yield { type: 'proposal', proposal: card };
   let proposed = 0;
   for (const requestProposal of plan.proposals.slice(0, MAX_PROPOSALS)) {
     const proposal = await buildProposal(
@@ -1035,7 +1054,6 @@ async function priorTurns(
         ? `[Asked while viewing incident /incidents/${context.id}] `
         : `[Asked while viewing a ${context.kind.replace('_', ' ')} page] `;
     };
-    const replayable = turns.filter(isReplayable);
     // Turns before the replay window are summarised (pinned after the system prompt), not dropped. The
     // summary is the deterministic digest: a model summary here would add a SUMMARIZE call, a per-user
     // rate-limit slot, budget spend and a serial round trip before the answer to every turn of a long
@@ -1048,10 +1066,12 @@ async function priorTurns(
       ...(summary ? { summary } : {}),
       messages: [
         ...(summary ? [summary] : []),
-        ...replayable.map(message => ({
+        ...turns.map(message => ({
           role: message.role,
-          content:
-            message.role === 'assistant'
+          content: !isReplayable(message)
+            ? // A stand-in keeps the turns in order without the text (interrupted, or no longer readable).
+              `[Earlier ${message.role === 'user' ? 'question' : 'answer'} not included: it was interrupted or its sources are no longer readable.]`
+            : message.role === 'assistant'
               ? `${
                   message.envelope?.verified
                     ? `[Saved answer recorded ${message.createdAt.toISOString()}; verify current facts with tools.]`
@@ -1061,10 +1081,10 @@ async function priorTurns(
                   message.content.slice(0, SQUIRE_LIMITS.historyTurnMax)
                 }`
               : `${askedOn(message)}${message.content}`.slice(0, SQUIRE_LIMITS.historyTurnMax),
-          dataClass: message.dataClass,
+          dataClass: isReplayable(message) ? message.dataClass : ('INTERNAL' as const),
         })),
       ],
-      omitted: replayable.length !== turns.length,
+      omitted: !turns.every(isReplayable),
     };
   }
   return readBrowserContext(actor, incidentId, request.history);

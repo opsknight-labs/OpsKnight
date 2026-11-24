@@ -159,7 +159,12 @@ function authFor(actor: AuthorizationActor, operation: Operation, name: string):
 export type OperationArgs = ReturnType<typeof validateOperationArgs>;
 
 /** Who the REST handler names in audit and timeline text, looked up once per turn or confirmation. */
-export type InvokeContext = { name: string; signal?: AbortSignal };
+export type InvokeContext = {
+  name: string;
+  signal?: AbortSignal;
+  /** Receives the response's ETag (the record's revision), when it has one. */
+  etag?: (value: string) => void;
+};
 
 export async function displayName(userId: string): Promise<string> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
@@ -171,7 +176,7 @@ export async function invoke(
   actor: AuthorizationActor,
   operation: Operation,
   args: OperationArgs,
-  { name, signal }: InvokeContext
+  { name, signal, etag }: InvokeContext
 ): Promise<unknown> {
   const load =
     (isMcpApprovalGated(operation) ? MCP_APPROVAL_HANDLERS : MCP_HANDLERS).get(
@@ -218,6 +223,8 @@ export async function invoke(
     'squire'
   );
   if (!response.ok) throw await domainRejection(response);
+  const tag = response.headers.get('etag');
+  if (tag) etag?.(tag);
   // "Did the fix hold?" for a confirmed resolve (single change or plan step); never fails the change.
   const resolvedId = operation.operationId === 'resolveIncident' ? args.path?.id : undefined;
   if (typeof resolvedId === 'string')
@@ -602,23 +609,31 @@ export async function buildOperationProposal(
   if (!operation || isReadOperation(operation) || !mayCall(actor, operation)) return null;
   const highRisk = isHighRisk(operation);
   const id = randomUUID();
+  // Best effort: the target as the person sees it now, for the card and its revision (the read's ETag).
+  const read: { etag?: string } = {};
+  const target = Object.hasOwn(known, 'target')
+    ? known.target
+    : await readTarget(actor, operation, parsed.data.args as OperationArgs, {
+        name: known.name ?? (await displayName(actor.id)),
+        etag: value => (read.etag = value),
+      });
+  // A revision-checked change is bound to the revision the card shows, never one the model guessed.
+  const ifMatch =
+    operation.mutation?.concurrency === 'etag' && /^"\d{1,10}"$/.test(read.etag ?? '')
+      ? { ifMatch: read.etag }
+      : {};
+  const record = (target && typeof target === 'object' ? target : {}) as Record<string, unknown>;
   let args: OperationArgs;
   try {
     args = validateOperationArgs(
       operation.operationId,
-      { ...parsed.data.args, idempotencyKey: `squire-${id}` },
+      { ...parsed.data.args, ...ifMatch, idempotencyKey: `squire-${id}` },
       isMcpApprovalGated(operation) ? 'approved' : 'generic'
     );
   } catch {
     return null;
   }
   const changes = changesOf(operation, args);
-  // Best effort, for the card only: the target as the person sees it now.
-  const target = Object.hasOwn(known, 'target')
-    ? known.target
-    : await readTarget(actor, operation, args, {
-        name: known.name ?? (await displayName(actor.id)),
-      });
   const rows = reviewDiff(changes, target);
   const preview = (
     rows.length
@@ -642,15 +657,16 @@ export async function buildOperationProposal(
     actorId: actor.id,
     exp: now.getTime() + TTL_MS,
   };
-  const targets = Object.entries(args.path ?? {}).map(([key, value]) => `${key} ${value}`);
+  const name = record.name ?? record.title;
   return {
     token: await encrypt(JSON.stringify(sealed)),
     receiptId: id,
     action: 'run_operation' as SquireProposal['action'],
     kind: 'WRITE',
     title: (operation.summary ?? camelWords(operation.operationId)).slice(0, 120),
+    // In words, not the API route: what it changes, when the target's name is known.
     detail:
-      `${operation.method.toUpperCase()} ${operation.path}${targets.length ? ` (${targets.join(', ')})` : ''}. ${
+      `${typeof name === 'string' && name.trim() ? `On “${name.trim().slice(0, 120)}”. ` : ''}${
         highRisk
           ? 'High-risk change: it runs as you as soon as you confirm, and Squire cannot undo it.'
           : 'Runs as you, with your permissions.'

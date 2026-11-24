@@ -449,6 +449,84 @@ describe('AI mode', () => {
     expect(second).not.toContain('Payroll');
   });
 
+  it('lists incidents by filter with no words, most urgent first, with the total', async () => {
+    await setup();
+    const { member, mine, serviceA, teamA } = await scopedWorld();
+    const minor = await createTestIncident('Minor blip', serviceA.id, {
+      teamId: teamA.id,
+      urgency: 'LOW',
+      createdAt: new Date(Date.now() + 60_000),
+    });
+    await createTestIncident('Old fixed thing', serviceA.id, {
+      teamId: teamA.id,
+      status: 'RESOLVED',
+    });
+    const search = buildSquireTools(await actorOf(member.id), { personal: false }).find(
+      tool => tool.name === 'search_incidents'
+    )!;
+    // "unresolved" is open or acknowledged; another team's incident never counts.
+    const open = (await search.execute!({ status: 'unresolved' })) as {
+      total: number;
+      items: Array<{ id: string }>;
+    };
+    expect(open.total).toBe(2);
+    expect(open.items.map(item => item.id)).toEqual([mine.id, minor.id]);
+    expect(await search.execute!({ status: 'unresolved', urgency: 'LOW' })).toMatchObject({
+      total: 1,
+      items: [{ id: minor.id }],
+    });
+    expect(await search.execute!({ query: 'blip', serviceId: serviceA.id })).toMatchObject({
+      total: 1,
+    });
+  });
+
+  it('answers from what was read when the tool loop ends without a word, once', async () => {
+    const admin = await setup({ ai: true, provider: true });
+    const { mine } = await scopedWorld();
+    model.script.push(
+      { toolCall: { name: 'get_incident', args: JSON.stringify({ id: mine.id }) } },
+      { content: '' },
+      { content: 'Checkout latency high is still open.' }
+    );
+    const events = await turn(admin.id, 'is it still open?');
+    expect(textOf(events)).toBe('Checkout latency high is still open.');
+    expect(events.some(e => e.type === 'notice' && /could not finish/.test(e.text))).toBe(false);
+    expect(model.requests).toHaveLength(3);
+    const last = model.requests[2].body as {
+      tool_choice?: unknown;
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(last.tool_choice).toBe('none');
+    expect(JSON.stringify(last.messages)).toContain('Checkout latency high');
+    expect(last.messages.at(-1)?.content).toMatch(/Answer my question now/);
+
+    // Still nothing: the basic answer, after exactly one extra call.
+    model.requests.length = 0;
+    model.script.push(
+      { toolCall: { name: 'get_incident', args: JSON.stringify({ id: mine.id }) } },
+      { content: '' },
+      { content: '' }
+    );
+    const empty = await turn(admin.id, 'is it still open?');
+    expect(model.requests).toHaveLength(3);
+    expect(empty.some(e => e.type === 'notice' && /could not finish/.test(e.text))).toBe(true);
+  });
+
+  it('keeps text written before a tool call and after it as separate paragraphs', async () => {
+    const admin = await setup({ ai: true, provider: true });
+    const { mine } = await scopedWorld();
+    model.script.push(
+      {
+        content: 'Checking the incident.',
+        toolCall: { name: 'get_incident', args: JSON.stringify({ id: mine.id }) },
+      },
+      { content: 'It is still open.' }
+    );
+    expect(textOf(await turn(admin.id, 'status?'))).toBe(
+      'Checking the incident.\n\nIt is still open.'
+    );
+  });
+
   it('falls back to a basic answer with a notice when the model is down', async () => {
     const admin = await setup({ ai: true, provider: true });
     model.script.push({ status: 500 }, { status: 500 });
@@ -477,7 +555,10 @@ describe('AI mode', () => {
     await turn(admin.id, 'hello');
     const calls = model.requests.length;
     const events = await turn(admin.id, 'help');
-    expect(events.find(e => e.type === 'notice')).toBeTruthy();
+    // Names the limit rather than calling AI "unavailable".
+    expect(events.find(e => e.type === 'notice')).toMatchObject({
+      text: expect.stringMatching(/per-minute AI limit/),
+    });
     expect(textOf(events)).toContain('I never change anything');
     expect(model.requests.length).toBe(calls);
     expect(events).toContainEqual(

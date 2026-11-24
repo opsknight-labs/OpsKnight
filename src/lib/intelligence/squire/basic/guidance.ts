@@ -34,7 +34,7 @@ const GUIDES: ReadonlyArray<{ match: RegExp; title: string; answer: string }> = 
     match: /\b(services?|business services?)\b/,
     title: 'Services',
     answer:
-      'A service is something your teams operate, such as an API, a worker or a database. Alerts and incidents are raised against a service, and its owning team, escalation policy and integrations decide who is paged. Open Services to see ownership, routing, dependencies and active incidents. Ask “Who owns Checkout API?” for a live answer.',
+      'A service is something your teams operate, such as an API, a worker or a database. Alerts and incidents are raised against a service, and its owning team, escalation policy and integrations decide who is paged. Open Services to see ownership, routing, dependencies and active incidents; to add one, choose Create service there and set its owning team and escalation policy. Ask “Who owns Checkout API?” for a live answer. [Read the guide](https://opsknight.com/docs/latest/guides/services/manage-service/)',
   },
   {
     match: /\b(maintenance|silenc\w*|mute|suppress\w*)\b/,

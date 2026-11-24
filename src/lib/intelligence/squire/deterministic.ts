@@ -26,6 +26,9 @@ import { getRelatedIncidentsForActor } from '../correlation/view';
 import { getResponseIntelligenceForActor } from '../response/view';
 import { getSimilarIncidentsForActor } from '../similarity/view';
 import {
+  FIX_QUESTION,
+  NAMED_INCIDENT,
+  RUNBOOK_FROM_FIX,
   routeIntent,
   incidentIntents,
   SHIFT_QUESTION,
@@ -35,6 +38,7 @@ import {
 import {
   answerBasicReadDetailed,
   BASIC_PAGE_SIZE,
+  formatWhen,
   timeZoneFor,
   type BasicReadOptions,
 } from './basic/reads';
@@ -47,6 +51,7 @@ import {
   classifyIntent,
   correctSpelling,
   extractSlots,
+  fixedRequest,
   normalizeMessage,
   parseDuration,
   parseSlashCommand,
@@ -55,11 +60,14 @@ import {
   type SpellingCorrection,
 } from './basic/nlu';
 import { confidentMatch, resolveEntities, type EntityMatch } from './basic/entities';
+import { howFixedAnswer } from './basic/resolution';
+import { runbookPageAnswer } from './basic/runbook-page';
+import { teamsAnswer } from './basic/teams';
 import { checksFor, BUILT_IN_CHECKS, safePattern } from '../assistant/check-templates';
 import { pageState, pendingState, type DialogueState } from '../assistant/dialogue-state';
 import { suggestFollowUps } from './basic/suggestions';
 import { BASIC_ANSWER_TTL_MS, TtlCache } from '../assistant/cache';
-import type { SquireActionName } from './actions/catalog';
+import type { SquireActionName, SquireProposal } from './actions/catalog';
 import type { SquireRequest } from './contract';
 import {
   detectEntityReferences,
@@ -211,16 +219,31 @@ async function describeIncident(
     const data = response.runbooks[0];
     collect?.({ kind: 'runbook', id: data.runbookId, label: data.name, data });
   }
-  const [similar, events] = await Promise.all([
+  const [similar, events, detail, timeZone] = await Promise.all([
     getSimilarIncidentsForActor(incident.id, actor),
     prisma.incidentEvent
       .findMany({
-        where: { incidentId: incident.id },
+        where: { incidentId: incident.id, ...LIFECYCLE_EVENT_WHERE },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 3,
         select: { type: true, createdAt: true },
       })
       .catch(() => []),
+    // Already read under the person's visibility above; these are the incident's own fields.
+    prisma.incident
+      .findUnique({
+        where: { id: incident.id },
+        select: {
+          description: true,
+          acknowledgedAt: true,
+          resolvedAt: true,
+          assignee: { select: { name: true } },
+          team: { select: { name: true } },
+          _count: { select: { alerts: true } },
+        },
+      })
+      .catch(() => null),
+    timeZoneFor(actor.id).catch(() => 'UTC'),
   ]);
   const precedent = similar?.find(row => row.status === 'RESOLVED') ?? similar?.[0];
   if (precedent)
@@ -230,36 +253,75 @@ async function describeIncident(
       label: precedent.title,
       data: precedent,
     });
+  const when = (at: Date) => formatWhen(at, timeZone);
+  const state =
+    incident.status === 'RESOLVED'
+      ? `Resolved${detail?.resolvedAt ? ` ${when(detail.resolvedAt)}` : ''}.`
+      : detail?.acknowledgedAt
+        ? `Acknowledged ${when(detail.acknowledgedAt)}.`
+        : incident.status === 'OPEN'
+          ? 'Not acknowledged yet.'
+          : `Status: ${incident.status.toLowerCase()}.`;
+  const owner = detail?.assignee
+    ? `Assigned to ${short(detail.assignee.name ?? 'a responder')}.`
+    : detail?.team
+      ? `Assigned to team ${short(detail.team.name)}; no person yet.`
+      : 'Unassigned.';
   return [
     head,
-    `Opened ${incident.createdAt.toISOString().replace('T', ' ').slice(0, 16)} UTC.`,
+    detail?.description ? `What fired: ${short(detail.description)}` : null,
+    `Opened ${when(incident.createdAt)}, ${ago(Date.now() - incident.createdAt.getTime())}.${detail?._count.alerts ? ` ${detail._count.alerts} alert${detail._count.alerts === 1 ? '' : 's'} grouped into it.` : ''}`,
+    `${state} ${owner}`,
     `/incidents/${incident.id}`,
     '',
     events.length
       ? `Latest recorded events: ${events
-          .map(
-            event =>
-              `${(event.type ?? 'EVENT').replace(/_/g, ' ').toLowerCase()} at ${event.createdAt.toISOString().slice(11, 16)} UTC`
-          )
+          .map(event => `${eventLabel(event.type)} at ${when(event.createdAt)}`)
           .join('; ')}.`
       : 'No events are recorded after the incident opened.',
     response?.changes[0]
       ? `Change to investigate: ${response.changes[0].summary} (a lead to verify).\n/changes/${response.changes[0].changeId}`
-      : 'No deployment or change lead is recorded yet.',
+      : null,
     precedent
       ? `Past context: ${precedent.title} (${precedent.matchPercent}% similar).${precedent.resolutionSummary ? ` Recorded resolution: ${short(precedent.resolutionSummary)}` : ''}\n/incidents/${precedent.incidentId}`
-      : 'No matching past incident is recorded yet.',
+      : null,
     response?.runbooks[0]
       ? `Suggested runbook: ${response.runbooks[0].name}.\n/runbooks/${response.runbooks[0].runbookId}`
-      : 'No reviewed runbook recommendation is recorded yet.',
+      : null,
     '',
     await suggestedChecksFor(incident),
-  ].join('\n');
+  ]
+    .filter(line => line !== null)
+    .join('\n');
 }
 
+/** "2 h ago", "3 days ago": how long ago something happened, at a glance. */
+function ago(ms: number): string {
+  const minutes = Math.max(0, Math.round(ms / 60_000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 90) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
+}
+
+/** Event types in words; untyped and legacy rows are plain updates (their text may be third-party). */
+const EVENT_LABEL: Partial<Record<string, string>> = {
+  COMMENT: 'note added',
+  MANUAL_RESOLVED: 'resolved',
+  AUTO_RESOLVED: 'auto-resolved',
+  STATUS_CHANGE: 'status changed',
+  ASSIGNMENT: 'assignment changed',
+  LEGACY_OTHER: 'update',
+  SLA_WARNING: 'SLA warning',
+  SLA_BREACHED: 'SLA breached',
+};
+const eventLabel = (type: string | null) =>
+  // eslint-disable-next-line security/detect-object-injection -- a lookup in a closed label table
+  (type && EVENT_LABEL[type]) ?? (type ? type.replace(/_/g, ' ').toLowerCase() : 'update');
+
 /** The best product-docs sections for a how-to question, as linked bullets; null when none match. */
-async function docsAnswer(question: string): Promise<string | null> {
-  if (docsTerms(question).length < 2) return null;
+async function docsAnswer(question: string, minTerms = 2): Promise<string | null> {
+  if (docsTerms(question).length < minTerms) return null;
   const hits = await searchProductDocs(question, 2).catch(() => []);
   if (!hits.length) return null;
   return [
@@ -319,23 +381,27 @@ const HELP = [
   'I never change anything on my own. A proposal happens only when you confirm its card. AI adds free-form reasoning on top of the same data.',
 ].join('\n');
 
-async function timeline(incident: ReadableIncident, collect?: Collect): Promise<string> {
-  const events = await prisma.incidentEvent.findMany({
-    where: { incidentId: incident.id, ...LIFECYCLE_EVENT_WHERE },
-    take: 8,
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    select: { type: true, createdAt: true },
-  });
+async function timeline(
+  actor: AuthorizationActor,
+  incident: ReadableIncident,
+  collect?: Collect
+): Promise<string> {
+  const [events, timeZone] = await Promise.all([
+    prisma.incidentEvent.findMany({
+      where: { incidentId: incident.id, ...LIFECYCLE_EVENT_WHERE },
+      take: 8,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { type: true, createdAt: true },
+    }),
+    timeZoneFor(actor.id).catch(() => 'UTC'),
+  ]);
   collect?.({ kind: 'incident', id: incident.id, label: incident.title, data: incident });
   return [
     `Recorded timeline for ${short(incident.title)}:`,
-    `• ${incident.createdAt.toISOString()} — Incident opened.`,
+    `• ${formatWhen(incident.createdAt, timeZone)} — Incident opened.`,
     ...events
       .reverse()
-      .map(
-        event =>
-          `• ${event.createdAt.toISOString()} — ${(event.type ?? 'EVENT').replace(/_/g, ' ').toLowerCase()}.`
-      ),
+      .map(event => `• ${formatWhen(event.createdAt, timeZone)} — ${eventLabel(event.type)}.`),
     `/incidents/${incident.id}`,
     'This is the recorded event sequence, not an explanation of causality.',
   ].join('\n');
@@ -496,6 +562,8 @@ export interface BasicTurnResult {
   proposals: BasicProposalRequest[];
   /** A change beyond incidents, from a slash command; also only ever a card. */
   operation?: BasicOperationRequest;
+  /** Cards already built and checked (the fix-to-runbook draft), sent as they are. */
+  cards?: Array<SquireProposal & { href?: string }>;
   suggestions: string[];
   nextState: DialogueState | null;
   corrections: SpellingCorrection[];
@@ -924,6 +992,7 @@ export async function planBasicTurn(
       ...answers[0],
       text: answers.map(answer => answer.text).join('\n\n---\n\n'),
       proposals: answers.flatMap(answer => answer.proposals),
+      cards: answers.flatMap(answer => answer.cards ?? []),
       corrections: answers.flatMap(answer => answer.corrections),
       nextState: null,
       cached: answers.every(answer => answer.cached),
@@ -942,6 +1011,7 @@ export async function planBasicTurn(
     intent,
     proposals: extra.proposals ?? [],
     ...(extra.operation ? { operation: extra.operation } : {}),
+    ...(extra.cards?.length ? { cards: extra.cards } : {}),
     suggestions:
       extra.suggestions ??
       suggestFollowUps({
@@ -1034,10 +1104,12 @@ export async function planBasicTurn(
     // A free-text request (a resolution note) takes the reply as that text unless it is clearly a question
     // or a command; otherwise a reply the rules read as a question of its own is a new question.
     const ruled = classifyIntent(text, onIncident);
+    // "Assign this to me" while a resolution note is awaited is a new request, not the note.
+    const command = extractSlots(text, raw).action;
     const standalone =
       slash !== null ||
       (state.pending.kind === 'incident'
-        ? /\?$/.test(raw)
+        ? /\?$/.test(raw) || (command !== undefined && command !== 'resolve' && command !== 'note')
         : !choice && ruled.intent !== 'UNKNOWN' && !ruled.scored);
     // The completed question keeps the reply's original capitalisation, so names and notes survive.
     let completed: string | null = null;
@@ -1104,6 +1176,20 @@ export async function planBasicTurn(
     )
       intent = 'INCIDENT_STATS';
   }
+  // "Last 3 days" or "which service has the most?" right after a list: that list again, narrowed or counted.
+  let refined: string | null = null;
+  if (!forcedIntent && !followup && !incident && input.previousQuestions?.length) {
+    const context = listContext(input.previousQuestions);
+    const most = text.match(MOST_BY);
+    if (context && most) {
+      intent = 'INCIDENT_STATS';
+      slots = { ...slots, groupBy: (most[1] ?? most[2]) === 'team' ? 'team' : 'service' };
+      refined = context.open ? `open ${context.question}` : context.question;
+    } else if (context && intent === 'UNKNOWN' && isRefinement(text)) {
+      intent = context.intent;
+      refined = mergeBasicQuestion(context.question, text);
+    }
+  }
   if (greetOnly) intent = 'GREETING';
 
   if (incident && (intent === 'GREETING' || intent === 'UNKNOWN'))
@@ -1122,9 +1208,93 @@ export async function planBasicTurn(
     );
   if (intent === 'HELP') return result(HELP, 'HELP');
   if (intent === 'IDENTITY') return result(await identityAnswer(actor), 'IDENTITY');
+
+  // Requests basic mode cannot serve from data get a plain answer saying where they can be done.
+  const fixed = forcedIntent ? null : fixedRequest(text, onIncident);
+  if (fixed === 'off_topic')
+    return result(
+      'That is outside what I can help with. I answer questions about your OpsKnight incidents, services, on-call, runbooks and how OpsKnight works, for example “What is on fire right now?”.',
+      'UNKNOWN'
+    );
+  if (fixed === 'create_incident')
+    return result(
+      'I can’t open incidents from chat in basic mode. Create it at /incidents/create, where you choose the service, title and urgency. With AI turned on, Squire can prepare changes like this as a card you confirm, when your administrator allows it.',
+      'UNKNOWN'
+    );
+  // On a runbook page, a question about "the runbook" (or a request to change it) is about that runbook.
+  if (
+    input.page?.kind === 'runbook' &&
+    !incident &&
+    !forcedIntent &&
+    fixed !== 'destructive' &&
+    !/\brunbooks\b/.test(text) &&
+    (RUNBOOK_PAGE_INTENTS.has(intent) || fixed === 'how_to')
+  ) {
+    const answer = await runbookPageAnswer(
+      actor,
+      input.page.id,
+      text,
+      await timeZoneFor(actor.id),
+      collect
+    );
+    if (answer) return result(answer, 'RUNBOOK_SEARCH');
+  }
+  if (fixed === 'destructive')
+    return result(await cannotChange(actor, expanded.message), 'UNKNOWN');
+  if (fixed === 'how_to') intent = 'GUIDANCE';
+  if (!incident && !forcedIntent) {
+    const teams = await teamsAnswer(
+      actor,
+      text,
+      input.page?.kind === 'team' ? input.page.id : null,
+      collect
+    ).catch(error => {
+      if (error instanceof AuthorizationError)
+        return 'You do not have permission to read teams. Ask an administrator to review your access.';
+      throw error;
+    });
+    if (teams) return result(teams, 'RESPONDERS');
+  }
+  if (incident && !forcedIntent && RUNBOOK_FROM_FIX.test(text))
+    return runbookFromFixTurn(actor, incident, result, collect);
+  if (incident && !forcedIntent && FIX_QUESTION.test(text))
+    return result(
+      await howFixedAnswer(actor, incident, await timeZoneFor(actor.id), collect),
+      'TIMELINE'
+    );
+  // "Why did the checkout latency incident happen?": the one incident whose title it names, as on its page.
+  if (!incident && !input.page && !forcedIntent && NAMED_INCIDENT.test(text)) {
+    const named = await incidentByTitle(actor, text).catch(() => null);
+    if (named)
+      return planBasicTurn(
+        {
+          ...input,
+          incident: named,
+          page: null,
+          state: null,
+          message: FIX_QUESTION.test(text)
+            ? 'how was this fixed'
+            : /\b(why|caus\w*|root)\b/.test(text)
+              ? 'Summarise this incident and its likely causes'
+              : 'Summarise this incident',
+        },
+        collect
+      );
+  }
+
   if (intent === 'GUIDANCE') {
     const guide = productGuidance(text);
-    const docs = await docsAnswer(text);
+    // A how-to names its subject in one word as often as not ("how do I set up slack").
+    // The docs say "create" and "connect" where people say "add" and "set up" ("how do I set up slack").
+    const docs =
+      fixed === 'how_to'
+        ? ((await docsAnswer(
+            text
+              .replace(/\b(?:add|make)\b/g, 'create')
+              .replace(/\bset ?up\b/g, 'connect configure'),
+            1
+          )) ?? (await docsAnswer(text, 1)))
+        : await docsAnswer(text);
     // A curated guide leads; the docs add the detailed steps. Without a guide, the docs answer alone.
     return result(
       guide.startsWith('## ') ? [guide, docs].filter(Boolean).join('\n\n') : (docs ?? guide),
@@ -1194,7 +1364,7 @@ export async function planBasicTurn(
     ...(picked ? { assigneeId: picked.id } : {}),
   };
   let noteLines: string[] = picked ? [`Incidents assigned to ${short(picked.label)}.`] : [];
-  let question = previous && followup ? mergeBasicQuestion(previous, text) : text;
+  let question = refined ?? (previous && followup ? mergeBasicQuestion(previous, text) : text);
   // A next page reuses the names already resolved for the first one.
   if (READ_INTENTS.has(intent) && !page) {
     const resolved = await resolveNames(actor, question, slots, intent, input.page, incident);
@@ -1266,7 +1436,7 @@ export async function planBasicTurn(
       'I can look up OpsKnight data without an AI provider. Try “My open incidents”, “How many incidents this week by team?”, “Who owns Checkout?”, “Who is on call?”, or “Find checkout incidents since Monday”. Open an incident for a briefing, likely change leads, recorded fixes, runbooks and confirmable actions.',
       'UNKNOWN'
     );
-  if (intent === 'TIMELINE') return result(await timeline(incident, collect), 'TIMELINE');
+  if (intent === 'TIMELINE') return result(await timeline(actor, incident, collect), 'TIMELINE');
   if (intent === 'UNKNOWN')
     return result(
       `I haven't matched that to a supported lookup yet. For ${short(incident.title)}, try a briefing, similar incidents, causes, runbooks, responders, postmortems, follow-up work or the timeline. You can also ask about service ownership, incident counts or how OpsKnight works, or say "acknowledge this".`,
@@ -1279,17 +1449,27 @@ export async function planBasicTurn(
           section => section !== 'RUNBOOKS' || !requested.includes('INCIDENT_SUMMARY')
         )
       : [intent];
-  const answers = await Promise.all(
+  const described = await Promise.all(
     sections.map(section => describeIncident(actor, incident, section, collect))
   );
-  const freshness = await readIncidentAnalysisState(actor, incident.id).catch(() => null);
-  const note =
-    freshness?.status === 'CURRENT'
-      ? 'Analysis is current.'
+  // Several sections share the same suggested checks: they are shown once, in the last section.
+  const checks = sections.length > 1 ? await suggestedChecksFor(incident) : '';
+  const answers = described.map((answer, index) =>
+    checks && index < described.length - 1 ? answer.replace(checks, '').trim() : answer
+  );
+  // Only answers built from intelligence (look-alikes, change leads, runbook picks) carry its freshness.
+  const derived = sections.some(section => INTELLIGENCE_SECTIONS.has(section));
+  const freshness = derived
+    ? await readIncidentAnalysisState(actor, incident.id).catch(() => null)
+    : null;
+  const note = !derived
+    ? ''
+    : freshness?.status === 'CURRENT'
+      ? ''
       : freshness
-        ? `${freshness.message} Suggestions below may be incomplete or out of date.`
-        : 'Recommendation freshness could not be verified; check the incident before acting.';
-  return result([note, ...answers].join('\n\n'), intent);
+        ? `_${freshness.message.replace(/\.\s*$/, '')}, so these suggestions may be incomplete._`
+        : '_Recommendation freshness could not be verified; check the incident before acting._';
+  return result([...answers, note].filter(Boolean).join('\n\n'), intent);
 
   function finishRead(
     text: string,
@@ -1320,6 +1500,127 @@ export async function planBasicTurn(
       }),
     });
   }
+}
+
+/** Incident intents whose answer is built from intelligence, so its freshness is worth stating. */
+const INTELLIGENCE_SECTIONS: ReadonlySet<SquireIntent> = new Set(['SIMILAR', 'CAUSES', 'RUNBOOKS']);
+/** What a question on a runbook page may mean when it is about "the runbook" rather than another read. */
+const RUNBOOK_PAGE_INTENTS: ReadonlySet<SquireIntent> = new Set([
+  'UNKNOWN',
+  'GUIDANCE',
+  'RUNBOOK_SEARCH',
+  'RUNBOOKS',
+  'INCIDENT_SUMMARY',
+]);
+/** Lists a short follow-up can narrow or count. */
+const LIST_CONTEXT_INTENTS: ReadonlySet<SquireIntent> = new Set([
+  'ACTIVE_INCIDENTS',
+  'SEARCH_INCIDENTS',
+  'WORK_QUEUE',
+  'INCIDENT_STATS',
+]);
+const MOST_BY =
+  /\b(?:which|what) (service|team)s? (?:has|have|had|with|is|got) (?:the )?most\b|\bmost (?:incidents )?(?:by|per) (service|team)\b/;
+
+/** Only filters, nothing to search for: "last 3 days", "high urgency", "resolved". */
+function isRefinement(text: string): boolean {
+  if (keywords(text).length) return false;
+  const query = parseBasicQuery(text);
+  return Boolean(
+    !query.error &&
+    (query.window ||
+      query.urgency ||
+      query.status ||
+      query.active ||
+      query.priority ||
+      query.unassigned)
+  );
+}
+
+/**
+ * The list the earlier questions built, with any filter-only follow-ups folded in ("what is on fire" then
+ * "last 3 days"); null when the last question was about something else.
+ */
+function listContext(
+  previous: readonly string[]
+): { question: string; intent: SquireIntent; open: boolean } | null {
+  type ListContext = { question: string; intent: SquireIntent; open: boolean };
+  let context = null as ListContext | null;
+  for (const raw of previous) {
+    const text = normalizeMessage(raw);
+    const intent = classifyIntent(text, false).intent;
+    if (LIST_CONTEXT_INTENTS.has(intent))
+      context = {
+        question: text,
+        intent,
+        open: intent === 'ACTIVE_INCIDENTS' || intent === 'WORK_QUEUE',
+      };
+    else if (context && intent === 'UNKNOWN' && isRefinement(text))
+      context = { ...context, question: mergeBasicQuestion(context.question, text) };
+    else if (!(context && MOST_BY.test(text))) context = null;
+  }
+  return context;
+}
+
+/** The one readable incident whose title holds every word the question names; null when not exactly one. */
+async function incidentByTitle(
+  actor: AuthorizationActor,
+  text: string
+): Promise<ReadableIncident | null> {
+  const terms = keywords(text);
+  if (!terms.length) return null;
+  const rows = await prisma.incident.findMany({
+    where: {
+      AND: [
+        incidentReadWhere(actor),
+        ...terms.map(term => ({ title: { contains: term, mode: 'insensitive' as const } })),
+      ],
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 2,
+    select: { id: true },
+  });
+  return rows.length === 1 ? readIncidentForActor(actor, rows[0].id) : null;
+}
+
+/** Where a delete, archive or disable is done instead: the named record's page, or its list. */
+async function cannotChange(actor: AuthorizationActor, message: string): Promise<string> {
+  const named = detectEntityReferences(message).find(ref => ref.name || ref.id);
+  const [found] = named ? await resolveEntityReferences(actor, [named]).catch(() => []) : [];
+  const kind = message.toLowerCase().match(/\b(service|team|runbook|schedule|incident)s?\b/)?.[1];
+  const where = found
+    ? `${short(found.name)}'s own page (${entityLink(found)})`
+    : kind
+      ? `the ${kind} page (/${kind === 'schedule' ? 'schedules' : `${kind}s`})`
+      : 'that record’s own page';
+  return `I can’t delete, archive or disable anything from chat. Do it from ${where}, which asks you to confirm and checks your permission. With AI turned on, Squire can prepare some changes as a card you confirm; nothing changes without that.`;
+}
+
+/** "Turn this fix into a runbook": the same draft card the AI answer offers, built and checked here. */
+async function runbookFromFixTurn(
+  actor: AuthorizationActor,
+  incident: ReadableIncident,
+  result: (
+    text: string,
+    intent: SquireIntent,
+    extra?: Partial<Omit<BasicTurnResult, 'text' | 'intent'>>
+  ) => BasicTurnResult,
+  collect?: Collect
+): Promise<BasicTurnResult> {
+  collect?.({ kind: 'incident', id: incident.id, label: incident.title, data: incident });
+  // Loaded on use: plans.ts reads incidents through this module.
+  const { buildRunbookFromFixProposal } = await import('./plans');
+  const card = await buildRunbookFromFixProposal(actor, { incidentId: incident.id }).catch(
+    () => null
+  );
+  if (!card)
+    return result('I could not prepare a runbook draft right now. Please try again.', 'RUNBOOKS');
+  if ('refusal' in card) return result(card.refusal, 'RUNBOOKS');
+  return result(
+    `I can turn how ${short(incident.title)} was fixed into an unpublished runbook draft. Review the steps on the card below; nothing is created until you confirm.`,
+    'RUNBOOKS',
+    { cards: [card] }
+  );
 }
 
 /** True when `ref` is the incident's id or its short "#ABCDE" reference. */
@@ -1503,6 +1804,11 @@ async function actionTurn(
         }
       );
     }
+    case 'priority':
+      return result(
+        `Priority is set on the incident page: /incidents/${incident.id}. I can’t change it from chat; I can prepare acknowledge, resolve, note and reassign cards here.`,
+        'RESPONDERS'
+      );
     case 'snooze':
     case 'escalate':
     case 'urgency': {

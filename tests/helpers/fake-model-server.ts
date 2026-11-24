@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 type Scripted = {
   finishDelayMs?: number;
   status?: number;
+  /** With `toolCall`, streamed before the call (a model narrating what it is about to do). */
   content?: string;
   toolCall?: { name: string; args: string };
   usage?: [number, number];
@@ -113,6 +114,7 @@ export async function startFakeModel(): Promise<FakeServer> {
         const chunk = (delta: unknown, finishReason: string | null = null) =>
           `data: ${JSON.stringify({ id: 'c1', object: 'chat.completion.chunk', created: 1, model: 'm', choices: [{ index: 0, delta, finish_reason: finishReason }] })}\n\n`;
         res.write(chunk({ role: 'assistant', content: '' }));
+        if (next.toolCall && next.content) res.write(chunk({ content: next.content }));
         if (next.toolCall) {
           res.write(
             chunk({

@@ -8,7 +8,11 @@ import {
   searchOperations,
   squireOperation,
 } from '@/lib/intelligence/squire/operations';
-import { buildRunbookFromFixProposal } from '@/lib/intelligence/squire/plans';
+import {
+  buildRunbookFromFixProposal,
+  buildRunbookStepsProposal,
+} from '@/lib/intelligence/squire/plans';
+import { buildIncidentTools } from '@/lib/intelligence/squire/tools-incident';
 import { executeSquireAction } from '@/lib/intelligence/squire/actions/execute';
 import { readSquireActionOutcome } from '@/lib/intelligence/squire/actions/outcomes';
 import {
@@ -288,8 +292,12 @@ describe('Squire operation catalog', () => {
       args: { path: { id: incident.id }, body: { name: 'database' } },
     });
     expect((await executeSquireAction(admin, tag!.token)).ok).toBe(true);
+    // What a person wrote is the note; its timeline event only says who added one.
+    await db.incidentNote.create({
+      data: { incidentId: incident.id, content: 'Restarted the connection pool' },
+    });
     await db.incidentEvent.create({
-      data: { incidentId: incident.id, type: 'COMMENT', message: 'Restarted the connection pool' },
+      data: { incidentId: incident.id, type: 'COMMENT', message: 'Note added by Op Admin' },
     });
     // Not resolved yet: nothing to turn into a runbook.
     expect(await buildRunbookFromFixProposal(admin, { incidentId: incident.id })).toMatchObject({
@@ -311,7 +319,10 @@ describe('Squire operation catalog', () => {
     expect(steps[0]).toContain('Confirm the symptom');
     expect(steps).toContain('Add a tag to an incident');
     expect(steps).toContain('Restarted the connection pool');
-    expect(steps.at(-1)).toMatch(/^Confirm the fix holds: .*Pool size raised to 50/);
+    expect(steps.at(-1)).toMatch(/^Confirm the fix holds: Pool size raised to 50$/);
+    expect(steps.join('\n')).not.toMatch(/Note added by|Resolution note added/);
+    // The steps quote notes people wrote.
+    expect(card!.untrustedContext).toBe(true);
     // Only a card: no runbook until it is confirmed, then an unpublished draft with those steps.
     expect(await db.runbook.count()).toBe(0);
     expect((await executeSquireAction(admin, card!.token)).ok).toBe(true);
@@ -322,6 +333,118 @@ describe('Squire operation catalog', () => {
     };
     expect(definition.steps.map(step => step.type)).toEqual(steps.map(() => 'MANUAL'));
     expect(definition.steps.map(step => step.name)).toContain('Restarted the connection pool');
+  });
+
+  it('offers no runbook after a resolve with nothing done but the resolution note', async () => {
+    const { admin, incident } = await world();
+    const resolve = await buildOperationProposal(admin, {
+      operationId: 'resolveIncident',
+      args: { path: { id: incident.id }, body: { resolutionNote: 'Stale alert, closing' } },
+    });
+    const resolved = await executeSquireAction(admin, resolve!.token);
+    expect(resolved.ok).toBe(true);
+    expect(resolved.ok && resolved.followUp).toBeFalsy();
+  });
+
+  it('binds a revision-checked change to the revision it read, and describes it in words', async () => {
+    const { admin, service } = await world();
+    const proposal = await buildOperationProposal(admin, {
+      operationId: 'updateService',
+      // A guessed revision: the card uses the one it read instead.
+      args: { path: { id: service.id }, body: { description: 'Checkout API' }, ifMatch: '"999"' },
+    });
+    expect(proposal!.detail).toBe(`On “${service.name}”. Runs as you, with your permissions.`);
+    expect((await executeSquireAction(admin, proposal!.token)).ok).toBe(true);
+    // A change since the card was made is refused, never applied over it.
+    const stale = await buildOperationProposal(admin, {
+      operationId: 'updateService',
+      args: { path: { id: service.id }, body: { description: 'Stale' } },
+    });
+    await db.service.update({ where: { id: service.id }, data: { description: 'Changed' } });
+    expect(await executeSquireAction(admin, stale!.token)).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('changed since'),
+    });
+  });
+
+  it("shows and changes a draft-only runbook's steps through its draft, never its configuration", async () => {
+    const { admin, stakeholder } = await world();
+    const responder = (await resolveUserActor(
+      (await createTestUser({ role: 'RESPONDER', name: 'Op Responder' })).id
+    ))!;
+    const runbook = await db.runbook.create({ data: { name: 'Failed run', slug: 'failed-run' } });
+    const draft = await db.runbookVersion.create({
+      data: {
+        runbookId: runbook.id,
+        version: 1,
+        state: 'DRAFT',
+        checksum: 'test',
+        draftRevision: 4,
+        definition: {
+          steps: [
+            {
+              key: 'open-run',
+              name: 'Open the failed run',
+              type: 'MANUAL',
+              riskClass: 'READ_ONLY',
+              config: { secretNote: 'do-not-show' },
+            },
+          ],
+        },
+      },
+    });
+    await db.runbook.update({ where: { id: runbook.id }, data: { draftVersionId: draft.id } });
+    const steps = (actor: typeof admin) =>
+      buildIncidentTools(actor, { personal: false }).find(
+        tool => tool.name === 'get_runbook_steps'
+      )!.execute!({ id: runbook.id });
+    const read = await steps(admin);
+    expect(read).toMatchObject({
+      steps: [],
+      draft: { revision: 4, steps: [{ name: 'Open the failed run', type: 'MANUAL' }] },
+    });
+    expect(JSON.stringify(read)).not.toContain('do-not-show');
+    // A role that may read runbooks but not manage them sees no draft, as in the runbook editor.
+    expect(await steps(responder)).not.toHaveProperty('draft');
+
+    const card = await buildRunbookStepsProposal(admin, {
+      runbookId: runbook.id,
+      steps: [
+        { name: 'Open the failed run' },
+        { name: 'Retry the run', description: 'Retry it once.' },
+      ],
+      mode: 'replace',
+    });
+    expect(card).toMatchObject({
+      title: 'Update the draft steps of “Failed run”',
+      confirmLabel: 'Save draft steps',
+      href: `/runbooks/${runbook.id}`,
+      preview: [
+        { label: 'Step 1', value: 'Open the failed run' },
+        { label: 'Step 2', value: 'Retry the run — Retry it once.' },
+      ],
+    });
+    expect(JSON.stringify(card)).not.toMatch(/PATCH|definition\.steps/);
+    const result = await executeSquireAction(admin, (card as { token: string }).token);
+    expect(result.ok, result.message).toBe(true);
+    const saved = await db.runbookVersion.findUniqueOrThrow({ where: { id: draft.id } });
+    expect(saved.draftRevision).toBe(5);
+    // The kept step keeps its key and its configuration (restored by the route, never on the card).
+    expect((saved.definition as { steps: unknown[] }).steps).toMatchObject([
+      { key: 'open-run', name: 'Open the failed run', config: { secretNote: 'do-not-show' } },
+      { name: 'Retry the run', description: 'Retry it once.', type: 'MANUAL' },
+    ]);
+
+    expect(
+      await buildRunbookStepsProposal(stakeholder, {
+        runbookId: runbook.id,
+        steps: [{ name: 'x' }],
+      })
+    ).toEqual({ refusal: expect.stringMatching(/needs .*Admin/) });
+    await db.runbook.update({ where: { id: runbook.id }, data: { draftVersionId: null } });
+    expect(
+      await buildRunbookStepsProposal(admin, { runbookId: runbook.id, steps: [{ name: 'x' }] })
+    ).toEqual({ refusal: expect.stringContaining(`has no unpublished draft`) });
   });
 
   it('lets the model refine the runbook steps, and names the role a person needs to create one', async () => {

@@ -118,6 +118,30 @@ describe('cache-friendly Squire turns', () => {
     expect(after.messages.at(-2)?.content).toContain('Nothing else changed.');
   });
 
+  it('keeps an interrupted earlier answer as a stand-in, without a notice on every later turn', async () => {
+    const { actor, conversationId, turn } = await conversation();
+    await recordExchange({
+      userId: actor.id,
+      conversationId,
+      question: 'Question number 3 about the checkout pool',
+      answer: 'Half an answer',
+      turn: { ...turn, completion: 'INTERRUPTED' },
+    });
+    model.script.push({ content: 'First.' }, { content: 'Second.' });
+    for (const message of ['is the pool ok now?', 'and now?']) {
+      const events = await ask(actor, conversationId, message);
+      expect(events.filter(event => event.type === 'notice')).toEqual([]);
+    }
+    const body = model.requests[0].body as unknown as Body;
+    // The question stays, followed by a stand-in for its answer, so the turns keep their order.
+    const at = body.messages.findIndex(m => m.content.includes('Question number 3'));
+    expect(body.messages[at + 1]).toMatchObject({
+      role: 'assistant',
+      content: expect.stringMatching(/^\[Earlier answer not included/),
+    });
+    expect(JSON.stringify(body)).not.toContain('Half an answer');
+  });
+
   it('ends the turn with a trace of the model, tokens and time', async () => {
     const { actor, conversationId } = await conversation();
     model.script.push({ content: 'The pool is fine now.', usage: [900, 12], cachedTokens: 800 });

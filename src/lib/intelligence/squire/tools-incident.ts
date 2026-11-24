@@ -7,7 +7,11 @@ import {
   scheduleReadWhere,
   serviceReadWhere,
 } from '@/lib/authorization-filters';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import {
+  authorize,
+  AUTHORIZATION_ACTIONS,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
 import { evaluateServiceObjective } from '@/lib/slo/evaluator';
 import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 import type { AiDataClass, AiToolDefinition } from '../ai/port';
@@ -113,6 +117,28 @@ export function compactPayload(value: unknown): { payload: unknown; truncated: b
   return { payload, truncated };
 }
 
+/** A runbook version's steps as the model may see them: never configuration, every text redacted. */
+function runbookSteps(definition: unknown) {
+  const rawSteps =
+    definition && typeof definition === 'object' && !Array.isArray(definition)
+      ? (definition as { steps?: unknown }).steps
+      : undefined;
+  return (Array.isArray(rawSteps) ? rawSteps : []).slice(0, 25).map((step, index) => {
+    const value = (step && typeof step === 'object' ? step : {}) as Record<string, unknown>;
+    const text = (field: unknown, max: number) =>
+      typeof field === 'string' ? redactSecrets(short(field, max)) : null;
+    return {
+      order: index + 1,
+      key: text(value.key, 80),
+      name: text(value.name, 200),
+      type: text(value.type, 40),
+      riskClass: text(value.riskClass, 40) ?? 'READ_ONLY',
+      requiresApproval: value.requiresApproval === true,
+      description: text(value.description, 300),
+    };
+  });
+}
+
 const objectInput = (properties: Record<string, unknown>, required: string[]) => ({
   type: 'object',
   properties,
@@ -148,7 +174,7 @@ export function buildIncidentTools(
   const tools: AiToolDefinition[] = [
     readTool(
       'get_runbook_steps',
-      'Read the published steps of one runbook by id: each step name, type, risk class, whether it needs approval and its description. Never returns step configuration.',
+      "Read one runbook's published steps by id (name, type, risk class, approval, description; never configuration), plus its unpublished draft's steps for a person who may manage runbooks.",
       objectInput({ id: idSchema }, ['id']),
       async input => {
         const parsed = z.object({ id }).strict().safeParse(input);
@@ -162,28 +188,27 @@ export function buildIncidentTools(
             name: true,
             updatedAt: true,
             publishedVersion: { select: { version: true, definition: true } },
+            draftVersion: { select: { version: true, draftRevision: true, definition: true } },
           },
         });
         if (!runbook) return NOT_FOUND;
-        const definition = runbook.publishedVersion?.definition;
-        const rawSteps =
-          definition && typeof definition === 'object' && !Array.isArray(definition)
-            ? (definition as { steps?: unknown }).steps
+        const steps = runbookSteps(runbook.publishedVersion?.definition);
+        // The draft is what the runbook editor shows a person who may manage runbooks (the same rule as its
+        // draft API): step names, types and descriptions only.
+        const draft =
+          runbook.draftVersion &&
+          authorize({ actor, action: AUTHORIZATION_ACTIONS.RUNBOOK_MANAGE }).allowed
+            ? {
+                version: runbook.draftVersion.version,
+                revision: runbook.draftVersion.draftRevision,
+                steps: runbookSteps(runbook.draftVersion.definition).map(step => ({
+                  order: step.order,
+                  name: step.name,
+                  type: step.type,
+                  description: step.description,
+                })),
+              }
             : undefined;
-        const steps = (Array.isArray(rawSteps) ? rawSteps : []).slice(0, 25).map((step, index) => {
-          const value = (step && typeof step === 'object' ? step : {}) as Record<string, unknown>;
-          const text = (field: unknown, max: number) =>
-            typeof field === 'string' ? redactSecrets(short(field, max)) : null;
-          return {
-            order: index + 1,
-            key: text(value.key, 80),
-            name: text(value.name, 200),
-            type: text(value.type, 40),
-            riskClass: text(value.riskClass, 40) ?? 'READ_ONLY',
-            requiresApproval: value.requiresApproval === true,
-            description: text(value.description, 300),
-          };
-        });
         return {
           id: runbook.id,
           name: runbook.name,
@@ -191,9 +216,18 @@ export function buildIncidentTools(
           updatedAt: runbook.updatedAt.toISOString(),
           publishedVersion: runbook.publishedVersion?.version ?? null,
           steps,
-          note: runbook.publishedVersion
-            ? undefined
-            : 'This runbook has no published version; it cannot be run yet.',
+          ...(draft ? { draft } : {}),
+          note:
+            [
+              runbook.publishedVersion
+                ? ''
+                : 'This runbook has no published version; it cannot be run yet.',
+              draft
+                ? 'Its unpublished draft is in `draft`: say it is a draft, not what runs today.'
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined,
         };
       }
     ),

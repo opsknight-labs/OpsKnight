@@ -11,7 +11,7 @@
  *   `$resolved` a visible resolved incident, `$hidden` another team's incident, `$service` the incident's
  *   service, `$hiddenService` the other team's service, `$change` a recorded deploy, `$alert` an alert of
  *   `$incident`, `$teammate` a teammate of the asker, `$runbook` a runbook (not published, not bound to the
- *   service), `$diffChange` a deploy that links to its commit, `$statusPage` the status page, `$self` the
+ *   service), `$draft` a runbook with only an unpublished draft, `$diffChange` a deploy that links to its commit, `$statusPage` the status page, `$self` the
  *   asker. `$incident` and
  *   `$resolved` carry an accepted related link. Observability connections exist for logs, metrics, traces,
  *   error events and code diffs, answered by a local stand-in whose payloads carry injected instructions,
@@ -169,10 +169,10 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     id: 'rca-empty-answer-falls-back',
     category: 'rca',
     question: 'Why is checkout failing?',
-    script: [{ tool: 'get_incident', input: { id: '$incident' } }, { say: '' }],
-    // A model that spends its turn on tools and says nothing never leaves the person with an empty answer:
-    // the turn falls back to the deterministic answer.
-    expect: { mode: 'basic', modelCalls: 2, notice: 'could not finish' },
+    script: [{ tool: 'get_incident', input: { id: '$incident' } }, { say: '' }, { say: '' }],
+    // A model that spends its turn on tools and says nothing, even when asked once more to answer from what
+    // it read, never leaves the person with an empty answer: the turn falls back to the deterministic answer.
+    expect: { mode: 'basic', modelCalls: 3, notice: 'could not finish' },
   },
 
   {
@@ -309,6 +309,42 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       toolLabels: ['Searching incidents'],
       toolSaw: ['Checkout pool exhausted'],
       modelNeverSaw: ['Hidden payroll outage'],
+    },
+  },
+  {
+    id: 'tool-search-on-fire',
+    category: 'tool-choice',
+    question: 'What is on fire?',
+    onIncident: false,
+    script: [
+      { tool: 'search_incidents', input: { status: 'unresolved' } },
+      { say: '2 incidents are open, both on Checkout API: /incidents/$other' },
+    ],
+    // An org-wide question lists by filter with no words, with the total, under the asker's own visibility.
+    expect: {
+      mode: 'ai',
+      modelSaw: ['search_incidents without words'],
+      toolSaw: ['total', 'Checkout pool exhausted again'],
+      modelNeverSaw: ['Hidden payroll outage', 'Checkout pool exhausted last week'],
+      citeKinds: ['incident'],
+    },
+  },
+  {
+    id: 'answer-after-empty-final-step',
+    category: 'tool-choice',
+    question: 'Is this still open?',
+    script: [
+      { tool: 'get_incident', input: { id: '$incident' } },
+      // The provider ends the loop without a word; one more call answers from what was read.
+      { say: '' },
+      { say: 'Yes, Checkout pool exhausted is still open.' },
+    ],
+    expect: {
+      mode: 'ai',
+      modelCalls: 3,
+      modelSaw: ['Answer my question now from what the tools returned'],
+      answerContains: ['still open'],
+      usageAccounted: true,
     },
   },
   {
@@ -555,6 +591,42 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     ],
     // Not resolved or not readable: no card, and the person is told why.
     expect: { mode: 'ai', noProposal: true, notice: 'Only a resolved incident you can open' },
+  },
+  {
+    id: 'operations-runbook-steps',
+    category: 'operations',
+    question: 'Add a step to retry the run to that draft',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'propose_runbook_steps',
+        input: {
+          runbookId: '$draft',
+          steps: [{ name: 'Retry the run', description: 'Retry it once.' }],
+          mode: 'append',
+        },
+      },
+      { say: 'Here are the draft steps to confirm.' },
+    ],
+    // Squire reads the draft and its revision itself; the card goes through updateRunbookDraft.
+    expect: { mode: 'ai', proposals: ['run_operation'] },
+  },
+  {
+    id: 'operations-runbook-steps-no-draft',
+    category: 'operations',
+    question: 'Add a step to the pool runbook',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      {
+        tool: 'propose_runbook_steps',
+        input: { runbookId: '$runbook', steps: [{ name: 'Reset the pool' }] },
+      },
+      { say: 'I could not prepare that.' },
+    ],
+    // No draft to change: no card, and the person is told where to create one.
+    expect: { mode: 'ai', noProposal: true, notice: 'has no unpublished draft' },
   },
   {
     id: 'memory-remember-fact',
@@ -861,6 +933,23 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
       mode: 'ai',
       toolLabels: ['Reading the runbook', 'Reading the runbook steps'],
       toolSaw: ['Database pool reset', 'no published version'],
+    },
+  },
+  {
+    id: 'tool-runbook-draft',
+    category: 'tool-choice',
+    question: 'What steps does the failed run recovery draft have?',
+    onIncident: false,
+    asAdmin: true,
+    script: [
+      { tool: 'get_runbook_steps', input: { id: '$draft' } },
+      { say: 'The unpublished draft /runbooks/$draft has one step: Open the failed run.' },
+    ],
+    // A draft-only runbook: its draft steps (never configuration) for a person who may manage runbooks.
+    expect: {
+      mode: 'ai',
+      toolSaw: ['Open the failed run', 'unpublished draft'],
+      citeKinds: ['runbook'],
     },
   },
   {

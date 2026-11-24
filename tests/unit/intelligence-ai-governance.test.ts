@@ -40,7 +40,7 @@ describe('prompt registry', () => {
     expect(rendered.system).toMatch(/the rules above always win/);
     expect(rendered.meta).toEqual({
       id: 'squire.system',
-      version: 6,
+      version: 7,
       hash: promptHash('squire.system'),
       guidanceRevision: 4,
     });

@@ -55,6 +55,8 @@ describe('Squire structural evaluation (no model)', () => {
       )
     );
     incidentId = incidents[0].id;
+    // One incident with a distinct title, for questions that name an incident by its title.
+    await createTestIncident('Checkout latency high', checkout.id, { teamId: team.id });
     // Third-party text with an injected instruction; basic answers must never repeat it.
     await db.incidentEvent.create({
       data: {

@@ -4,7 +4,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { estimateTokens, utcDay } from '@/lib/intelligence/ai/budget';
 import { estimateCacheReads } from '@/lib/intelligence/ai/cache-estimate';
-import { breakers, invalidateGatewayCache } from '@/lib/intelligence/ai/gateway';
+import {
+  breakers,
+  invalidateGatewayCache,
+  REASONING_ROOM_TOKENS,
+} from '@/lib/intelligence/ai/gateway';
 import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import { saveObservabilityConnection } from '@/lib/intelligence/connectors/service';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
@@ -296,6 +300,35 @@ describe('Squire scripted-model evaluation', () => {
     const runbook = await db.runbook.create({
       data: { name: 'Database pool reset', slug: 'database-pool-reset', tags: ['database'] },
     });
+    // A runbook with only an unpublished draft (as one Squire just created).
+    const drafted = await db.runbook.create({
+      data: { name: 'Failed run recovery', slug: 'failed-run-recovery', tags: ['ci'] },
+    });
+    const draftVersion = await db.runbookVersion.create({
+      data: {
+        runbookId: drafted.id,
+        version: 1,
+        state: 'DRAFT',
+        checksum: 'eval',
+        draftRevision: 2,
+        definition: {
+          steps: [
+            {
+              key: 'open_run',
+              name: 'Open the failed run',
+              description: 'Find the run that failed.',
+              type: 'MANUAL',
+              riskClass: 'READ_ONLY',
+              config: {},
+            },
+          ],
+        },
+      },
+    });
+    await db.runbook.update({
+      where: { id: drafted.id },
+      data: { draftVersionId: draftVersion.id },
+    });
     await db.postmortem.create({
       data: {
         incidentId: resolved.id,
@@ -384,6 +417,7 @@ describe('Squire scripted-model evaluation', () => {
       alert: alert.id,
       teammate: teammate.id,
       runbook: runbook.id,
+      draft: drafted.id,
       diffChange: diffChange.id,
       statusPage: statusPage.id,
     });
@@ -610,8 +644,9 @@ describe('Squire scripted-model evaluation', () => {
       expect(result.memory?.dataClass, why('saved-turn class')).toBe(expectation.memoryClass);
     if (expectation.maxTokensSent !== undefined)
       for (const body of result.requests)
+        // The answer-length setting, plus the gateway's fixed room for the model to think.
         expect(body.max_tokens ?? body.max_completion_tokens, why('max tokens')).toBe(
-          expectation.maxTokensSent
+          expectation.maxTokensSent + REASONING_ROOM_TOKENS
         );
     if (expectation.charts !== undefined) {
       expect(result.charts, why('chart events')).toHaveLength(expectation.charts);

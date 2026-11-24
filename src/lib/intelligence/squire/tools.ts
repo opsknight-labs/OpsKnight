@@ -300,60 +300,78 @@ export function buildSquireTools(
     ),
     readTool(
       'search_incidents',
-      'Find incidents whose title contains all of the given words. Optional status filter. Returns at most 10, newest first.',
+      'Find incidents the person can see. All filters optional: title words, status ("unresolved" = open or acknowledged), urgency, serviceId; without words it lists by filter. Returns the total and at most 10, most urgent then newest.',
       {
         type: 'object',
         properties: {
           query: { type: 'string', maxLength: 100 },
-          status: { type: 'string', enum: ['OPEN', 'ACKNOWLEDGED', 'RESOLVED'] },
+          status: { type: 'string', enum: ['unresolved', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED'] },
+          urgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+          serviceId: idSchema,
         },
-        required: ['query'],
         additionalProperties: false,
       },
       async input => {
         const parsed = z
           .object({
-            query: z.string().trim().min(1).max(100),
-            status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED']).optional(),
+            query: z.string().trim().max(100).optional(),
+            status: z.enum(['unresolved', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED']).optional(),
+            urgency: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
+            serviceId: z.string().trim().min(1).max(64).optional(),
           })
           .strict()
           .safeParse(input);
         if (!parsed.success) return { error: 'Invalid input' };
         const readable = scoped(() => incidentReadWhere(actor));
         if (!readable) return NOT_FOUND;
-        const terms = words(parsed.data.query);
-        if (terms.length === 0) return [];
-        const rows = await prisma.incident.findMany({
-          where: {
-            AND: [
-              ...terms.map(term => ({ title: { contains: term, mode: 'insensitive' as const } })),
-              ...(parsed.data.status ? [{ status: parsed.data.status }] : []),
-              readable,
-            ],
-          },
-          orderBy: { createdAt: 'desc' },
-          take: MAX_ROWS,
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            urgency: true,
-            createdAt: true,
-            resolvedAt: true,
-            updatedAt: true,
-            service: { select: { name: true } },
-          },
-        });
-        return rows.map(row => ({
-          id: row.id,
-          title: short(row.title, 160),
-          status: row.status,
-          urgency: row.urgency,
-          service: row.service.name,
-          createdAt: row.createdAt.toISOString(),
-          resolvedAt: row.resolvedAt?.toISOString() ?? null,
-          updatedAt: row.updatedAt.toISOString(),
-        }));
+        const { status, urgency, serviceId } = parsed.data;
+        const where = {
+          AND: [
+            ...words(parsed.data.query ?? '').map(term => ({
+              title: { contains: term, mode: 'insensitive' as const },
+            })),
+            ...(status === 'unresolved'
+              ? [{ status: { in: ['OPEN' as const, 'ACKNOWLEDGED' as const] } }]
+              : status
+                ? [{ status }]
+                : []),
+            ...(urgency ? [{ urgency }] : []),
+            ...(serviceId ? [{ serviceId }] : []),
+            readable,
+          ],
+        };
+        const [total, rows] = await Promise.all([
+          prisma.incident.count({ where }),
+          prisma.incident.findMany({
+            where,
+            // The urgency enum is declared LOW, MEDIUM, HIGH, so descending puts HIGH first.
+            orderBy: [{ urgency: 'desc' }, { createdAt: 'desc' }],
+            take: MAX_ROWS,
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              urgency: true,
+              createdAt: true,
+              resolvedAt: true,
+              updatedAt: true,
+              service: { select: { name: true } },
+            },
+          }),
+        ]);
+        return {
+          total,
+          items: rows.map(row => ({
+            id: row.id,
+            title: short(row.title, 160),
+            status: row.status,
+            urgency: row.urgency,
+            service: row.service.name,
+            createdAt: row.createdAt.toISOString(),
+            resolvedAt: row.resolvedAt?.toISOString() ?? null,
+            updatedAt: row.updatedAt.toISOString(),
+          })),
+        };
       }
     ),
     readTool(
@@ -569,7 +587,7 @@ export function buildSquireTools(
     ),
     readTool(
       'get_runbook',
-      'Get a runbook by id: name, description and whether a published version exists.',
+      'Get a runbook by id: name, description, whether it is published and whether it has an unpublished draft.',
       idOnly,
       async input => {
         const parsed = idInput.safeParse(input);
@@ -583,6 +601,7 @@ export function buildSquireTools(
             name: true,
             description: true,
             publishedVersionId: true,
+            draftVersionId: true,
             updatedAt: true,
           },
         });
@@ -593,6 +612,7 @@ export function buildSquireTools(
           updatedAt: runbook.updatedAt.toISOString(),
           description: short(runbook.description, 800),
           published: Boolean(runbook.publishedVersionId),
+          hasDraft: Boolean(runbook.draftVersionId),
         };
       }
     ),
@@ -769,7 +789,7 @@ export function buildSquireTools(
       ),
       readTool(
         'get_catch_up',
-        'Catch the asking person up (a shift hand-off): what opened, resolved and is still open on their teams and assigned to them since their last on-call shift ended (or the last `hours`, default 12, at most 168), still-open high-urgency incidents, incidents that paged them, notes that mention them, and their current or next shift. Lead with what needs action.',
+        "Catch the asking person up (a shift hand-off): what opened, resolved and is still open on their teams and assigned to them since their last on-call shift ended (or the last `hours`, default 12, at most 168), still-open high-urgency incidents, incidents that paged them, notes that mention them, and their current or next shift. Only the person's own scope; for the whole organisation use search_incidents. Lead with what needs action.",
         {
           type: 'object',
           properties: { hours: { type: 'integer', minimum: 1, maximum: 168 } },
