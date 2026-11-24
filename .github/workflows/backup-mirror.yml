@@ -1,0 +1,94 @@
+name: Backup mirror
+
+# Mirrors develop (as the backup's main) and release tags to OpsKnightLabs/OpsKnight-backup, a
+# code-only safety copy. Every workflow there is kept disabled, so the backup adds no CI load
+# and publishes no images; the test image is built by develop-image.yml in this repo.
+# Needs the BACKUP_TOKEN secret: a classic PAT with the repo and workflow scopes
+# (fine-grained PATs are rejected by GitHub's LFS API).
+on:
+  push:
+    branches: [develop]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-mirror
+  cancel-in-progress: false
+
+env:
+  BACKUP_REPO: OpsKnightLabs/OpsKnight-backup
+
+jobs:
+  mirror:
+    if: github.repository == 'opsknight-labs/OpsKnight'
+    # Shows the staging build as a deployment; no approval (develop is staging).
+    environment:
+      name: staging
+      url: https://opssentinal.com
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          lfs: true
+          # The persisted GITHUB_TOKEN auth header would override BACKUP_TOKEN for LFS
+          # uploads to the backup ("Resource not accessible by integration").
+          persist-credentials: false
+      - name: Push main, tags and LFS objects to the backup
+        env:
+          BACKUP_TOKEN: ${{ secrets.BACKUP_TOKEN }}
+          GH_TOKEN: ${{ secrets.BACKUP_TOKEN }}
+        run: |
+          if [ -z "$BACKUP_TOKEN" ]; then
+            echo "::warning::BACKUP_TOKEN is not set; skipping the backup mirror."
+            exit 0
+          fi
+          # Keep every workflow in the backup disabled, before and after the push:
+          # before covers existing workflows, after covers any added by this push.
+          all_off() {
+            gh api "repos/${BACKUP_REPO}/actions/workflows?per_page=100" \
+              --jq '.workflows[] | select(.path | startswith(".github/")) | [.id, .path, .state] | @tsv' |
+              while IFS=$'\t' read -r id path state; do
+                if [ "$state" = active ]; then
+                  # shortcut: GitHub's dynamic Dependabot workflow cannot be disabled (422); ignore it.
+                  gh api -X PUT "repos/${BACKUP_REPO}/actions/workflows/${id}/disable" >/dev/null 2>&1 &&
+                    echo "disabled ${path}" || true
+                fi
+              done
+          }
+          all_off
+          remote="https://x-access-token:${BACKUP_TOKEN}@github.com/${BACKUP_REPO}.git"
+          # The LFS locks API returns 403 to fine-grained PATs even with push access, and
+          # this repo never uses LFS locks, so skip the verification.
+          git config lfs.locksverify false
+          # shortcut: GitHub's LFS API rejects fine-grained PATs (403), so LFS upload is best-effort; the
+          # only LFS file is public/demo.gif and the backup already has it. Use a classic PAT if that changes.
+          git lfs push "$remote" "${GITHUB_SHA}" ||
+            echo "::warning::LFS objects were not uploaded to the backup (token not accepted by LFS); code is still mirrored."
+          # The backup mirrors this repo exactly, so refs are force-updated. A tag run's
+          # GITHUB_SHA is the tagged commit, not main's tip, so it only syncs tags.
+          # LFS was handled above; stop the pre-push hook from retrying it.
+          export GIT_LFS_SKIP_PUSH=1
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            git push --force "$remote" 'refs/tags/*:refs/tags/*'
+          else
+            git push --force "$remote" "${GITHUB_SHA}:refs/heads/main" 'refs/tags/*:refs/tags/*'
+          fi
+          # GitHub registers workflows added by this push a few seconds later; disabling
+          # right away missed them, so wait first.
+          sleep 15
+          all_off
+          # Those workflows were already triggered by the push, and disabling does not
+          # cancel runs, so cancel them all.
+          gh api "repos/${BACKUP_REPO}/actions/runs?head_sha=${GITHUB_SHA}&per_page=100" \
+            --jq '.workflow_runs[] | select(.status != "completed") | [.id, .path] | @tsv' |
+            while IFS=$'\t' read -r id path; do
+              # A run that finished in the meantime cannot be cancelled; that is fine.
+              gh api -X POST "repos/${BACKUP_REPO}/actions/runs/${id}/cancel" >/dev/null 2>&1 &&
+                echo "cancelled ${path} run ${id}" || true
+            done
+          echo "Mirrored ${GITHUB_REF_NAME} (${GITHUB_SHA::12}) to ${BACKUP_REPO}" >> "$GITHUB_STEP_SUMMARY"
