@@ -1797,6 +1797,26 @@ ${R} .status-v3-services__group-icon {
   opacity: 0.85;
 }
 
+${R} .status-v3-services__controls { display: contents; }
+${R} .status-v3-business__subscribe {
+  border: 1px solid var(--status-panel-border); border-radius: 4px; background: var(--status-panel-bg);
+  color: var(--primary); font-size: .72rem; font-weight: 600; padding: .2rem .55rem; cursor: pointer;
+}
+${R} .status-v3-business__subscribe:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--status-panel-border)); }
+${R} .status-v3-business__subscribe:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+${R} .status-subscribe-sticky { display: none; }
+@media (max-width: 40rem) {
+  ${R} .status-subscribe-sticky {
+    display: block; position: sticky; inset-block-end: 0; z-index: 20; padding: .6rem 1rem calc(.6rem + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--status-panel-bg) 92%, transparent); border-block-start: 1px solid var(--status-panel-border);
+    backdrop-filter: blur(6px);
+  }
+  ${R} .status-subscribe-sticky button {
+    inline-size: 100%; min-block-size: 2.75rem; border: 0; border-radius: 8px; background: var(--primary);
+    color: var(--status-text-inverse); font-weight: 600; font-size: .9rem; cursor: pointer;
+  }
+  ${R} .status-subscribe-sticky button:focus-visible { outline: 2px solid var(--status-text-strong); outline-offset: 2px; }
+}
 ${R} .status-v3-services__right-group {
   display: flex;
   align-items: center;

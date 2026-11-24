@@ -14,13 +14,7 @@ import ServiceHistoryV3 from './ServiceHistoryV3';
 import { BusinessServiceRowV3 } from './BusinessServiceHealthV3';
 
 type FilterKey =
-  | 'all'
-  | 'issues'
-  | 'OPERATIONAL'
-  | 'DEGRADED'
-  | 'OUTAGE'
-  | 'MAINTENANCE'
-  | PublicServiceStatus;
+  'all' | 'issues' | 'OPERATIONAL' | 'DEGRADED' | 'OUTAGE' | 'MAINTENANCE' | PublicServiceStatus;
 
 type SortMode = 'configured' | 'issues' | 'alphabetical';
 
@@ -77,6 +71,8 @@ function sortRows<T extends { id: string; name: string; status: PublicServiceSta
   return items;
 }
 
+const FILTER_THRESHOLD = 8;
+
 function serviceMatches(service: { status: PublicServiceStatus }, filter: FilterKey) {
   if (filter === 'all') return true;
   if (filter === 'issues') return service.status !== 'OPERATIONAL';
@@ -106,6 +102,7 @@ const ServiceRow = memo(function ServiceRow({
   showMetrics,
   showUptimeHistory,
   showSlaMetrics = true,
+  showServiceMeta = false,
 }: {
   service: PublicStatusService;
   timeZone: string;
@@ -113,13 +110,15 @@ const ServiceRow = memo(function ServiceRow({
   showMetrics?: boolean;
   showUptimeHistory?: boolean;
   showSlaMetrics?: boolean;
+  showServiceMeta?: boolean;
 }) {
   const token = statusPresentation(service.status).token;
-  const slaTier = service.sla?.tier ?? service.slaTier;
+  const slaTier = showServiceMeta ? (service.sla?.tier ?? service.slaTier) : undefined;
+  const teamName = showServiceMeta ? service.team?.name : undefined;
   const effectiveShowMetrics = showMetrics ?? showUptime;
   const effectiveShowHistory = showUptimeHistory ?? true;
   const slaGrade = service.sla?.grade ?? service.uptime?.days90?.grade;
-  const hasDetails = Boolean(slaTier || service.team?.name || (service.regions?.length ?? 0) > 0);
+  const hasDetails = Boolean(slaTier || teamName || (service.regions?.length ?? 0) > 0);
   const affected = service.status !== 'OPERATIONAL';
 
   return (
@@ -151,10 +150,8 @@ const ServiceRow = memo(function ServiceRow({
           {hasDetails && (
             <div className="status-v3-service__meta">
               {slaTier ? <span className="status-v3-chip">Service tier: {slaTier}</span> : null}
-              {service.team?.name ? (
-                <span className="status-v3-chip status-v3-chip--muted">
-                  Owned by {service.team.name}
-                </span>
+              {teamName ? (
+                <span className="status-v3-chip status-v3-chip--muted">Owned by {teamName}</span>
               ) : null}
               {service.regions?.map(region => (
                 <span key={region} className="status-v3-chip status-v3-chip--muted">
@@ -201,6 +198,7 @@ const ServiceList = memo(function ServiceList({
   showMetrics,
   showUptimeHistory,
   showSlaMetrics = true,
+  showServiceMeta = false,
 }: {
   services: PublicStatusService[];
   timeZone: string;
@@ -208,6 +206,7 @@ const ServiceList = memo(function ServiceList({
   showMetrics?: boolean;
   showUptimeHistory?: boolean;
   showSlaMetrics?: boolean;
+  showServiceMeta?: boolean;
 }) {
   return (
     <div className="status-v3-services__list" role="list">
@@ -220,6 +219,7 @@ const ServiceList = memo(function ServiceList({
           showMetrics={showMetrics}
           showUptimeHistory={showUptimeHistory}
           showSlaMetrics={showSlaMetrics}
+          showServiceMeta={showServiceMeta}
         />
       ))}
     </div>
@@ -235,6 +235,9 @@ export default function ServiceHealthV3({
   showMetrics,
   showUptimeHistory,
   showSlaMetrics = true,
+  showServiceMeta = false,
+  onSubscribeGroup,
+  filterThreshold = FILTER_THRESHOLD,
   layout = 'FLAT',
   businessServices = [],
 }: {
@@ -248,11 +251,19 @@ export default function ServiceHealthV3({
   showMetrics?: boolean;
   showUptimeHistory?: boolean;
   showSlaMetrics?: boolean;
+  /** Tier and owning-team chips; hidden unless the page opts in. */
+  showServiceMeta?: boolean;
+  onSubscribeGroup?: (id: string) => void;
+  /** Services above this count get the Filter disclosure; below it the list is shown bare. */
+  filterThreshold?: number;
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [sortMode, setSortMode] = useState<SortMode>('configured');
   const [groupRegions, setGroupRegions] = useState(groupByRegion);
+  // Search, status chips and sort only earn their space on long lists.
+  const showControls = services.length > filterThreshold;
+  const [controlsOpen, setControlsOpen] = useState(false);
   const businessMode = layout !== 'FLAT' && businessServices.length > 0;
   const expandable = layout === 'BUSINESS_EXPANDABLE';
   // Affected business services start open so visitors see which part is down, and one that
@@ -292,7 +303,6 @@ export default function ServiceHealthV3({
   }, [services, query]);
 
   const canGroup = !businessMode && services.some(service => (service.regions?.length ?? 0) > 0);
-
 
   const filtered = useMemo(() => {
     const matched = searched.filter(service => serviceMatches(service, filter));
@@ -334,6 +344,7 @@ export default function ServiceHealthV3({
     showMetrics: showMetrics ?? showUptime,
     showUptimeHistory: showUptimeHistory ?? true,
     showSlaMetrics,
+    onSubscribeGroup,
   };
 
   const groups = grouped
@@ -378,154 +389,154 @@ export default function ServiceHealthV3({
         </div>
 
         <div className="status-v3-services__right-group">
-          <div className="status-v3-search">
-            <span className="sr-only">Search services</span>
-            <svg
-              className="status-v3-search__icon"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="search"
-              placeholder="Search services"
-              aria-label={`Search ${services.length} services`}
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-            />
-          </div>
-
-          <label htmlFor="status-v3-filter-select" className="sr-only">
-            Filter by status
-          </label>
-          <select
-            id="status-v3-filter-select"
-            className="sr-only"
-            aria-label="Filter by status"
-            value={filter}
-            onChange={event => setFilter(event.target.value as FilterKey)}
-          >
-            <option value="all">All</option>
-            <option value="issues">Issues</option>
-            <option value="OPERATIONAL">Operational</option>
-            <option value="DEGRADED">Degraded</option>
-            <option value="OUTAGE">Outage</option>
-            <option value="MAINTENANCE">Maintenance</option>
-          </select>
-
-          <div className="status-v3-filters" role="group" aria-label="Filter services by status">
-            {STATUS_FILTERS.map(item => {
-              const isSelected =
-                filter === item.key ||
-                (item.key === 'OUTAGE' &&
-                  (filter === 'MAJOR_OUTAGE' || filter === 'PARTIAL_OUTAGE'));
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`status-v3-filter-chip${isSelected ? ' status-v3-filter-chip--active' : ''}`}
-                  aria-pressed={isSelected}
-                  onClick={() => setFilter(prev => (prev === item.key ? 'all' : item.key))}
-                >
-                  {item.dotClass && (
-                    <span
-                      className={`status-v3-legend-indicator ${item.dotClass}`}
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <span className="status-v3-services__legend-divider" aria-hidden="true" />
-
-          {canGroup && (
+          {showControls && (
             <button
               type="button"
-              className={`status-v3-services__group-btn${groupRegions ? ' status-v3-services__group-btn--active' : ''}`}
-              aria-label="Group by region"
-              aria-pressed={groupRegions}
-              onClick={() => setGroupRegions(open => !open)}
+              className={`status-v3-filter-chip${controlsOpen ? ' status-v3-filter-chip--active' : ''}`}
+              aria-expanded={controlsOpen}
+              aria-controls="status-v3-services-controls"
+              onClick={() => setControlsOpen(open => !open)}
             >
-              <svg
-                className="status-v3-services__group-icon"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-                <path d="M2 12h20" />
-              </svg>
-              <span>{groupRegions ? 'Grouped by region' : 'Group by region'}</span>
+              Filter
             </button>
           )}
+          {showControls && controlsOpen && (
+            <div id="status-v3-services-controls" className="status-v3-services__controls">
+              <div className="status-v3-search">
+                <span className="sr-only">Search services</span>
+                <svg
+                  className="status-v3-search__icon"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="search"
+                  placeholder="Search services"
+                  aria-label={`Search ${services.length} services`}
+                  value={query}
+                  onChange={event => setQuery(event.target.value)}
+                />
+              </div>
 
-          <div className="status-v3-services__sort-wrap">
-            <svg
-              className="status-v3-services__sort-icon"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="m3 16 4 4 4-4" />
-              <path d="M7 20V4" />
-              <path d="m21 8-4-4-4 4" />
-              <path d="M17 4v16" />
-            </svg>
-            <label htmlFor="status-v3-sort-select" className="sr-only">
-              Sort services
-            </label>
-            <select
-              id="status-v3-sort-select"
-              className="status-v3-services__sort-select"
-              aria-label="Sort services"
-              value={sortMode}
-              onChange={event => setSortMode(event.target.value as SortMode)}
-            >
-              <option value="configured">Configured order</option>
-              <option value="issues">Issues first</option>
-              <option value="alphabetical">Alphabetical</option>
-            </select>
-            <svg
-              className="status-v3-services__sort-chevron"
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </div>
+              <div
+                className="status-v3-filters"
+                role="group"
+                aria-label="Filter services by status"
+              >
+                {STATUS_FILTERS.map(item => {
+                  const isSelected =
+                    filter === item.key ||
+                    (item.key === 'OUTAGE' &&
+                      (filter === 'MAJOR_OUTAGE' || filter === 'PARTIAL_OUTAGE'));
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`status-v3-filter-chip${isSelected ? ' status-v3-filter-chip--active' : ''}`}
+                      aria-pressed={isSelected}
+                      onClick={() => setFilter(prev => (prev === item.key ? 'all' : item.key))}
+                    >
+                      {item.dotClass && (
+                        <span
+                          className={`status-v3-legend-indicator ${item.dotClass}`}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
+              <span className="status-v3-services__legend-divider" aria-hidden="true" />
+
+              {canGroup && (
+                <button
+                  type="button"
+                  className={`status-v3-services__group-btn${groupRegions ? ' status-v3-services__group-btn--active' : ''}`}
+                  aria-label="Group by region"
+                  aria-pressed={groupRegions}
+                  onClick={() => setGroupRegions(open => !open)}
+                >
+                  <svg
+                    className="status-v3-services__group-icon"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                    <path d="M2 12h20" />
+                  </svg>
+                  <span>{groupRegions ? 'Grouped by region' : 'Group by region'}</span>
+                </button>
+              )}
+
+              <div className="status-v3-services__sort-wrap">
+                <svg
+                  className="status-v3-services__sort-icon"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m3 16 4 4 4-4" />
+                  <path d="M7 20V4" />
+                  <path d="m21 8-4-4-4 4" />
+                  <path d="M17 4v16" />
+                </svg>
+                <label htmlFor="status-v3-sort-select" className="sr-only">
+                  Sort services
+                </label>
+                <select
+                  id="status-v3-sort-select"
+                  className="status-v3-services__sort-select"
+                  aria-label="Sort services"
+                  value={sortMode}
+                  onChange={event => setSortMode(event.target.value as SortMode)}
+                >
+                  <option value="configured">Configured order</option>
+                  <option value="issues">Issues first</option>
+                  <option value="alphabetical">Alphabetical</option>
+                </select>
+                <svg
+                  className="status-v3-services__sort-chevron"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+            </div>
+          )}
           <span className="status-v3-services__legend-divider" aria-hidden="true" />
 
           <div className="status-v3-services__legend-window">
@@ -617,6 +628,7 @@ export default function ServiceHealthV3({
                   showMetrics={showMetrics}
                   showUptimeHistory={showUptimeHistory}
                   showSlaMetrics={showSlaMetrics}
+                  showServiceMeta={showServiceMeta}
                 />
               </div>
             )}
@@ -716,6 +728,7 @@ export default function ServiceHealthV3({
                 showMetrics={showMetrics}
                 showUptimeHistory={showUptimeHistory}
                 showSlaMetrics={showSlaMetrics}
+                showServiceMeta={showServiceMeta}
               />
             </div>
           );
@@ -728,6 +741,7 @@ export default function ServiceHealthV3({
           showMetrics={showMetrics}
           showUptimeHistory={showUptimeHistory}
           showSlaMetrics={showSlaMetrics}
+          showServiceMeta={showServiceMeta}
         />
       )}
     </section>

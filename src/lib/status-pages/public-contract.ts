@@ -182,6 +182,8 @@ export interface PublicStatusBranding {
   showApiLink?: boolean;
   showRssLink?: boolean;
   showSlaMetrics?: boolean;
+  /** Show service tier and owning team chips; off by default. */
+  showServiceMeta?: boolean;
 }
 
 /** Chrome and layout that the public renderer reads; kept in sync with branding. */
@@ -194,6 +196,8 @@ export interface PublicPagePresentation {
   showApiLink?: boolean;
   showRssLink?: boolean;
   showSlaMetrics?: boolean;
+  /** Show service tier and owning team chips; off by default. */
+  showServiceMeta?: boolean;
 }
 
 /** What this page's engine supports, independent of what the admin chose to show. */

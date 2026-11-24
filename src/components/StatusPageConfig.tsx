@@ -88,6 +88,7 @@ type StatusPageBranding = {
   themeVersion?: number;
   themeDensity?: StatusPageThemeDensity;
   showSlaMetrics?: boolean;
+  showServiceMeta?: boolean;
 };
 
 function isStatusPageBranding(value: unknown): value is StatusPageBranding {
@@ -295,6 +296,7 @@ export default function StatusPageConfig({
     statusApiRateLimitMax: statusPage.statusApiRateLimitMax ?? 120,
     statusApiRateLimitWindowSec: statusPage.statusApiRateLimitWindowSec ?? 60,
     showSlaMetrics: branding.showSlaMetrics !== false,
+    showServiceMeta: branding.showServiceMeta === true,
   });
 
   const [formData, setFormData] = useState(getInitialFormData);
@@ -541,6 +543,7 @@ export default function StatusPageConfig({
     themeVersion: formData.themeVersion,
     themeDensity: formData.themeDensity,
     showSlaMetrics: formData.showSlaMetrics,
+    showServiceMeta: formData.showServiceMeta,
   };
   const previewMaxWidth =
     formData.layout === 'wide' ? '1600px' : formData.layout === 'compact' ? '900px' : '1280px';
@@ -578,6 +581,7 @@ export default function StatusPageConfig({
           themeVersion: formData.themeVersion,
           themeDensity: formData.themeDensity,
           showSlaMetrics: formData.showSlaMetrics,
+          showServiceMeta: formData.showServiceMeta,
         };
 
         const response = await fetch(
@@ -1722,6 +1726,16 @@ export default function StatusPageConfig({
                                     }}
                                     label="Show 30 & 90-Day SLA"
                                     helperText="Display 30-day and 90-day SLA availability cards below service history"
+                                  />
+                                </div>
+                                <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                  <Switch
+                                    checked={formData.showServiceMeta === true}
+                                    onChange={checked => {
+                                      setFormData(prev => ({ ...prev, showServiceMeta: checked }));
+                                    }}
+                                    label="Show service tier and owner"
+                                    helperText="Display each service's tier and owning team chips. Off by default."
                                   />
                                 </div>
                                 <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">

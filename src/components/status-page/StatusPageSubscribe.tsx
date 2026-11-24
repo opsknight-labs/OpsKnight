@@ -18,6 +18,8 @@ interface StatusPageSubscribeProps {
   apiHref?: string | null;
   onSuccess?: () => void;
   onClose?: () => void;
+  /** Opens in 'selected' mode with this service or group already ticked. */
+  initialSelectedId?: string | null;
 }
 
 const MAX_EMAIL_LEN = 254;
@@ -227,10 +229,13 @@ export default function StatusPageSubscribe({
   apiHref,
   onSuccess,
   onClose,
+  initialSelectedId = null,
 }: StatusPageSubscribeProps) {
   const [email, setEmail] = useState('');
-  const [mode, setMode] = useState<'all' | 'selected'>('all');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [mode, setMode] = useState<'all' | 'selected'>(initialSelectedId ? 'selected' : 'all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(initialSelectedId ? [initialSelectedId] : [])
+  );
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);

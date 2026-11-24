@@ -72,6 +72,9 @@ export function projectPublicBranding(value: unknown): PublicStatusBranding | nu
     ...(bool(source.showSlaMetrics) !== undefined
       ? { showSlaMetrics: bool(source.showSlaMetrics) }
       : {}),
+    ...(bool(source.showServiceMeta) !== undefined
+      ? { showServiceMeta: bool(source.showServiceMeta) }
+      : {}),
   };
   return Object.keys(branding).length > 0 ? branding : null;
 }
@@ -93,6 +96,9 @@ export function projectPublicPresentation(
     ...(typeof branding.showRssLink === 'boolean' ? { showRssLink: branding.showRssLink } : {}),
     ...(typeof branding.showSlaMetrics === 'boolean'
       ? { showSlaMetrics: branding.showSlaMetrics }
+      : {}),
+    ...(typeof branding.showServiceMeta === 'boolean'
+      ? { showServiceMeta: branding.showServiceMeta }
       : {}),
   };
   return Object.keys(presentation).length > 0 ? presentation : undefined;

@@ -152,6 +152,7 @@ export const StatusPageBrandingSchema = z
     showRssLink: z.boolean().optional(),
     showApiLink: z.boolean().optional(),
     showSlaMetrics: z.boolean().optional(),
+    showServiceMeta: z.boolean().optional(),
   })
   .passthrough();
 

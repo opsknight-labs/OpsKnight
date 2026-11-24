@@ -52,6 +52,7 @@ export default function StatusPageV3({
   const vis = page.visibility;
   const [timeZone, setTimeZone] = useState('UTC');
   const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [subscribeGroupId, setSubscribeGroupId] = useState<string | null>(null);
   const themeBranding = branding as typeof branding & {
     themeId?: unknown;
     themeDensity?: unknown;
@@ -217,21 +218,6 @@ export default function StatusPageV3({
         {showAnnouncements && (
           <AnnouncementsV3 announcements={snapshot.announcements} timeZone={timeZone} />
         )}
-        {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
-        {showServices && (
-          <ServiceHealthV3
-            services={snapshot.services}
-            layout={page.serviceLayout ?? 'FLAT'}
-            businessServices={snapshot.businessServices}
-            timeZone={timeZone}
-            groupByRegion={page.showServicesByRegion === true}
-            showUptime={showUptime}
-            showMetrics={showMetrics}
-            showUptimeHistory={showUptimeHistory}
-            showSlaMetrics={showSlaMetrics}
-          />
-        )}
-        {showChangelog && <ChangelogV3 changelog={snapshot.changelog} timeZone={timeZone} />}
         {showIncidents && (
           <IncidentsV3
             incidents={snapshot.incidents}
@@ -244,6 +230,30 @@ export default function StatusPageV3({
             }
           />
         )}
+        {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
+        {showServices && (
+          <ServiceHealthV3
+            services={snapshot.services}
+            layout={page.serviceLayout ?? 'FLAT'}
+            businessServices={snapshot.businessServices}
+            timeZone={timeZone}
+            groupByRegion={page.showServicesByRegion === true}
+            showUptime={showUptime}
+            showMetrics={showMetrics}
+            showUptimeHistory={showUptimeHistory}
+            showSlaMetrics={showSlaMetrics}
+            showServiceMeta={(presentation?.showServiceMeta ?? branding.showServiceMeta) === true}
+            onSubscribeGroup={
+              showSubscribe && subscribeEnabled && businessOptions.length > 0
+                ? id => {
+                    setSubscribeGroupId(id);
+                    setSubscribeOpen(true);
+                  }
+                : undefined
+            }
+          />
+        )}
+        {showChangelog && <ChangelogV3 changelog={snapshot.changelog} timeZone={timeZone} />}
       </div>
 
       {showSubscribe && (
@@ -272,8 +282,20 @@ export default function StatusPageV3({
           services={serviceOptions}
           rssHref={rssHref}
           apiHref={showApi ? apiPath : null}
-          onClose={() => setSubscribeOpen(false)}
+          initialSelectedId={subscribeGroupId}
+          onClose={() => {
+            setSubscribeOpen(false);
+            setSubscribeGroupId(null);
+          }}
         />
+      )}
+
+      {showSubscribe && subscribeEnabled && (
+        <div className="status-subscribe-sticky">
+          <button type="button" onClick={() => setSubscribeOpen(true)}>
+            Subscribe to updates
+          </button>
+        </div>
       )}
 
       {showFooter && (

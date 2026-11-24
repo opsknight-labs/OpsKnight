@@ -10,6 +10,7 @@ interface StatusPageSubscribeModalProps {
   rssHref?: string | null;
   apiHref?: string | null;
   onClose: () => void;
+  initialSelectedId?: string | null;
 }
 
 export default function StatusPageSubscribeModal({
@@ -19,6 +20,7 @@ export default function StatusPageSubscribeModal({
   rssHref,
   apiHref,
   onClose,
+  initialSelectedId,
 }: StatusPageSubscribeModalProps) {
   const backdropRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -157,6 +159,7 @@ export default function StatusPageSubscribeModal({
           <StatusPageSubscribe
             statusPageId={statusPageId}
             services={services}
+            initialSelectedId={initialSelectedId}
             variant="modal"
             rssHref={rssHref}
             apiHref={apiHref}

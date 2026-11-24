@@ -205,6 +205,7 @@ function StatusPageLivePreview({
           showRssLink: previewData.showRssLink,
           showApiLink: previewData.showApiLink,
           showSlaMetrics: previewData.branding?.showSlaMetrics !== false,
+          showServiceMeta: previewData.branding?.showServiceMeta === true,
         },
         services: previewData.services,
         mappings: previewData.statusPageServices,

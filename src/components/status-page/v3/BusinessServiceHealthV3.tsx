@@ -15,6 +15,8 @@ type RowDisplay = {
   showMetrics: boolean;
   showUptimeHistory: boolean;
   showSlaMetrics: boolean;
+  /** Called with the group id; renders a 'Subscribe to this group' action when set. */
+  onSubscribeGroup?: (id: string) => void;
 };
 
 /** The history component draws any row with a status, uptime and segments. */
@@ -178,6 +180,16 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
           </span>
         </div>
         <div className="status-v3-service__badges">
+          {display.onSubscribeGroup && (
+            <button
+              type="button"
+              className="status-v3-business__subscribe"
+              onClick={() => display.onSubscribeGroup?.(item.id)}
+              aria-label={`Subscribe to ${item.name}`}
+            >
+              Subscribe
+            </button>
+          )}
           <StatusBadge
             status={item.status}
             label={presentation.label}
@@ -217,9 +229,8 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
           aria-label={`Services in ${item.name}`}
           hidden={!open}
         >
-          {open && members.map(member => (
-            <MemberRow key={member.id} service={member} display={display} />
-          ))}
+          {open &&
+            members.map(member => <MemberRow key={member.id} service={member} display={display} />)}
         </div>
       )}
     </div>
