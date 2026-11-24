@@ -177,8 +177,10 @@ async function audit(
       actor: actor.id
         ? { type: 'USER', id: actor.id, name: actor.name ?? null }
         : { type: 'SYSTEM' },
-      oldValue: { roleKey: input.roleKey, userId: previousUserId },
-      newValue: { roleKey: input.roleKey, userId: input.userId },
+      // `role` repeats roleKey under a name the audit redaction keeps (it hides any field containing "key");
+      // role names are not secret and the audit trail needs them.
+      oldValue: { roleKey: input.roleKey, role: input.roleKey, userId: previousUserId },
+      newValue: { roleKey: input.roleKey, role: input.roleKey, userId: input.userId },
     },
     tx
   );

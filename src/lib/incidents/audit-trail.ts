@@ -131,8 +131,13 @@ export function auditSummary(row: AuditRowInput): string {
     const what = squireAction ? humanizeAuditAction(squireAction).toLowerCase() : 'action';
     return `Ran ${what}${outcome && outcome !== 'SUCCEEDED' ? ` (${outcome.toLowerCase()})` : ''}`;
   }
-  const changes = describeAuditChanges(details.oldValue, details.newValue);
-  const label = humanizeAuditAction(row.action);
+  // The role a role change is about (recorded as `role`; `roleKey` is redacted by the audit writer).
+  const role =
+    text(record(details.newValue).role) ?? text(record(details.oldValue).role) ?? text(details.role);
+  const changes = describeAuditChanges(details.oldValue, details.newValue).filter(
+    change => !change.startsWith('role ')
+  );
+  const label = `${humanizeAuditAction(row.action)}${role ? ` (${humanizeAuditAction(role).toLowerCase()})` : ''}`;
   return changes.length ? `${label} · ${changes.join(', ')}` : label;
 }
 

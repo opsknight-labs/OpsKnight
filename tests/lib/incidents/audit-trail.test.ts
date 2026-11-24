@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  auditSummary,
   countAuditKinds,
   describeAuditChanges,
   groupAuditTrail,
@@ -129,5 +130,17 @@ describe('groupAuditTrail', () => {
     expect(groups[0].at).toBe(rows[0].at);
     expect(groups[0].firstAt).toBe(rows[2].at);
     expect(countAuditKinds(rows)).toEqual({ all: 6, person: 2, automation: 4, ai: 0, api: 0 });
+  });
+
+  it('names the role a role change is about', () => {
+    expect(
+      auditSummary({
+        action: 'incident.role_assigned',
+        details: {
+          oldValue: { roleKey: '[REDACTED]', role: 'commander', userId: null },
+          newValue: { roleKey: '[REDACTED]', role: 'commander', userId: 'u1' },
+        },
+      } as never)
+    ).toBe('Role assigned (commander) · user set');
   });
 });

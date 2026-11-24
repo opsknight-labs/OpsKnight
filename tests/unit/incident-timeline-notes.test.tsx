@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import IncidentTimeline, { categorize } from '@/components/incident/detail/IncidentTimeline';
 
 vi.mock('@/contexts/TimezoneContext', () => ({
@@ -79,8 +79,8 @@ describe('IncidentTimeline component with Notes filter', () => {
     // Must NOT show "No matching events"
     expect(screen.queryByText('No matching events')).toBeNull();
 
-    // Must show the Note content and label
-    expect(screen.getByText('Note')).toBeDefined();
+    // Must show the Note content and label (on the row itself: the activity graph legend also says "Note")
+    expect(within(document.getElementById('timeline-evt-1')!).getByText('Note')).toBeDefined();
     expect(screen.getByText(/Restarting cache clusters/)).toBeDefined();
   });
 
@@ -134,19 +134,29 @@ describe('IncidentTimeline component with Notes filter', () => {
     ).toBeDefined();
   });
 
-  it('shows empty state when filter has truly no matching events', () => {
-    const events = [
-      {
-        id: 'evt-lifecycle',
-        type: 'CREATED',
-        message: 'Incident triggered and created',
-        createdAt: now,
-      },
-    ];
+  it('hides filters with nothing in them, and shows the empty state when the active filter empties', () => {
+    const created = {
+      id: 'evt-lifecycle',
+      type: 'CREATED',
+      message: 'Incident triggered and created',
+      createdAt: now,
+    };
+    const note = {
+      id: 'evt-note',
+      type: 'COMMENT',
+      message: 'Note added via Slack ChatOps by @alice:\nChecking replicas',
+      createdAt: now,
+    };
 
-    render(<IncidentTimeline events={events} notes={[]} incidentCreatedAt={now} />);
+    const { rerender } = render(
+      <IncidentTimeline events={[created]} notes={[]} incidentCreatedAt={now} />
+    );
+    // A filter with no events is not offered.
+    expect(screen.queryByRole('button', { name: 'Notes' })).toBeNull();
 
+    rerender(<IncidentTimeline events={[created, note]} notes={[]} incidentCreatedAt={now} />);
     fireEvent.click(screen.getByRole('button', { name: 'Notes' }));
+    rerender(<IncidentTimeline events={[created]} notes={[]} incidentCreatedAt={now} />);
     expect(screen.getByText('No matching events')).toBeDefined();
     expect(
       screen.getByText(/Try a different filter, or select "All" to see the full timeline\./)
