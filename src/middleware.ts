@@ -176,7 +176,7 @@ const STATUS_API_EXACT_POST = new Set([
 ]);
 
 const STATUS_SLUG_API_REGEX =
-  /^\/api\/status\/[a-z0-9_-]+(\/(history|rss|uptime-export|subscribe))?$/;
+  /^\/api\/status\/[a-z0-9_-]+(\/(history|rss|uptime-export|subscribe|badge))?$/;
 
 const RESERVED_STATUS_API_SLUGS = new Set([
   'admin',
