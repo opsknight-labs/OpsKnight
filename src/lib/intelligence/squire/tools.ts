@@ -1,6 +1,7 @@
 import 'server-only';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
+import { pageByUrgency } from '@/lib/incidents/urgency-order';
 import { CAPABILITIES, hasCapability, type Capability } from '@/lib/authorization';
 import {
   dashboardUserReadWhere,
@@ -300,7 +301,7 @@ export function buildSquireTools(
     ),
     readTool(
       'search_incidents',
-      'Find incidents the person can see. All filters optional: title words, status ("unresolved" = open or acknowledged), urgency, serviceId; without words it lists by filter. Returns the total and at most 10, most urgent then newest.',
+      'Find incidents the person can see. All filters optional: title words, status ("unresolved" = open or acknowledged), urgency, serviceId; without words it lists by filter. Returns the total and at most 10, most urgent then newest; pass offset 10, 20... for the next pages.',
       {
         type: 'object',
         properties: {
@@ -308,12 +309,14 @@ export function buildSquireTools(
           status: { type: 'string', enum: ['unresolved', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED'] },
           urgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
           serviceId: idSchema,
+          offset: { type: 'integer', minimum: 0, maximum: 2000 },
         },
         additionalProperties: false,
       },
       async input => {
         const parsed = z
           .object({
+            offset: z.number().int().min(0).max(2000).optional(),
             query: z.string().trim().max(100).optional(),
             status: z.enum(['unresolved', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED']).optional(),
             urgency: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
@@ -342,21 +345,28 @@ export function buildSquireTools(
         };
         const [total, rows] = await Promise.all([
           prisma.incident.count({ where }),
-          prisma.incident.findMany({
-            where,
-            // The urgency enum is declared LOW, MEDIUM, HIGH, so descending puts HIGH first.
-            orderBy: [{ urgency: 'desc' }, { createdAt: 'desc' }],
+          // Most urgent first (HIGH, MEDIUM, LOW), then newest: the database enum cannot be sorted into that order.
+          pageByUrgency({
             take: MAX_ROWS,
-            select: {
-              id: true,
-              title: true,
-              status: true,
-              urgency: true,
-              createdAt: true,
-              resolvedAt: true,
-              updatedAt: true,
-              service: { select: { name: true } },
-            },
+            skip: parsed.data.offset,
+            count: tier => prisma.incident.count({ where: { AND: [where, { urgency: tier }] } }),
+            fetch: (tier, skip, take) =>
+              prisma.incident.findMany({
+                where: { AND: [where, { urgency: tier }] },
+                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+                skip,
+                take,
+                select: {
+                  id: true,
+                  title: true,
+                  status: true,
+                  urgency: true,
+                  createdAt: true,
+                  resolvedAt: true,
+                  updatedAt: true,
+                  service: { select: { name: true } },
+                },
+              }),
           }),
         ]);
         return {
