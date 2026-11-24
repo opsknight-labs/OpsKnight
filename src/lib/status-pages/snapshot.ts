@@ -726,7 +726,7 @@ export async function buildStatusPageSnapshot(
       },
       subscription: {
         enabled: page.showSubscribe,
-        channels: ['EMAIL'],
+        channels: ['EMAIL', 'WEBHOOK'],
         verificationRequired: true,
         serviceSelectionSupported: true,
       },

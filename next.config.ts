@@ -199,7 +199,8 @@ const nextConfig: NextConfig = {
 
     return [
       {
-        source: '/:path*',
+        // The status-page embed widget is the one framable surface; middleware sets its headers.
+        source: '/((?!status/[^/]+/embed/?$).*)',
         headers: [
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
           {

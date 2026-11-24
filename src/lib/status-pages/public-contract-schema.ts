@@ -55,6 +55,7 @@ const branding = z
     refreshInterval: z.number().optional(),
     showApiLink: z.boolean().optional(),
     showRssLink: z.boolean().optional(),
+    locale: z.enum(['en', 'es', 'fr', 'de', 'pt', 'ja']).optional(),
   })
   .passthrough();
 

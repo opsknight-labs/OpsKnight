@@ -14,6 +14,7 @@ import {
   statusCacheControl,
   statusEtag,
 } from '@/lib/status-pages/cache-policy';
+import { groupScope } from './public-access';
 import { getAppUrl } from '@/lib/app-config';
 import {
   extractStatusSessionToken,
@@ -76,9 +77,9 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
 
     // Check if authentication is required
     if (statusPage.requireAuth) {
-      const cookieHeader = req.headers.get('cookie');
       if (!(await isStatusPageIpAllowed(statusPage.id, req.headers)))
         return new NextResponse('Access restricted', { status: 403 });
+      const cookieHeader = req.headers.get('cookie');
       const statusToken = extractStatusSessionToken(cookieHeader);
       const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
       const appUrl = await getAppUrl();
@@ -104,7 +105,14 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
     if (projected.snapshot) {
       const snapshot = projected.snapshot;
       const pageUrl = getStatusPagePublicUrl(statusPage, getBaseUrl());
-      const events = projectPublicStatusEvents(snapshot);
+      // `?group=<businessServiceId>`: only events touching that group's (nested) member services.
+      const groupId = new URL(req.url).searchParams.get('group');
+      const scope = groupId ? groupScope(snapshot, groupId) : null;
+      if (groupId && !scope) return new NextResponse('Group not found', { status: 404 });
+      const events = projectPublicStatusEvents(snapshot).filter(
+        event =>
+          !scope || (event.affectedServices ?? []).some(service => scope.memberIds.has(service.id))
+      );
       const items = events
         .map(event => {
           const title = event.status ? `${event.title} - ${event.status}` : event.title;
@@ -114,7 +122,7 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
         })
         .join('');
       const cacheControl = statusCacheControl(statusPage);
-      const etag = statusEtag([statusPage.id, snapshot.revision, projected.stale, 'rss']);
+      const etag = statusEtag([statusPage.id, snapshot.revision, projected.stale, 'rss', groupId ?? '']);
       if (etagMatches(req.headers.get('if-none-match'), etag)) {
         return new NextResponse(null, {
           status: 304,
@@ -122,7 +130,7 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
         });
       }
       return new NextResponse(
-        `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${escapeXml(statusPage.name)} - Status Updates</title><link>${pageUrl}</link><description>Current status and incidents</description>${items}</channel></rss>`,
+        `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${escapeXml(scope ? `${statusPage.name} / ${scope.group.name}` : statusPage.name)} - Status Updates</title><link>${pageUrl}</link><description>Current status and incidents</description>${items}</channel></rss>`,
         {
           headers: {
             'Content-Type': 'application/rss+xml; charset=utf-8',

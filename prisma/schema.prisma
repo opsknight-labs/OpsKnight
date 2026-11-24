@@ -3206,11 +3206,16 @@ model StatusPageWebhook {
   events          Json
   enabled         Boolean    @default(true)
   lastTriggeredAt DateTime?
+  /// ADMIN = configured by a page admin; SUBSCRIBER = self-service public webhook subscription.
+  source          String     @default("ADMIN")
+  /// Set once a subscriber endpoint echoed the verification challenge; unverified rows stay disabled.
+  verifiedAt      DateTime?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   statusPage      StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
 
   @@index([statusPageId, enabled])
+  @@index([statusPageId, source])
 }
 
 model CustomField {
@@ -7634,25 +7639,6 @@ model SquireMcpInvestigation {
   @@index([expiresAt])
 }
 
-/// One row per (period, kind, recipient): the claim that makes a monthly review run idempotent.
-model BusinessServiceReviewRun {
-  id            String   @id @default(cuid())
-  /// Calendar month reviewed, "YYYY-MM".
-  period        String
-  /// DIGEST (per-recipient) or SUMMARY (org portfolio).
-  kind          String
-  /// User id, or lowercased email for summary recipients that are not users.
-  recipientKey  String
-  /// SENT, SKIPPED or FAILED.
-  status        String
-  serviceCount  Int      @default(0)
-  error         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([period, kind, recipientKey])
-  @@index([period, createdAt])
-}
 /// State an edge entered, so the graph can be replayed at any past moment. No foreign keys: the
 /// history outlives the edge and its services.
 enum DependencyEventState {
@@ -7716,3 +7702,22 @@ model SavedGraphView {
   @@index([visibility, teamId])
 }
 
+/// One row per (period, kind, recipient): the claim that makes a monthly review run idempotent.
+model BusinessServiceReviewRun {
+  id            String   @id @default(cuid())
+  /// Calendar month reviewed, "YYYY-MM".
+  period        String
+  /// DIGEST (per-recipient) or SUMMARY (org portfolio).
+  kind          String
+  /// User id, or lowercased email for summary recipients that are not users.
+  recipientKey  String
+  /// SENT, SKIPPED or FAILED.
+  status        String
+  serviceCount  Int      @default(0)
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([period, kind, recipientKey])
+  @@index([period, createdAt])
+}

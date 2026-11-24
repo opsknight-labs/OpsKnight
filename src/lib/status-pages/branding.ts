@@ -1,3 +1,4 @@
+import { STATUS_LOCALES } from './i18n';
 import type { PublicPagePresentation, PublicStatusBranding } from './public-contract';
 
 function str(value: unknown): string | undefined {
@@ -13,6 +14,7 @@ function num(value: unknown): number | undefined {
 }
 
 const LAYOUTS = new Set(['default', 'compact', 'wide']);
+const COLOR_SCHEMES = new Set(['light', 'dark', 'auto']);
 const THEME_DENSITIES = new Set(['comfortable', 'compact']);
 
 /**
@@ -31,9 +33,9 @@ export function projectPublicBranding(value: unknown): PublicStatusBranding | nu
   const themeId = str(source.themeId);
   const themeVersion = num(source.themeVersion);
   const themeDensity = str(source.themeDensity);
+  const colorScheme = str(source.colorScheme);
   // Branding images must be short asset URLs, never inline data URLs in the snapshot.
   // A 2.8 MB data:image in the snapshot bloats RSC + hydration props for every visitor.
-  const colorScheme = str(source.colorScheme);
   // Uploaded logos are normalized to /api/status-assets/* via status-page asset handling;
   // any data URL that survived normalization (e.g. preview draft) is dropped here.
   const rawLogo = str(source.logoUrl) ?? str(source.logo);
@@ -61,11 +63,11 @@ export function projectPublicBranding(value: unknown): PublicStatusBranding | nu
     ...(themeDensity && THEME_DENSITIES.has(themeDensity)
       ? { themeDensity: themeDensity as PublicStatusBranding['themeDensity'] }
       : {}),
-    ...(layout && LAYOUTS.has(layout) ? { layout: layout as PublicStatusBranding['layout'] } : {}),
-    ...(bool(source.showHeader) !== undefined ? { showHeader: bool(source.showHeader) } : {}),
     ...(colorScheme && COLOR_SCHEMES.has(colorScheme)
       ? { colorScheme: colorScheme as PublicStatusBranding['colorScheme'] }
       : {}),
+    ...(layout && LAYOUTS.has(layout) ? { layout: layout as PublicStatusBranding['layout'] } : {}),
+    ...(bool(source.showHeader) !== undefined ? { showHeader: bool(source.showHeader) } : {}),
     ...(bool(source.showFooter) !== undefined ? { showFooter: bool(source.showFooter) } : {}),
     ...(bool(source.autoRefresh) !== undefined ? { autoRefresh: bool(source.autoRefresh) } : {}),
     ...(num(source.refreshInterval) !== undefined
@@ -79,6 +81,9 @@ export function projectPublicBranding(value: unknown): PublicStatusBranding | nu
     ...(bool(source.showServiceMeta) !== undefined
       ? { showServiceMeta: bool(source.showServiceMeta) }
       : {}),
+    ...(str(source.locale) && STATUS_LOCALES.includes(str(source.locale) as never)
+      ? { locale: str(source.locale) as PublicStatusBranding['locale'] }
+      : {}),
   };
   return Object.keys(branding).length > 0 ? branding : null;
 }
@@ -89,12 +94,12 @@ export function projectPublicPresentation(
 ): PublicPagePresentation | undefined {
   if (!branding) return undefined;
   const presentation: PublicPagePresentation = {
+    ...(branding.colorScheme ? { colorScheme: branding.colorScheme } : {}),
     ...(branding.layout ? { layout: branding.layout } : {}),
     ...(typeof branding.showHeader === 'boolean' ? { showHeader: branding.showHeader } : {}),
     ...(typeof branding.showFooter === 'boolean' ? { showFooter: branding.showFooter } : {}),
     ...(typeof branding.autoRefresh === 'boolean' ? { autoRefresh: branding.autoRefresh } : {}),
     ...(typeof branding.refreshInterval === 'number'
-    ...(branding.colorScheme ? { colorScheme: branding.colorScheme } : {}),
       ? { refreshInterval: branding.refreshInterval }
       : {}),
     ...(typeof branding.showApiLink === 'boolean' ? { showApiLink: branding.showApiLink } : {}),
@@ -105,6 +110,7 @@ export function projectPublicPresentation(
     ...(typeof branding.showServiceMeta === 'boolean'
       ? { showServiceMeta: branding.showServiceMeta }
       : {}),
+    ...(branding.locale ? { locale: branding.locale } : {}),
   };
   return Object.keys(presentation).length > 0 ? presentation : undefined;
 }

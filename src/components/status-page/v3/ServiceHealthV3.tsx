@@ -8,6 +8,9 @@ import type {
   PublicStatusService,
 } from '@/lib/status-pages/public-contract';
 import { serviceRegionBucket, serviceSearchKey } from '@/lib/status-pages/presentation';
+import type { I18nKey } from '@/lib/status-pages/i18n';
+import { STATUS_LABEL_KEYS } from '@/lib/status-pages/i18n';
+import { useT } from '@/lib/status-pages/i18n/context';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
 import ServiceHistoryV3 from './ServiceHistoryV3';
@@ -18,12 +21,20 @@ type FilterKey =
 
 type SortMode = 'configured' | 'issues' | 'alphabetical';
 
-const STATUS_FILTERS: { key: FilterKey; label: string; dotClass?: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'OPERATIONAL', label: 'Operational', dotClass: 'status-v3-legend-indicator--operational' },
-  { key: 'DEGRADED', label: 'Degraded', dotClass: 'status-v3-legend-indicator--degraded' },
-  { key: 'OUTAGE', label: 'Outage', dotClass: 'status-v3-legend-indicator--outage' },
-  { key: 'MAINTENANCE', label: 'Maintenance', dotClass: 'status-v3-legend-indicator--maintenance' },
+const STATUS_FILTERS: { key: FilterKey; label: I18nKey; dotClass?: string }[] = [
+  { key: 'all', label: 'filter.all' },
+  {
+    key: 'OPERATIONAL',
+    label: 'filter.operational',
+    dotClass: 'status-v3-legend-indicator--operational',
+  },
+  { key: 'DEGRADED', label: 'filter.degraded', dotClass: 'status-v3-legend-indicator--degraded' },
+  { key: 'OUTAGE', label: 'filter.outage', dotClass: 'status-v3-legend-indicator--outage' },
+  {
+    key: 'MAINTENANCE',
+    label: 'filter.maintenance',
+    dotClass: 'status-v3-legend-indicator--maintenance',
+  },
 ];
 
 const IMPACT_ORDER: Record<PublicServiceStatus, number> = {
@@ -112,6 +123,7 @@ const ServiceRow = memo(function ServiceRow({
   showSlaMetrics?: boolean;
   showServiceMeta?: boolean;
 }) {
+  const t = useT();
   const token = statusPresentation(service.status).token;
   const slaTier = showServiceMeta ? (service.sla?.tier ?? service.slaTier) : undefined;
   const teamName = showServiceMeta ? service.team?.name : undefined;
@@ -167,7 +179,7 @@ const ServiceRow = memo(function ServiceRow({
           )}
           <StatusBadge
             status={service.status}
-            label={statusPresentation(service.status).label}
+            label={t(STATUS_LABEL_KEYS[service.status])}
             size="sm"
             showDot
             pulse={affected}
@@ -257,6 +269,7 @@ export default function ServiceHealthV3({
   /** Services above this count get the Filter disclosure; below it the list is shown bare. */
   filterThreshold?: number;
 }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [sortMode, setSortMode] = useState<SortMode>('configured');
@@ -350,7 +363,11 @@ export default function ServiceHealthV3({
   if (services.length === 0) return null;
 
   // Nest child business services under their parent (depth bounded, cycle-safe at render time).
-  const renderBusinessRows = (parentId: string | null, level: number, seen: Set<string>): ReactNode => {
+  const renderBusinessRows = (
+    parentId: string | null,
+    level: number,
+    seen: Set<string>
+  ): ReactNode => {
     if (!business || level > 3) return null;
     const present = new Set(business.rows.map(row => row.item.id));
     return business.rows
@@ -501,7 +518,7 @@ export default function ServiceHealthV3({
                           aria-hidden="true"
                         />
                       )}
-                      <span>{item.label}</span>
+                      <span>{t(item.label)}</span>
                     </button>
                   );
                 })}
@@ -592,7 +609,7 @@ export default function ServiceHealthV3({
             <span className="status-v3-services__legend-count">
               {business
                 ? business.rows.length === business.total
-                  ? `${business.total} business services`
+                  ? t('services.businessCount', { count: business.total })
                   : `${business.rows.length} of ${business.total}`
                 : filtered.length === services.length
                   ? `${services.length} services`
@@ -616,7 +633,7 @@ export default function ServiceHealthV3({
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            <span>Last 90 days</span>
+            <span>{t('services.last90')}</span>
           </div>
         </div>
       </div>
@@ -624,7 +641,7 @@ export default function ServiceHealthV3({
       {business ? (
         business.rows.length === 0 && business.others.length === 0 ? (
           <div className="status-v3-services__empty" role="status">
-            <p className="status-v3-services__empty-title">No services match your filters.</p>
+            <p className="status-v3-services__empty-title">{t('services.noMatch')}</p>
             <button
               type="button"
               className="status-v3-services__empty-reset"
@@ -633,7 +650,7 @@ export default function ServiceHealthV3({
                 setQuery('');
               }}
             >
-              Clear filters
+              {t('services.clearFilters')}
             </button>
           </div>
         ) : (
@@ -647,7 +664,7 @@ export default function ServiceHealthV3({
               <div className="status-v3-group status-v3-business-others">
                 <div className="status-v3-group__head">
                   <div className="status-v3-group__title-wrap">
-                    <h3 className="status-v3-group__title">Other services</h3>
+                    <h3 className="status-v3-group__title">{t('services.others')}</h3>
                     <span className="status-v3-group__subtitle">
                       {business.others.length} service{business.others.length === 1 ? '' : 's'}
                     </span>

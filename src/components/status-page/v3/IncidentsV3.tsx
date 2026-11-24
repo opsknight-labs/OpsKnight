@@ -5,6 +5,7 @@ import type { PublicIncident } from '@/lib/status-pages/public-contract';
 import { formatDateTime } from '@/lib/timezone';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
+import { useT } from '@/lib/status-pages/i18n/context';
 
 const INITIAL_VISIBLE = 8;
 const DESC_CLAMP_AT = 180;
@@ -29,7 +30,9 @@ function formatDuration(start?: string, end?: string): string | null {
   }
   const d = Math.floor(h / 24);
   const rh = h % 24;
-  return ongoing ? `Ongoing · ${d}d${rh ? ` ${rh}h` : ''}` : `Resolved in ${d}d${rh ? ` ${rh}h` : ''}`;
+  return ongoing
+    ? `Ongoing · ${d}d${rh ? ` ${rh}h` : ''}`
+    : `Resolved in ${d}d${rh ? ` ${rh}h` : ''}`;
 }
 
 function IncidentImpactIcon({ impact }: { impact?: string }) {
@@ -140,13 +143,16 @@ const IncidentCard = memo(function IncidentCard({
   incident,
   timeZone,
   postmortemHref,
+  permalinkHref,
   defaultOpen = false,
 }: {
   incident: PublicIncident;
   timeZone: string;
   postmortemHref?: (postmortemId: string) => string;
+  permalinkHref?: (incidentId: string) => string;
   defaultOpen?: boolean;
 }) {
+  const t = useT();
   const isActive = incident.status === 'OPEN' || incident.status === 'ACKNOWLEDGED';
   const impactToken = incident.publicImpact
     ? statusPresentation(incident.publicImpact as unknown as never).token
@@ -196,12 +202,18 @@ const IncidentCard = memo(function IncidentCard({
           {createdRelative && (
             <>
               <span className="status-v3-incident-pill__divider" aria-hidden="true" />
-              <span className="status-v3-incident-pill__time" suppressHydrationWarning title={createdAbsolute ?? undefined}>
+              <span
+                className="status-v3-incident-pill__time"
+                suppressHydrationWarning
+                title={createdAbsolute ?? undefined}
+              >
                 {createdRelative}
               </span>
             </>
           )}
-          {hasService && <span className="status-v3-chip status-v3-chip--muted">{incident.service!.name}</span>}
+          {hasService && (
+            <span className="status-v3-chip status-v3-chip--muted">{incident.service!.name}</span>
+          )}
           {incident.businessServices?.map(business => (
             <span key={business.id} className="status-v3-chip status-v3-chip--muted">
               {business.name}
@@ -218,7 +230,13 @@ const IncidentCard = memo(function IncidentCard({
             </span>
           )}
           {incident.publicImpact && impactLabel && (
-            <StatusBadge status={incident.publicImpact} label={impactLabel} size="xs" showDot pulse={isActive} />
+            <StatusBadge
+              status={incident.publicImpact}
+              label={impactLabel}
+              size="xs"
+              showDot
+              pulse={isActive}
+            />
           )}
           {incident.urgency && <StatusBadge status={incident.urgency} size="xs" />}
           {durationLabel && (
@@ -251,7 +269,9 @@ const IncidentCard = memo(function IncidentCard({
         )}
 
         {isRedacted ? (
-          <p className="status-v3-incident-pill__redacted">Detailed update is hidden for older history.</p>
+          <p className="status-v3-incident-pill__redacted">
+            Detailed update is hidden for older history.
+          </p>
         ) : (
           hasDescription && <ClampedDesc text={incident.description!} />
         )}
@@ -270,7 +290,11 @@ const IncidentCard = memo(function IncidentCard({
                   <StatusBadge status={update.type} size="xs" />
                   <span className="status-v3-update__message">{update.message}</span>
                   {updRelative && (
-                    <span className="status-v3-update__time" suppressHydrationWarning title={updAbsolute ?? undefined}>
+                    <span
+                      className="status-v3-update__time"
+                      suppressHydrationWarning
+                      title={updAbsolute ?? undefined}
+                    >
                       {updRelative}
                     </span>
                   )}
@@ -278,6 +302,15 @@ const IncidentCard = memo(function IncidentCard({
               );
             })}
           </ol>
+        )}
+
+        {permalinkHref && (incident.id ?? incident.publicEventId) && (
+          <a
+            className="status-v3-incident-pill__pir"
+            href={permalinkHref((incident.id ?? incident.publicEventId)!)}
+          >
+            {t('incidents.details')}
+          </a>
         )}
 
         {incident.postmortem && (
@@ -356,7 +389,9 @@ const IncidentCard = memo(function IncidentCard({
                 {item.name}
               </span>
             ))}
-            {hasService && <span className="status-v3-chip status-v3-chip--muted">{incident.service!.name}</span>}
+            {hasService && (
+              <span className="status-v3-chip status-v3-chip--muted">{incident.service!.name}</span>
+            )}
             {incident.service?.regions?.map(region => (
               <span key={region} className="status-v3-chip status-v3-chip--muted">
                 {region}
@@ -381,13 +416,18 @@ export default function IncidentsV3({
   incidents,
   timeZone,
   postmortemHref,
+  permalinkHref,
+  historyHref,
   historyDays,
 }: {
   incidents: PublicIncident[];
   timeZone: string;
   postmortemHref?: (postmortemId: string) => string;
+  permalinkHref?: (incidentId: string) => string;
+  historyHref?: string;
   historyDays?: number;
 }) {
+  const t = useT();
   const [service, setService] = useState('all');
   const [visible, setVisible] = useState(INITIAL_VISIBLE);
   const [showHistory, setShowHistory] = useState(false);
@@ -395,13 +435,17 @@ export default function IncidentsV3({
   const services = useMemo(() => {
     const byId = new Map<string, string>();
     for (const incident of incidents) {
-      if (incident.service?.id && incident.service.name) byId.set(incident.service.id, incident.service.name);
+      if (incident.service?.id && incident.service.name)
+        byId.set(incident.service.id, incident.service.name);
     }
     return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [incidents]);
 
   const filtered = useMemo(
-    () => (service === 'all' ? incidents : incidents.filter(incident => incident.service?.id === service)),
+    () =>
+      service === 'all'
+        ? incidents
+        : incidents.filter(incident => incident.service?.id === service),
     [incidents, service]
   );
 
@@ -437,13 +481,22 @@ export default function IncidentsV3({
 
   if (incidents.length === 0) {
     return (
-      <section className="status-v3-incidents-inline" id="incidents" aria-labelledby="status-v3-incidents-heading">
+      <section
+        className="status-v3-incidents-inline"
+        id="incidents"
+        aria-labelledby="status-v3-incidents-heading"
+      >
         <div className="status-v3-incidents-inline__head">
           <div className="status-v3-incidents-inline__title-wrap">
-            <h2 id="status-v3-incidents-heading" className="status-section-title status-v3-incidents-inline__title">
+            <h2
+              id="status-v3-incidents-heading"
+              className="status-section-title status-v3-incidents-inline__title"
+            >
               Incidents
             </h2>
-            <span className="status-v3-incidents-inline__subtitle">Active & recent</span>
+            <span className="status-v3-incidents-inline__subtitle">
+              {t('incidents.activeRecent')}
+            </span>
           </div>
         </div>
         <p className="status-v3-incidents-inline__empty">No incidents reported.</p>
@@ -457,13 +510,22 @@ export default function IncidentsV3({
       : 'All time'
     : `Past ${RECENT_DISPLAY_DAYS}d`;
   const tallyTotal = feed.length;
-  const subtitlePastCount = showHistory ? filtered.filter(i => i.status !== 'OPEN' && i.status !== 'ACKNOWLEDGED').length : recentPast.length;
+  const subtitlePastCount = showHistory
+    ? filtered.filter(i => i.status !== 'OPEN' && i.status !== 'ACKNOWLEDGED').length
+    : recentPast.length;
 
   return (
-    <section className="status-v3-incidents-inline" id="incidents" aria-labelledby="status-v3-incidents-heading">
+    <section
+      className="status-v3-incidents-inline"
+      id="incidents"
+      aria-labelledby="status-v3-incidents-heading"
+    >
       <div className="status-v3-incidents-inline__head">
         <div className="status-v3-incidents-inline__title-wrap">
-          <h2 id="status-v3-incidents-heading" className="status-section-title status-v3-incidents-inline__title">
+          <h2
+            id="status-v3-incidents-heading"
+            className="status-section-title status-v3-incidents-inline__title"
+          >
             Incidents
           </h2>
           <span className="status-v3-incidents-inline__subtitle">
@@ -471,7 +533,10 @@ export default function IncidentsV3({
             {hiddenOlderCount > 0 && !showHistory ? ` · +${hiddenOlderCount} in history` : ''}
           </span>
         </div>
-        <div className="status-v3-incidents-inline__tally" aria-label={`${tallyTotal} incidents in view`}>
+        <div
+          className="status-v3-incidents-inline__tally"
+          aria-label={`${tallyTotal} incidents in view`}
+        >
           {active.length > 0 ? (
             <span className="status-v3-incidents-inline__tally-pill status-v3-incidents-inline__tally-pill--active">
               <span className="status-v3-incidents-inline__dot" aria-hidden="true" />
@@ -490,7 +555,7 @@ export default function IncidentsV3({
           )}
           {services.length > 1 && (
             <label className="status-v3-filter">
-              <span className="sr-only">Filter incidents by service</span>
+              <span className="sr-only">{t('incidents.filterByService')}</span>
               <select
                 value={service}
                 onChange={event => {
@@ -522,12 +587,22 @@ export default function IncidentsV3({
           {/* Collapsed by default — scannable feed; active + past both start closed */}
           {shownActive.map((incident, index) => (
             <div key={incident.id ?? incident.publicEventId ?? `active-${index}`} role="listitem">
-              <IncidentCard incident={incident} timeZone={timeZone} postmortemHref={postmortemHref} />
+              <IncidentCard
+                incident={incident}
+                timeZone={timeZone}
+                postmortemHref={postmortemHref}
+                permalinkHref={permalinkHref}
+              />
             </div>
           ))}
           {shownPast.map((incident, index) => (
             <div key={incident.id ?? incident.publicEventId ?? `past-${index}`} role="listitem">
-              <IncidentCard incident={incident} timeZone={timeZone} postmortemHref={postmortemHref} />
+              <IncidentCard
+                incident={incident}
+                timeZone={timeZone}
+                postmortemHref={postmortemHref}
+                permalinkHref={permalinkHref}
+              />
             </div>
           ))}
         </div>
@@ -539,7 +614,8 @@ export default function IncidentsV3({
           className="status-v3-showmore"
           onClick={() => setVisible(count => count + INITIAL_VISIBLE)}
         >
-          Show {Math.min(INITIAL_VISIBLE, feed.length - visible)} more · {feed.length - visible} remaining
+          Show {Math.min(INITIAL_VISIBLE, feed.length - visible)} more · {feed.length - visible}{' '}
+          remaining
         </button>
       )}
 
@@ -549,16 +625,28 @@ export default function IncidentsV3({
           className="status-v3-incidents-inline__history-toggle"
           onClick={() => {
             setShowHistory(true);
-            setVisible(count => Math.max(count, feedBase.length + Math.min(INITIAL_VISIBLE, hiddenOlderCount)));
+            setVisible(count =>
+              Math.max(count, feedBase.length + Math.min(INITIAL_VISIBLE, hiddenOlderCount))
+            );
           }}
           aria-expanded={showHistory}
         >
-          <span>View incident history</span>
+          <span>{t('incidents.history')}</span>
           <span className="status-v3-incidents-inline__history-count">
             {hiddenOlderCount} older {hiddenOlderCount === 1 ? 'incident' : 'incidents'}
             {historyDays ? ` · past ${historyDays}d` : ''}
           </span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
             <path d="m9 18 6-6-6-6" />
           </svg>
         </button>
@@ -573,12 +661,30 @@ export default function IncidentsV3({
           }}
           aria-expanded={showHistory}
         >
-          <span>Show recent only</span>
-          <span className="status-v3-incidents-inline__history-count">Back to past {RECENT_DISPLAY_DAYS}d</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: 'rotate(180deg)' }}>
+          <span>{t('incidents.recentOnly')}</span>
+          <span className="status-v3-incidents-inline__history-count">
+            Back to past {RECENT_DISPLAY_DAYS}d
+          </span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            style={{ transform: 'rotate(180deg)' }}
+          >
             <path d="m9 18 6-6-6-6" />
           </svg>
         </button>
+      )}
+      {historyHref && (
+        <a className="status-v3-incidents-inline__history-toggle" href={historyHref}>
+          <span>{t('history.title')}</span>
+        </a>
       )}
     </section>
   );

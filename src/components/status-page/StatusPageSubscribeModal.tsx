@@ -6,6 +6,7 @@ import StatusPageSubscribe from './StatusPageSubscribe';
 interface StatusPageSubscribeModalProps {
   open: boolean;
   statusPageId: string;
+  webhookSlug?: string | null;
   services: Array<{ id: string; name: string; kind?: 'service' | 'business' }>;
   rssHref?: string | null;
   apiHref?: string | null;
@@ -16,6 +17,7 @@ interface StatusPageSubscribeModalProps {
 export default function StatusPageSubscribeModal({
   open,
   statusPageId,
+  webhookSlug,
   services,
   rssHref,
   apiHref,
@@ -158,6 +160,7 @@ export default function StatusPageSubscribeModal({
         <div className="status-subscribe-modal__body">
           <StatusPageSubscribe
             statusPageId={statusPageId}
+            webhookSlug={webhookSlug}
             services={services}
             initialSelectedId={initialSelectedId}
             variant="modal"

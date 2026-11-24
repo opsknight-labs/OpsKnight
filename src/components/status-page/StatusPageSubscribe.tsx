@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useRef, useState, useTransition } from 'react';
+import { useT } from '@/lib/status-pages/i18n/context';
+import StatusPageWebhookSubscribe from './StatusPageWebhookSubscribe';
 
 interface ServiceOption {
   id: string;
@@ -20,6 +22,8 @@ interface StatusPageSubscribeProps {
   onClose?: () => void;
   /** Opens in 'selected' mode with this service or group already ticked. */
   initialSelectedId?: string | null;
+  /** Page slug; when set (and webhook subscriptions are on) a Webhook tab is offered. */
+  webhookSlug?: string | null;
 }
 
 const MAX_EMAIL_LEN = 254;
@@ -221,7 +225,7 @@ function SuccessCheckIcon() {
   );
 }
 
-export default function StatusPageSubscribe({
+function StatusPageEmailSubscribe({
   statusPageId,
   services = [],
   variant = 'card',
@@ -551,5 +555,36 @@ export default function StatusPageSubscribe({
         </div>
       )}
     </form>
+  );
+}
+
+/** Email form, plus a Webhook tab when the page supports subscriber webhooks. */
+export default function StatusPageSubscribe(props: StatusPageSubscribeProps) {
+  const t = useT();
+  const [tab, setTab] = useState<'email' | 'webhook'>('email');
+  const { webhookSlug, ...emailProps } = props;
+  if (!webhookSlug) return <StatusPageEmailSubscribe {...emailProps} />;
+  return (
+    <div>
+      <div className="status-subscribe__segment" role="tablist" aria-label="Subscription channel">
+        {(['email', 'webhook'] as const).map(id => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            className={`status-subscribe__segbtn${tab === id ? ' status-subscribe__segbtn--active' : ''}`}
+            onClick={() => setTab(id)}
+          >
+            <span>{id === 'email' ? 'Email' : t('subscribe.webhook')}</span>
+          </button>
+        ))}
+      </div>
+      {tab === 'email' ? (
+        <StatusPageEmailSubscribe {...emailProps} />
+      ) : (
+        <StatusPageWebhookSubscribe slug={webhookSlug} />
+      )}
+    </div>
   );
 }

@@ -3154,7 +3154,8 @@ ${R} .status-v3-business__children {
   gap: 0.5rem;
   margin-block-start: 0.5rem;
   border-inline-start: 1px solid var(--status-panel-border);
-  padding-inline-start: 0.25rem;
+  padding-inline-start: 0.6rem;
+  min-inline-size: 0;
 }
 ${R} .status-v3-business__member {
   display: grid;

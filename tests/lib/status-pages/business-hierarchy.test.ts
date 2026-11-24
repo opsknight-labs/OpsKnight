@@ -10,7 +10,10 @@ describe('buildBusinessHierarchy', () => {
     expect(h.get('b')?.parentId).toBe('a');
   });
   it('drops cycles, self edges and unknown ids', () => {
-    const h = buildBusinessHierarchy(['a', 'b'], [e('a', 'b'), e('b', 'a'), e('a', 'a'), e('x', 'a')]);
+    const h = buildBusinessHierarchy(
+      ['a', 'b'],
+      [e('a', 'b'), e('b', 'a'), e('a', 'a'), e('x', 'a')]
+    );
     expect(h.get('a')?.parentId).toBeUndefined();
     expect(h.get('b')?.parentId).toBe('a');
   });

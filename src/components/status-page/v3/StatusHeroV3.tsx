@@ -1,6 +1,8 @@
 import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import { OVERALL_DETAIL, statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
+import { useT } from '@/lib/status-pages/i18n/context';
+import { STATUS_LABEL_KEYS } from '@/lib/status-pages/i18n';
 
 /**
  * Compact overall-status panel. Figures come from the V3 `overall` block only.
@@ -13,8 +15,8 @@ export default function StatusHeroV3({
   overall: PublicStatusPageSnapshot['overall'];
   updatedLabel?: string | null;
 }) {
+  const t = useT();
   const token = statusPresentation(overall.status).token;
-  const presentation = statusPresentation(overall.status);
   const impacted = overall.impactedServiceCount;
   const stats: Array<{
     label: string;
@@ -23,26 +25,26 @@ export default function StatusHeroV3({
     tone?: 'default' | 'danger' | 'warning' | 'success';
   }> = [
     {
-      label: 'Services',
+      label: t('hero.services'),
       value: overall.totalServiceCount,
       tone: 'default',
     },
     ...(impacted != null && impacted > 0
       ? [
           {
-            label: impacted === 1 ? 'Affected service' : 'Affected services',
+            label: impacted === 1 ? t('hero.affectedOne') : t('hero.affectedMany'),
             value: impacted,
             tone: 'danger' as const,
           },
         ]
       : []),
     {
-      label: 'Active incidents',
+      label: t('hero.activeIncidents'),
       value: overall.activeIncidentCount,
       tone: (overall.activeIncidentCount ?? 0) > 0 ? 'danger' : 'default',
     },
     {
-      label: 'Active maintenance',
+      label: t('hero.activeMaintenance'),
       value: overall.maintenanceCount,
       tone: (overall.maintenanceCount ?? 0) > 0 ? 'warning' : 'default',
     },
@@ -60,7 +62,7 @@ export default function StatusHeroV3({
           <span className="status-v3-hero__live" aria-hidden="true" />
           <StatusBadge
             status={overall.status}
-            label={presentation.label}
+            label={t(STATUS_LABEL_KEYS[overall.status])}
             size="sm"
             showDot
             pulse={overall.status !== 'OPERATIONAL'}
@@ -75,14 +77,16 @@ export default function StatusHeroV3({
             {updatedLabel && (
               <span className="status-v3-hero__updated" suppressHydrationWarning>
                 {' '}
-                · Updated {updatedLabel}
+                · {t('hero.updated', { time: updatedLabel })}
               </span>
             )}
           </p>
           {overall.confidence !== 'complete' && (
             <p className="status-v3-hero__confidence">
-              {overall.unknownServiceCount} of{' '}
-              {overall.knownServiceCount + overall.unknownServiceCount} services unverified
+              {t('hero.unverified', {
+                unknown: overall.unknownServiceCount,
+                total: overall.knownServiceCount + overall.unknownServiceCount,
+              })}
             </p>
           )}
         </div>

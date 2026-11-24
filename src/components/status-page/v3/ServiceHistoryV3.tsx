@@ -12,6 +12,7 @@ import { describeUptimeWindow } from '@/lib/status-pages/presentation';
 import { formatDateTime } from '@/lib/timezone';
 import { barSeverity, barTooltip } from '@/lib/status-pages/history-bars';
 import StatusBadge from '@/components/incident/StatusBadge';
+import { useT } from '@/lib/status-pages/i18n/context';
 
 function gradeLabel(grade: string | undefined): string | undefined {
   switch (grade) {
@@ -102,6 +103,7 @@ function ServiceHistoryV3Inner({
   showHistoryBars?: boolean;
   showSlaMetrics?: boolean;
 }) {
+  const t = useT();
   // Days are bucketed in UTC on purpose: the visitor's zone is only known after hydration, and
   // re-bucketing then would redraw every bar. Timestamps elsewhere still follow the visitor.
   const days = useMemo(
@@ -225,26 +227,26 @@ function ServiceHistoryV3Inner({
 
           <div className="status-v3-history__axis status-v3-history__axis--narrow" aria-hidden="true">
             <span>{days.length > 30 ? '30 days ago' : days.length > 1 ? `${days.length} days ago` : 'Yesterday'}</span>
-            <span>Today</span>
+            <span>{t('common.today')}</span>
           </div>
           <div className="status-v3-history__axis status-v3-history__axis--wide" aria-hidden="true">
             {days.length <= 30 ? (
               <>
                 <span>{days.length > 1 ? `${days.length} days ago` : 'Yesterday'}</span>
-                <span>Today</span>
+                <span>{t('common.today')}</span>
               </>
             ) : days.length <= 60 ? (
               <>
                 <span>{days.length} days ago</span>
                 <span>30 days ago</span>
-                <span>Today</span>
+                <span>{t('common.today')}</span>
               </>
             ) : (
               <>
                 <span>{days.length >= 90 ? '90 days ago' : `${days.length} days ago`}</span>
                 <span>60 days ago</span>
                 <span>30 days ago</span>
-                <span>Today</span>
+                <span>{t('common.today')}</span>
               </>
             )}
           </div>
@@ -292,7 +294,7 @@ function ServiceHistoryV3Inner({
               <button
                 type="button"
                 className="status-v3-inspector__nav"
-                aria-label="Previous day"
+                aria-label={t('common.previousDay')}
                 title="Previous day (Left arrow)"
                 style={{ padding: 0 }}
                 disabled={selected === 0}
@@ -316,7 +318,7 @@ function ServiceHistoryV3Inner({
               <button
                 type="button"
                 className="status-v3-inspector__nav"
-                aria-label="Next day"
+                aria-label={t('common.nextDay')}
                 title="Next day (Right arrow)"
                 style={{ padding: 0 }}
                 disabled={selected === days.length - 1}
@@ -340,7 +342,7 @@ function ServiceHistoryV3Inner({
               <button
                 type="button"
                 className="status-v3-inspector__close"
-                aria-label="Close"
+                aria-label={t('common.close')}
                 title="Close inspector (Esc)"
                 style={{ padding: 0 }}
                 onClick={() => setSelected(null)}

@@ -17,7 +17,11 @@ export function buildBusinessHierarchy(
   const nodes = new Map<string, BusinessHierarchyNode>(ids.map(id => [id, { childIds: [] }]));
   const depthOf = (id: string) => {
     let depth = 1;
-    for (let at = nodes.get(id)?.parentId; at && depth <= maxDepth + 1; at = nodes.get(at)?.parentId)
+    for (
+      let at = nodes.get(id)?.parentId;
+      at && depth <= maxDepth + 1;
+      at = nodes.get(at)?.parentId
+    )
       depth++;
     return depth;
   };
@@ -36,7 +40,11 @@ export function buildBusinessHierarchy(
     if (!parent || !child || parentId === childId || child.parentId) continue;
     // Cycle: the child is already an ancestor of the parent.
     let cyclic = false;
-    for (let at: string | undefined = parentId, n = 0; at && n <= ids.length; at = nodes.get(at)?.parentId, n++)
+    for (
+      let at: string | undefined = parentId, n = 0;
+      at && n <= ids.length;
+      at = nodes.get(at)?.parentId, n++
+    )
       if (at === childId) cyclic = true;
     if (cyclic || depthOf(parentId) + 1 + heightOf(childId) > maxDepth) continue;
     child.parentId = parentId;

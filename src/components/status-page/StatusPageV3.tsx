@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatDateTime } from '@/lib/timezone';
+import { StatusLocaleProvider } from '@/lib/status-pages/i18n/context';
+import { formatLocalizedDateTime, normalizeLocale } from '@/lib/status-pages/i18n';
 import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import { STATUS_PAGE_PUBLIC_CSS, STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
 import { isDarkHex } from '@/lib/status-page-theme';
@@ -147,6 +148,10 @@ export default function StatusPageV3({
 
   const statusPagePath =
     page.slug && !page.isDefault ? `/status/${encodeURIComponent(page.slug)}` : '/status';
+  // Permalink, history and embed routes exist only under /status/[slug].
+  const hasSlugRoutes = Boolean(page.slug && !page.isDefault);
+  const webhookSlug =
+    hasSlugRoutes && page.subscription?.channels?.includes('WEBHOOK') ? page.slug : null;
   const apiPath =
     page.slug && !page.isDefault ? `/api/status/${encodeURIComponent(page.slug)}` : '/api/status';
 
@@ -163,165 +168,180 @@ export default function StatusPageV3({
   ];
   const rssHref = showRss ? `${apiPath}/rss` : null;
 
+  const locale = normalizeLocale(presentation?.locale);
   return (
-    <div
-      className={STATUS_PAGE_SURFACE_CLASS}
-      data-sp-theme={selectedTheme.id}
-      data-sp-theme-version={selectedTheme.version}
-      data-sp-density={themeDensity}
-      data-surface-theme={surfaceTheme}
-    >
-      {styleMode === 'inline' && <style>{STATUS_PAGE_PUBLIC_CSS}</style>}
-      {builtInThemeCss && <style data-status-page-theme-runtime>{builtInThemeCss}</style>}
+    <StatusLocaleProvider locale={locale}>
+      <div
+        lang={locale}
+        className={STATUS_PAGE_SURFACE_CLASS}
+        data-sp-theme={selectedTheme.id}
+        data-sp-theme-version={selectedTheme.version}
+        data-sp-density={themeDensity}
+        data-surface-theme={surfaceTheme}
+      >
+        {styleMode === 'inline' && <style>{STATUS_PAGE_PUBLIC_CSS}</style>}
+        {builtInThemeCss && <style data-status-page-theme-runtime>{builtInThemeCss}</style>}
 
-      {showHeader && (
-        <StatusPageHeader
-          statusPage={{
-            name: page.name,
-            contactEmail: page.contactEmail,
-            contactUrl: page.contactUrl,
-          }}
-          branding={branding}
-          rssHref={rssHref}
-          apiHref={showApi ? apiPath : null}
-          onSubscribeClick={showSubscribe && subscribeEnabled ? () => setSubscribeOpen(true) : null}
-          timeZone={timeZone}
-          generatedAt={snapshot.freshness?.generatedAt ?? snapshot.generatedAt}
-          refreshIntervalSeconds={refreshIntervalSeconds}
-        />
-      )}
-
-      {stale && (
-        <p role="note" className="status-muted status-stale-note">
-          Showing the last verified status update.
-        </p>
-      )}
-      <span className="sr-only">Times shown in your local time</span>
-
-      <div className="status-v3">
-        <StatusHeroV3
-          overall={{
-            ...snapshot.overall,
-            headline: presentOverallHeadline(
-              snapshot.overall,
-              snapshot.services.map(service => service.status)
-            ),
-          }}
-          updatedLabel={formatDateTime(snapshot.generatedAt, timeZone, {
-            format: 'short',
-            hour12: true,
-          })}
-        />
-        {showMaintenance && (
-          <MaintenanceV3 maintenance={snapshot.maintenance} timeZone={timeZone} />
-        )}
-        {showAnnouncements && (
-          <AnnouncementsV3 announcements={snapshot.announcements} timeZone={timeZone} />
-        )}
-        {showIncidents && (
-          <IncidentsV3
-            incidents={snapshot.incidents}
-            timeZone={timeZone}
-            historyDays={snapshot.retention?.requestedHistoryDays ?? snapshot.historyDays}
-            postmortemHref={
-              postmortemsEnabled
-                ? id => `${statusPagePath}/postmortems/${encodeURIComponent(id)}`
-                : undefined
+        {showHeader && (
+          <StatusPageHeader
+            statusPage={{
+              name: page.name,
+              contactEmail: page.contactEmail,
+              contactUrl: page.contactUrl,
+            }}
+            branding={branding}
+            rssHref={rssHref}
+            apiHref={showApi ? apiPath : null}
+            onSubscribeClick={
+              showSubscribe && subscribeEnabled ? () => setSubscribeOpen(true) : null
             }
+            timeZone={timeZone}
+            generatedAt={snapshot.freshness?.generatedAt ?? snapshot.generatedAt}
+            refreshIntervalSeconds={refreshIntervalSeconds}
           />
         )}
-        {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
-        {showServices && (
-          <ServiceHealthV3
-            services={snapshot.services}
-            layout={page.serviceLayout ?? 'FLAT'}
-            businessServices={snapshot.businessServices}
-            timeZone={timeZone}
-            groupByRegion={page.showServicesByRegion === true}
-            showUptime={showUptime}
-            showMetrics={showMetrics}
-            showUptimeHistory={showUptimeHistory}
-            showSlaMetrics={showSlaMetrics}
-            showServiceMeta={(presentation?.showServiceMeta ?? branding.showServiceMeta) === true}
-            onSubscribeGroup={
-              showSubscribe && subscribeEnabled && businessOptions.length > 0
-                ? id => {
-                    setSubscribeGroupId(id);
-                    setSubscribeOpen(true);
-                  }
-                : undefined
-            }
-          />
-        )}
-        {showChangelog && <ChangelogV3 changelog={snapshot.changelog} timeZone={timeZone} />}
-      </div>
 
-      {showSubscribe && (
-        <section className="status-subscribe-block" aria-labelledby="subscribe-heading">
-          <div className="status-section__head">
-            <h2 id="subscribe-heading">Subscribe to updates</h2>
-            <span className="status-section__count">Get notified when service status changes</span>
-          </div>
-          {subscribeEnabled ? (
-            <StatusPageSubscribe
-              statusPageId={page.id}
-              services={serviceOptions}
-              rssHref={rssHref}
-              apiHref={showApi ? apiPath : null}
-            />
-          ) : (
-            <p className="status-muted">Subscriptions are accepted on the published status page.</p>
+        {stale && (
+          <p role="note" className="status-muted status-stale-note">
+            Showing the last verified status update.
+          </p>
+        )}
+        <span className="sr-only">Times shown in your local time</span>
+
+        <div className="status-v3">
+          <StatusHeroV3
+            overall={{
+              ...snapshot.overall,
+              headline: presentOverallHeadline(
+                snapshot.overall,
+                snapshot.services.map(service => service.status)
+              ),
+            }}
+            updatedLabel={formatLocalizedDateTime(snapshot.generatedAt, locale, timeZone)}
+          />
+          {showMaintenance && (
+            <MaintenanceV3 maintenance={snapshot.maintenance} timeZone={timeZone} />
           )}
-        </section>
-      )}
-
-      {showSubscribe && subscribeEnabled && (
-        <StatusPageSubscribeModal
-          open={subscribeOpen}
-          statusPageId={page.id}
-          services={serviceOptions}
-          rssHref={rssHref}
-          apiHref={showApi ? apiPath : null}
-          initialSelectedId={subscribeGroupId}
-          onClose={() => {
-            setSubscribeOpen(false);
-            setSubscribeGroupId(null);
-          }}
-        />
-      )}
-
-      {showSubscribe && subscribeEnabled && (
-        <div className="status-subscribe-sticky">
-          <button type="button" onClick={() => setSubscribeOpen(true)}>
-            Subscribe to updates
-          </button>
+          {showAnnouncements && (
+            <AnnouncementsV3 announcements={snapshot.announcements} timeZone={timeZone} />
+          )}
+          {showIncidents && (
+            <IncidentsV3
+              incidents={snapshot.incidents}
+              timeZone={timeZone}
+              historyDays={snapshot.retention?.requestedHistoryDays ?? snapshot.historyDays}
+              permalinkHref={
+                hasSlugRoutes
+                  ? id => `${statusPagePath}/incidents/${encodeURIComponent(id)}`
+                  : undefined
+              }
+              historyHref={hasSlugRoutes ? `${statusPagePath}/history` : undefined}
+              postmortemHref={
+                postmortemsEnabled
+                  ? id => `${statusPagePath}/postmortems/${encodeURIComponent(id)}`
+                  : undefined
+              }
+            />
+          )}
+          {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
+          {showServices && (
+            <ServiceHealthV3
+              services={snapshot.services}
+              layout={page.serviceLayout ?? 'FLAT'}
+              businessServices={snapshot.businessServices}
+              timeZone={timeZone}
+              groupByRegion={page.showServicesByRegion === true}
+              showUptime={showUptime}
+              showMetrics={showMetrics}
+              showUptimeHistory={showUptimeHistory}
+              showSlaMetrics={showSlaMetrics}
+              showServiceMeta={(presentation?.showServiceMeta ?? branding.showServiceMeta) === true}
+              onSubscribeGroup={
+                showSubscribe && subscribeEnabled && businessOptions.length > 0
+                  ? id => {
+                      setSubscribeGroupId(id);
+                      setSubscribeOpen(true);
+                    }
+                  : undefined
+              }
+            />
+          )}
+          {showChangelog && <ChangelogV3 changelog={snapshot.changelog} timeZone={timeZone} />}
         </div>
-      )}
 
-      {showFooter && (
-        <StatusPageFooter
-          footerText={page.footerText}
-          organizationName={page.organizationName}
-          links={{
-            resources: [
-              ...(showApi ? [{ href: apiPath, label: 'JSON API' }] : []),
-              ...(showRss ? [{ href: `${apiPath}/rss`, label: 'RSS Feed' }] : []),
-              ...(showCsv
-                ? [{ href: `${apiPath}/uptime-export?format=csv`, label: 'Uptime CSV' }]
-                : []),
-              ...(showPdf
-                ? [{ href: `${apiPath}/uptime-export?format=pdf`, label: 'Uptime PDF' }]
-                : []),
-            ],
-            support: [
-              ...(page.contactEmail
-                ? [{ href: `mailto:${page.contactEmail}`, label: 'Contact' }]
-                : []),
-              ...(page.contactUrl ? [{ href: page.contactUrl, label: 'Support' }] : []),
-            ],
-          }}
-        />
-      )}
-    </div>
+        {showSubscribe && (
+          <section className="status-subscribe-block" aria-labelledby="subscribe-heading">
+            <div className="status-section__head">
+              <h2 id="subscribe-heading">Subscribe to updates</h2>
+              <span className="status-section__count">
+                Get notified when service status changes
+              </span>
+            </div>
+            {subscribeEnabled ? (
+              <StatusPageSubscribe
+                statusPageId={page.id}
+                webhookSlug={webhookSlug}
+                services={serviceOptions}
+                rssHref={rssHref}
+                apiHref={showApi ? apiPath : null}
+              />
+            ) : (
+              <p className="status-muted">
+                Subscriptions are accepted on the published status page.
+              </p>
+            )}
+          </section>
+        )}
+
+        {showSubscribe && subscribeEnabled && (
+          <StatusPageSubscribeModal
+            open={subscribeOpen}
+            statusPageId={page.id}
+            webhookSlug={webhookSlug}
+            services={serviceOptions}
+            rssHref={rssHref}
+            apiHref={showApi ? apiPath : null}
+            initialSelectedId={subscribeGroupId}
+            onClose={() => {
+              setSubscribeOpen(false);
+              setSubscribeGroupId(null);
+            }}
+          />
+        )}
+
+        {showSubscribe && subscribeEnabled && (
+          <div className="status-subscribe-sticky">
+            <button type="button" onClick={() => setSubscribeOpen(true)}>
+              Subscribe to updates
+            </button>
+          </div>
+        )}
+
+        {showFooter && (
+          <StatusPageFooter
+            footerText={page.footerText}
+            organizationName={page.organizationName}
+            links={{
+              resources: [
+                ...(showApi ? [{ href: apiPath, label: 'JSON API' }] : []),
+                ...(showRss ? [{ href: `${apiPath}/rss`, label: 'RSS Feed' }] : []),
+                ...(showCsv
+                  ? [{ href: `${apiPath}/uptime-export?format=csv`, label: 'Uptime CSV' }]
+                  : []),
+                ...(showPdf
+                  ? [{ href: `${apiPath}/uptime-export?format=pdf`, label: 'Uptime PDF' }]
+                  : []),
+              ],
+              support: [
+                ...(page.contactEmail
+                  ? [{ href: `mailto:${page.contactEmail}`, label: 'Contact' }]
+                  : []),
+                ...(page.contactUrl ? [{ href: page.contactUrl, label: 'Support' }] : []),
+              ],
+            }}
+          />
+        )}
+      </div>
+    </StatusLocaleProvider>
   );
 }

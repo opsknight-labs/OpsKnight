@@ -5,11 +5,14 @@ import { assertAdmin } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { readStatusPageSnapshot } from '@/lib/status-pages/snapshot';
+import { groupScope } from '@/lib/status-pages/public-access';
 import { resolveStatusPage } from '@/lib/status-page-resolver';
 import { publicStatusVisibility } from '@/lib/status-page-public-data';
 import {
   buildEnhancedUptimeCsv,
   buildEnhancedUptimePdf,
+  StatusPageReportBusinessService,
   StatusPageReportData,
   StatusPageReportIncident,
 } from '@/lib/status-pages/reports/uptime-report-generator';
@@ -199,26 +202,37 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
     const excellentThreshold = statusPage.uptimeExcellentThreshold || 99.9;
     const goodThreshold = statusPage.uptimeGoodThreshold || 99.0;
 
-    const reportServices = statusPage.services.map(sp => {
-      const uptime = Math.max(0, Math.min(100, uptimeMap[sp.service.id] ?? 100));
-      const downtimeMinutes = Math.max(0, ((100 - uptime) / 100) * totalPeriodMinutes);
-      return {
-        id: sp.service.id,
-        name: sp.displayName || sp.service.name,
-        region: visibility.showServiceRegion ? sp.service.region : null,
-        description: statusPage.showServiceDescriptions ? sp.service.description : null,
-        uptime,
-        slaTarget: excellentThreshold,
-        downtimeMinutes,
-      };
-    });
+    // `?group=<businessServiceId>` narrows both tables to that group (and its nested children).
+    const snapshot = await readStatusPageSnapshot(statusPage.id);
+    const groupParam = searchParams.get('group');
+    const scope = groupParam && snapshot ? groupScope(snapshot, groupParam) : null;
+    if (groupParam && !scope) return new NextResponse('Group not found', { status: 404 });
+
+    const reportServices = statusPage.services
+      .filter(sp => !scope || scope.memberIds.has(sp.service.id))
+      .map(sp => {
+        const uptime = Math.max(0, Math.min(100, uptimeMap[sp.service.id] ?? 100));
+        const downtimeMinutes = Math.max(0, ((100 - uptime) / 100) * totalPeriodMinutes);
+        return {
+          id: sp.service.id,
+          name: sp.displayName || sp.service.name,
+          region: visibility.showServiceRegion ? sp.service.region : null,
+          description: statusPage.showServiceDescriptions ? sp.service.description : null,
+          uptime,
+          slaTarget: excellentThreshold,
+          downtimeMinutes,
+        };
+      });
 
     // Fetch public incidents for reporting period if incidents are enabled for public
     let reportIncidents: StatusPageReportIncident[] = [];
-    if (visibility.showIncidents && serviceIds.length > 0) {
+    const incidentServiceIds = scope
+      ? serviceIds.filter(id => scope.memberIds.has(id))
+      : serviceIds;
+    if (visibility.showIncidents && incidentServiceIds.length > 0) {
       const incidents = await prisma.incident.findMany({
         where: {
-          serviceId: { in: serviceIds },
+          serviceId: { in: incidentServiceIds },
           visibility: 'PUBLIC',
           createdAt: { lt: effectiveEnd },
           OR: [{ resolvedAt: null }, { resolvedAt: { gte: effectiveStart } }],
@@ -282,6 +296,28 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
         ? `https://${statusPage.subdomain}.opsknight.com`
         : null;
 
+    // Published roll-up (union-of-downtime uptime) from the snapshot; never recomputed here.
+    const businessServices: StatusPageReportBusinessService[] = (
+      scope ? scope.scope : (snapshot?.businessServices ?? [])
+    ).flatMap(group => {
+      const w30 = group.uptime?.days30;
+      const w90 = group.uptime?.days90;
+      return [
+        {
+          id: group.id,
+          name: group.name,
+          uptime30: w30?.percentage ?? null,
+          uptime90: w90?.percentage ?? null,
+          downtimeMinutes30:
+            w30?.percentage == null
+              ? null
+              : ((100 - w30.percentage) / 100) * w30.measuredDays * 1440,
+          incidentCount30: w30?.incidentCount ?? 0,
+          slaTarget: excellentThreshold,
+        },
+      ];
+    });
+
     const reportData: StatusPageReportData = {
       pageId: statusPage.id,
       pageName: statusPage.name,
@@ -307,6 +343,7 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
         showIncidentTimestamp: visibility.showIncidentTimestamp,
       },
       services: reportServices,
+      ...(businessServices.length ? { businessServices } : {}),
       incidents: reportIncidents,
       overallAvailability,
       slaComplianceRate,

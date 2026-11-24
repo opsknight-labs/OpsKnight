@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     }
 
     const webhooks = await prisma.statusPageWebhook.findMany({
-      where: { statusPageId },
+      where: { statusPageId, source: 'ADMIN' },
       orderBy: { createdAt: 'desc' },
     });
 

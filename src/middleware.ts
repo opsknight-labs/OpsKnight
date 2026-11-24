@@ -705,12 +705,16 @@ export async function fetchPublishedStatusDomain(
   return request;
 }
 
-function getSecurityHeaders(): Record<string, string> {
+/** The only framable surface of a status page: the compact embed widget. */
+const STATUS_EMBED_PATH = /^\/status\/[a-z0-9-]+\/embed\/?$/;
+
+function getSecurityHeaders(pathname = ''): Record<string, string> {
+  const framable = STATUS_EMBED_PATH.test(pathname);
   const isProduction = process.env.NODE_ENV === 'production';
   const scriptSource = isProduction
     ? "script-src 'self' 'unsafe-inline'"
     : "script-src 'self' 'unsafe-eval' 'unsafe-inline'";
-  return {
+  const headers: Record<string, string> = {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'X-XSS-Protection': '0',
@@ -733,6 +737,15 @@ function getSecurityHeaders(): Record<string, string> {
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     }),
   };
+  if (framable) {
+    // Public, read-only widget: may be embedded anywhere. Still no scripts from other origins.
+    delete headers['X-Frame-Options'];
+    headers['Content-Security-Policy'] = headers['Content-Security-Policy'].replace(
+      "frame-ancestors 'none'",
+      'frame-ancestors *'
+    );
+  }
+  return headers;
 }
 
 const MCP_SENSITIVE_PREFIXES = ['/oauth/mcp', '/settings/integrations/mcp'];
@@ -856,7 +869,7 @@ export default async function middleware(req: NextRequest) {
 
   let response = NextResponse.next({ request: { headers: forwardedHeaders } });
   response.headers.set('x-request-id', requestId);
-  const securityHeaders = getSecurityHeaders();
+  const securityHeaders = getSecurityHeaders(pathname);
   Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
   applySensitiveAuthHeaders(response, pathname);
 

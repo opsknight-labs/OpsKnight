@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 import { decryptStoredSecret } from './encryption';
 import { retry } from './retry';
+import { webhookUnsubscribeUrl } from './status-pages/subscriber-webhook-crypto';
 import { CircuitBreakers } from './circuit-breaker';
 import { statusWebhookDeliveryId, statusWebhookDeliveryKey } from './status-page-delivery';
 import { enqueueCentralNotification } from './notification-control-plane';
@@ -280,6 +281,18 @@ export async function triggerStatusPageWebhooks(
       const results = await Promise.allSettled(
         batch.map(async webhook => {
           const stableDeliveryId = statusWebhookDeliveryId(effectiveDeliveryKey, webhook.id);
+          const secret = await decryptStoredSecret(webhook.secret);
+          // Subscriber webhooks carry their own unsubscribe link in every delivery.
+          const deliveryPayload: WebhookPayload =
+            webhook.source === 'SUBSCRIBER'
+              ? {
+                  ...payload,
+                  data: {
+                    ...asWebhookRecord(payload.data),
+                    unsubscribeUrl: webhookUnsubscribeUrl(secret, webhook.id),
+                  },
+                }
+              : payload;
           const intent = await enqueueCentralNotification(
             {
               category: 'STATUS_PAGE',
@@ -297,8 +310,8 @@ export async function triggerStatusPageWebhooks(
               payload: {
                 kind: 'STATUS_PAGE_WEBHOOK',
                 url: webhook.url,
-                secret: await decryptStoredSecret(webhook.secret),
-                payload,
+                secret,
+                payload: deliveryPayload,
                 deliveryId: stableDeliveryId,
                 webhookId: webhook.id,
                 statusPageId,
