@@ -19,7 +19,6 @@ import {
   breakers,
   invalidateGatewayCache,
   resolveGatewayPort,
-  REASONING_ROOM_TOKENS,
 } from '@/lib/intelligence/ai/gateway';
 import { saveAiProvider, updateAiSettings } from '@/lib/intelligence/ai/settings';
 import { cachedGenerate } from '@/lib/intelligence/ai/result-cache';
@@ -333,8 +332,8 @@ describe('gateway routing and degradation', () => {
     expect(result).toMatchObject({ degraded: true, served: { model: 'gpt-5-mini' } });
     const body = server.requests.at(-1)?.body ?? {};
     expect(body.model).toBe('gpt-5-mini');
-    // Half the 400-token answer setting, plus the fixed room to think.
-    expect(Number(body.max_completion_tokens ?? body.max_tokens)).toBe(200 + REASONING_ROOM_TOKENS);
+    // Half the 400-token answer setting; this nearly spent day cannot also hold the thinking room.
+    expect(Number(body.max_completion_tokens ?? body.max_tokens)).toBe(200);
     expect(await db.aiResultCache.count()).toBe(0);
   });
 

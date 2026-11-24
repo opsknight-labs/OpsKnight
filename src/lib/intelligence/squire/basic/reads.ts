@@ -300,10 +300,12 @@ async function breakdown(
 }
 
 /** A minute count people can read at a glance: "42 min", "3 h 5 min". */
-const duration = (minutes: number) =>
-  minutes < 90
-    ? `${minutes.toFixed(minutes < 10 ? 1 : 0)} min`
-    : `${Math.floor(minutes / 60)} h ${Math.round(minutes % 60)} min`;
+export const duration = (minutes: number) => {
+  if (minutes < 90) return `${minutes.toFixed(minutes < 10 ? 1 : 0)} min`;
+  // Round once, then split, so 119.5 reads "2 h 0 min", never "1 h 60 min".
+  const whole = Math.round(minutes);
+  return `${Math.floor(whole / 60)} h ${whole % 60} min`;
+};
 
 /** "How many incidents are open?": everything unresolved now, whenever it was opened; not a created-in report. */
 async function openNow(ctx: Context): Promise<string> {

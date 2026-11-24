@@ -38,8 +38,9 @@ daily token budgets apply.
 
 **Maximum answer length (tokens)** limits the written answer. Current models also think before they answer and
 count that against the same output limit, so OpsKnight adds a fixed 8,192 tokens of room for thinking on top of
-it; otherwise a short setting could be used up by thinking and the answer would come back empty. Thinking is
-counted and billed as used. An assistant answer that looks up several records typically uses 8,000–20,000
+it; otherwise a short setting could be used up by thinking and the answer would come back empty. Budgets
+reserve the room too; when a budget can cover only the answer, the request is sent without the extra room, so
+no budget is ever exceeded. Thinking is counted and billed as used. An assistant answer that looks up several records typically uses 8,000–20,000
 tokens in all, so a per-person daily budget of 100,000 tokens allows roughly 5–10 such questions.
 
 ## See where spend goes

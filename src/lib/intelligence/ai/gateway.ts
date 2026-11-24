@@ -613,11 +613,15 @@ class GatewayPort implements LanguageModelPort {
   /**
    * The output cap sent for an answer: its length setting plus room to think. Current models think by default
    * and count it against the same cap, so a 1,024-token answer setting could be spent entirely on thinking after
-   * a tool step, ending the answer with no text. Thinking is billed and settled as used.
+   * a tool step, ending the answer with no text. The hold reserves this cap (see hold).
    */
   private answerCap(request: AiGenerateRequest): number {
-    return this.outputLimit(request, this.data.settings.maxOutputTokens) + REASONING_ROOM_TOKENS;
+    const answer = this.outputLimit(request, this.data.settings.maxOutputTokens);
+    return this.lean.has(request) ? answer : answer + REASONING_ROOM_TOKENS;
   }
+
+  /** Requests whose budget covered only the answer: they are sent without thinking room (see hold). */
+  private readonly lean = new WeakSet<AiGenerateRequest>();
 
   /** Answer-length ceiling for this request; halved while the day's spend is past the degradation point. */
   private outputLimit(request: AiGenerateRequest, ceiling: number): number {
@@ -643,11 +647,33 @@ class GatewayPort implements LanguageModelPort {
     structured: boolean,
     extend?: AiReservation
   ): Promise<AiReservation | null> {
-    // The answer length, not answerCap: thinking room is a ceiling, settled at real usage, and holding it up
-    // front would refuse every call under a small daily budget.
-    const output = structured
-      ? this.outputLimit(request, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
-      : this.outputLimit(request, this.data.settings.maxOutputTokens);
+    // The hold covers everything the call may send back (answer plus thinking room), so a hard budget is never
+    // overshot. When only the answer fits, the first hold is retried without the room and the call is sent
+    // without it (`lean`), so a small budget still answers; a top-up is never retried smaller.
+    const roomy = !structured && !this.lean.has(request);
+    if (roomy && !extend) {
+      const full = await this.holdTokens(request, provider, input, this.answerCap(request));
+      if (full) return full;
+      this.lean.add(request);
+    }
+    return this.holdTokens(
+      request,
+      provider,
+      input,
+      structured
+        ? this.outputLimit(request, AI_SETTINGS_BOUNDS.maxOutputTokens.max)
+        : this.answerCap(request),
+      extend
+    );
+  }
+
+  private async holdTokens(
+    request: AiGenerateRequest,
+    provider: GatewayProvider,
+    input: number,
+    output: number,
+    extend?: AiReservation
+  ): Promise<AiReservation | null> {
     const inputEstimate =
       input +
       estimateTokens(

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { resetDialogueMemory } from '@/lib/intelligence/assistant/dialogue-state';
-import { resetBasicReadCaches } from '@/lib/intelligence/squire/basic/reads';
+import { duration, resetBasicReadCaches } from '@/lib/intelligence/squire/basic/reads';
 import { streamSquire } from '@/lib/intelligence/squire/chat';
 import {
   planBasicTurn,
@@ -182,5 +182,11 @@ describe('basic team answers', () => {
     const hidden = await plan(member, 'who is on the hidden ops team');
     expect(hidden.text).toContain('No team called');
     expect(hidden.text).not.toContain('Sam Secret');
+  });
+
+  it('reads a duration without an impossible "60 min" remainder', () => {
+    expect(duration(42)).toBe('42 min');
+    expect(duration(119.5)).toBe('2 h 0 min');
+    expect(duration(185)).toBe('3 h 5 min');
   });
 });

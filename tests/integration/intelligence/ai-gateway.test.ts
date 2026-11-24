@@ -450,6 +450,9 @@ describe('gateway', () => {
     invalidateGatewayCache();
     const port = (await resolveGatewayPort('INTERNAL'))!;
     await port.generate(request(admin.id));
+    // A 1,000-token day cannot hold the thinking room too: the call goes out without it, never over budget.
+    const lean = primary.requests.at(-1)!.body;
+    expect(lean.max_tokens ?? lean.max_completion_tokens).toBe(512);
     await port.generate(request(admin.id));
     await expect(port.generate(request(admin.id))).rejects.toMatchObject({ code: 'RATE_LIMITED' });
     const other = await createTestUser({ role: 'ADMIN' });
