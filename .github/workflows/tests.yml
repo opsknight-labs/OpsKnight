@@ -25,8 +25,8 @@ env:
   NODE_OPTIONS: --max-old-space-size=6144
 
 jobs:
-  # Pull requests run only this file's light gate (static checks, unit, database
-  # integration, build). Browser E2E lives in e2e.yml; heavy certification suites
+  # Pull requests run only this file's light gate (static checks, unit, build). Database
+  # integration runs locally in the pre-push hook, and here on main, nightly and manual runs. Browser E2E lives in e2e.yml; heavy certification suites
   # run on main, or on a pull request labelled `ci:full`.
   # Decides which expensive PR jobs a change can affect, so UI-only and docs-only PRs skip the
   # database shards (about 70 of 109 machine-minutes). Unrecognised paths run everything.
@@ -67,6 +67,9 @@ jobs:
               esac
             done <<< "$changed"
           fi
+          # Database jobs never run on pull requests (Actions volume): the pre-push hook runs the same
+          # steps locally (scripts/local-db-tests.sh). main, the nightly run and manual runs keep them.
+          if [ "$EVENT_NAME" = pull_request ]; then backend=false; fi
           echo "backend=$backend" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "Affected: backend=$backend build=$build"
