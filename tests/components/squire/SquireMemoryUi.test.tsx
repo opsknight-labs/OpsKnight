@@ -132,9 +132,9 @@ describe('Proactive Squire notes on the incident page', () => {
       'href',
       '/changes/chg-1'
     );
-    expect(screen.getByText('Likely change (unconfirmed)')).toBeInTheDocument();
+    expect(screen.getByText('Changes before onset · link unconfirmed')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Restart api pods' })).toBeInTheDocument();
-    expect(screen.queryByText('Possible causes (to verify)')).toBeNull();
+    expect(screen.queryByText('Possible causes · to verify')).toBeNull();
   });
 
   it('shows an automatic investigation, or withholds it when its sources are not all readable', async () => {

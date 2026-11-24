@@ -12,8 +12,9 @@ const TONE_DOT: Record<StripChipTone, string> = {
   shift: 'bg-status-shift',
 };
 
+// The page's chip shape (field-styles CHIP_CLASS), with a 44px touch target on phones.
 const CHIP_CLASS =
-  'inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-2xs transition-colors hover:bg-muted/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 const OPENER_CLASS =
   'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -30,6 +31,7 @@ export default function IntelligenceStrip({
   chips,
   freshness,
   touch = false,
+  bare = false,
 }: {
   incidentId: string;
   chips: StripChip[];
@@ -37,24 +39,34 @@ export default function IntelligenceStrip({
   touch?: boolean;
   /** Present only while analysis is unfinished, failed or unverifiable. */
   freshness: IncidentAnalysisState | null;
+  /** Inside another card (the AI briefing): no border, background or opener of its own; chips wrap. */
+  bare?: boolean;
 }) {
   if (chips.length === 0 && !freshness) return null;
-  const chipClass = touch ? CHIP_CLASS : `${CHIP_CLASS} sm:min-h-7`;
+  const chipClass = touch ? CHIP_CLASS : `${CHIP_CLASS} sm:min-h-8`;
   const firstSection = chips.flatMap(chip =>
     'section' in chip.target ? [chip.target.section] : []
   )[0];
   return (
     <div
       data-testid="intelligence-strip"
-      className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-card px-2.5 py-1 text-card-foreground"
+      className={
+        bare
+          ? 'flex min-w-0 items-center gap-2'
+          : 'flex min-w-0 items-center gap-2 rounded-xl border border-border bg-card px-2.5 py-1 text-card-foreground'
+      }
     >
       {chips.length > 0 && (
         <nav
           aria-label="Incident insights"
           // Chips scroll sideways: the trailing edge fades so a cut-off chip reads as "more this way".
-          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5 pr-6 scrollbar-none mask-[linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]"
+          className={
+            bare
+              ? 'flex min-w-0 flex-1 flex-wrap items-center gap-1.5'
+              : 'flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5 pr-6 scrollbar-none mask-[linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]'
+          }
         >
-          {firstSection && (
+          {firstSection && !bare && (
             <a
               href={`?insights=${firstSection}`}
               data-insights-open=""
@@ -70,7 +82,9 @@ export default function IntelligenceStrip({
               </kbd>
             </a>
           )}
-          <ul className="flex items-center gap-1.5">
+          <ul
+            className={bare ? 'flex flex-wrap items-center gap-1.5' : 'flex items-center gap-1.5'}
+          >
             {chips.map(chip => (
               <li key={chip.id} className="flex shrink-0">
                 {'section' in chip.target ? (

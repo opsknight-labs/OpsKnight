@@ -22,27 +22,37 @@ verification:
 # Use Intelligence suggestions and the assistant
 
 An incident page keeps its own content first: title, status, actions, description, notes and timeline
-stay where they are. Intelligence is one row of chips under the action bar, the **strip**, and one panel
-you open on demand, **Insights**.
+stay where they are. On a desktop, intelligence is the compact **AI briefing** card directly under the
+incident's title card and one panel you open on demand, **Investigation**. On a phone it is one row of chips under the action bar,
+the **strip**, and the same panel.
 
-## The strip and the Insights panel
+## The AI briefing card, the strip and the Investigation panel
 
-The strip shows a chip only when there is something to say, for example **Triage: urgency HIGH**,
+The **AI briefing** card appears only when an AI wrote the incident's briefing. It shows the briefing
+headline with the next step under it (**Next:**), chips for anything else worth a look, and **Open
+investigation** (or press **I**), which opens the Investigation panel. Below are three short columns:
+**Summary** (the current state), **Possible causes, to verify** (up to two) and **Changes before onset**
+(up to two; select one to see why it was linked). Hover over any of them to read it in full. The card
+says it was written with AI; check it before acting. With intelligence off, or in Basic mode, there is
+no AI briefing card: the chips appear on their own when the analysis found something.
+
+A chip appears only when there is something to say, for example **Triage: urgency HIGH**,
 **3 similar**, **Likely cause: deploy api v9**, **Suppressed by rule X**, **Impact: 4 services, SLO
-burning** or **Briefing ready**. When there is nothing to say there is no strip. On a phone the strip
-scrolls sideways.
+burning** or **Briefing ready**. When there is nothing to say there is no card and no strip. On a phone
+the strip scrolls sideways.
 
-Select a chip to open **Insights** at that section. You can also press **I** anywhere on the incident
-(press it again to close), or share a link that ends in `?insights=similar` (or `briefing`, `triage`,
+Select a chip to open **Investigation** at that section. The panel numbers its steps along the top (for
+example **Briefing**, **Triage**, **Similar**, **Why**, **Impact**); select one to jump to it. You can
+also press **I** anywhere on the incident (press it again to close), or share a link that ends in `?insights=similar` (or `briefing`, `triage`,
 `related`, `why`, `runbooks`, `impact`, `summary`). On a desktop the panel sits on the right, does not
 block the page behind it, and can be resized by dragging its left edge or with the arrow keys on the
 resize handle; the width is remembered in this browser. On a phone it opens as a sheet from the bottom.
 
-A small dot at the end of the strip appears only while analysis is waiting, out of date, paused or
+A small dot at the end of the chips appears only while analysis is waiting, out of date, paused or
 failed. It reads **Refreshing** only while new analysis is queued; **Out of date** means nothing is
 queued yet. Select it to read why; intelligence managers can refresh the analysis from there.
 
-Insights has up to eight sections, always in this order, and a section with nothing to show is left
+Investigation has up to eight sections, always in this order, and a section with nothing to show is left
 out: Briefing, Triage, Similar, Related and group, Why, Runbooks, Impact, Summary. When enabled for the
 service, they can show:
 
@@ -64,15 +74,15 @@ normal visibility and feedback permissions.
 Each item has an **Ask** button labelled with your assistant's name (for example **Ask Squire**). It
 opens the assistant with a question about that one item already asked.
 
-When intelligence is off for the service, responders see no strip, no chips and no Insights panel.
-Intelligence managers can still open Insights with **I**: it says intelligence is off and keeps the
+When intelligence is off for the service, responders see no briefing card, no strip, no chips and no
+Investigation panel. Intelligence managers can still open Investigation with **I**: it says intelligence is off and keeps the
 links and groups made before it was turned off, so a wrong grouping can still be undone.
 
 ## Suggested runbooks
 
 Runbooks that have worked on similar incidents appear as **Suggested for this incident**, with their
-success rate, at the top of the incident's **Runbooks** tab. The Runbooks section of Insights links
-there.
+success rate, at the top of the incident's **Runbooks & automation** tab. The Runbooks section of
+Investigation links there.
 
 ## Triage chips
 
@@ -84,7 +94,8 @@ and the percentage is a match strength from past incidents, not a probability.
 
 ## Intelligence events on the timeline
 
-The incident's **Timeline** tab has a **Show intelligence events** switch. It is on whenever such events
+The incident's **Timeline** tab (**Events** view) has a **Show intelligence events** switch at the end of
+the filter chips. It is on whenever such events
 exist and adds recorded changes (with their risk score), incidents on upstream services, noise-control
 decisions and suggestion history as rows of the same timeline, so you can see what changed just before
 the incident started. The **Intelligence** filter shows only those rows. Turn the switch off to see the
@@ -118,7 +129,7 @@ The assistant (named by your administrator, Squire by default) opens from:
 - the keyboard shortcut **⌘ J** (macOS) or **Ctrl J** (Windows and Linux), from any page; press it again to
   close the assistant. It is listed on the **Keyboard Shortcuts** page,
 - **Ask** in global search,
-- the **Ask** button on any item in an incident's Insights panel, which asks about that item.
+- the **Ask** button on any item in an incident's Investigation panel, which asks about that item.
 
 On an incident page it knows which incident you mean. Ask things like "have we seen this before?", "what could
 have caused this?" or "which runbook fits?".
@@ -164,7 +175,7 @@ A strip under the assistant's header says why, and what you can do:
 
 ## Summaries and postmortem drafts
 
-When AI is set up for it, the **Summary** section of Insights offers **Summarise this incident**: it writes
+When AI is set up for it, the **Summary** section of Investigation offers **Summarise this incident**: it writes
 a short summary of what happened so far, the current state and suggested next steps. **Post summary as
 note** adds it to the incident's notes. **Insert summary** in the note box's toolbar drafts the same
 summary into the note for you to edit before posting. In the postmortem editor, **Draft with AI**

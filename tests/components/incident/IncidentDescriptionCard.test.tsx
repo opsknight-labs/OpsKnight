@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import IncidentDescriptionCard, {
   clickHouseLiteralToJson,
@@ -49,6 +49,10 @@ describe('ClickHouse values in incident descriptions', () => {
       2
     );
     render(<IncidentDescriptionCard incidentId="i1" description={description} canManage={false} />);
+    // A whole-JSON description starts as one "Raw alert payload" row; View shows the formatted payload.
+    expect(screen.getByText('Raw alert payload')).toBeTruthy();
+    expect(screen.queryByText('query_duration_ms: 5400', { exact: false })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /view/i }));
     expect(screen.getByText('query_duration_ms: 5400', { exact: false })).toBeTruthy();
     expect(screen.queryByText(/\\n/)).toBeNull();
     expect(screen.getByText('"A"')).toBeTruthy();

@@ -6,7 +6,7 @@ export type SafetyBudget = { label: string; used: number; limit: number };
 /** Compact, enterprise per-incident automation budget meters with clean status chips and progress bars. */
 export default function AutomationSafetyMeter({ items }: { items: SafetyBudget[] }) {
   return (
-    <ul className="grid gap-2.5 sm:grid-cols-3">
+    <ul className="grid gap-2">
       {items.map(item => {
         const exhausted = item.limit > 0 && item.used >= item.limit;
         const isDisabled = item.limit === 0;

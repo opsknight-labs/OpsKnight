@@ -29,8 +29,9 @@ const SHORT_LABEL: Record<string, string> = {
 
 const ACTION_BASE =
   'min-h-11 rounded border border-border bg-background px-3 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60';
+// The page's chip shape (field-styles CHIP_CLASS), quieter text; 44px touch target on phones.
 const DOT_BASE =
-  'inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-full px-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex min-h-11 min-w-11 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-background px-2.5 text-xs font-medium text-muted-foreground shadow-2xs transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
  * The one place the incident page states how fresh its recommendations are.

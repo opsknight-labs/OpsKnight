@@ -10,6 +10,14 @@ import type {
 } from '@/lib/intelligence/memory/proactive-view';
 
 const modeLabel = (mode: 'BASIC' | 'AI') => (mode === 'AI' ? 'Written with AI' : 'Basic mode');
+const LABEL = 'text-2xs font-semibold uppercase tracking-wider text-muted-foreground';
+
+/** "12m before onset", "18h before onset", "3d before onset". */
+function beforeOnset(minutes: number): string {
+  if (minutes < 60) return `${minutes}m before onset`;
+  if (minutes < 48 * 60) return `${Math.round(minutes / 60)}h before onset`;
+  return `${Math.round(minutes / 1440)}d before onset`;
+}
 
 type Digest = InvestigationView['updates'][number];
 
@@ -79,6 +87,7 @@ export function ProactiveNotes({
   routePrefix = '',
   action,
   assistantName = 'Squire',
+  bare = false,
 }: {
   incidentId: string;
   notes: ProactiveNotesView;
@@ -88,15 +97,19 @@ export function ProactiveNotes({
   action?: ReactNode;
   /** The configured assistant name (Settings → Assistant). */
   assistantName?: string;
+  /** Inside the inspector's trail: the step already has the heading and the action, so no own frame. */
+  bare?: boolean;
 }) {
   const { briefing, nudge, postmortemDraft, investigation, verification } = notes;
   // Unique per instance: the desktop inspector and the mobile sheet can both render the notes.
   const headingId = useId();
   return (
     <section
-      aria-labelledby={headingId}
-      className="space-y-4 rounded-lg border border-border bg-card p-4"
+      aria-labelledby={bare ? undefined : headingId}
+      aria-label={bare ? `${assistantName} notes` : undefined}
+      className={bare ? 'space-y-4' : 'space-y-4 rounded-lg border border-border bg-card p-4'}
     >
+      {!bare && (
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -106,6 +119,7 @@ export function ProactiveNotes({
         </div>
         {action}
       </div>
+      )}
 
       {nudge && (
         <div
@@ -198,96 +212,122 @@ export function ProactiveNotes({
       )}
 
       {briefing && (
-        <div className="space-y-2 text-sm">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h4 className="font-medium">Briefing</h4>
-            <span className="text-xs text-muted-foreground">{modeLabel(briefing.mode)}</span>
-          </div>
-          <p>{briefing.ai?.headline ?? briefing.headline}</p>
-          {briefing.ai ? (
-            <p className="text-muted-foreground">{briefing.ai.currentState}</p>
-          ) : (
-            <ul className="list-disc pl-5 text-muted-foreground">
-              {briefing.facts.map(fact => (
-                <li key={fact}>{fact}</li>
-              ))}
-            </ul>
-          )}
-          {briefing.analysisPending && (
-            <p className="text-xs text-muted-foreground">
-              Written before the first analysis finished; similar incidents may be missing.
+        <div className="space-y-4 text-sm">
+          <div className="space-y-1.5">
+            {!bare && (
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h4 className={LABEL}>Briefing</h4>
+                <span className="text-2xs text-muted-foreground">{modeLabel(briefing.mode)}</span>
+              </div>
+            )}
+            <p className="text-base font-semibold leading-snug text-foreground">
+              {briefing.ai?.headline ?? briefing.headline}
             </p>
-          )}
-          {briefing.refs.similar.length > 0 && (
-            <div>
-              <h4 className="text-xs font-medium uppercase text-muted-foreground">
-                Similar incidents
-              </h4>
-              <ul className="space-y-1">
-                {briefing.refs.similar.map(item => (
-                  <li key={item.id}>
-                    <Link href={`${routePrefix}/incidents/${item.id}`} className="hover:underline">
-                      {item.label}
-                    </Link>{' '}
-                    <span className="text-xs text-muted-foreground">
-                      {item.matchPercent}% match
-                    </span>
-                  </li>
+            {briefing.ai ? (
+              <p className="leading-relaxed text-muted-foreground">{briefing.ai.currentState}</p>
+            ) : (
+              <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
+                {briefing.facts.map(fact => (
+                  <li key={fact}>{fact}</li>
                 ))}
               </ul>
-            </div>
-          )}
-          {briefing.refs.changes.length > 0 && (
-            <div>
-              <h4 className="text-xs font-medium uppercase text-muted-foreground">
-                Likely change (unconfirmed)
-              </h4>
-              <ul className="space-y-1">
-                {briefing.refs.changes.map(item => (
-                  <li key={item.id}>
-                    <Link href={`/changes/${item.id}`} className="hover:underline">
-                      {item.label}
-                    </Link>{' '}
-                    <span className="text-xs text-muted-foreground">
-                      {item.minutesBefore} min before onset
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            )}
+            {briefing.analysisPending && (
+              <p className="text-xs text-muted-foreground">
+                Written before the first analysis finished; similar incidents may be missing.
+              </p>
+            )}
+          </div>
+
           {(briefing.ai?.possibleCauses.length ?? 0) > 0 && (
-            <div>
-              <h4 className="text-xs font-medium uppercase text-muted-foreground">
-                Possible causes (to verify)
-              </h4>
-              <ul className="list-disc pl-5">
+            <div className="space-y-2">
+              <h4 className={LABEL}>Possible causes · to verify</h4>
+              <ul className="space-y-1.5">
                 {briefing.ai!.possibleCauses.map(cause => (
-                  <li key={cause}>{cause}</li>
+                  <li
+                    key={cause}
+                    className="flex gap-2.5 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 leading-snug"
+                  >
+                    <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-status-elevated" />
+                    <span>{cause}</span>
+                  </li>
                 ))}
               </ul>
             </div>
           )}
-          <div>
-            <h4 className="text-xs font-medium uppercase text-muted-foreground">Next steps</h4>
-            <ol className="list-decimal pl-5">
+
+          <div className="space-y-2">
+            <h4 className={LABEL}>Next steps</h4>
+            <ol className="space-y-1.5">
               {(briefing.ai?.nextSteps.length ? briefing.ai.nextSteps : briefing.nextSteps).map(
-                step => (
-                  <li key={step}>{step}</li>
+                (step, index) => (
+                  <li key={step} className="flex gap-2.5 leading-snug">
+                    <span
+                      aria-hidden="true"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border bg-background text-2xs font-semibold tabular-nums text-muted-foreground"
+                    >
+                      {index + 1}
+                    </span>
+                    <span className="pt-px">{step}</span>
+                  </li>
                 )
               )}
             </ol>
+            {briefing.refs.runbooks.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Suggested runbook:{' '}
+                <Link
+                  href={`${routePrefix}/incidents/${incidentId}?tab=runbooks`}
+                  className="font-semibold text-foreground underline-offset-2 hover:underline"
+                >
+                  {briefing.refs.runbooks[0].label}
+                </Link>
+              </p>
+            )}
           </div>
-          {briefing.refs.runbooks.length > 0 && (
-            <p>
-              Suggested runbook:{' '}
-              <Link
-                href={`${routePrefix}/incidents/${incidentId}?tab=runbooks`}
-                className="font-medium hover:underline"
-              >
-                {briefing.refs.runbooks[0].label}
-              </Link>
-            </p>
+
+          {!bare && briefing.refs.changes.length > 0 && (
+            <div className="space-y-2">
+              <h4 className={LABEL}>Changes before onset · link unconfirmed</h4>
+              <ul className="divide-y divide-border/70 rounded-lg border border-border/70">
+                {briefing.refs.changes.map(item => (
+                  <li key={item.id} className="flex items-baseline justify-between gap-3 px-3 py-2">
+                    <Link href={`/changes/${item.id}`} className="min-w-0 font-medium hover:underline">
+                      {item.label}
+                    </Link>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {beforeOnset(item.minutesBefore)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {!bare && briefing.refs.similar.length > 0 && (
+            <div className="space-y-2">
+              <h4 className={LABEL}>Similar incidents</h4>
+              <ul className="divide-y divide-border/70 rounded-lg border border-border/70">
+                {briefing.refs.similar.map(item => (
+                  <li key={item.id} className="space-y-0.5 px-3 py-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <Link
+                        href={`${routePrefix}/incidents/${item.id}`}
+                        className="min-w-0 font-medium hover:underline"
+                      >
+                        {item.label}
+                      </Link>
+                      <span className="shrink-0 rounded-full border border-border bg-muted/50 px-1.5 text-2xs font-semibold tabular-nums text-muted-foreground">
+                        {item.matchPercent}% match
+                      </span>
+                    </div>
+                    {item.resolution && (
+                      <p className="text-xs text-muted-foreground">Fixed by: {item.resolution}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}

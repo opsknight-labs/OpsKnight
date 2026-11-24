@@ -4,6 +4,24 @@ import IncidentInsights, {
   SuggestedRunbooks,
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
+import { readPayload } from '@/lib/payload-reader';
+import IncidentAuditView from '@/components/incident/detail/IncidentAuditView';
+import { priorityReason } from '@/lib/incidents/priority-reason';
+import IncidentLiveRefresh from '@/components/incident/IncidentLiveRefresh';
+import CardSkeleton from '@/components/incident/detail/CardSkeleton';
+import { getCachedOrFetch } from '@/lib/realtime-cache';
+import FollowControl from '@/components/incident/detail/FollowControl';
+import IncidentViewers from '@/components/incident/detail/IncidentViewers';
+import { incidentSummaryText } from '@/lib/incidents/summary-text';
+import IncidentShortcuts from '@/components/incident/IncidentShortcuts';
+import { catchUpKind, type CatchUpItem } from '@/lib/incidents/catch-up';
+import CatchUpStrip from '@/components/incident/detail/CatchUpStrip';
+import { baselineLabel, computeBaseline } from '@/lib/incidents/baseline';
+import IncidentAlertsView from '@/components/incident/detail/IncidentAlertsView';
+import IncidentCustomerCommsCard from '@/components/incident/detail/IncidentCustomerCommsCard';
+import IncidentRespondersCard from '@/components/incident/detail/IncidentRespondersCard';
+import { incidentReadWhere } from '@/lib/authorization-filters';
+import DedupRecurrenceChip from '@/components/incident/detail/DedupRecurrenceChip';
 import { CHAT_EVENT_DISPLAY_MAX, LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
 import { Suspense } from 'react';
 import UserAvatar from '@/components/UserAvatar';
@@ -293,7 +311,17 @@ export default async function IncidentDetailScreen({
 
   // Rendering an incident must not perform hidden Jira or provider network I/O.
   // Persisted state is refreshed by background webhooks or explicit sync actions.
-  const [jiraLinks, collaboration, escalationHealth, statusUpdate] = await Promise.all([
+  // One clock read per render: the baseline window and the "running long" line use the same instant.
+  const pageRenderedAt = new Date();
+  const [
+    jiraLinks,
+    collaboration,
+    escalationHealth,
+    statusUpdate,
+    alertTotal,
+    previousOnKey,
+    baselineRows,
+  ] = await Promise.all([
     prisma.externalIssueLink.findMany({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
@@ -305,7 +333,37 @@ export default async function IncidentDetailScreen({
     permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE)
       ? loadIncidentStatusUpdate(storedIncident).catch(() => null)
       : null,
+    // One indexed COUNT: the Timeline graph reads its own aggregated data when it is shown.
+    prisma.alert.count({ where: { incidentId: id } }),
+    // The last earlier incident on the same dedup key the viewer may read: "first in 41 days".
+    loadPreviousOnDedupKey(id, storedIncident.dedupKey ?? null, storedIncident.createdAt),
+    // The service's usual response times: its recent resolved incidents (bounded), cached per service for
+    // 10 minutes so busy incidents and live refreshes do not re-read them.
+    getCachedOrFetch(
+      `incident-baseline:${storedIncident.serviceId}`,
+      () =>
+        prisma.incident.findMany({
+          where: {
+            serviceId: storedIncident.serviceId,
+            status: 'RESOLVED',
+            resolvedAt: { not: null },
+            createdAt: { gte: new Date(pageRenderedAt.getTime() - 90 * 86_400_000) },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          select: { createdAt: true, acknowledgedAt: true, resolvedAt: true },
+        }),
+      10 * 60_000
+    )
+      .then(entry => entry.data)
+      .catch(() => []),
   ]);
+  const serviceBaseline = baselineLabel(
+    computeBaseline(baselineRows),
+    storedIncident.createdAt,
+    storedIncident.resolvedAt ?? null,
+    pageRenderedAt.getTime()
+  );
 
   // The access check above already ran; the viewer's capabilities drive lane redaction.
   const responseTimeline = await getIncidentResponseTimeline(id, permissions, {
@@ -393,6 +451,8 @@ export default async function IncidentDetailScreen({
     totalNotesCount: totalNotesCount,
     totalNotificationsCount: totalNotificationsCount,
     totalActivityCount: totalActivityCount,
+    alertTotal,
+    renderedAt: new Date(),
   };
   // Intelligence events join the core timeline once read; until then (and on any failure) the core
   // timeline renders on its own.
@@ -418,10 +478,12 @@ export default async function IncidentDetailScreen({
     </div>
   ) : null;
 
-  const contextContent = responseTimeline ? (
-    <IncidentContextCard context={responseTimeline.context} />
-  ) : null;
-  const hasContextCard = !!responseTimeline && responseTimeline.context.visibility !== 'HIDDEN';
+  const escalationInBand =
+    presentation !== 'mobile' && Boolean(escalationHealth) && !escalationHealth?.needsAttention;
+  const contextContent =
+    responseTimeline && responseTimeline.context.visibility !== 'HIDDEN' ? (
+      <IncidentContextCard context={responseTimeline.context} embedded />
+    ) : null;
 
   // Assignee and incident-role pickers offer only people who may be paged (no stakeholders).
   const pageableUsers = users.filter(candidate => isPageableRole(candidate.role));
@@ -456,7 +518,7 @@ export default async function IncidentDetailScreen({
   );
   // Suggested responders sit with the responders card; only people who can add responders see them.
   const watchersContent = (
-    <div className="space-y-3">
+    <div id="incident-subscribers" className="scroll-mt-24 space-y-3">
       {watchersCard}
       {canManageIncident && (
         <Suspense fallback={null}>
@@ -481,7 +543,91 @@ export default async function IncidentDetailScreen({
     />
   );
 
+  // Compact rows for "Catch me up", from data the page already loaded (no extra queries).
+  const catchUpItems: CatchUpItem[] = [
+    ...events.map(event => ({
+      at: event.createdAt.toISOString(),
+      kind: catchUpKind(event.type ?? '', event.message ?? ''),
+      text: (event.message ?? '').slice(0, 160),
+    })),
+    ...incident.notes.map(note => ({
+      at: note.createdAt.toISOString(),
+      kind: 'note' as const,
+      text: note.content.slice(0, 160),
+    })),
+    ...incident.notifications.map(notification => ({
+      at: (notification.failedAt ?? notification.sentAt ?? notification.createdAt).toISOString(),
+      kind: notification.status === 'FAILED' ? ('page_failed' as const) : ('page' as const),
+      text: `${notification.channel} ${notification.status.toLowerCase()}`,
+    })),
+  ];
+  const summaryText = incidentSummaryText({
+    title: incident.title,
+    priority: incident.priority ?? null,
+    status: incident.status,
+    serviceName: incident.service.name,
+    assigneeName: incident.assignee?.name ?? incident.team?.name ?? null,
+    createdAt: incident.createdAt,
+    now: pageRenderedAt,
+    alertTotal: alertTotal,
+    escalation: incident.escalationStatus
+      ? ((
+          { ESCALATING: 'escalating', COMPLETED: 'max step reached', PAUSED: 'paused' } as Record<
+            string,
+            string
+          >
+        )[incident.escalationStatus] ?? incident.escalationStatus.toLowerCase())
+      : null,
+    url: `${appUrl}/incidents/${id}`,
+  });
+  // Who else has the page open, then Follow: always in view at the top right (key resets it per incident).
+  const followControl = (
+    <>
+      <IncidentViewers key={id} incidentId={id} currentUserId={user.id} />
+      <FollowControl
+        currentUserId={user.id}
+        currentWatcherId={incident.watchers.find(w => w.user.id === user.id)?.id ?? null}
+        followers={incident.watchers.map(w => ({
+          id: w.user.id,
+          name: w.user.name,
+          avatarUrl: w.user.avatarUrl ?? null,
+        }))}
+        total={incident.watchers.length}
+        onAddWatcher={handleAddWatcher}
+        onRemoveWatcher={handleRemoveWatcher}
+      />
+    </>
+  );
   const routePrefix = presentation === 'mobile' ? '/m' : '';
+  const detailsProps = {
+    incident,
+    users: pageableUsers,
+    teams,
+    canManage: canManageIncident,
+    routePrefix,
+    baseline: serviceBaseline,
+    priorityReason: priorityReason({
+      priority: storedIncident.priority ?? null,
+      source: storedIncident.classificationPrioritySource ?? null,
+      rule: storedIncident.classificationRule ?? null,
+      slaRule: storedIncident.slaPolicyRule ?? null,
+    }),
+    escalationHealth: escalationInBand ? (
+      <EscalationExecutionHealth health={escalationHealth} variant="inline" />
+    ) : null,
+  };
+  const detailsBand = <IncidentHeader {...detailsProps} embedded />;
+  // From lg the details are a properties panel at the top of the side column.
+  const detailsPanel = <IncidentHeader {...detailsProps} panel />;
+  const dedupChip = (
+    <DedupRecurrenceChip
+      alertTotal={alertTotal}
+      hasDedupKey={Boolean(storedIncident.dedupKey)}
+      createdAt={incident.createdAt}
+      previous={previousOnKey}
+      routePrefix={routePrefix}
+    />
+  );
 
   const holderByRole = new Map(
     storedIncident.roleAssignments.map(assignment => [assignment.roleKey, assignment.user])
@@ -512,7 +658,7 @@ export default async function IncidentDetailScreen({
       users={pageableUsers}
       currentUserId={user.id}
       onSetRole={handleSetRole}
-      presentation={presentation}
+      showAllRoles={incident.priority === 'P1' || incident.priority === 'P2'}
     />
   );
 
@@ -544,56 +690,51 @@ export default async function IncidentDetailScreen({
       }
     >
       {presentation === 'mobile' ? (
-        <section className="rounded-xl border border-border bg-card p-3.5 text-card-foreground shadow-none">
-          {/* The mobile header already has the back arrow; a second "Back to Incidents" here repeated it. */}
-          <div className="mb-2.5 flex items-center justify-end gap-2 border-b border-border/70 pb-2">
-            <div className="flex shrink-0 items-center gap-1">
-              <CopyButton text={id} label="ID" className="h-7 px-2 text-[10px]" />
-              <CopyButton
-                text={`${appUrl}/incidents/${id}`}
-                icon="link"
-                label="Link"
-                className="h-7 px-2 text-[10px]"
-              />
-            </div>
-          </div>
-
-          <div className="flex min-w-0 items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
+        <section className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
+          <div className={`h-1 w-full bg-linear-to-r ${statusGradient}`} />
+          {/* The mobile header already has the back arrow, so the card starts with status and title. */}
+          <div className="space-y-3 p-3.5">
+            <div className="flex min-w-0 items-center justify-between gap-2">
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <IncidentStatusBadge status={incident.status} />
                 <IncidentUrgencyBadge urgency={incident.urgency} />
                 {incident.priority && (
-                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-bold">
+                  <Badge variant="outline" className="h-5 px-1.5 text-2xs font-bold">
                     {incident.priority}
                   </Badge>
                 )}
               </div>
-              <h1 className="mt-2 wrap-break-word text-base font-bold leading-snug tracking-tight text-foreground">
-                {incident.title}
-              </h1>
-              {showIntelligence && (
-                <Suspense fallback={null}>
-                  <IncidentGroupLine incidentId={incident.id} presentation="mobile" />
-                </Suspense>
-              )}
+              <div className="flex shrink-0 items-center">
+                <CopyButton text={id} label="ID" className="h-9 px-2 text-xs" />
+                <CopyButton
+                  text={`${appUrl}/incidents/${id}`}
+                  icon="link"
+                  label="Link"
+                  className="h-9 px-2 text-xs"
+                />
+              </div>
             </div>
-          </div>
-
-          <div className="mt-3">
-            <IncidentSLABadges sla={incidentSla} />
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border/70 pt-3 text-[11px]">
-            <div className="min-w-0">
-              <span className="block text-muted-foreground">Service</span>
-              <span className="mt-0.5 block truncate font-semibold text-foreground">
-                {incident.service.name}
+            <h1 className="wrap-break-word text-lg font-bold leading-snug tracking-tight text-foreground">
+              {incident.title}
+            </h1>
+            {/* Dedup and recurrence on its own line on phones, so it never crowds the copy buttons. */}
+            <div className="flex flex-wrap items-center gap-2">
+              {dedupChip}
+              {followControl}
+            </div>
+            {showIntelligence && (
+              <Suspense fallback={null}>
+                <IncidentGroupLine incidentId={incident.id} presentation="mobile" />
+              </Suspense>
+            )}
+            <IncidentSLABadges sla={incidentSla} className="pt-0" />
+            <div className="flex min-w-0 items-center gap-x-4 gap-y-1 border-t border-border/70 pt-3 text-xs">
+              <span className="min-w-0 truncate">
+                <span className="text-muted-foreground">Service </span>
+                <span className="font-semibold text-foreground">{incident.service.name}</span>
               </span>
-            </div>
-            <div className="min-w-0">
-              <span className="block text-muted-foreground">Assigned to</span>
-              <span className="mt-0.5 flex min-w-0 items-center gap-1.5 font-semibold text-foreground">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0 text-muted-foreground">Assigned</span>
                 {incident.assignee && (
                   <UserAvatar
                     userId={incident.assignee.id}
@@ -604,53 +745,34 @@ export default async function IncidentDetailScreen({
                     aria-hidden
                   />
                 )}
-                <span className="truncate">{incident.assignee?.name || 'Unassigned'}</span>
+                <span className="truncate font-semibold text-foreground">
+                  {incident.assignee?.name || 'Unassigned'}
+                </span>
               </span>
             </div>
-          </div>
-
-          {impactedBusinessServices.some(impact => !impact.excluded) && (
-            <div className="mt-3">
+            {impactedBusinessServices.some(impact => !impact.excluded) && (
               <IncidentImpacts
                 incidentId={id}
                 impacts={impactedBusinessServices}
                 linkable={false}
               />
-            </div>
-          )}
-
-          <div className="mt-3 border-t border-border/70 pt-3">{rolesContent}</div>
+            )}
+            {rolesContent}
+          </div>
         </section>
       ) : (
         <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xs">
           <div className={`h-1 w-full bg-linear-to-r ${statusGradient}`} />
-          <div className="p-3.5 sm:p-4.5">
-            <div className="mb-2.5 flex min-w-0 items-center justify-between gap-3">
+          <div className="p-3.5 sm:px-4.5 sm:py-4">
+            <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
               <ListReturnLink
                 href={backHref}
-                className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                aria-label={backLabel}
+                title={backLabel}
+                className="mt-1.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                <span>{backLabel}</span>
+                <ArrowLeft className="h-4 w-4" aria-hidden />
               </ListReturnLink>
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Badge
-                  variant="outline"
-                  className="hidden font-mono text-[11px] text-muted-foreground sm:inline-flex border-border/80"
-                >
-                  #{id.slice(0, 8)}
-                </Badge>
-                <CopyButton text={id} label="ID" className="h-7 px-2 text-xs font-medium" />
-                <CopyButton
-                  text={`${appUrl}/incidents/${id}`}
-                  icon="link"
-                  label="Link"
-                  className="h-7 px-2 text-xs font-medium"
-                />
-              </div>
-            </div>
-
-            <div className="flex min-w-0 items-start gap-3 sm:gap-3.5">
               <div
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-xs sm:h-10 sm:w-10 ${statusGradient}`}
               >
@@ -664,35 +786,92 @@ export default async function IncidentDetailScreen({
                   <AlertCircle className="h-4.5 w-4.5" />
                 )}
               </div>
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <h1 className="min-w-0 wrap-break-word text-base font-bold leading-snug tracking-tight text-foreground sm:text-xl">
-                    {incident.title}
-                  </h1>
-                  <StatusBadge status={incident.status} live={incident.status === 'OPEN'} />
+              <div className="min-w-0 flex-1 space-y-3">
+                {/* Narrow windows stack the actions under the title instead of squeezing it to one letter wide. */}
+                <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:justify-between">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 pt-0.5">
+                    <h1
+                      className={`min-w-0 wrap-break-word text-lg font-bold leading-snug tracking-tight text-foreground ${
+                        // Long titles step down a size so they stay ~3 lines instead of 4+.
+                        incident.title.length > 80 ? 'sm:text-xl' : 'sm:text-2xl'
+                      }`}
+                    >
+                      {incident.title}
+                    </h1>
+                    <StatusBadge
+                      status={incident.status}
+                      live={incident.status === 'OPEN'}
+                      // The page's chip shape (field-styles CHIP_CLASS); other pages keep the pill.
+                      className="h-8 rounded-md px-2.5 text-xs shadow-2xs"
+                    />
+                    {dedupChip}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-1">
+                    {/* Follow / Following with who follows, where Watch sits on GitHub: always in view. */}
+                    <div className="mr-2 flex items-center gap-3">{followControl}</div>
+                    <Badge
+                      variant="outline"
+                      className="hidden border-border/80 font-mono text-xs text-muted-foreground sm:inline-flex"
+                    >
+                      #{id.slice(0, 8)}
+                    </Badge>
+                    <CopyButton text={id} label="ID" className="h-7 px-2 text-xs font-medium" />
+                    <CopyButton
+                      text={summaryText}
+                      label="Copy summary"
+                      variant="button"
+                      className="h-7 px-2 text-xs font-medium"
+                    />
+                    <CopyButton
+                      text={`${appUrl}/incidents/${id}`}
+                      icon="link"
+                      label="Link"
+                      className="h-7 px-2 text-xs font-medium"
+                    />
+                  </div>
                 </div>
                 {showIntelligence && (
                   <Suspense fallback={null}>
                     <IncidentGroupLine incidentId={incident.id} />
                   </Suspense>
                 )}
-                <IncidentSLABadges sla={incidentSla} />
-                <IncidentImpacts
-                  incidentId={id}
-                  impacts={impactedBusinessServices}
-                  canEdit={canManageIncident}
-                />
-                {(canManageIncident || canAddIncidentNote) && (
-                  <NotifyStakeholdersButton
-                    incidentId={incident.id}
-                    businessServices={impactedBusinessServices.filter(impact => !impact.excluded)}
+                {/* Response row: SLA, impact and roles, right under the title. */}
+                <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2.5">
+                  <IncidentSLABadges sla={incidentSla} className="pt-0" />
+                  <IncidentImpacts
+                    incidentId={id}
+                    impacts={impactedBusinessServices}
+                    canEdit={canManageIncident}
                   />
-                )}
+                  {(canManageIncident || canAddIncidentNote) && (
+                    <NotifyStakeholdersButton
+                      incidentId={incident.id}
+                      businessServices={impactedBusinessServices.filter(impact => !impact.excluded)}
+                    />
+                  )}
+                  <div className="min-w-0">{rolesContent}</div>
+                </div>
               </div>
             </div>
-            <div className="mt-3.5 border-t border-border/70 pt-3">{rolesContent}</div>
           </div>
+          {/* Below lg the side column drops under the tabs, so the details stay in the card there. */}
+          <div className="lg:hidden">{detailsBand}</div>
         </section>
+      )}
+
+      {/* A, R, W, T, S on the incident page (listed in the ? shortcuts overlay). */}
+      <IncidentShortcuts summary={summaryText} />
+      {/* Refreshes when someone else changes this incident: shared realtime connection, throttled. */}
+      <IncidentLiveRefresh incidentId={incident.id} />
+
+      {/* "Since you looked 2h ago: …" — remembered per incident in the viewer's browser; nothing on a first visit. */}
+      <CatchUpStrip incidentId={incident.id} items={catchUpItems} />
+
+      {/* AI briefing: one compact card under the title card, so it is read first without pushing the rest down. */}
+      {presentation !== 'mobile' && showInsightsInspector && (
+        <Suspense fallback={null}>
+          <IncidentInsights incidentId={incident.id} presentation={presentation} variant="card" />
+        </Suspense>
       )}
 
       {storedIncident.maintenanceWindow && incident.status === 'SUPPRESSED' && (
@@ -743,6 +922,9 @@ export default async function IncidentDetailScreen({
           id: incident.id,
           title: incident.title,
           service: { name: incident.service.name },
+          priority: incident.priority ?? null,
+          // Only people who may write the postmortem are offered to start it.
+          postmortemHref: canManageIncident ? `/postmortems/${incident.id}` : null,
         }}
         postmortemHref={
           postmortem
@@ -775,16 +957,20 @@ export default async function IncidentDetailScreen({
       />
 
       {/* Intelligence: one row of chips, and the inspector they open. Silent when there is nothing to say. */}
-      {showInsightsInspector && (
+      {showInsightsInspector && presentation === 'mobile' && (
         <Suspense fallback={null}>
           <IncidentInsights incidentId={incident.id} presentation={presentation} />
         </Suspense>
       )}
 
       {/* Escalation Execution Health: Compact status strip or alert banner */}
-      <EscalationExecutionHealth health={escalationHealth} />
+      {/* Healthy: one line under the Escalation field on desktop; the full panel when a step needs review, or on phones. */}
+      <EscalationExecutionHealth
+        health={escalationHealth}
+        className={escalationInBand ? 'sm:hidden' : undefined}
+      />
 
-      {presentation === 'mobile' ? (
+      {presentation === 'mobile' && (
         <details className="group overflow-hidden rounded-xl border border-border bg-card">
           <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
             <span>Incident details &amp; assignment</span>
@@ -803,14 +989,26 @@ export default async function IncidentDetailScreen({
             />
           </div>
         </details>
-      ) : (
-        <IncidentHeader
-          incident={incident}
-          users={pageableUsers}
-          teams={teams}
-          canManage={canManageIncident}
-          routePrefix={routePrefix}
-        />
+      )}
+
+      {/* Phones: who is on it and what customers were told, before the description and tabs. */}
+      {presentation === 'mobile' && (
+        <>
+          <Suspense fallback={<CardSkeleton title="Responders" rows={4} />}>
+            <IncidentRespondersCard incidentId={id} viewerId={user.id} />
+          </Suspense>
+          <Suspense fallback={<CardSkeleton title="Customer updates" rows={2} />}>
+            <IncidentCustomerCommsCard
+              incident={{
+                id,
+                serviceId: storedIncident.serviceId,
+                status: storedIncident.status,
+                visibility: storedIncident.visibility,
+              }}
+              timeZone={userTimeZone}
+            />
+          </Suspense>
+        </>
       )}
 
       {presentation === 'mobile' && (
@@ -846,6 +1044,9 @@ export default async function IncidentDetailScreen({
             <section className="rounded-xl border border-border/80 bg-card p-3.5 text-card-foreground">
               <h2 className="text-xs font-semibold">Incident Description</h2>
               <p className="mt-1 text-xs text-muted-foreground">Alert details are restricted.</p>
+              {contextContent && (
+                <div className="mt-3 border-t border-border/70 pt-3">{contextContent}</div>
+              )}
             </section>
           ) : (
             <IncidentDescriptionCard
@@ -853,6 +1054,8 @@ export default async function IncidentDetailScreen({
               description={incident.description}
               canManage={canManageIncident}
               onUpdateDescription={handleUpdateDescription}
+              context={contextContent}
+              readable={incident.description ? readPayload(incident.description) : null}
             />
           )}
 
@@ -866,12 +1069,18 @@ export default async function IncidentDetailScreen({
           )}
 
           <IncidentDetailTabs
-            defaultTab={initialTab || 'overview'}
+            defaultTab={initialTab || 'notes'}
             eventCount={totalEventsCount}
             noteCount={totalNotesCount}
             activityContent={activityContent}
             automationContent={automationContent}
             responseContent={responseContent}
+            auditContent={<IncidentAuditView incidentId={incident.id} />}
+            alertsContent={
+              alertTotal > 0 ? (
+                <IncidentAlertsView incidentId={incident.id} total={alertTotal} />
+              ) : undefined
+            }
             runbooksContent={
               canReadRunbooks ? (
                 <>
@@ -887,23 +1096,12 @@ export default async function IncidentDetailScreen({
             timelineContent={timelineContent}
             postmortemContent={postmortemContent}
             postmortemStatus={postmortem?.status ?? null}
+            showPostmortem={incident.status === 'RESOLVED'}
           />
         </div>
 
         {presentation === 'mobile' ? (
           <>
-            {hasContextCard && (
-              <details className="group overflow-hidden rounded-xl border border-border bg-card">
-                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
-                  <span>Incident context</span>
-                  <ChevronDown
-                    className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
-                    aria-hidden="true"
-                  />
-                </summary>
-                <div className="border-t border-border p-2">{contextContent}</div>
-              </details>
-            )}
             <details className="group overflow-hidden rounded-xl border border-border bg-card lg:hidden">
               <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
                 <span>People, fields &amp; links</span>
@@ -919,7 +1117,6 @@ export default async function IncidentDetailScreen({
               </div>
             </details>
             <aside className="hidden min-w-0 space-y-4 lg:block lg:col-span-4 lg:space-y-5 2xl:col-span-3">
-              {contextContent}
               {watchersContent}
               {customFieldsContent}
               {quickLinksContent}
@@ -927,7 +1124,23 @@ export default async function IncidentDetailScreen({
           </>
         ) : (
           <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
-            {contextContent}
+            <div className="hidden lg:block">{detailsPanel}</div>
+            {/* Who was paged, how, did it arrive, who acknowledged; escalation now; on call. */}
+            <Suspense fallback={<CardSkeleton title="Responders" rows={4} />}>
+              <IncidentRespondersCard incidentId={id} viewerId={user.id} />
+            </Suspense>
+            {/* What customers were told, and when the next update is due. */}
+            <Suspense fallback={<CardSkeleton title="Customer updates" rows={2} />}>
+              <IncidentCustomerCommsCard
+                incident={{
+                  id,
+                  serviceId: storedIncident.serviceId,
+                  status: storedIncident.status,
+                  visibility: storedIncident.visibility,
+                }}
+                timeZone={userTimeZone}
+              />
+            </Suspense>
             {watchersContent}
             {customFieldsContent}
             {quickLinksContent}
@@ -936,4 +1149,25 @@ export default async function IncidentDetailScreen({
       </div>
     </div>
   );
+}
+
+async function loadPreviousOnDedupKey(
+  incidentId: string,
+  dedupKey: string | null,
+  createdAt: Date
+) {
+  if (!dedupKey) return null;
+  try {
+    const readable = incidentReadWhere(await getCurrentAuthorizationActor());
+    return await prisma.incident.findFirst({
+      where: {
+        AND: [{ dedupKey, id: { not: incidentId }, createdAt: { lt: createdAt } }, readable],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, createdAt: true },
+    });
+  } catch {
+    // A recurrence hint must never block the incident page.
+    return null;
+  }
 }

@@ -23,6 +23,8 @@ import {
   Pause,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { BaselineLabel } from '@/lib/incidents/baseline';
+import { FIELD_SELECT_CLASS, FIELD_VALUE_CLASS } from '@/components/incident/field-styles';
 import { incidentStatusTone, urgencyTone } from '@/lib/design/status-palette';
 import { toneClasses } from '@/components/patterns/status-tone';
 import SeverityBadge from '@/components/patterns/SeverityBadge';
@@ -30,6 +32,7 @@ import RelativeTime from '@/components/patterns/RelativeTime';
 import EscalationStatusBadge from './EscalationStatusBadge';
 import AssigneeSection from './AssigneeSection';
 import PrioritySelector from './PrioritySelector';
+import TruncatedText from '@/components/patterns/TruncatedText';
 
 type IncidentHeaderProps = {
   incident: Incident & {
@@ -58,6 +61,19 @@ type IncidentHeaderProps = {
   teams: Array<{ id: string; name: string }>;
   canManage: boolean;
   routePrefix?: string;
+  /**
+   * Rendered as the bottom band of the incident title card: no card chrome of its own,
+   * timing becomes the last cell, and the ID is left to the title row.
+   */
+  embedded?: boolean;
+  /** Properties panel for the page's side column: one row per field, label left and value right. */
+  panel?: boolean;
+  /** "Set by rule “payments-high” · SLA rule “P1”": why the incident has its priority. */
+  priorityReason?: string | null;
+  /** The service's usual response times, for "usually resolved in ~45m" under Opened. */
+  baseline?: BaselineLabel | null;
+  /** Escalation execution health, shown as the second line of the Escalation field. */
+  escalationHealth?: React.ReactNode;
 };
 
 function formatDuration(startDate: Date, endDate: Date | null): string {
@@ -79,6 +95,11 @@ export default function IncidentHeader({
   teams,
   canManage,
   routePrefix = '',
+  embedded = false,
+  panel = false,
+  escalationHealth,
+  baseline = null,
+  priorityReason = null,
 }: IncidentHeaderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -97,6 +118,7 @@ export default function IncidentHeader({
     });
   };
 
+  const urgencyLabel = incident.urgency.charAt(0) + incident.urgency.slice(1).toLowerCase();
   const currentVisibility = incident.visibility || 'PUBLIC';
   const isPrivate = currentVisibility === 'PRIVATE';
 
@@ -109,44 +131,80 @@ export default function IncidentHeader({
     incident.urgency === 'HIGH' && 'motion-safe:animate-pulse'
   );
 
-  const SELECTOR_BASE_CLASS =
-    'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-semibold bg-background border border-border/80 text-foreground shadow-2xs transition-all max-w-full select-none hover:bg-muted/40 hover:border-border';
-
   const durationText = incident.resolvedAt
     ? `Resolved in ${formatDuration(incident.createdAt, incident.resolvedAt)}`
     : `Open for ${formatDuration(incident.createdAt, null)}`;
 
+  // Boxed cells: uppercase label on top, value below. items-start stops chips stretching to the cell width.
+  // Embedded (title card band): one line of content-sized cells; only assignee and policy may shrink.
+  // Panel: a two-column row; anything after the value (escalation health, duration) sits under the value.
+  const cellClass = panel
+    ? 'grid min-h-10 min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 px-3 py-1.5 [&>*:nth-child(n+3)]:col-start-2'
+    : embedded
+      ? 'flex min-w-0 shrink-0 flex-col items-start justify-start px-3 py-2'
+      : 'flex min-h-[52px] min-w-0 flex-col items-start justify-start px-3 py-2.5';
+  const shrinkCell = embedded ? 'shrink' : '';
+  const labelClass = panel
+    ? 'flex min-w-0 items-center gap-1.5 whitespace-nowrap [&>svg]:h-3.5 [&>svg]:w-3.5'
+    : 'mb-1 flex items-center gap-1 whitespace-nowrap';
+  const labelText = panel
+    ? 'text-xs text-muted-foreground'
+    : 'text-2xs font-bold uppercase tracking-wider text-muted-foreground';
+  const linkCell = 'hover:bg-muted/40 transition-colors';
+
   return (
     <div
       className={cn(
-        'rounded-xl border border-border/80 bg-card shadow-2xs overflow-hidden transition-all text-card-foreground',
-        statusAccent
+        'overflow-hidden text-card-foreground',
+        panel
+          ? 'rounded-xl border border-border/80 bg-card shadow-2xs'
+          : embedded
+            ? 'border-t border-border/70 bg-muted/20'
+            : cn(
+                'rounded-xl border border-border/80 bg-card shadow-2xs transition-all',
+                statusAccent
+              )
       )}
     >
-      {/* Unified 7-cell grid — all metadata in equal rhythm */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 divide-x divide-y xl:divide-y-0 divide-border/60">
+      {panel && (
+        <h2 className="border-b border-border/70 bg-muted/20 px-3 py-2 text-xs font-semibold text-foreground">
+          Details
+        </h2>
+      )}
+      {/* Embedded: one row on desktop (wraps on phones). Standalone: 7 equal cells + footer. */}
+      <div
+        className={cn(
+          panel
+            ? 'flex flex-col divide-y divide-border/50'
+            : embedded
+              ? 'flex flex-wrap divide-x divide-border/60 lg:flex-nowrap'
+              : 'grid grid-cols-2 divide-x divide-y divide-border/60 sm:grid-cols-3 xl:grid-cols-7 xl:divide-y-0'
+        )}
+      >
         {/* Priority */}
-        <div className="flex flex-col justify-center px-3 py-2 min-h-[52px]">
-          <div className="flex items-center gap-1 mb-1">
+        <div className={cellClass}>
+          <div className={labelClass}>
             <Activity className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
-              Priority
-            </span>
+            <span className={labelText}>Priority</span>
           </div>
           <PrioritySelector
             incidentId={incident.id}
             priority={incident.priority}
             canManage={canManage}
           />
+          {/* Why it has this priority: from the incident row, no extra read. */}
+          {priorityReason && (
+            <span className="truncate text-2xs text-muted-foreground" title={priorityReason}>
+              {priorityReason}
+            </span>
+          )}
         </div>
 
         {/* Urgency */}
-        <div className="flex flex-col justify-center px-3 py-2 min-h-[52px]">
-          <div className="flex items-center gap-1 mb-1">
+        <div className={cellClass}>
+          <div className={labelClass}>
             <AlertTriangle className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
-              Urgency
-            </span>
+            <span className={labelText}>Urgency</span>
           </div>
           {canManage ? (
             <Select
@@ -158,9 +216,9 @@ export default function IncidentHeader({
                 aria-label={`Urgency: ${incident.urgency}`}
                 className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-ring rounded-md [&>svg]:hidden group"
               >
-                <div className={cn(SELECTOR_BASE_CLASS, 'cursor-pointer group')}>
+                <div className={FIELD_SELECT_CLASS}>
                   <span className={cn('h-2 w-2 rounded-full shrink-0', urgencyDot)} />
-                  <span>{incident.urgency}</span>
+                  <span>{urgencyLabel}</span>
                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0 ml-auto" />
                 </div>
               </SelectTrigger>
@@ -173,24 +231,22 @@ export default function IncidentHeader({
               </SelectContent>
             </Select>
           ) : (
-            <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+            <div className={FIELD_VALUE_CLASS}>
               <span className={cn('h-2 w-2 rounded-full shrink-0', urgencyDot)} />
-              <span>{incident.urgency}</span>
+              <span>{urgencyLabel}</span>
             </div>
           )}
         </div>
 
         {/* Visibility */}
-        <div className="flex flex-col justify-center px-3 py-2 min-h-[52px]">
-          <div className="flex items-center gap-1 mb-1">
+        <div className={cellClass}>
+          <div className={labelClass}>
             {isPrivate ? (
               <EyeOff className="h-3 w-3 text-muted-foreground shrink-0" />
             ) : (
               <Eye className="h-3 w-3 text-muted-foreground shrink-0" />
             )}
-            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
-              Visibility
-            </span>
+            <span className={labelText}>Visibility</span>
           </div>
           {canManage ? (
             <Select
@@ -202,7 +258,7 @@ export default function IncidentHeader({
                 aria-label={`Visibility: ${isPrivate ? 'Private' : 'Public'}`}
                 className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-ring rounded-md [&>svg]:hidden group"
               >
-                <div className={cn(SELECTOR_BASE_CLASS, 'cursor-pointer group')}>
+                <div className={FIELD_SELECT_CLASS}>
                   {isPrivate ? (
                     <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   ) : (
@@ -228,7 +284,7 @@ export default function IncidentHeader({
               </SelectContent>
             </Select>
           ) : (
-            <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+            <div className={FIELD_VALUE_CLASS}>
               {isPrivate ? (
                 <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               ) : (
@@ -242,30 +298,26 @@ export default function IncidentHeader({
         {/* Service */}
         <Link
           href={`${routePrefix}/services/${incident.serviceId}`}
-          title={`Service: ${incident.service.name}`}
-          className="group flex flex-col justify-center px-3 py-2 min-h-[52px] hover:bg-muted/40 transition-colors"
+          className={cn(cellClass, 'group', linkCell)}
         >
-          <div className="flex items-center gap-1 mb-1">
+          <div className={labelClass}>
             <Server className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
-              Service
-            </span>
+            <span className={labelText}>Service</span>
           </div>
-          <div className="flex items-center gap-1 max-w-full">
-            <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-              {incident.service.name}
-            </span>
+          <div className="flex h-8 min-w-0 max-w-full items-center gap-1">
+            <TruncatedText
+              text={incident.service.name}
+              className="text-sm font-medium text-foreground group-hover:text-primary transition-colors"
+            />
             <ArrowUpRight className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
           </div>
         </Link>
 
         {/* Assignee */}
-        <div className="flex flex-col justify-center px-3 py-2 min-h-[52px]">
-          <div className="flex items-center gap-1 mb-1">
+        <div className={cn(cellClass, shrinkCell)}>
+          <div className={labelClass}>
             <Users className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
-              Assignee
-            </span>
+            <span className={labelText}>Assignee</span>
           </div>
           <AssigneeSection
             assignee={incident.assignee}
@@ -284,29 +336,25 @@ export default function IncidentHeader({
         {incident.incidentPolicy ? (
           <Link
             href={`${routePrefix}/policies/${incident.incidentPolicy.id}`}
-            title={`Escalation Policy: ${incident.incidentPolicy.name}`}
-            className="group flex flex-col justify-center px-3 py-2 min-h-[52px] hover:bg-muted/40 transition-colors"
+            className={cn(cellClass, shrinkCell, 'group', linkCell)}
           >
-            <div className="flex items-center gap-1 mb-1">
+            <div className={labelClass}>
               <Shield className="h-3 w-3 text-muted-foreground shrink-0" />
-              <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
-                Incident policy
-              </span>
+              <span className={labelText}>Incident policy</span>
             </div>
-            <div className="flex items-center gap-1 max-w-full">
-              <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-                {incident.incidentPolicy.name}
-              </span>
+            <div className="flex h-8 min-w-0 max-w-full items-center gap-1">
+              <TruncatedText
+                text={incident.incidentPolicy.name}
+                className="text-sm font-medium text-foreground group-hover:text-primary transition-colors"
+              />
               <ArrowUpRight className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
             </div>
           </Link>
         ) : (
-          <div className="flex flex-col justify-center px-3 py-2 min-h-[52px] opacity-60">
-            <div className="flex items-center gap-1 mb-1">
+          <div className={cn(cellClass, shrinkCell, 'opacity-60')}>
+            <div className={labelClass}>
               <Shield className="h-3 w-3 text-muted-foreground shrink-0" />
-              <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
-                Incident policy
-              </span>
+              <span className={labelText}>Incident policy</span>
             </div>
             <span className="text-xs text-muted-foreground italic">
               {incident.noEscalation ? 'Personal paging skipped' : 'None'}
@@ -315,19 +363,17 @@ export default function IncidentHeader({
         )}
 
         {/* Escalation */}
-        <div className="flex flex-col justify-center px-3 py-2 min-h-[52px]">
-          <div className="flex items-center gap-1 mb-1">
+        <div className={cellClass}>
+          <div className={labelClass}>
             <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
-            <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
-              Escalation
-            </span>
+            <span className={labelText}>Escalation</span>
           </div>
           {(() => {
             // Case 1: Incident is Resolved
             if (incident.status === 'RESOLVED') {
               return (
                 <div
-                  className={cn(SELECTOR_BASE_CLASS, 'cursor-default text-foreground/80')}
+                  className={cn(FIELD_VALUE_CLASS, 'text-foreground/80')}
                   title="Escalation ended upon resolution"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 dark:text-emerald-400" />
@@ -340,10 +386,7 @@ export default function IncidentHeader({
             if (incident.status === 'SNOOZED' || incident.status === 'SUPPRESSED') {
               return (
                 <div
-                  className={cn(
-                    SELECTOR_BASE_CLASS,
-                    'cursor-default text-indigo-700 dark:text-indigo-400'
-                  )}
+                  className={cn(FIELD_VALUE_CLASS, ' text-indigo-700 dark:text-indigo-400')}
                   title="Escalation paused while incident is snoozed/suppressed"
                 >
                   <Pause className="h-3.5 w-3.5 text-indigo-600 shrink-0 dark:text-indigo-400" />
@@ -361,10 +404,7 @@ export default function IncidentHeader({
                   : 'Stopped (Acked)';
               return (
                 <div
-                  className={cn(
-                    SELECTOR_BASE_CLASS,
-                    'cursor-default text-emerald-800 dark:text-emerald-400'
-                  )}
+                  className={cn(FIELD_VALUE_CLASS, ' text-emerald-800 dark:text-emerald-400')}
                   title="Escalation stopped because incident was acknowledged"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 dark:text-emerald-400" />
@@ -390,14 +430,11 @@ export default function IncidentHeader({
             if (incident.escalationStatus === 'COMPLETED') {
               return (
                 <div
-                  className={cn(
-                    SELECTOR_BASE_CLASS,
-                    'cursor-default text-rose-800 dark:text-rose-400'
-                  )}
+                  className={cn(FIELD_VALUE_CLASS, ' text-rose-800 dark:text-rose-400')}
                   title="All escalation policy steps have been exhausted"
                 >
                   <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0 dark:text-rose-400" />
-                  <span>Max Step Reached</span>
+                  <span className="truncate">Max Step Reached</span>
                 </div>
               );
             }
@@ -405,53 +442,89 @@ export default function IncidentHeader({
             // Default fallback
             return <span className="text-xs text-muted-foreground italic">None</span>;
           })()}
+          {escalationHealth}
         </div>
-      </div>
 
-      {/* Balanced, enriched compact footer bar */}
-      <div className="border-t border-border/50 bg-muted/15 px-3 py-1.5 flex flex-wrap items-center justify-between gap-y-1 text-xs text-muted-foreground">
-        {/* Left: Timestamps + duration */}
-        <div className="flex items-center gap-x-3.5 gap-y-0.5 flex-wrap text-[11px] font-medium">
-          <div className="flex items-center gap-1">
-            <Clock className="h-3 w-3 text-muted-foreground" />
-            <span>
-              Created <RelativeTime date={incident.createdAt} />
+        {/* Timing: in the title card it is the last cell, not a separate footer bar. */}
+        {(embedded || panel) && (
+          <div className={cellClass}>
+            <div className={labelClass}>
+              <Timer className="h-3 w-3 text-muted-foreground shrink-0" />
+              <span className={labelText}>Opened</span>
+            </div>
+            <span className="flex h-8 items-center text-sm font-medium text-foreground">
+              <RelativeTime date={incident.createdAt} />
             </span>
-          </div>
-          {incident.acknowledgedAt && (
-            <div className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
-              <CheckCircle2 className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-              <span>
-                Ack&apos;d <RelativeTime date={incident.acknowledgedAt} />
+            <span className="text-2xs text-muted-foreground">
+              {durationText}
+              {incident.acknowledgedAt && !incident.resolvedAt && (
+                <>
+                  {' · '}ack&apos;d <RelativeTime date={incident.acknowledgedAt} />
+                </>
+              )}
+            </span>
+            {baseline && (
+              <span
+                className={cn(
+                  'text-2xs',
+                  baseline.long
+                    ? 'font-medium text-status-elevated-deep dark:text-status-elevated'
+                    : 'text-muted-foreground'
+                )}
+                title={baseline.title}
+              >
+                {baseline.text}
               </span>
-            </div>
-          )}
-          {incident.resolvedAt && (
-            <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-              <span>
-                Resolved <RelativeTime date={incident.resolvedAt} />
-              </span>
-            </div>
-          )}
-          <div className="flex items-center gap-1 text-foreground/80">
-            <Timer className="h-3 w-3 text-muted-foreground" />
-            <span>{durationText}</span>
+            )}
           </div>
-        </div>
-
-        {/* Right: Quick reference */}
-        <div className="flex items-center gap-1.5">
-          <span className="font-mono text-[11px] text-muted-foreground">
-            #{incident.id.slice(0, 8)}
-          </span>
-          <CopyButton
-            text={incident.id}
-            label="Copy ID"
-            className="text-muted-foreground hover:text-foreground hover:bg-muted/60 h-5 px-1.5 text-[10px]"
-          />
-        </div>
+        )}
       </div>
+
+      {!embedded && !panel && (
+        <div className="border-t border-border/50 bg-muted/15 px-3 py-1.5 flex flex-wrap items-center justify-between gap-y-1 text-xs text-muted-foreground">
+          {/* Left: Timestamps + duration */}
+          <div className="flex items-center gap-x-3.5 gap-y-0.5 flex-wrap text-[11px] font-medium">
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3 text-muted-foreground" />
+              <span>
+                Created <RelativeTime date={incident.createdAt} />
+              </span>
+            </div>
+            {incident.acknowledgedAt && (
+              <div className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                <CheckCircle2 className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                <span>
+                  Ack&apos;d <RelativeTime date={incident.acknowledgedAt} />
+                </span>
+              </div>
+            )}
+            {incident.resolvedAt && (
+              <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                <span>
+                  Resolved <RelativeTime date={incident.resolvedAt} />
+                </span>
+              </div>
+            )}
+            <div className="flex items-center gap-1 text-foreground/80">
+              <Timer className="h-3 w-3 text-muted-foreground" />
+              <span>{durationText}</span>
+            </div>
+          </div>
+
+          {/* Right: Quick reference */}
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-[11px] text-muted-foreground">
+              #{incident.id.slice(0, 8)}
+            </span>
+            <CopyButton
+              text={incident.id}
+              label="Copy ID"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/60 h-5 px-1.5 text-[10px]"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

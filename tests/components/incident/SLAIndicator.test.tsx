@@ -23,10 +23,17 @@ describe('SLAIndicator & IncidentSLABadges', () => {
   it('renders compact SLA chips correctly when breached', () => {
     const state = projectIncidentSlaState(base, { now: new Date('2025-01-01T05:00:00.000Z') });
     render(<IncidentSLABadges sla={state} />);
-    expect(screen.getByText('Response Health')).toBeDefined();
+    expect(screen.getByText('SLA')).toBeDefined();
     expect(screen.getByText('Ack')).toBeDefined();
     expect(screen.getByText('Resolve')).toBeDefined();
-    expect(screen.getAllByText('Breached').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/^· .+ overdue$/).length).toBe(2);
+  });
+
+  it('says how much time is left while a phase is still running', () => {
+    const state = projectIncidentSlaState(base, { now: new Date('2025-01-01T00:01:00.000Z') });
+    render(<IncidentSLABadges sla={state} />);
+    expect(screen.getAllByText(/^· .+ left$/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/overdue/)).toBeNull();
   });
 
   it('renders detailed card grid view when showDetails is true', () => {

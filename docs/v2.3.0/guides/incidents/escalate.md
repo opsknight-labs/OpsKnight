@@ -8,7 +8,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Escalate an open incident from a supported Microsoft Teams card and verify the next policy action.
-  evidence: [docs/v2.3.0/assets/incident-detail.png]
+  evidence: [docs/v2.3.0/assets/incident-detail-redesign.png]
 verification:
   level: test
   verified_at: 2026-09-29
@@ -24,7 +24,7 @@ verification:
 
 # Escalate an incident
 
-![Incident detail with the active escalation state](/docs/v2.3.0/assets/incident-detail.png)
+![Incident detail with the active escalation state](/docs/v2.3.0/assets/incident-detail-redesign.png)
 
 Manual escalation asks OpsKnight to execute the current step of an open incident's escalation plan immediately. In 2.0, this action is exposed only by a capability-enabled Microsoft Teams Adaptive Card. The Web incident page is used to inspect the resulting state; it has no manual **Escalate** control. Standard Slack incident actions do not expose manual escalation.
 
@@ -48,7 +48,7 @@ Open the current Microsoft Teams incident card in its configured service destina
 
 Use the authenticated Microsoft Teams card that exposes **Escalate**.
 
-1. Open the incident in OpsKnight Web and note its current escalation step and status.
+1. Open the incident in OpsKnight Web and note its status and the **Escalation** field in the **Details** card.
 2. In the current Microsoft Teams Adaptive Card, select **Escalate** once.
 3. If prompted, confirm the incident identity.
 4. Wait for the result before selecting the action again.
@@ -66,6 +66,8 @@ Confirm all applicable outcomes:
 4. Resolved targets match the users, schedules, teams, or notification destinations configured on that policy step.
 5. Notification history contains the expected durable delivery operations; inspect their status rather than assuming that a created operation was delivered.
 6. No page was sent for a stale, resolved, or otherwise non-escalatable state.
+
+On the incident page, the line under the **Escalation** field reads, for example, **✓ 3/3 steps ran**; select it to see each step with its target, outcome, attempts, and any error. When a step failed or needs review, that line is replaced by the **Escalation Execution Health** panel below the action bar, already open and marked **Needs review**. A failed step is not retried automatically, because a retry could page responders twice. On a phone the panel always sits below the action bar and opens by itself only when something needs review.
 
 If a step has no eligible target, the planner can advance to the next tier. That is a policy-resolution result, not proof that the provider failed.
 

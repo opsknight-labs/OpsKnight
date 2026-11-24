@@ -8,7 +8,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Resolve an incident with evidence and handle a later recurrence through supported ingestion or API paths.
-  evidence: [docs/v2.3.0/assets/incident-acknowledged.png, docs/v2.3.0/assets/incident-timeline.png]
+  evidence: [docs/v2.3.0/assets/incident-acknowledged-redesign.png, docs/v2.3.0/assets/incident-timeline-redesign.png]
 verification:
   level: test
   verified_at: 2026-09-29
@@ -24,7 +24,7 @@ verification:
 
 # Resolve an incident
 
-![Incident response controls before resolution](/docs/v2.3.0/assets/incident-acknowledged.png)
+![Incident response controls before resolution](/docs/v2.3.0/assets/incident-acknowledged-redesign.png)
 
 Resolve an incident only after service health is restored or the triggering condition is conclusively no longer actionable. Resolution ends active response and escalation, but preserves the timeline, first-response measurements, and prior lifecycle history.
 
@@ -43,15 +43,15 @@ You need responder-level incident management access or broader authorization.
 
 ## Open the feature
 
-Open **Incidents → select the incident** and locate **Resolve** in the response controls.
+Open **Incidents → select the incident**. **Resolve** is on the right of the action bar, under the incident's title card. On a phone it is in the bar fixed to the bottom of the screen (**Resolve incident**) once the incident is acknowledged.
 
 ## Configure and resolve the incident
 
-1. Open the incident and review its latest timeline entries, status, assignee, and response health.
+1. Open the incident and review its latest **Timeline** entries, status, assignee, and response health.
 2. Select **Resolve**.
 3. Enter a resolution note from 10 to 1,000 characters.
 4. State what recovered, what action caused or confirmed recovery, and any known remaining risk. Avoid unsupported root-cause conclusions; a postmortem can refine them later.
-5. Confirm the action once and wait for the page to update.
+5. Select **Resolve Incident** in the dialog once and wait for the page to update.
 
 A useful note is specific: `Rolled back checkout-api release 2026.09.29.2; 5xx rate returned below 0.2% for 20 minutes. Follow-up tracks the invalid cache configuration.`
 
@@ -62,9 +62,10 @@ Confirm:
 1. Status is **Resolved** and the resolution timestamp is present.
 2. The resolution summary shows the note and actor.
 3. The timeline contains the terminal event.
-4. Escalation is **Completed** and no next escalation is scheduled for the old generation.
+4. The **Escalation** field in the **Details** card shows **Completed** and no next escalation is scheduled for the old generation.
 5. First acknowledgement and other SLA history remain visible; resolution does not rewrite them.
 6. Connected ChatOps, Jira, notification, postmortem, and status projections update as configured.
+7. The **Postmortem** tab now appears on the incident, and the action bar offers **Create Postmortem** (or **View Postmortem** when one exists) in place of the response buttons.
 
 Do not repeatedly resolve because a provider card is stale. Verify canonical state, then diagnose the projection.
 

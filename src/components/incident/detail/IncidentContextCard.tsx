@@ -234,13 +234,86 @@ export default function IncidentContextCard({
   );
 
   if (embedded) {
+    // Inline in the description card, above the raw payload: the verified facts first, the evidence below.
+    // Each field is one compact key/value pill so the whole context reads in a line or two.
     return (
-      <div className={cn('min-w-0 space-y-2', className)}>
-        <h2 id="incident-context-heading" className="sr-only">
-          Incident context
-        </h2>
-        {innerContent}
-      </div>
+      <section aria-labelledby="incident-context-heading" className={cn('min-w-0', className)}>
+        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <h2
+            id="incident-context-heading"
+            className="flex items-center gap-1.5 text-xs font-semibold text-foreground"
+          >
+            <Fingerprint className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            Context
+          </h2>
+          <span
+            title={
+              available
+                ? 'Verified field states that runbook triggers and Agent targeting act on. Only recognized fields are used.'
+                : 'Context-based runbook triggers and targeting are skipped for this incident.'
+            }
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-2xs font-medium',
+              toneChipClass(integrityTone)
+            )}
+          >
+            {available ? (
+              <ShieldCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
+            ) : (
+              <ShieldAlert className="h-3 w-3 shrink-0" aria-hidden="true" />
+            )}
+            {available
+              ? `Verified · automation v${context.versionNumber}`
+              : incidentContextReasonLabel(context.reason)}
+          </span>
+          {available && context.visibility === 'REDACTED' && (
+            <span className="text-2xs text-muted-foreground">Values restricted</span>
+          )}
+        </div>
+        {available &&
+          (hasFields ? (
+            <dl className="flex min-w-0 flex-wrap gap-1.5">
+              {context.fields.map(field => (
+                <div
+                  key={field.key}
+                  data-testid={`context-field-${field.key}`}
+                  title={
+                    field.state === 'RECOGNIZED'
+                      ? undefined
+                      : `${field.key}: ${STATE_LABEL.get(field.state)?.label ?? field.state}`
+                  }
+                  className={cn(
+                    'inline-flex h-7 min-w-0 max-w-full items-stretch overflow-hidden rounded-md border bg-background text-xs',
+                    field.state === 'RECOGNIZED'
+                      ? 'border-border/70'
+                      : 'border-dashed border-border'
+                  )}
+                >
+                  <dt className="flex items-center border-r border-border/60 bg-muted/40 px-2 font-mono text-muted-foreground">
+                    {field.key}
+                  </dt>
+                  <dd className="flex min-w-0 items-center gap-1.5 px-2">
+                    <span
+                      className="min-w-0 truncate"
+                      title={field.value != null ? String(field.value) : undefined}
+                    >
+                      {renderFieldValue(field)}
+                    </span>
+                    {field.source === 'ENRICHMENT' && (
+                      <Chip tone="oncall">
+                        <span className="sr-only">Source: </span>Enrichment
+                      </Chip>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              The automation version declares no context fields.
+            </p>
+          ))}
+      </section>
     );
   }
 

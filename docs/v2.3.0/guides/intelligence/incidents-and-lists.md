@@ -32,7 +32,7 @@ already open.
 
 When an incident is a storm or correlation parent, or is grouped under one, one line under the title
 says so: **Parent of 7 grouped incidents** or **Grouped under #ABCDE**, with **View group**. View group
-opens the **Related and group** section of the Insights panel (see
+opens the **Related and group** section of the Investigation panel (see
 [Use Intelligence suggestions](./use-suggestions.md)), which holds the full group view. The line is not
 shown when intelligence is off for the service.
 
@@ -49,8 +49,8 @@ shown when intelligence is off for the service.
 
 ## Intelligence events in the Timeline tab
 
-With **Show intelligence events** on, the incident's **Timeline** tab also shows, as rows of the same
-timeline:
+With **Show intelligence events** on (at the end of the filter chips in the **Timeline** tab's **Events**
+view), the timeline also shows, as rows of the same list:
 
 - **Noise decisions** on this incident's alerts: suppressed by a rule, in a maintenance window,
   deduplicated, grouped into a parent, held during a possible storm. **Why?** expands the reasons.
@@ -63,9 +63,9 @@ timeline:
 
 ## Post a summary as a note
 
-After **Summarise this incident** (in the Summary section of the Insights panel) produces a summary,
+After **Summarise this incident** (in the Summary section of the Investigation panel) produces a summary,
 **Post summary as note** adds it to the incident's notes through the normal note command. **Insert
-summary** in the note box's toolbar drafts the same summary into your note so you can edit it first. It needs the same permission as writing a note
+summary** in the note box's toolbar on the **Notes** tab (shown once you select the box) drafts the same summary into your note so you can edit it first. It needs the same permission as writing a note
 (responders and administrators). The note says the summary was AI-generated and should be verified.
 AI summaries appear only when an administrator has configured an AI provider; administrators see a
 link to **Settings › Intelligence › AI** when it is off.

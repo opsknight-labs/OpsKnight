@@ -3,10 +3,9 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ResolveIncidentModal from '@/components/incident/ResolveIncidentModal';
 import { resolveIncidentWithNote } from '@/app/(app)/incidents/actions';
 
+const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    refresh: vi.fn(),
-  }),
+  useRouter: () => router,
 }));
 
 const mockNotifySuccess = vi.hoisted(() => vi.fn());
@@ -107,5 +106,29 @@ describe('ResolveIncidentModal', () => {
     await waitFor(() => {
       expect(screen.getByText('Database network timeout')).toBeDefined();
     });
+  });
+
+  it('offers to start the postmortem next, on by default for P1, and opens it after resolving', async () => {
+    vi.mocked(resolveIncidentWithNote).mockResolvedValue({ replayed: false });
+    render(
+      <ResolveIncidentModal
+        incident={{ ...testIncident, priority: 'P1', postmortemHref: '/postmortems/inc-1234567890' }}
+        open={true}
+        onOpenChange={vi.fn()}
+      />
+    );
+    const option = screen.getByRole('checkbox', { name: /start the postmortem next/i });
+    expect(option).toBeChecked();
+    fireEvent.change(screen.getByRole('textbox', { name: /resolution note/i }), {
+      target: { value: 'Rolled back v2.41.0 and confirmed recovery.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /resolve incident/i }));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith('/postmortems/inc-1234567890'));
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it('does not offer the postmortem without a link (viewer cannot write it)', () => {
+    render(<ResolveIncidentModal incident={testIncident} open={true} onOpenChange={vi.fn()} />);
+    expect(screen.queryByRole('checkbox', { name: /start the postmortem next/i })).toBeNull();
   });
 });

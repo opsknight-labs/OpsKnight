@@ -66,7 +66,10 @@ function ValueText({
   summaryLabel: string;
 }) {
   const characters = [...text];
-  const className = cn('wrap-break-word', muted ? 'italic text-muted-foreground' : 'text-foreground');
+  const className = cn(
+    'wrap-break-word',
+    muted ? 'italic text-muted-foreground' : 'text-foreground'
+  );
   if (characters.length <= MAX_INLINE_CHARACTERS) return <span className={className}>{text}</span>;
   return (
     <>
@@ -175,6 +178,24 @@ export default function IncidentAlertContextCard({
           </div>
         </dd>
       </div>
+    );
+  }
+  // Nothing was mapped: one line, not a card that says so in three.
+  if (sensitive && !omitted && fields.length === 0) {
+    return (
+      <section
+        aria-labelledby="incident-alert-context-heading"
+        className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground"
+      >
+        <h2
+          id="incident-alert-context-heading"
+          className="flex items-center gap-1.5 font-semibold text-foreground"
+        >
+          <ListTree className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          Alert Context
+        </h2>
+        <span>· No mapped alert context was captured (automation v{versionNumber ?? '—'}).</span>
+      </section>
     );
   }
   return (

@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { FIELD_SELECT_CLASS, FIELD_VALUE_CLASS } from '@/components/incident/field-styles';
 import { INCIDENT_PRIORITY_DEFINITIONS } from '@/lib/incidents/priority';
 
 type PrioritySelectorProps = {
@@ -72,9 +73,6 @@ function getPriorityItem(priority: string | null | undefined) {
   return PRIORITY_OPTIONS.find(opt => opt.key === priority) || null;
 }
 
-const SELECTOR_BASE_CLASS =
-  'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-semibold bg-background border border-border/80 text-foreground shadow-2xs transition-all max-w-full select-none';
-
 export default function PrioritySelector({
   incidentId,
   priority,
@@ -90,7 +88,7 @@ export default function PrioritySelector({
     if (currentItem && priority) {
       const Icon = currentItem.icon;
       return (
-        <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+        <div className={FIELD_VALUE_CLASS}>
           <Icon className={cn('h-3.5 w-3.5 shrink-0', currentItem.iconColor)} />
           <span className="truncate">
             {priority} · {currentItem.label}
@@ -99,7 +97,7 @@ export default function PrioritySelector({
       );
     }
     return (
-      <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+      <div className={FIELD_VALUE_CLASS}>
         <Activity className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <span className="text-muted-foreground font-medium">Unassigned</span>
       </div>
@@ -122,10 +120,7 @@ export default function PrioritySelector({
         className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group"
       >
         <div
-          className={cn(
-            SELECTOR_BASE_CLASS,
-            'hover:bg-muted/40 hover:border-border cursor-pointer group'
-          )}
+          className={FIELD_SELECT_CLASS}
         >
           {currentItem && priority ? (
             <>

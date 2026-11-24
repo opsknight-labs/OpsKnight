@@ -4,7 +4,6 @@ import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SlidersHorizontal, Settings, Plus, Loader2, Check } from 'lucide-react';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Switch } from '@/components/ui/shadcn/switch';
@@ -17,6 +16,7 @@ import {
 } from '@/components/ui/shadcn/select';
 import { cn } from '@/lib/utils';
 import { notify } from '@/lib/toast';
+import { FIELD_SELECT_CLASS, FIELD_VALUE_CLASS } from '@/components/incident/field-styles';
 
 export type CustomFieldValue = {
   id: string;
@@ -132,218 +132,192 @@ export default function IncidentCustomFieldsCard({
     }
   };
 
+  const inputClass = 'h-8 px-2.5 text-sm shadow-2xs';
+
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-zinc-900 dark:border-zinc-800 transition-all',
+        'overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-2xs',
         className
       )}
     >
-      {/* Card Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-800/30 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">
-            <SlidersHorizontal className="h-4 w-4 shrink-0" />
-          </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200 whitespace-nowrap">
-              Custom Fields
-            </h3>
-            {allCustomFields.length > 0 && (
-              <Badge
-                variant="secondary"
-                className="text-[10px] h-4.5 px-1.5 font-semibold text-slate-600 bg-slate-100 dark:bg-zinc-800 dark:text-zinc-400 shrink-0"
-              >
-                {allCustomFields.length}
-              </Badge>
-            )}
-          </div>
-        </div>
+      <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-muted/20 px-3 py-2">
+        <h2 className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+          Custom fields
+          {allCustomFields.length > 0 && (
+            <span className="font-normal tabular-nums text-muted-foreground">
+              {allCustomFields.length}
+            </span>
+          )}
+        </h2>
 
         {canManage && (
           <Link
             href="/settings/custom-fields"
             title="Configure Custom Fields"
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 transition-colors p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800"
+            aria-label="Configure custom fields"
+            className="-my-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
           >
             <Settings className="h-3.5 w-3.5" />
           </Link>
         )}
       </div>
 
-      {/* Card Content */}
-      <div className="p-3.5">
-        {allCustomFields.length === 0 ? (
-          <div className="py-4 text-center">
-            <SlidersHorizontal className="h-6 w-6 mx-auto text-slate-300 dark:text-zinc-600 mb-1.5" />
-            <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-              No Custom Fields
-            </p>
-            <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-0.5 leading-relaxed">
-              Track metadata like Environment, Affected Region, or Root Cause.
-            </p>
-            {canManage && (
-              <Link href="/settings/custom-fields" className="inline-block mt-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs gap-1.5 border-slate-200 dark:border-zinc-700"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Configure</span>
-                </Button>
-              </Link>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {allCustomFields.map(field => {
-              const currentValue = formValues.get(field.id) ?? '';
-              const isSaving = savingFieldId === field.id;
-              const isSaved = savedFieldId === field.id;
-              const options: string[] = Array.isArray(field.options)
-                ? (field.options as string[])
-                : [];
+      {allCustomFields.length === 0 ? (
+        <div className="px-3 py-4 text-center">
+          <SlidersHorizontal className="mx-auto mb-1.5 h-5 w-5 text-muted-foreground" />
+          <p className="text-xs font-medium text-foreground">No custom fields</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Track metadata like Environment, Affected Region, or Root Cause.
+          </p>
+          {canManage && (
+            <Link href="/settings/custom-fields" className="mt-3 inline-block">
+              <Button type="button" variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs">
+                <Plus className="h-3.5 w-3.5" />
+                <span>Configure</span>
+              </Button>
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col divide-y divide-border/50">
+          {allCustomFields.map(field => {
+            const currentValue = formValues.get(field.id) ?? '';
+            const isSaving = savingFieldId === field.id;
+            const isSaved = savedFieldId === field.id;
+            const options: string[] = Array.isArray(field.options)
+              ? (field.options as string[])
+              : [];
 
-              return (
-                <div
-                  key={field.id}
-                  className="p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800/80 bg-slate-50/40 dark:bg-zinc-800/20 space-y-1.5"
-                >
-                  {/* Field Label & Indicators */}
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-semibold text-slate-800 dark:text-zinc-200 truncate">
-                        {field.name}
-                      </span>
-                      {field.required && (
-                        <span className="text-[10px] text-rose-500 font-bold" title="Required">
-                          *
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {isSaving && (
-                        <span className="flex items-center gap-1 text-[10px] text-ink-400">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span>Saving</span>
-                        </span>
-                      )}
-                      {isSaved && (
-                        <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                          <Check className="h-3 w-3" />
-                          <span>Saved</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Input / Control / Display */}
-                  {canManage ? (
-                    <div>
-                      {field.type === 'SELECT' ? (
-                        <Select
-                          value={currentValue}
-                          onValueChange={val => {
-                            setFormValues(prev => new Map(prev).set(field.id, val));
-                            void handleSave(field.id, val);
-                          }}
-                        >
-                          <SelectTrigger className="h-8 text-xs bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700">
-                            <SelectValue placeholder="Select option..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {options.map((opt: string) => (
-                              <SelectItem key={opt} value={opt} className="text-xs">
-                                {opt}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : field.type === 'BOOLEAN' ? (
-                        <div className="flex items-center justify-between h-8 px-2 rounded-md bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700">
-                          <span className="text-xs text-slate-700 dark:text-zinc-300 font-medium">
-                            {currentValue === 'true' ? 'Yes' : 'No'}
-                          </span>
-                          <Switch
-                            checked={currentValue === 'true'}
-                            onCheckedChange={checked => {
-                              const val = checked ? 'true' : 'false';
-                              setFormValues(prev => new Map(prev).set(field.id, val));
-                              void handleSave(field.id, val);
-                            }}
-                          />
-                        </div>
-                      ) : field.type === 'DATE' ? (
-                        <Input
-                          type="date"
-                          value={currentValue}
-                          onChange={e =>
-                            setFormValues(prev => new Map(prev).set(field.id, e.target.value))
-                          }
-                          onBlur={e => void handleSave(field.id, e.target.value)}
-                          className="h-8 text-xs bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700"
-                        />
-                      ) : field.type === 'NUMBER' ? (
-                        <Input
-                          type="number"
-                          value={currentValue}
-                          placeholder="0"
-                          onChange={e =>
-                            setFormValues(prev => new Map(prev).set(field.id, e.target.value))
-                          }
-                          onBlur={e => void handleSave(field.id, e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              void handleSave(field.id, (e.target as HTMLInputElement).value);
-                            }
-                          }}
-                          className="h-8 text-xs bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700"
-                        />
-                      ) : (
-                        <Input
-                          type={
-                            field.type === 'EMAIL' ? 'email' : field.type === 'URL' ? 'url' : 'text'
-                          }
-                          value={currentValue}
-                          placeholder={
-                            field.type === 'URL'
-                              ? 'https://...'
-                              : field.type === 'EMAIL'
-                                ? 'user@example.com'
-                                : 'Enter value...'
-                          }
-                          onChange={e =>
-                            setFormValues(prev => new Map(prev).set(field.id, e.target.value))
-                          }
-                          onBlur={e => void handleSave(field.id, e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              void handleSave(field.id, (e.target as HTMLInputElement).value);
-                            }
-                          }}
-                          className="h-8 text-xs bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700"
-                        />
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-slate-800 dark:text-zinc-200">
-                      {currentValue ? (
-                        <span className="font-medium">
-                          {formatFieldValue(currentValue, field.type)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 dark:text-zinc-500 italic">Not set</span>
-                      )}
-                    </div>
+            return (
+              <div
+                key={field.id}
+                className="grid min-h-10 min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2 px-3 py-1.5"
+              >
+                {/* Field label & save state */}
+                <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  <span className="truncate" title={field.name}>
+                    {field.name}
+                  </span>
+                  {field.required && (
+                    <span className="text-rose-600 dark:text-rose-400" title="Required">
+                      *
+                    </span>
+                  )}
+                  {isSaving && (
+                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-label="Saving" />
+                  )}
+                  {isSaved && (
+                    <Check
+                      className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400"
+                      aria-label="Saved"
+                    />
                   )}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+
+                {/* Input / Control / Display */}
+                {canManage ? (
+                  field.type === 'SELECT' ? (
+                    <Select
+                      value={currentValue}
+                      onValueChange={val => {
+                        setFormValues(prev => new Map(prev).set(field.id, val));
+                        void handleSave(field.id, val);
+                      }}
+                    >
+                      <SelectTrigger
+                        aria-label={field.name}
+                        className={cn(FIELD_SELECT_CLASS, 'w-full justify-between')}
+                      >
+                        <SelectValue placeholder="Select option..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.map((opt: string) => (
+                          <SelectItem key={opt} value={opt} className="text-sm">
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : field.type === 'BOOLEAN' ? (
+                    <div className="flex h-8 items-center gap-2">
+                      <Switch
+                        aria-label={field.name}
+                        checked={currentValue === 'true'}
+                        onCheckedChange={checked => {
+                          const val = checked ? 'true' : 'false';
+                          setFormValues(prev => new Map(prev).set(field.id, val));
+                          void handleSave(field.id, val);
+                        }}
+                      />
+                      <span className="text-sm font-medium text-foreground">
+                        {currentValue === 'true' ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                  ) : field.type === 'DATE' ? (
+                    <Input
+                      type="date"
+                      aria-label={field.name}
+                      value={currentValue}
+                      onChange={e =>
+                        setFormValues(prev => new Map(prev).set(field.id, e.target.value))
+                      }
+                      onBlur={e => void handleSave(field.id, e.target.value)}
+                      className={inputClass}
+                    />
+                  ) : field.type === 'NUMBER' ? (
+                    <Input
+                      type="number"
+                      aria-label={field.name}
+                      value={currentValue}
+                      placeholder="0"
+                      onChange={e =>
+                        setFormValues(prev => new Map(prev).set(field.id, e.target.value))
+                      }
+                      onBlur={e => void handleSave(field.id, e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          void handleSave(field.id, (e.target as HTMLInputElement).value);
+                        }
+                      }}
+                      className={inputClass}
+                    />
+                  ) : (
+                    <Input
+                      type={field.type === 'EMAIL' ? 'email' : field.type === 'URL' ? 'url' : 'text'}
+                      aria-label={field.name}
+                      value={currentValue}
+                      placeholder={
+                        field.type === 'URL'
+                          ? 'https://...'
+                          : field.type === 'EMAIL'
+                            ? 'user@example.com'
+                            : 'Enter value...'
+                      }
+                      onChange={e =>
+                        setFormValues(prev => new Map(prev).set(field.id, e.target.value))
+                      }
+                      onBlur={e => void handleSave(field.id, e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          void handleSave(field.id, (e.target as HTMLInputElement).value);
+                        }
+                      }}
+                      className={inputClass}
+                    />
+                  )
+                ) : currentValue ? (
+                  <span className={FIELD_VALUE_CLASS}>
+                    <span className="truncate">{formatFieldValue(currentValue, field.type)}</span>
+                  </span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Not set</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

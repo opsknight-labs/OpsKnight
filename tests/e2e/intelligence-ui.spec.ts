@@ -447,7 +447,8 @@ test.describe.serial('intelligence responder workflows', () => {
 
   test('an incident shows explainable suggestions and accepts feedback', async ({ page }) => {
     await page.goto(`/incidents/${incidentId}`);
-    // One row of chips under the command bar; the full analysis is one click away in the inspector.
+    // One row of chips under the title card (inside the AI briefing card when an AI briefing exists);
+    // the full analysis is one click away in the inspector.
     // Streaming can leave a hidden copy of a server-rendered block for a moment: match the visible one.
     const strip = page.getByTestId('intelligence-strip').filter({ visible: true });
     await expect(
@@ -496,15 +497,20 @@ test.describe.serial('intelligence responder workflows', () => {
     await expect(page.getByRole('region', { name: 'Similar past incidents' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: /^Ask / })).toHaveCount(0);
 
-    // Density: hero, command bar, strip, health, description and the top of the core tabs within 1.5 screens.
+    // Density, in page order: title card, the chips (the AI briefing card's slot; this fixture has no AI
+    // briefing, so the plain strip), command bar, description, then the top of the core tabs, all within
+    // 1.5 screens. The catch-up strip only appears on a revisit, so a first visit does not have it.
     const top = async (locator: ReturnType<Page['locator']>) =>
       (await locator.boundingBox())!.y + (await page.evaluate(() => window.scrollY));
-    const tabsTop = await top(page.getByRole('tab', { name: 'Overview', exact: true }));
+    const titleTop = await top(page.locator('#main-content h1').first());
     const stripTop = await top(strip);
-    expect(tabsTop).toBeLessThanOrEqual(800 * 1.5);
+    const commandBarTop = await top(page.locator('[data-command-bar]'));
+    const tabsTop = await top(page.getByRole('tab', { name: /^Notes/ }));
+    expect(titleTop).toBeLessThan(stripTop);
+    expect(stripTop).toBeLessThan(commandBarTop);
+    expect(commandBarTop).toBeLessThan(tabsTop);
     expect(stripTop).toBeLessThan(800);
-    expect(stripTop).toBeLessThan(tabsTop);
-    expect(await top(page.locator('#main-content h1').first())).toBeLessThan(stripTop);
+    expect(tabsTop).toBeLessThanOrEqual(800 * 1.5);
 
     // Keyboard: I opens and closes the inspector; it is not modal, so the page behind stays usable.
     await page.locator('body').press('i');
@@ -955,8 +961,9 @@ test.describe.serial('intelligence responder workflows', () => {
     try {
       // Off means off: no strip, no chips, nothing in the main column or on the timeline.
       await page.goto(`/incidents/${incidentId}`);
-      await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible();
+      await expect(page.getByRole('tab', { name: /^Notes/ })).toBeVisible();
       await expect(page.getByTestId('intelligence-strip')).toHaveCount(0);
+      await expect(page.locator('section[aria-labelledby="ai-briefing-heading"]')).toHaveCount(0);
       await expect(page.getByTestId('incident-group-line')).toHaveCount(0);
       await page.getByRole('tab', { name: /^Timeline/ }).click();
       await expect(page.getByRole('checkbox', { name: /Show intelligence events/ })).toHaveCount(0);
@@ -1245,7 +1252,9 @@ test.describe.serial('intelligence responder workflows', () => {
       },
     });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`/incidents/${pending.id}`);
+    // The phone route: there the strip carries the freshness dot on its own. The desktop route shows the
+    // strip only when it has chips, and this fresh incident has none yet.
+    await page.goto(`/m/incidents/${pending.id}`);
     // A web-only fixture can retain paging work from the earlier action cases. With the held
     // analysis lease, both waiting and deliberately yielding are valid unfinished states.
     // Completed, unavailable and failed analysis must still fail this assertion.

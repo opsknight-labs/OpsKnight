@@ -307,7 +307,9 @@ describe('ad-hoc incident runbook actions', () => {
     expect(mocks.runbookFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          serviceAutomationRules: {
+          // `bindings` is the Runbook → ServiceAutomationRule relation in the schema; a wrong name only
+          // fails at runtime (Prisma rejects the unknown filter), never under this mocked client.
+          bindings: {
             some: {
               serviceId: SERVICE,
               enabled: true,

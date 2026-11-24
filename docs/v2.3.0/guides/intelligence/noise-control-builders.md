@@ -84,11 +84,12 @@ next ping is due, and the last incident it raised.
 
 ## Intelligence on your phone
 
-The mobile incident page has the same strip of chips as the desktop page, scrolling sideways, directly
-under the incident's actions. Select a chip to open **Insights** as a sheet from the bottom: triage
+The mobile incident page has a strip of chips, scrolling sideways, directly under the incident's
+actions; on a desktop the same chips sit in the **AI briefing** card. Select a chip to open
+**Investigation** as a sheet from the bottom: triage
 suggestions you can apply or dismiss, similar past incidents, related incidents and the group, possible
 causes, runbooks that have worked on this service, impact and the summary. A chip or section with
 nothing to show is left out. You only see incidents, services and runbooks you can already open.
 
-If intelligence is off for the service, responders see nothing; intelligence managers who open Insights
+If intelligence is off for the service, responders see nothing; intelligence managers who open Investigation
 see a one-line note that it is off.

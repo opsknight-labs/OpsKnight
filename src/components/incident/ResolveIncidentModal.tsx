@@ -22,6 +22,9 @@ export type ResolvingIncidentData = {
   id: string;
   title: string;
   service?: { name: string } | null;
+  priority?: string | null;
+  /** When set, the dialog offers to open the postmortem right after resolving (on by default for P1/P2). */
+  postmortemHref?: string | null;
 };
 
 type ResolveIncidentModalProps = {
@@ -41,6 +44,9 @@ export default function ResolveIncidentModal({
   onSuccess,
 }: ResolveIncidentModalProps) {
   const [resolutionNote, setResolutionNote] = useState('');
+  const [startPostmortem, setStartPostmortem] = useState(
+    incident?.priority === 'P1' || incident?.priority === 'P2'
+  );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const { showToast } = useToast();
@@ -72,7 +78,8 @@ export default function ResolveIncidentModal({
         );
         handleClose(false);
         onSuccess?.(incident.id);
-        router.refresh();
+        if (startPostmortem && incident.postmortemHref) router.push(incident.postmortemHref);
+        else router.refresh();
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to resolve incident. Please try again.';
@@ -155,6 +162,23 @@ export default function ResolveIncidentModal({
               Minimum 10 characters. Explain the solution applied so responders can reference it.
             </p>
           </div>
+
+          {incident.postmortemHref && (
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border/70 bg-muted/20 px-2.5 py-2 text-xs text-foreground">
+              <input
+                type="checkbox"
+                checked={startPostmortem}
+                onChange={event => setStartPostmortem(event.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 rounded border-border accent-primary"
+              />
+              <span>
+                <span className="font-medium">Start the postmortem next</span>
+                <span className="block text-muted-foreground">
+                  Opens the postmortem draft, filled from this incident&apos;s timeline and notes.
+                </span>
+              </span>
+            </label>
+          )}
 
           {error && (
             <div className="p-2.5 rounded-md bg-rose-500/10 border border-rose-200 dark:border-rose-900/60 flex items-start gap-2 text-rose-700 dark:text-rose-300 text-xs">

@@ -10,9 +10,9 @@ reader:
   task: Acknowledge an incident and verify ownership and escalation effects.
   evidence:
     [
-      docs/v2.3.0/assets/incident-detail.png,
-      docs/v2.3.0/assets/incident-acknowledged.png,
-      docs/v2.3.0/assets/incident-timeline.png,
+      docs/v2.3.0/assets/incident-detail-redesign.png,
+      docs/v2.3.0/assets/incident-acknowledged-redesign.png,
+      docs/v2.3.0/assets/incident-timeline-redesign.png,
     ]
 verification:
   level: test
@@ -30,7 +30,7 @@ verification:
 
 # Acknowledge an incident
 
-![Incident detail with response controls and timeline](/docs/v2.3.0/assets/incident-detail.png)
+![Incident detail with response controls and timeline](/docs/v2.3.0/assets/incident-detail-redesign.png)
 
 Acknowledgement tells OpsKnight that a responder has accepted the active response. It records response timing and completes the current escalation generation. It does not assign the incident, resolve the underlying problem, or make a private incident public.
 
@@ -47,12 +47,12 @@ Before selecting the action:
 
 ## Open the feature
 
-Open **Incidents → select the incident** and locate the response controls on the incident detail page.
+Open **Incidents → select the incident**. **Acknowledge** is on the right of the action bar, under the incident's title card. On a phone it is in the bar fixed to the bottom of the screen.
 
 ## Configure and acknowledge from the incident page
 
 1. Open **Incidents** and select the incident.
-2. Review the service, urgency, priority, current assignee, and response timer.
+2. Review the service, urgency, priority and current assignee in the **Details** card, and the **Ack** SLA chip under the title.
 3. Select **Acknowledge** once.
 4. Wait for the status update before taking the same action from another channel.
 
@@ -60,19 +60,19 @@ OpsKnight applies lifecycle commands against the status you loaded. If another r
 
 ## Verify acknowledgement
 
-![Acknowledged incident with stopped escalation and recorded response timing](/docs/v2.3.0/assets/incident-acknowledged.png)
+![Acknowledged incident with stopped escalation and recorded response timing](/docs/v2.3.0/assets/incident-acknowledged-redesign.png)
 
 Confirm all of the following:
 
-- The header shows **Acknowledged**.
+- The title card shows **Acknowledged**.
 - The timeline records the acknowledgement and actor.
 - The first acknowledgement timestamp and response measurement are present. Later status changes do not replace the original first-acknowledgement measurement.
 - The active escalation generation is complete, with no new step scheduled from that generation.
 - Any acknowledgement-dependent delivery or ChatOps projection eventually reflects the change.
 
-Refresh the page once if the header and timeline disagree. If the source page is correct but a Slack or Teams card is stale, treat that as a projection/delivery issue; do not acknowledge repeatedly.
+Refresh the page once if the title card and the **Timeline** tab disagree. If the source page is correct but a Slack or Teams card is stale, treat that as a projection/delivery issue; do not acknowledge repeatedly.
 
-![Incident timeline after the acknowledgement transition](/docs/v2.3.0/assets/incident-timeline.png)
+![Incident timeline after the acknowledgement transition](/docs/v2.3.0/assets/incident-timeline-redesign.png)
 
 ## Acknowledge from another response channel
 
@@ -113,7 +113,7 @@ Use **Unacknowledge** only when the incident genuinely needs to return to the op
 
 1. Open the acknowledged incident.
 2. Confirm there is no active owner continuing the response.
-3. Select **Unacknowledge**.
+3. Open the **⋯** menu at the right of the action bar and select **Unacknowledge**.
 4. Verify the status returns to **Open**, a timeline event is added, and escalation resumes from the applicable current step rather than silently inventing a new policy history.
 
 Unacknowledging does not erase the original acknowledgement or its SLA measurement. Add a timeline note if the handoff context would otherwise be unclear.

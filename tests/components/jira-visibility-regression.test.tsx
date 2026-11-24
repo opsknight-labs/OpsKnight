@@ -103,6 +103,11 @@ function renderIncident(jiraCapability: JiraCapability, links: JiraLinkItem[] = 
   );
 }
 
+/** Linked issues and their Sync / Manage actions live in the Jira popover on the command bar. */
+function openJiraIssues() {
+  fireEvent.click(screen.getByRole('button', { name: /^Jira issues:/ }));
+}
+
 function openMobileActions() {
   const triggers = screen.getAllByLabelText('More incident actions');
   fireEvent.click(triggers[triggers.length - 1]);
@@ -153,8 +158,10 @@ describe('IncidentCommandBar Jira visibility regression contract', () => {
     );
 
     expect(screen.getByText('OPS-123')).toBeInTheDocument();
+    openJiraIssues();
     expect(screen.queryByText('Sync')).not.toBeInTheDocument();
     expect(screen.queryByText('Manage')).not.toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
 
     openMobileActions();
     expect(screen.queryByText('Manage Jira Issues')).not.toBeInTheDocument();
@@ -177,6 +184,7 @@ describe('IncidentCommandBar Jira visibility regression contract', () => {
     renderIncident(unmapped, [incidentLink]);
 
     expect(screen.getByText('OPS-123')).toBeInTheDocument();
+    openJiraIssues();
     expect(screen.getByText('Sync')).toBeInTheDocument();
   });
 
@@ -191,6 +199,7 @@ describe('IncidentCommandBar Jira visibility regression contract', () => {
 
     renderIncident(noSync, [incidentLink]);
     expect(screen.getByText('OPS-123')).toBeInTheDocument();
+    openJiraIssues();
     expect(screen.queryByText('Sync')).not.toBeInTheDocument();
     expect(screen.getByText('Manage')).toBeInTheDocument();
   });
@@ -199,6 +208,7 @@ describe('IncidentCommandBar Jira visibility regression contract', () => {
     renderIncident(capability(), [incidentLink]);
 
     expect(screen.getByText('OPS-123')).toBeInTheDocument();
+    openJiraIssues();
     expect(screen.getByText('Sync')).toBeInTheDocument();
     expect(screen.getByText('Manage')).toBeInTheDocument();
   });

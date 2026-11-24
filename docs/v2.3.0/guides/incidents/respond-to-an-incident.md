@@ -32,6 +32,117 @@ Sign in as a responder who can view/manage the service incident. Ensure your not
 
 Do not act from an old provider message without confirming the current OpsKnight state.
 
+### Where things are on the incident page
+
+- **Title card:** title, status, a deduplication chip (for example **6 alerts · first in 41 days**: the alert count opens the Timeline's activity graph and dedup details, and the gap links to the last earlier incident on the same dedup key), ID and link copy buttons, SLA chips (**Ack** and **Resolve**, each showing time left, time overdue, or **Met**, plus **Clock paused** while the SLA clock is paused), impacted business services, **Notify stakeholders**, and the **Roles** chips.
+- **Details card:** the first card in the right-hand column lists **Priority**, **Urgency**, **Visibility**, **Service**, **Assignee**, **Incident policy**, **Escalation** and **Opened**, one per row; the ones you can change are dropdowns. On narrower screens, where the right-hand column moves below the tabs, these fields sit along the bottom of the title card instead. Under **Escalation**, a line such as **✓ 3/3 steps ran** opens the escalation step list; when a step failed or needs review, the full **Escalation Execution Health** panel appears below the action bar instead, already open (see [Escalate an incident](./escalate)).
+- **Action bar:** tags (two shown, **+N** for the rest), the war room button, **Jira**, and **Post status update** on the left; **Acknowledge**, **Resolve**, **Take command** and the **⋯** menu (Unacknowledge, Snooze, Suppress) on the right.
+- **Description card:** the verified **Context** first, as key/value pills with a **Verified · automation vN** badge (a dashed pill is a field that is missing or whose value was not recognised; only recognised fields drive runbook triggers and Agent targeting), then the description or raw alert payload. When intelligence is on for the service and has something to report, the compact **AI briefing** card sits directly under the title card; **Open investigation** opens the **Investigation** panel (see [Use Intelligence suggestions](../intelligence/use-suggestions)).
+- **Tabs:** **Notes** (with the note count), **Timeline** (an **Events** list with an activity graph, or the **Response path** view), **Runbooks & automation** (runbooks first, then the automation decision and alert context; the tab is named **Automation** when you cannot read runbooks), and **Postmortem** once the incident is resolved. The tab bar stays in view while you scroll.
+
+### See who is responding, and what customers were told
+
+The right-hand column, under **Details**:
+
+- **Responders** — the escalation right now (the next step, its target and when it fires; or stopped,
+  acknowledged, paused, max step reached), then one row per person paged: the escalation step, each channel
+  with its delivery state (delivered, failed with the short reason, pending), and when they acknowledged.
+  People a step targeted but never paged are listed too. **On call for this service** shows who is on call
+  now and next.
+- **Customer updates** — the status-page posts for this incident (newest first), when the next update is
+  due or how long it is overdue, the affected status-page components and their state, and **Post update**
+  for people who may publish.
+
+Under **Opened** in **Details**, the incident is compared with the service's recent history: **Usually
+resolved in ~31m**, or, for an open incident running past twice that, **48× longer than usual**. The
+comparison uses the median of the service's last 90 days of resolved incidents and appears once it has at
+least three.
+
+### The page stays current
+
+An open incident page updates itself when someone else acknowledges, resolves, reassigns or otherwise
+changes the incident — at most every 10 seconds, and only while the tab is visible; coming back to the tab
+after a minute away also refreshes it. A note you are writing is kept.
+
+Under **Priority** in **Details**, a line says why the incident has its priority (for example **Set by rule
+"payments-high"**) and which SLA rule its targets come from, when that was recorded at creation. Beside the
+SLA chips, **paused 25m in total** shows time the SLA clock was paused (snoozed, suppressed or in a
+maintenance window), which is not counted against the targets.
+
+On a phone, **Responders** and **Customer updates** appear right after the incident details, before the
+description, and **Follow** sits beside the alert chip under the title. Cards that show more on hover open on
+tap.
+
+When you resolve a `P1` or `P2` incident and can write its postmortem, **Start the postmortem next** is
+selected in the **Resolve** dialog: after resolving, the postmortem draft opens, filled from the timeline and
+notes. Clear it to stay on the incident.
+
+### Catch up and move fast
+
+When you come back to an incident, a **Since you looked** strip under the title card counts what changed
+since your last visit in this browser (alerts, notes, escalations, status and assignment changes, failed
+pages) and shows the latest status change and escalation in words. Nothing shows on a first visit.
+
+On the incident page, press **A** to acknowledge, **R** to resolve, **W** to write a note, **T** to open the
+timeline, **S** to copy a summary, and **I** to open the investigation. **?** lists every shortcut. The
+summary (priority, title, status, how long it has been open, service, assignee, escalation, alert count and
+link) is also behind **Copy summary** beside the incident ID.
+
+**Follow** at the top right of the title card subscribes you to the incident's updates in one click (it
+reads **Following** once you do); the avatars beside it are the people following, and select them to open
+the **Subscribers** card, where you choose a role or add teammates.
+
+Left of **Follow**, a green dot and avatars show who else has the incident open right now; hover (or, with
+a screen reader, read) them for names. Nobody shown means you are the only viewer. Someone drops off as soon
+as they close the tab or move to another page, or within about a minute and a quarter if their browser goes
+away without saying so. A tab in the background does not count as viewing.
+
+### Read the alert payload
+
+When the incident's description is an alert payload, the **Description & Context** card shows it as a
+readable view instead of raw text. OpsKnight builds this view with fixed rules, not AI, so it works with AI
+turned off and the payload never leaves your OpsKnight:
+
+- **What fired:** the sending tool (for example Datadog, Grafana, Alertmanager, CloudWatch, Azure Monitor,
+  Google Cloud Monitoring, New Relic, Sentry, PagerDuty, Zabbix, Nagios, uptime checkers, GitHub or
+  Kubernetes), firing or resolved, the severity, the title, and the condition with the measured value and
+  threshold where the tool sends them.
+- **Query**, labelled with its language (PromQL, SQL, NRQL, LogQL, SPL, KQL or Datadog) when one is present.
+- **Where and when:** host, service, env, region and similar fields, and the start and resolve times in your
+  time zone.
+- **Message, links and tags:** the tool's own message, its links (dashboard, runbook, the alert in the
+  source tool; only `http` and `https` links are shown) and graph images, and the alert's tags.
+- **Other fields:** everything else, as readable paths such as **Monitor › Priority**.
+
+Payloads from tools without a dedicated reader are still read by key names and value shapes. JSON,
+ClickHouse-style values (`{'A':5400}`), XML, logfmt, form data, `Key: value` text, Markdown and plain text
+are all recognised, as is JSON nested inside a string. Credential-looking fields are masked before anything
+is shown. The **Raw alert payload** row below the view shows the format and size; **View raw** shows the
+payload as received and **Copy** copies it.
+
+### Read the timeline
+
+The **Timeline** tab has four views: **Events**, **Response path**, **Alerts**, which lists every alert
+deduplicated into the incident, newest first, marks the one that opened it, and opens each to its readable
+payload (see [Read the alert payload](#read-the-alert-payload)), and **Audit**, which shows who changed what —
+a person, an automation, Squire, or an API or MCP client — with the source of each change. Automated steps
+that are not audit records (escalation steps, SLA warnings and breaches, auto-resolve and runbook steps)
+appear there too as **Automation · OpsKnight**, and role changes name the role, such as **Role assigned
+(commander)**. **Audit** needs
+the same permission as the **Audit Log** page; the **Alerts** and **Audit** views load only when you open
+them.
+
+**Response path** shows routing, paging, remediation, verification and recovery as lanes. **Events** lists every event and shows an **Activity** graph above the list:
+
+- Bars count alerts per time bucket; the bucket size adapts to the incident's length. A dashed line marks when the incident triggered.
+- Coloured dots mark key events: changes before onset, the trigger, escalations, acknowledgement and resolution, notes, and runbook runs. Select a dot to jump to its row in the list; the row is highlighted and the filter resets to **All**.
+- On a long incident, **Onset** (the default) zooms to the alert burst and what led up to it, and **All** shows the whole incident. Events outside the window collect at the edges as **‹ N earlier** and **N later ›**; **N later ›** switches to **All**.
+- **N alerts → 1 incident** opens **Deduplication**: the dedup key (with a copy button), how many alerts are still firing, the severity mix, distinct fingerprints when the source sends them, and when alerts were first and last seen. An incident with no alerts shows **No alerts · opened by hand or by API**.
+
+Filter chips with no events are hidden. When intelligence events exist, **Show intelligence events** is a switch at the end of the chip row.
+
+Links from earlier releases still open the right place: `?tab=overview` opens **Notes**, `?tab=response` and `#response-activity` open the **Timeline** tab in its **Response path** view, and `?tab=runbooks` and `#runbook-…` links open **Runbooks & automation**.
+
 ## 2. Acknowledge active response
 
 Use **Acknowledge** when you accept response responsibility. Confirm the timeline attributes you and acknowledgement timing/escalation behavior is correct. Acknowledgement is not assignment or resolution.
@@ -46,7 +157,7 @@ Follow [Assign an incident](./assign).
 
 ## 4. Diagnose and communicate
 
-Use the service runbook and observability evidence to bound impact, time, affected users/components, and mitigations. Add concise timeline notes for decisions and results.
+Use the service runbook and observability evidence to bound impact, time, affected users/components, and mitigations. Add concise notes for decisions and results on the **Notes** tab; the box is one line until you select it, then shows formatting, **Preview** and **Post**. The **Timeline** tab's **Activity** graph shows when alerts arrived relative to the trigger, and **N alerts → 1 incident** shows how they were deduplicated. To run a runbook that is not attached to the service, use **Run another runbook** on the **Runbooks & automation** tab (see [Bind Runbooks and respond to incidents](../runbooks/respond)).
 
 Use routine Slack/Teams destination cards for distributed awareness. Create a [war room](../chatops/create-war-room) when the response needs an incident-scoped coordination space. Keep authoritative status in OpsKnight; provider chat history is collaboration evidence, not the lifecycle source of truth.
 
@@ -64,7 +175,7 @@ During response, keep immediate operational steps in the timeline/coordination c
 
 Resolve only after service health/trigger condition is verified and the observation period has passed. Complete required custom fields, record impact/mitigation/resolution summary, assign remaining action items, and confirm active escalation should end.
 
-Follow [Resolve an incident](./resolve). If the condition later returns, report a new manual incident with the matching deduplication key within 30 minutes or use an authorized public API status update; the Web incident page has no direct manual Reopen action. Normal automated alert ingestion creates a new incident.
+Follow [Resolve an incident](./resolve). The **Postmortem** tab appears once the incident is resolved; until then a wide screen shows **Postmortem after resolve** at the right of the tab bar. If the condition later returns, report a new manual incident with the matching deduplication key within 30 minutes or use an authorized public API status update; the Web incident page has no direct manual Reopen action. Normal automated alert ingestion creates a new incident.
 
 ## Verify the completed response
 

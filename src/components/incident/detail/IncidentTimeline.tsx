@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import _TimelineEvent from '../TimelineEvent';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
+import TimelineGraph, { type GraphMarker, type GraphMarkerKind } from './TimelineGraph';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { loadOlderIncidentTimelineActivity } from './actions';
@@ -24,6 +25,7 @@ import {
   Loader2,
   Workflow,
   Sparkles,
+  ChevronDown,
 } from 'lucide-react';
 import Link from 'next/link';
 import UngroupButton from '../intelligence/UngroupButton';
@@ -74,6 +76,36 @@ export function categorize(type: string, message: string): TimelineFilter {
   if (/triggered|created|resolved|acknowledged|snooz|suppress|reopen/i.test(message))
     return 'LIFECYCLE';
   return 'ALL';
+}
+
+const CHANGE_LIKE = new Set(['CHANGE', 'METRIC_ANOMALY', 'UPSTREAM_INCIDENT']);
+
+/** Which rows are key events on the activity graph, and how each is drawn. Null: list only. */
+function graphMarkerKind(row: {
+  type: string;
+  message: string;
+  intelligence?: IntelligenceTimelineEvent;
+}): GraphMarkerKind | null {
+  if (row.intelligence) return CHANGE_LIKE.has(row.intelligence.kind) ? 'change' : null;
+  if (row.type === 'CREATED') return 'trigger';
+  if (row.type === 'ACKNOWLEDGED') return 'ack';
+  if (row.type === 'RESOLVED' || row.type === 'MANUAL_RESOLVED' || row.type === 'AUTO_RESOLVED')
+    return 'resolved';
+  switch (categorize(row.type, row.message)) {
+    case 'ESCALATION':
+      return 'escalation';
+    case 'NOTES':
+      return 'note';
+    case 'RUNBOOKS':
+      return 'runbook';
+    case 'LIFECYCLE':
+      if (/triggered|created/i.test(row.message)) return 'trigger';
+      if (/acknowledged/i.test(row.message)) return 'ack';
+      if (/resolved/i.test(row.message)) return 'resolved';
+      return 'other';
+    default:
+      return null;
+  }
 }
 
 function formatNotificationChannel(channel: string): string {
@@ -205,6 +237,10 @@ export type IncidentTimelineProps = {
    * the "Show intelligence events" toggle; absent or empty means the toggle is not rendered at all.
    */
   intelligenceEvents?: IntelligenceTimelineEvent[];
+  /** How many alerts were deduplicated into the incident; the activity graph loads its own data. */
+  alertTotal?: number;
+  /** When the page was rendered: the graph's right edge while the incident is open. */
+  renderedAt?: Date;
 };
 
 const EMPTY_NOTES: Note[] = [];
@@ -235,6 +271,8 @@ export default function IncidentTimeline({
   totalNotificationsCount,
   totalActivityCount,
   intelligenceEvents = EMPTY_INTELLIGENCE,
+  alertTotal = 0,
+  renderedAt,
 }: IncidentTimelineProps) {
   const { userTimeZone } = useTimezone();
   const [activeFilter, setActiveFilter] = useState<TimelineFilter>('ALL');
@@ -639,6 +677,49 @@ export default function IncidentTimeline({
       : timelineEvents.filter(e => categorize(e.type, e.message) === activeFilter);
   }, [timelineEvents, activeFilter]);
 
+  // Key events for the activity graph: what changed the incident's course, not every page sent.
+  const graphMarkers = useMemo(
+    () =>
+      timelineEvents.flatMap((row): GraphMarker[] => {
+        const kind = graphMarkerKind(row);
+        if (!kind) return [];
+        const label = row.message.split('\n')[0].slice(0, 140);
+        return [{ id: row.id, at: new Date(row.createdAt), kind, label }];
+      }),
+    [timelineEvents]
+  );
+
+  const jumpToRow = (rowId: string) => {
+    setActiveFilter('ALL');
+    // After the "All" list renders, the row is the hash target: it scrolls into view and highlights.
+    requestAnimationFrame(() => {
+      const hash = `#timeline-${rowId}`;
+      if (window.location.hash === hash)
+        document.getElementById(`timeline-${rowId}`)?.scrollIntoView({ block: 'center' });
+      else window.location.hash = hash;
+    });
+  };
+
+  // Consecutive alert rows fold into one "N alerts" row: the activity graph already plots each arrival.
+  const { alertRuns, alertRunSkip } = useMemo(() => {
+    const runs = new Map<string, TimelineRow[]>();
+    const skip = new Set<string>();
+    let current: TimelineRow[] = [];
+    const flush = () => {
+      if (current.length > 1) {
+        runs.set(current[0].id, current);
+        for (const row of current.slice(1)) skip.add(row.id);
+      }
+      current = [];
+    };
+    for (const row of filteredEvents) {
+      if (row.intelligence?.kind === 'ALERT') current.push(row);
+      else flush();
+    }
+    flush();
+    return { alertRuns: runs, alertRunSkip: skip };
+  }, [filteredEvents]);
+
   const filterCounts = useMemo(() => {
     const counts: Record<TimelineFilter, number> = {
       ALL: timelineEvents.length,
@@ -752,58 +833,78 @@ export default function IncidentTimeline({
     );
   }
 
+  const activityGraph = incidentCreatedAt ? (
+    <TimelineGraph
+      incidentId={incidentId ?? ''}
+      alertTotal={alertTotal}
+      markers={graphMarkers}
+      onsetAt={incidentCreatedAt}
+      endAt={incidentResolvedAt ?? renderedAt ?? incidentCreatedAt}
+      open={!incidentResolvedAt}
+      timeZone={userTimeZone}
+      onJump={jumpToRow}
+    />
+  ) : null;
+
   const visibleFilters =
     hasIntelligence && showIntelligence
       ? [FILTERS[0], INTELLIGENCE_FILTER, ...FILTERS.slice(1)]
       : FILTERS;
 
+  // One row: the filters that have something in them, then the intelligence switch at its end.
   const intelligenceToggle = hasIntelligence ? (
-    <div id="timeline-intelligence" className="mb-2 flex scroll-mt-24 items-center">
-      <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-xs font-medium text-foreground sm:min-h-8">
-        <input
-          type="checkbox"
-          checked={showIntelligence}
-          onChange={event => setShowIntelligence(event.target.checked)}
-          className="h-4 w-4 rounded border-border accent-primary"
-        />
-        Show intelligence events
-        <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">
-          {intelligenceEvents.length}
-        </span>
-      </label>
-    </div>
+    <label
+      id="timeline-intelligence"
+      className="inline-flex h-6.5 scroll-mt-24 cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-border/80 px-2 text-xs font-medium text-muted-foreground transition-colors select-none hover:text-foreground has-checked:border-solid has-checked:text-foreground"
+    >
+      <input
+        type="checkbox"
+        checked={showIntelligence}
+        onChange={event => setShowIntelligence(event.target.checked)}
+        className="h-3.5 w-3.5 rounded border-border accent-primary"
+      />
+      Show intelligence events
+      <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">
+        {intelligenceEvents.length}
+      </span>
+    </label>
   ) : null;
 
   const filterChips = (
     <div className="flex flex-wrap gap-1.5 mb-2" role="group" aria-label="Filter timeline events">
-      {visibleFilters.map(filter => {
-        const count = filterCounts[filter.id] ?? 0;
-        return (
-          <button
-            key={filter.id}
-            type="button"
-            onClick={() => setActiveFilter(filter.id)}
-            aria-pressed={activeFilter === filter.id}
-            aria-label={filter.label}
-            className={cn(
-              'h-6.5 px-2.5 rounded-md text-xs font-medium transition-all select-none border focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring flex items-center gap-1.5',
-              activeFilter === filter.id
-                ? 'bg-foreground text-background border-foreground shadow-2xs font-semibold'
-                : 'bg-background text-muted-foreground border-border/80 hover:text-foreground hover:bg-muted/40'
-            )}
-          >
-            <span>{filter.label}</span>
-            <span
+      {visibleFilters
+        .filter(f => f.id === 'ALL' || f.id === activeFilter || (filterCounts[f.id] ?? 0) > 0)
+        .map(filter => {
+          const count = filterCounts[filter.id] ?? 0;
+          return (
+            <button
+              key={filter.id}
+              type="button"
+              onClick={() => setActiveFilter(filter.id)}
+              aria-pressed={activeFilter === filter.id}
+              aria-label={filter.label}
               className={cn(
-                'text-[10.5px] tabular-nums font-mono',
-                activeFilter === filter.id ? 'opacity-90 font-semibold' : 'text-muted-foreground/70'
+                'h-6.5 px-2.5 rounded-md text-xs font-medium transition-all select-none border focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring flex items-center gap-1.5',
+                activeFilter === filter.id
+                  ? 'bg-foreground text-background border-foreground shadow-2xs font-semibold'
+                  : 'bg-background text-muted-foreground border-border/80 hover:text-foreground hover:bg-muted/40'
               )}
             >
-              {count}
-            </span>
-          </button>
-        );
-      })}
+              <span>{filter.label}</span>
+              <span
+                className={cn(
+                  'text-[10.5px] tabular-nums font-mono',
+                  activeFilter === filter.id
+                    ? 'opacity-90 font-semibold'
+                    : 'text-muted-foreground/70'
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      {intelligenceToggle}
     </div>
   );
 
@@ -811,7 +912,7 @@ export default function IncidentTimeline({
     return (
       <div className="space-y-6">
         <div>
-          {intelligenceToggle}
+          {activityGraph}
           {filterChips}
         </div>
         <div className="text-center py-12">
@@ -826,15 +927,64 @@ export default function IncidentTimeline({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        {intelligenceToggle}
+        {activityGraph}
         {filterChips}
       </div>
-      <div className="space-y-6 relative ml-2">
+      <div className="space-y-4 relative ml-1">
         {/* Continuous vertical line background */}
-        <div className="absolute left-[19px] top-2 bottom-4 w-px bg-border/70" />
+        <div className="absolute left-[15px] top-2 bottom-4 w-px bg-border/70" />
         {filteredEvents.map((event, index) => {
+          if (alertRunSkip.has(event.id)) return null;
+          const run = alertRuns.get(event.id);
+          if (run) {
+            const runConfig = getEventConfig(event.type, event.message);
+            const first = run[0];
+            const last = run[run.length - 1];
+            return (
+              <details
+                key={event.id}
+                id={`timeline-${event.id}`}
+                className="group/run relative scroll-mt-24 target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
+              >
+                <summary className="flex cursor-pointer list-none gap-3 [&::-webkit-details-marker]:hidden">
+                  <div
+                    className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-background shadow-2xs ${runConfig.avatarBg} ${runConfig.avatarText}`}
+                  >
+                    {runConfig.icon}
+                  </div>
+                  <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pt-1">
+                    <span className="min-w-0 text-sm">
+                      <span className="font-semibold text-foreground">{run.length} alerts</span>
+                      <span className="text-muted-foreground">
+                        {' '}
+                        · deduplicated into this incident ·{' '}
+                        {formatDateTime(first.createdAt, userTimeZone, { format: 'time' })}–
+                        {formatDateTime(last.createdAt, userTimeZone, { format: 'time' })}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open/run:rotate-180"
+                      aria-hidden
+                    />
+                  </div>
+                </summary>
+                <ul className="mt-2 ml-11 space-y-1 border-l border-border/70 pl-3 text-xs">
+                  {run.map(alert => (
+                    <li key={alert.id} className="flex gap-2">
+                      <span className="shrink-0 font-mono tabular-nums text-muted-foreground">
+                        {formatDateTime(alert.createdAt, userTimeZone, { format: 'time' })}
+                      </span>
+                      <span className="min-w-0 text-foreground/90">
+                        {alert.intelligence?.detail ?? alert.message}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            );
+          }
           const config = getEventConfig(event.type, event.message);
           const isLifecycleEvent =
             event.type === 'CREATED' || event.type === 'ACKNOWLEDGED' || event.type === 'RESOLVED';
@@ -851,11 +1001,11 @@ export default function IncidentTimeline({
                 className="relative flex scroll-mt-24 gap-4 group target:rounded-lg target:bg-amber-50/60 dark:target:bg-amber-950/20"
               >
                 <div
-                  className={`relative z-10 rounded-full border-4 border-background shrink-0 h-10 w-10 flex items-center justify-center shadow-2xs ${config.avatarBg} ${config.avatarText}`}
+                  className={`relative z-10 rounded-full border-2 border-background shrink-0 h-8 w-8 flex items-center justify-center shadow-2xs ${config.avatarBg} ${config.avatarText}`}
                 >
                   {config.icon}
                 </div>
-                <div className="flex-1 pt-1.5 min-w-0">
+                <div className="flex-1 pt-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs sm:text-sm font-semibold text-foreground/90">
@@ -953,13 +1103,13 @@ export default function IncidentTimeline({
             >
               {/* Node Icon */}
               <div
-                className={`relative z-10 rounded-full border-4 border-background shrink-0 h-10 w-10 flex items-center justify-center shadow-2xs ${config.avatarBg} ${config.avatarText}`}
+                className={`relative z-10 rounded-full border-2 border-background shrink-0 h-8 w-8 flex items-center justify-center shadow-2xs ${config.avatarBg} ${config.avatarText}`}
               >
                 {config.icon}
               </div>
 
               {/* Content Body */}
-              <div className="flex-1 pt-1.5 min-w-0">
+              <div className="flex-1 pt-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <div className="flex items-center gap-2">
                     <span

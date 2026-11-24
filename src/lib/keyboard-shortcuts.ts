@@ -5,13 +5,14 @@ export type KeyboardShortcutDefinition = {
   keys: string[];
   description: string;
   category: KeyboardShortcutCategory;
-  scope: 'global' | 'incidents';
+  scope: 'global' | 'incidents' | 'incident';
   runtimeOwner:
     | 'GlobalKeyboardHandler'
     | 'SidebarSearch'
     | 'IncidentsListTable'
     | 'SquireLauncher'
-    | 'InsightsInspectorHost';
+    | 'InsightsInspectorHost'
+    | 'IncidentShortcuts';
 };
 
 export const GLOBAL_NAVIGATION_SHORTCUTS = [
@@ -145,5 +146,45 @@ export const KEYBOARD_SHORTCUTS: KeyboardShortcutDefinition[] = [
     category: 'Incident Triage',
     scope: 'incidents',
     runtimeOwner: 'InsightsInspectorHost',
+  },
+  {
+    id: 'incident-page-ack',
+    keys: ['A'],
+    description: 'Acknowledge this incident (incident page)',
+    category: 'Incident Triage',
+    scope: 'incident',
+    runtimeOwner: 'IncidentShortcuts',
+  },
+  {
+    id: 'incident-page-resolve',
+    keys: ['R'],
+    description: 'Resolve this incident (incident page)',
+    category: 'Incident Triage',
+    scope: 'incident',
+    runtimeOwner: 'IncidentShortcuts',
+  },
+  {
+    id: 'incident-page-note',
+    keys: ['W'],
+    description: 'Write a note (incident page)',
+    category: 'Incident Triage',
+    scope: 'incident',
+    runtimeOwner: 'IncidentShortcuts',
+  },
+  {
+    id: 'incident-page-timeline',
+    keys: ['T'],
+    description: 'Open the timeline (incident page)',
+    category: 'Incident Triage',
+    scope: 'incident',
+    runtimeOwner: 'IncidentShortcuts',
+  },
+  {
+    id: 'incident-page-summary',
+    keys: ['S'],
+    description: 'Copy a summary to paste in Slack or Teams (incident page)',
+    category: 'Incident Triage',
+    scope: 'incident',
+    runtimeOwner: 'IncidentShortcuts',
   },
 ];

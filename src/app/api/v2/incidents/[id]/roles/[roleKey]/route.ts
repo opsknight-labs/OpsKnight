@@ -44,7 +44,7 @@ export const PUT = defineV2Route({
       entityId: params.id,
       actorId: actor.id,
       apiKeyId: apiKey.id,
-      details: { roleKey: params.roleKey, userId: body.userId },
+      details: { roleKey: params.roleKey, role: params.roleKey, userId: body.userId },
       tx,
     });
     return { data: result };
@@ -80,7 +80,7 @@ export const DELETE = defineV2Route({
       entityId: params.id,
       actorId: actor.id,
       apiKeyId: apiKey.id,
-      details: { roleKey: params.roleKey },
+      details: { roleKey: params.roleKey, role: params.roleKey },
       tx,
     });
     return { data: result };

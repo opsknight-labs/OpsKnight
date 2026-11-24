@@ -23,6 +23,8 @@ import {
   DialogFooter,
 } from '@/components/ui/shadcn/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/shadcn/sheet';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import RelativeTime from '@/components/patterns/RelativeTime';
 import { JiraLogo } from '@/components/common/BrandLogos';
 import { WarRoomLauncher } from '@/components/incident/war-room/WarRoomLauncher';
 import type { IncidentCollaborationView } from '@/lib/incident-collaboration/types';
@@ -55,6 +57,8 @@ import {
   Trash2,
   RefreshCw,
   Flag,
+  Settings2,
+  ChevronDown,
 } from 'lucide-react';
 import { notify } from '@/lib/toast';
 
@@ -355,95 +359,157 @@ export default function IncidentCommandBar({
         className="hidden sm:flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-card px-3.5 py-2 shadow-2xs transition-all text-card-foreground"
         data-command-bar
       >
-        <div className="flex items-center gap-2.5 flex-wrap min-w-0">
-          {hasAnyIntegrations && (
-            <>
-              <span className="text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground select-none">
-                Integrations:
-              </span>
+        {/* Tags, then the incident's links out (war room, Jira, status page).
+            Every control is the same 28 px bordered chip so the row reads as one set. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
+          <IncidentTags incidentId={incidentId} tags={tags} canManage={canManage} variant="bar" />
 
-              {collaboration?.visible && <WarRoomLauncher collaboration={collaboration} />}
-
-              {primaryJira ? (
-                <div className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-blue-500/10 text-blue-900 dark:text-blue-300 border border-blue-500/20 text-xs font-medium shadow-2xs">
-                  <JiraLogo className="h-3.5 w-3.5 shrink-0" />
-                  <a
-                    href={primaryJira.externalUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline font-semibold inline-flex items-center gap-1"
-                    title={`Jira: ${primaryJira.externalKey}`}
-                  >
-                    <span>{primaryJira.externalKey}</span>
-                    {primaryJira.externalStatus && (
-                      <span
-                        className={cn(
-                          'ml-1 px-1.5 py-0.2 rounded text-[10px] font-bold uppercase border',
-                          jiraStatusBadgeStyle(primaryJira.externalStatus)
-                        )}
-                      >
-                        {primaryJira.externalStatus}
-                      </span>
-                    )}
-                    <ExternalLink className="h-3 w-3 text-blue-600 dark:text-blue-400 ml-0.5" />
-                  </a>
-                  {jiraLinks.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowJiraDialog(true)}
-                      className="text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-500/15 hover:bg-blue-500/25 px-1 py-0.2 rounded transition-colors cursor-pointer"
-                      title="View all linked Jira issues"
-                    >
-                      +{jiraLinks.length - 1}
-                    </button>
-                  )}
-                  {jiraCapability.canSync && (
-                    <button
-                      type="button"
-                      onClick={() => handleSyncJira(primaryJira.id)}
-                      disabled={isJiraPending || syncingLinkId === primaryJira.id}
-                      className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 hover:text-blue-950 dark:hover:text-blue-100 transition-colors ml-1 pl-2 border-l border-blue-500/20 cursor-pointer inline-flex items-center gap-1 disabled:opacity-50"
-                      title="Sync status with Jira"
-                    >
-                      <RefreshCw
-                        className={cn(
-                          'h-3 w-3',
-                          syncingLinkId === primaryJira.id &&
-                            'animate-spin text-blue-600 dark:text-blue-400'
-                        )}
-                      />
-                      <span>Sync</span>
-                    </button>
-                  )}
-                  {canManageLinkedJira && (
-                    <button
-                      type="button"
-                      onClick={() => setShowJiraDialog(true)}
-                      className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 hover:text-blue-950 dark:hover:text-blue-100 transition-colors ml-1 pl-2 border-l border-blue-500/20 cursor-pointer"
-                      title="Manage Jira issues"
-                    >
-                      Manage
-                    </button>
-                  )}
-                </div>
-              ) : jiraCapability.canLink ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowJiraDialog(true)}
-                  className="h-8 gap-1.5 px-2.5 text-xs font-semibold bg-background hover:bg-muted/40 border-border/80 text-foreground shadow-2xs hover:border-border transition-all"
-                >
-                  <JiraLogo className="h-3.5 w-3.5 shrink-0" />
-                  <span>Link Jira Issue</span>
-                </Button>
-              ) : null}
-
-              <div className="h-4 w-px bg-border/80 shrink-0 hidden md:block" />
-            </>
+          {(hasAnyIntegrations || statusUpdate) && (
+            <div className="hidden h-4 w-px shrink-0 bg-border md:block" aria-hidden />
           )}
 
-          <IncidentTags incidentId={incidentId} tags={tags} canManage={canManage} variant="bar" />
+          {collaboration?.visible && (
+            <WarRoomLauncher
+              collaboration={collaboration}
+              className="h-8 gap-1.5 px-2.5 border-input"
+            />
+          )}
+
+          {primaryJira ? (
+            // One control: key + status on the button, every linked issue and its actions in the popover.
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Jira issues: ${primaryJira.externalKey}${primaryJira.externalStatus ? `, ${primaryJira.externalStatus}` : ''}${jiraLinks.length > 1 ? `, and ${jiraLinks.length - 1} more` : ''}`}
+                  className="group inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-xs font-semibold text-foreground shadow-2xs transition-colors hover:bg-muted/60 data-[state=open]:bg-muted/60"
+                >
+                  <JiraLogo className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-mono">{primaryJira.externalKey}</span>
+                  {primaryJira.externalStatus && (
+                    <span
+                      className={cn(
+                        'rounded border px-1 text-2xs font-semibold leading-4 whitespace-nowrap',
+                        jiraStatusBadgeStyle(primaryJira.externalStatus)
+                      )}
+                    >
+                      {primaryJira.externalStatus}
+                    </span>
+                  )}
+                  {jiraLinks.length > 1 && (
+                    <span className="text-2xs font-semibold text-muted-foreground">
+                      +{jiraLinks.length - 1}
+                    </span>
+                  )}
+                  <ChevronDown
+                    className="h-3 w-3 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
+                    aria-hidden
+                  />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-80 p-0">
+                <div className="flex items-center gap-1.5 border-b border-border/60 px-3 py-2">
+                  <JiraLogo className="h-3.5 w-3.5" />
+                  <h2 className="text-xs font-semibold text-foreground">
+                    Jira {jiraLinks.length === 1 ? 'issue' : `issues · ${jiraLinks.length}`}
+                  </h2>
+                </div>
+                <ul className="max-h-72 divide-y divide-border/60 overflow-y-auto">
+                  {jiraLinks.map(link => (
+                    <li key={link.id} className="space-y-1.5 px-3 py-2.5">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="font-mono text-xs font-semibold text-foreground">
+                          {link.externalKey}
+                        </span>
+                        {link.externalStatus && (
+                          <span
+                            className={cn(
+                              'rounded border px-1 text-2xs font-semibold leading-4 whitespace-nowrap',
+                              jiraStatusBadgeStyle(link.externalStatus)
+                            )}
+                          >
+                            {link.externalStatus}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-2xs text-muted-foreground">
+                        {link.externalAssignee
+                          ? `Assigned to ${link.externalAssignee}`
+                          : 'Unassigned'}
+                        {' · '}
+                        {link.lastSyncedAt ? (
+                          <>
+                            synced <RelativeTime date={link.lastSyncedAt} />
+                          </>
+                        ) : (
+                          'not synced yet'
+                        )}
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 px-2 text-xs"
+                        >
+                          <a href={link.externalUrl} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-3 w-3" aria-hidden />
+                            Open in Jira
+                          </a>
+                        </Button>
+                        {jiraCapability.canSync && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSyncJira(link.id)}
+                            disabled={isJiraPending || syncingLinkId === link.id}
+                            className="h-7 gap-1.5 px-2 text-xs"
+                            title="Pull the latest status and assignee from Jira"
+                          >
+                            <RefreshCw
+                              className={cn('h-3 w-3', syncingLinkId === link.id && 'animate-spin')}
+                              aria-hidden
+                            />
+                            <span>Sync</span>
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {canManageLinkedJira && (
+                  <div className="border-t border-border/60 p-1.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowJiraDialog(true)}
+                      className="h-8 w-full justify-start gap-1.5 px-2 text-xs"
+                    >
+                      <Settings2 className="h-3.5 w-3.5" aria-hidden />
+                      <span>Manage</span>
+                      <span className="font-normal text-muted-foreground">
+                        · link, create or unlink issues
+                      </span>
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          ) : jiraCapability.canLink ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowJiraDialog(true)}
+              className="h-8 gap-1.5 border-dashed border-border bg-background px-2.5 text-xs font-medium text-muted-foreground shadow-2xs hover:text-foreground"
+            >
+              <JiraLogo className="h-3.5 w-3.5 shrink-0" />
+              <span>Link Jira Issue</span>
+            </Button>
+          ) : null}
+
           <StatusUpdateAction statusUpdate={statusUpdate} />
         </div>
 
@@ -478,6 +544,7 @@ export default function IncidentCommandBar({
                     <Button
                       type="submit"
                       size="sm"
+                      data-incident-action="acknowledge"
                       className="h-8 gap-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-2xs text-xs transition-colors"
                     >
                       <Check className="h-3.5 w-3.5" />
@@ -503,11 +570,14 @@ export default function IncidentCommandBar({
                     type="button"
                     variant="outline"
                     size="sm"
+                    data-incident-action="resolve"
                     className="h-8 gap-1.5 px-3.5 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold shadow-2xs bg-background text-xs transition-colors"
                     onClick={() => setShowResolveModal(true)}
                   >
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Resolve Incident</span>
+                    <span>
+                      Resolve<span className="sr-only"> Incident</span>
+                    </span>
                   </Button>
                 )}
                 {showTakeCommand && (

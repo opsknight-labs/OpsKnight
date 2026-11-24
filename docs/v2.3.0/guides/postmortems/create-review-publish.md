@@ -32,7 +32,7 @@ identify the review facilitator and action-item owners.
 
 ## Open the feature
 
-Open **Postmortems**, or open a resolved incident and select **Postmortem**.
+Open **Postmortems**, or open a resolved incident and select its **Postmortem** tab or **Create Postmortem** in the action bar. The tab appears only after the incident is resolved.
 
 ## Configure the draft
 

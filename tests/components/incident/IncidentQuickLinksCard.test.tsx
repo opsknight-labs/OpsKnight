@@ -24,7 +24,7 @@ describe('IncidentQuickLinksCard', () => {
   it('renders standard service, policy, analytics, and team quick links', () => {
     render(<IncidentQuickLinksCard {...defaultProps} />);
 
-    expect(screen.getByText('Quick Links')).toBeInTheDocument();
+    expect(screen.getByText('Quick links')).toBeInTheDocument();
     expect(screen.getByText('Authentication API')).toBeInTheDocument();
     expect(screen.getByText('Current service default: Critical Escalation')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Service analytics/ })).toHaveAttribute(
