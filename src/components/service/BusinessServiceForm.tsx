@@ -18,6 +18,7 @@ import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { cn } from '@/lib/utils';
 import { linksFromLines } from '@/lib/business-services/links';
 import { attributesFromLines } from '@/lib/business-services/attributes';
+import { moneyToCents } from '@/lib/business-services/impact-cost';
 import {
   createBusinessServiceAction,
   deleteBusinessServiceAction,
@@ -68,6 +69,13 @@ export type BusinessServiceFormValue = {
   quorumPartialPct: string;
   quorumMajorPct: string;
   dependencyHopDepth: string;
+  /** Customer impact: '' = unknown/off. Revenue is in major units, e.g. 12000.50. */
+  customersTotal?: string;
+  revenuePerHour?: string;
+  currency?: string;
+  customerReportThreshold?: string;
+  customerReportWindowMinutes?: string;
+  reviewIntervalDays?: string;
 };
 
 const NO_TEAM = '__none__';
@@ -113,6 +121,12 @@ const EMPTY: BusinessServiceFormValue = {
   quorumPartialPct: '',
   quorumMajorPct: '',
   dependencyHopDepth: '3',
+  customersTotal: '',
+  revenuePerHour: '',
+  currency: 'USD',
+  customerReportThreshold: '',
+  customerReportWindowMinutes: '',
+  reviewIntervalDays: '',
 };
 const LIFECYCLES = ['ACTIVE', 'BETA', 'DEPRECATED', 'RETIRED'] as const;
 const pct = (text: string) => (text.trim() === '' ? null : Number(text));
@@ -384,8 +398,34 @@ export default function BusinessServiceForm({
       setError('Quorum thresholds are whole percents from 1 to 100; partial cannot exceed major.');
       return;
     }
+    const customers = pct(value.customersTotal ?? '');
+    const revenue = (value.revenuePerHour ?? '').trim() ? moneyToCents(value.revenuePerHour ?? '') : null;
+    const reportThreshold = pct(value.customerReportThreshold ?? '');
+    const reportWindow = pct(value.customerReportWindowMinutes ?? '');
+    const reviewDays = pct(value.reviewIntervalDays ?? '');
+    const whole = (n: number | null, min: number, max: number) =>
+      n === null || (Number.isInteger(n) && n >= min && n <= max);
+    if (
+      ((value.revenuePerHour ?? '').trim() !== '' && revenue === null) ||
+      !whole(customers, 0, 1_000_000_000) ||
+      !whole(reportThreshold, 1, 100_000) ||
+      !whole(reportWindow, 5, 1440) ||
+      !whole(reviewDays, 7, 730) ||
+      !/^[A-Za-z]{3}$/.test(value.currency ?? 'USD')
+    ) {
+      setError(
+        'Customer impact: revenue is an amount like 12000.50, customers a whole number, report threshold 1+, window 5 to 1440 minutes, review interval 7 to 730 days, currency a 3-letter code.'
+      );
+      return;
+    }
     setError(null);
     const payload = {
+      customersTotal: customers,
+      revenuePerHourCents: revenue,
+      currency: (value.currency ?? 'USD').toUpperCase(),
+      customerReportThreshold: reportThreshold,
+      customerReportWindowMinutes: reportThreshold === null ? null : reportWindow,
+      reviewIntervalDays: reviewDays,
       sloTarget: slo,
       sloWindowDays: Number(value.sloWindowDays) as 7 | 30 | 90,
       ownerUserId: value.ownerUserId || null,
@@ -697,6 +737,77 @@ export default function BusinessServiceForm({
             />
             Mark as reviewed today
           </label>
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="bs-customer-heading"
+        className="grid gap-6 rounded-xl border border-border bg-card p-5 text-card-foreground sm:p-6 lg:grid-cols-2"
+      >
+        <div className="space-y-4">
+          <div>
+            <h2 id="bs-customer-heading" className="text-sm font-semibold">
+              Customer impact
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Used to estimate what downtime costs and to lift health when customers report
+              problems. All optional.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              id="bs-revenue"
+              label="Revenue per hour of downtime"
+              value={value.revenuePerHour ?? ''}
+              placeholder="12000.00"
+              inputMode="decimal"
+              onChange={next => set('revenuePerHour', next)}
+            />
+            <TextField
+              id="bs-currency"
+              label="Currency"
+              value={value.currency ?? 'USD'}
+              maxLength={3}
+              placeholder="USD"
+              onChange={next => set('currency', next.toUpperCase())}
+            />
+          </div>
+          <TextField
+            id="bs-customers"
+            label="Customers exposed"
+            value={value.customersTotal ?? ''}
+            placeholder="250000"
+            inputMode="numeric"
+            onChange={next => set('customersTotal', next)}
+          />
+        </div>
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              id="bs-report-threshold"
+              label="Customer reports to degrade"
+              value={value.customerReportThreshold ?? ''}
+              placeholder="Off"
+              inputMode="numeric"
+              onChange={next => set('customerReportThreshold', next)}
+            />
+            <TextField
+              id="bs-report-window"
+              label="Within (minutes)"
+              value={value.customerReportWindowMinutes ?? ''}
+              placeholder="60"
+              inputMode="numeric"
+              onChange={next => set('customerReportWindowMinutes', next)}
+            />
+          </div>
+          <TextField
+            id="bs-review-interval"
+            label="Review every (days)"
+            value={value.reviewIntervalDays ?? ''}
+            placeholder="180"
+            inputMode="numeric"
+            onChange={next => set('reviewIntervalDays', next)}
+          />
         </div>
       </section>
 

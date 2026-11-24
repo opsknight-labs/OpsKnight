@@ -12,6 +12,7 @@ import BusinessServiceForm from '@/components/service/BusinessServiceForm';
 import HealthBadge from '@/components/business-service/HealthBadge';
 import { getBusinessServiceHealth } from '@/lib/business-services/contract';
 import { attributesToLines } from '@/lib/business-services/attributes';
+import { centsToMoney } from '@/lib/business-services/impact-cost';
 import { linksToLines, parseBusinessServiceLinks } from '@/lib/business-services/links';
 import { loadBusinessServiceFormOptions } from '../../form-options';
 
@@ -98,6 +99,17 @@ export default async function EditBusinessServicePage({
           quorumPartialPct: item.quorumPartialPct === null ? '' : String(item.quorumPartialPct),
           quorumMajorPct: item.quorumMajorPct === null ? '' : String(item.quorumMajorPct),
           dependencyHopDepth: String(item.dependencyHopDepth),
+          customersTotal: item.customersTotal === null ? '' : String(item.customersTotal),
+          revenuePerHour:
+            item.revenuePerHourCents === null ? '' : centsToMoney(item.revenuePerHourCents),
+          currency: item.currency,
+          customerReportThreshold:
+            item.customerReportThreshold === null ? '' : String(item.customerReportThreshold),
+          customerReportWindowMinutes:
+            item.customerReportWindowMinutes === null
+              ? ''
+              : String(item.customerReportWindowMinutes),
+          reviewIntervalDays: item.reviewIntervalDays === null ? '' : String(item.reviewIntervalDays),
         }}
       />
     </div>

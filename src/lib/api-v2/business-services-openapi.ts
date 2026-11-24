@@ -76,6 +76,17 @@ const input = {
   quorumPartialPct: { type: ['integer', 'null'], minimum: 1, maximum: 100 },
   quorumMajorPct: { type: ['integer', 'null'], minimum: 1, maximum: 100 },
   dependencyHopDepth: { type: 'integer', minimum: 1, maximum: 5 },
+  customersTotal: { type: ['integer', 'null'], minimum: 0, maximum: 1_000_000_000 },
+  revenuePerHourCents: {
+    type: ['integer', 'null'],
+    minimum: 0,
+    maximum: 2_000_000_000,
+    description: 'Revenue per hour of full downtime in hundredths of the currency unit.',
+  },
+  currency: { type: 'string', pattern: '^[A-Za-z]{3}$', description: 'ISO 4217, default USD.' },
+  customerReportThreshold: { type: ['integer', 'null'], minimum: 1, maximum: 100000 },
+  customerReportWindowMinutes: { type: ['integer', 'null'], minimum: 5, maximum: 1440 },
+  reviewIntervalDays: { type: ['integer', 'null'], minimum: 7, maximum: 730 },
 };
 
 /** Why a business service has its status; the worst reason is first. */
@@ -83,7 +94,10 @@ const reason: Schema = {
   type: 'object',
   required: ['kind', 'status'],
   properties: {
-    kind: { type: 'string', enum: ['DIRECT', 'DEPENDENCY', 'NESTED', 'MANUAL', 'MAINTENANCE'] },
+    kind: {
+      type: 'string',
+      enum: ['DIRECT', 'DEPENDENCY', 'NESTED', 'MANUAL', 'MAINTENANCE', 'CUSTOMER_REPORTS'],
+    },
     status,
     incidentId: string,
     serviceId: string,
@@ -93,6 +107,9 @@ const reason: Schema = {
     urgency,
     markedById: nullableString,
     maintenanceWindowId: string,
+    reportCount: { type: 'integer' },
+    threshold: { type: 'integer' },
+    windowMinutes: { type: 'integer' },
   },
   additionalProperties: false,
 };
@@ -143,6 +160,12 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     quorumPartialPct: { type: ['integer', 'null'] },
     quorumMajorPct: { type: ['integer', 'null'] },
     dependencyHopDepth: { type: 'integer', minimum: 1, maximum: 5 },
+    customersTotal: { type: ['integer', 'null'] },
+    revenuePerHourCents: { type: ['integer', 'null'] },
+    currency: string,
+    customerReportThreshold: { type: ['integer', 'null'] },
+    customerReportWindowMinutes: { type: ['integer', 'null'] },
+    reviewIntervalDays: { type: ['integer', 'null'] },
     members: {
       type: 'array',
       items: object({ id, name: string, status: string, critical: { type: 'boolean' } }),
@@ -169,9 +192,21 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     incidentCount: { type: 'integer', minimum: 0 },
     mttaMinutes: { type: ['number', 'null'] },
     mttrMinutes: { type: ['number', 'null'] },
+    weightedDowntimeMinutes: { type: 'number', minimum: 0 },
+    weightedUptimePercent: { type: 'number', minimum: 0, maximum: 100 },
+    currency: string,
+    customersTotal: { type: ['integer', 'null'] },
+    estimatedCostCents: {
+      type: ['integer', 'null'],
+      description: 'Weighted downtime x revenue per hour; null without a revenue rate.',
+    },
     entries: {
       type: 'array',
       items: object({
+        costCents: {
+          type: ['integer', 'null'],
+          description: 'Null when no rate is set, the interval is excluded or the incident is unreadable.',
+        },
         incidentId: {
           ...nullableString,
           description: 'Null when the caller cannot read the incident.',
@@ -289,29 +324,6 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
       ]),
     },
   }),
-  StatusPageBusinessServiceOverride: object({
-    statusPageId: id,
-    businessServiceId: id,
-    status: { type: ['string', 'null'], enum: [...OVERRIDE_STATUSES, null] },
-    until: { type: ['string', 'null'], format: 'date-time' },
-  }),
-  StakeholderNotification: object({
-    incidentId: id,
-    businessServices: { type: 'array', items: object({ id, name: string }) },
-    recipientCount: { type: 'integer' },
-    emailCount: { type: 'integer' },
-  }),
-};
-
-export const BUSINESS_SERVICE_OPERATIONS: {
-  method: 'get' | 'post' | 'patch' | 'put' | 'delete';
-  path: string;
-  summary: string;
-  description?: string;
-  query?: Record<string, Schema>;
-  body?: Schema;
-  status?: number;
-  paginated?: boolean;
   // Monthly service reviews
   ServiceReviewSettings: object({
     enabled: { type: 'boolean' },
@@ -352,6 +364,97 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     },
     ['sent', 'period']
   ),
+  StatusPageBusinessServiceOverride: object({
+    statusPageId: id,
+    businessServiceId: id,
+    status: { type: ['string', 'null'], enum: [...OVERRIDE_STATUSES, null] },
+    until: { type: ['string', 'null'], format: 'date-time' },
+  }),
+  BusinessServiceCustomerReport: object({
+    id,
+    businessServiceId: id,
+    source: string,
+    count: { type: 'integer', minimum: 1 },
+    windowStart: date,
+    windowEnd: date,
+    externalRef: nullableString,
+    createdById: nullableString,
+    createdAt: date,
+    created: { type: 'boolean', description: 'False when an existing report with this externalRef was returned.' },
+  }, ['id', 'businessServiceId', 'source', 'count', 'windowStart', 'windowEnd', 'externalRef', 'createdById', 'createdAt']),
+  BusinessServiceTemplate: object({
+    id,
+    name: string,
+    description: nullableString,
+    criticality: tier,
+    sloTarget: { type: ['number', 'null'] },
+    sloWindowDays: { type: 'integer', enum: [7, 30, 90] },
+    quorumPartialPct: { type: ['integer', 'null'] },
+    quorumMajorPct: { type: ['integer', 'null'] },
+    tags: { type: 'array', items: string },
+    environment: nullableString,
+    lifecycle: { type: 'string', enum: LIFECYCLE },
+    links: { type: 'array', items: LINK },
+    impactMinUrgency: { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] },
+    impactMaxPriority: nullableString,
+    ownerTeamId: nullableString,
+    ownerTeam: { oneOf: [object({ id, name: string }), { type: 'null' }] },
+    createdAt: date,
+    updatedAt: date,
+  }),
+  BusinessServiceTemplateDeletion: object({ id, deleted: { const: true } }),
+  BusinessServiceBulkResult: object({
+    dryRun: { type: 'boolean' },
+    summary: object({ ok: { type: 'integer' }, failed: { type: 'integer' } }),
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['id', 'ok'],
+        properties: {
+          id,
+          ok: { type: 'boolean' },
+          changed: { type: 'array', items: string },
+          error: string,
+        },
+        additionalProperties: false,
+      },
+    },
+  }),
+  StakeholderNotification: object({
+    incidentId: id,
+    businessServices: { type: 'array', items: object({ id, name: string }) },
+    recipientCount: { type: 'integer' },
+    emailCount: { type: 'integer' },
+  }),
+};
+
+const templateInput = {
+  name: { type: 'string', minLength: 1, maxLength: 120 },
+  description: { type: ['string', 'null'], maxLength: 2000 },
+  criticality: tier,
+  sloTarget: { type: ['number', 'null'], minimum: 90, maximum: 99.999 },
+  sloWindowDays: { type: 'integer', enum: [7, 30, 90] },
+  quorumPartialPct: { type: ['integer', 'null'], minimum: 1, maximum: 100 },
+  quorumMajorPct: { type: ['integer', 'null'], minimum: 1, maximum: 100 },
+  tags: { type: 'array', maxItems: 20, items: { type: 'string', minLength: 1, maxLength: 40 } },
+  environment: { type: ['string', 'null'], maxLength: 40 },
+  lifecycle: { type: 'string', enum: LIFECYCLE },
+  links: { type: ['array', 'null'], maxItems: 10, items: LINK },
+  impactMinUrgency: { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] },
+  impactMaxPriority: { type: ['string', 'null'], pattern: '^[Pp][1-9]$' },
+  ownerTeamId: nullableString,
+};
+
+export const BUSINESS_SERVICE_OPERATIONS: {
+  method: 'get' | 'post' | 'patch' | 'put' | 'delete';
+  path: string;
+  summary: string;
+  description?: string;
+  query?: Record<string, Schema>;
+  body?: Schema;
+  status?: number;
+  paginated?: boolean;
 }[] = [
   {
     method: 'get',
@@ -521,7 +624,6 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     description:
       'Requires an Idempotency-Key. The exclusion is remembered so automatic impact never re-adds it.',
   },
-];
   {
     method: 'get',
     path: '/settings/service-reviews',
@@ -573,3 +675,92 @@ export const BUSINESS_SERVICE_OPERATIONS: {
       'Contains only business services the caller can read. Limited to 3 per hour; nothing is recorded as a monthly send.',
     body: object({}),
   },
+  {
+    method: 'get',
+    path: '/business-services/{id}/customer-reports',
+    summary: 'List customer-reported impact for a business service',
+    description: 'Newest first, at most 200 (limit, default 50). Requires read access to the business service.',
+    query: { limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 } },
+  },
+  {
+    method: 'post',
+    path: '/business-services/{id}/customer-reports',
+    summary: 'Record customer-reported impact',
+    description:
+      'Responder or Admin within the business service scope; requires an Idempotency-Key. Idempotent by externalRef: re-posting a reference returns the stored report (200, created false). When the business service sets customerReportThreshold, reports inside its window lift health to degraded.',
+    status: 201,
+    body: object(
+      {
+        source: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$', description: 'zendesk, intercom, manual, api, ...' },
+        count: { type: 'integer', minimum: 1, maximum: 1000000 },
+        windowStart: date,
+        windowEnd: { ...date, description: 'Not in the future; at most 7 days after windowStart.' },
+        externalRef: { type: 'string', minLength: 1, maxLength: 200 },
+      },
+      ['source', 'count', 'windowStart', 'windowEnd']
+    ),
+  },
+  {
+    method: 'post',
+    path: '/business-services/bulk',
+    summary: 'Apply one change to up to 100 business services',
+    description:
+      'Responder or Admin within scope; requires an Idempotency-Key. Each service succeeds or fails on its own (per-item results) and writes its own audit event. dryRun true validates and reports without writing.',
+    body: object(
+      {
+        ids: ids(100),
+        changes: object(
+          {
+            ownerTeamId: nullableString,
+            criticality: tier,
+            lifecycle: { type: 'string', enum: LIFECYCLE },
+            addTags: { type: 'array', maxItems: 20, items: { type: 'string', minLength: 1, maxLength: 40 } },
+            removeTags: { type: 'array', maxItems: 20, items: { type: 'string', minLength: 1, maxLength: 40 } },
+            markReviewed: { const: true },
+            sloTarget: { type: ['number', 'null'], minimum: 90, maximum: 99.999 },
+            sloWindowDays: { type: 'integer', enum: [7, 30, 90] },
+          },
+          []
+        ),
+        dryRun: { type: 'boolean', default: false },
+      },
+      ['ids', 'changes']
+    ),
+  },
+  {
+    method: 'get',
+    path: '/business-service-templates',
+    summary: 'List business service templates',
+    description: 'Responder or Admin (the access needed to create business services). At most 200.',
+  },
+  {
+    method: 'post',
+    path: '/business-service-templates',
+    summary: 'Create a business service template',
+    description: 'Responder or Admin; requires an Idempotency-Key.',
+    status: 201,
+    body: object(templateInput, ['name']),
+  },
+  {
+    method: 'patch',
+    path: '/business-service-templates/{id}',
+    summary: 'Update a business service template',
+    description: 'Responder or Admin; requires an Idempotency-Key. Only the fields sent change.',
+    body: object(templateInput, []),
+  },
+  {
+    method: 'delete',
+    path: '/business-service-templates/{id}',
+    summary: 'Delete a business service template',
+    description: 'Responder or Admin; requires an Idempotency-Key. Business services created from it are unchanged.',
+  },
+  {
+    method: 'post',
+    path: '/business-service-templates/{id}/instantiate',
+    summary: 'Create a business service from a template',
+    description:
+      'Responder or Admin; requires an Idempotency-Key. Template defaults apply, and any field in the body overrides them. The template owner team must be visible to the caller.',
+    status: 201,
+    body: object(input, ['name']),
+  },
+];

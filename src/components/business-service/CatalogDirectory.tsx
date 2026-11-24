@@ -1,6 +1,7 @@
 'use client';
 /* eslint-disable security/detect-object-injection -- lookups are keyed by typed enum values (status, tier, urgency), never request input */
 
+import { useState } from 'react';
 import Link from 'next/link';
 import type { BusinessServiceTier } from '@prisma/client';
 import { Boxes, Plus } from 'lucide-react';
@@ -17,6 +18,8 @@ import { Button } from '@/components/ui/shadcn/button';
 import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
 import BusinessServiceFollowButton from '@/components/service/BusinessServiceFollowButton';
 import type { BsStatus } from '@/lib/business-services/contract';
+import { HYGIENE_LABELS, type HygieneReason } from '@/lib/business-services/hygiene';
+import BulkEditBar from './BulkEditBar';
 import HealthBadge, { CRITICALITY_HINT, CRITICALITY_LABEL } from './HealthBadge';
 
 export type CatalogRow = {
@@ -32,6 +35,8 @@ export type CatalogRow = {
   openIncidentCount: number;
   followerCount: number;
   following: boolean;
+  /** Ownership hygiene findings (stale review, inactive owner). */
+  hygiene?: readonly HygieneReason[];
 };
 
 export type CatalogPagination = {
@@ -64,6 +69,22 @@ function Members({ row }: { row: CatalogRow }) {
           {row.impactedMemberCount.toLocaleString()} impacted
         </span>
       )}
+    </span>
+  );
+}
+
+function HygieneBadges({ reasons }: { reasons?: readonly HygieneReason[] }) {
+  if (!reasons?.length) return <span className="text-muted-foreground">Clean</span>;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {reasons.map(reason => (
+        <span
+          key={reason}
+          className="whitespace-nowrap rounded-full border border-status-elevated/40 bg-status-elevated/10 px-2 py-0.5 text-xs font-medium text-status-elevated"
+        >
+          {HYGIENE_LABELS[reason]}
+        </span>
+      ))}
     </span>
   );
 }
@@ -122,6 +143,12 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
       </span>
     ),
     className: 'text-right font-normal',
+  },
+  {
+    id: 'hygiene',
+    header: 'Hygiene',
+    cell: row => <HygieneBadges reasons={row.hygiene} />,
+    className: 'font-normal',
   },
   {
     id: 'followers',
@@ -221,14 +248,27 @@ export default function CatalogDirectory({
   filtered,
   clearHref,
   canManage,
+  teams = [],
 }: {
   rows: readonly CatalogRow[];
   pagination: CatalogPagination;
   filtered: boolean;
   clearHref: string;
   canManage: boolean;
+  /** Owner-team choices for the bulk edit bar. */
+  teams?: ReadonlyArray<{ id: string; name: string }>;
 }) {
   const [view, setView] = useDirectoryView('business-services');
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const pageIds = rows.map(row => row.id);
+  const allSelected = pageIds.length > 0 && pageIds.every(id => selected.has(id));
+  const toggle = (id: string, checked: boolean) =>
+    setSelected(current => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const empty = filtered ? (
     <EmptyState
@@ -279,7 +319,26 @@ export default function CatalogDirectory({
             : undefined
         }
         view={rows.length ? { value: view, onChange: setView } : undefined}
+        selectAll={
+          canManage && rows.length && view !== 'cards'
+            ? {
+                checked: allSelected,
+                indeterminate: !allSelected && pageIds.some(id => selected.has(id)),
+                onCheckedChange: checked =>
+                  setSelected(checked ? new Set(pageIds.slice(0, 100)) : new Set()),
+                label: 'Select page',
+              }
+            : undefined
+        }
       />
+      {canManage && selected.size > 0 && (
+        <BulkEditBar
+          ids={[...selected]}
+          names={new Map(rows.map(row => [row.id, row.name]))}
+          teams={teams}
+          onClear={() => setSelected(new Set())}
+        />
+      )}
       {rows.length === 0 ? (
         <div className="p-6">{empty}</div>
       ) : view === 'cards' ? (
@@ -295,6 +354,15 @@ export default function CatalogDirectory({
           getRowId={row => row.id}
           columns={COLUMNS}
           mobileRow={row => <MobileRow row={row} />}
+          selection={
+            canManage
+              ? {
+                  selected,
+                  onToggle: toggle,
+                  rowLabel: row => `Select ${row.name}`,
+                }
+              : undefined
+          }
           rowActions={row => (
             <BusinessServiceFollowButton id={row.id} name={row.name} following={row.following} />
           )}

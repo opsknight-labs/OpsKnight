@@ -3,6 +3,7 @@ import { RelativeTime, SeverityBadge } from '@/components/patterns';
 import { toneClasses } from '@/components/patterns/status-tone';
 import { urgencyTone } from '@/lib/design/status-palette';
 import type { ImpactTimelineEntry, TimeWindow } from '@/lib/business-services/contract';
+import { formatMoney, intervalCostCents } from '@/lib/business-services/impact-cost';
 import { cn } from '@/lib/utils';
 
 const SOURCE_LABEL: Record<ImpactTimelineEntry['source'], string> = {
@@ -31,11 +32,14 @@ export default function ImpactTimeline({
   window,
   showIncidents,
   now = window.to,
+  cost,
 }: {
   entries: readonly ImpactTimelineEntry[];
   window: TimeWindow;
   showIncidents: boolean;
   now?: Date;
+  /** Revenue rate for the per-incident cost; leave out for readers who must not see money. */
+  cost?: { revenuePerHourCents: number | null; currency: string };
 }) {
   const from = window.from.getTime();
   const span = Math.max(1, window.to.getTime() - from);
@@ -86,6 +90,10 @@ export default function ImpactTimeline({
         <ol className="divide-y divide-border rounded-md border" aria-label="Recent impacts">
           {recent.map((entry, index) => {
             const minutes = ((entry.endedAt ?? now).getTime() - entry.startedAt.getTime()) / 60_000;
+            const costCents =
+              cost && !entry.excluded
+                ? intervalCostCents(entry, cost.revenuePerHourCents, now)
+                : null;
             return (
               <li
                 key={index}
@@ -111,6 +119,9 @@ export default function ImpactTimeline({
                 <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                   <RelativeTime date={entry.startedAt} /> ·{' '}
                   {entry.endedAt ? minutesLabel(minutes) : 'ongoing'}
+                  {costCents !== null && cost && (
+                    <span title="Estimated cost of this impact"> · ~{formatMoney(costCents, cost.currency)}</span>
+                  )}
                 </span>
               </li>
             );

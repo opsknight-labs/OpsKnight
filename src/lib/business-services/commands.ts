@@ -16,6 +16,11 @@ import { invalidateBusinessServiceHealth } from './health';
 import { wouldCreateSupportCycle } from './stats';
 import { CustomAttributesSchema } from './attributes';
 import { BusinessServiceLinkSchema, parseBusinessServiceLinks } from './links';
+import {
+  CurrencySchema,
+  CustomersTotalSchema,
+  RevenuePerHourCentsSchema,
+} from './impact-cost';
 
 const id = z.string().trim().min(1).max(100);
 
@@ -62,6 +67,14 @@ export const BusinessServiceInputSchema = z
     quorumPartialPct: z.number().int().min(1).max(100).nullable().optional(),
     quorumMajorPct: z.number().int().min(1).max(100).nullable().optional(),
     dependencyHopDepth: z.number().int().min(1).max(5).optional(),
+    // Customer impact: integer cents per hour of full downtime, never a float.
+    customersTotal: CustomersTotalSchema.nullable().optional(),
+    revenuePerHourCents: RevenuePerHourCentsSchema.nullable().optional(),
+    currency: CurrencySchema.optional(),
+    // Customer-report health input: off while the threshold is null.
+    customerReportThreshold: z.number().int().min(1).max(100_000).nullable().optional(),
+    customerReportWindowMinutes: z.number().int().min(5).max(1440).nullable().optional(),
+    reviewIntervalDays: z.number().int().min(7).max(730).nullable().optional(),
   })
   .strict();
 
@@ -91,6 +104,12 @@ export const BUSINESS_SERVICE_SELECT = {
   quorumPartialPct: true,
   quorumMajorPct: true,
   dependencyHopDepth: true,
+  customersTotal: true,
+  revenuePerHourCents: true,
+  currency: true,
+  customerReportThreshold: true,
+  customerReportWindowMinutes: true,
+  reviewIntervalDays: true,
   createdAt: true,
   updatedAt: true,
   ownerTeam: { select: { id: true, name: true } },
@@ -480,6 +499,12 @@ function columns(input: ParsedInput) {
       'quorumPartialPct',
       'quorumMajorPct',
       'dependencyHopDepth',
+      'customersTotal',
+      'revenuePerHourCents',
+      'currency',
+      'customerReportThreshold',
+      'customerReportWindowMinutes',
+      'reviewIntervalDays',
     ]),
     ...(input.customAttributes !== undefined
       ? { customAttributes: input.customAttributes ?? Prisma.DbNull }
@@ -504,6 +529,9 @@ function auditFields(
     quorumPartialPct: number | null;
     quorumMajorPct: number | null;
     dependencyHopDepth: number;
+    revenuePerHourCents: number | null;
+    currency: string;
+    customerReportThreshold: number | null;
   }
 ) {
   return {
@@ -522,6 +550,15 @@ function auditFields(
     quorumPartialPct: input.quorumPartialPct ?? current?.quorumPartialPct ?? null,
     quorumMajorPct: input.quorumMajorPct ?? current?.quorumMajorPct ?? null,
     dependencyHopDepth: input.dependencyHopDepth ?? current?.dependencyHopDepth ?? 3,
+    revenuePerHourCents:
+      input.revenuePerHourCents !== undefined
+        ? input.revenuePerHourCents
+        : (current?.revenuePerHourCents ?? null),
+    currency: input.currency ?? current?.currency ?? 'USD',
+    customerReportThreshold:
+      input.customerReportThreshold !== undefined
+        ? input.customerReportThreshold
+        : (current?.customerReportThreshold ?? null),
   };
 }
 
@@ -607,6 +644,9 @@ export async function updateBusinessService(
         quorumPartialPct: current.quorumPartialPct,
         quorumMajorPct: current.quorumMajorPct,
         dependencyHopDepth: current.dependencyHopDepth,
+        revenuePerHourCents: current.revenuePerHourCents,
+        currency: current.currency,
+        customerReportThreshold: current.customerReportThreshold,
         dependsOnBusinessServiceIds: previousSupports,
         linksChanged:
           input.links !== undefined &&
@@ -742,6 +782,12 @@ export function businessServiceDto(
     quorumPartialPct: row.quorumPartialPct,
     quorumMajorPct: row.quorumMajorPct,
     dependencyHopDepth: row.dependencyHopDepth,
+    customersTotal: row.customersTotal,
+    revenuePerHourCents: row.revenuePerHourCents,
+    currency: row.currency,
+    customerReportThreshold: row.customerReportThreshold,
+    customerReportWindowMinutes: row.customerReportWindowMinutes,
+    reviewIntervalDays: row.reviewIntervalDays,
     members: row.members.map(({ service, critical }) => ({
       id: service.id,
       name: service.name,

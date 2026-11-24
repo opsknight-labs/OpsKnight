@@ -4,6 +4,7 @@ import { Boxes, MonitorCheck, Plus, Wand2 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccess } from '@/lib/access/server';
 import { CAPABILITIES } from '@/lib/authorization';
+import { teamReadWhere } from '@/lib/authorization-filters';
 import { actorHasCapability } from '@/lib/authorization-policy';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { businessServiceReadWhere } from '@/lib/business-services/commands';
@@ -15,6 +16,8 @@ import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
 import { Button } from '@/components/ui/shadcn/button';
 import ListFilterBar from '@/components/intelligence/lists/ListFilterBar';
 import CatalogDirectory, { type CatalogRow } from '@/components/business-service/CatalogDirectory';
+import HygieneToggle from '@/components/business-service/HygieneToggle';
+import { hygieneBadges } from '@/lib/business-services/hygiene';
 import HealthUnavailable from '@/components/business-service/HealthUnavailable';
 import { BS_STATUS_META, CRITICALITY_LABEL } from '@/components/business-service/HealthBadge';
 import {
@@ -111,6 +114,42 @@ export default async function BusinessServicesPage({
         select: { businessServiceId: true },
       })
     : [];
+  const hygieneRows = pageIds.length
+    ? await prisma.businessService.findMany({
+        where: { id: { in: pageIds } },
+        select: {
+          id: true,
+          createdAt: true,
+          lastReviewedAt: true,
+          reviewIntervalDays: true,
+          ownerUserId: true,
+          ownerUser: { select: { status: true } },
+        },
+      })
+    : [];
+  const hygieneById = new Map(
+    hygieneRows.map(row => [
+      row.id,
+      hygieneBadges({ ...row, ownerUserStatus: row.ownerUser?.status ?? null }),
+    ])
+  );
+  const bulkTeams = canManage
+    ? await prisma.team.findMany({
+        where: teamReadWhere(actor),
+        orderBy: { name: 'asc' },
+        take: 200,
+        select: { id: true, name: true },
+      })
+    : [];
+  const isAdmin = actorHasCapability(actor, CAPABILITIES.ADMIN_MANAGE);
+  const hygieneEnabled = isAdmin
+    ? ((
+        await prisma.systemSettings.findUnique({
+          where: { id: 'default' },
+          select: { businessServiceHygieneEnabled: true },
+        })
+      )?.businessServiceHygieneEnabled ?? false)
+    : false;
   const followerCounts = new Map(followers.map(row => [row.businessServiceId, row._count._all]));
   const followingIds = new Set(following.map(row => row.businessServiceId));
 
@@ -171,6 +210,7 @@ export default async function BusinessServicesPage({
           openIncidentCount: item.health.openIncidentCount,
           followerCount: followerCounts.get(item.id) ?? 0,
           following: followingIds.has(item.id),
+          hygiene: hygieneById.get(item.id),
         };
       })
     : [];
@@ -193,6 +233,11 @@ export default async function BusinessServicesPage({
                   <Wand2 className="h-4 w-4" aria-hidden />
                   Guided setup
                 </Link>
+              </Button>
+            )}
+            {canManage && (
+              <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>
+                <Link href="/services/business/templates">Templates</Link>
               </Button>
             )}
             <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>
@@ -261,8 +306,11 @@ export default async function BusinessServicesPage({
         ]}
       />
 
+      {isAdmin && <HygieneToggle enabled={hygieneEnabled} />}
+
       {engine ? (
         <CatalogDirectory
+          teams={bulkTeams}
           rows={rows}
           filtered={filtered}
           clearHref="/services/business"

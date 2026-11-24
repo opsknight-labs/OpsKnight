@@ -580,6 +580,7 @@ model User {
   businessServiceFollows      BusinessServiceFollower[]
   ownedBusinessServices       BusinessService[]         @relation("BusinessServiceOwner")
   businessServiceImpactsMarked IncidentBusinessServiceImpact[]
+  customerImpactReportsCreated CustomerImpactReport[]
   auditLogs                   AuditLog[]
   overrides                   OnCallOverride[]             @relation("OverrideUser")
   overrideReplacements        OnCallOverride[]             @relation("OverrideReplacesUser")
@@ -701,6 +702,7 @@ model Team {
   runbooks          Runbook[]          @relation("RunbookOwnerTeam")
   businessServices  BusinessService[]
   businessServiceSubscriptions BusinessServiceTeamSubscriber[]
+  businessServiceTemplates     BusinessServiceTemplate[]
   statusDashboards  StatusDashboard[]
   teamLeadId        String?
   teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
@@ -2978,6 +2980,17 @@ model BusinessService {
   lastNotifiedStatusAt DateTime?
   /// Opt-in to the monthly service review digest (also needs the org-level switch).
   includeInReview    Boolean                                 @default(false)
+  /// Customers exposed to this service; null = unknown.
+  customersTotal       Int?
+  /// Estimated revenue per hour of full downtime, integer minor units (cents).
+  revenuePerHourCents  Int?
+  /// ISO 4217 code for revenuePerHourCents.
+  currency             String                                  @default("USD")
+  /// Customer reports within customerReportWindowMinutes that lift health to degraded; null = off.
+  customerReportThreshold     Int?
+  customerReportWindowMinutes Int?
+  /// Review cadence in days; null = org default (180).
+  reviewIntervalDays   Int?
   createdAt          DateTime                                @default(now())
   updatedAt          DateTime                                @updatedAt
   ownerTeam          Team?                                   @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
@@ -2995,10 +3008,53 @@ model BusinessService {
   dashboards         StatusDashboardBusinessService[]
   teamSubscribers    BusinessServiceTeamSubscriber[]
   maintenanceWindows MaintenanceWindowBusinessService[]
+  customerReports    CustomerImpactReport[]
 
   @@index([ownerTeamId])
   @@index([ownerUserId])
   @@index([escalationPolicyId])
+}
+
+/// Customer-reported impact signals (support tickets, status inquiries) for a business service.
+model CustomerImpactReport {
+  id                String          @id @default(cuid())
+  businessServiceId String
+  /// zendesk, intercom, manual, api, ...
+  source            String
+  count             Int
+  windowStart       DateTime
+  windowEnd         DateTime
+  /// Caller-supplied id; unique per business service so a retry never double counts.
+  externalRef       String?
+  createdById       String?
+  createdAt         DateTime        @default(now())
+  businessService   BusinessService @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+  createdBy         User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([businessServiceId, externalRef])
+  @@index([businessServiceId, windowEnd])
+}
+
+/// Defaults applied when creating a business service from a template.
+model BusinessServiceTemplate {
+  id                String                    @id @default(cuid())
+  name              String                    @unique
+  description       String?
+  criticality       BusinessServiceTier?
+  sloTarget         Float?
+  sloWindowDays     Int                       @default(30)
+  quorumPartialPct  Int?
+  quorumMajorPct    Int?
+  tags              String[]                  @default([])
+  environment       String?
+  lifecycle         BusinessServiceLifecycle  @default(ACTIVE)
+  links             Json?
+  impactMinUrgency  IncidentUrgency?
+  impactMaxPriority String?
+  ownerTeamId       String?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  ownerTeam         Team?                     @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
 }
 
 model BusinessServiceMember {
@@ -3256,6 +3312,8 @@ model SystemSettings {
   accessReviewLastStartedAt        DateTime?
   /// When true, admins allow outgoing service webhooks to use plain http:// URLs.
   allowInsecureWebhookUrls         Boolean   @default(false)
+  /// Admin switch for the scheduled business-service ownership hygiene sweep (off by default).
+  businessServiceHygieneEnabled    Boolean   @default(false)
 }
 
 model IncidentMetricRollup {

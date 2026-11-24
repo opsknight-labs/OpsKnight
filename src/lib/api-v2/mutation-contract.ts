@@ -792,8 +792,35 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'POST /api/v2/business-services/import': supported(
     'dryRun only reads; an apply writes every row, member set and audit with the replay record, or nothing.'
   ),
+  'PUT /api/v2/settings/service-reviews': supported(
+    'The settings write and its audit commit with the replay record, so a retry returns the first result.'
+  ),
+  'POST /api/v2/service-reviews/run': supported(
+    'Each (period, kind, recipient) is claimed in a unique row before sending, so a retry or replay can never send a second review.'
+  ),
+  'POST /api/v2/service-reviews/preview': supported(
+    'Emails only the caller; rate limited to 3 per hour and a replay returns the first result without a second email.'
+  ),
   'PUT /api/v2/status-pages/[id]/business-services/[businessServiceId]/override': supported(
     'Override and audit commit with the replay record; the mapping trigger republishes the page.'
+  ),
+  'POST /api/v2/business-services/[id]/customer-reports': supported(
+    'The report, realtime tick and audit commit with the replay record; a repeated externalRef returns the stored report instead of counting twice.'
+  ),
+  'POST /api/v2/business-services/bulk': supported(
+    'Every service applies in its own savepoint inside the replay transaction; per-item results, audits and the realtime tick commit together, or replay as stored. dryRun rolls every item back.'
+  ),
+  'POST /api/v2/business-service-templates': supported(
+    'The template and its audit event commit with the replay record.'
+  ),
+  'PATCH /api/v2/business-service-templates/[id]': supported(
+    'The template change and its audit event commit with the replay record.'
+  ),
+  'DELETE /api/v2/business-service-templates/[id]': supported(
+    'The deletion and its audit event commit with the replay record; business services created from it are unchanged.'
+  ),
+  'POST /api/v2/business-service-templates/[id]/instantiate': supported(
+    'The business service, members, audit and realtime tick commit with the replay record.'
   ),
   'POST /api/v2/incidents/[id]/stakeholder-notify': supported(
     'In-app rows, the email outbox and the audit commit with the replay record, so a retry never sends twice. At most 3 per incident every 10 minutes.'
@@ -828,15 +855,6 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     idempotency: 'required',
     concurrency: 'none',
     rationale: 'Shared participant command, audit and replay commit together.',
-  'PUT /api/v2/settings/service-reviews': supported(
-    'The settings write and its audit commit with the replay record, so a retry returns the first result.'
-  ),
-  'POST /api/v2/service-reviews/run': supported(
-    'Each (period, kind, recipient) is claimed in a unique row before sending, so a retry or replay can never send a second review.'
-  ),
-  'POST /api/v2/service-reviews/preview': supported(
-    'Emails only the caller; rate limited to 3 per hour and a replay returns the first result without a second email.'
-  ),
   },
   'PATCH /api/v2/schedules/[id]/layers/[layerId]/participants/[userId]': {
     idempotency: 'required',

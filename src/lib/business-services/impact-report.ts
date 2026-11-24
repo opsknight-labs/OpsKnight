@@ -7,6 +7,7 @@ import { serviceReadWhere } from '@/lib/authorization-filters';
 import { businessServiceReadWhere } from './commands';
 import { getBusinessServiceStats, type BusinessServiceStats, type TimeWindow } from './contract';
 import { unionDurationMs } from './stats';
+import { estimateDowntimeCostCents } from './impact-cost';
 
 export const IMPACT_REPORT_WINDOWS = [7, 30, 90] as const;
 const TIERS: readonly BusinessServiceTier[] = ['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3'];
@@ -15,8 +16,12 @@ export const IMPACT_REPORT_LIMIT = 100;
 const CONCURRENCY = 8;
 const MAX_IMPACT_ROWS = 10_000;
 
+export const IMPACT_REPORT_SORTS = ['impact', 'cost'] as const;
+
 export type ImpactReportParams = {
   days: (typeof IMPACT_REPORT_WINDOWS)[number];
+  /** impact (default): worst impacted time first; cost: highest estimated cost first. */
+  sort?: (typeof IMPACT_REPORT_SORTS)[number];
   teamId: string | null;
   tier: BusinessServiceTier | null;
 };
@@ -27,6 +32,11 @@ export type ImpactReportRow = {
   criticality: BusinessServiceTier | null;
   ownerTeam: { id: string; name: string } | null;
   stats: BusinessServiceStats;
+  /** Weighted downtime x revenue per hour, integer cents; null without a revenue rate. */
+  estimatedCostCents: number | null;
+  revenuePerHourCents: number | null;
+  currency: string;
+  customersTotal: number | null;
   /** The member service whose own incidents caused the most impact time in the window. */
   worstMember: { id: string; name: string; impactMinutes: number } | null;
 };
@@ -57,6 +67,7 @@ export function parseImpactReportParams(
   const tier = get('tier');
   return {
     days: IMPACT_REPORT_WINDOWS.find(value => value === days) ?? 30,
+    sort: IMPACT_REPORT_SORTS.find(value => value === get('sort')) ?? 'impact',
     teamId: typeof team === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(team) ? team : null,
     tier: TIERS.find(value => value === tier) ?? null,
   };
@@ -65,6 +76,7 @@ export function parseImpactReportParams(
 export function impactReportSearch(params: ImpactReportParams): string {
   const search = new URLSearchParams();
   if (params.days !== 30) search.set('days', String(params.days));
+  if (params.sort && params.sort !== 'impact') search.set('sort', params.sort);
   if (params.teamId) search.set('team', params.teamId);
   if (params.tier) search.set('tier', params.tier);
   return search.toString();
@@ -94,6 +106,9 @@ export async function getBusinessImpactReport(
       id: true,
       name: true,
       criticality: true,
+      revenuePerHourCents: true,
+      currency: true,
+      customersTotal: true,
       ownerTeam: { select: { id: true, name: true } },
       members: { select: { serviceId: true } },
     },
@@ -118,15 +133,31 @@ export async function getBusinessImpactReport(
     name: service.name,
     criticality: service.criticality,
     ownerTeam: service.ownerTeam,
+    revenuePerHourCents: service.revenuePerHourCents,
+    currency: service.currency,
+    customersTotal: service.customersTotal,
+    estimatedCostCents: estimateDowntimeCostCents(
+      stats.at(index)!.weightedDowntimeMinutes ?? 0,
+      service.revenuePerHourCents
+    ),
     worstMember: worst.get(service.id) ?? null,
   }));
-  rows.sort(
-    (a, b) =>
+  rows.sort(compareImpactRows(params.sort));
+  return { window, params, rows, truncated: found.length > IMPACT_REPORT_LIMIT };
+}
+
+/** Row order: by estimated cost (unpriced last) or by impacted time; ties fall back to the other, then name. */
+export function compareImpactRows(sort: ImpactReportParams['sort'] = 'impact') {
+  type R = Pick<ImpactReportRow, 'name' | 'estimatedCostCents'> & {
+    stats: Pick<BusinessServiceStats, 'impactMinutes' | 'incidentCount'>;
+  };
+  return (a: R, b: R) =>
+    (sort === 'cost'
+      ? (b.estimatedCostCents ?? -1) - (a.estimatedCostCents ?? -1)
+      : 0) ||
       b.stats.impactMinutes - a.stats.impactMinutes ||
       b.stats.incidentCount - a.stats.incidentCount ||
-      a.name.localeCompare(b.name)
-  );
-  return { window, params, rows, truncated: found.length > IMPACT_REPORT_LIMIT };
+      a.name.localeCompare(b.name);
 }
 
 /** Worst first by unioned impact time, then incident count, then name; keeps the top limit. */
@@ -243,6 +274,9 @@ export function impactReportCsv(report: ImpactReport): string {
     'Impacted hours',
     'Worst member',
     'Worst member impacted hours',
+    'Estimated cost',
+    'Currency',
+    'Customers exposed',
   ];
   const lines = report.rows.map(row =>
     [
@@ -256,6 +290,9 @@ export function impactReportCsv(report: ImpactReport): string {
       round(row.stats.impactMinutes / 60, 2),
       row.worstMember?.name ?? null,
       row.worstMember ? round(row.worstMember.impactMinutes / 60, 2) : null,
+      row.estimatedCostCents === null ? null : (row.estimatedCostCents / 100).toFixed(2),
+      row.estimatedCostCents === null ? null : row.currency,
+      row.customersTotal,
     ]
       .map(csvCell)
       .join(',')

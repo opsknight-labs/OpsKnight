@@ -91,6 +91,26 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
     businessServiceIds: ['bsv_123456'],
   },
   'PUT /business-services/{id}/supporting': { businessServiceIds: ['bsv_234567'] },
+  'POST /business-services/{id}/customer-reports': {
+    source: 'zendesk',
+    count: 14,
+    windowStart: '2026-11-25T09:00:00.000Z',
+    windowEnd: '2026-11-25T09:30:00.000Z',
+    externalRef: 'zendesk-batch-2026-11-25-0900',
+  },
+  'POST /business-services/bulk': {
+    ids: ['bsv_123456', 'bsv_234567'],
+    changes: { addTags: ['pci'], markReviewed: true },
+    dryRun: true,
+  },
+  'POST /business-service-templates': {
+    name: 'Customer-facing API',
+    criticality: 'TIER_1',
+    sloTarget: 99.9,
+    tags: ['api'],
+  },
+  'PATCH /business-service-templates/{id}': { sloTarget: 99.95 },
+  'POST /business-service-templates/{id}/instantiate': { name: 'Orders API' },
   'PUT /settings/service-reviews': { enabled: false, dayOfMonth: 1, hour: 9 },
   'POST /business-services/import': {
     format: 'csv',

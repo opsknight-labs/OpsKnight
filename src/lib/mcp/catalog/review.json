@@ -4042,7 +4042,7 @@
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
     "routeSha256": "9e40021138b603ce4f324a9996fbc5997fa6f103d4da14bfeb5b8150afd10c9e",
-    "contractSha256": "bda5296525f33dfac580b23a0a7f982907b26abad28a94850ae5dfcc10ea3971"
+    "contractSha256": "fd8d30b3136827365d152e763a6b5e2aaed19218a880dbe2e7053ac2f3a7cd6a"
   },
   "updateBusinessService": {
     "status": "UNSUPPORTED_WITH_REASON",
@@ -4053,7 +4053,7 @@
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
     "routeSha256": "5eac70acaf47d887f15db82bbb2fa3f51a1475432ade8de7a0e0af470eb9400f",
-    "contractSha256": "bd39456a2c37db0f396dd4dd78552e6dab7a96b79000cfaf6cfa5eefa307dea5"
+    "contractSha256": "c13d4b5d4b4a78ae7f49d8e09ce0ab7730dd612c858afc98f9aba1bcc7bc3d5c"
   },
   "deleteBusinessService": {
     "status": "UNSUPPORTED_WITH_REASON",
@@ -4100,7 +4100,7 @@
     "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.read"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "c4a964b9dcaba1847a7a1e864813ad07b0439cad808d028cf774a38b56955057",
+    "routeSha256": "1b4b7dfd70be01ffe4c0e656c93fe208e99f27f1d348a77ff1def35f2d4a48c9",
     "contractSha256": "67ff1ab5ddaf91b4e30dc2f473f139ed2dd208da772975a6e46b25975bbc8604"
   },
   "getBusinessServiceGraph": {
@@ -4148,6 +4148,127 @@
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "e6c4001358077094b223e59076241b34cbd804179e08999413d0be2b22139712",
     "actions": ["service.create"]
+  },
+  "importBusinessServices": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Bulk create or update of up to 1000 business services. Run with dryRun first; the apply needs approval.",
+    "tool": null,
+    "routeSha256": "c5f8babf2b223a3ab9239384a48137c5c2b4e811b5c2e118b4469a2214508ccd",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "a7dc251c0a89e8503a82c6c3b713c1711c14b4fdd321c3663f4883ec5a7927f0",
+    "actions": ["service.create"]
+  },
+  "listBusinessServiceCustomerReports": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "bfdc09108897f9ee32269924eec3effcb95f553132290e9a6ba44346da1ea2be",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "bb2a94dd2874639914e2de27c85485fdfde313936ae4a22fb27499f3dfd52ff4",
+    "actions": ["service.read"]
+  },
+  "listBusinessServiceTemplates": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "3bb2f82249cb888fe29f6c9609c6cf8b79c4c581c09a2b07773a607d9f1c6919",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "4bf032f373ce38efd23283a9c36c04f8336745a00830e353b0ad9a5bb079fbad",
+    "actions": ["service.create"]
+  },
+  "createBusinessServiceCustomerReport": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Adds customer-reported impact that can lift a business service to degraded and change what stakeholders are told; prepared, reviewed by a person, then committed through the existing REST command.",
+    "tool": null,
+    "routeSha256": "bfdc09108897f9ee32269924eec3effcb95f553132290e9a6ba44346da1ea2be",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "c3242eeca477f0ee28192262d2f78b6e8991271371076797999cba05b27e341c",
+    "actions": ["service.create"]
+  },
+  "bulkEditBusinessServices": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Changes owner, tier, lifecycle, tags or SLO on up to 100 business services. Run with dryRun first; the apply needs approval.",
+    "tool": null,
+    "routeSha256": "574c5986d1f43f64c285b0830ca1d675d62652290b38a3fbe41f54669957ddac",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "0d5cfbc31e1baa9ffdf8978b7f4a72220ac79742e0a4d49a5bf5b1159f288561",
+    "actions": ["service.create"]
+  },
+  "createBusinessServiceTemplate": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Defines defaults that new business services inherit (tier, SLO, owner); prepared, reviewed by a person, then committed through the existing REST command.",
+    "tool": null,
+    "routeSha256": "3bb2f82249cb888fe29f6c9609c6cf8b79c4c581c09a2b07773a607d9f1c6919",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "5fc65ab37b98236904c93aa85da21c148ddeb5f568bf8e27b5a1b85f2e968a83",
+    "actions": ["service.create"]
+  },
+  "updateBusinessServiceTemplate": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Changes defaults that new business services inherit; prepared, reviewed by a person, then committed through the existing REST command.",
+    "tool": null,
+    "routeSha256": "e69df3b1ad5d3ce3c1ba8257eb5341f88d95f6b4491e34ed1539eba740541ae5",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "92d361ecc5271522a8a7ca2d7d798010634a24255ac05d9046b537649777f1a8",
+    "actions": ["service.create"]
+  },
+  "deleteBusinessServiceTemplate": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Removes a template; business services created from it are unchanged. Approval keeps an assistant from deleting shared defaults unreviewed.",
+    "tool": null,
+    "routeSha256": "e69df3b1ad5d3ce3c1ba8257eb5341f88d95f6b4491e34ed1539eba740541ae5",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "13d2cc613c6823b634e9d093f90af8c0347cb9b32eda92a71103a0b67ff0ab0b",
+    "actions": ["service.create"]
+  },
+  "createBusinessServiceFromTemplate": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Creates a business service with template defaults, which sets who owns it and how it is paged; prepared, reviewed by a person, then committed through the existing REST command.",
+    "tool": null,
+    "routeSha256": "c75332be4ffbad2f2bf0440b7054bd3026045c459eac4e46c9c075014607c993",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "c64aeb22b4524472f0b159eee07db6dafac078d557f66f62cea043bd011754e0",
+    "actions": ["service.create"]
+  },
+  "setStatusPageBusinessServiceOverride": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Changes what customers see on a public status page immediately, so a person approves it.",
+    "tool": null,
+    "routeSha256": "90b41dd85800f33829752c7001ca083e9583c551bf709cb9c0ae0119c2768129",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "d5f1859687f8aa08004a097e8b4891ade1489168c345cf35717cd35cc5b592fc",
+    "actions": ["status_page.manage"]
+  },
+  "notifyIncidentStakeholders": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Emails people outside the response team; a person approves the wording before it is sent. Never pages.",
+    "tool": null,
+    "routeSha256": "8b9115df0a0bd527b5c88e0cbdb5da62302c87a812f469d3c2d89d1c5cff1118",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "dfefe6ad1ae18be7a129ac5a6f3c2b924c9512010e255450ec3ea8ed6cad148d",
+    "actions": ["incident.note"]
   },
   "getServiceReviewSettings": {
     "status": "SENSITIVE_READ",
@@ -4203,39 +4324,6 @@
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "55cdf93b415db1c218e7536e283de61ff330acba681b5a64242442840b61c064",
     "actions": ["service_review.read"]
-  },
-  "importBusinessServices": {
-    "status": "APPROVAL_REQUIRED",
-    "risk": "R2",
-    "reason": "Bulk create or update of up to 1000 business services. Run with dryRun first; the apply needs approval.",
-    "tool": null,
-    "routeSha256": "c5f8babf2b223a3ab9239384a48137c5c2b4e811b5c2e118b4469a2214508ccd",
-    "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "a7dc251c0a89e8503a82c6c3b713c1711c14b4fdd321c3663f4883ec5a7927f0",
-    "actions": ["service.create"]
-  },
-  "setStatusPageBusinessServiceOverride": {
-    "status": "APPROVAL_REQUIRED",
-    "risk": "R2",
-    "reason": "Changes what customers see on a public status page immediately, so a person approves it.",
-    "tool": null,
-    "routeSha256": "90b41dd85800f33829752c7001ca083e9583c551bf709cb9c0ae0119c2768129",
-    "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "d5f1859687f8aa08004a097e8b4891ade1489168c345cf35717cd35cc5b592fc",
-    "actions": ["status_page.manage"]
-  },
-  "notifyIncidentStakeholders": {
-    "status": "APPROVAL_REQUIRED",
-    "risk": "R2",
-    "reason": "Emails people outside the response team; a person approves the wording before it is sent. Never pages.",
-    "tool": null,
-    "routeSha256": "8b9115df0a0bd527b5c88e0cbdb5da62302c87a812f469d3c2d89d1c5cff1118",
-    "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
-    "contractSha256": "dfefe6ad1ae18be7a129ac5a6f3c2b924c9512010e255450ec3ea8ed6cad148d",
-    "actions": ["incident.note"]
   },
   "getDependencyGraphAt": {
     "status": "CURATED",

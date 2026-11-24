@@ -23,6 +23,9 @@ export type HealthBusinessService = {
   quorumMajorPct?: number | null;
   /** Dependency hops from a member that count as impact; default MAX_DEPTH. */
   dependencyHopDepth?: number | null;
+  /** Customer reports within the window that lift health to DEGRADED; null = off. */
+  customerReportThreshold?: number | null;
+  customerReportWindowMinutes?: number | null;
   members: ReadonlyArray<{ serviceId: string; critical: boolean; teamId: string | null }>;
 };
 
@@ -67,7 +70,38 @@ export type HealthInputs = {
   impactRows: readonly HealthImpactRow[];
   /** serviceId -> id of the active maintenance window covering it. */
   maintenance: ReadonlyMap<string, string>;
+  /** Recent customer reports (only needed for services with a threshold). */
+  customerReports?: readonly HealthCustomerReport[];
 };
+
+export type HealthCustomerReport = { businessServiceId: string; count: number; windowEnd: Date };
+
+export const DEFAULT_CUSTOMER_REPORT_WINDOW_MINUTES = 60;
+export const MAX_CUSTOMER_REPORT_WINDOW_MINUTES = 1440;
+
+/**
+ * The CUSTOMER_REPORTS reason when reports ending inside the window reach the threshold, else
+ * null. A report counts whole while its window ended inside the lookback (no pro-rating).
+ */
+export function customerReportsReason(
+  bs: Pick<HealthBusinessService, 'customerReportThreshold' | 'customerReportWindowMinutes'>,
+  reports: readonly Pick<HealthCustomerReport, 'count' | 'windowEnd'>[],
+  now: Date
+): Extract<ImpactReason, { kind: 'CUSTOMER_REPORTS' }> | null {
+  const threshold = bs.customerReportThreshold;
+  if (!threshold || threshold < 1) return null;
+  const windowMinutes = Math.min(
+    Math.max(bs.customerReportWindowMinutes ?? DEFAULT_CUSTOMER_REPORT_WINDOW_MINUTES, 1),
+    MAX_CUSTOMER_REPORT_WINDOW_MINUTES
+  );
+  const since = now.getTime() - windowMinutes * 60_000;
+  const reportCount = reports
+    .filter(report => report.windowEnd.getTime() >= since && report.windowEnd.getTime() <= now.getTime() + 300_000)
+    .reduce((sum, report) => sum + report.count, 0);
+  return reportCount >= threshold
+    ? { kind: 'CUSTOMER_REPORTS', status: 'DEGRADED', reportCount, threshold, windowMinutes }
+    : null;
+}
 
 export const MAX_DEPTH = 3;
 export const MAX_HOP_DEPTH = 5;
@@ -89,6 +123,7 @@ const KIND_ORDER: Record<ImpactReason['kind'], number> = {
   MANUAL: 2,
   NESTED: 3,
   MAINTENANCE: 4,
+  CUSTOMER_REPORTS: 5,
 };
 const URGENCY_RANK: Record<IncidentUrgency, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
 
@@ -208,6 +243,12 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
       else membersByService.set(member.serviceId, [entry]);
     }
   }
+  const reportsByBs = new Map<string, HealthCustomerReport[]>();
+  for (const report of inputs.customerReports ?? []) {
+    const list = reportsByBs.get(report.businessServiceId);
+    if (list) list.push(report);
+    else reportsByBs.set(report.businessServiceId, [report]);
+  }
   const latestRows = latestImpactRows(inputs.impactRows);
   const excluded = new Set<string>();
   for (const [key, row] of latestRows) if (row.excluded) excluded.add(key);
@@ -308,6 +349,11 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
         status: 'MAINTENANCE',
         maintenanceWindowId: inputs.maintenance.get(pool[0].serviceId)!,
       });
+    }
+    // Never lowers status and never exceeds DEGRADED on its own; maintenance keeps its status.
+    if (bs.customerReportThreshold && !reasons.some(reason => reason.kind === 'MAINTENANCE')) {
+      const customer = customerReportsReason(bs, reportsByBs.get(bs.id) ?? [], inputs.now);
+      if (customer) reasons.push(customer);
     }
     const criticalIds = new Set(critical.map(member => member.serviceId));
     const impactedCritical = [...(impactedMembers.get(bs.id) ?? [])].filter(id =>
@@ -417,7 +463,8 @@ export function incidentImpactSources(
   const sources = new Map<string, BusinessServiceImpactSource>();
   for (const [bsId, item] of health) {
     const reason = item.reasons[0];
-    if (reason && reason.kind !== 'MAINTENANCE') sources.set(bsId, reason.kind);
+    if (reason && reason.kind !== 'MAINTENANCE' && reason.kind !== 'CUSTOMER_REPORTS')
+      sources.set(bsId, reason.kind);
   }
   return sources;
 }
@@ -457,7 +504,7 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
     import('@/lib/service-maintenance/windows'),
     import('@/lib/incident-status'),
   ]);
-  const [businessServices, supports, edges, incidents, impactRows] = await Promise.all([
+  const [businessServices, supports, edges, incidents, impactRows, customerReports] = await Promise.all([
     prisma.businessService.findMany({
       select: {
         id: true,
@@ -468,6 +515,8 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
         quorumPartialPct: true,
         quorumMajorPct: true,
         dependencyHopDepth: true,
+        customerReportThreshold: true,
+        customerReportWindowMinutes: true,
         members: {
           select: { serviceId: true, critical: true, service: { select: { teamId: true } } },
         },
@@ -504,6 +553,14 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
         startedAt: true,
       },
     }),
+    // Only services that opted in (threshold set) need reports; none is read otherwise.
+    prisma.customerImpactReport.findMany({
+      where: {
+        businessService: { customerReportThreshold: { not: null } },
+        windowEnd: { gte: new Date(now.getTime() - MAX_CUSTOMER_REPORT_WINDOW_MINUTES * 60_000) },
+      },
+      select: { businessServiceId: true, count: true, windowEnd: true },
+    }),
   ]);
   const memberServiceIds = [
     ...new Set(businessServices.flatMap(bs => bs.members.map(member => member.serviceId))),
@@ -523,6 +580,7 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
     edges,
     incidents,
     impactRows,
+    customerReports,
     maintenance: new Map([...windows].map(([serviceId, window]) => [serviceId, window.id])),
   };
 }

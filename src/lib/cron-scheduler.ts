@@ -490,6 +490,14 @@ async function runOnce() {
       logger.warn('[Cron] Business-service impact reconcile enqueue failed', { error });
     }
 
+    // Business-service ownership hygiene: hourly, only when an admin enabled it (off by default).
+    try {
+      const { runBusinessServiceHygieneIfDue } = await import('./business-services/hygiene-sweep');
+      await runBusinessServiceHygieneIfDue();
+    } catch (error) {
+      logger.warn('[Cron] Business-service hygiene sweep failed', { error });
+    }
+
     // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
     const ownership = getSchedulerOwnership(schedulerProfile);
     const jobResult = ownership.backgroundJobs
@@ -695,14 +703,6 @@ async function runOnce() {
       logger.warn('[Cron] Weekly analytics digests failed', { error });
     }
 
-    // Group 3: Maintenance tasks (low priority, run last)
-    const { processAuthenticationAlerts } = await import('./auth-control/security-events');
-    await processAuthenticationAlerts();
-    const { cleanAuthenticationCeremonies } = await import('./auth-control/sessions');
-    await cleanAuthenticationCeremonies();
-    const { observeAuthenticationReplica } = await import('./auth-control/replicas');
-    if (process.env.OPSKNIGHT_PROCESS_ROLE !== 'scheduler') await observeAuthenticationReplica();
-    const tokenCleanup = await cleanupUserTokens();
     // Monthly business service reviews: off unless an admin enabled them; idempotent per period.
     try {
       const { runScheduledServiceReviews } = await import('./business-services/reviews/run');
@@ -714,6 +714,14 @@ async function runOnce() {
       logger.warn('[Cron] Business service reviews failed', { error });
     }
 
+    // Group 3: Maintenance tasks (low priority, run last)
+    const { processAuthenticationAlerts } = await import('./auth-control/security-events');
+    await processAuthenticationAlerts();
+    const { cleanAuthenticationCeremonies } = await import('./auth-control/sessions');
+    await cleanAuthenticationCeremonies();
+    const { observeAuthenticationReplica } = await import('./auth-control/replicas');
+    if (process.env.OPSKNIGHT_PROCESS_ROLE !== 'scheduler') await observeAuthenticationReplica();
+    const tokenCleanup = await cleanupUserTokens();
     const rateLimitCleanup = await cleanupExpiredRateLimits();
     // MCP maintenance failure must not block incident-response maintenance; it logs and counts
     // its own failures.

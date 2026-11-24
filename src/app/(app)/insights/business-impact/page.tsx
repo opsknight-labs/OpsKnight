@@ -18,6 +18,7 @@ import {
   parseImpactReportParams,
   type ImpactReportRow,
 } from '@/lib/business-services/impact-report';
+import { formatMoney } from '@/lib/business-services/impact-cost';
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { cn } from '@/lib/utils';
@@ -211,6 +212,9 @@ export default async function BusinessImpactPage({
                     <th scope="col" className={cn(head, 'text-right')}>
                       Impacted
                     </th>
+                    <th scope="col" className={cn(head, 'hidden text-right md:table-cell')}>
+                      Est. cost
+                    </th>
                     <th scope="col" className={cn(head, 'hidden lg:table-cell')}>
                       Worst member
                     </th>
@@ -252,6 +256,16 @@ export default async function BusinessImpactPage({
                         {minutes(row.stats.mttrMinutes)}
                       </td>
                       <td className={num}>{hours(row.stats.impactMinutes)}</td>
+                      <td className={cn(num, 'hidden md:table-cell')}>
+                        {row.estimatedCostCents === null
+                          ? '—'
+                          : formatMoney(row.estimatedCostCents, row.currency)}
+                        {row.customersTotal !== null && (
+                          <span className="block text-xs text-muted-foreground">
+                            {row.customersTotal.toLocaleString('en-US')} customers
+                          </span>
+                        )}
+                      </td>
                       <td className="hidden max-w-[14rem] px-3 py-2 lg:table-cell">
                         {row.worstMember ? (
                           <Link

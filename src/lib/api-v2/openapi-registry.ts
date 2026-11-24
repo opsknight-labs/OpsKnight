@@ -836,6 +836,70 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/business-services/{id}/customer-reports',
+    'listBusinessServiceCustomerReports',
+    'services:read',
+    'list',
+    'BusinessServiceCustomerReport'
+  ),
+  op(
+    'post',
+    '/business-services/{id}/customer-reports',
+    'createBusinessServiceCustomerReport',
+    'services:write',
+    'item',
+    'BusinessServiceCustomerReport'
+  ),
+  op(
+    'post',
+    '/business-services/bulk',
+    'bulkEditBusinessServices',
+    'services:write',
+    'item',
+    'BusinessServiceBulkResult'
+  ),
+  op(
+    'get',
+    '/business-service-templates',
+    'listBusinessServiceTemplates',
+    'services:write',
+    'list',
+    'BusinessServiceTemplate'
+  ),
+  op(
+    'post',
+    '/business-service-templates',
+    'createBusinessServiceTemplate',
+    'services:write',
+    'item',
+    'BusinessServiceTemplate'
+  ),
+  op(
+    'patch',
+    '/business-service-templates/{id}',
+    'updateBusinessServiceTemplate',
+    'services:write',
+    'item',
+    'BusinessServiceTemplate'
+  ),
+  op(
+    'delete',
+    '/business-service-templates/{id}',
+    'deleteBusinessServiceTemplate',
+    'services:write',
+    'item',
+    'BusinessServiceTemplateDeletion'
+  ),
+  op(
+    'post',
+    '/business-service-templates/{id}/instantiate',
+    'createBusinessServiceFromTemplate',
+    'services:write',
+    'item',
+    'BusinessService'
+  ),
+  op(
+    'get',
     '/business-services/{id}/graph',
     'getBusinessServiceGraph',
     'services:read',
@@ -996,6 +1060,46 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'BusinessServiceImportResult'
   ),
   op(
+    'get',
+    '/settings/service-reviews',
+    'getServiceReviewSettings',
+    'services:write',
+    'item',
+    'ServiceReviewSettings'
+  ),
+  op(
+    'put',
+    '/settings/service-reviews',
+    'updateServiceReviewSettings',
+    'services:write',
+    'item',
+    'ServiceReviewSettings'
+  ),
+  op(
+    'get',
+    '/service-reviews/runs',
+    'listServiceReviewRuns',
+    'services:read',
+    'list',
+    'ServiceReviewRun'
+  ),
+  op(
+    'post',
+    '/service-reviews/run',
+    'runServiceReviews',
+    'services:write',
+    'item',
+    'ServiceReviewRunResult'
+  ),
+  op(
+    'post',
+    '/service-reviews/preview',
+    'previewServiceReview',
+    'services:read',
+    'item',
+    'ServiceReviewPreview'
+  ),
+  op(
     'put',
     '/status-pages/{id}/business-services/{businessServiceId}/override',
     'setStatusPageBusinessServiceOverride',
@@ -1098,46 +1202,6 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'status-pages:write',
     'item',
     'StatusPageAssetUpload'
-  ),
-  op(
-    'get',
-    '/settings/service-reviews',
-    'getServiceReviewSettings',
-    'services:write',
-    'item',
-    'ServiceReviewSettings'
-  ),
-  op(
-    'put',
-    '/settings/service-reviews',
-    'updateServiceReviewSettings',
-    'services:write',
-    'item',
-    'ServiceReviewSettings'
-  ),
-  op(
-    'get',
-    '/service-reviews/runs',
-    'listServiceReviewRuns',
-    'services:read',
-    'list',
-    'ServiceReviewRun'
-  ),
-  op(
-    'post',
-    '/service-reviews/run',
-    'runServiceReviews',
-    'services:write',
-    'item',
-    'ServiceReviewRunResult'
-  ),
-  op(
-    'post',
-    '/service-reviews/preview',
-    'previewServiceReview',
-    'services:read',
-    'item',
-    'ServiceReviewPreview'
   ),
   op(
     'get',

@@ -46,7 +46,15 @@ export type ImpactReason =
       incidentId: string;
     }
   | { kind: 'MANUAL'; status: BsStatus; incidentId: string; markedById: string | null }
-  | { kind: 'MAINTENANCE'; status: 'MAINTENANCE'; maintenanceWindowId: string };
+  | { kind: 'MAINTENANCE'; status: 'MAINTENANCE'; maintenanceWindowId: string }
+  | {
+      /** Customer reports in the service's window reached its threshold; lifts to DEGRADED at most. */
+      kind: 'CUSTOMER_REPORTS';
+      status: 'DEGRADED';
+      reportCount: number;
+      threshold: number;
+      windowMinutes: number;
+    };
 
 export type BusinessServiceHealth = {
   businessServiceId: string;
