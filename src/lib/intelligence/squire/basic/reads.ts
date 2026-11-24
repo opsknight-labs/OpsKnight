@@ -1,6 +1,7 @@
 import 'server-only';
-import type { Prisma } from '@prisma/client';
+import type { IncidentUrgency, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { pageByUrgency } from '@/lib/incidents/urgency-order';
 import { AuthorizationError } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import {
@@ -160,22 +161,28 @@ async function incidentList(ctx: Context): Promise<BasicReadResult> {
   const where = incidentWhere(ctx);
   const [total, rows] = await Promise.all([
     prisma.incident.count({ where }),
-    prisma.incident.findMany({
-      where,
-      orderBy: [{ urgency: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+    pageByUrgency({
       skip: ctx.offset,
       take: ctx.limit,
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        urgency: true,
-        createdAt: true,
-        updatedAt: true,
-        service: { select: { name: true } },
-        assignee: { select: { name: true } },
-        team: { select: { name: true } },
-      },
+      count: urgency => prisma.incident.count({ where: { AND: [where, { urgency }] } }),
+      fetch: (urgency, skip, take) =>
+        prisma.incident.findMany({
+          where: { AND: [where, { urgency }] },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          skip,
+          take,
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            urgency: true,
+            createdAt: true,
+            updatedAt: true,
+            service: { select: { name: true } },
+            assignee: { select: { name: true } },
+            team: { select: { name: true } },
+          },
+        }),
     }),
   ]);
   rows.forEach(row => ctx.collect?.({ kind: 'incident', id: row.id, label: row.title, data: row }));
@@ -512,17 +519,24 @@ async function serviceOverview(ctx: Context): Promise<string> {
   const service = namedService(rows, ctx);
   if (!service) return serviceChoices(rows, ctx);
   ctx.collect?.({ kind: 'service', id: service.id, label: service.name, data: service });
+  const activeOnService = (urgency: IncidentUrgency): Prisma.IncidentWhereInput => ({
+    AND: [
+      incidentReadWhere(ctx.actor),
+      { serviceId: service.id, status: { in: ['OPEN', 'ACKNOWLEDGED'] }, urgency },
+    ],
+  });
   const [active, policy, edges] = await Promise.all([
-    prisma.incident.findMany({
-      where: {
-        AND: [
-          incidentReadWhere(ctx.actor),
-          { serviceId: service.id, status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
-        ],
-      },
+    pageByUrgency({
       take: LIMIT + 1,
-      orderBy: [{ urgency: 'desc' }, { createdAt: 'desc' }],
-      select: { id: true, title: true, status: true, urgency: true, updatedAt: true },
+      count: urgency => prisma.incident.count({ where: activeOnService(urgency) }),
+      fetch: (urgency, skip, take) =>
+        prisma.incident.findMany({
+          where: activeOnService(urgency),
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          skip,
+          take,
+          select: { id: true, title: true, status: true, urgency: true, updatedAt: true },
+        }),
     }),
     service.escalationPolicyId
       ? prisma.escalationPolicy.findFirst({

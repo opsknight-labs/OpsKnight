@@ -1,5 +1,7 @@
 import 'server-only';
+import type { IncidentUrgency } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { pageByUrgency } from '@/lib/incidents/urgency-order';
 import { logger } from '@/lib/logger';
 import { escapeHtml } from '../digest/render';
 import { renderBrief } from '../ai/brief';
@@ -78,21 +80,32 @@ export async function buildHandoffSummary(
     narrative: null,
   };
   if (serviceIds.length === 0) return empty;
+  const openWhere = (urgency: IncidentUrgency) => ({
+    serviceId: { in: serviceIds },
+    status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED'] as ('OPEN' | 'ACKNOWLEDGED' | 'SNOOZED')[] },
+    urgency,
+  });
   const [open, resolved, followUps, openCount, resolvedCount, headsUp] = await Promise.all([
-    client.incident.findMany({
-      where: { serviceId: { in: serviceIds }, status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED'] } },
-      orderBy: [{ urgency: 'desc' }, { createdAt: 'asc' }],
+    pageByUrgency({
       take: MAX_OPEN,
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        urgency: true,
-        createdAt: true,
-        acknowledgedAt: true,
-        service: { select: { name: true } },
-        assignee: { select: { name: true, email: true } },
-      },
+      count: urgency => client.incident.count({ where: openWhere(urgency) }),
+      fetch: (urgency, skip, take) =>
+        client.incident.findMany({
+          where: openWhere(urgency),
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          skip,
+          take,
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            urgency: true,
+            createdAt: true,
+            acknowledgedAt: true,
+            service: { select: { name: true } },
+            assignee: { select: { name: true, email: true } },
+          },
+        }),
     }),
     client.incident.findMany({
       where: { serviceId: { in: serviceIds }, status: 'RESOLVED', resolvedAt: { gte: since } },

@@ -1,5 +1,6 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
+import { pageByUrgency } from '@/lib/incidents/urgency-order';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { resolveUserActor } from '@/lib/authorization-actors';
@@ -71,11 +72,18 @@ export async function buildHeadsUpBriefing(
   };
   const [incidents, openCount, changes, flags] = await Promise.all([
     incidentScope && services.length
-      ? prisma.incident.findMany({
-          where: { AND: [open, incidentScope] },
-          orderBy: [{ urgency: 'desc' }, { createdAt: 'asc' }],
+      ? pageByUrgency({
           take: MAX_LINES,
-          select: { title: true, urgency: true, service: { select: { name: true } } },
+          count: urgency =>
+            prisma.incident.count({ where: { AND: [open, incidentScope, { urgency }] } }),
+          fetch: (urgency, skip, take) =>
+            prisma.incident.findMany({
+              where: { AND: [open, incidentScope, { urgency }] },
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              skip,
+              take,
+              select: { title: true, urgency: true, service: { select: { name: true } } },
+            }),
         })
       : [],
     incidentScope && services.length
