@@ -99,6 +99,24 @@ export type OverallPublicHealth = {
  * itself operational.
  */
 export function deriveOverallPublicHealth(
+  services: ReadonlyArray<{ status: PublicServiceStatus }>,
+  groups: ReadonlyArray<{ status: PublicServiceStatus }> = []
+): OverallPublicHealth {
+  const base = deriveServicesHealth(services);
+  const groupWorst = worstKnownPublicStatus(groups.map(group => group.status));
+  if (!groupWorst || getWorstPublicStatus([groupWorst, base.status]) === base.status) return base;
+  return {
+    ...base,
+    status: groupWorst,
+    headline: overallHeadline(groupWorst, {
+      knownServiceCount: base.knownServiceCount,
+      unknownServiceCount: base.unknownServiceCount,
+      worstCount: groups.filter(group => group.status === groupWorst).length,
+    }),
+  };
+}
+
+function deriveServicesHealth(
   services: ReadonlyArray<{ status: PublicServiceStatus }>
 ): OverallPublicHealth {
   const statuses = services.map(service => service.status);

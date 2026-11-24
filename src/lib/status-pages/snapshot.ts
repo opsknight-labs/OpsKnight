@@ -32,7 +32,10 @@ import {
 } from './availability-engine';
 import { projectPublicBranding, projectPublicPresentation } from './branding';
 import { publicUptimeGrade } from './presentation';
-import { deriveOverallPublicHealth, getWorstPublicStatus } from './status-presentation';
+import {
+  deriveOverallPublicHealth,
+  getWorstPublicStatus,
+} from './status-presentation';
 import { buildPublicBusinessServices, expandAffectedServiceIds } from './business-services';
 import { activeStatusOverride } from './status-override';
 import { parsePublicStatusPageSnapshot } from './public-contract-schema';
@@ -619,7 +622,9 @@ export async function buildStatusPageSnapshot(
     });
     for (const update of linkedUpdates) add(update.incidentId, update.affectedBusinessServiceIds);
   }
-  const overallBase = deriveOverallPublicHealth(visibleServices);
+  // A pinned business-service status (override) can be worse than any member: the page headline
+  // must not stay green while a group row says outage.
+  const overallBase = deriveOverallPublicHealth(visibleServices, businessServices);
   const impactedServiceCount = visibleServices.filter(
     service => service.status !== 'OPERATIONAL' && service.status !== 'UNKNOWN'
   ).length;
@@ -732,7 +737,10 @@ export async function buildStatusPageSnapshot(
     // Canonical page status matches overall severity. UNKNOWN is confidence, not a worse outage.
     status: overallBase.status,
     statusIncludingUnknown: visibleServices.length
-      ? getWorstPublicStatus(visibleServices.map(service => service.status))
+      ? getWorstPublicStatus([
+          ...visibleServices.map(service => service.status),
+          ...(businessServices ?? []).map(group => group.status),
+        ])
       : overallBase.status,
     overall: {
       ...overallBase,
