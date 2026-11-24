@@ -22,7 +22,7 @@ export const BS_STATUS_META: Readonly<Record<BsStatus, StatusMeta>> = {
   UNKNOWN: { label: 'Unknown', tone: 'neutral', icon: CircleHelp, rank: 1 },
   MAINTENANCE: { label: 'Maintenance', tone: 'info', icon: Wrench, rank: 2 },
   DEGRADED: { label: 'Degraded', tone: 'elevated', icon: TriangleAlert, rank: 3 },
-  PARTIAL_OUTAGE: { label: 'Partial outage', tone: 'elevated', icon: CircleAlert, rank: 4 },
+  PARTIAL_OUTAGE: { label: 'Partial outage', tone: 'orange', icon: CircleAlert, rank: 4 },
   MAJOR_OUTAGE: { label: 'Major outage', tone: 'critical', icon: OctagonX, rank: 5 },
 };
 

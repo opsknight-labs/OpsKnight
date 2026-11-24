@@ -20,7 +20,7 @@ export const GRAPH_STATUS_META: Readonly<
   UNKNOWN: { label: 'Unknown', tone: 'neutral', icon: CircleHelp },
   MAINTENANCE: { label: 'Maintenance', tone: 'info', icon: Wrench },
   DEGRADED: { label: 'Degraded', tone: 'elevated', icon: TriangleAlert },
-  PARTIAL_OUTAGE: { label: 'Partial outage', tone: 'elevated', icon: CircleAlert },
+  PARTIAL_OUTAGE: { label: 'Partial outage', tone: 'orange', icon: CircleAlert },
   MAJOR_OUTAGE: { label: 'Major outage', tone: 'critical', icon: OctagonX },
 };
 
