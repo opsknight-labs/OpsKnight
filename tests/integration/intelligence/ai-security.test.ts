@@ -277,6 +277,10 @@ describe('prompt-injection red team', () => {
       'get_slo_status',
       'incident_analytics',
       'get_escalation_policy',
+      // The operation catalog's lookups: reads run as the person, never a change.
+      'find_operations',
+      'describe_operation',
+      'read_operation',
     ]);
     expect(
       advertised.filter(name => !reads.has(name)).filter(name => !name.startsWith('propose_'))

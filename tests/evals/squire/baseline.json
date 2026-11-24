@@ -11,7 +11,7 @@
   "maxTokensPerCase": 60000,
   "maxMedianTokenRise": 0.15,
   "medianTokensPerCase": null,
-  "modelMedianPromptTokens": 9206,
+  "modelMedianPromptTokens": 13223,
   "modelCacheReadShare": 0.514,
   "investigationMedianPromptTokens": 5943,
   "judge": {
@@ -21,8 +21,8 @@
   },
   "note": "Raised deliberately by committing a new value after a reviewed run; never by a passing run. minimumCases is refreshed with node scripts/check-squire-eval-baseline.cjs --record-catalogue. medianTokensPerCase (live) is recorded with --record-tokens <report>; modelMedianPromptTokens (scripted tier, estimated prompt tokens) is committed by hand from the failing test's message. Either may rise by maxMedianTokenRise before CI fails. modelCacheReadShare is the offline estimate (src/lib/intelligence/ai/cache-estimate.ts) of prompt tokens a cache-marking provider reads from cache in the scripted tier; it may fall by 0.05 before CI fails. Real cache reads come from a live run (paid; never in CI): SQUIRE_EVAL_PROVIDER_KIND=ANTHROPIC (or BEDROCK with SQUIRE_EVAL_AWS_ACCESS_KEY_ID/SQUIRE_EVAL_AWS_REGION) SQUIRE_EVAL_MODEL=<model> SQUIRE_EVAL_API_KEY=<key> npm run test:squire:eval, which writes cache.cacheReadShare to reports/squire-eval.json.",
   "minimumCases": {
-    "basic": 59,
-    "model": 119,
+    "basic": 131,
+    "model": 128,
     "live": 32
   }
 }

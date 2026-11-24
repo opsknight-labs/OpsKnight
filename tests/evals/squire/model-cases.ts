@@ -533,6 +533,41 @@ export const MODEL_CASES: readonly SquireModelEvalCase[] = [
     expect: { mode: 'ai', proposals: ['run_plan'] },
   },
   {
+    id: 'operations-runbook-from-fix',
+    category: 'operations',
+    question: 'Turn how we fixed that resolved incident into a runbook',
+    asAdmin: true,
+    script: [
+      { tool: 'propose_runbook_from_fix', input: { incidentId: '$resolved' } },
+      { say: 'Here is a draft runbook to confirm.' },
+    ],
+    // A draft runbook card through the catalog's createRunbook, with the same role check as any change.
+    expect: { mode: 'ai', proposals: ['run_operation'] },
+  },
+  {
+    id: 'operations-runbook-from-fix-hidden',
+    category: 'operations',
+    question: 'Turn that incident into a runbook',
+    asAdmin: true,
+    script: [
+      { tool: 'propose_runbook_from_fix', input: { incidentId: '$hidden' } },
+      { say: 'I could not prepare that.' },
+    ],
+    // Not resolved or not readable: no card, and the person is told why.
+    expect: { mode: 'ai', noProposal: true, notice: 'Only a resolved incident you can open' },
+  },
+  {
+    id: 'memory-remember-fact',
+    category: 'operations',
+    question: 'Remember that I own the checkout service',
+    script: [
+      { tool: 'propose_remember_fact', input: { fact: 'I own the checkout service' } },
+      { say: 'I can remember that once you confirm.' },
+    ],
+    // Saved only when the person confirms the card: text read from data can never plant a memory.
+    expect: { mode: 'ai', proposals: ['remember_fact'] },
+  },
+  {
     id: 'operations-extended-off',
     category: 'operations',
     question: 'Set the description of this service to "Checkout API"',

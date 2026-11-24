@@ -20,7 +20,7 @@ const STATUS_VARIANT = {
 
 /** The organisation's own documentation that Squire searches. Visible to intelligence readers, changed by managers. */
 export default async function DocSourcesPage() {
-  await requirePageAccess('/settings/intelligence/ai');
+  await requirePageAccess('/settings/intelligence/ai/docs');
   const user = await assertCapability(CAPABILITIES.INTELLIGENCE_READ);
   const canManage = hasCapability(user.role as AppRole, CAPABILITIES.INTELLIGENCE_MANAGE);
   const [sources, teams, memory] = await Promise.all([
