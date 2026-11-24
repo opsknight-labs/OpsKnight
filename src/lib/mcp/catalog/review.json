@@ -3982,7 +3982,7 @@
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/mcp/incident-roles-tools.test.ts",
     "actions": ["incident.acknowledge"],
-    "routeSha256": "a3349e77f331048b2b2a0970d52b50c9f95549f488c5a3d6a798043338136d9e",
+    "routeSha256": "2b211c470142e629e548a3d133741d643bd762f3bf66450eae15e0be621389d1",
     "contractSha256": "b33412efb6a87bd502172970d09c2af7ec67068de15025a45f1e503871d5caa5"
   },
   "clearIncidentRole": {
@@ -3993,7 +3993,7 @@
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "actions": ["incident.acknowledge"],
-    "routeSha256": "a3349e77f331048b2b2a0970d52b50c9f95549f488c5a3d6a798043338136d9e",
+    "routeSha256": "2b211c470142e629e548a3d133741d643bd762f3bf66450eae15e0be621389d1",
     "contractSha256": "a02a08215398b761d7cc595e835bf5805a8f4fa51794546f49302076ceb7adee"
   },
   "listBusinessServices": {
