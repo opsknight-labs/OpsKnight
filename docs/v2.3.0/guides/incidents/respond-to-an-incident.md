@@ -58,6 +58,25 @@ resolved in ~31m**, or, for an open incident running past twice that, **48× lon
 comparison uses the median of the service's last 90 days of resolved incidents and appears once it has at
 least three.
 
+### The page stays current
+
+An open incident page updates itself when someone else acknowledges, resolves, reassigns or otherwise
+changes the incident — at most every 10 seconds, and only while the tab is visible; coming back to the tab
+after a minute away also refreshes it. A note you are writing is kept.
+
+Under **Priority** in **Details**, a line says why the incident has its priority (for example **Set by rule
+"payments-high"**) and which SLA rule its targets come from, when that was recorded at creation. Beside the
+SLA chips, **paused 25m in total** shows time the SLA clock was paused (snoozed, suppressed or in a
+maintenance window), which is not counted against the targets.
+
+On a phone, **Responders** and **Customer updates** appear right after the incident details, before the
+description, and **Follow** sits beside the alert chip under the title. Cards that show more on hover open on
+tap.
+
+When you resolve a `P1` or `P2` incident and can write its postmortem, **Start the postmortem next** is
+selected in the **Resolve** dialog: after resolving, the postmortem draft opens, filled from the timeline and
+notes. Clear it to stay on the incident.
+
 ### Catch up and move fast
 
 When you come back to an incident, a **Since you looked** strip under the title card counts what changed
@@ -98,9 +117,12 @@ payload as received and **Copy** copies it.
 
 ### Read the timeline
 
-The **Timeline** tab has three views: **Events**, **Response path**, and **Alerts**, which lists every alert
+The **Timeline** tab has four views: **Events**, **Response path**, **Alerts**, which lists every alert
 deduplicated into the incident, newest first, marks the one that opened it, and opens each to its readable
-payload (see [Read the alert payload](#read-the-alert-payload)).
+payload (see [Read the alert payload](#read-the-alert-payload)), and **Audit**, which shows who changed what —
+a person, an automation, Squire, or an API or MCP client — with the source of each change. **Audit** needs
+the same permission as the **Audit Log** page; the **Alerts** and **Audit** views load only when you open
+them.
 
 The **Timeline** tab has two views. **Response path** shows routing, paging, remediation, verification and recovery as lanes. **Events** lists every event and shows an **Activity** graph above the list:
 
