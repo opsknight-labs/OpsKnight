@@ -13,6 +13,7 @@ No per-seat pricing. Your incident data stays in your own database.</p>
   <a href="https://github.com/opsknight-labs/OpsKnight/releases/tag/v2.2.2"><img src="https://img.shields.io/badge/release-v2.2.2-e11d48?style=for-the-badge" alt="Release v2.2.2"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0--only-111827?style=for-the-badge" alt="License AGPL-3.0-only"></a>
   <a href="https://github.com/opsknight-labs/OpsKnight/pkgs/container/opsknight"><img src="https://img.shields.io/badge/ghcr.io-amd64%20%7C%20arm64-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Multi-architecture container on GHCR"></a>
+  <a href="https://hub.docker.com/u/opsknight"><img src="https://img.shields.io/badge/docker%20hub-opsknight-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Container images on Docker Hub"></a>
   <a href="https://opsknight.com/docs/v2.2.0/"><img src="https://img.shields.io/badge/docs-opsknight.com-2563eb?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation"></a>
 </p>
 <p>
@@ -99,6 +100,8 @@ Actionable reliability metrics including MTTA, MTTR, SLA compliance tracking, co
 ## 🚀 Quick start
 
 Prerequisites: Git, Docker with Docker Compose, and `openssl`.
+
+Images are published to two registries with identical digests: `ghcr.io/opsknight-labs/opsknight` and `docker.io/opsknight/opsknight`. If one is unreachable, set `OPSKNIGHT_IMAGE` to the other (the same applies to `opsknight-agent` and `opsknight-pgbouncer`).
 
 ```bash
 git clone https://github.com/opsknight-labs/OpsKnight.git
