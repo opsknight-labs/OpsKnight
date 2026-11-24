@@ -5,6 +5,7 @@ import IncidentInsights, {
 } from './intelligence/IncidentInsights';
 import prisma from '@/lib/prisma';
 import { readPayload } from '@/lib/payload-reader';
+import IncidentAuditView from '@/components/incident/detail/IncidentAuditView';
 import { priorityReason } from '@/lib/incidents/priority-reason';
 import IncidentLiveRefresh from '@/components/incident/IncidentLiveRefresh';
 import CardSkeleton from '@/components/incident/detail/CardSkeleton';
@@ -1068,6 +1069,7 @@ export default async function IncidentDetailScreen({
             activityContent={activityContent}
             automationContent={automationContent}
             responseContent={responseContent}
+            auditContent={<IncidentAuditView incidentId={incident.id} />}
             alertsContent={
               alertTotal > 0 ? (
                 <IncidentAlertsView incidentId={incident.id} total={alertTotal} />

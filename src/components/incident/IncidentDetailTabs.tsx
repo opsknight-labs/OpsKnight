@@ -10,6 +10,7 @@ import {
   MessageSquareText,
   Route,
   ListTree,
+  ScrollText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +27,8 @@ export type IncidentDetailTabsProps = {
   responseContent?: ReactNode;
   /** Every alert on the incident with its readable payload; a view inside the Timeline tab. */
   alertsContent?: ReactNode;
+  /** Who changed what (people, automation, Squire, API/MCP); a view inside the Timeline tab, loaded on open. */
+  auditContent?: ReactNode;
   /** Runbooks for this incident; a section of the Automation tab. */
   runbooksContent?: ReactNode;
   postmortemContent?: ReactNode;
@@ -100,7 +103,7 @@ export function isIncidentTabAvailable(
 const TRIGGER_CLASS =
   'shrink-0 flex items-center justify-center gap-1.5 py-1.5 px-2.5 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs transition-colors select-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
 
-type TimelineView = 'events' | 'response' | 'alerts';
+type TimelineView = 'events' | 'response' | 'alerts' | 'audit';
 
 export default function IncidentDetailTabs({
   defaultTab = 'notes',
@@ -110,6 +113,7 @@ export default function IncidentDetailTabs({
   automationContent,
   responseContent,
   alertsContent,
+  auditContent,
   runbooksContent,
   postmortemContent,
   showPostmortem = true,
@@ -260,7 +264,7 @@ export default function IncidentDetailTabs({
           </TabsContent>
 
           <TabsContent value="timeline" className="mt-0 focus-visible:outline-hidden">
-            {(hasResponse || alertsContent) && (
+            {(hasResponse || alertsContent || auditContent) && (
               <div
                 id="incident-alerts"
                 role="group"
@@ -274,6 +278,7 @@ export default function IncidentDetailTabs({
                       ? [{ id: 'response', label: 'Response path', Icon: Route }]
                       : []),
                     ...(alertsContent ? [{ id: 'alerts', label: 'Alerts', Icon: Bell }] : []),
+                    ...(auditContent ? [{ id: 'audit', label: 'Audit', Icon: ScrollText }] : []),
                   ] as Array<{ id: TimelineView; label: string; Icon: typeof ListTree }>
                 ).map(({ id, label, Icon }) => (
                   <button
@@ -286,7 +291,9 @@ export default function IncidentDetailTabs({
                         ? 'Every event, note and page, with the activity graph'
                         : id === 'alerts'
                           ? 'Every alert deduplicated into this incident, with its payload'
-                          : 'How the incident was routed, paged, remediated and recovered'
+                          : id === 'audit'
+                            ? 'Who changed what: people, automation, Squire and API/MCP clients'
+                            : 'How the incident was routed, paged, remediated and recovered'
                     }
                     className={cn(
                       'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 transition-colors',
@@ -305,7 +312,9 @@ export default function IncidentDetailTabs({
               ? responseContent
               : alertsContent && timelineView === 'alerts'
                 ? alertsContent
-                : timelineContent}
+                : auditContent && timelineView === 'audit'
+                  ? auditContent
+                  : timelineContent}
           </TabsContent>
 
           {(hasAutomation || hasRunbooks) && (
