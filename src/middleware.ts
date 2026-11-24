@@ -51,6 +51,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/logs/ingest',
   '/api/status',
   '/api/status-page',
+  '/api/graph-embed',
   '/api/system/vapid-public-key',
   '/api/slack/actions',
   '/api/slack/oauth/callback',

@@ -37,6 +37,10 @@ import {
   BUSINESS_SERVICE_SCHEMAS,
   BUSINESS_SERVICE_OPERATIONS,
 } from './business-services-openapi';
+import {
+  DEPENDENCY_GRAPH_SCHEMAS,
+  DEPENDENCY_GRAPH_OPERATIONS,
+} from './dependency-graph-openapi';
 import { statusPageSectionFields } from '@/lib/status-pages/settings-sections';
 import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
 import {
@@ -373,6 +377,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
   ...MAINTENANCE_WINDOW_SCHEMAS,
   ...INCIDENT_ROLE_SCHEMAS,
   ...BUSINESS_SERVICE_SCHEMAS,
+  ...DEPENDENCY_GRAPH_SCHEMAS,
   StatusPagePublicationState: object(
     {
       status: { type: 'string', enum: ['LIVE', 'PUBLISHING', 'FAILED', 'DISABLED'] },
@@ -1913,6 +1918,7 @@ const operations: Operation[] = [
   ...MAINTENANCE_WINDOW_OPERATIONS,
   ...INCIDENT_ROLE_OPERATIONS,
   ...BUSINESS_SERVICE_OPERATIONS,
+  ...DEPENDENCY_GRAPH_OPERATIONS,
   {
     method: 'get',
     path: '/status-pages/{id}/preview',

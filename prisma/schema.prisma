@@ -7593,3 +7593,66 @@ model BusinessServiceReviewRun {
   @@unique([period, kind, recipientKey])
   @@index([period, createdAt])
 }
+/// State an edge entered, so the graph can be replayed at any past moment. No foreign keys: the
+/// history outlives the edge and its services.
+enum DependencyEventState {
+  ACTIVE
+  SUGGESTED
+  REJECTED
+  REMOVED
+}
+
+model ServiceDependencyEvent {
+  id                  String               @id @default(cuid())
+  upstreamServiceId   String
+  downstreamServiceId String
+  state               DependencyEventState
+  origin              DependencyOrigin
+  actorId             String?
+  occurredAt          DateTime             @default(now())
+
+  @@index([occurredAt])
+  @@index([upstreamServiceId, downstreamServiceId, occurredAt])
+}
+
+/// Measured traffic on one dependency edge over one window, pushed by an integration.
+model ServiceDependencyEdgeStats {
+  id                  String   @id @default(cuid())
+  upstreamServiceId   String
+  downstreamServiceId String
+  source              String   @db.VarChar(64)
+  windowStart         DateTime
+  windowSeconds       Int
+  requestCount        Int
+  errorCount          Int
+  createdAt           DateTime @default(now())
+
+  @@unique([upstreamServiceId, downstreamServiceId, source, windowStart])
+  @@index([upstreamServiceId, downstreamServiceId, windowStart])
+  @@index([windowStart])
+}
+
+enum GraphViewVisibility {
+  PRIVATE
+  TEAM
+  ORG
+}
+
+/// A named, shareable dependency-graph view. The embed token is stored only as a SHA-256 hash.
+model SavedGraphView {
+  id               String              @id @default(cuid())
+  name             String              @db.VarChar(120)
+  ownerId          String
+  teamId           String?
+  visibility       GraphViewVisibility @default(PRIVATE)
+  config           Json
+  shareTokenHash   String?             @unique
+  shareExpiresAt   DateTime?
+  shareRevokedAt   DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([ownerId])
+  @@index([visibility, teamId])
+}
+

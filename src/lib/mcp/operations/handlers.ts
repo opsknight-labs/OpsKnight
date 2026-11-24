@@ -174,6 +174,34 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/business-services/[id]/graph/route')).GET,
   ],
   [
+    'getDependencyGraphAt',
+    async () => (await import('@/app/api/v2/dependency-graph/at/route')).GET,
+  ],
+  [
+    'getDependencyGraphDiff',
+    async () => (await import('@/app/api/v2/dependency-graph/diff/route')).GET,
+  ],
+  [
+    'listDependencyGraphSinglePointsOfFailure',
+    async () => (await import('@/app/api/v2/dependency-graph/spof/route')).GET,
+  ],
+  [
+    'getDependencyFailureSimulation',
+    async () => (await import('@/app/api/v2/dependency-graph/simulate/route')).GET,
+  ],
+  [
+    'simulateDependencyFailure',
+    async () => (await import('@/app/api/v2/dependency-graph/simulate/route')).POST,
+  ],
+  [
+    'listDependencyGraphViews',
+    async () => (await import('@/app/api/v2/dependency-graph/views/route')).GET,
+  ],
+  [
+    'getDependencyGraphView',
+    async () => (await import('@/app/api/v2/dependency-graph/views/[id]/route')).GET,
+  ],
+  [
     'setIncidentRole',
     async () => (await import('@/app/api/v2/incidents/[id]/roles/[roleKey]/route')).PUT,
   ],

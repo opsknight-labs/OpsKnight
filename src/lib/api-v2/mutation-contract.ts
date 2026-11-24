@@ -713,6 +713,42 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Parent-scoped idempotent removal emits a timeline event only when an association existed.',
   },
+  'POST /api/v2/dependency-graph/views': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Saved view and audit event; a replay returns the stored view without a second row.',
+  },
+  'PATCH /api/v2/dependency-graph/views/[id]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Owner or admin edit of one saved view; last write wins, audited.',
+  },
+  'DELETE /api/v2/dependency-graph/views/[id]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Deleting a saved view also ends its embed token; audited.',
+  },
+  'POST /api/v2/dependency-graph/views/[id]/share': {
+    idempotency: 'never',
+    concurrency: 'none',
+    rationale:
+      'The response carries a one-time embed token that is stored only as a hash, so it is never replayed; sharing again replaces the token.',
+  },
+  'DELETE /api/v2/dependency-graph/views/[id]/share': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Revokes the embed token; revoking twice leaves it revoked.',
+  },
+  'POST /api/v2/dependency-graph/simulate': {
+    idempotency: 'natural',
+    concurrency: 'none',
+    rationale: 'Read-only bounded what-if over the dependency graph; nothing is written.',
+  },
+  'POST /api/v2/dependency-graph/edge-stats': {
+    idempotency: 'natural',
+    concurrency: 'none',
+    rationale: 'Each window per edge and source is upserted, so a retry stores the same values.',
+  },
   'POST /api/v2/business-services': {
     idempotency: 'required',
     concurrency: 'none',
