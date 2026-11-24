@@ -20,7 +20,7 @@ import BusinessServiceFollowButton from '@/components/service/BusinessServiceFol
 import type { BsStatus } from '@/lib/business-services/contract';
 import { HYGIENE_LABELS, type HygieneReason } from '@/lib/business-services/hygiene';
 import BulkEditBar from './BulkEditBar';
-import HealthBadge, { CRITICALITY_HINT, CRITICALITY_LABEL } from './HealthBadge';
+import HealthBadge, { BS_STATUS_META, CRITICALITY_HINT, CRITICALITY_LABEL } from './HealthBadge';
 
 export type CatalogRow = {
   id: string;
@@ -94,6 +94,8 @@ const href = (row: CatalogRow) => `/services/business/${row.id}`;
 const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   {
     id: 'name',
+    sortKey: 'name',
+    sortValue: (row: CatalogRow) => row.name.toLowerCase(),
     header: 'Business service',
     cell: row => (
       <DirectoryPrimaryCell
@@ -106,12 +108,16 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   },
   {
     id: 'health',
+    sortKey: 'health',
+    sortValue: (row: CatalogRow) => -BS_STATUS_META[row.status].rank,
     header: 'Health',
     cell: row => <HealthBadge status={row.status} since={row.since} variant="solid" />,
     className: 'min-w-[11rem] font-normal',
   },
   {
     id: 'criticality',
+    sortKey: 'criticality',
+    sortValue: (row: CatalogRow) => row.criticality ?? 'TIER_9',
     header: 'Criticality',
     cell: row => <Criticality tier={row.criticality} />,
     // Global `table td` is 600; DESIGN.md wants 400 for secondary cells.
@@ -119,6 +125,8 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   },
   {
     id: 'owner',
+    sortKey: 'owner',
+    sortValue: (row: CatalogRow) => row.ownerTeam?.name.toLowerCase() ?? '\uffff',
     header: 'Owner team',
     cell: row =>
       row.ownerTeam ? (
@@ -130,12 +138,16 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   },
   {
     id: 'members',
+    sortKey: 'members',
+    sortValue: (row: CatalogRow) => row.memberCount,
     header: 'Services',
     cell: row => <Members row={row} />,
     className: 'text-right font-normal',
   },
   {
     id: 'incidents',
+    sortKey: 'incidents',
+    sortValue: (row: CatalogRow) => -row.openIncidentCount,
     header: 'Open incidents',
     cell: row => (
       <span className={row.openIncidentCount ? 'font-medium tabular-nums' : 'tabular-nums'}>
@@ -152,6 +164,8 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   },
   {
     id: 'followers',
+    sortKey: 'followers',
+    sortValue: (row: CatalogRow) => row.followerCount,
     header: 'Followers',
     cell: row => <span className="tabular-nums">{row.followerCount.toLocaleString()}</span>,
     className: 'text-right font-normal',
@@ -299,6 +313,9 @@ export default function CatalogDirectory({
             </Button>
             <Button asChild size="sm" variant="outline">
               <Link href="/services/business/setup">Guided setup</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/services/business/templates">Start from a template</Link>
             </Button>
           </div>
         ) : undefined

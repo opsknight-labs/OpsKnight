@@ -20,9 +20,13 @@ import HygieneToggle from '@/components/business-service/HygieneToggle';
 import { hygieneBadges } from '@/lib/business-services/hygiene';
 import HealthUnavailable from '@/components/business-service/HealthUnavailable';
 import { BS_STATUS_META, CRITICALITY_LABEL } from '@/components/business-service/HealthBadge';
+import HealthDistribution from '@/components/business-service/HealthDistribution';
+import SavedViews from '@/components/business-service/SavedViews';
+import AutoRefresh from '@/components/business-service/AutoRefresh';
 import {
   catalogHref,
   countMatching,
+  distribution,
   hasActiveFilters,
   isImpacted,
   parseCatalogParams,
@@ -156,10 +160,6 @@ export default async function BusinessServicesPage({
   const impactedNow = engine
     ? [...engine.health.values()].filter(entry => isImpacted(entry.status)).length
     : null;
-  const tierCounts = TIERS.map(tier => ({
-    tier,
-    count: visible.filter(row => row.criticality === tier).length,
-  })).filter(entry => entry.count > 0);
   const needsAttention = countable.filter(row => scoreRow(row).needsAttention).length;
   const base = { q: '', tier: '', status: '', team: '', needs: '' } as const;
   const stats: DetailStatItem[] = [
@@ -181,12 +181,6 @@ export default async function BusinessServicesPage({
           },
         ]
       : []),
-    ...tierCounts.map(({ tier, count }) => ({
-      label: CRITICALITY_LABEL[tier],
-      value: count.toLocaleString(),
-      href: catalogHref({ ...base, tier }),
-      active: query.tier === tier && !query.status,
-    })),
   ];
 
   const teams = [
@@ -218,6 +212,7 @@ export default async function BusinessServicesPage({
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <AutoRefresh seconds={30} />
       <PageHeader
         eyebrow="Service Catalog"
         title="Business services"
@@ -259,6 +254,8 @@ export default async function BusinessServicesPage({
           ) : undefined
         }
       />
+
+      {engine && <HealthDistribution data={distribution(visible, engine.health)} query={query} />}
 
       <ListFilterBar
         basePath="/services/business"
@@ -305,6 +302,8 @@ export default async function BusinessServicesPage({
           },
         ]}
       />
+
+      <SavedViews userId={actor.id} currentHref={catalogHref(query)} filtered={filtered} />
 
       {isAdmin && <HygieneToggle enabled={hygieneEnabled} />}
 

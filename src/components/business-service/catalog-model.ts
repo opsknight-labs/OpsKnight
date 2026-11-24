@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-object-injection -- lookups are keyed by typed enum values (status, tier), never request input */
 import type { BusinessServiceTier } from '@prisma/client';
 import type {
   BsStatus,
@@ -124,4 +125,58 @@ export function countMatching(
     if (query.status === 'impacted') return isImpacted(status);
     return !query.status || status === query.status;
   }).length;
+}
+
+export const DISTRIBUTION_STATUSES = [
+  'MAJOR_OUTAGE',
+  'PARTIAL_OUTAGE',
+  'DEGRADED',
+  'MAINTENANCE',
+  'OPERATIONAL',
+  'UNKNOWN',
+] as const satisfies readonly BsStatus[];
+
+export type Distribution = {
+  total: number;
+  byStatus: Record<BsStatus, number>;
+  /** One row per tier (null = no tier) that has services, with a count per status. */
+  matrix: { tier: BusinessServiceTier | null; total: number; byStatus: Record<BsStatus, number> }[];
+};
+
+const emptyCounts = (): Record<BsStatus, number> => ({
+  MAJOR_OUTAGE: 0,
+  PARTIAL_OUTAGE: 0,
+  DEGRADED: 0,
+  MAINTENANCE: 0,
+  OPERATIONAL: 0,
+  UNKNOWN: 0,
+});
+
+/** Counts of every visible business service by status, and by tier then status. */
+export function distribution(
+  rows: readonly { id: string; criticality: BusinessServiceTier | null }[],
+  health: ReadonlyMap<string, { status: BsStatus }>
+): Distribution {
+  const byStatus = emptyCounts();
+  const tiers = new Map<
+    BusinessServiceTier | null,
+    { total: number; byStatus: Record<BsStatus, number> }
+  >();
+  for (const row of rows) {
+    const status = health.get(row.id)?.status ?? 'UNKNOWN';
+    byStatus[status] += 1;
+    const entry = tiers.get(row.criticality) ?? { total: 0, byStatus: emptyCounts() };
+    entry.total += 1;
+    entry.byStatus[status] += 1;
+    tiers.set(row.criticality, entry);
+  }
+  const order = [...TIERS, null] as const;
+  return {
+    total: rows.length,
+    byStatus,
+    matrix: order.flatMap(tier => {
+      const entry = tiers.get(tier);
+      return entry ? [{ tier, ...entry }] : [];
+    }),
+  };
 }

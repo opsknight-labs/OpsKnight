@@ -7,6 +7,7 @@ import { businessServiceReadWhere } from '@/lib/business-services/commands';
 
 /** Each picker loads and searches at most this many rows; typing narrows server-side. */
 export const FORM_OPTION_LIMIT = 50;
+const TEAM_SERVICES_LIMIT = 200;
 
 export type BusinessServiceFormOptionKind = 'services' | 'users';
 
@@ -121,5 +122,24 @@ export async function loadBusinessServiceFormOptions(
       businessServices.map(row => ({ ...row, hint: null })),
       [...(selected.dependsOn ?? [])]
     ),
+  };
+}
+
+/** Services of one team the actor may read, for "add all of a team's services" (bounded). */
+export async function listTeamServiceOptions(
+  actor: AuthorizationActor,
+  teamId: string
+): Promise<{ options: Option[]; truncated: boolean }> {
+  const rows = await prisma.service.findMany({
+    where: { AND: [serviceReadWhere(actor), { teamId }] },
+    orderBy: { name: 'asc' },
+    take: TEAM_SERVICES_LIMIT + 1,
+    select: { id: true, name: true, team: { select: { name: true } } },
+  });
+  return {
+    options: rows
+      .slice(0, TEAM_SERVICES_LIMIT)
+      .map(row => ({ id: row.id, name: row.name, hint: row.team?.name ?? null })),
+    truncated: rows.length > TEAM_SERVICES_LIMIT,
   };
 }

@@ -38,6 +38,33 @@ function duration(minutes: number | null) {
 
 const BURN_LABEL = { OK: 'On track', AT_RISK: 'At risk', BREACHED: 'Budget spent' } as const;
 
+const BURN_BAR = {
+  OK: 'bg-status-ok',
+  AT_RISK: 'bg-status-elevated',
+  BREACHED: 'bg-status-critical',
+} as const;
+
+/** Share of the error budget spent, as a meter; the burn state is also written out beside it. */
+function BudgetGauge({ budget }: { budget: ErrorBudget }) {
+  const spent = Math.min(Math.max(100 - budget.remainingPercent, 0), 100);
+  return (
+    <div
+      role="meter"
+      aria-label="Error budget spent"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(spent)}
+      aria-valuetext={`${Math.round(spent)}% spent, ${BURN_LABEL[budget.burnState]}`}
+      className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
+    >
+      <div
+        className={cn('h-full rounded-full', BURN_BAR[budget.burnState])}
+        style={{ width: `${spent}%` }}
+      />
+    </div>
+  );
+}
+
 /** Uptime 30/90 days, incidents, MTTA and MTTR over the last 30 days. */
 export function OverviewKpis({
   last30,
@@ -62,6 +89,7 @@ export function OverviewKpis({
               </span>
             }
           />
+          <BudgetGauge budget={slo} />
         </li>
       )}
       <li className={KPI_CARD}>
