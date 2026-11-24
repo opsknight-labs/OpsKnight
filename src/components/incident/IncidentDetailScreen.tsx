@@ -11,6 +11,7 @@ import IncidentLiveRefresh from '@/components/incident/IncidentLiveRefresh';
 import CardSkeleton from '@/components/incident/detail/CardSkeleton';
 import { getCachedOrFetch } from '@/lib/realtime-cache';
 import FollowControl from '@/components/incident/detail/FollowControl';
+import IncidentViewers from '@/components/incident/detail/IncidentViewers';
 import { incidentSummaryText } from '@/lib/incidents/summary-text';
 import IncidentShortcuts from '@/components/incident/IncidentShortcuts';
 import { catchUpKind, type CatchUpItem } from '@/lib/incidents/catch-up';
@@ -579,19 +580,23 @@ export default async function IncidentDetailScreen({
       : null,
     url: `${appUrl}/incidents/${id}`,
   });
+  // Who else has the page open, then Follow: always in view at the top right (key resets it per incident).
   const followControl = (
-    <FollowControl
-      currentUserId={user.id}
-      currentWatcherId={incident.watchers.find(w => w.user.id === user.id)?.id ?? null}
-      followers={incident.watchers.map(w => ({
-        id: w.user.id,
-        name: w.user.name,
-        avatarUrl: w.user.avatarUrl ?? null,
-      }))}
-      total={incident.watchers.length}
-      onAddWatcher={handleAddWatcher}
-      onRemoveWatcher={handleRemoveWatcher}
-    />
+    <>
+      <IncidentViewers key={id} incidentId={id} currentUserId={user.id} />
+      <FollowControl
+        currentUserId={user.id}
+        currentWatcherId={incident.watchers.find(w => w.user.id === user.id)?.id ?? null}
+        followers={incident.watchers.map(w => ({
+          id: w.user.id,
+          name: w.user.name,
+          avatarUrl: w.user.avatarUrl ?? null,
+        }))}
+        total={incident.watchers.length}
+        onAddWatcher={handleAddWatcher}
+        onRemoveWatcher={handleRemoveWatcher}
+      />
+    </>
   );
   const routePrefix = presentation === 'mobile' ? '/m' : '';
   const detailsProps = {
@@ -782,7 +787,8 @@ export default async function IncidentDetailScreen({
                 )}
               </div>
               <div className="min-w-0 flex-1 space-y-3">
-                <div className="flex min-w-0 items-start justify-between gap-3">
+                {/* Narrow windows stack the actions under the title instead of squeezing it to one letter wide. */}
+                <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:justify-between">
                   <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 pt-0.5">
                     <h1
                       className={`min-w-0 wrap-break-word text-lg font-bold leading-snug tracking-tight text-foreground ${
@@ -800,9 +806,9 @@ export default async function IncidentDetailScreen({
                     />
                     {dedupChip}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div className="flex shrink-0 flex-wrap items-center gap-1">
                     {/* Follow / Following with who follows, where Watch sits on GitHub: always in view. */}
-                    <div className="mr-2">{followControl}</div>
+                    <div className="mr-2 flex items-center gap-3">{followControl}</div>
                     <Badge
                       variant="outline"
                       className="hidden border-border/80 font-mono text-xs text-muted-foreground sm:inline-flex"

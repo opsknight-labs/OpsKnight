@@ -92,6 +92,11 @@ link) is also behind **Copy summary** beside the incident ID.
 reads **Following** once you do); the avatars beside it are the people following, and select them to open
 the **Subscribers** card, where you choose a role or add teammates.
 
+Left of **Follow**, a green dot and avatars show who else has the incident open right now; hover (or, with
+a screen reader, read) them for names. Nobody shown means you are the only viewer. Someone drops off as soon
+as they close the tab or move to another page, or within about a minute and a quarter if their browser goes
+away without saying so. A tab in the background does not count as viewing.
+
 ### Read the alert payload
 
 When the incident's description is an alert payload, the **Description & Context** card shows it as a
@@ -120,11 +125,14 @@ payload as received and **Copy** copies it.
 The **Timeline** tab has four views: **Events**, **Response path**, **Alerts**, which lists every alert
 deduplicated into the incident, newest first, marks the one that opened it, and opens each to its readable
 payload (see [Read the alert payload](#read-the-alert-payload)), and **Audit**, which shows who changed what —
-a person, an automation, Squire, or an API or MCP client — with the source of each change. **Audit** needs
+a person, an automation, Squire, or an API or MCP client — with the source of each change. Automated steps
+that are not audit records (escalation steps, SLA warnings and breaches, auto-resolve and runbook steps)
+appear there too as **Automation · OpsKnight**, and role changes name the role, such as **Role assigned
+(commander)**. **Audit** needs
 the same permission as the **Audit Log** page; the **Alerts** and **Audit** views load only when you open
 them.
 
-The **Timeline** tab has two views. **Response path** shows routing, paging, remediation, verification and recovery as lanes. **Events** lists every event and shows an **Activity** graph above the list:
+**Response path** shows routing, paging, remediation, verification and recovery as lanes. **Events** lists every event and shows an **Activity** graph above the list:
 
 - Bars count alerts per time bucket; the bucket size adapts to the incident's length. A dashed line marks when the incident triggered.
 - Coloured dots mark key events: changes before onset, the trigger, escalations, acknowledgement and resolution, notes, and runbook runs. Select a dot to jump to its row in the list; the row is highlighted and the filter resets to **All**.
