@@ -705,7 +705,10 @@ export default async function IncidentDetailScreen({
               {incident.title}
             </h1>
             {/* Dedup and recurrence on its own line on phones, so it never crowds the copy buttons. */}
-            <div className="flex">{dedupChip}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              {dedupChip}
+              {followControl}
+            </div>
             {showIntelligence && (
               <Suspense fallback={null}>
                 <IncidentGroupLine incidentId={incident.id} presentation="mobile" />
@@ -969,6 +972,26 @@ export default async function IncidentDetailScreen({
             />
           </div>
         </details>
+      )}
+
+      {/* Phones: who is on it and what customers were told, before the description and tabs. */}
+      {presentation === 'mobile' && (
+        <>
+          <Suspense fallback={<CardSkeleton title="Responders" rows={4} />}>
+            <IncidentRespondersCard incidentId={id} viewerId={user.id} />
+          </Suspense>
+          <Suspense fallback={<CardSkeleton title="Customer updates" rows={2} />}>
+            <IncidentCustomerCommsCard
+              incident={{
+                id,
+                serviceId: storedIncident.serviceId,
+                status: storedIncident.status,
+                visibility: storedIncident.visibility,
+              }}
+              timeZone={userTimeZone}
+            />
+          </Suspense>
+        </>
       )}
 
       {presentation === 'mobile' && (
