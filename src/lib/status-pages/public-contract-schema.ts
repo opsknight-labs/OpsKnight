@@ -265,6 +265,8 @@ export const publicStatusPageSnapshotSchema = z
             status,
             statusSince: dateTime.optional(),
             memberServiceIds: z.array(z.string()),
+            parentId: z.string().optional(),
+            childIds: z.array(z.string()).optional(),
             activeIncidentCount: z.number().int().nonnegative(),
             impactedServiceCount: z.number().int().nonnegative(),
             uptime: z

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useId } from 'react';
+import { memo, useId, type ReactNode } from 'react';
 import type {
   PublicBusinessService,
   PublicStatusService,
@@ -115,6 +115,9 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
   open,
   onToggle,
   display,
+  childRows,
+  childCount = 0,
+  level = 1,
 }: {
   item: PublicBusinessService;
   members: PublicStatusService[];
@@ -122,17 +125,27 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
   open: boolean;
   onToggle: () => void;
   display: RowDisplay;
+  /** Nested child business-service rows (already rendered), shown under this row. */
+  childRows?: ReactNode;
+  childCount?: number;
+  /** 1-based depth in the support hierarchy, exposed as aria-level. */
+  level?: number;
 }) {
   const panelId = useId();
   const presentation = statusPresentation(item.status);
   const affected = item.status !== 'OPERATIONAL';
   const row = asHistoryRow(item);
   // Members stay out of view when the page shows only the business service.
-  const canExpand = expandable && item.showMembers !== false;
+  const showMembers = item.showMembers !== false;
+  const canExpand = expandable && (showMembers || childCount > 0);
+  // Without disclosure (non-expandable layout) children are always visible.
+  const showChildren = childCount > 0 && (!expandable || open);
   return (
     <div
       role="listitem"
-      className={`status-v3-service status-service-card status-v3-business${affected ? ' status-v3-service--affected' : ''}`}
+      aria-level={level}
+      style={level > 1 ? { marginInlineStart: 'clamp(0.5rem, 3vw, 1.25rem)' } : undefined}
+      className={`status-v3-service status-service-card status-v3-business${level > 1 ? ' status-v3-business--child' : ''}${affected ? ' status-v3-service--affected' : ''}`}
       data-status={presentation.token}
       data-expanded={canExpand ? String(open) : undefined}
     >
@@ -165,6 +178,7 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
               <span className="sr-only">
                 , {open ? 'hide' : 'show'} {members.length}{' '}
                 {members.length === 1 ? 'service' : 'services'}
+                {childCount > 0 ? `, ${childCount} nested` : ''}
               </span>
             </button>
           ) : (
@@ -230,7 +244,13 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
           hidden={!open}
         >
           {open &&
+            showMembers &&
             members.map(member => <MemberRow key={member.id} service={member} display={display} />)}
+        </div>
+      )}
+      {showChildren && (
+        <div role="list" aria-label={`Within ${item.name}`} className="status-v3-business__children">
+          {childRows}
         </div>
       )}
     </div>

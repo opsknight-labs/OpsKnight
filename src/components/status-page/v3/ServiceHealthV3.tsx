@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, type ReactNode } from 'react';
 import type {
   PublicBusinessService,
   PublicServiceLayout,
@@ -268,10 +268,21 @@ export default function ServiceHealthV3({
   const expandable = layout === 'BUSINESS_EXPANDABLE';
   // Affected business services start open so visitors see which part is down, and one that
   // becomes affected on a live refresh opens again even if the visitor closed it earlier.
-  const affectedKey = businessServices
-    .filter(item => item.status !== 'OPERATIONAL')
-    .map(item => item.id)
-    .join(',');
+  const affectedKey = [
+    ...new Set(
+      businessServices
+        .filter(item => item.status !== 'OPERATIONAL')
+        .flatMap(item => {
+          const chain = [item.id];
+          // Open ancestors too so a nested affected child is visible (bounded: depth <= 3).
+          for (let at = item.parentId, n = 0; at && n < 3; n++) {
+            chain.push(at);
+            at = businessServices.find(other => other.id === at)?.parentId;
+          }
+          return chain;
+        })
+    ),
+  ].join(',');
   const [openIds, setOpenIds] = useState<Set<string>>(
     () => new Set(affectedKey ? affectedKey.split(',') : [])
   );
@@ -337,6 +348,44 @@ export default function ServiceHealthV3({
   }, [businessMode, businessServices, filter, filtered, query, serviceById, sortMode]);
 
   if (services.length === 0) return null;
+
+  // Nest child business services under their parent (depth bounded, cycle-safe at render time).
+  const renderBusinessRows = (parentId: string | null, level: number, seen: Set<string>): ReactNode => {
+    if (!business || level > 3) return null;
+    const present = new Set(business.rows.map(row => row.item.id));
+    return business.rows
+      .filter(({ item }) =>
+        parentId === null
+          ? !item.parentId || !present.has(item.parentId)
+          : item.parentId === parentId
+      )
+      .filter(({ item }) => !seen.has(item.id))
+      .map(({ item, members, revealedBySearch }) => {
+        const nextSeen = new Set(seen).add(item.id);
+        const childCount = business.rows.filter(row => row.item.parentId === item.id).length;
+        return (
+          <BusinessServiceRowV3
+            key={item.id}
+            item={item}
+            members={members}
+            expandable={expandable}
+            level={level}
+            childCount={childCount}
+            childRows={childCount ? renderBusinessRows(item.id, level + 1, nextSeen) : null}
+            open={revealedBySearch || openIds.has(item.id)}
+            onToggle={() =>
+              setOpenIds(current => {
+                const next = new Set(current);
+                if (next.has(item.id)) next.delete(item.id);
+                else next.add(item.id);
+                return next;
+              })
+            }
+            display={rowDisplay}
+          />
+        );
+      });
+  };
 
   const grouped = groupRegions && canGroup;
   const rowDisplay = {
@@ -591,24 +640,7 @@ export default function ServiceHealthV3({
           <>
             {business.rows.length > 0 && (
               <div className="status-v3-services__list" role="list" aria-label="Business services">
-                {business.rows.map(({ item, members, revealedBySearch }) => (
-                  <BusinessServiceRowV3
-                    key={item.id}
-                    item={item}
-                    members={members}
-                    expandable={expandable}
-                    open={revealedBySearch || openIds.has(item.id)}
-                    onToggle={() =>
-                      setOpenIds(current => {
-                        const next = new Set(current);
-                        if (next.has(item.id)) next.delete(item.id);
-                        else next.add(item.id);
-                        return next;
-                      })
-                    }
-                    display={rowDisplay}
-                  />
-                ))}
+                {renderBusinessRows(null, 1, new Set())}
               </div>
             )}
             {business.others.length > 0 && (

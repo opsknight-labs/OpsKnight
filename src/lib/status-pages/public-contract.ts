@@ -88,6 +88,10 @@ export interface PublicBusinessService {
   showMembers?: false;
   /** Published member services, in page order; their rows live in `services`. */
   memberServiceIds: string[];
+  /** Parent business service on this page (support hierarchy, at most 3 levels). */
+  parentId?: string;
+  /** Child business services on this page, in page order. */
+  childIds?: string[];
   activeIncidentCount: number;
   impactedServiceCount: number;
   uptime?: { days30: PublicUptimeWindow; days90: PublicUptimeWindow };

@@ -3149,6 +3149,13 @@ ${R} .status-v3-business__members {
   border-inline-start: 1px solid var(--status-panel-border);
 }
 ${R} .status-v3-business__members[hidden] { display: none; }
+${R} .status-v3-business__children {
+  display: grid;
+  gap: 0.5rem;
+  margin-block-start: 0.5rem;
+  border-inline-start: 1px solid var(--status-panel-border);
+  padding-inline-start: 0.25rem;
+}
 ${R} .status-v3-business__member {
   display: grid;
   gap: 0.4rem;
