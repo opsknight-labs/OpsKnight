@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
-import { planBasicTurn, resolvePageContext } from '@/lib/intelligence/squire/deterministic';
+import {
+  mentionedIncident,
+  planBasicTurn,
+  resolvePageContext,
+} from '@/lib/intelligence/squire/deterministic';
 import {
   confidentMatch,
   resetEntityCache,
@@ -77,6 +81,60 @@ async function collect(events: AsyncGenerator<SquireEvent>) {
     (out.find(e => e.type === 'suggestions') as { items?: string[] } | undefined)?.items ?? [];
   return { out, text, meta, proposals, suggestions };
 }
+
+describe('an incident named by id or link', () => {
+  it('recognises "incident <id>", a pasted link and a bare id, and keeps the rest of the question', () => {
+    const id = 'cmwrxgqb503diocekj3xjhdwv';
+    expect(mentionedIncident(`What's going on with incident ${id}`)).toEqual({
+      id,
+      rest: "What's going on with",
+    });
+    expect(mentionedIncident(`timeline of https://ops.example.com/incidents/${id}?x=1`)?.id).toBe(
+      id
+    );
+    expect(mentionedIncident(`${id} its incident id from its url`)).toEqual({ id, rest: '' });
+    expect(mentionedIncident('who is on call for checkout')).toBeNull();
+  });
+
+  it('answers about the named incident off its page, and never searches for the id as a keyword', async () => {
+    const w = await world();
+    await db.aiSettings.create({ data: { id: 'default', enabled: false, squireEnabled: true } });
+    const target = w.incidents[2];
+    for (const message of [
+      `What's going on with incident ${target.id}`,
+      `${target.id} its incident id from its url`,
+      `/incidents/${target.id}`,
+    ]) {
+      const turn = await planBasicTurn({ actor: w.actor, message, incident: null });
+      expect(turn.intent, message).toBe('INCIDENT_SUMMARY');
+      expect(turn.text, message).toContain(target.title);
+      expect(turn.text, message).not.toContain('0 matches');
+    }
+    const timeline = await planBasicTurn({
+      actor: w.actor,
+      message: `timeline for incident ${target.id}`,
+      incident: null,
+    });
+    expect(timeline.intent).toBe('TIMELINE');
+  });
+
+  it('says it cannot find an incident the person may not open', async () => {
+    const w = await world();
+    await db.aiSettings.create({ data: { id: 'default', enabled: false, squireEnabled: true } });
+    const outsiders = await createTestTeam('Outsiders');
+    const hiddenService = await createTestService('Hidden Payroll', outsiders.id);
+    const hidden = await createTestIncident('Payroll secret outage', hiddenService.id, {
+      teamId: outsiders.id,
+    });
+    const turn = await planBasicTurn({
+      actor: w.actor,
+      message: `What's going on with incident ${hidden.id}`,
+      incident: null,
+    });
+    expect(turn.text).toContain('can’t find that incident');
+    expect(turn.text).not.toContain('Payroll secret');
+  });
+});
 
 describe('fuzzy names', () => {
   it('matches a misspelt service to the closest visible one and never a hidden one', async () => {

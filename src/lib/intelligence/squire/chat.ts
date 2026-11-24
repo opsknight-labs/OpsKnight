@@ -45,6 +45,7 @@ import {
   type SquireRequest,
 } from './contract';
 import {
+  mentionedIncident,
   planBasicTurn,
   readIncidentForActor,
   resolvePageContext,
@@ -226,8 +227,12 @@ async function* squireTurn(
         : Promise.resolve(undefined),
     ]);
     // An alert or postmortem page is its incident's page, when the person may read that incident.
+    // A question that names an incident by id or link ("what's going on with incident <id>") is about it, when
+    // the person may read it: its briefing is loaded up front as on its page.
+    const named = !request.incidentId ? mentionedIncident(request.message) : null;
     const incident =
       requestedIncident ??
+      (named ? await readIncidentForActor(actor, named.id).catch(() => null) : null) ??
       (page?.incidentId ? await readIncidentForActor(actor, page.incidentId) : null);
     // Basic answers have no model to read mention lines: one mentioned record, asked off any page, is the page.
     const sole = !incident && !page && mentioned.length === 1 ? mentioned[0] : undefined;

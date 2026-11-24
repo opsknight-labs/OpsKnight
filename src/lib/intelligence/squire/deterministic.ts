@@ -695,6 +695,36 @@ function operationSlash(
  * One basic-mode turn: understand, resolve names, read, propose, and decide the next chips and dialogue
  * state. Everything is deterministic and permission-scoped; nothing here writes to incidents.
  */
+/** Intents that mean "tell me about it" once a single incident is in hand. */
+const INCIDENT_LIST_INTENTS: ReadonlySet<SquireIntent> = new Set([
+  'UNKNOWN',
+  'ACTIVE_INCIDENTS',
+  'SEARCH_INCIDENTS',
+  'WORK_QUEUE',
+  'GREETING',
+]);
+
+/**
+ * An incident the question names by id: a pasted `/incidents/<id>` link, "incident <id>", or a bare
+ * collision-resistant id (cuid). Returns the id and the question without it, or null.
+ */
+export function mentionedIncident(message: string): { id: string; rest: string } | null {
+  const text = message.slice(0, 2_000);
+  const match =
+    text.match(/\/incidents\/([A-Za-z0-9_-]{8,64})/) ??
+    text.match(/\bincidents?\s*(?:id\s*)?[:#]?\s*([a-z0-9]{20,32})\b/i) ??
+    text.match(/\b(c[a-z0-9]{20,31})\b/);
+  if (!match) return null;
+  const rest = text
+    .replace(match[0], ' ')
+    .replace(/https?:\/\/\S*/gi, ' ')
+    .replace(/\b(?:its|it'?s|the|this|an?)\s+incident\s+(?:id|link|url)\b.*$/i, ' ')
+    .replace(/\bfrom (?:its|the) (?:url|link)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { id: match[1], rest };
+}
+
 export async function planBasicTurn(
   input: BasicTurnInput,
   collect?: Collect
@@ -733,6 +763,37 @@ export async function planBasicTurn(
     cached: extra.cached ?? false,
   });
 
+  // "What's going on with incident <id>", a pasted /incidents/<id> link or a bare id: answer about that incident
+  // as if on its page, when the person may read it. Never a keyword search for the id.
+  if (!parseSlashCommand(input.message)) {
+    const reference = mentionedIncident(input.message);
+    if (reference) {
+      const found =
+        incident?.id === reference.id
+          ? incident
+          : await readIncidentForActor(actor, reference.id).catch(() => null);
+      if (!found)
+        return result(
+          'I can’t find that incident, or you can’t open it. Check the id, or open it from the incidents list and ask again.',
+          'UNKNOWN'
+        );
+      const rest = reference.rest;
+      const intentOnIncident = rest
+        ? classifyIntent(normalizeMessage(rest), true).intent
+        : 'UNKNOWN';
+      return planBasicTurn(
+        {
+          ...input,
+          incident: found,
+          page: null,
+          state: null,
+          // A question that is only the id (or "what's going on with it") gets the briefing.
+          message: INCIDENT_LIST_INTENTS.has(intentOnIncident) ? 'Summarise this incident' : rest,
+        },
+        collect
+      );
+    }
+  }
   const change = operationSlash(input, now);
   if (change) return result(change.text, change.intent, { operation: change.operation });
   const slash = parseSlashCommand(input.message);
