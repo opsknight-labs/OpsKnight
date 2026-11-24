@@ -4,7 +4,7 @@
 #
 #   mirror-dockerhub.sh all              every user-facing tag that exists on GHCR (one-time backfill)
 #   mirror-dockerhub.sh release vX.Y.Z   the tags a release publishes (used by docker-image.yml)
-#   mirror-dockerhub.sh staging          the develop test image (backup org registry) as opsknight-test:{develop,latest}
+#   mirror-dockerhub.sh staging          the develop test image (built by develop-image.yml) as opsknight-test:{develop,latest}
 #
 # Env: DOCKERHUB_NAMESPACE (required), GHCR_OWNER (default opsknight-labs),
 #      GHCR_TOKEN (a GitHub token, needed while the org's packages are hidden), DRY_RUN=1 to print
@@ -43,8 +43,8 @@ case "${1:-}" in
     done
     ;;
   staging)
-    # The develop build the staging server runs is published by the backup org, not by $OWNER.
-    for tag in develop latest; do copy opsknight-test "$tag" "${STAGING_OWNER:-opsknightlabs}"; done
+    # The develop build the staging server runs is built by develop-image.yml.
+    for tag in develop latest; do copy opsknight-test "$tag" "${STAGING_OWNER:-$OWNER}"; done
     ;;
   release)
     version="${2:?usage: mirror-dockerhub.sh release vX.Y.Z}"

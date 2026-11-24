@@ -1,0 +1,66 @@
+name: Develop image
+
+# Publishes the staging/test image for every push to develop: ghcr.io/<owner>/opsknight-test
+# {develop,latest,sha-*}. Tests already ran on the PR, so this only builds and pushes.
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: develop-image
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: staging
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/opsknight-test" >> "$GITHUB_ENV"
+      - name: Build + push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:develop
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          # Same heap as docker-image.yml (4 GB OOMs). The PR gate already type-checks every commit.
+          build-args: |
+            SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+            BUILD_REVISION=${{ github.sha }}
+            BUILD_NODE_MAX_OLD_SPACE_SIZE=6144
+            SKIP_BUILD_TYPECHECK=true
+          cache-from: type=gha,scope=develop-amd64
+          cache-to: type=gha,scope=develop-amd64,mode=max
+          provenance: false
+          sbom: false
+      - name: Mirror to Docker Hub
+        if: vars.DOCKERHUB_NAMESPACE != ''
+        continue-on-error: true
+        env:
+          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          STAGING_OWNER="${GITHUB_REPOSITORY_OWNER,,}" bash scripts/ci/mirror-dockerhub.sh staging

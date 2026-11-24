@@ -30,7 +30,7 @@ feat/* fix/* ──PR (squash)──▶ develop ──release PR (merge commit)�
 | Source | Image | Purpose |
 |---|---|---|
 | PR with the `ci:full` label (one run per label add) | `ghcr.io/opsknight-labs/opsknight-test:pr-<N>` | Testing a PR |
-| Push to `develop` | `ghcr.io/opsknightlabs/opsknight-test:{develop,latest,sha-*}` (built in the backup repo) | Staging |
+| Push to `develop` | `ghcr.io/opsknight-labs/opsknight-test:{develop,latest,sha-*}` (`develop-image.yml`) | Staging |
 | Push to `main` | `ghcr.io/opsknight-labs/opsknight-test:{main,sha-*}` | Smoke check of released code |
 | Tag `vX.Y.Z-rc.N` | `ghcr.io/opsknight-labs/opsknight:X.Y.Z-rc.N` (and agent), GitHub pre-release | Release candidates |
 | Tag `vX.Y.Z` | `ghcr.io/opsknight-labs/opsknight:{X.Y.Z,X.Y,X,latest}`, agent, pgbouncer, SBOM, GitHub release | Users |

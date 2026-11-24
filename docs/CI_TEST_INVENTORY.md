@@ -49,8 +49,7 @@ Pull requests run a light required gate. Heavy suites run on `develop` in a nigh
 | sbom-validation.yml              | validate                   | Sec   | No  | No      | No      | batch, tags, dispatch                 |
 | main-heavy.yml                   | batch dispatcher           | CI    | No  | No      | No      | every 6h, dispatch (force)            |
 | actions-budget.yml               | minutes budget alarm       | CI    | No  | No      | No      | every 6h, dispatch                    |
-| backup-mirror.yml                | mirror to OpsKnightLabs    | CI    | No  | No      | No      | push develop, tags, dispatch          |
-| backup-test-image.yml            | test image (backup only)   | Img   | No  | Docker  | No      | push main in backup (= develop)       |
+| develop-image.yml                | develop test image         | Img   | No  | Docker  | No      | push develop, dispatch                |
 | auth-e2e.yml / mobile-pwa-e2e.yml| standalone browser suites  | L3    | Yes | Yes     | No      | workflow_dispatch (debugging)         |
 +------------------------------------------------------------------------------------------------------------------------------------------+
 ```
