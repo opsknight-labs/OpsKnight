@@ -4,6 +4,7 @@
 #
 #   mirror-dockerhub.sh all              every user-facing tag that exists on GHCR (one-time backfill)
 #   mirror-dockerhub.sh release vX.Y.Z   the tags a release publishes (used by docker-image.yml)
+#   mirror-dockerhub.sh staging          the develop test image (backup org registry) as opsknight-test:{develop,latest}
 #
 # Env: DOCKERHUB_NAMESPACE (required), GHCR_OWNER (default opsknight-labs),
 #      GHCR_TOKEN (a GitHub token, needed while the org's packages are hidden), DRY_RUN=1 to print
@@ -12,13 +13,13 @@ set -euo pipefail
 
 NS="${DOCKERHUB_NAMESPACE:?set DOCKERHUB_NAMESPACE}"
 OWNER="${GHCR_OWNER:-opsknight-labs}"
-IMAGES="opsknight opsknight-agent opsknight-pgbouncer"
+IMAGES="opsknight opsknight-agent opsknight-pgbouncer opsknight-test"
 # shortcut: pgbouncer is versioned separately from the app; keep in sync with docker-image.yml.
 PGBOUNCER_VERSION="${PGBOUNCER_VERSION:-1.26.0}"
 
 copy() {
-  local image="$1" tag="$2"
-  local src="ghcr.io/${OWNER}/${image}:${tag}" dst="docker.io/${NS}/${image}:${tag}"
+  local image="$1" tag="$2" owner="${3:-$OWNER}"
+  local src="ghcr.io/${owner}/${image}:${tag}" dst="docker.io/${NS}/${image}:${tag}"
   if [[ -n "${DRY_RUN:-}" ]]; then echo "would copy ${src} -> ${dst}"; return; fi
   docker buildx imagetools create --prefer-index=false -t "$dst" "$src" >/dev/null
   local want have
@@ -36,8 +37,14 @@ case "${1:-}" in
       # sha-* and rc-* are build staging tags, not something users pull.
       tags="$(curl -fsS -H "Authorization: Bearer ${token}" "https://ghcr.io/v2/${OWNER}/${image}/tags/list?n=10000" |
         jq -r '.tags[]? | select(startswith("sha-") or startswith("rc-") | not)')"
+      # opsknight-test: only `main` comes from here. Its `latest` is the staging build, see `staging`.
+      [[ "$image" == opsknight-test ]] && tags="main"
       for tag in $tags; do copy "$image" "$tag"; done
     done
+    ;;
+  staging)
+    # The develop build the staging server runs is published by the backup org, not by $OWNER.
+    for tag in develop latest; do copy opsknight-test "$tag" "${STAGING_OWNER:-opsknightlabs}"; done
     ;;
   release)
     version="${2:?usage: mirror-dockerhub.sh release vX.Y.Z}"
@@ -55,7 +62,7 @@ case "${1:-}" in
     for tag in "${pgbouncer_tags[@]}"; do copy opsknight-pgbouncer "$tag"; done
     ;;
   *)
-    echo "usage: $0 all | release vX.Y.Z" >&2
+    echo "usage: $0 all | staging | release vX.Y.Z" >&2
     exit 2
     ;;
 esac
