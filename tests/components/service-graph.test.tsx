@@ -7,6 +7,8 @@ const actions = vi.hoisted(() => ({
   disconnectDependencyAction: vi.fn(),
   reviewSuggestedDependencyAction: vi.fn(),
   getGraphNodeDetailsAction: vi.fn(),
+  getGraphStatusesAction: vi.fn().mockResolvedValue(null),
+  expandNeighboursAction: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/app/(app)/services/graph/actions', () => actions);
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));

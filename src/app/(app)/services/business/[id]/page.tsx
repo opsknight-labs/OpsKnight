@@ -2,7 +2,7 @@ import { Suspense, cache } from 'react';
 import { FreezeBanner } from '@/components/business-service/FreezeBanner';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Boxes, ExternalLink, Pencil } from 'lucide-react';
+import { Boxes, ExternalLink, Network, Pencil } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccess } from '@/lib/access/server';
 import { CAPABILITIES } from '@/lib/authorization';
@@ -37,6 +37,9 @@ import HealthBadge, {
 } from '@/components/business-service/HealthBadge';
 import HealthUnavailable from '@/components/business-service/HealthUnavailable';
 import ImpactTimeline from '@/components/business-service/ImpactTimeline';
+import CustomerImpactPanel from '@/components/business-service/CustomerImpactPanel';
+import { estimateDowntimeCostCents } from '@/lib/business-services/impact-cost';
+import { listCustomerImpactReports } from '@/lib/business-services/customer-reports';
 import {
   DependenciesPanel,
   FollowersPanel,
@@ -123,14 +126,67 @@ async function KpiSection({
   return <OverviewKpis last30={stats[0]} last90={stats[1]} slo={budget} />;
 }
 
+/** Cost of downtime, customers exposed and customer reports; for readers who may see incidents. */
+async function CustomerImpactSection({
+  item,
+  actor,
+  canAdd,
+}: {
+  item: {
+    id: string;
+    revenuePerHourCents: number | null;
+    currency: string;
+    customersTotal: number | null;
+    customerReportThreshold: number | null;
+    customerReportWindowMinutes: number | null;
+  };
+  actor: AuthorizationActor;
+  canAdd: boolean;
+}) {
+  const data = await orUnavailable(
+    Promise.all([stats30(item.id, actor), listCustomerImpactReports(item.id, actor, 5)]),
+    'business_services.overview.customer_impact_unavailable'
+  );
+  return (
+    <SectionCard
+      id="bs-customer-impact"
+      title="Customer impact"
+      description="What downtime has cost, who is exposed, and what customers are reporting."
+    >
+      {data ? (
+        <CustomerImpactPanel
+          view={{
+            businessServiceId: item.id,
+            estimatedCostCents: estimateDowntimeCostCents(
+              data[0].weightedDowntimeMinutes ?? 0,
+              item.revenuePerHourCents
+            ),
+            currency: item.currency,
+            customersTotal: item.customersTotal,
+            windowDays: 30,
+            threshold: item.customerReportThreshold,
+            thresholdWindowMinutes: item.customerReportWindowMinutes,
+            reports: data[1],
+            canAdd,
+          }}
+        />
+      ) : (
+        <HealthUnavailable />
+      )}
+    </SectionCard>
+  );
+}
+
 async function TimelineSection({
   id,
   actor,
   showIncidents,
+  cost,
 }: {
   id: string;
   actor: AuthorizationActor;
   showIncidents: boolean;
+  cost?: { revenuePerHourCents: number | null; currency: string };
 }) {
   const window = windowOf(30);
   const entries = await orUnavailable(
@@ -144,7 +200,7 @@ async function TimelineSection({
       description="When this business service was impacted, and how serious it was."
     >
       {entries ? (
-        <ImpactTimeline entries={entries} window={window} showIncidents={showIncidents} />
+        <ImpactTimeline entries={entries} window={window} showIncidents={showIncidents} cost={cost} />
       ) : (
         <HealthUnavailable />
       )}
@@ -254,6 +310,11 @@ export default async function BusinessServiceOverviewPage({
       ownerTeam: { select: { id: true, name: true } },
       sloTarget: true,
       sloWindowDays: true,
+      revenuePerHourCents: true,
+      currency: true,
+      customersTotal: true,
+      customerReportThreshold: true,
+      customerReportWindowMinutes: true,
       ownerUser: { select: { id: true, name: true, email: true } },
       escalationPolicy: {
         select: { id: true, name: true, steps: FIRST_STEP_SELECT },
@@ -434,8 +495,18 @@ export default async function BusinessServiceOverviewPage({
         />
       </Suspense>
       <Suspense fallback={<SectionSkeleton title="Impact, last 30 days" height="h-24" />}>
-        <TimelineSection id={item.id} actor={actor} showIncidents={canReadIncidents} />
+        <TimelineSection
+          id={item.id}
+          actor={actor}
+          showIncidents={canReadIncidents}
+          cost={canReadIncidents ? item : undefined}
+        />
       </Suspense>
+      {canReadIncidents && (
+        <Suspense fallback={<SectionSkeleton title="Customer impact" height="h-24" />}>
+          <CustomerImpactSection item={item} actor={actor} canAdd={canManage} />
+        </Suspense>
+      )}
       <Suspense fallback={<SectionSkeleton title="Incidents" height="h-40" />}>
         {canReadIncidents ? (
           <IncidentsSection id={item.id} memberIds={memberIds} actor={actor} />
@@ -551,7 +622,22 @@ export default async function BusinessServiceOverviewPage({
           },
           { label: 'Followers', value: item._count.followers.toLocaleString() },
         ]}
-        secondaryActions={followButton}
+        secondaryActions={
+          <>
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className={cn('gap-1.5', pageHeaderActionClass)}
+            >
+              <Link href={`/services/graph?focus=bs:${item.id}`}>
+                <Network className="h-4 w-4" aria-hidden />
+                Show on graph
+              </Link>
+            </Button>
+            {followButton}
+          </>
+        }
         primaryAction={
           canManage ? (
             <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>

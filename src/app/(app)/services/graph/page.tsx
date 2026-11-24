@@ -6,20 +6,34 @@ import ServiceGraphExplorer from '@/components/service-graph/ServiceGraphExplore
 import { requirePageAccess } from '@/lib/access/server';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { teamReadWhere } from '@/lib/authorization-filters';
-import { getServiceGraphForActor } from '@/lib/intelligence/dependencies/graph-view';
+import {
+  getIncidentScopeForActor,
+  getServiceGraphForActor,
+} from '@/lib/intelligence/dependencies/graph-view';
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
-import { parseGraphFocus } from '@/lib/service-graph/focus';
+import { parseGraphFocus, parseGraphHops, parseIncidentId } from '@/lib/service-graph/focus';
 
 export const metadata: Metadata = { title: 'Service graph' };
 export const dynamic = 'force-dynamic';
+
+const TIERS = ['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3'] as const;
+const STATUSES = [
+  'OPERATIONAL',
+  'UNKNOWN',
+  'MAINTENANCE',
+  'DEGRADED',
+  'PARTIAL_OUTAGE',
+  'MAJOR_OUTAGE',
+] as const;
 
 type Search = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
 /**
  * The dependency map: business services, technical services and how they depend on each other,
- * with live health. Focus mode (`?focus=bs:<id>` or `svc:<id>`) shows two hops around one node.
+ * with live health. Focus mode (`?focus=bs:<id>` or `svc:<id>`) shows `hops` (default 2) around one node;
+ * `?incident=<id>` scopes it to that incident's service (when the viewer may read the incident).
  */
 export default async function ServiceGraphPage({
   searchParams,
@@ -28,9 +42,14 @@ export default async function ServiceGraphPage({
 }) {
   await requirePageAccess('/services/graph');
   const [actor, raw] = await Promise.all([getCurrentAuthorizationActor(), searchParams]);
-  const focus = parseGraphFocus(first(raw?.focus));
-  const [graph, teams] = await Promise.all([
-    getServiceGraphForActor(actor, prisma, { focus, access: 'service' }),
+  const incidentId = parseIncidentId(first(raw?.incident));
+  const incident = incidentId ? await getIncidentScopeForActor(actor, incidentId) : null;
+  const focus = incident
+    ? ({ kind: 'svc', id: incident.serviceId } as const)
+    : parseGraphFocus(first(raw?.focus));
+  const hops = parseGraphHops(first(raw?.hops), incident ? 3 : 2);
+  const [loaded, teams] = await Promise.all([
+    getServiceGraphForActor(actor, prisma, { focus, hops, access: 'service' }),
     prisma.team.findMany({
       where: teamReadWhere(actor),
       select: { id: true, name: true },
@@ -38,6 +57,7 @@ export default async function ServiceGraphPage({
       take: 500,
     }),
   ]);
+  const graph = loaded && incident ? { ...loaded, incident } : loaded;
   // Mirrors assertCanModifyService: admins edit anything; other managers only services of teams
   // they belong to (the dragged-from, dependent service decides).
   const isAdmin = actor.role === 'ADMIN';
@@ -119,11 +139,24 @@ export default async function ServiceGraphPage({
           canEdit={canEdit}
           editableTeamIds={editableTeamIds}
           focusName={focusName}
+          incidentUnavailable={!!incidentId && !incident}
+          hops={hops}
           initial={{
             q: first(raw?.q) ?? '',
             team: first(raw?.team) ?? '',
             impacted: first(raw?.impacted) === '1',
             view: first(raw?.view) === 'list' ? 'list' : 'graph',
+            tier: TIERS.find(tier => tier === first(raw?.tier)) ?? '',
+            status: STATUSES.find(status => status === first(raw?.status)) ?? '',
+            origin:
+              first(raw?.origin) === 'DECLARED' || first(raw?.origin) === 'OBSERVED'
+                ? (first(raw?.origin) as 'DECLARED' | 'OBSERVED')
+                : '',
+            filterMode: first(raw?.filter) === '1',
+            impact:
+              first(raw?.impact) === 'blast' || first(raw?.impact) === 'root'
+                ? (first(raw?.impact) as 'blast' | 'root')
+                : null,
           }}
         />
       )}

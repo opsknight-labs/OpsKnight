@@ -5,10 +5,12 @@ import {
   detailLevel,
   edgeImpactStatus,
   exportGraphJson,
+  exportGraphSvg,
   filterGraph,
   findPath,
   impactSubgraph,
   matchItems,
+  sortItems,
   mergeViews,
   traverse,
   type GraphItem,
@@ -214,5 +216,54 @@ describe('exportGraphJson', () => {
     const parsed = JSON.parse(exportGraphJson({ items, links }));
     expect(parsed.items).toHaveLength(6);
     expect(parsed.links[0]).toMatchObject({ from: 'bs:shop', to: 'svc:web', kind: 'member' });
+  });
+});
+
+describe('exportGraphSvg', () => {
+  it('draws placed nodes and escapes names', () => {
+    const svg = exportGraphSvg(
+      [item('svc:a', { name: '<b>&"' }), item('svc:b')],
+      [link('svc:a', 'svc:b', { dependencyType: 'SOFT' })],
+      { 'svc:a': { x: 0, y: 0 }, 'svc:b': { x: 300, y: 0 } },
+      () => ({ width: 200, height: 60 })
+    );
+    expect(svg).toContain('<svg');
+    expect(svg).not.toContain('<b>');
+    expect(svg).toContain('&#60;b&#62;&#38;&#34;');
+    expect(svg).toContain('stroke-dasharray="10 3 2 3"');
+    expect(svg).toContain('marker-end');
+  });
+  it('skips nodes without a position and links to them', () => {
+    const svg = exportGraphSvg([item('svc:a')], [link('svc:a', 'svc:z')], {}, () => ({
+      width: 1,
+      height: 1,
+    }));
+    expect(svg).not.toContain('<line');
+  });
+});
+
+describe('sortItems', () => {
+  const rows = [
+    item('svc:b', { name: 'Beta', status: 'DEGRADED', openIncidents: 1 }),
+    item('svc:a', { name: 'alpha', status: 'MAJOR_OUTAGE', openIncidents: 3 }),
+    item('svc:c', { name: 'Gamma' }),
+  ];
+  it('sorts by name case-insensitively and does not mutate', () => {
+    expect(sortItems(rows, [], 'name', 'asc').map(r => r.name)).toEqual(['alpha', 'Beta', 'Gamma']);
+    expect(rows[0].name).toBe('Beta');
+  });
+  it('sorts by severity and counts, descending, ties by name', () => {
+    expect(sortItems(rows, [], 'status', 'desc').map(r => r.name)).toEqual([
+      'alpha',
+      'Beta',
+      'Gamma',
+    ]);
+    expect(sortItems(rows, [], 'incidents', 'asc').map(r => r.name)).toEqual([
+      'Gamma',
+      'Beta',
+      'alpha',
+    ]);
+    const l = [link('svc:c', 'svc:a'), link('svc:b', 'svc:a')];
+    expect(sortItems(rows, l, 'usedBy', 'desc')[0].name).toBe('alpha');
   });
 });

@@ -4,6 +4,7 @@
  * depends on. Pure, so the canvas, the list view and the tests share it.
  */
 import type { BusinessServiceTier } from '@prisma/client';
+import { STATUS_PALETTE } from '@/lib/design/status-palette';
 import type { BsStatus, ImpactReason } from '@/lib/business-services/contract';
 import type { GraphStatuses, ServiceGraphView } from '@/lib/intelligence/dependencies/graph-view';
 
@@ -304,9 +305,14 @@ export function mergeViews(
   extra: ServiceGraphView,
   expanded: string
 ): ServiceGraphView {
+  // The fresher copy (extra) wins for the same id, so a re-fetched edge or status replaces the old one.
   const unite = <T>(a: readonly T[], b: readonly T[], keyOf: (value: T) => string) => {
+    const fresh = new Map(b.map(value => [keyOf(value), value]));
     const seen = new Set(a.map(keyOf));
-    return [...a, ...b.filter(value => !seen.has(keyOf(value)))];
+    return [
+      ...a.map(value => fresh.get(keyOf(value)) ?? value),
+      ...b.filter(value => !seen.has(keyOf(value))),
+    ];
   };
   const loaded = new Set([...base.nodes, ...extra.nodes].map(node => node.id));
   return {
@@ -397,4 +403,113 @@ export function exportGraphJson(model: GraphModel): string {
     null,
     2
   );
+}
+
+/** One colour per status for SVG strokes, the minimap and exports (CSS classes cannot reach those). */
+export const STATUS_HEX: Readonly<Record<BsStatus, string>> = {
+  OPERATIONAL: STATUS_PALETTE.ok.base,
+  UNKNOWN: '#a1a1aa',
+  MAINTENANCE: STATUS_PALETTE.info.base,
+  DEGRADED: STATUS_PALETTE.elevated.base,
+  PARTIAL_OUTAGE: '#ea580c',
+  MAJOR_OUTAGE: STATUS_PALETTE.critical.base,
+};
+
+const escapeXml = (text: string) => text.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`);
+
+/** The laid-out graph as a standalone SVG (what is loaded, at the positions shown). */
+export function exportGraphSvg(
+  items: readonly GraphItem[],
+  links: readonly GraphLink[],
+  positions: Readonly<Record<string, { x: number; y: number }>>,
+  size: (item: GraphItem) => { width: number; height: number }
+): string {
+  const placed = items.flatMap(item => {
+    const at = positions[item.key];
+    return at ? [{ item, ...at, ...size(item) }] : [];
+  });
+  const byKey = new Map(placed.map(node => [node.item.key, node]));
+  const pad = 24;
+  const minX = Math.min(0, ...placed.map(n => n.x)) - pad;
+  const minY = Math.min(0, ...placed.map(n => n.y)) - pad;
+  const maxX = Math.max(1, ...placed.map(n => n.x + n.width)) + pad;
+  const maxY = Math.max(1, ...placed.map(n => n.y + n.height)) + pad;
+  const lines = links.flatMap(link => {
+    const a = byKey.get(link.source);
+    const b = byKey.get(link.target);
+    if (!a || !b) return [];
+    const dash = link.suggested
+      ? ' stroke-dasharray="6 4"'
+      : link.dependencyType === 'SOFT'
+        ? ' stroke-dasharray="10 3 2 3"'
+        : link.kind === 'member'
+          ? ' stroke-dasharray="2 3"'
+          : '';
+    return [
+      `<line x1="${a.x + a.width}" y1="${a.y + a.height / 2}" x2="${b.x}" y2="${b.y + b.height / 2}" stroke="#71717a" stroke-width="1.5"${dash} marker-end="url(#arrow)"/>`,
+    ];
+  });
+  const boxes = placed.map(
+    ({ item, x, y, width, height }) =>
+      `<g><rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${item.kind === 'bs' ? 4 : 12}" fill="#fff" stroke="#d4d4d8"/><rect x="${x}" y="${y}" width="5" height="${height}" fill="${STATUS_HEX[item.status]}"/><text x="${x + 14}" y="${y + 26}" font-family="sans-serif" font-size="13" font-weight="600" fill="#18181b">${escapeXml(item.name.slice(0, 40))}</text><text x="${x + 14}" y="${y + 46}" font-family="sans-serif" font-size="11" fill="#52525b">${escapeXml(item.status.replace('_', ' ').toLowerCase())}${item.openIncidents ? ` · ${item.openIncidents} open` : ''}</text></g>`
+  );
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" width="${maxX - minX}" height="${maxY - minY}"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#71717a"/></marker></defs><rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}" fill="#fafafa"/>${lines.join('')}${boxes.join('')}</svg>`;
+}
+
+export type SortKey = 'name' | 'team' | 'status' | 'incidents' | 'dependsOn' | 'usedBy';
+
+const STATUS_SEVERITY: Record<BsStatus, number> = {
+  OPERATIONAL: 0,
+  UNKNOWN: 1,
+  MAINTENANCE: 2,
+  DEGRADED: 3,
+  PARTIAL_OUTAGE: 4,
+  MAJOR_OUTAGE: 5,
+};
+
+/** Relation counts per item key: what it depends on and what uses it. */
+export function relationCounts(links: readonly GraphLink[]) {
+  const dependsOn = new Map<string, number>();
+  const usedBy = new Map<string, number>();
+  for (const link of links) {
+    dependsOn.set(link.source, (dependsOn.get(link.source) ?? 0) + 1);
+    usedBy.set(link.target, (usedBy.get(link.target) ?? 0) + 1);
+  }
+  return { dependsOn, usedBy };
+}
+
+/** A sorted copy for the list view; ties fall back to the name so the order is stable. */
+export function sortItems(
+  items: readonly GraphItem[],
+  links: readonly GraphLink[],
+  key: SortKey,
+  direction: 'asc' | 'desc'
+): GraphItem[] {
+  const { dependsOn, usedBy } = relationCounts(links);
+  const value = (item: GraphItem): string | number => {
+    switch (key) {
+      case 'name':
+        return item.name.toLowerCase();
+      case 'team':
+        return (item.teamName ?? '').toLowerCase();
+      case 'status':
+        return STATUS_SEVERITY[item.status] ?? 0;
+      case 'incidents':
+        return item.openIncidents;
+      case 'dependsOn':
+        return dependsOn.get(item.key) ?? 0;
+      case 'usedBy':
+        return usedBy.get(item.key) ?? 0;
+    }
+  };
+  const sign = direction === 'asc' ? 1 : -1;
+  return [...items].sort((a, b) => {
+    const left = value(a);
+    const right = value(b);
+    const order =
+      typeof left === 'number' && typeof right === 'number'
+        ? left - right
+        : String(left).localeCompare(String(right));
+    return order * sign || a.name.localeCompare(b.name);
+  });
 }
