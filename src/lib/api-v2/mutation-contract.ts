@@ -792,6 +792,15 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     idempotency: 'required',
     concurrency: 'none',
     rationale: 'Shared participant command, audit and replay commit together.',
+  'PUT /api/v2/settings/service-reviews': supported(
+    'The settings write and its audit commit with the replay record, so a retry returns the first result.'
+  ),
+  'POST /api/v2/service-reviews/run': supported(
+    'Each (period, kind, recipient) is claimed in a unique row before sending, so a retry or replay can never send a second review.'
+  ),
+  'POST /api/v2/service-reviews/preview': supported(
+    'Emails only the caller; rate limited to 3 per hour and a replay returns the first result without a second email.'
+  ),
   },
   'PATCH /api/v2/schedules/[id]/layers/[layerId]/participants/[userId]': {
     idempotency: 'required',

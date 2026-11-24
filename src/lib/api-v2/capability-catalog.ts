@@ -102,6 +102,11 @@ const decisions: readonly ApiCapability[] = [
       'Canonical lifecycle, watcher and incident-role commands, transactional timeline/audit and durable replay. Watcher mutations require operational privileges; roles follow the incident relationship (take, delegate as commander, or manage).',
     operationIds: [
       'reopenIncident',
+      'getServiceReviewSettings',
+      'updateServiceReviewSettings',
+      'listServiceReviewRuns',
+      'runServiceReviews',
+      'previewServiceReview',
       'escalateIncident',
       'snoozeIncident',
       'unsnoozeIncident',

@@ -703,6 +703,17 @@ async function runOnce() {
     const { observeAuthenticationReplica } = await import('./auth-control/replicas');
     if (process.env.OPSKNIGHT_PROCESS_ROLE !== 'scheduler') await observeAuthenticationReplica();
     const tokenCleanup = await cleanupUserTokens();
+    // Monthly business service reviews: off unless an admin enabled them; idempotent per period.
+    try {
+      const { runScheduledServiceReviews } = await import('./business-services/reviews/run');
+      const reviews = await runScheduledServiceReviews(new Date());
+      if (reviews.sent > 0 || reviews.failed > 0) {
+        logger.info('[Cron] Business service reviews processed', reviews);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Business service reviews failed', { error });
+    }
+
     const rateLimitCleanup = await cleanupExpiredRateLimits();
     // MCP maintenance failure must not block incident-response maintenance; it logs and counts
     // its own failures.

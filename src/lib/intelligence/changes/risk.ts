@@ -5,6 +5,8 @@ import { loadActiveEdges } from '../dependencies/service';
 import { upstreamDistances } from '../dependencies/graph';
 import { localHour } from '@/lib/oncall-load/metrics';
 import { weekdayInTimeZone } from '../noise-controls/builders';
+import { applyBudgetRisk } from '@/lib/business-services/reviews/freeze';
+import { exhaustedBudgetsForService } from '@/lib/business-services/reviews/freeze-service';
 
 /**
  * Change risk: how likely a change is to be followed by an incident, as a 0..1 ranking signal. It is
@@ -177,6 +179,9 @@ export async function computeChangeRisk(
     size: sizeFromLabels(change.labels),
     kind: change.kind,
   });
+  // Error budget exhausted on a business service this change touches: warn, never block.
+  const exhaustedBudgets = change.serviceId ? await exhaustedBudgetsForService(change.serviceId) : [];
+  score.score = applyBudgetRisk(score.score, exhaustedBudgets.length > 0);
   await tx.changeEvent.update({
     where: { id: change.id },
     data: {
@@ -190,6 +195,7 @@ export async function computeChangeRisk(
         blastRadius: dependants,
         followWindowMinutes: RISK_FOLLOW_WINDOW_MINUTES,
         historyDays: RISK_HISTORY_DAYS,
+        ...(exhaustedBudgets.length > 0 ? { errorBudgetExhausted: exhaustedBudgets } : {}),
       },
       riskComputedAt: now,
     },

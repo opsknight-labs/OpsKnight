@@ -983,6 +983,15 @@ export const MCP_PREVIEW_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () =>
       (await import('@/app/api/v2/schedules/[id]/layers/[layerId]/participants/[userId]/route'))
         .GET,
+  [
+    'updateServiceReviewSettings',
+    async () => (await import('@/app/api/v2/settings/service-reviews/route')).PUT,
+  ],
+  ['runServiceReviews', async () => (await import('@/app/api/v2/service-reviews/run/route')).POST],
+  [
+    'previewServiceReview',
+    async () => (await import('@/app/api/v2/service-reviews/preview/route')).POST,
+  ],
   ],
   [
     'getScheduleOverride',

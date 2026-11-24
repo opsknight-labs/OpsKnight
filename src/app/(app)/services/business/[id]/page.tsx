@@ -1,4 +1,5 @@
 import { Suspense, cache } from 'react';
+import { FreezeBanner } from '@/components/business-service/FreezeBanner';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Boxes, ExternalLink, Pencil } from 'lucide-react';
@@ -418,6 +419,9 @@ export default async function BusinessServiceOverviewPage({
 
   const overview = (
     <div className="space-y-4 sm:space-y-6">
+      <Suspense fallback={null}>
+        <FreezeBanner id={item.id} />
+      </Suspense>
       <Suspense fallback={<KpiGridSkeleton count={4} />}>
         <KpiSection
           id={item.id}

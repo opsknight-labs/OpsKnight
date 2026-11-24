@@ -91,6 +91,7 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
     businessServiceIds: ['bsv_123456'],
   },
   'PUT /business-services/{id}/supporting': { businessServiceIds: ['bsv_234567'] },
+  'PUT /settings/service-reviews': { enabled: false, dayOfMonth: 1, hour: 9 },
   'POST /business-services/import': {
     format: 'csv',
     content:

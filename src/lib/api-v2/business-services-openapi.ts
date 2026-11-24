@@ -312,6 +312,46 @@ export const BUSINESS_SERVICE_OPERATIONS: {
   body?: Schema;
   status?: number;
   paginated?: boolean;
+  // Monthly service reviews
+  ServiceReviewSettings: object({
+    enabled: { type: 'boolean' },
+    freezeWarningEnabled: { type: 'boolean' },
+    dayOfMonth: { type: 'integer', minimum: 1, maximum: 28 },
+    hour: { type: 'integer', minimum: 0, maximum: 23 },
+    timeZone: string,
+    summaryUserIds: ids(20),
+  }),
+  ServiceReviewRun: object({
+    period: string,
+    kind: { type: 'string', enum: ['DIGEST', 'SUMMARY'] },
+    recipientKey: string,
+    status: { type: 'string', enum: ['PENDING', 'SENT', 'SKIPPED', 'FAILED'] },
+    serviceCount: { type: 'integer' },
+    error: nullableString,
+    createdAt: date,
+  }),
+  ServiceReviewRunResult: object(
+    {
+      period: string,
+      sent: { type: 'integer' },
+      skipped: { type: 'integer' },
+      failed: { type: 'integer' },
+      alreadySent: { type: 'integer' },
+      disabled: { type: 'boolean' },
+      notDue: { type: 'boolean' },
+      noEmailProvider: { type: 'boolean' },
+    },
+    ['period', 'sent', 'skipped', 'failed', 'alreadySent']
+  ),
+  ServiceReviewPreview: object(
+    {
+      sent: { type: 'boolean' },
+      period: string,
+      reason: { type: 'string', enum: ['nothing_to_report'] },
+      services: { type: 'integer' },
+    },
+    ['sent', 'period']
+  ),
 }[] = [
   {
     method: 'get',
@@ -482,3 +522,54 @@ export const BUSINESS_SERVICE_OPERATIONS: {
       'Requires an Idempotency-Key. The exclusion is remembered so automatic impact never re-adds it.',
   },
 ];
+  {
+    method: 'get',
+    path: '/settings/service-reviews',
+    summary: 'Read the monthly service review settings',
+    description: 'Admin only. Reviews are off by default.',
+  },
+  {
+    method: 'put',
+    path: '/settings/service-reviews',
+    summary: 'Update the monthly service review settings',
+    description:
+      'Admin only; audited. Send any subset of fields. `summaryUserIds` and `summaryEmails` must name existing active users; services opt in with includeInReview and people with receiveServiceReviews.',
+    body: object(
+      {
+        ...{
+          enabled: { type: 'boolean' },
+          freezeWarningEnabled: { type: 'boolean' },
+          dayOfMonth: { type: 'integer', minimum: 1, maximum: 28 },
+          hour: { type: 'integer', minimum: 0, maximum: 23 },
+          timeZone: string,
+          summaryUserIds: ids(20),
+        },
+        summaryEmails: { type: 'array', maxItems: 20, items: { type: 'string', format: 'email' } },
+      },
+      []
+    ),
+  },
+  {
+    method: 'get',
+    path: '/service-reviews/runs',
+    summary: 'List recent service review runs',
+    description:
+      'Admins see every recipient; responders only rows addressed to themselves. Viewers have no access.',
+    query: { limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 } },
+  },
+  {
+    method: 'post',
+    path: '/service-reviews/run',
+    summary: "Run last month's service review now",
+    description:
+      'Admin only. Each (period, recipient) is sent once; repeating the call reports alreadySent. Nothing is sent while reviews are disabled.',
+    body: object({}),
+  },
+  {
+    method: 'post',
+    path: '/service-reviews/preview',
+    summary: 'Email yourself a preview of the service review',
+    description:
+      'Contains only business services the caller can read. Limited to 3 per hour; nothing is recorded as a monthly send.',
+    body: object({}),
+  },

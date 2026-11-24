@@ -4149,6 +4149,61 @@
     "contractSha256": "e6c4001358077094b223e59076241b34cbd804179e08999413d0be2b22139712",
     "actions": ["service.create"]
   },
+  "getServiceReviewSettings": {
+    "status": "SENSITIVE_READ",
+    "risk": "R2",
+    "reason": "Organization review schedule and recipient ids; administrators only, read-only.",
+    "tool": null,
+    "routeSha256": "5bc112f6d41f9a53df76b5103a98409edb1334b868a4b63a1d815119c05d14e2",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "22e69a1ffc273a44ae2c4de83b244fcaa996bb3c3092c148920608c6840d8784",
+    "actions": ["service_review.manage"]
+  },
+  "updateServiceReviewSettings": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Changes who is emailed monthly service reviews and the schedule; a person approves it.",
+    "tool": null,
+    "routeSha256": "5bc112f6d41f9a53df76b5103a98409edb1334b868a4b63a1d815119c05d14e2",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "5f7415c52a37072648138ac02ca295cc9af2766434a0bb6fd5b13b11a81b3b82",
+    "actions": ["service_review.manage"]
+  },
+  "listServiceReviewRuns": {
+    "status": "SENSITIVE_READ",
+    "risk": "R2",
+    "reason": "Delivery log of monthly reviews; admins see every recipient, others only their own rows.",
+    "tool": null,
+    "routeSha256": "44c4274f1900c4820665e6b383a00b1e691a2ae6f3c5a9490d6b0a6df2b96569",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "5417962a8ca3ade796a1270acb74fd3498373fd35512b12b5a5a7dbe0623bb3f",
+    "actions": ["service_review.read"]
+  },
+  "runServiceReviews": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Sends emails to many recipients, so a person approves it. Each recipient and month is sent once.",
+    "tool": null,
+    "routeSha256": "737d6be8a902c309d4ec87cecdea5ab825deb6fad651897f4a7bc8a44719b516",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "670f3ad19cf984a6bd310ad9e6ec0b0401f2372851f1cef154a61d352bb27d0b",
+    "actions": ["service_review.manage"]
+  },
+  "previewServiceReview": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Emails the requester a preview; reviewed because it sends email.",
+    "tool": null,
+    "routeSha256": "2bc5ed87b94e9a747e6a95cf8f2be2fe4af6cd0f99b20a35efbd80f4d53073e8",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "55cdf93b415db1c218e7536e283de61ff330acba681b5a64242442840b61c064",
+    "actions": ["service_review.read"]
+  },
   "importBusinessServices": {
     "status": "APPROVAL_REQUIRED",
     "risk": "R2",

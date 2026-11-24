@@ -997,6 +997,46 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
   ),
   op(
     'get',
+    '/settings/service-reviews',
+    'getServiceReviewSettings',
+    'services:write',
+    'item',
+    'ServiceReviewSettings'
+  ),
+  op(
+    'put',
+    '/settings/service-reviews',
+    'updateServiceReviewSettings',
+    'services:write',
+    'item',
+    'ServiceReviewSettings'
+  ),
+  op(
+    'get',
+    '/service-reviews/runs',
+    'listServiceReviewRuns',
+    'services:read',
+    'list',
+    'ServiceReviewRun'
+  ),
+  op(
+    'post',
+    '/service-reviews/run',
+    'runServiceReviews',
+    'services:write',
+    'item',
+    'ServiceReviewRunResult'
+  ),
+  op(
+    'post',
+    '/service-reviews/preview',
+    'previewServiceReview',
+    'services:read',
+    'item',
+    'ServiceReviewPreview'
+  ),
+  op(
+    'get',
     '/status-pages/{id}/assets',
     'listStatusPageAssets',
     'status-pages:read',
