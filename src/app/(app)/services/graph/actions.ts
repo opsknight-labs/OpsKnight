@@ -14,6 +14,12 @@ import {
   removeDependency,
   reviewDependency,
 } from '@/lib/intelligence/dependencies/service';
+import {
+  getGraphStatusesForActor,
+  getServiceGraphForActor,
+  type GraphStatuses,
+  type ServiceGraphView,
+} from '@/lib/intelligence/dependencies/graph-view';
 import { onCallFor } from '@/lib/business-services/on-call';
 import { assertCanModifyService, getCurrentAuthorizationActor } from '@/lib/rbac';
 
@@ -21,7 +27,13 @@ export type GraphActionResult = { ok: boolean; message: string };
 
 const id = z.string().trim().min(1).max(100);
 const connectSchema = z
-  .object({ downstreamServiceId: id, upstreamServiceId: id })
+  .object({
+    downstreamServiceId: id,
+    upstreamServiceId: id,
+    dependencyType: z.enum(['HARD', 'SOFT']).optional(),
+    note: z.string().trim().max(500, 'A note can be at most 500 characters.').nullable().optional(),
+    criticality: z.enum(['LOW', 'MEDIUM', 'HIGH']).nullable().optional(),
+  })
   .strict()
   .refine(input => input.downstreamServiceId !== input.upstreamServiceId, {
     message: 'A service cannot depend on itself.',
@@ -30,6 +42,13 @@ const edgeSchema = z.object({ dependencyId: id }).strict();
 const reviewSchema = z
   .object({ dependencyId: id, decision: z.enum(['APPROVE', 'REJECT']) })
   .strict();
+const statusesSchema = z
+  .object({
+    services: z.array(id).max(2500),
+    businessServices: z.array(id).max(500),
+  })
+  .strict();
+const expandSchema = z.object({ serviceId: id }).strict();
 const detailsSchema = z.object({ kind: z.enum(['bs', 'svc']), id }).strict();
 
 async function guarded(
@@ -68,7 +87,7 @@ export async function connectServicesAction(input: unknown): Promise<GraphAction
     const parsed = connectSchema.safeParse(input);
     if (!parsed.success)
       return { ok: false, message: parsed.error.issues[0]?.message ?? 'Invalid request.' };
-    const { downstreamServiceId, upstreamServiceId } = parsed.data;
+    const { downstreamServiceId, upstreamServiceId, ...semantics } = parsed.data;
     const user = await assertCanModifyService(downstreamServiceId);
     const readable = serviceReadWhere(await getCurrentAuthorizationActor());
     const count = await prisma.service.count({
@@ -76,7 +95,7 @@ export async function connectServicesAction(input: unknown): Promise<GraphAction
     });
     if (count !== 2) return { ok: false, message: 'That service no longer exists.' };
     await declareDependency(
-      { downstreamServiceId, upstreamServiceId },
+      { downstreamServiceId, upstreamServiceId, ...semantics },
       {
         actorId: user.id,
         source: 'UI',
@@ -232,4 +251,45 @@ function serialize(incident: {
   createdAt: Date;
 }) {
   return { ...incident, createdAt: incident.createdAt.toISOString() };
+}
+
+/**
+ * Live statuses for the nodes the client already shows, polled by the explorer. Read-only and scoped
+ * to what the caller may read; it never revalidates the page, so the layout is not recomputed.
+ */
+export async function getGraphStatusesAction(input: unknown): Promise<GraphStatuses | null> {
+  const parsed = statusesSchema.safeParse(input);
+  if (!parsed.success) return null;
+  try {
+    const actor = await getCurrentAuthorizationActor();
+    if (actor.status !== 'ACTIVE') return null;
+    return await getGraphStatusesForActor(actor, parsed.data);
+  } catch (error) {
+    if (!(error instanceof AppError))
+      logger.error('[ServiceGraph] statuses failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    return null;
+  }
+}
+
+/** One hop of neighbours around a service, to merge into the loaded graph ("Load neighbours"). */
+export async function expandNeighboursAction(input: unknown): Promise<ServiceGraphView | null> {
+  const parsed = expandSchema.safeParse(input);
+  if (!parsed.success) return null;
+  try {
+    const actor = await getCurrentAuthorizationActor();
+    if (actor.status !== 'ACTIVE') return null;
+    return await getServiceGraphForActor(actor, prisma, {
+      focus: { kind: 'svc', id: parsed.data.serviceId },
+      hops: 1,
+      access: 'service',
+    });
+  } catch (error) {
+    if (!(error instanceof AppError))
+      logger.error('[ServiceGraph] expand failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    return null;
+  }
 }

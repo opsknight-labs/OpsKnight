@@ -6090,6 +6090,18 @@ enum DependencyOrigin {
   OBSERVED
 }
 
+/// HARD: the dependent fails when this dependency fails. SOFT: it degrades gracefully.
+enum DependencyType {
+  HARD
+  SOFT
+}
+
+enum DependencyCriticality {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum DependencyStatus {
   ACTIVE
   SUGGESTED
@@ -6114,6 +6126,9 @@ model ServiceDependency {
   status              DependencyStatus @default(ACTIVE)
   confidence          Float            @default(1)
   evidence            Json
+  dependencyType      DependencyType   @default(HARD)
+  note                String?          @db.VarChar(500)
+  criticality         DependencyCriticality?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 

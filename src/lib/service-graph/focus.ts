@@ -14,3 +14,16 @@ export function parseGraphFocus(raw: unknown): GraphFocus | null {
 }
 
 export const formatGraphFocus = (focus: GraphFocus) => `${focus.kind}:${focus.id}`;
+
+const INCIDENT_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
+
+/** A plausible incident id from the query string; anything else is none. */
+export function parseIncidentId(raw: unknown): string | null {
+  return typeof raw === 'string' && INCIDENT_PATTERN.test(raw.trim()) ? raw.trim() : null;
+}
+
+/** 1 to 3 hops around a focus; anything else is the fallback. */
+export function parseGraphHops(raw: unknown, fallback = 2): number {
+  const hops = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number.NaN;
+  return hops >= 1 && hops <= 3 ? hops : fallback;
+}

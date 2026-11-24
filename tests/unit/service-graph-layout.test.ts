@@ -84,3 +84,16 @@ describe('graph focus', () => {
     expect(formatGraphFocus({ kind: 'bs', id: 'q' })).toBe('bs:q');
   });
 });
+
+describe('incident and hops query parsing', () => {
+  it('accepts plausible ids and clamps hops', async () => {
+    const { parseGraphHops, parseIncidentId } = await import('@/lib/service-graph/focus');
+    expect(parseIncidentId(' abc_123-x ')).toBe('abc_123-x');
+    expect(parseIncidentId('bad id!')).toBeNull();
+    expect(parseIncidentId(['a'])).toBeNull();
+    expect(parseGraphHops('3')).toBe(3);
+    expect(parseGraphHops('0')).toBe(2);
+    expect(parseGraphHops('9', 3)).toBe(3);
+    expect(parseGraphHops(undefined)).toBe(2);
+  });
+});
