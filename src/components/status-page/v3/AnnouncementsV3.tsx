@@ -291,9 +291,7 @@ function ChangelogCard({ item, timeZone }: { item: PublicChangelogEntry; timeZon
       {item.message && (
         <ClampedDesc text={item.message} className="status-v3-changelog-pill__desc" />
       )}
-      <ChangelogAffects
-        services={[...(item.affectedBusinessServices ?? []), ...(item.affectedServices ?? [])]}
-      />
+      <ChangelogAffects services={item.affectedServices} />
     </div>
   );
 }
