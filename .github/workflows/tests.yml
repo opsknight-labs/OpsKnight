@@ -97,8 +97,12 @@ jobs:
         # Large changesets exceed one process's heap: lint in batches, each with the build's 4096 MB.
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          base="$(git merge-base origin/main HEAD)"
+          # Under Git Flow main trails develop, so diff against the PR's own base branch.
+          base_branch="${BASE_REF:-main}"
+          git fetch --no-tags origin "$base_branch"
+          base="$(git merge-base "origin/$base_branch" HEAD)"
           git diff --name-only --diff-filter=d "$base" HEAD -- '*.ts' '*.tsx' '*.mjs' '*.cjs' > changed-source.txt
           if [ -s changed-source.txt ]; then
             xargs -a changed-source.txt -n 60 npx eslint --max-warnings 0 --no-warn-ignored

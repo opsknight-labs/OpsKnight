@@ -30,6 +30,15 @@ const DROP_WITHOUT_IF_EXISTS_ALLOWLIST = new Set(['20260104135828_remove_nextaut
 // under the same name or new migrations. Any byte change restores the strict error.
 const REVIEWED_APPLIED_MIGRATIONS = new Map([
   [
+    '20261124000400_squire_memory_docs_heads_up',
+    {
+      sha256: '93dd5eac28bb72d9542203fe9732b8c6f99ec5119b948a158d26f36e1c6f32e7',
+      rule: 'ENUM_MIXED_OPERATIONS',
+      reason:
+        'Squire memory/heads-up migration: the new tables never reference the new DOCUMENT KnowledgeSourceKind value (KnowledgeDocSource.kind is TEXT), so the enum ADD VALUE and the table DDL are safe in one transaction; splitting it would break databases that already ran it and change Prisma checksums.',
+    },
+  ],
+  [
     '20261020110000_dashboard_api_revision',
     {
       sha256: '49594429ed7c9e61db0a80030dda198796abe25b56d2b755de9eb182191c8fb6',
