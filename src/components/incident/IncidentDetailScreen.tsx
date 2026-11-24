@@ -908,6 +908,9 @@ export default async function IncidentDetailScreen({
           id: incident.id,
           title: incident.title,
           service: { name: incident.service.name },
+          priority: incident.priority ?? null,
+          // Only people who may write the postmortem are offered to start it.
+          postmortemHref: canManageIncident ? `/postmortems/${incident.id}` : null,
         }}
         postmortemHref={
           postmortem
