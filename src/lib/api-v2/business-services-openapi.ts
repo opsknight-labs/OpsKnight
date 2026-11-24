@@ -37,10 +37,17 @@ const windowQuery: Record<string, Schema> = {
   to: { type: 'string', format: 'date-time', description: 'Default: now. At most 400 days wide.' },
 };
 
+const LINK: Schema = object({
+  label: { type: 'string', minLength: 1, maxLength: 80 },
+  url: { type: 'string', format: 'uri', pattern: '^https://', maxLength: 2000 },
+});
+
 const input = {
   name: { type: 'string', minLength: 1, maxLength: 120 },
   description: { type: ['string', 'null'], maxLength: 2000 },
   tier: { type: ['string', 'null'], maxLength: 40 },
+  statusPageSummary: { type: ['string', 'null'], maxLength: 500 },
+  links: { type: ['array', 'null'], maxItems: 10, items: LINK },
   ownerTeamId: nullableString,
   memberServiceIds: ids(200),
   followerUserIds: ids(500),
@@ -85,6 +92,8 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     name: string,
     description: nullableString,
     tier: nullableString,
+    statusPageSummary: nullableString,
+    links: { type: 'array', items: LINK },
     criticality: tier,
     impactMinUrgency: { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] },
     impactMaxPriority: nullableString,

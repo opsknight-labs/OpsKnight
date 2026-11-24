@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/patterns';
 import BusinessServiceForm from '@/components/service/BusinessServiceForm';
 import HealthBadge from '@/components/business-service/HealthBadge';
 import { getBusinessServiceHealth } from '@/lib/business-services/contract';
+import { linksToLines, parseBusinessServiceLinks } from '@/lib/business-services/links';
 import { loadBusinessServiceFormOptions } from '../../form-options';
 
 export default async function EditBusinessServicePage({
@@ -65,6 +66,8 @@ export default async function EditBusinessServicePage({
           id: item.id,
           name: item.name,
           description: item.description ?? '',
+          statusPageSummary: item.statusPageSummary ?? '',
+          linksText: linksToLines(parseBusinessServiceLinks(item.links)),
           tier: item.tier ?? '',
           ownerTeamId: item.ownerTeamId ?? '',
           memberServiceIds: item.members.map(member => member.service.id),

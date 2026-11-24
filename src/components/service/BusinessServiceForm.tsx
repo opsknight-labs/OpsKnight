@@ -16,6 +16,7 @@ import {
 import { notify } from '@/lib/toast';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { cn } from '@/lib/utils';
+import { linksFromLines } from '@/lib/business-services/links';
 import {
   createBusinessServiceAction,
   deleteBusinessServiceAction,
@@ -29,6 +30,10 @@ export type BusinessServiceFormValue = {
   id?: string;
   name: string;
   description: string;
+  /** Shown on status pages instead of the description. */
+  statusPageSummary: string;
+  /** One "Label | https://url" per line. */
+  linksText: string;
   tier: string;
   ownerTeamId: string;
   memberServiceIds: string[];
@@ -63,6 +68,8 @@ const PRIORITIES = ['P1', 'P2', 'P3', 'P4', 'P5'];
 const EMPTY: BusinessServiceFormValue = {
   name: '',
   description: '',
+  statusPageSummary: '',
+  linksText: '',
   tier: '',
   ownerTeamId: '',
   memberServiceIds: [],
@@ -238,8 +245,17 @@ export default function BusinessServiceForm({
       setError('Give the business service a name.');
       return;
     }
+    const links = linksFromLines(value.linksText);
+    if (!links) {
+      setError(
+        'Links need a label and an https URL, one per line ("Runbook | https://..."), up to 10.'
+      );
+      return;
+    }
     setError(null);
     const payload = {
+      statusPageSummary: value.statusPageSummary.trim() || null,
+      links,
       name: value.name.trim(),
       description: value.description.trim() || null,
       tier: value.tier || null,
@@ -310,6 +326,35 @@ export default function BusinessServiceForm({
               maxLength={2000}
               rows={3}
             />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="bs-summary" className="text-sm font-semibold">
+              Status page summary{' '}
+              <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <Textarea
+              id="bs-summary"
+              value={value.statusPageSummary}
+              onChange={event => set('statusPageSummary', event.target.value)}
+              placeholder="Plain-language description for customers."
+              maxLength={500}
+              rows={2}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="bs-links" className="text-sm font-semibold">
+              Links <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <Textarea
+              id="bs-links"
+              value={value.linksText}
+              onChange={event => set('linksText', event.target.value)}
+              placeholder="Runbook | https://wiki.example.com/checkout"
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">
+              One per line as Label | https URL. Runbooks, dashboards, docs.
+            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">

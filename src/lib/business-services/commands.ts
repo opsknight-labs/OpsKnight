@@ -14,6 +14,7 @@ import { serviceReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import type { BusinessServiceHealth, ImpactSource } from './contract';
 import { invalidateBusinessServiceHealth } from './health';
 import { wouldCreateSupportCycle } from './stats';
+import { BusinessServiceLinkSchema, parseBusinessServiceLinks } from './links';
 
 const id = z.string().trim().min(1).max(100);
 
@@ -21,7 +22,11 @@ export const BusinessServiceInputSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
     description: z.string().trim().max(2000).nullable().default(null),
-    tier: z.string().trim().max(40).nullable().default(null),
+    // Legacy free text with no default: a client that omits it keeps the stored value on update.
+    tier: z.string().trim().max(40).nullable().optional(),
+    /** Plain-language summary shown on status pages in place of the description. */
+    statusPageSummary: z.string().trim().max(500).nullable().optional(),
+    links: z.array(BusinessServiceLinkSchema).max(10).nullable().optional(),
     ownerTeamId: id.nullable().default(null),
     memberServiceIds: z.array(id).max(200).default([]),
     followerUserIds: z.array(id).max(500).default([]),
@@ -49,6 +54,8 @@ export const BUSINESS_SERVICE_SELECT = {
   name: true,
   description: true,
   tier: true,
+  statusPageSummary: true,
+  links: true,
   criticality: true,
   impactMinUrgency: true,
   impactMaxPriority: true,
@@ -363,13 +370,39 @@ function columns(input: ParsedInput) {
   return {
     name: input.name,
     description: input.description,
-    tier: input.tier,
+    ...(input.tier !== undefined ? { tier: input.tier } : {}),
     ownerTeamId: input.ownerTeamId,
+    ...(input.statusPageSummary !== undefined
+      ? { statusPageSummary: input.statusPageSummary }
+      : {}),
+    ...(input.links !== undefined ? { links: input.links ?? Prisma.DbNull } : {}),
     ...(input.criticality !== undefined ? { criticality: input.criticality } : {}),
     ...(input.impactMinUrgency !== undefined ? { impactMinUrgency: input.impactMinUrgency } : {}),
     ...(input.impactMaxPriority !== undefined
       ? { impactMaxPriority: input.impactMaxPriority }
       : {}),
+  };
+}
+
+/** Audit snapshot of the fields that change who is paged and what the status page says. */
+function auditFields(
+  input: ParsedInput,
+  current?: {
+    criticality: string | null;
+    impactMinUrgency: string | null;
+    impactMaxPriority: string | null;
+  }
+) {
+  return {
+    name: input.name,
+    memberServiceIds: input.memberServiceIds,
+    criticality: input.criticality ?? current?.criticality ?? null,
+    ownerTeamId: input.ownerTeamId,
+    impactMinUrgency: input.impactMinUrgency ?? current?.impactMinUrgency ?? null,
+    impactMaxPriority: input.impactMaxPriority ?? current?.impactMaxPriority ?? null,
+    dependsOnBusinessServiceIds: input.dependsOnBusinessServiceIds ?? null,
+    linkCount: input.links?.length ?? null,
+    hasStatusPageSummary: Boolean(input.statusPageSummary),
   };
 }
 
@@ -386,10 +419,7 @@ export async function createBusinessService(
       .create({ data: columns(input), select: { id: true } })
       .catch(conflict);
     await replaceChildren(tx, created.id, input);
-    await audit(tx, context, 'business_service.created', created.id, {
-      name: input.name,
-      memberServiceIds: input.memberServiceIds,
-    });
+    await audit(tx, context, 'business_service.created', created.id, auditFields(input));
     return tx.businessService.findUniqueOrThrow({
       where: { id: created.id },
       select: BUSINESS_SERVICE_SELECT,
@@ -418,6 +448,8 @@ export async function updateBusinessService(
       name: current.name,
       description: current.description,
       tier: current.tier,
+      statusPageSummary: current.statusPageSummary,
+      links: parseBusinessServiceLinks(current.links),
       ownerTeamId: current.ownerTeamId,
       memberServiceIds: currentMemberIds,
       followerUserIds: current.followers.map(follower => follower.user.id),
@@ -435,9 +467,29 @@ export async function updateBusinessService(
       });
     await tx.businessService.update({ where: { id }, data: columns(input) }).catch(conflict);
     await replaceChildren(tx, id, input, currentMemberIds);
+    const previousSupports = current.supportedBy.map(({ child }) => child.id).sort();
+    const nextSupports = input.dependsOnBusinessServiceIds;
     await audit(tx, context, 'business_service.updated', id, {
-      name: input.name,
-      memberServiceIds: input.memberServiceIds,
+      ...auditFields(input, current),
+      before: {
+        name: current.name,
+        memberServiceIds: currentMemberIds,
+        criticality: current.criticality,
+        ownerTeamId: current.ownerTeamId,
+        impactMinUrgency: current.impactMinUrgency,
+        impactMaxPriority: current.impactMaxPriority,
+        dependsOnBusinessServiceIds: previousSupports,
+        linksChanged:
+          input.links !== undefined &&
+          JSON.stringify(input.links ?? []) !==
+            JSON.stringify(parseBusinessServiceLinks(current.links)),
+        statusPageSummaryChanged:
+          input.statusPageSummary !== undefined &&
+          (input.statusPageSummary ?? null) !== current.statusPageSummary,
+      },
+      supportsChanged:
+        nextSupports !== undefined &&
+        JSON.stringify([...nextSupports].sort()) !== JSON.stringify(previousSupports),
     });
     return tx.businessService.findUniqueOrThrow({ where: { id }, select: BUSINESS_SERVICE_SELECT });
   };
@@ -541,6 +593,8 @@ export function businessServiceDto(
     name: row.name,
     description: row.description,
     tier: row.tier,
+    statusPageSummary: row.statusPageSummary,
+    links: parseBusinessServiceLinks(row.links),
     criticality: row.criticality,
     impactMinUrgency: row.impactMinUrgency,
     impactMaxPriority: row.impactMaxPriority,

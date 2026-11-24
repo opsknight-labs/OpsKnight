@@ -145,6 +145,7 @@ export async function buildStatusPageSnapshot(
               id: true,
               name: true,
               description: true,
+              statusPageSummary: true,
               members: { select: { serviceId: true } },
             },
           },
@@ -583,7 +584,9 @@ export async function buildStatusPageSnapshot(
             name: mapping.displayName || mapping.businessService.name,
             statusOverride: activeStatusOverride(mapping, now),
             showMembers: mapping.showMembers,
-            description: page.showServiceDescriptions ? mapping.businessService.description : null,
+            description: page.showServiceDescriptions
+              ? mapping.businessService.statusPageSummary || mapping.businessService.description
+              : null,
             memberServiceIds: mapping.businessService.members
               .map(member => member.serviceId)
               .sort((a, b) => (servicePosition.get(a) ?? 0) - (servicePosition.get(b) ?? 0)),
