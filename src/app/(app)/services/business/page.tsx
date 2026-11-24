@@ -44,8 +44,8 @@ const STATUS_CHIPS = [
 
 /**
  * Business-service catalog: PageHeader (totals, impacted now, tiers) → FilterBar → directory with keyset
- * pages. One `listBusinessServices` call per page; header and footer counts come from one scoped
- * query plus the (cached) health of every visible business service.
+ * pages. One `listBusinessServices` call per page; header and footer counts come from one lean scoped
+ * read (no per-row follower subqueries) plus the (cached) health of every visible business service.
  */
 export default async function BusinessServicesPage({
   searchParams,
@@ -67,11 +67,8 @@ export default async function BusinessServicesPage({
       criticality: true,
       ownerTeamId: true,
       ownerTeam: { select: { id: true, name: true } },
-      _count: { select: { followers: true } },
-      followers: { where: { userId: actor.id }, select: { userId: true } },
     },
   });
-  const byId = new Map(visible.map(row => [row.id, row]));
 
   const list = (cursor: string | null) =>
     listBusinessServices({ filter, cursor, limit: PAGE_SIZE }, actor);
@@ -94,6 +91,24 @@ export default async function BusinessServicesPage({
     ]).then(([{ page, cursors }, health]) => ({ page, cursors, health })),
     'business_services.catalog.unavailable'
   );
+
+  // Follower counts only for the rows on this page, not for every visible business service.
+  const pageIds = engine?.page.items.map(item => item.id) ?? [];
+  const followers = pageIds.length
+    ? await prisma.businessServiceFollower.groupBy({
+        by: ['businessServiceId'],
+        where: { businessServiceId: { in: pageIds } },
+        _count: { _all: true },
+      })
+    : [];
+  const following = pageIds.length
+    ? await prisma.businessServiceFollower.findMany({
+        where: { businessServiceId: { in: pageIds }, userId: actor.id },
+        select: { businessServiceId: true },
+      })
+    : [];
+  const followerCounts = new Map(followers.map(row => [row.businessServiceId, row._count._all]));
+  const followingIds = new Set(following.map(row => row.businessServiceId));
 
   const impactedNow = engine
     ? [...engine.health.values()].filter(entry => isImpacted(entry.status)).length
@@ -127,7 +142,6 @@ export default async function BusinessServicesPage({
 
   const rows: CatalogRow[] = engine
     ? engine.page.items.map(item => {
-        const extra = byId.get(item.id);
         return {
           id: item.id,
           name: item.name,
@@ -139,8 +153,8 @@ export default async function BusinessServicesPage({
           memberCount: item.memberCount,
           impactedMemberCount: item.health.impactedMemberCount,
           openIncidentCount: item.health.openIncidentCount,
-          followerCount: extra?._count.followers ?? 0,
-          following: Boolean(extra?.followers.length),
+          followerCount: followerCounts.get(item.id) ?? 0,
+          following: followingIds.has(item.id),
         };
       })
     : [];

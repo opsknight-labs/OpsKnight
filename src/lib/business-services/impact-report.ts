@@ -90,7 +90,6 @@ export async function getBusinessImpactReport(
       ],
     },
     orderBy: [{ criticality: { sort: 'asc', nulls: 'last' } }, { name: 'asc' }],
-    take: IMPACT_REPORT_LIMIT + 1,
     select: {
       id: true,
       name: true,
@@ -99,7 +98,9 @@ export async function getBusinessImpactReport(
       members: { select: { serviceId: true } },
     },
   });
-  const services = found.slice(0, IMPACT_REPORT_LIMIT);
+  // Rank every visible service first (one cheap interval query), then run the engine stats
+  // for the worst IMPACT_REPORT_LIMIT only, so a truncated report still shows the worst offenders.
+  const services = await rankByImpact(found, window, now);
   const stats: BusinessServiceStats[] = [];
   for (let index = 0; index < services.length; index += CONCURRENCY) {
     stats.push(
@@ -126,6 +127,48 @@ export async function getBusinessImpactReport(
       a.name.localeCompare(b.name)
   );
   return { window, params, rows, truncated: found.length > IMPACT_REPORT_LIMIT };
+}
+
+/** Worst first by unioned impact time, then incident count, then name; keeps the top limit. */
+export async function rankByImpact<T extends { id: string; name: string }>(
+  found: readonly T[],
+  window: TimeWindow,
+  now: Date,
+  limit = IMPACT_REPORT_LIMIT
+): Promise<T[]> {
+  if (found.length <= limit) return [...found];
+  // shortcut: capped at MAX_IMPACT_ROWS intervals, so a very noisy org ranks approximately.
+  const rows = await prisma.incidentBusinessServiceImpact.findMany({
+    where: {
+      businessServiceId: { in: found.map(service => service.id) },
+      excluded: false,
+      startedAt: { lt: window.to },
+      OR: [{ endedAt: null }, { endedAt: { gt: window.from } }],
+    },
+    take: MAX_IMPACT_ROWS,
+    select: { businessServiceId: true, startedAt: true, endedAt: true },
+  });
+  const spans = new Map<string, Array<{ start: number; end: number }>>();
+  for (const row of rows) {
+    const list = spans.get(row.businessServiceId) ?? [];
+    list.push({ start: row.startedAt.getTime(), end: (row.endedAt ?? now).getTime() });
+    spans.set(row.businessServiceId, list);
+  }
+  const bounds = { from: window.from.getTime(), to: Math.min(window.to.getTime(), now.getTime()) };
+  const score = new Map(
+    found.map(service => {
+      const list = spans.get(service.id) ?? [];
+      return [service.id, { minutes: unionDurationMs(list, bounds), count: list.length }] as const;
+    })
+  );
+  return [...found]
+    .sort(
+      (a, b) =>
+        score.get(b.id)!.minutes - score.get(a.id)!.minutes ||
+        score.get(b.id)!.count - score.get(a.id)!.count ||
+        a.name.localeCompare(b.name)
+    )
+    .slice(0, limit);
 }
 
 async function worstMembers(

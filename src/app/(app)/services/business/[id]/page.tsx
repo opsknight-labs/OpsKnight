@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { Suspense, cache } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Boxes, ExternalLink, Pencil } from 'lucide-react';
@@ -75,14 +75,15 @@ function safeLinks(value: unknown): { label: string; url: string }[] {
   });
 }
 
+/** One 30-day stats read per render, shared by the KPI and incident-count sections. */
+const stats30 = cache((id: string, actor: AuthorizationActor) =>
+  getBusinessServiceStats(id, windowOf(30), actor)
+);
+
 /** Uptime and response KPIs (30 and 90 days). */
 async function KpiSection({ id, actor }: { id: string; actor: AuthorizationActor }) {
-  const now = new Date();
   const stats = await orUnavailable(
-    Promise.all([
-      getBusinessServiceStats(id, windowOf(30, now), actor),
-      getBusinessServiceStats(id, windowOf(90, now), actor),
-    ]),
+    Promise.all([stats30(id, actor), getBusinessServiceStats(id, windowOf(90), actor)]),
     'business_services.overview.stats_unavailable'
   );
   if (!stats) {
@@ -181,7 +182,7 @@ async function IncidentCountSection({
   open: number;
 }) {
   const stats = await orUnavailable(
-    getBusinessServiceStats(id, windowOf(30), actor),
+    stats30(id, actor),
     'business_services.overview.stats_unavailable'
   );
   const last30 = stats?.incidentCount ?? null;
