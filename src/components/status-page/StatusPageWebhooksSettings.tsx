@@ -28,6 +28,7 @@ const WEBHOOK_EVENTS = [
   { value: 'incident.updated', label: 'Incident Updated' },
   { value: 'incident.resolved', label: 'Incident Resolved' },
   { value: 'status.changed', label: 'Status Changed' },
+  { value: 'business_service.status_changed', label: 'Business Service Status Changed' },
   { value: 'maintenance.scheduled', label: 'Maintenance Scheduled' },
 ];
 

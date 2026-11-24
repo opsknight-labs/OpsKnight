@@ -2971,6 +2971,9 @@ model BusinessService {
   quorumMajorPct     Int?
   /// How many dependency hops from a member count as impact (1 to 5).
   dependencyHopDepth Int                                     @default(3)
+  /// Last health status announced to followers and status-page webhooks; null until first reconcile.
+  lastNotifiedStatus   String?
+  lastNotifiedStatusAt DateTime?
   createdAt          DateTime                                @default(now())
   updatedAt          DateTime                                @updatedAt
   ownerTeam          Team?                                   @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
