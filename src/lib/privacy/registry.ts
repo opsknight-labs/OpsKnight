@@ -309,6 +309,8 @@ export const personalDataRegistry = [
       'IntelligenceWorkItem',
       'IntelligencePattern',
       'ServiceDependency',
+      'ServiceDependencyEvent',
+      'ServiceDependencyEdgeStats',
       'ChangeEvent',
       'IntelligenceDigestSettings',
       'IntelligenceDigestRun',
