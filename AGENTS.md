@@ -142,6 +142,12 @@ Email templates and dashboard views must be responsive across all devices. The f
 - **Deduplication**: Honor `dedupKey` indexing (`@@index([serviceId, dedupKey, status])`) to prevent alert storms and duplicate open incidents.
 - **Immutable SLA Contracts**: Freeze SLA targets (`slaAckTargetMs`, `slaResolveTargetMs`, `slaTargetSource`) upon incident creation.
 - **Migrations**: Always run `npx prisma migrate dev` or inspect `prisma/schema.prisma` before modifying database access code. Never use destructive flags (`--force` or `db push --accept-data-loss`) in shared environments.
+- **Verify migrations before raising a PR**: CI skips the database jobs when a change is "not affected", so a broken migration reaches staging unnoticed, and a failed row in `_prisma_migrations` stops the app from starting (Prisma `P3009`, a crash loop and a 502). For every PR that adds or edits a migration:
+  1. **Identifier length**: Postgres truncates identifiers to 63 characters, so two long index or constraint names that share their first 63 characters collide (`42P07`). Give long ones an explicit short `map:` in `schema.prisma` and use the same name in the SQL.
+  2. **Apply the full history to a throwaway Postgres** on its own port, never a dev or test database: `docker run -d --name migrate-check -e POSTGRES_PASSWORD=check -e POSTGRES_DB=migcheck -p 127.0.0.1:55440:5432 pgvector/pgvector:pg16`, wait until `psql -c "select 1"` succeeds (`pg_isready` answers too early during first-boot init), then `DATABASE_URL=postgresql://postgres:check@127.0.0.1:55440/migcheck npx prisma migrate deploy`.
+  3. **Check drift**: `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script` with the same `DATABASE_URL`. The baseline already reports drift for raw-SQL indexes and foreign keys, so confirm that none of the objects you added or changed appear.
+  4. Remove the container, and say in the PR description that the migrations were applied for real.
+  If a migration has already failed on staging, the failed row must be cleared with `prisma migrate resolve --rolled-back <name>` before the fixed image can start.
 
 ---
 
@@ -181,6 +187,9 @@ npx eslint <modified-files>
 
 # 3. Unit Tests
 npx vitest run <relevant-tests>
+
+# 4. Migrations (only when prisma/ changed): apply the full history to a throwaway Postgres and
+#    check drift, as described under "Verify migrations before raising a PR" in section 5.
 ```
 
 Zero errors and zero warnings are required before pushing.

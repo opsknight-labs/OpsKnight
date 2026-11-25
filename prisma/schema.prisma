@@ -7658,7 +7658,7 @@ model ServiceDependencyEvent {
   occurredAt          DateTime             @default(now())
 
   @@index([occurredAt])
-  @@index([upstreamServiceId, downstreamServiceId, occurredAt])
+  @@index([upstreamServiceId, downstreamServiceId, occurredAt], map: "ServiceDependencyEvent_edge_occurredAt_idx")
 }
 
 /// Measured traffic on one dependency edge over one window, pushed by an integration.
@@ -7673,8 +7673,8 @@ model ServiceDependencyEdgeStats {
   errorCount          Int
   createdAt           DateTime @default(now())
 
-  @@unique([upstreamServiceId, downstreamServiceId, source, windowStart])
-  @@index([upstreamServiceId, downstreamServiceId, windowStart])
+  @@unique([upstreamServiceId, downstreamServiceId, source, windowStart], map: "ServiceDependencyEdgeStats_edge_source_window_key")
+  @@index([upstreamServiceId, downstreamServiceId, windowStart], map: "ServiceDependencyEdgeStats_edge_window_idx")
   @@index([windowStart])
 }
 
