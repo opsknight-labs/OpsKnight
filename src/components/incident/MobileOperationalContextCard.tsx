@@ -40,6 +40,8 @@ export type MobileOperationalContextCardProps = {
   }>;
   capabilities?: MobileContextCapabilities;
   className?: string;
+  /** Off where the Details panel above already shows the service and team. */
+  showServiceTeam?: boolean;
 };
 
 export default function MobileOperationalContextCard({
@@ -50,6 +52,7 @@ export default function MobileOperationalContextCard({
   jiraLinks = [],
   capabilities,
   className,
+  showServiceTeam = true,
 }: MobileOperationalContextCardProps) {
   const [showManager, setShowManager] = useState(false);
 
@@ -198,30 +201,32 @@ export default function MobileOperationalContextCard({
         </div>
 
         {/* Service & Team Summary */}
-        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/70 text-[11px]">
-          <div className="min-w-0">
-            <span className="text-muted-foreground block text-[10px]">Service</span>
-            <Link
-              href={`/services/${service.id}`}
-              className="font-medium text-foreground hover:underline truncate block"
-            >
-              {service.name}
-            </Link>
-          </div>
-          <div className="min-w-0">
-            <span className="text-muted-foreground block text-[10px]">Team</span>
-            {team ? (
+        {showServiceTeam && (
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/70 text-[11px]">
+            <div className="min-w-0">
+              <span className="text-muted-foreground block text-[10px]">Service</span>
               <Link
-                href={`/teams/${team.id}`}
+                href={`/services/${service.id}`}
                 className="font-medium text-foreground hover:underline truncate block"
               >
-                {team.name}
+                {service.name}
               </Link>
-            ) : (
-              <span className="mt-0.5 text-muted-foreground truncate block">Unassigned</span>
-            )}
+            </div>
+            <div className="min-w-0">
+              <span className="text-muted-foreground block text-[10px]">Team</span>
+              {team ? (
+                <Link
+                  href={`/teams/${team.id}`}
+                  className="font-medium text-foreground hover:underline truncate block"
+                >
+                  {team.name}
+                </Link>
+              ) : (
+                <span className="mt-0.5 text-muted-foreground truncate block">Unassigned</span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       {effectiveCollaboration?.visible && (

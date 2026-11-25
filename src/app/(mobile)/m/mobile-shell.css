@@ -259,7 +259,8 @@
   min-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  padding-inline: max(0.35rem, env(safe-area-inset-left, 0px)) max(0.35rem, env(safe-area-inset-right, 0px));
+  padding-inline: max(0.35rem, env(safe-area-inset-left, 0px))
+    max(0.35rem, env(safe-area-inset-right, 0px));
   padding-top: 0.25rem;
   padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid hsl(var(--ui-border) / 0.9);
@@ -286,7 +287,10 @@
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
-  transition: color 140ms ease, background-color 140ms ease, transform 100ms ease;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    transform 100ms ease;
 }
 
 .mobile-nav-item.active {
@@ -294,7 +298,9 @@
   color: hsl(var(--ui-foreground));
 }
 
-.mobile-nav-item:active { transform: scale(0.98); }
+.mobile-nav-item:active {
+  transform: scale(0.98);
+}
 
 .mobile-nav-icon {
   position: relative;
@@ -372,9 +378,13 @@
 }
 
 .dark .mobile-network-banner.offline,
-[data-theme='dark'] .mobile-network-banner.offline { color: #fb7185; }
+[data-theme='dark'] .mobile-network-banner.offline {
+  color: #fb7185;
+}
 .dark .mobile-network-banner.slow,
-[data-theme='dark'] .mobile-network-banner.slow { color: #fbbf24; }
+[data-theme='dark'] .mobile-network-banner.slow {
+  color: #fbbf24;
+}
 
 .mobile-network-banner button {
   min-height: 36px;
@@ -415,10 +425,16 @@
   box-shadow: 0 16px 40px hsl(var(--ui-foreground) / 0.14);
 }
 
-.mobile-pwa-notice > div { min-width: 0; }
+.mobile-pwa-notice > div {
+  min-width: 0;
+}
 .mobile-pwa-notice strong,
-.mobile-pwa-notice span { display: block; }
-.mobile-pwa-notice strong { font-size: 0.8125rem; }
+.mobile-pwa-notice span {
+  display: block;
+}
+.mobile-pwa-notice strong {
+  font-size: 0.8125rem;
+}
 .mobile-pwa-notice span {
   margin-top: 0.125rem;
   color: hsl(var(--ui-muted-foreground));
@@ -446,8 +462,12 @@
   height: auto;
 }
 
-.mobile-swipe-navigator.snap-left { animation: mobileSnapLeft 160ms ease-out; }
-.mobile-swipe-navigator.snap-right { animation: mobileSnapRight 160ms ease-out; }
+.mobile-swipe-navigator.snap-left {
+  animation: mobileSnapLeft 160ms ease-out;
+}
+.mobile-swipe-navigator.snap-right {
+  animation: mobileSnapRight 160ms ease-out;
+}
 
 .mobile-swipe-hint {
   position: fixed;
@@ -469,13 +489,25 @@
 }
 
 @keyframes mobileSnapLeft {
-  from { transform: translateX(8px); opacity: 0.9; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(8px);
+    opacity: 0.9;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 @keyframes mobileSnapRight {
-  from { transform: translateX(-8px); opacity: 0.9; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(-8px);
+    opacity: 0.9;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 /* Interaction contract */
@@ -489,6 +521,11 @@
   min-height: 44px;
 }
 
+/* The incident page sizes its own controls and adds invisible 44px hit areas (globals.css, .incident-dense). */
+.mobile-app .incident-dense :where(button, [role='button']) {
+  min-height: 0;
+}
+
 .mobile-app :where(button, [role='button'], input, select, textarea, a):focus-visible {
   outline: 2px solid hsl(var(--ui-ring));
   outline-offset: 2px;
@@ -500,7 +537,9 @@
 }
 
 @media (min-width: 640px) {
-  .mobile-content { padding-inline: 1.25rem; }
+  .mobile-content {
+    padding-inline: 1.25rem;
+  }
   .mobile-header {
     padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
     padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
@@ -508,9 +547,12 @@
 }
 
 @media (max-width: 359px) {
-  .mobile-header-brand span { display: none; }
+  .mobile-header-brand span {
+    display: none;
+  }
   .mobile-nav {
-    padding-inline: max(0.2rem, env(safe-area-inset-left, 0px)) max(0.2rem, env(safe-area-inset-right, 0px));
+    padding-inline: max(0.2rem, env(safe-area-inset-left, 0px))
+      max(0.2rem, env(safe-area-inset-right, 0px));
   }
   .mobile-nav-item {
     gap: 0.12rem;
@@ -526,9 +568,15 @@
     --mobile-header-height: 50px;
     --mobile-nav-height: 56px;
   }
-  .mobile-content { padding-top: 0.625rem; }
-  .mobile-nav-item { min-height: 44px; }
-  .mobile-nav-label { display: none; }
+  .mobile-content {
+    padding-top: 0.625rem;
+  }
+  .mobile-nav-item {
+    min-height: 44px;
+  }
+  .mobile-nav-label {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,6 +1,14 @@
 'use client';
 
-import { useState, useTransition, useMemo, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+  useMemo,
+  type ReactNode,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -21,7 +29,45 @@ type IncidentDescriptionCardProps = {
   context?: ReactNode;
   /** The description read as an alert payload (server-built, no AI); shown instead of raw text when structured. */
   readable?: ReadablePayload | null;
+  /** Start as a summary (context and the top of the alert) with "Show full alert"; remembered per browser. */
+  clamp?: boolean;
 };
+
+/** Summary height: context pills, source, alert title and key metric. */
+const CLAMP_PX = 208;
+const FULL_KEY = 'opsknight.incident.descriptionFull';
+const FULL_EVENT = 'opsknight:description-full';
+
+function subscribeFull(notify: () => void) {
+  window.addEventListener('storage', notify);
+  window.addEventListener(FULL_EVENT, notify);
+  return () => {
+    window.removeEventListener('storage', notify);
+    window.removeEventListener(FULL_EVENT, notify);
+  };
+}
+
+function readFull(): boolean {
+  try {
+    const stored = localStorage.getItem(FULL_KEY);
+    if (stored !== null) return stored === '1';
+  } catch {
+    // Storage blocked: use this page's own choice below.
+  }
+  return fullFallback;
+}
+
+/** This page's choice when storage is blocked. */
+let fullFallback = false;
+function writeFull(next: boolean) {
+  fullFallback = next;
+  try {
+    localStorage.setItem(FULL_KEY, next ? '1' : '0');
+  } catch {
+    // Not remembered across visits; fullFallback keeps it for this page.
+  }
+  window.dispatchEvent(new Event(FULL_EVENT));
+}
 
 // Check if string is raw JSON
 function tryParseJson(text: string): string | null {
@@ -429,7 +475,22 @@ export function IncidentDescriptionCard({
   className,
   context,
   readable = null,
+  clamp = false,
 }: IncidentDescriptionCardProps) {
+  // The remembered choice lives in localStorage (an external store); the server render is the summary.
+  const full = useSyncExternalStore(subscribeFull, readFull, () => false);
+  const [tall, setTall] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = contentRef.current;
+    if (!clamp || !element) return;
+    const measure = () => setTall(element.scrollHeight > CLAMP_PX + 48);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [clamp]);
+  const toggleFull = () => writeFull(!full);
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(description || '');
@@ -509,160 +570,186 @@ export function IncidentDescriptionCard({
         </div>
       </div>
 
-      {/* Verified context first, the raw description/payload below it as the evidence. */}
-      {context && <div className="border-b border-border/70 px-3.5 py-2.5">{context}</div>}
+      <div
+        className={cn(clamp && tall && !full && !isEditing && 'overflow-hidden')}
+        style={clamp && tall && !full && !isEditing ? { maxHeight: CLAMP_PX } : undefined}
+      >
+        <div ref={contentRef}>
+          {/* Verified context first, the raw description/payload below it as the evidence. */}
+          {context && <div className="border-b border-border/70 px-3.5 py-2.5">{context}</div>}
 
-      {/* Body */}
-      <div className="p-2.5 sm:p-3">
-        {isEditing ? (
-          <div className="space-y-2.5">
-            <Textarea
-              value={editedText}
-              onChange={e => setEditedText(e.target.value)}
-              placeholder="Add incident diagnostic notes, customer impact, or context... (Markdown, JSON, logs supported)"
-              rows={8}
-              className="w-full text-xs font-mono leading-relaxed resize-y border-border focus-visible:ring-1 focus-visible:ring-primary bg-background text-foreground"
-              disabled={isPending}
-            />
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] text-muted-foreground">
-                Tip: Markdown, JSON payloads, code blocks (<code>```</code>), and key: value pairs
-                are supported.
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCancel}
+          {/* Body */}
+          <div className="p-2.5 sm:p-3">
+            {isEditing ? (
+              <div className="space-y-2.5">
+                <Textarea
+                  value={editedText}
+                  onChange={e => setEditedText(e.target.value)}
+                  placeholder="Add incident diagnostic notes, customer impact, or context... (Markdown, JSON, logs supported)"
+                  rows={8}
+                  className="w-full text-xs font-mono leading-relaxed resize-y border-border focus-visible:ring-1 focus-visible:ring-primary bg-background text-foreground"
                   disabled={isPending}
-                  className="h-7 gap-1 text-xs"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  <span>Cancel</span>
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={isPending}
-                  className="h-7 gap-1.5 text-xs font-semibold"
-                >
-                  {isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Check className="h-3.5 w-3.5" />
-                  )}
-                  <span>Save Changes</span>
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : collapsible && !showPayload ? (
-          // A structured payload: its readable view first (no AI), the raw source one row below.
-          <div className="space-y-3">
-            {structured && readable && <ReadablePayloadView view={readable} />}
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs">
-              <span className="flex items-center gap-1.5 font-medium text-foreground">
-                <Code2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                Raw alert payload
-              </span>
-              <span className="tabular-nums text-muted-foreground">
-                {FORMAT_LABEL[readable?.format ?? 'json']} ·{' '}
-                {(wholeJson ?? rawDescription).split('\n').length} lines
-              </span>
-              <span className="ml-auto flex items-center gap-1.5">
-                <CopyButton
-                  text={wholeJson ?? rawDescription}
-                  label="Copy raw payload"
-                  className="h-7 px-2 text-xs"
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowPayload(true)}
-                  className="h-7 gap-1 px-2.5 text-xs font-medium"
-                  aria-expanded={false}
-                >
-                  {structured ? 'View raw' : 'View'}
-                  <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-                </Button>
-              </span>
-            </div>
-          </div>
-        ) : rawDescription ? (
-          <div>
-            {collapsible && (
-              <div className="mb-1.5 flex justify-end">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowPayload(false)}
-                  className="h-6 gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
-                  aria-expanded
-                >
-                  Hide payload
-                  <ChevronUp className="h-3.5 w-3.5" aria-hidden />
-                </Button>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-muted-foreground">
+                    Tip: Markdown, JSON payloads, code blocks (<code>```</code>), and key: value
+                    pairs are supported.
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancel}
+                      disabled={isPending}
+                      className="h-7 gap-1 text-xs"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      <span>Cancel</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSave}
+                      disabled={isPending}
+                      className="h-7 gap-1.5 text-xs font-semibold"
+                    >
+                      {isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" />
+                      )}
+                      <span>Save Changes</span>
+                    </Button>
+                  </div>
+                </div>
               </div>
-            )}
-            <div
-              className={cn(
-                'text-xs text-foreground transition-all',
-                isLong && !isExpanded && 'max-h-[220px] overflow-hidden'
-              )}
-            >
-              {parsedContent}
-            </div>
+            ) : collapsible && !showPayload ? (
+              // A structured payload: its readable view first (no AI), the raw source one row below.
+              <div className="space-y-3">
+                {structured && readable && <ReadablePayloadView view={readable} />}
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs">
+                  <span className="flex items-center gap-1.5 font-medium text-foreground">
+                    <Code2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                    Raw alert payload
+                  </span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {FORMAT_LABEL[readable?.format ?? 'json']} ·{' '}
+                    {(wholeJson ?? rawDescription).split('\n').length} lines
+                  </span>
+                  <span className="ml-auto flex items-center gap-1.5">
+                    <CopyButton
+                      text={wholeJson ?? rawDescription}
+                      label="Copy raw payload"
+                      className="h-7 px-2 text-xs"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowPayload(true)}
+                      className="h-7 gap-1 px-2.5 text-xs font-medium"
+                      aria-expanded={false}
+                    >
+                      {structured ? 'View raw' : 'View'}
+                      <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                    </Button>
+                  </span>
+                </div>
+              </div>
+            ) : rawDescription ? (
+              <div>
+                {collapsible && (
+                  <div className="mb-1.5 flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowPayload(false)}
+                      className="h-6 gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+                      aria-expanded
+                    >
+                      Hide payload
+                      <ChevronUp className="h-3.5 w-3.5" aria-hidden />
+                    </Button>
+                  </div>
+                )}
+                <div
+                  className={cn(
+                    'text-xs text-foreground transition-all',
+                    isLong && !isExpanded && 'max-h-[220px] overflow-hidden'
+                  )}
+                >
+                  {parsedContent}
+                </div>
 
-            {/* Clean expand/collapse toggle without greyish gradient flare */}
-            {isLong && !isExpanded && (
-              <div className="mt-2 pt-2 border-t border-border/60 flex justify-center">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsExpanded(true)}
-                  className="h-6 px-2.5 gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-                >
-                  <span>Show full description</span>
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            )}
+                {/* Clean expand/collapse toggle without greyish gradient flare */}
+                {isLong && !isExpanded && (
+                  <div className="mt-2 pt-2 border-t border-border/60 flex justify-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsExpanded(true)}
+                      className="h-6 px-2.5 gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      <span>Show full description</span>
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
 
-            {isLong && isExpanded && (
-              <div className="mt-2 pt-2 border-t border-border/60 flex justify-center">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsExpanded(false)}
-                  className="h-6 px-2.5 gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-                >
-                  <span>Collapse description</span>
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </Button>
+                {isLong && isExpanded && (
+                  <div className="mt-2 pt-2 border-t border-border/60 flex justify-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsExpanded(false)}
+                      className="h-6 px-2.5 gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      <span>Collapse description</span>
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-xs text-muted-foreground italic">
+                No incident description provided.{' '}
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="text-primary hover:underline font-semibold not-italic ml-1"
+                  >
+                    Add description
+                  </button>
+                )}
               </div>
             )}
           </div>
-        ) : (
-          <div className="text-center py-4 text-xs text-muted-foreground italic">
-            No incident description provided.{' '}
-            {canManage && (
-              <button
-                type="button"
-                onClick={() => setIsEditing(true)}
-                className="text-primary hover:underline font-semibold not-italic ml-1"
-              >
-                Add description
-              </button>
-            )}
-          </div>
-        )}
+        </div>
       </div>
+      {clamp && tall && !isEditing && (
+        <div className="flex justify-center border-t border-border/60 py-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={toggleFull}
+            aria-expanded={full}
+            className="h-7 gap-1 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            {full ? 'Show less' : 'Show full alert'}
+            {full ? (
+              <ChevronUp className="h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

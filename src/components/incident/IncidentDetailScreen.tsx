@@ -11,6 +11,9 @@ import IncidentLiveRefresh from '@/components/incident/IncidentLiveRefresh';
 import CardSkeleton from '@/components/incident/detail/CardSkeleton';
 import { getCachedOrFetch } from '@/lib/realtime-cache';
 import FollowControl from '@/components/incident/detail/FollowControl';
+import ShareMenu, { CopyIdText } from '@/components/incident/detail/ShareMenu';
+import ResponseRow from '@/components/incident/detail/ResponseRow';
+import { formatRelativeShort } from '@/lib/mobile-time';
 import IncidentViewers from '@/components/incident/detail/IncidentViewers';
 import { incidentSummaryText } from '@/lib/incidents/summary-text';
 import IncidentShortcuts from '@/components/incident/IncidentShortcuts';
@@ -25,7 +28,7 @@ import DedupRecurrenceChip from '@/components/incident/detail/DedupRecurrenceChi
 import { CHAT_EVENT_DISPLAY_MAX, LIFECYCLE_EVENT_WHERE } from '@/lib/incidents/event-filters';
 import { Suspense } from 'react';
 import UserAvatar from '@/components/UserAvatar';
-import { incidentStatusTone, statusGradientClass } from '@/lib/design/status-palette';
+import { incidentStatusTone } from '@/lib/design/status-palette';
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
 import EscalationExecutionHealth from '@/components/incident/detail/EscalationExecutionHealth';
 import { getEscalationExecutionHealth } from '@/lib/escalation/execution-health';
@@ -44,8 +47,7 @@ import {
   getIncidentOperatorPermissions,
   getUserPermissions,
 } from '@/lib/rbac';
-import IncidentRoles, { type IncidentRoleSlot } from '@/components/incident/detail/IncidentRoles';
-import IncidentImpacts from '@/components/incident/detail/IncidentImpacts';
+import { type IncidentRoleSlot } from '@/components/incident/detail/IncidentRoles';
 import NotifyStakeholdersButton from '@/components/incident/detail/NotifyStakeholdersButton';
 import { impactedBusinessServicesForIncident } from '@/lib/business-services/commands';
 import { INCIDENT_ROLES } from '@/lib/incidents/roles';
@@ -89,16 +91,15 @@ import {
 import { projectIncidentSlaState } from '@/lib/incident-sla/state';
 import { Badge } from '@/components/ui/shadcn/badge';
 import StatusBadge from '@/components/patterns/StatusBadge';
-import CopyButton from '@/components/common/CopyButton';
 import { getAppUrl } from '@/lib/app-url';
 import { redactNotificationError } from '@/lib/notification-operations';
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
-  ChevronDown,
   Network,
   Pause,
+  Settings,
   Volume2,
   Wrench,
 } from 'lucide-react';
@@ -129,6 +130,18 @@ export type IncidentDetailScreenProps = {
  * The presentation flag changes composition only; permissions, actions and
  * operational capabilities stay shared.
  */
+
+/** Soft status tile beside the title (DESIGN.md: status hues mean status; no gradient decoration). */
+const STATUS_TILE: Record<string, string> = {
+  critical:
+    'bg-status-critical-soft text-status-critical-deep ring-status-critical-border/25 dark:bg-status-critical/15 dark:text-rose-300',
+  elevated:
+    'bg-status-elevated-soft text-status-elevated-deep ring-status-elevated-border/25 dark:bg-status-elevated/15 dark:text-amber-300',
+  ok: 'bg-status-ok-soft text-status-ok-deep ring-status-ok-border/25 dark:bg-status-ok/15 dark:text-emerald-300',
+  info: 'bg-status-info-soft text-status-info-deep ring-status-info-border/25 dark:bg-status-info/15 dark:text-blue-300',
+  none: 'bg-muted text-muted-foreground ring-border',
+};
+
 export default async function IncidentDetailScreen({
   id,
   backHref,
@@ -388,11 +401,6 @@ export default async function IncidentDetailScreen({
   const handleUpdateDescription = updateIncidentDetailDescription.bind(null, id);
 
   const statusTone = incidentStatusTone(incident.status);
-  const statusGradient = statusTone
-    ? statusGradientClass(statusTone)
-    : incident.status === 'SUPPRESSED'
-      ? 'from-slate-600 to-slate-500'
-      : statusGradientClass('critical');
 
   // "Insert summary" in the note composer: only where summaries exist and the viewer may post a note.
   const canInsertSummary =
@@ -529,21 +537,6 @@ export default async function IncidentDetailScreen({
     </div>
   );
 
-  const customFieldsContent = (
-    <IncidentCustomFieldsCard
-      incidentId={id}
-      customFieldValues={
-        incident.customFieldValues?.map(value => ({
-          id: value.id,
-          value: value.value,
-          customField: value.customField,
-        })) || []
-      }
-      allCustomFields={customFields}
-      canManage={canManageIncident}
-    />
-  );
-
   // Compact rows for "Catch me up", from data the page already loaded (no extra queries).
   const catchUpItems: CatchUpItem[] = [
     ...events.map(event => ({
@@ -618,17 +611,6 @@ export default async function IncidentDetailScreen({
     ) : null,
   };
   const detailsBand = <IncidentHeader {...detailsProps} embedded />;
-  // From lg the details are a properties panel at the top of the side column.
-  const detailsPanel = <IncidentHeader {...detailsProps} panel />;
-  const dedupChip = (
-    <DedupRecurrenceChip
-      alertTotal={alertTotal}
-      hasDedupKey={Boolean(storedIncident.dedupKey)}
-      createdAt={incident.createdAt}
-      previous={previousOnKey}
-      routePrefix={routePrefix}
-    />
-  );
 
   const holderByRole = new Map(
     storedIncident.roleAssignments.map(assignment => [assignment.roleKey, assignment.user])
@@ -653,13 +635,43 @@ export default async function IncidentDetailScreen({
     (roleAccess?.access.canTakeSelf.COMMANDER ?? false) &&
     holderByRole.get('COMMANDER')?.id !== user.id;
   const handleTakeCommand = setIncidentDetailRole.bind(null, id, 'COMMANDER', user.id);
-  const rolesContent = (
-    <IncidentRoles
+
+  const incidentUrl = `${appUrl}/incidents/${id}`;
+  const postmortemHref =
+    postmortem && presentation === 'mobile'
+      ? `/m/postmortems/${postmortem.id}`
+      : `/postmortems/${id}`;
+  const shareMenu = <ShareMenu id={id} url={incidentUrl} summary={summaryText} />;
+  const shareMenuIcon = <ShareMenu id={id} url={incidentUrl} summary={summaryText} iconOnly />;
+  // ID, dedup and recurrence, service (phones) and age on one quiet line under the title.
+  const metaLine = (
+    <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+      <CopyIdText id={id} />
+      <DedupRecurrenceChip
+        inline
+        alertTotal={alertTotal}
+        hasDedupKey={Boolean(storedIncident.dedupKey)}
+        createdAt={incident.createdAt}
+        previous={previousOnKey}
+        routePrefix={routePrefix}
+      />
+      {presentation === 'mobile' && <span className="truncate">{incident.service.name}</span>}
+      <span title={formatDateTime(incident.createdAt, userTimeZone, { format: 'datetime' })}>
+        opened {formatRelativeShort(incident.createdAt, userTimeZone).toLowerCase()}
+      </span>
+    </p>
+  );
+  const statusTileClass = STATUS_TILE[statusTone ?? 'none'] ?? STATUS_TILE.none;
+  const responseRow = (
+    <ResponseRow
+      incidentId={id}
+      impacts={impactedBusinessServices}
+      canEditImpacts={presentation !== 'mobile' && canManageIncident}
+      linkableImpacts={presentation !== 'mobile'}
       roles={roleSlots}
       users={pageableUsers}
       currentUserId={user.id}
       onSetRole={handleSetRole}
-      showAllRoles={incident.priority === 'P1' || incident.priority === 'P2'}
     />
   );
 
@@ -679,20 +691,121 @@ export default async function IncidentDetailScreen({
       }}
       team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
       routePrefix={routePrefix}
+      embedded
     />
   );
+
+  const customFieldsEmbedded = (
+    <IncidentCustomFieldsCard
+      incidentId={id}
+      customFieldValues={
+        incident.customFieldValues?.map(value => ({
+          id: value.id,
+          value: value.value,
+          customField: value.customField,
+        })) || []
+      }
+      allCustomFields={customFields}
+      canManage={canManageIncident}
+      embedded
+    />
+  );
+  // The rest of Details: who subscribes (opens the sheet) and the links not already on a field row.
+  const moreDetailsRows = <>{quickLinksContent}</>;
+  const detailsPanelFull = (
+    <IncidentHeader
+      {...detailsProps}
+      panel
+      headerAction={
+        canManageIncident ? (
+          <Link
+            href="/settings/custom-fields"
+            title="Configure custom fields"
+            aria-label="Configure custom fields"
+            className="-my-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          >
+            <Settings className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        ) : null
+      }
+      footer={
+        <>
+          {customFieldsEmbedded}
+          {moreDetailsRows}
+        </>
+      }
+    />
+  );
+
+  const descriptionContent = sourceRestricted ? (
+    <section className="rounded-xl border border-border/80 bg-card p-3.5 text-card-foreground">
+      <h2 className="text-xs font-semibold">Incident Description</h2>
+      <p className="mt-1 text-xs text-muted-foreground">Alert details are restricted.</p>
+      {contextContent && (
+        <div className="mt-3 border-t border-border/70 pt-3">{contextContent}</div>
+      )}
+    </section>
+  ) : (
+    <IncidentDescriptionCard
+      incidentId={incident.id}
+      description={incident.description}
+      canManage={canManageIncident}
+      onUpdateDescription={handleUpdateDescription}
+      context={contextContent}
+      readable={incident.description ? readPayload(incident.description) : null}
+      clamp
+    />
+  );
+  const customerCommsCard = (
+    <Suspense fallback={<CardSkeleton title="Customer updates" rows={2} />}>
+      <IncidentCustomerCommsCard
+        incident={{
+          id,
+          serviceId: storedIncident.serviceId,
+          status: storedIncident.status,
+          visibility: storedIncident.visibility,
+        }}
+        timeZone={userTimeZone}
+      />
+    </Suspense>
+  );
+  const tabsProps = {
+    eventCount: totalEventsCount,
+    noteCount: totalNotesCount,
+    activityContent,
+    automationContent,
+    responseContent,
+    auditContent: <IncidentAuditView incidentId={incident.id} />,
+    alertsContent:
+      alertTotal > 0 ? (
+        <IncidentAlertsView incidentId={incident.id} total={alertTotal} />
+      ) : undefined,
+    runbooksContent: canReadRunbooks ? (
+      <>
+        {showIntelligence && (
+          <Suspense fallback={null}>
+            <SuggestedRunbooks incidentId={incident.id} />
+          </Suspense>
+        )}
+        <IncidentRunbooks incidentId={incident.id} serviceId={incident.serviceId} />
+      </>
+    ) : null,
+    timelineContent,
+    postmortemContent,
+    postmortemStatus: postmortem?.status ?? null,
+    showPostmortem: incident.status === 'RESOLVED',
+  };
 
   return (
     <div
       className={
         presentation === 'mobile'
-          ? 'responsive-page w-full space-y-3 pb-24'
-          : 'responsive-page w-full space-y-4 px-3 py-4 sm:space-y-6 sm:px-4 sm:py-6'
+          ? 'incident-dense responsive-page w-full space-y-3 pb-24'
+          : 'incident-dense responsive-page w-full space-y-4 px-3 py-4 sm:space-y-6 sm:px-4 sm:py-6'
       }
     >
       {presentation === 'mobile' ? (
-        <section className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
-          <div className={`h-1 w-full bg-linear-to-r ${statusGradient}`} />
+        <section className="rounded-xl border border-border bg-card text-card-foreground">
           {/* The mobile header already has the back arrow, so the card starts with status and title. */}
           <div className="space-y-3 p-3.5">
             <div className="flex min-w-0 items-center justify-between gap-2">
@@ -705,65 +818,42 @@ export default async function IncidentDetailScreen({
                   </Badge>
                 )}
               </div>
-              <div className="flex shrink-0 items-center">
-                <CopyButton text={id} label="ID" className="h-9 px-2 text-xs" />
-                <CopyButton
-                  text={`${appUrl}/incidents/${id}`}
-                  icon="link"
-                  label="Link"
-                  className="h-9 px-2 text-xs"
-                />
-              </div>
+              {shareMenuIcon}
             </div>
-            <h1 className="wrap-break-word text-lg font-bold leading-snug tracking-tight text-foreground">
-              {incident.title}
-            </h1>
-            {/* Dedup and recurrence on its own line on phones, so it never crowds the copy buttons. */}
-            <div className="flex flex-wrap items-center gap-2">
-              {dedupChip}
-              {followControl}
+            <div className="space-y-1">
+              <h1 className="wrap-break-word font-display text-lg font-bold leading-snug tracking-tight text-foreground">
+                {incident.title}
+              </h1>
+              {metaLine}
             </div>
             {showIntelligence && (
               <Suspense fallback={null}>
                 <IncidentGroupLine incidentId={incident.id} presentation="mobile" />
               </Suspense>
             )}
-            <IncidentSLABadges sla={incidentSla} className="pt-0" />
-            <div className="flex min-w-0 items-center gap-x-4 gap-y-1 border-t border-border/70 pt-3 text-xs">
-              <span className="min-w-0 truncate">
-                <span className="text-muted-foreground">Service </span>
-                <span className="font-semibold text-foreground">{incident.service.name}</span>
-              </span>
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="shrink-0 text-muted-foreground">Assigned</span>
-                {incident.assignee && (
-                  <UserAvatar
-                    userId={incident.assignee.id}
-                    avatarUrl={incident.assignee.avatarUrl}
-                    name={incident.assignee.name}
-                    gender={incident.assignee.gender}
-                    size="xs"
-                    aria-hidden
-                  />
-                )}
-                <span className="truncate font-semibold text-foreground">
-                  {incident.assignee?.name || 'Unassigned'}
-                </span>
+            <IncidentSLABadges sla={incidentSla} className="pt-0" compact />
+            <div className="flex flex-wrap items-center gap-2.5">{followControl}</div>
+            <div className="flex min-w-0 items-center gap-1.5 border-t border-border/70 pt-3 text-xs">
+              <span className="shrink-0 text-muted-foreground">Assigned</span>
+              {incident.assignee && (
+                <UserAvatar
+                  userId={incident.assignee.id}
+                  avatarUrl={incident.assignee.avatarUrl}
+                  name={incident.assignee.name}
+                  gender={incident.assignee.gender}
+                  size="xs"
+                  aria-hidden
+                />
+              )}
+              <span className="truncate font-semibold text-foreground">
+                {incident.assignee?.name || 'Unassigned'}
               </span>
             </div>
-            {impactedBusinessServices.some(impact => !impact.excluded) && (
-              <IncidentImpacts
-                incidentId={id}
-                impacts={impactedBusinessServices}
-                linkable={false}
-              />
-            )}
-            {rolesContent}
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5">{responseRow}</div>
           </div>
         </section>
       ) : (
-        <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xs">
-          <div className={`h-1 w-full bg-linear-to-r ${statusGradient}`} />
+        <section className="relative rounded-2xl border border-border bg-card text-card-foreground shadow-2xs">
           <div className="p-3.5 sm:px-4.5 sm:py-4">
             <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
               <ListReturnLink
@@ -774,8 +864,10 @@ export default async function IncidentDetailScreen({
               >
                 <ArrowLeft className="h-4 w-4" aria-hidden />
               </ListReturnLink>
+              {/* One soft status tile; the badge beside the title says the status in words. */}
               <div
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-xs sm:h-10 sm:w-10 ${statusGradient}`}
+                aria-hidden
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset sm:h-10 sm:w-10 ${statusTileClass}`}
               >
                 {incident.status === 'RESOLVED' ? (
                   <CheckCircle2 className="h-4.5 w-4.5" />
@@ -790,45 +882,29 @@ export default async function IncidentDetailScreen({
               <div className="min-w-0 flex-1 space-y-3">
                 {/* Narrow windows stack the actions under the title instead of squeezing it to one letter wide. */}
                 <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:justify-between">
-                  <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 pt-0.5">
-                    <h1
-                      className={`min-w-0 wrap-break-word text-lg font-bold leading-snug tracking-tight text-foreground ${
-                        // Long titles step down a size so they stay ~3 lines instead of 4+.
-                        incident.title.length > 80 ? 'sm:text-xl' : 'sm:text-2xl'
-                      }`}
-                    >
-                      {incident.title}
-                    </h1>
-                    <StatusBadge
-                      status={incident.status}
-                      live={incident.status === 'OPEN'}
-                      // The page's chip shape (field-styles CHIP_CLASS); other pages keep the pill.
-                      className="h-8 rounded-md px-2.5 text-xs shadow-2xs"
-                    />
-                    {dedupChip}
+                  <div className="min-w-0 space-y-1 pt-0.5">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+                      <h1
+                        className={`min-w-0 wrap-break-word text-lg font-bold leading-snug tracking-tight text-foreground ${
+                          // Long titles step down a size so they stay ~3 lines instead of 4+.
+                          incident.title.length > 80 ? 'sm:text-xl' : 'sm:text-2xl'
+                        }`}
+                      >
+                        {incident.title}
+                      </h1>
+                      <StatusBadge
+                        status={incident.status}
+                        live={incident.status === 'OPEN'}
+                        // The page's chip shape (field-styles CHIP_CLASS); other pages keep the pill.
+                        className="h-8 rounded-md px-2.5 text-xs shadow-2xs"
+                      />
+                    </div>
+                    {metaLine}
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-1">
-                    {/* Follow / Following with who follows, where Watch sits on GitHub: always in view. */}
-                    <div className="mr-2 flex items-center gap-3">{followControl}</div>
-                    <Badge
-                      variant="outline"
-                      className="hidden border-border/80 font-mono text-xs text-muted-foreground sm:inline-flex"
-                    >
-                      #{id.slice(0, 8)}
-                    </Badge>
-                    <CopyButton text={id} label="ID" className="h-7 px-2 text-xs font-medium" />
-                    <CopyButton
-                      text={summaryText}
-                      label="Copy summary"
-                      variant="button"
-                      className="h-7 px-2 text-xs font-medium"
-                    />
-                    <CopyButton
-                      text={`${appUrl}/incidents/${id}`}
-                      icon="link"
-                      label="Link"
-                      className="h-7 px-2 text-xs font-medium"
-                    />
+                  {/* Who's viewing, Follow / Following with who follows, and Share: always in view. */}
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    {followControl}
+                    {shareMenu}
                   </div>
                 </div>
                 {showIntelligence && (
@@ -839,11 +915,7 @@ export default async function IncidentDetailScreen({
                 {/* Response row: SLA, impact and roles, right under the title. */}
                 <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2.5">
                   <IncidentSLABadges sla={incidentSla} className="pt-0" />
-                  <IncidentImpacts
-                    incidentId={id}
-                    impacts={impactedBusinessServices}
-                    canEdit={canManageIncident}
-                  />
+                  {responseRow}
                   {(canManageIncident || canAddIncidentNote) && (
                     <NotifyStakeholdersButton
                       incidentId={incident.id}
@@ -852,12 +924,11 @@ export default async function IncidentDetailScreen({
                   )}
                   <Link
                     href={`/services/graph?incident=${encodeURIComponent(incident.id)}`}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-xs font-medium text-foreground shadow-2xs hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <Network className="h-3.5 w-3.5" aria-hidden="true" />
                     Show on graph
                   </Link>
-                  <div className="min-w-0">{rolesContent}</div>
                 </div>
               </div>
             </div>
@@ -934,13 +1005,7 @@ export default async function IncidentDetailScreen({
           // Only people who may write the postmortem are offered to start it.
           postmortemHref: canManageIncident ? `/postmortems/${incident.id}` : null,
         }}
-        postmortemHref={
-          postmortem
-            ? presentation === 'mobile'
-              ? `/m/postmortems/${postmortem.id}`
-              : `/postmortems/${id}`
-            : `/postmortems/${id}`
-        }
+        postmortemHref={postmortemHref}
         postmortemExists={Boolean(postmortem)}
         collaboration={collaboration}
         jira={{
@@ -964,197 +1029,107 @@ export default async function IncidentDetailScreen({
         }
       />
 
-      {/* Intelligence: one row of chips, and the inspector they open. Silent when there is nothing to say. */}
-      {showInsightsInspector && presentation === 'mobile' && (
-        <Suspense fallback={null}>
-          <IncidentInsights incidentId={incident.id} presentation={presentation} />
-        </Suspense>
-      )}
+      {presentation === 'mobile' ? (
+        // Phones: the page splits into five short sections under one sticky bar instead of one long scroll.
+        <IncidentDetailTabs
+          layout="sections"
+          defaultTab={initialTab || 'overview'}
+          overviewContent={
+            <>
+              {showInsightsInspector && (
+                <Suspense fallback={null}>
+                  <IncidentInsights incidentId={incident.id} presentation={presentation} />
+                </Suspense>
+              )}
+              {incident.status === 'RESOLVED' && (
+                <IncidentResolutionSummary
+                  incident={incident}
+                  resolutionNote={resolutionNote}
+                  postmortemStatus={postmortem?.status ?? null}
+                  postmortemHref={postmortemHref}
+                />
+              )}
 
-      {/* Escalation Execution Health: Compact status strip or alert banner */}
-      {/* Healthy: one line under the Escalation field on desktop; the full panel when a step needs review, or on phones. */}
-      <EscalationExecutionHealth
-        health={escalationHealth}
-        className={escalationInBand ? 'sm:hidden' : undefined}
-      />
-
-      {presentation === 'mobile' && (
-        <details className="group overflow-hidden rounded-xl border border-border bg-card">
-          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
-            <span>Incident details &amp; assignment</span>
-            <ChevronDown
-              className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
-              aria-hidden="true"
-            />
-          </summary>
-          <div className="border-t border-border p-2">
-            <IncidentHeader
-              incident={incident}
-              users={pageableUsers}
-              teams={teams}
-              canManage={canManageIncident}
-              routePrefix={routePrefix}
-            />
-          </div>
-        </details>
-      )}
-
-      {/* Phones: who is on it and what customers were told, before the description and tabs. */}
-      {presentation === 'mobile' && (
+              <EscalationExecutionHealth health={escalationHealth} />
+              <Suspense fallback={<CardSkeleton title="Responders" rows={4} />}>
+                <IncidentRespondersCard incidentId={id} viewerId={user.id} />
+              </Suspense>
+              {customerCommsCard}
+              {watchersContent}
+              {descriptionContent}
+            </>
+          }
+          detailsContent={
+            <>
+              {detailsPanelFull}
+              <MobileOperationalContextCard
+                service={{
+                  id: incident.service.id,
+                  name: incident.service.name,
+                  slaTier: incident.service.slaTier,
+                }}
+                team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
+                tags={incident.tags.map(tagLink => ({
+                  id: tagLink.tag.id,
+                  name: tagLink.tag.name,
+                  color: tagLink.tag.color,
+                }))}
+                collaboration={collaboration}
+                jiraLinks={jiraLinks.map(l => ({
+                  id: l.id,
+                  issueKey: l.externalKey,
+                  issueUrl: l.externalUrl,
+                  status: l.externalStatus ?? undefined,
+                }))}
+                capabilities={{
+                  jiraConfigured: jiraLinks.length > 0,
+                }}
+                showServiceTeam={false}
+              />
+            </>
+          }
+          {...tabsProps}
+        />
+      ) : (
         <>
-          <Suspense fallback={<CardSkeleton title="Responders" rows={4} />}>
-            <IncidentRespondersCard incidentId={id} viewerId={user.id} />
-          </Suspense>
-          <Suspense fallback={<CardSkeleton title="Customer updates" rows={2} />}>
-            <IncidentCustomerCommsCard
-              incident={{
-                id,
-                serviceId: storedIncident.serviceId,
-                status: storedIncident.status,
-                visibility: storedIncident.visibility,
-              }}
-              timeZone={userTimeZone}
-            />
-          </Suspense>
+          {/* Healthy: one line under the Escalation field; the full panel when a step needs review. */}
+          <EscalationExecutionHealth
+            health={escalationHealth}
+            className={escalationInBand ? 'sm:hidden' : undefined}
+          />
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
+            <div className="min-w-0 space-y-4 lg:col-span-8 lg:space-y-5 2xl:col-span-9">
+              {descriptionContent}
+              {incident.status === 'RESOLVED' && (
+                <IncidentResolutionSummary
+                  incident={incident}
+                  resolutionNote={resolutionNote}
+                  postmortemStatus={postmortem?.status ?? null}
+                  postmortemHref={postmortemHref}
+                />
+              )}
+
+              <IncidentDetailTabs defaultTab={initialTab || 'notes'} {...tabsProps} />
+            </div>
+            <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
+              <div className="hidden lg:block">{detailsPanelFull}</div>
+              {/* Below lg the properties sit in the title card; the rest of Details gets its own card. */}
+              <div className="divide-y divide-border/50 overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-2xs lg:hidden">
+                {customFieldsEmbedded}
+                {moreDetailsRows}
+              </div>
+              {/* Who gets this incident's updates: always in view, with Subscribe / Add inline. */}
+              {watchersContent}
+              {/* Who was paged, how, did it arrive, who acknowledged; escalation now; on call. */}
+              <Suspense fallback={<CardSkeleton title="Responders" rows={4} />}>
+                <IncidentRespondersCard incidentId={id} viewerId={user.id} />
+              </Suspense>
+              {/* What customers were told, and when the next update is due. */}
+              {customerCommsCard}
+            </aside>
+          </div>
         </>
       )}
-
-      {presentation === 'mobile' && (
-        <MobileOperationalContextCard
-          service={{
-            id: incident.service.id,
-            name: incident.service.name,
-            slaTier: incident.service.slaTier,
-          }}
-          team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
-          tags={incident.tags.map(tagLink => ({
-            id: tagLink.tag.id,
-            name: tagLink.tag.name,
-            color: tagLink.tag.color,
-          }))}
-          collaboration={collaboration}
-          jiraLinks={jiraLinks.map(l => ({
-            id: l.id,
-            issueKey: l.externalKey,
-            issueUrl: l.externalUrl,
-            status: l.externalStatus ?? undefined,
-          }))}
-          capabilities={{
-            jiraConfigured: jiraLinks.length > 0,
-          }}
-        />
-      )}
-
-      {/* Main Content Grid: 2 columns on desktop, responsive stack on mobile */}
-      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
-        <div className="min-w-0 space-y-4 lg:col-span-8 lg:space-y-5 2xl:col-span-9">
-          {sourceRestricted ? (
-            <section className="rounded-xl border border-border/80 bg-card p-3.5 text-card-foreground">
-              <h2 className="text-xs font-semibold">Incident Description</h2>
-              <p className="mt-1 text-xs text-muted-foreground">Alert details are restricted.</p>
-              {contextContent && (
-                <div className="mt-3 border-t border-border/70 pt-3">{contextContent}</div>
-              )}
-            </section>
-          ) : (
-            <IncidentDescriptionCard
-              incidentId={incident.id}
-              description={incident.description}
-              canManage={canManageIncident}
-              onUpdateDescription={handleUpdateDescription}
-              context={contextContent}
-              readable={incident.description ? readPayload(incident.description) : null}
-            />
-          )}
-
-          {incident.status === 'RESOLVED' && (
-            <IncidentResolutionSummary
-              incident={incident}
-              resolutionNote={resolutionNote}
-              postmortemStatus={postmortem?.status ?? null}
-              canManage={canManageIncident}
-            />
-          )}
-
-          <IncidentDetailTabs
-            defaultTab={initialTab || 'notes'}
-            eventCount={totalEventsCount}
-            noteCount={totalNotesCount}
-            activityContent={activityContent}
-            automationContent={automationContent}
-            responseContent={responseContent}
-            auditContent={<IncidentAuditView incidentId={incident.id} />}
-            alertsContent={
-              alertTotal > 0 ? (
-                <IncidentAlertsView incidentId={incident.id} total={alertTotal} />
-              ) : undefined
-            }
-            runbooksContent={
-              canReadRunbooks ? (
-                <>
-                  {showIntelligence && (
-                    <Suspense fallback={null}>
-                      <SuggestedRunbooks incidentId={incident.id} />
-                    </Suspense>
-                  )}
-                  <IncidentRunbooks incidentId={incident.id} serviceId={incident.serviceId} />
-                </>
-              ) : null
-            }
-            timelineContent={timelineContent}
-            postmortemContent={postmortemContent}
-            postmortemStatus={postmortem?.status ?? null}
-            showPostmortem={incident.status === 'RESOLVED'}
-          />
-        </div>
-
-        {presentation === 'mobile' ? (
-          <>
-            <details className="group overflow-hidden rounded-xl border border-border bg-card lg:hidden">
-              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold text-foreground select-none *:pointer-events-none [&::-webkit-details-marker]:hidden">
-                <span>People, fields &amp; links</span>
-                <ChevronDown
-                  className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
-                  aria-hidden="true"
-                />
-              </summary>
-              <div className="space-y-3 border-t border-border p-3">
-                {watchersContent}
-                {customFieldsContent}
-                {quickLinksContent}
-              </div>
-            </details>
-            <aside className="hidden min-w-0 space-y-4 lg:block lg:col-span-4 lg:space-y-5 2xl:col-span-3">
-              {watchersContent}
-              {customFieldsContent}
-              {quickLinksContent}
-            </aside>
-          </>
-        ) : (
-          <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-5 2xl:col-span-3">
-            <div className="hidden lg:block">{detailsPanel}</div>
-            {/* Who was paged, how, did it arrive, who acknowledged; escalation now; on call. */}
-            <Suspense fallback={<CardSkeleton title="Responders" rows={4} />}>
-              <IncidentRespondersCard incidentId={id} viewerId={user.id} />
-            </Suspense>
-            {/* What customers were told, and when the next update is due. */}
-            <Suspense fallback={<CardSkeleton title="Customer updates" rows={2} />}>
-              <IncidentCustomerCommsCard
-                incident={{
-                  id,
-                  serviceId: storedIncident.serviceId,
-                  status: storedIncident.status,
-                  visibility: storedIncident.visibility,
-                }}
-                timeZone={userTimeZone}
-              />
-            </Suspense>
-            {watchersContent}
-            {customFieldsContent}
-            {quickLinksContent}
-          </aside>
-        )}
-      </div>
     </div>
   );
 }

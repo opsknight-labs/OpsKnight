@@ -317,28 +317,12 @@ test.describe('mobile PWA browser contract', () => {
     // Detail screen renders title
     await expect(page.locator('h1', { hasText: 'Mobile PWA Active Incident' })).toBeVisible();
 
-    // Details & assignment disclosure works
-    const detailsSummary = page.locator('summary', { hasText: 'Incident details & assignment' });
-    await expect(detailsSummary).toBeVisible();
-    await detailsSummary.click();
-    const detailsElement = page.locator('details').filter({ has: detailsSummary });
-    if (!(await detailsElement.evaluate(el => el.hasAttribute('open')))) {
-      await detailsSummary.dispatchEvent('click');
-    }
+    // Sections: the Details section holds the properties, and its links use /m routes
+    await page.locator('[data-incident-tab="details"]').click();
     await expect(page.locator('text=Mobile PWA Service').first()).toBeVisible();
-
-    // People, fields & links disclosure works and links use /m routes
-    const linksSummary = page.locator('summary', { hasText: 'People, fields & links' });
-    await expect(linksSummary).toBeVisible();
-    await linksSummary.click();
-    const linksDetailsElement = page.locator('details').filter({ has: linksSummary });
-    if (!(await linksDetailsElement.evaluate(el => el.hasAttribute('open')))) {
-      await linksSummary.dispatchEvent('click');
-    }
     const serviceQuickLink = page
-      .locator('details')
-      .filter({ has: linksSummary })
       .locator('a[href*="/m/services/"]')
+      .filter({ visible: true })
       .first();
     await expect(serviceQuickLink).toBeVisible();
 
