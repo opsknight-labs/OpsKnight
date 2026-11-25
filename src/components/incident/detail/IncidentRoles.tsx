@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Plus, UserCheck, UserMinus, Users } from 'lucide-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/shadcn/hover-card';
@@ -28,25 +28,43 @@ type IncidentRolesProps = {
   users: IncidentPickerUser[];
   currentUserId: string;
   onSetRole: (roleKey: IncidentRoleKey, userId: string | null) => Promise<unknown>;
-  /** Major incidents (P1/P2) show every role up front; others start with the commander only. */
-  showAllRoles?: boolean;
+  /** Extra "+ Add" entries from the same row (the impacted business service picker). */
+  addItems?: Array<{ key: string; label: string; description: string; onSelect: () => void }>;
 };
 
-/** Roles strip in the incident hero: one slot per catalog role, assign/take/clear in place. */
+/**
+ * Roles strip in the incident hero: the commander and every held role as slots (assign, take, clear in
+ * place); everything still empty folds into one "+ Add" menu with the row's other additions. Picking a role
+ * there shows its slot with the picker open.
+ */
 export default function IncidentRoles({
   roles,
   users,
   currentUserId,
   onSetRole,
-  showAllRoles = false,
+  addItems = [],
 }: IncidentRolesProps) {
-  const [expanded, setExpanded] = useState(showAllRoles);
-  // Commander always; any role someone holds; the rest fold into one "+ N roles" chip.
-  const visible = expanded
-    ? roles
-    : roles.filter(role => role.roleKey === 'COMMANDER' || role.holder);
-  const folded = roles.filter(role => !visible.includes(role));
-  const canFill = folded.some(role => role.canAssignOthers || role.canTakeSelf);
+  const [revealed, setRevealed] = useState<IncidentRoleKey[]>([]);
+  const [opening, setOpening] = useState<IncidentRoleKey | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const visible = roles.filter(
+    role => role.roleKey === 'COMMANDER' || role.holder || revealed.includes(role.roleKey)
+  );
+  const folded = roles.filter(
+    role => !visible.includes(role) && (role.canAssignOthers || role.canTakeSelf)
+  );
+  const entries = [
+    ...addItems,
+    ...folded.map(role => ({
+      key: role.roleKey,
+      label: role.label,
+      description: role.description,
+      onSelect: () => {
+        setRevealed(current => [...current, role.roleKey]);
+        setOpening(role.roleKey);
+      },
+    })),
+  ];
 
   return (
     <section aria-label="Incident roles" className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
@@ -62,23 +80,47 @@ export default function IncidentRoles({
               users={users}
               currentUserId={currentUserId}
               onSetRole={onSetRole}
+              startOpen={opening === role.roleKey}
             />
           </li>
         ))}
-        {folded.length > 0 && canFill && (
+        {entries.length > 0 && (
           <li className="min-w-0">
-            <button
-              type="button"
-              onClick={() => setExpanded(true)}
-              title={folded.map(role => role.label).join(', ')}
-              aria-label={`Show more roles: ${folded.map(role => role.label).join(', ')}`}
-              className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md border border-dashed border-border/80 px-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <span className="truncate">
-                {folded.length} more {folded.length === 1 ? 'role' : 'roles'}
-              </span>
-            </button>
+            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Add: ${entries.map(entry => entry.label).join(', ')}`}
+                  className="flex h-8 min-w-0 items-center gap-1.5 rounded-md border border-dashed border-border/80 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  Add
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-72 p-1">
+                <ul>
+                  {entries.map(entry => (
+                    <li key={entry.key}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          entry.onSelect();
+                        }}
+                        className="w-full rounded-md px-2.5 py-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-hidden"
+                      >
+                        <span className="block text-xs font-medium text-foreground">
+                          {entry.label}
+                        </span>
+                        <span className="mt-0.5 block text-2xs leading-snug text-muted-foreground">
+                          {entry.description}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </PopoverContent>
+            </Popover>
           </li>
         )}
       </ul>
@@ -91,14 +133,23 @@ function RoleSlot({
   users,
   currentUserId,
   onSetRole,
+  startOpen = false,
 }: {
   role: IncidentRoleSlot;
   users: IncidentPickerUser[];
   currentUserId: string;
   onSetRole: IncidentRolesProps['onSetRole'];
+  /** Revealed from "+ Add": open the picker right away. */
+  startOpen?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // After "+ Add" has closed and handed focus back; opening at once would be dismissed by that.
+  useEffect(() => {
+    if (!startOpen) return;
+    const timer = setTimeout(() => setOpen(true), 60);
+    return () => clearTimeout(timer);
+  }, [startOpen]);
   const [hoverOpen, setHoverOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const holder = role.holder;

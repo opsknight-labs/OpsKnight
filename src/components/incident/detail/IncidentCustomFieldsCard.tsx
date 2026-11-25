@@ -46,6 +46,8 @@ export type IncidentCustomFieldsCardProps = {
   }>;
   canManage: boolean;
   className?: string;
+  /** Rows only, for the Details panel (nothing when no fields are defined). */
+  embedded?: boolean;
 };
 
 function formatFieldValue(value: string | null, type: string): string {
@@ -73,6 +75,7 @@ export default function IncidentCustomFieldsCard({
   allCustomFields,
   canManage,
   className,
+  embedded = false,
 }: IncidentCustomFieldsCardProps) {
   const router = useRouter();
 
@@ -134,6 +137,139 @@ export default function IncidentCustomFieldsCard({
 
   const inputClass = 'h-8 px-2.5 text-sm shadow-2xs';
 
+  const rows = (
+    <div className="flex flex-col divide-y divide-border/50">
+      {allCustomFields.map(field => {
+        const currentValue = formValues.get(field.id) ?? '';
+        const isSaving = savingFieldId === field.id;
+        const isSaved = savedFieldId === field.id;
+        const options: string[] = Array.isArray(field.options) ? (field.options as string[]) : [];
+
+        return (
+          <div
+            key={field.id}
+            className="grid min-h-10 min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2 px-3 py-1.5"
+          >
+            {/* Field label & save state */}
+            <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+              <span className="truncate" title={field.name}>
+                {field.name}
+              </span>
+              {field.required && (
+                <span className="text-rose-600 dark:text-rose-400" title="Required">
+                  *
+                </span>
+              )}
+              {isSaving && (
+                <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-label="Saving" />
+              )}
+              {isSaved && (
+                <Check
+                  className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400"
+                  aria-label="Saved"
+                />
+              )}
+            </div>
+
+            {/* Input / Control / Display */}
+            {canManage ? (
+              field.type === 'SELECT' ? (
+                <Select
+                  value={currentValue}
+                  onValueChange={val => {
+                    setFormValues(prev => new Map(prev).set(field.id, val));
+                    void handleSave(field.id, val);
+                  }}
+                >
+                  <SelectTrigger
+                    aria-label={field.name}
+                    className={cn(FIELD_SELECT_CLASS, 'w-full justify-between')}
+                  >
+                    <SelectValue placeholder="Select option..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {options.map((opt: string) => (
+                      <SelectItem key={opt} value={opt} className="text-sm">
+                        {opt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : field.type === 'BOOLEAN' ? (
+                <div className="flex h-8 items-center gap-2">
+                  <Switch
+                    aria-label={field.name}
+                    checked={currentValue === 'true'}
+                    onCheckedChange={checked => {
+                      const val = checked ? 'true' : 'false';
+                      setFormValues(prev => new Map(prev).set(field.id, val));
+                      void handleSave(field.id, val);
+                    }}
+                  />
+                  <span className="text-sm font-medium text-foreground">
+                    {currentValue === 'true' ? 'Yes' : 'No'}
+                  </span>
+                </div>
+              ) : field.type === 'DATE' ? (
+                <Input
+                  type="date"
+                  aria-label={field.name}
+                  value={currentValue}
+                  onChange={e => setFormValues(prev => new Map(prev).set(field.id, e.target.value))}
+                  onBlur={e => void handleSave(field.id, e.target.value)}
+                  className={inputClass}
+                />
+              ) : field.type === 'NUMBER' ? (
+                <Input
+                  type="number"
+                  aria-label={field.name}
+                  value={currentValue}
+                  placeholder="0"
+                  onChange={e => setFormValues(prev => new Map(prev).set(field.id, e.target.value))}
+                  onBlur={e => void handleSave(field.id, e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      void handleSave(field.id, (e.target as HTMLInputElement).value);
+                    }
+                  }}
+                  className={inputClass}
+                />
+              ) : (
+                <Input
+                  type={field.type === 'EMAIL' ? 'email' : field.type === 'URL' ? 'url' : 'text'}
+                  aria-label={field.name}
+                  value={currentValue}
+                  placeholder={
+                    field.type === 'URL'
+                      ? 'https://...'
+                      : field.type === 'EMAIL'
+                        ? 'user@example.com'
+                        : 'Enter value...'
+                  }
+                  onChange={e => setFormValues(prev => new Map(prev).set(field.id, e.target.value))}
+                  onBlur={e => void handleSave(field.id, e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      void handleSave(field.id, (e.target as HTMLInputElement).value);
+                    }
+                  }}
+                  className={inputClass}
+                />
+              )
+            ) : currentValue ? (
+              <span className={FIELD_VALUE_CLASS}>
+                <span className="truncate">{formatFieldValue(currentValue, field.type)}</span>
+              </span>
+            ) : (
+              <span className="text-sm text-muted-foreground">Not set</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+  if (embedded) return allCustomFields.length ? rows : null;
+
   return (
     <div
       className={cn(
@@ -180,143 +316,7 @@ export default function IncidentCustomFieldsCard({
           )}
         </div>
       ) : (
-        <div className="flex flex-col divide-y divide-border/50">
-          {allCustomFields.map(field => {
-            const currentValue = formValues.get(field.id) ?? '';
-            const isSaving = savingFieldId === field.id;
-            const isSaved = savedFieldId === field.id;
-            const options: string[] = Array.isArray(field.options)
-              ? (field.options as string[])
-              : [];
-
-            return (
-              <div
-                key={field.id}
-                className="grid min-h-10 min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2 px-3 py-1.5"
-              >
-                {/* Field label & save state */}
-                <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                  <span className="truncate" title={field.name}>
-                    {field.name}
-                  </span>
-                  {field.required && (
-                    <span className="text-rose-600 dark:text-rose-400" title="Required">
-                      *
-                    </span>
-                  )}
-                  {isSaving && (
-                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-label="Saving" />
-                  )}
-                  {isSaved && (
-                    <Check
-                      className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400"
-                      aria-label="Saved"
-                    />
-                  )}
-                </div>
-
-                {/* Input / Control / Display */}
-                {canManage ? (
-                  field.type === 'SELECT' ? (
-                    <Select
-                      value={currentValue}
-                      onValueChange={val => {
-                        setFormValues(prev => new Map(prev).set(field.id, val));
-                        void handleSave(field.id, val);
-                      }}
-                    >
-                      <SelectTrigger
-                        aria-label={field.name}
-                        className={cn(FIELD_SELECT_CLASS, 'w-full justify-between')}
-                      >
-                        <SelectValue placeholder="Select option..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {options.map((opt: string) => (
-                          <SelectItem key={opt} value={opt} className="text-sm">
-                            {opt}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : field.type === 'BOOLEAN' ? (
-                    <div className="flex h-8 items-center gap-2">
-                      <Switch
-                        aria-label={field.name}
-                        checked={currentValue === 'true'}
-                        onCheckedChange={checked => {
-                          const val = checked ? 'true' : 'false';
-                          setFormValues(prev => new Map(prev).set(field.id, val));
-                          void handleSave(field.id, val);
-                        }}
-                      />
-                      <span className="text-sm font-medium text-foreground">
-                        {currentValue === 'true' ? 'Yes' : 'No'}
-                      </span>
-                    </div>
-                  ) : field.type === 'DATE' ? (
-                    <Input
-                      type="date"
-                      aria-label={field.name}
-                      value={currentValue}
-                      onChange={e =>
-                        setFormValues(prev => new Map(prev).set(field.id, e.target.value))
-                      }
-                      onBlur={e => void handleSave(field.id, e.target.value)}
-                      className={inputClass}
-                    />
-                  ) : field.type === 'NUMBER' ? (
-                    <Input
-                      type="number"
-                      aria-label={field.name}
-                      value={currentValue}
-                      placeholder="0"
-                      onChange={e =>
-                        setFormValues(prev => new Map(prev).set(field.id, e.target.value))
-                      }
-                      onBlur={e => void handleSave(field.id, e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          void handleSave(field.id, (e.target as HTMLInputElement).value);
-                        }
-                      }}
-                      className={inputClass}
-                    />
-                  ) : (
-                    <Input
-                      type={field.type === 'EMAIL' ? 'email' : field.type === 'URL' ? 'url' : 'text'}
-                      aria-label={field.name}
-                      value={currentValue}
-                      placeholder={
-                        field.type === 'URL'
-                          ? 'https://...'
-                          : field.type === 'EMAIL'
-                            ? 'user@example.com'
-                            : 'Enter value...'
-                      }
-                      onChange={e =>
-                        setFormValues(prev => new Map(prev).set(field.id, e.target.value))
-                      }
-                      onBlur={e => void handleSave(field.id, e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          void handleSave(field.id, (e.target as HTMLInputElement).value);
-                        }
-                      }}
-                      className={inputClass}
-                    />
-                  )
-                ) : currentValue ? (
-                  <span className={FIELD_VALUE_CLASS}>
-                    <span className="truncate">{formatFieldValue(currentValue, field.type)}</span>
-                  </span>
-                ) : (
-                  <span className="text-sm text-muted-foreground">Not set</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        rows
       )}
     </div>
   );

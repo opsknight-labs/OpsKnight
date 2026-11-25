@@ -95,8 +95,8 @@ describe('IntelligenceStrip', () => {
     const similar = within(strip).getByRole('link', { name: '1 similar' });
     expect(similar).toHaveAttribute('href', '?insights=similar');
     expect(similar).toHaveAttribute('data-insights-open', 'similar');
-    // 44 px touch target on phones, compact on desktop; never wraps, so the row scrolls sideways.
-    expect(similar.className).toContain('min-h-11');
+    // The page's chip height; the incident page's touch scope adds the 44 px hit area. Labels never wrap.
+    expect(similar.className).toContain('h-8');
     expect(similar.className).toContain('whitespace-nowrap');
     expect(strip.className).toContain('overflow-x-auto');
     const noise = within(strip).getByRole('link', { name: 'Suppressed by Known noisy probe' });

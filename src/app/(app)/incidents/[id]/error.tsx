@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { logger } from '@/lib/logger';
 import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 import { AlertCircle, RefreshCw } from 'lucide-react';
@@ -12,6 +13,15 @@ export default function IncidentDetailError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+  const [retrying, startRetry] = useTransition();
+  // reset() alone only re-renders the segment; a failed fetch (network dropped, laptop woke up) needs the
+  // server data again, so refresh and reset together.
+  const retry = () =>
+    startRetry(() => {
+      router.refresh();
+      reset();
+    });
   useEffect(() => {
     logger.error('[Incident Detail] Render error', {
       message: error.message,
@@ -33,10 +43,11 @@ export default function IncidentDetailError({
         </div>
         <button
           type="button"
-          onClick={reset}
+          onClick={retry}
+          disabled={retrying}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={`w-4 h-4 ${retrying ? 'animate-spin' : ''}`} />
           Try again
         </button>
       </div>

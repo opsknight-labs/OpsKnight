@@ -25,6 +25,8 @@ export type IncidentQuickLinksCardProps = {
   } | null;
   className?: string;
   routePrefix?: string;
+  /** For the Details panel, which already links the service and incident policy: the rest as one line. */
+  embedded?: boolean;
 };
 
 function LinkRow({
@@ -61,7 +63,38 @@ export default function IncidentQuickLinksCard({
   team,
   className,
   routePrefix = '',
+  embedded = false,
 }: IncidentQuickLinksCardProps) {
+  if (embedded) {
+    const link =
+      'text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline [&>svg]:ml-0.5 [&>svg]:inline';
+    return (
+      <div className="grid min-h-10 min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2 px-3 py-1.5">
+        <span className="text-xs text-muted-foreground">Links</span>
+        <span className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
+          {service.policy && (
+            <Link href={`${routePrefix}/policies/${service.policy.id}`} className={link}>
+              Service default: {service.policy.name}
+              <ArrowUpRight className="h-3 w-3" aria-hidden />
+            </Link>
+          )}
+          {noEscalation && (
+            <span className="text-xs text-muted-foreground">No personal escalation</span>
+          )}
+          <Link href={`/insights?service=${encodeURIComponent(service.id)}`} className={link}>
+            Analytics
+            <ArrowUpRight className="h-3 w-3" aria-hidden />
+          </Link>
+          {team && (
+            <Link href={`${routePrefix}/teams/${team.id}`} className={link}>
+              {team.name}
+              <ArrowUpRight className="h-3 w-3" aria-hidden />
+            </Link>
+          )}
+        </span>
+      </div>
+    );
+  }
   return (
     <div
       className={cn(

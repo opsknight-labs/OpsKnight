@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Incident, Service } from '@prisma/client';
@@ -68,6 +68,10 @@ type IncidentHeaderProps = {
   embedded?: boolean;
   /** Properties panel for the page's side column: one row per field, label left and value right. */
   panel?: boolean;
+  /** Panel only: more rows under the fields (custom fields, links, subscribers). */
+  footer?: ReactNode;
+  /** Panel only: a control at the right of the "Details" heading. */
+  headerAction?: ReactNode;
   /** "Set by rule “payments-high” · SLA rule “P1”": why the incident has its priority. */
   priorityReason?: string | null;
   /** The service's usual response times, for "usually resolved in ~45m" under Opened. */
@@ -100,6 +104,8 @@ export default function IncidentHeader({
   escalationHealth,
   baseline = null,
   priorityReason = null,
+  footer = null,
+  headerAction = null,
 }: IncidentHeaderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -167,9 +173,10 @@ export default function IncidentHeader({
       )}
     >
       {panel && (
-        <h2 className="border-b border-border/70 bg-muted/20 px-3 py-2 text-xs font-semibold text-foreground">
-          Details
-        </h2>
+        <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-muted/20 px-3 py-2">
+          <h2 className="text-xs font-semibold text-foreground">Details</h2>
+          {headerAction}
+        </div>
       )}
       {/* Embedded: one row on desktop (wraps on phones). Standalone: 7 equal cells + footer. */}
       <div
@@ -478,6 +485,7 @@ export default function IncidentHeader({
             )}
           </div>
         )}
+        {panel && footer}
       </div>
 
       {!embedded && !panel && (

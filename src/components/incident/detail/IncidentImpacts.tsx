@@ -3,7 +3,12 @@
 import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { Boxes, Plus, X } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/shadcn/popover';
 import {
   Command,
   CommandEmpty,
@@ -43,14 +48,24 @@ export default function IncidentImpacts({
   impacts,
   linkable = true,
   canEdit = false,
+  open: openProp,
+  onOpenChange,
+  addFromMenu = false,
 }: {
   incidentId: string;
   impacts: IncidentImpactChip[];
   linkable?: boolean;
   canEdit?: boolean;
+  /** Controlled picker, for when another control (the title card's "+ Add") opens it. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** No "+ Impacted business service" chip of its own: "+ Add" opens the picker instead. */
+  addFromMenu?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = openProp ?? ownOpen;
+  const setOpen = onOpenChange ?? setOwnOpen;
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<Array<{ id: string; name: string }>>([]);
   const shown = impacts.filter(impact => !impact.excluded);
@@ -82,6 +97,8 @@ export default function IncidentImpacts({
     });
 
   if (!shown.length && !canEdit) return null;
+  // Nothing marked and the picker is opened from "+ Add": no label, no empty chip, just the picker's anchor.
+  if (!shown.length && addFromMenu && !open) return null;
   const marked = new Set(shown.map(impact => impact.id));
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -126,16 +143,20 @@ export default function IncidentImpacts({
       </ul>
       {canEdit && (
         <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              disabled={pending}
-              className={`${chip} border-dashed text-muted-foreground hover:text-foreground disabled:opacity-50`}
-            >
-              <Plus className="h-3 w-3" aria-hidden />
-              Impacted business service
-            </button>
-          </PopoverTrigger>
+          {addFromMenu ? (
+            <PopoverAnchor className="h-8 w-px" />
+          ) : (
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                disabled={pending}
+                className={`${chip} border-dashed text-muted-foreground hover:text-foreground disabled:opacity-50`}
+              >
+                <Plus className="h-3 w-3" aria-hidden />
+                Impacted business service
+              </button>
+            </PopoverTrigger>
+          )}
           <PopoverContent className="w-72 p-0" align="start">
             <Command shouldFilter={false} className="rounded-lg">
               <CommandInput

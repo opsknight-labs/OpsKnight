@@ -21,17 +21,16 @@ const slot = (overrides: Partial<IncidentRoleSlot>): IncidentRoleSlot => ({
 });
 
 describe('IncidentRoles', () => {
-  it('shows holders and read-only gaps without controls for viewers', () => {
+  it('shows holders and the empty commander slot without controls for viewers', () => {
     render(
       <IncidentRoles
         roles={[
-          slot({ holder: ada }),
-          slot({ roleKey: 'SCRIBE', label: 'Scribe', shortLabel: 'Scribe' }),
+          slot({}),
+          slot({ roleKey: 'SCRIBE', label: 'Scribe', shortLabel: 'Scribe', holder: ada }),
         ]}
         users={[]}
         currentUserId="viewer"
         onSetRole={vi.fn()}
-        showAllRoles
       />
     );
     expect(screen.getByRole('region', { name: 'Incident roles' })).toBeInTheDocument();
@@ -40,24 +39,44 @@ describe('IncidentRoles', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('folds empty non-commander roles behind one chip and opens them on click', () => {
+  it('folds empty non-commander roles behind one "+ Add" and reveals the one picked', async () => {
     render(
       <IncidentRoles
         roles={[
           slot({ canTakeSelf: true }),
-          slot({ roleKey: 'OPS_LEAD', label: 'Operations lead', shortLabel: 'Ops lead', canAssignOthers: true }),
+          slot({
+            roleKey: 'OPS_LEAD',
+            label: 'Operations lead',
+            shortLabel: 'Ops lead',
+            canAssignOthers: true,
+          }),
           slot({ roleKey: 'SCRIBE', label: 'Scribe', shortLabel: 'Scribe', canAssignOthers: true }),
         ]}
         users={[]}
         currentUserId="u-me"
         onSetRole={vi.fn()}
+        addItems={[
+          {
+            key: 'impact',
+            label: 'Impacted business service',
+            description: 'Mark one.',
+            onSelect: vi.fn(),
+          },
+        ]}
       />
     );
     expect(screen.getByText('Commander')).toBeInTheDocument();
     expect(screen.queryByText('Ops lead')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Show more roles: Operations lead, Scribe/ }));
-    expect(screen.getByText('Ops lead')).toBeInTheDocument();
-    expect(screen.getByText('Scribe')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Add: Impacted business service, Operations lead, Scribe',
+      })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /^Scribe/ }));
+    expect(
+      await screen.findByRole('button', { name: 'Scribe: unassigned. Change' })
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Ops lead')).not.toBeInTheDocument();
   });
 
   it('keeps a held role visible and hides the fold chip from read-only viewers', () => {
@@ -75,7 +94,7 @@ describe('IncidentRoles', () => {
     );
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
     expect(screen.queryByText('Ops lead')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Show more roles/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Add:/ })).not.toBeInTheDocument();
   });
 
   it('lets an operator take command from the empty slot', async () => {

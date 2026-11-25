@@ -14,7 +14,7 @@ const db = createPrismaClient();
 const isDesktop = (info: { project: { use: { isMobile?: boolean } } }) =>
   !info.project.use.isMobile;
 // The incident tab holding automation is "Runbooks & automation" when the viewer can read runbooks.
-const AUTOMATION_TAB = { name: /^(?:Runbooks & automation|Automation)$/ };
+const AUTOMATION_TAB = { name: /^(?:Runbooks & automation|Runbooks|Automation)$/ };
 let email: string;
 const password = 'Automation-Local-Test-938!';
 let serviceId: string;
@@ -492,16 +492,8 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
       .locator('xpath=following-sibling::dd')
   ).toContainText(policy.name);
   if (!isDesktop(testInfo)) {
-    await page
-      .locator('summary')
-      .filter({ hasText: 'Incident details & assignment' })
-      .filter({ visible: true })
-      .click();
-    const linksDisclosure = page
-      .locator('summary')
-      .filter({ hasText: 'People, fields & links' })
-      .filter({ visible: true });
-    if (await linksDisclosure.count()) await linksDisclosure.click();
+    // Phones: properties and links live in the Details section.
+    await page.locator('[data-incident-tab="details"]').filter({ visible: true }).click();
   }
   await expect(
     // The Incident policy field in Details (the side panel from lg, the title card band below it).
@@ -512,7 +504,7 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
   ).toContainText(policy.name);
   await expect(
     page
-      .getByText(`Current service default: ${defaultPolicy.name}`, { exact: true })
+      .getByText(`Service default: ${defaultPolicy.name}`, { exact: true })
       .filter({ visible: true })
   ).toBeVisible();
   expect(

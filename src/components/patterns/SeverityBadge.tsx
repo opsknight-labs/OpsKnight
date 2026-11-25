@@ -1,14 +1,12 @@
-import { memo } from 'react';
+import { memo, type ComponentType } from 'react';
 import {
   AlertCircle,
   ArrowUp,
   Info,
   ShieldAlert,
-  SignalHigh,
-  SignalLow,
-  SignalMedium,
   Zap,
   type LucideIcon,
+  type LucideProps,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { priorityTone, urgencyTone } from '@/lib/design/status-palette';
@@ -22,15 +20,43 @@ type SeverityMeta = {
   srSuffix?: string;
   /** Full spoken label when the visible text is abbreviated. */
   srLabel?: string;
-  icon: LucideIcon;
+  icon: LucideIcon | ComponentType<LucideProps>;
 };
+
+/**
+ * Urgency as a three-bar meter: lit bars for the level, the rest faint. Lucide's SignalLow draws only the
+ * two shortest bars, which reads as a stray ".ı" at badge size; a full meter reads as a level.
+ */
+function urgencyBars(lit: 1 | 2 | 3) {
+  function UrgencyBars({ className, strokeWidth: _strokeWidth, ...rest }: LucideProps) {
+    return (
+      <svg viewBox="0 0 16 16" fill="currentColor" className={cn('h-3 w-3', className)} {...rest}>
+        {[5, 9, 13].map((height, index) => (
+          <rect
+            key={height}
+            x={1.5 + index * 5}
+            y={14 - height}
+            width={3}
+            height={height}
+            rx={1}
+            opacity={index < lit ? 1 : 0.28}
+          />
+        ))}
+      </svg>
+    );
+  }
+  return UrgencyBars;
+}
+const URGENCY_HIGH = urgencyBars(3);
+const URGENCY_MEDIUM = urgencyBars(2);
+const URGENCY_LOW = urgencyBars(1);
 
 function titleCase(key: string): string {
   return key.charAt(0) + key.slice(1).toLowerCase();
 }
 
 function urgencyMeta(key: string, abbreviate: boolean): SeverityMeta {
-  const meta = (text: string, icon: LucideIcon): SeverityMeta => ({
+  const meta = (text: string, icon: SeverityMeta['icon']): SeverityMeta => ({
     text,
     srSuffix: ' urgency',
     icon,
@@ -38,13 +64,13 @@ function urgencyMeta(key: string, abbreviate: boolean): SeverityMeta {
   switch (key) {
     case 'HIGH':
     case 'CRITICAL':
-      return meta(titleCase(key), SignalHigh);
+      return meta(titleCase(key), URGENCY_HIGH);
     case 'MEDIUM':
       return abbreviate
-        ? { text: 'Med', srLabel: 'Medium urgency', icon: SignalMedium }
-        : meta('Medium', SignalMedium);
+        ? { text: 'Med', srLabel: 'Medium urgency', icon: URGENCY_MEDIUM }
+        : meta('Medium', URGENCY_MEDIUM);
     case 'LOW':
-      return meta('Low', SignalLow);
+      return meta('Low', URGENCY_LOW);
     default:
       return meta(titleCase(key), Info);
   }

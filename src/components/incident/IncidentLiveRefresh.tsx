@@ -8,6 +8,8 @@ import { useOptionalRealtime } from '@/hooks/useRealtime';
 const MIN_INTERVAL_MS = 10_000;
 /** Coming back to the tab after at least this long refreshes once (notes do not always touch the incident). */
 const STALE_AFTER_HIDDEN_MS = 60_000;
+/** Server not reachable: try the refresh again after this long. */
+const RETRY_UNREACHABLE_MS = 15_000;
 
 /**
  * Keeps an open incident page current when someone else acts on it. It listens to the console's single shared
@@ -30,10 +32,22 @@ export default function IncidentLiveRefresh({ incidentId }: { incidentId: string
 
   useEffect(() => {
     if (typeof navigator !== 'undefined' && navigator.webdriver) return;
-    const refresh = () => {
+    const refresh = async () => {
       timer.current = null;
       if (document.visibilityState !== 'visible') {
         pending.current = true; // catch up when the tab is shown again
+        return;
+      }
+      // A refresh that fails (offline, or the network not back yet after the laptop wakes) would replace the
+      // page with the error screen; check the server answers first and try again shortly if it does not.
+      const reachable =
+        navigator.onLine !== false &&
+        (await fetch('/api/health', { cache: 'no-store' })
+          .then(response => response.ok)
+          .catch(() => false));
+      if (!reachable) {
+        pending.current = true;
+        timer.current = setTimeout(() => void refresh(), RETRY_UNREACHABLE_MS);
         return;
       }
       pending.current = false;
@@ -43,7 +57,7 @@ export default function IncidentLiveRefresh({ incidentId }: { incidentId: string
     const schedule = () => {
       if (timer.current) return;
       const wait = Math.max(0, lastRefresh.current + MIN_INTERVAL_MS - Date.now());
-      timer.current = setTimeout(refresh, wait);
+      timer.current = setTimeout(() => void refresh(), wait);
     };
 
     if (signature) {
