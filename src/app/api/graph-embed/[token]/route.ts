@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { jsonError, jsonOk } from '@/lib/api-response';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 import { getEmbeddedView } from '@/lib/intelligence/dependencies/insights/views';
@@ -9,8 +10,8 @@ import { getEmbeddedView } from '@/lib/intelligence/dependencies/insights/views'
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const rate = await checkRateLimit(`api:graph-embed:ip:${getClientIp(req.headers)}`, 60, 60_000);
-  if (!rate.allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+  if (!rate.allowed) return jsonError('Rate limit exceeded', 429);
   const view = await getEmbeddedView((await params).token);
-  if (!view) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json(view, { headers: { 'Cache-Control': 'no-store' } });
+  if (!view) return jsonError('Not found', 404);
+  return jsonOk(view, 200, { 'Cache-Control': 'no-store' });
 }

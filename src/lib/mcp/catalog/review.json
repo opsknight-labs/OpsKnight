@@ -1072,7 +1072,7 @@
     "routeSha256": "a4ff00ebcae84a4a350764a0f7bc8c0f8b8d1a0750f40a4708eca7c39d43be2e",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-destructive.test.ts",
-    "contractSha256": "44648fb4898f4a6c775552b703718ed20c59494f2ac90a0e7595461bc9f10345",
+    "contractSha256": "593fb0a5f1e5ee1daed1120dd9eea41303c6bdd369225fc5be530c0c1d9a1133",
     "additionalScopes": ["status-pages:read"],
     "impactPreview": "getStatusPagePrivacy",
     "actions": ["status_page.manage"]

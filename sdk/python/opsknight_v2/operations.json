@@ -871,6 +871,70 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "listBusinessServiceCustomerReports": {
+    "method": "GET",
+    "path": "/business-services/{id}/customer-reports",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createBusinessServiceCustomerReport": {
+    "method": "POST",
+    "path": "/business-services/{id}/customer-reports",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "bulkEditBusinessServices": {
+    "method": "POST",
+    "path": "/business-services/bulk",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listBusinessServiceTemplates": {
+    "method": "GET",
+    "path": "/business-service-templates",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createBusinessServiceTemplate": {
+    "method": "POST",
+    "path": "/business-service-templates",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "updateBusinessServiceTemplate": {
+    "method": "PATCH",
+    "path": "/business-service-templates/{id}",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "deleteBusinessServiceTemplate": {
+    "method": "DELETE",
+    "path": "/business-service-templates/{id}",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createBusinessServiceFromTemplate": {
+    "method": "POST",
+    "path": "/business-service-templates/{id}/instantiate",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
   "getBusinessServiceGraph": {
     "method": "GET",
     "path": "/business-services/{id}/graph",
@@ -878,6 +942,110 @@
     "idempotency": null,
     "requiredHeaders": [],
     "bodyRequired": false
+  },
+  "getDependencyGraphAt": {
+    "method": "GET",
+    "path": "/dependency-graph/at",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getDependencyGraphDiff": {
+    "method": "GET",
+    "path": "/dependency-graph/diff",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "listDependencyGraphSinglePointsOfFailure": {
+    "method": "GET",
+    "path": "/dependency-graph/spof",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "getDependencyFailureSimulation": {
+    "method": "GET",
+    "path": "/dependency-graph/simulate",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "simulateDependencyFailure": {
+    "method": "POST",
+    "path": "/dependency-graph/simulate",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listDependencyGraphViews": {
+    "method": "GET",
+    "path": "/dependency-graph/views",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "createDependencyGraphView": {
+    "method": "POST",
+    "path": "/dependency-graph/views",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": true
+  },
+  "getDependencyGraphView": {
+    "method": "GET",
+    "path": "/dependency-graph/views/{id}",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateDependencyGraphView": {
+    "method": "PATCH",
+    "path": "/dependency-graph/views/{id}",
+    "kind": "item",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": true
+  },
+  "deleteDependencyGraphView": {
+    "method": "DELETE",
+    "path": "/dependency-graph/views/{id}",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": false
+  },
+  "shareDependencyGraphView": {
+    "method": "POST",
+    "path": "/dependency-graph/views/{id}/share",
+    "kind": "item",
+    "idempotency": "never",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "revokeDependencyGraphViewShare": {
+    "method": "DELETE",
+    "path": "/dependency-graph/views/{id}/share",
+    "kind": "none",
+    "idempotency": "required",
+    "requiredHeaders": ["Idempotency-Key"],
+    "bodyRequired": false
+  },
+  "ingestDependencyEdgeStats": {
+    "method": "POST",
+    "path": "/dependency-graph/edge-stats",
+    "kind": "item",
+    "idempotency": "natural",
+    "requiredHeaders": [],
+    "bodyRequired": true
   },
   "markIncidentBusinessServiceImpact": {
     "method": "PUT",
@@ -922,6 +1090,46 @@
   "importBusinessServices": {
     "method": "POST",
     "path": "/business-services/import",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "getServiceReviewSettings": {
+    "method": "GET",
+    "path": "/settings/service-reviews",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "updateServiceReviewSettings": {
+    "method": "PUT",
+    "path": "/settings/service-reviews",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "listServiceReviewRuns": {
+    "method": "GET",
+    "path": "/service-reviews/runs",
+    "kind": "list",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
+  "runServiceReviews": {
+    "method": "POST",
+    "path": "/service-reviews/run",
+    "kind": "item",
+    "idempotency": "supported",
+    "requiredHeaders": [],
+    "bodyRequired": true
+  },
+  "previewServiceReview": {
+    "method": "POST",
+    "path": "/service-reviews/preview",
     "kind": "item",
     "idempotency": "supported",
     "requiredHeaders": [],
