@@ -51,8 +51,6 @@ function reasonText(reason: ImpactReason, nameOf: (key: string) => string): stri
       return 'Under maintenance';
     case 'CUSTOMER_REPORTS':
       return `${label}: customers reported problems (${reason.reportCount} in ${reason.windowMinutes} minutes)`;
-    case 'CUSTOMER_REPORTS':
-      return `${label}: ${reason.reportCount} customer reports in ${reason.windowMinutes} minutes`;
   }
 }
 
