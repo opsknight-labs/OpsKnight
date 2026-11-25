@@ -165,4 +165,40 @@ describe('status page middleware serving routes', () => {
     expect(isAllowedStatusApi('/api/health', 'HEAD')).toBe(true);
     expect(isAllowedStatusApi('/api/users', 'GET')).toBe(false);
   });
+
+  it('allows webhook subscribe POST only, and the new custom-domain surfaces', async () => {
+    const { isAllowedStatusApi, isStatusDomainPath } = await import('@/middleware');
+    expect(isAllowedStatusApi('/api/status/acme/subscribe/webhook', 'POST')).toBe(true);
+    expect(isAllowedStatusApi('/api/status/acme/subscribe/webhook', 'GET')).toBe(false);
+    expect(isAllowedStatusApi('/api/status/acme/subscribe/other', 'POST')).toBe(false);
+    for (const p of ['/history', '/embed', '/incidents/abc']) {
+      expect(isStatusDomainPath(p)).toBe(true);
+    }
+    for (const p of ['/incidents', '/incidents/a/b', '/history/x', '/embed/x', '/admin']) {
+      expect(isStatusDomainPath(p)).toBe(false);
+    }
+  });
+
+  it('serves own-slug links and frames the embed on custom domains', async () => {
+    const { handleStatusDomainRequest } = await import('@/middleware');
+    const { NextRequest } = await import('next/server');
+    const run = (pathname: string, slug = 'acme') =>
+      handleStatusDomainRequest({
+        req: new NextRequest(`https://status.example.com${pathname}`),
+        pathname,
+        statusRoute: { pageId: 'p', slug, requireAuth: false },
+        securityHeaders: { 'X-Frame-Options': 'DENY' },
+        forwardedHeaders: new Headers(),
+        requestId: 'r',
+      });
+    const target = (r: Response) => r.headers.get('x-middleware-rewrite') ?? '';
+    expect(target(run('/incidents/i1'))).toContain('/status/acme/incidents/i1');
+    expect(target(run('/status/acme/history'))).toContain('/status/acme/history');
+    const embed = run('/embed');
+    expect(target(embed)).toContain('/status/acme/embed');
+    expect(embed.headers.get('X-Frame-Options')).toBeNull();
+    expect(embed.headers.get('Content-Security-Policy')).toContain('frame-ancestors *');
+    expect(run('/status/other/history').status).toBe(404);
+    expect(run('/incidents').status).toBe(404);
+  });
 });

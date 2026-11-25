@@ -31,16 +31,32 @@ export type RunSummary = {
   noEmailProvider?: boolean;
 };
 
-async function claim(period: string, kind: string, recipientKey: string): Promise<boolean> {
+/** A PENDING claim older than this belongs to a node that died before finish(). */
+export const STALE_PENDING_MS = 30 * 60_000;
+
+export async function claim(
+  period: string,
+  kind: string,
+  recipientKey: string,
+  now = new Date()
+): Promise<boolean> {
   const created = await prisma.businessServiceReviewRun.createMany({
     data: [{ period, kind, recipientKey, status: 'PENDING' }],
     skipDuplicates: true,
   });
   if (created.count > 0) return true;
-  // A failed attempt may be retried; SENT, SKIPPED and PENDING are never re-run.
+  // FAILED may be retried, and so may a PENDING abandoned by a crashed node. Compare-and-set on the
+  // old updatedAt: the winner bumps it, so a second node's identical update matches nothing.
+  // SENT and SKIPPED are never re-run.
+  const stale = new Date(now.getTime() - STALE_PENDING_MS);
   const retried = await prisma.businessServiceReviewRun.updateMany({
-    where: { period, kind, recipientKey, status: 'FAILED' },
-    data: { status: 'PENDING', error: null },
+    where: {
+      period,
+      kind,
+      recipientKey,
+      OR: [{ status: 'FAILED' }, { status: 'PENDING', updatedAt: { lt: stale } }],
+    },
+    data: { status: 'PENDING', error: null, updatedAt: now },
   });
   return retried.count > 0;
 }

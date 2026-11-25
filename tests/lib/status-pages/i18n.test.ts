@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { execSync } from 'node:child_process';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { DICTIONARIES, STATUS_LOCALES, createTranslator } from '@/lib/status-pages/i18n';
 import { en } from '@/lib/status-pages/i18n/en';
 
@@ -10,24 +11,32 @@ describe('status page i18n', () => {
   it.each(STATUS_LOCALES)(
     '%s defines exactly the English keys with the same placeholders',
     locale => {
-      const dictionary = DICTIONARIES[locale] as Record<string, string>;
-      expect(Object.keys(dictionary).sort()).toEqual([...keys].sort());
-      for (const key of keys) {
-        expect(dictionary[key], `${locale}:${key}`).toBeTruthy();
-        expect(placeholders(dictionary[key]), `${locale}:${key}`).toEqual(
-          placeholders((en as Record<string, string>)[key])
-        );
+      const dictionary = new Map(
+        Object.entries(DICTIONARIES)
+          .filter(([l]) => l === locale)
+          .flatMap(([, d]) => Object.entries(d as Record<string, string>))
+      );
+      expect([...dictionary.keys()].sort()).toEqual([...keys].sort());
+      for (const [key, english] of Object.entries(en)) {
+        const text = dictionary.get(key) ?? '';
+        expect(text, `${locale}:${key}`).toBeTruthy();
+        expect(placeholders(text), `${locale}:${key}`).toEqual(placeholders(english));
       }
     }
   );
   it('every key is used in the app and every used key exists', () => {
-    const files = execSync(
-      'grep -rlE "([\'\\"])(status|hero|filter|services|business|incidents|common|embed|incident|history|subscribe)\\.[A-Za-z0-9]+\\1" src --include=*.ts --include=*.tsx || true',
-      { encoding: 'utf8' }
-    )
-      .split('\n')
-      .filter(f => f && !/status-pages\/i18n\/(en|es|fr|de|pt|ja)\.ts$/.test(f));
-    const source = files.map(f => execSync(`cat "${f}"`, { encoding: 'utf8' })).join('\n');
+    // Test-only walk of the repo's own src tree.
+    /* eslint-disable security/detect-non-literal-fs-filename */
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+        const full = join(dir, e.name);
+        return e.isDirectory() ? walk(full) : /\.tsx?$/.test(e.name) ? [full] : [];
+      });
+    const source = walk('src')
+      .filter(f => !/status-pages\/i18n\/(en|es|fr|de|pt|ja)\.ts$/.test(f))
+      .map(f => readFileSync(f, 'utf8'))
+      .join('\n');
+    /* eslint-enable security/detect-non-literal-fs-filename */
     const unused = keys.filter(key => !source.includes(`'${key}'`) && !source.includes(`"${key}"`));
     expect(unused).toEqual([]);
   });

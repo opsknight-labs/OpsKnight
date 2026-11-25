@@ -10,6 +10,7 @@ vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
 import {
   createView,
   getEmbeddedView,
+  applyViewFilters,
   shareView,
   viewConfigSchema,
 } from '@/lib/intelligence/dependencies/insights/views';
@@ -68,5 +69,36 @@ describe('getEmbeddedView', () => {
     expect(await getEmbeddedView(token)).toBeNull();
     db.savedGraphView.findUnique.mockResolvedValueOnce({ shareRevokedAt: null, shareExpiresAt: new Date(Date.now() - 1) });
     expect(await getEmbeddedView(token)).toBeNull();
+  });
+});
+
+describe('applyViewFilters', () => {
+  const graph = {
+    nodes: [
+      { id: 'a', status: 'OPERATIONAL', teamId: 't1' },
+      { id: 'b', status: 'MAJOR_OUTAGE', teamId: 't2' },
+      { id: 'c', status: 'OPERATIONAL', teamId: 't1' },
+    ],
+    businessServices: [{ id: 'x', status: 'OPERATIONAL', teamId: 't2' }],
+    edges: [
+      { upstreamServiceId: 'a', downstreamServiceId: 'b', status: 'ACTIVE', origin: 'DECLARED' },
+      { upstreamServiceId: 'a', downstreamServiceId: 'c', status: 'ACTIVE', origin: 'OBSERVED' },
+    ],
+    memberEdges: [
+      { serviceId: 'b', businessServiceId: 'x' },
+      { serviceId: 'a', businessServiceId: 'x' },
+    ],
+  };
+  it('drops filtered-out nodes and every edge touching them', () => {
+    const out = applyViewFilters(graph, { teamIds: ['t1'] });
+    expect(out.nodes.map(n => n.id)).toEqual(['a', 'c']);
+    expect(out.businessServices).toEqual([]);
+    expect(out.edges).toHaveLength(1);
+    expect(out.memberEdges).toEqual([]);
+  });
+  it('filters by status and origin', () => {
+    expect(applyViewFilters(graph, { statuses: ['OPERATIONAL'] }).edges).toHaveLength(1);
+    expect(applyViewFilters(graph, { origins: ['DECLARED'] }).edges).toHaveLength(1);
+    expect(applyViewFilters(graph, {}).nodes).toHaveLength(3);
   });
 });

@@ -79,11 +79,11 @@ describe('Status Domain Host Firewall & Isolation', () => {
       expect(res.headers.get('cache-control')).toBe(PUBLIC_STATUS_CACHE_CONTROL);
     });
 
-    it('rejects /history on status domain as not found (rendered inline on status page)', async () => {
+    it('rejects /history/export on status domain as not found', async () => {
       setupRouteMocks();
       const { default: middleware } = await import('@/middleware');
 
-      const req = new NextRequest('https://status.customer.test/history', {
+      const req = new NextRequest('https://status.customer.test/history/export', {
         headers: { host: 'status.customer.test' },
       });
       const res = await middleware(req);
@@ -313,10 +313,10 @@ describe('Status Domain Host Firewall & Isolation', () => {
       '/settings',
       '/settings/general',
       '/incidents',
-      '/incidents/123',
+      '/incidents/123/edit',
       '/admin',
       '/admin/system',
-      '/history',
+      '/history/export',
       '/setup',
       '/login',
       '/forgot-password',

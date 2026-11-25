@@ -236,6 +236,39 @@ export async function revokeShare(actor: AuthorizationActor, viewId: string) {
   await audit(actor, 'graph_view.share_revoked', viewId);
 }
 
+type ViewFilters = z.infer<typeof viewConfigSchema>['filters'];
+
+/** Saved-view filters, applied server-side so filtered-out nodes and their edges never leave it. */
+export function applyViewFilters<
+  G extends {
+    nodes: { id: string; status: string; teamId: string | null }[];
+    businessServices: { id: string; status: string; teamId: string | null }[];
+    edges: { upstreamServiceId: string; downstreamServiceId: string; status: string; origin?: string | null }[];
+    memberEdges: { serviceId: string; businessServiceId: string }[];
+  },
+>(graph: G, f: ViewFilters): G {
+  const keep = (n: { status: string; teamId: string | null }) =>
+    (!f.statuses?.length || f.statuses.includes(n.status)) &&
+    (!f.teamIds?.length || (n.teamId !== null && f.teamIds.includes(n.teamId)));
+  const nodes = graph.nodes.filter(keep);
+  const businessServices = graph.businessServices.filter(keep);
+  const svc = new Set(nodes.map(n => n.id));
+  const bs = new Set(businessServices.map(b => b.id));
+  return {
+    ...graph,
+    nodes,
+    businessServices,
+    edges: graph.edges.filter(
+      e =>
+        svc.has(e.upstreamServiceId) &&
+        svc.has(e.downstreamServiceId) &&
+        (!f.origins?.length || (!!e.origin && f.origins.includes(e.origin as 'DECLARED' | 'OBSERVED'))) &&
+        (f.includeSuggested || e.status !== 'SUGGESTED')
+    ),
+    memberEdges: graph.memberEdges.filter(m => svc.has(m.serviceId) && bs.has(m.businessServiceId)),
+  };
+}
+
 /**
  * Read-only embed. Resolves the token, then reads the graph as the view's OWNER (so it can never
  * show more than they can see now, and stops when they are disabled), and anonymizes it: no ids,
@@ -250,12 +283,13 @@ export async function getEmbeddedView(token: string) {
   if (!owner || owner.status !== 'ACTIVE') return null;
   const config = viewConfigSchema.safeParse(row.config);
   if (!config.success) return null;
-  const graph = await getServiceGraphForActor(owner, prisma, {
+  const full = await getServiceGraphForActor(owner, prisma, {
     access: 'service',
     focus: config.data.focus ? parseGraphFocus(config.data.focus) : null,
     hops: config.data.hops,
   });
-  if (!graph) return null;
+  if (!full) return null;
+  const graph = applyViewFilters(full, config.data.filters);
   const nodes = graph.nodes.slice(0, EMBED_MAX_NODES);
   const ref = new Map(nodes.map((node, index) => [node.id, `S${index + 1}`] as const));
   const bsRef = new Map(graph.businessServices.map((bs, index) => [bs.id, `B${index + 1}`] as const));

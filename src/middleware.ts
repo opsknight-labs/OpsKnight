@@ -112,6 +112,9 @@ export function isStatusDomainPath(pathname: string) {
   return (
     pathname === '/' ||
     pathname === '/subscribe' ||
+    pathname === '/history' ||
+    pathname === '/embed' ||
+    /^\/incidents\/[^/]+$/.test(pathname) ||
     pathname.startsWith('/postmortems/') ||
     pathname.startsWith('/verify') ||
     pathname.startsWith('/unsubscribe')
@@ -176,7 +179,7 @@ const STATUS_API_EXACT_POST = new Set([
 ]);
 
 const STATUS_SLUG_API_REGEX =
-  /^\/api\/status\/[a-z0-9_-]+(\/(history|rss|uptime-export|subscribe|badge))?$/;
+  /^\/api\/status\/[a-z0-9_-]+(\/(history|rss|uptime-export|subscribe|subscribe\/webhook|badge))?$/;
 
 const RESERVED_STATUS_API_SLUGS = new Set([
   'admin',
@@ -197,7 +200,7 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
       const firstSegment = pathname.slice('/api/status/'.length).split('/')[0];
       if (firstSegment && RESERVED_STATUS_API_SLUGS.has(firstSegment)) return false;
     }
-    if (STATUS_SLUG_API_REGEX.test(pathname) && !pathname.endsWith('/subscribe')) return true;
+    if (STATUS_SLUG_API_REGEX.test(pathname) && !/\/subscribe(\/webhook)?$/.test(pathname)) return true;
     return false;
   }
 
@@ -207,7 +210,7 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
       const firstSegment = pathname.slice('/api/status/'.length).split('/')[0];
       if (firstSegment && RESERVED_STATUS_API_SLUGS.has(firstSegment)) return false;
     }
-    if (STATUS_SLUG_API_REGEX.test(pathname) && pathname.endsWith('/subscribe')) return true;
+    if (STATUS_SLUG_API_REGEX.test(pathname) && /\/subscribe(\/webhook)?$/.test(pathname)) return true;
     return false;
   }
 
@@ -814,8 +817,16 @@ export function handleStatusDomainRequest({
     return callbackResponse;
   }
 
-  // 4. Allowed Status Surface Pages (Rewrite to public status route)
+  // 4. Allowed Status Surface Pages (Rewrite to public status route).
+  // Components link to /status/<slug>/..., so accept the page's own prefix as the same page.
+  if (statusRoute.slug) {
+    const own = `/status/${statusRoute.slug}`;
+    if (pathname.startsWith(`${own}/`)) pathname = pathname.slice(own.length);
+  }
   if (isStatusDomainPath(pathname)) {
+    // The raw custom-domain /embed path is the framable widget; frame headers must follow the rewrite.
+    if (pathname === '/embed' && statusRoute.slug)
+      securityHeaders = getSecurityHeaders(`/status/${statusRoute.slug}/embed`);
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return new NextResponse('Method Not Allowed', {
         status: 405,
