@@ -5,6 +5,7 @@ import { ArrowUpRight, Boxes, LayoutPanelTop, Network, Users } from 'lucide-reac
 import { KPI_CARD, KPI_GRID, KpiBody } from '@/components/analytics/KpiCard';
 import { EmptyState, RelativeTime, SeverityBadge, StatusBadge } from '@/components/patterns';
 import type { BsStatus, BusinessServiceStats } from '@/lib/business-services/contract';
+import type { ErrorBudget } from '@/lib/business-services/slo';
 import { cn } from '@/lib/utils';
 import DependencyMiniGraph from './DependencyMiniGraph';
 import HealthBadge, { CRITICALITY_LABEL } from './HealthBadge';
@@ -35,16 +36,62 @@ function duration(minutes: number | null) {
   return hours < 48 ? `${hours.toFixed(1)}h` : `${Math.round(hours / 24)}d`;
 }
 
+const BURN_LABEL = { OK: 'On track', AT_RISK: 'At risk', BREACHED: 'Budget spent' } as const;
+
+const BURN_BAR = {
+  OK: 'bg-status-ok',
+  AT_RISK: 'bg-status-elevated',
+  BREACHED: 'bg-status-critical',
+} as const;
+
+/** Share of the error budget spent, as a meter; the burn state is also written out beside it. */
+function BudgetGauge({ budget }: { budget: ErrorBudget }) {
+  const spent = Math.min(Math.max(100 - budget.remainingPercent, 0), 100);
+  return (
+    <div
+      role="meter"
+      aria-label="Error budget spent"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(spent)}
+      aria-valuetext={`${Math.round(spent)}% spent, ${BURN_LABEL[budget.burnState]}`}
+      className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
+    >
+      <div
+        className={cn('h-full rounded-full', BURN_BAR[budget.burnState])}
+        style={{ width: `${spent}%` }}
+      />
+    </div>
+  );
+}
+
 /** Uptime 30/90 days, incidents, MTTA and MTTR over the last 30 days. */
 export function OverviewKpis({
   last30,
   last90,
+  slo,
 }: {
   last30: BusinessServiceStats;
   last90: BusinessServiceStats;
+  slo?: (ErrorBudget & { target: number; windowDays: number }) | null;
 }) {
   return (
     <ul className={KPI_GRID} aria-label="Key metrics">
+      {slo && (
+        <li className={KPI_CARD}>
+          <KpiBody
+            label={`Error budget, ${slo.windowDays} days`}
+            value={`${Math.max(slo.remainingPercent, 0).toFixed(0)}% left`}
+            meta={
+              <span className="tabular-nums">
+                {BURN_LABEL[slo.burnState]}. Target {slo.target}%, {Math.round(slo.consumedMinutes)}{' '}
+                of {Math.round(slo.allowedMinutes)} min used
+              </span>
+            }
+          />
+          <BudgetGauge budget={slo} />
+        </li>
+      )}
       <li className={KPI_CARD}>
         <KpiBody
           label="Uptime, 30 days"

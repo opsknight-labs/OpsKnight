@@ -2,14 +2,14 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Check, Network, Unlink, X } from 'lucide-react';
+import { ArrowUpRight, Check, Crosshair, Network, Power, Route, Unlink, Waypoints, X } from 'lucide-react';
 import { RelativeTime, SeverityBadge } from '@/components/patterns';
 import { Button } from '@/components/ui/shadcn/button';
 import type { ImpactReason } from '@/lib/business-services/contract';
 import { formatGraphFocus } from '@/lib/service-graph/focus';
 import type { GraphNodeDetails } from '@/app/(app)/services/graph/actions';
 import GraphHealthBadge, { GRAPH_STATUS_META } from './GraphHealthBadge';
-import type { GraphItem, GraphLink } from './model';
+import type { GraphItem, GraphLink, ImpactMode } from './model';
 
 export type PanelRelation = { link: GraphLink; other: GraphItem | null };
 
@@ -24,6 +24,16 @@ type Props = {
   onClose: () => void;
   onDisconnect: (link: GraphLink) => void;
   onReview: (link: GraphLink, decision: 'APPROVE' | 'REJECT') => void;
+  /** Move focus to the heading when the selection changes. Off while arrow keys walk the canvas. */
+  focusOnSelect?: boolean;
+  impactMode?: ImpactMode | null;
+  onImpactMode?: (mode: ImpactMode | null) => void;
+  /** Start or end a path between two nodes. */
+  onPathPoint?: (end: 'from' | 'to') => void;
+  /** Opens the failure simulation for this (technical) service. */
+  onWhatIf?: () => void;
+  /** How many of the node's open incidents the panel lists before linking to the full list. */
+  incidentsHref?: string | null;
 };
 
 function reasonText(reason: ImpactReason, nameOf: (key: string) => string): string {
@@ -39,6 +49,8 @@ function reasonText(reason: ImpactReason, nameOf: (key: string) => string): stri
       return `${label}: marked impacted on an incident`;
     case 'MAINTENANCE':
       return 'Under maintenance';
+    case 'CUSTOMER_REPORTS':
+      return `${label}: customers reported problems (${reason.reportCount} in ${reason.windowMinutes} minutes)`;
   }
 }
 
@@ -53,9 +65,17 @@ export default function GraphSidePanel({
   onClose,
   onDisconnect,
   onReview,
+  focusOnSelect = true,
+  impactMode = null,
+  onImpactMode,
+  onPathPoint,
+  onWhatIf,
+  incidentsHref = null,
 }: Props) {
   const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => heading.current?.focus(), [item.key]);
+  useEffect(() => {
+    if (focusOnSelect) heading.current?.focus();
+  }, [item.key, focusOnSelect]);
   const overview = item.kind === 'bs' ? `/services/business/${item.id}` : `/services/${item.id}`;
   const manage =
     item.kind === 'bs'
@@ -83,6 +103,9 @@ export default function GraphSidePanel({
                 )}
                 {link.suggested && (
                   <span className="text-xs text-muted-foreground"> · suggested</span>
+                )}
+                {link.kind === 'dependency' && link.dependencyType === 'SOFT' && (
+                  <span className="text-xs text-muted-foreground"> · soft</span>
                 )}
               </span>
               {canEdit && link.kind === 'dependency' && link.suggested && (
@@ -226,7 +249,57 @@ export default function GraphSidePanel({
               {item.openIncidents > 0 ? 'None you can open.' : 'None.'}
             </p>
           )}
+          {incidentsHref && item.openIncidents > 0 && (
+            <Link
+              href={incidentsHref}
+              className="text-xs font-medium underline-offset-2 hover:underline"
+            >
+              Show all incidents
+            </Link>
+          )}
         </section>
+        {onImpactMode && (
+          <section className="space-y-1.5" aria-label="Impact view">
+            <h3 className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Highlight
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={impactMode === 'blast' ? 'default' : 'outline'}
+                aria-pressed={impactMode === 'blast'}
+                onClick={() => onImpactMode(impactMode === 'blast' ? null : 'blast')}
+              >
+                <Crosshair className="h-4 w-4" aria-hidden="true" /> Blast radius
+              </Button>
+              <Button
+                size="sm"
+                variant={impactMode === 'root' ? 'default' : 'outline'}
+                aria-pressed={impactMode === 'root'}
+                onClick={() => onImpactMode(impactMode === 'root' ? null : 'root')}
+              >
+                <Route className="h-4 w-4" aria-hidden="true" /> Root-cause path
+              </Button>
+              {onPathPoint && (
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => onPathPoint('from')}>
+                    <Waypoints className="h-4 w-4" aria-hidden="true" /> Path from here
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onPathPoint('to')}>
+                    Path to here
+                  </Button>
+                </>
+              )}
+            </div>
+          </section>
+        )}
+        {onWhatIf && item.kind === 'svc' && (
+          <section aria-label="Failure simulation">
+            <Button size="sm" variant="outline" onClick={onWhatIf}>
+              <Power className="h-4 w-4" aria-hidden="true" /> What if this goes down?
+            </Button>
+          </section>
+        )}
         {relationList('Depends on', dependsOn)}
         {relationList('Used by', usedBy)}
         <div className="flex flex-wrap gap-2 border-t pt-3">

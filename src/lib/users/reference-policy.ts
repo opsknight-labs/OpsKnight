@@ -18,8 +18,11 @@ export const USER_REFERENCE_POLICY = {
   incidentWatchers: { deactivate: 'SUPPRESS', delete: 'CASCADE' },
   incidentRoles: { deactivate: 'REPORT', delete: 'CASCADE' },
   incidentRolesAssigned: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  // An inactive owner is surfaced by the ownership hygiene sweep; deletion clears the owner (FK SetNull).
+  ownedBusinessServices: { deactivate: 'REPORT', delete: 'SET_NULL' },
   businessServiceFollows: { deactivate: 'SUPPRESS', delete: 'CASCADE' },
   businessServiceImpactsMarked: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  customerImpactReportsCreated: { deactivate: 'KEEP', delete: 'SET_NULL' },
   auditLogs: { deactivate: 'KEEP', delete: 'SET_NULL' },
   overrides: { deactivate: 'REPORT', delete: 'BLOCK' },
   overrideReplacements: { deactivate: 'REPORT', delete: 'BLOCK' },

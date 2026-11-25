@@ -881,10 +881,31 @@ export type BusinessService = {
   name: string;
   description: string | null;
   tier: string | null;
+  statusPageSummary: string | null;
+  links: Array<{ label: string; url: string }>;
   criticality: 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
   impactMinUrgency: 'LOW' | 'MEDIUM' | 'HIGH' | null;
   impactMaxPriority: string | null;
   ownerTeam: { id: string; name: string } | null;
+  sloTarget: number | null;
+  sloWindowDays: 7 | 30 | 90;
+  ownerUser: { id: string; name: string } | null;
+  escalationPolicy: { id: string; name: string } | null;
+  contactChannel: string | null;
+  tags: Array<string>;
+  environment: string | null;
+  lifecycle: 'ACTIVE' | 'BETA' | 'DEPRECATED' | 'RETIRED';
+  lastReviewedAt: string | null;
+  customAttributes: Record<string, unknown> | null;
+  quorumPartialPct: number | null;
+  quorumMajorPct: number | null;
+  dependencyHopDepth: number;
+  customersTotal: number | null;
+  revenuePerHourCents: number | null;
+  currency: string;
+  customerReportThreshold: number | null;
+  customerReportWindowMinutes: number | null;
+  reviewIntervalDays: number | null;
   members: Array<{ id: string; name: string; status: string; critical: boolean }>;
   dependsOn: Array<{ id: string; name: string }>;
   followers: Array<{ id: string; name: string }>;
@@ -893,7 +914,7 @@ export type BusinessService = {
       'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
     since: string | null;
     reasons: Array<{
-      kind: 'DIRECT' | 'DEPENDENCY' | 'NESTED' | 'MANUAL' | 'MAINTENANCE';
+      kind: 'DIRECT' | 'DEPENDENCY' | 'NESTED' | 'MANUAL' | 'MAINTENANCE' | 'CUSTOMER_REPORTS';
       status:
         'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
       incidentId?: string;
@@ -904,11 +925,15 @@ export type BusinessService = {
       urgency?: 'LOW' | 'MEDIUM' | 'HIGH';
       markedById?: string | null;
       maintenanceWindowId?: string;
+      reportCount?: number;
+      threshold?: number;
+      windowMinutes?: number;
     }>;
     openIncidentCount: number;
     memberCount: number;
     impactedMemberCount: number;
     computedAt: string;
+    unknownReason?: 'NO_MEMBERS';
   } | null;
   createdAt: string;
   updatedAt: string;
@@ -929,7 +954,13 @@ export type BusinessServiceImpactTimeline = {
   incidentCount: number;
   mttaMinutes: number | null;
   mttrMinutes: number | null;
+  weightedDowntimeMinutes: number;
+  weightedUptimePercent: number;
+  currency: string;
+  customersTotal: number | null;
+  estimatedCostCents: number | null;
   entries: Array<{
+    costCents: number | null;
     incidentId: string | null;
     incidentTitle: string | null;
     urgency: 'LOW' | 'MEDIUM' | 'HIGH' | null;
@@ -1010,17 +1041,221 @@ export type BusinessServiceImportResult = {
   }>;
   issues: Array<{ line: number; name?: string; message: string }>;
 };
+export type ServiceReviewSettings = {
+  enabled: boolean;
+  freezeWarningEnabled: boolean;
+  dayOfMonth: number;
+  hour: number;
+  timeZone: string;
+  summaryUserIds: Array<string>;
+};
+export type ServiceReviewRun = {
+  period: string;
+  kind: 'DIGEST' | 'SUMMARY';
+  recipientKey: string;
+  status: 'PENDING' | 'SENT' | 'SKIPPED' | 'FAILED';
+  serviceCount: number;
+  error: string | null;
+  createdAt: string;
+};
+export type ServiceReviewRunResult = {
+  period: string;
+  sent: number;
+  skipped: number;
+  failed: number;
+  alreadySent: number;
+  disabled?: boolean;
+  notDue?: boolean;
+  noEmailProvider?: boolean;
+};
+export type ServiceReviewPreview = {
+  sent: boolean;
+  period: string;
+  reason?: 'nothing_to_report';
+  services?: number;
+};
 export type StatusPageBusinessServiceOverride = {
   statusPageId: string;
   businessServiceId: string;
   status: 'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | null;
   until: string | null;
 };
+export type BusinessServiceCustomerReport = {
+  id: string;
+  businessServiceId: string;
+  source: string;
+  count: number;
+  windowStart: string;
+  windowEnd: string;
+  externalRef: string | null;
+  createdById: string | null;
+  createdAt: string;
+  created?: boolean;
+};
+export type BusinessServiceTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  criticality: 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
+  sloTarget: number | null;
+  sloWindowDays: 7 | 30 | 90;
+  quorumPartialPct: number | null;
+  quorumMajorPct: number | null;
+  tags: Array<string>;
+  environment: string | null;
+  lifecycle: 'ACTIVE' | 'BETA' | 'DEPRECATED' | 'RETIRED';
+  links: Array<{ label: string; url: string }>;
+  impactMinUrgency: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+  impactMaxPriority: string | null;
+  ownerTeamId: string | null;
+  ownerTeam: { id: string; name: string } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+export type BusinessServiceTemplateDeletion = { id: string; deleted: true };
+export type BusinessServiceBulkResult = {
+  dryRun: boolean;
+  summary: { ok: number; failed: number };
+  results: Array<{ id: string; ok: boolean; changed?: Array<string>; error?: string }>;
+};
 export type StakeholderNotification = {
   incidentId: string;
   businessServices: Array<{ id: string; name: string }>;
   recipientCount: number;
   emailCount: number;
+};
+export type DependencyGraphAt = {
+  at: string;
+  truncated: boolean;
+  services: Array<{
+    id: string;
+    name: string;
+    teamId: string | null;
+    status:
+      'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+    openIncidentCount: number;
+  }>;
+  businessServices: Array<{
+    id: string;
+    name: string;
+    criticality: string | null;
+    status:
+      'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+    openIncidentCount: number;
+  }>;
+  dependencies: Array<{
+    upstreamServiceId: string;
+    downstreamServiceId: string;
+    state: 'ACTIVE' | 'SUGGESTED';
+    origin: 'DECLARED' | 'OBSERVED';
+    since: string;
+  }>;
+  members: Array<{ businessServiceId: string; serviceId: string; critical: boolean }>;
+  supports: Array<{ parentId: string; childId: string }>;
+  notes: Array<string>;
+};
+export type DependencyGraphDiff = {
+  since: string;
+  until: string;
+  truncated: boolean;
+  addedDependencies: Array<{
+    upstreamServiceId: string;
+    downstreamServiceId: string;
+    upstreamName: string | null;
+    downstreamName: string | null;
+    origin: 'DECLARED' | 'OBSERVED';
+    since: string;
+  }>;
+  removedDependencies: Array<{
+    upstreamServiceId: string;
+    downstreamServiceId: string;
+    upstreamName: string | null;
+    downstreamName: string | null;
+    origin: 'DECLARED' | 'OBSERVED';
+    since: string;
+  }>;
+  newlySuggestedDependencies: Array<{
+    upstreamServiceId: string;
+    downstreamServiceId: string;
+    upstreamName: string | null;
+    downstreamName: string | null;
+    origin: 'DECLARED' | 'OBSERVED';
+    since: string;
+  }>;
+  awaitingReview: {
+    count: number;
+    items: Array<{
+      upstreamServiceId: string;
+      downstreamServiceId: string;
+      upstreamName: string | null;
+      downstreamName: string | null;
+      origin: 'DECLARED' | 'OBSERVED';
+      since: string;
+    }>;
+  };
+  serviceStatusChanges: Array<{
+    id: string;
+    name: string | null;
+    from:
+      'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+    to: 'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+  }>;
+  businessServiceStatusChanges: Array<{
+    id: string;
+    name: string | null;
+    from:
+      'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+    to: 'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+  }>;
+};
+export type DependencyGraphSpof = {
+  threshold: number;
+  truncated: boolean;
+  singlePointsOfFailure: Array<{
+    serviceId: string;
+    name: string;
+    fanOut: number;
+    businessServiceCount: number;
+    criticalBusinessServiceCount: number;
+    articulationPoint: boolean;
+    reasons: Array<'NO_OWNER_TEAM' | 'NO_ON_CALL'>;
+    score: number;
+  }>;
+  articulationPoints: Array<{ serviceId: string; name: string | null; fanOut: number }>;
+};
+export type DependencyGraphSimulation = {
+  seeds: Array<{ id: string; name: string }>;
+  maxDepth: number;
+  truncated: boolean;
+  affectedServices: Array<{ id: string; name: string; distance: number }>;
+  possiblyDegradedServices: Array<{ id: string; name: string; distance: number }>;
+  affectedBusinessServices: Array<{
+    id: string;
+    name: string;
+    criticality: string | null;
+    currentStatus:
+      'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+    projectedStatus:
+      'OPERATIONAL' | 'DEGRADED' | 'PARTIAL_OUTAGE' | 'MAJOR_OUTAGE' | 'MAINTENANCE' | 'UNKNOWN';
+  }>;
+  exposure: { note: string; revenuePerHourCents: number | null; customers: number | null };
+};
+export type DependencyGraphView = {
+  id: string;
+  name: string;
+  ownerId: string;
+  teamId: string | null;
+  visibility: 'PRIVATE' | 'TEAM' | 'ORG';
+  config: Record<string, unknown>;
+  shared: boolean;
+  shareExpiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+export type DependencyGraphViewShare = { token: string; expiresAt: string };
+export type DependencyGraphEdgeStatsResult = {
+  accepted: number;
+  rejected: Array<{ index: number; reason: string }>;
 };
 export type StatusPagePublicationState = {
   status: 'LIVE' | 'PUBLISHING' | 'FAILED' | 'DISABLED';
@@ -1070,6 +1305,7 @@ export type StatusPagePrivacy = {
     privacyMode?: string | null;
     requireAuth?: boolean;
     authProvider?: string | null;
+    ipAllowList?: Array<string>;
     showIncidentDetails?: boolean;
     showIncidentTitles?: boolean;
     showIncidentDescriptions?: boolean;
@@ -3224,6 +3460,8 @@ export interface OperationRequests {
       name: string;
       description?: string | null;
       tier?: string | null;
+      statusPageSummary?: string | null;
+      links?: Array<{ label: string; url: string }> | null;
       ownerTeamId?: string | null;
       memberServiceIds?: Array<string>;
       followerUserIds?: Array<string>;
@@ -3232,6 +3470,25 @@ export interface OperationRequests {
       impactMaxPriority?: string | null;
       nonCriticalServiceIds?: Array<string>;
       dependsOnBusinessServiceIds?: Array<string>;
+      sloTarget?: number | null;
+      sloWindowDays?: 7 | 30 | 90;
+      ownerUserId?: string | null;
+      escalationPolicyId?: string | null;
+      contactChannel?: string | null;
+      tags?: Array<string>;
+      environment?: string | null;
+      lifecycle?: 'ACTIVE' | 'BETA' | 'DEPRECATED' | 'RETIRED';
+      lastReviewedAt?: string | null;
+      customAttributes?: Record<string, string | number | boolean> | null;
+      quorumPartialPct?: number | null;
+      quorumMajorPct?: number | null;
+      dependencyHopDepth?: number;
+      customersTotal?: number | null;
+      revenuePerHourCents?: number | null;
+      currency?: string;
+      customerReportThreshold?: number | null;
+      customerReportWindowMinutes?: number | null;
+      reviewIntervalDays?: number | null;
     };
   };
   getBusinessService: { params: { id: string } };
@@ -3242,6 +3499,8 @@ export interface OperationRequests {
       name?: string;
       description?: string | null;
       tier?: string | null;
+      statusPageSummary?: string | null;
+      links?: Array<{ label: string; url: string }> | null;
       ownerTeamId?: string | null;
       memberServiceIds?: Array<string>;
       followerUserIds?: Array<string>;
@@ -3250,6 +3509,25 @@ export interface OperationRequests {
       impactMaxPriority?: string | null;
       nonCriticalServiceIds?: Array<string>;
       dependsOnBusinessServiceIds?: Array<string>;
+      sloTarget?: number | null;
+      sloWindowDays?: 7 | 30 | 90;
+      ownerUserId?: string | null;
+      escalationPolicyId?: string | null;
+      contactChannel?: string | null;
+      tags?: Array<string>;
+      environment?: string | null;
+      lifecycle?: 'ACTIVE' | 'BETA' | 'DEPRECATED' | 'RETIRED';
+      lastReviewedAt?: string | null;
+      customAttributes?: Record<string, string | number | boolean> | null;
+      quorumPartialPct?: number | null;
+      quorumMajorPct?: number | null;
+      dependencyHopDepth?: number;
+      customersTotal?: number | null;
+      revenuePerHourCents?: number | null;
+      currency?: string;
+      customerReportThreshold?: number | null;
+      customerReportWindowMinutes?: number | null;
+      reviewIntervalDays?: number | null;
     };
   };
   deleteBusinessService: { params: { id: string }; headers: { 'Idempotency-Key': string } };
@@ -3258,7 +3536,177 @@ export interface OperationRequests {
     params: { id: string };
     query?: { from?: string; to?: string };
   };
+  listBusinessServiceCustomerReports: { params: { id: string }; query?: { limit?: number } };
+  createBusinessServiceCustomerReport: {
+    params: { id: string };
+    headers?: { 'Idempotency-Key'?: string };
+    body: {
+      source: string;
+      count: number;
+      windowStart: string;
+      windowEnd: string;
+      externalRef?: string;
+    };
+  };
+  bulkEditBusinessServices: {
+    headers?: { 'Idempotency-Key'?: string };
+    body: {
+      ids: Array<string>;
+      changes: {
+        ownerTeamId?: string | null;
+        criticality?: 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
+        lifecycle?: 'ACTIVE' | 'BETA' | 'DEPRECATED' | 'RETIRED';
+        addTags?: Array<string>;
+        removeTags?: Array<string>;
+        markReviewed?: true;
+        sloTarget?: number | null;
+        sloWindowDays?: 7 | 30 | 90;
+      };
+      dryRun?: boolean;
+    };
+  };
+  listBusinessServiceTemplates: Record<string, never>;
+  createBusinessServiceTemplate: {
+    headers?: { 'Idempotency-Key'?: string };
+    body: {
+      name: string;
+      description?: string | null;
+      criticality?: 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
+      sloTarget?: number | null;
+      sloWindowDays?: 7 | 30 | 90;
+      quorumPartialPct?: number | null;
+      quorumMajorPct?: number | null;
+      tags?: Array<string>;
+      environment?: string | null;
+      lifecycle?: 'ACTIVE' | 'BETA' | 'DEPRECATED' | 'RETIRED';
+      links?: Array<{ label: string; url: string }> | null;
+      impactMinUrgency?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+      impactMaxPriority?: string | null;
+      ownerTeamId?: string | null;
+    };
+  };
+  updateBusinessServiceTemplate: {
+    params: { id: string };
+    headers?: { 'Idempotency-Key'?: string };
+    body: {
+      name?: string;
+      description?: string | null;
+      criticality?: 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
+      sloTarget?: number | null;
+      sloWindowDays?: 7 | 30 | 90;
+      quorumPartialPct?: number | null;
+      quorumMajorPct?: number | null;
+      tags?: Array<string>;
+      environment?: string | null;
+      lifecycle?: 'ACTIVE' | 'BETA' | 'DEPRECATED' | 'RETIRED';
+      links?: Array<{ label: string; url: string }> | null;
+      impactMinUrgency?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+      impactMaxPriority?: string | null;
+      ownerTeamId?: string | null;
+    };
+  };
+  deleteBusinessServiceTemplate: {
+    params: { id: string };
+    headers?: { 'Idempotency-Key'?: string };
+  };
+  createBusinessServiceFromTemplate: {
+    params: { id: string };
+    headers?: { 'Idempotency-Key'?: string };
+    body: {
+      name: string;
+      description?: string | null;
+      tier?: string | null;
+      statusPageSummary?: string | null;
+      links?: Array<{ label: string; url: string }> | null;
+      ownerTeamId?: string | null;
+      memberServiceIds?: Array<string>;
+      followerUserIds?: Array<string>;
+      criticality?: 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3' | null;
+      impactMinUrgency?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+      impactMaxPriority?: string | null;
+      nonCriticalServiceIds?: Array<string>;
+      dependsOnBusinessServiceIds?: Array<string>;
+      sloTarget?: number | null;
+      sloWindowDays?: 7 | 30 | 90;
+      ownerUserId?: string | null;
+      escalationPolicyId?: string | null;
+      contactChannel?: string | null;
+      tags?: Array<string>;
+      environment?: string | null;
+      lifecycle?: 'ACTIVE' | 'BETA' | 'DEPRECATED' | 'RETIRED';
+      lastReviewedAt?: string | null;
+      customAttributes?: Record<string, string | number | boolean> | null;
+      quorumPartialPct?: number | null;
+      quorumMajorPct?: number | null;
+      dependencyHopDepth?: number;
+      customersTotal?: number | null;
+      revenuePerHourCents?: number | null;
+      currency?: string;
+      customerReportThreshold?: number | null;
+      customerReportWindowMinutes?: number | null;
+      reviewIntervalDays?: number | null;
+    };
+  };
   getBusinessServiceGraph: { params: { id: string }; query?: { hops?: number } };
+  getDependencyGraphAt: { query?: { at?: string; focus?: string; hops?: number } };
+  getDependencyGraphDiff: { query?: { since?: string; focus?: string; hops?: number } };
+  listDependencyGraphSinglePointsOfFailure: {
+    query?: { threshold?: number; focus?: string; hops?: number };
+  };
+  getDependencyFailureSimulation: { query?: { serviceIds?: string; maxDepth?: number } };
+  simulateDependencyFailure: { body: { serviceIds: Array<string>; maxDepth?: number } };
+  listDependencyGraphViews: Record<string, never>;
+  createDependencyGraphView: {
+    headers: { 'Idempotency-Key': string };
+    body: {
+      name: string;
+      visibility?: 'PRIVATE' | 'TEAM' | 'ORG';
+      teamId?: string | null;
+      config: {
+        focus?: string | null;
+        hops?: number;
+        filters?: Record<string, unknown>;
+        mode?: string;
+        pinned?: Array<{ id: string; x: number; y: number }>;
+      };
+    };
+  };
+  getDependencyGraphView: { params: { id: string } };
+  updateDependencyGraphView: {
+    params: { id: string };
+    headers: { 'Idempotency-Key': string };
+    body: {
+      name?: string;
+      visibility?: 'PRIVATE' | 'TEAM' | 'ORG';
+      teamId?: string | null;
+      config?: {
+        focus?: string | null;
+        hops?: number;
+        filters?: Record<string, unknown>;
+        mode?: string;
+        pinned?: Array<{ id: string; x: number; y: number }>;
+      };
+    };
+  };
+  deleteDependencyGraphView: { params: { id: string }; headers: { 'Idempotency-Key': string } };
+  shareDependencyGraphView: { params: { id: string }; body: { expiresInDays?: number } };
+  revokeDependencyGraphViewShare: {
+    params: { id: string };
+    headers: { 'Idempotency-Key': string };
+  };
+  ingestDependencyEdgeStats: {
+    body: {
+      source: string;
+      stats: Array<{
+        upstreamServiceId: string;
+        downstreamServiceId: string;
+        windowStart: string;
+        windowSeconds: number;
+        requestCount: number;
+        errorCount: number;
+      }>;
+    };
+  };
   markIncidentBusinessServiceImpact: {
     params: { id: string; businessServiceId: string };
     headers: { 'Idempotency-Key': string };
@@ -3289,6 +3737,22 @@ export interface OperationRequests {
     headers?: { 'Idempotency-Key'?: string };
     body: { format: 'csv' | 'yaml' | 'backstage'; content: string };
   };
+  getServiceReviewSettings: Record<string, never>;
+  updateServiceReviewSettings: {
+    headers?: { 'Idempotency-Key'?: string };
+    body: {
+      enabled?: boolean;
+      freezeWarningEnabled?: boolean;
+      dayOfMonth?: number;
+      hour?: number;
+      timeZone?: string;
+      summaryUserIds?: Array<string>;
+      summaryEmails?: Array<string>;
+    };
+  };
+  listServiceReviewRuns: { query?: { limit?: number } };
+  runServiceReviews: { headers?: { 'Idempotency-Key'?: string }; body: Record<string, never> };
+  previewServiceReview: { headers?: { 'Idempotency-Key'?: string }; body: Record<string, never> };
   setStatusPageBusinessServiceOverride: {
     params: { id: string; businessServiceId: string };
     headers?: { 'Idempotency-Key'?: string };
@@ -3337,6 +3801,7 @@ export interface OperationRequests {
       privacyMode?: string | null;
       requireAuth?: boolean;
       authProvider?: string | null;
+      ipAllowList?: Array<string>;
       showIncidentDetails?: boolean;
       showIncidentTitles?: boolean;
       showIncidentDescriptions?: boolean;
@@ -5002,8 +5467,105 @@ export interface OperationResponses {
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
+  listBusinessServiceCustomerReports: {
+    data: Array<BusinessServiceCustomerReport>;
+    pagination?: Pagination;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  createBusinessServiceCustomerReport: {
+    data: BusinessServiceCustomerReport;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  bulkEditBusinessServices: {
+    data: BusinessServiceBulkResult;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  listBusinessServiceTemplates: {
+    data: Array<BusinessServiceTemplate>;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  createBusinessServiceTemplate: {
+    data: BusinessServiceTemplate;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  updateBusinessServiceTemplate: {
+    data: BusinessServiceTemplate;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  deleteBusinessServiceTemplate: {
+    data: BusinessServiceTemplateDeletion;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  createBusinessServiceFromTemplate: {
+    data: BusinessService;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
   getBusinessServiceGraph: {
     data: BusinessServiceGraph;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getDependencyGraphAt: { data: DependencyGraphAt; requestId: string; timestamp: string } & Record<
+    string,
+    unknown
+  >;
+  getDependencyGraphDiff: {
+    data: DependencyGraphDiff;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  listDependencyGraphSinglePointsOfFailure: {
+    data: DependencyGraphSpof;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getDependencyFailureSimulation: {
+    data: DependencyGraphSimulation;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  simulateDependencyFailure: {
+    data: DependencyGraphSimulation;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  listDependencyGraphViews: {
+    data: Array<DependencyGraphView>;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  createDependencyGraphView: {
+    data: DependencyGraphView;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getDependencyGraphView: {
+    data: DependencyGraphView;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  updateDependencyGraphView: {
+    data: DependencyGraphView;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  deleteDependencyGraphView: null;
+  shareDependencyGraphView: {
+    data: DependencyGraphViewShare;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  revokeDependencyGraphViewShare: null;
+  ingestDependencyEdgeStats: {
+    data: DependencyGraphEdgeStatsResult;
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
@@ -5034,6 +5596,32 @@ export interface OperationResponses {
   } & Record<string, unknown>;
   importBusinessServices: {
     data: BusinessServiceImportResult;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getServiceReviewSettings: {
+    data: ServiceReviewSettings;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  updateServiceReviewSettings: {
+    data: ServiceReviewSettings;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  listServiceReviewRuns: {
+    data: Array<ServiceReviewRun>;
+    pagination?: Pagination;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  runServiceReviews: {
+    data: ServiceReviewRunResult;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  previewServiceReview: {
+    data: ServiceReviewPreview;
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
@@ -6991,6 +7579,70 @@ export const OPERATIONS = {
     requiredHeaders: [],
     bodyRequired: false,
   },
+  listBusinessServiceCustomerReports: {
+    method: 'GET',
+    path: '/business-services/{id}/customer-reports',
+    kind: 'list',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  createBusinessServiceCustomerReport: {
+    method: 'POST',
+    path: '/business-services/{id}/customer-reports',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  bulkEditBusinessServices: {
+    method: 'POST',
+    path: '/business-services/bulk',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  listBusinessServiceTemplates: {
+    method: 'GET',
+    path: '/business-service-templates',
+    kind: 'list',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  createBusinessServiceTemplate: {
+    method: 'POST',
+    path: '/business-service-templates',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  updateBusinessServiceTemplate: {
+    method: 'PATCH',
+    path: '/business-service-templates/{id}',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  deleteBusinessServiceTemplate: {
+    method: 'DELETE',
+    path: '/business-service-templates/{id}',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  createBusinessServiceFromTemplate: {
+    method: 'POST',
+    path: '/business-service-templates/{id}/instantiate',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
   getBusinessServiceGraph: {
     method: 'GET',
     path: '/business-services/{id}/graph',
@@ -6998,6 +7650,110 @@ export const OPERATIONS = {
     idempotency: null,
     requiredHeaders: [],
     bodyRequired: false,
+  },
+  getDependencyGraphAt: {
+    method: 'GET',
+    path: '/dependency-graph/at',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  getDependencyGraphDiff: {
+    method: 'GET',
+    path: '/dependency-graph/diff',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  listDependencyGraphSinglePointsOfFailure: {
+    method: 'GET',
+    path: '/dependency-graph/spof',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  getDependencyFailureSimulation: {
+    method: 'GET',
+    path: '/dependency-graph/simulate',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  simulateDependencyFailure: {
+    method: 'POST',
+    path: '/dependency-graph/simulate',
+    kind: 'item',
+    idempotency: 'natural',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  listDependencyGraphViews: {
+    method: 'GET',
+    path: '/dependency-graph/views',
+    kind: 'list',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  createDependencyGraphView: {
+    method: 'POST',
+    path: '/dependency-graph/views',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: true,
+  },
+  getDependencyGraphView: {
+    method: 'GET',
+    path: '/dependency-graph/views/{id}',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  updateDependencyGraphView: {
+    method: 'PATCH',
+    path: '/dependency-graph/views/{id}',
+    kind: 'item',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: true,
+  },
+  deleteDependencyGraphView: {
+    method: 'DELETE',
+    path: '/dependency-graph/views/{id}',
+    kind: 'none',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: false,
+  },
+  shareDependencyGraphView: {
+    method: 'POST',
+    path: '/dependency-graph/views/{id}/share',
+    kind: 'item',
+    idempotency: 'never',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  revokeDependencyGraphViewShare: {
+    method: 'DELETE',
+    path: '/dependency-graph/views/{id}/share',
+    kind: 'none',
+    idempotency: 'required',
+    requiredHeaders: ['Idempotency-Key'],
+    bodyRequired: false,
+  },
+  ingestDependencyEdgeStats: {
+    method: 'POST',
+    path: '/dependency-graph/edge-stats',
+    kind: 'item',
+    idempotency: 'natural',
+    requiredHeaders: [],
+    bodyRequired: true,
   },
   markIncidentBusinessServiceImpact: {
     method: 'PUT',
@@ -7042,6 +7798,46 @@ export const OPERATIONS = {
   importBusinessServices: {
     method: 'POST',
     path: '/business-services/import',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  getServiceReviewSettings: {
+    method: 'GET',
+    path: '/settings/service-reviews',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  updateServiceReviewSettings: {
+    method: 'PUT',
+    path: '/settings/service-reviews',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  listServiceReviewRuns: {
+    method: 'GET',
+    path: '/service-reviews/runs',
+    kind: 'list',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  runServiceReviews: {
+    method: 'POST',
+    path: '/service-reviews/run',
+    kind: 'item',
+    idempotency: 'supported',
+    requiredHeaders: [],
+    bodyRequired: true,
+  },
+  previewServiceReview: {
+    method: 'POST',
+    path: '/service-reviews/preview',
     kind: 'item',
     idempotency: 'supported',
     requiredHeaders: [],

@@ -59,8 +59,12 @@ describe('public boundary contract', () => {
       readFileSync('src/lib/status-pages/rss.ts', 'utf8'),
     ];
     for (const source of sources) {
-      expect(source).toContain('PUBLIC_STATUS_CACHE_CONTROL');
-      expect(source).toContain('PRIVATE_STATUS_CACHE_CONTROL');
+      // statusCacheControl() picks the private policy for gated pages and the short public one otherwise.
+      expect(
+        source.includes('statusCacheControl') ||
+          (source.includes('PUBLIC_STATUS_CACHE_CONTROL') &&
+            source.includes('PRIVATE_STATUS_CACHE_CONTROL'))
+      ).toBe(true);
     }
     expect(readFileSync('src/lib/status-pages/cache-policy.ts', 'utf8')).not.toContain(
       'stale-if-error'

@@ -6,7 +6,11 @@ import type { StatusTone } from '@/lib/design/status-palette';
  * palette fill/border at low alpha and lifts the text to the `-300` shade for AA
  * contrast on zinc surfaces. Tailwind JIT needs the literal strings below.
  */
-export type ToneKey = StatusTone | 'neutral';
+/**
+ * `orange` sits between elevated (amber) and critical (red) for states that are worse than degraded
+ * but not a full outage; it is deliberately not part of the status palette.
+ */
+export type ToneKey = StatusTone | 'neutral' | 'orange';
 
 type ToneRecipe = {
   /** Soft pill: tinted fill, hairline border, deep text. */
@@ -64,6 +68,14 @@ const TONE_RECIPES: Record<ToneKey, ToneRecipe> = {
     borderLeft: 'border-l-status-shift',
     text: 'text-status-shift-deep dark:text-violet-300',
   },
+  orange: {
+    soft: 'border-orange-600/30 bg-orange-50 text-orange-800 dark:border-orange-500/35 dark:bg-orange-500/15 dark:text-orange-300',
+    solid: 'bg-orange-500',
+    filled: 'border-transparent bg-orange-600 text-white dark:bg-orange-500 dark:text-zinc-950',
+    hoverBorder: 'hover:border-orange-600/40',
+    borderLeft: 'border-l-orange-500',
+    text: 'text-orange-800 dark:text-orange-300',
+  },
   neutral: {
     // ink-600, not muted-foreground: muted text on the muted fill is only 4.3:1 in light mode.
     soft: 'border-border bg-muted text-ink-600',
@@ -87,6 +99,8 @@ export function toneClasses(tone: ToneKey | null | undefined): ToneRecipe {
       return TONE_RECIPES.info;
     case 'shift':
       return TONE_RECIPES.shift;
+    case 'orange':
+      return TONE_RECIPES.orange;
     default:
       return TONE_RECIPES.neutral;
   }

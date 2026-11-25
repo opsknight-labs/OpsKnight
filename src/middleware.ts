@@ -51,6 +51,8 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/logs/ingest',
   '/api/status',
   '/api/status-page',
+  '/api/graph-embed',
+  '/graph-embed',
   '/api/system/vapid-public-key',
   '/api/slack/actions',
   '/api/slack/oauth/callback',
@@ -110,6 +112,9 @@ export function isStatusDomainPath(pathname: string) {
   return (
     pathname === '/' ||
     pathname === '/subscribe' ||
+    pathname === '/history' ||
+    pathname === '/embed' ||
+    /^\/incidents\/[^/]+$/.test(pathname) ||
     pathname.startsWith('/postmortems/') ||
     pathname.startsWith('/verify') ||
     pathname.startsWith('/unsubscribe')
@@ -174,7 +179,7 @@ const STATUS_API_EXACT_POST = new Set([
 ]);
 
 const STATUS_SLUG_API_REGEX =
-  /^\/api\/status\/[a-z0-9_-]+(\/(history|rss|uptime-export|subscribe))?$/;
+  /^\/api\/status\/[a-z0-9_-]+(\/(history|rss|uptime-export|subscribe|subscribe\/webhook|badge))?$/;
 
 const RESERVED_STATUS_API_SLUGS = new Set([
   'admin',
@@ -195,7 +200,7 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
       const firstSegment = pathname.slice('/api/status/'.length).split('/')[0];
       if (firstSegment && RESERVED_STATUS_API_SLUGS.has(firstSegment)) return false;
     }
-    if (STATUS_SLUG_API_REGEX.test(pathname) && !pathname.endsWith('/subscribe')) return true;
+    if (STATUS_SLUG_API_REGEX.test(pathname) && !/\/subscribe(\/webhook)?$/.test(pathname)) return true;
     return false;
   }
 
@@ -205,7 +210,7 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
       const firstSegment = pathname.slice('/api/status/'.length).split('/')[0];
       if (firstSegment && RESERVED_STATUS_API_SLUGS.has(firstSegment)) return false;
     }
-    if (STATUS_SLUG_API_REGEX.test(pathname) && pathname.endsWith('/subscribe')) return true;
+    if (STATUS_SLUG_API_REGEX.test(pathname) && /\/subscribe(\/webhook)?$/.test(pathname)) return true;
     return false;
   }
 
@@ -703,12 +708,16 @@ export async function fetchPublishedStatusDomain(
   return request;
 }
 
-function getSecurityHeaders(): Record<string, string> {
+/** The only framable surface of a status page: the compact embed widget. */
+const STATUS_EMBED_PATH = /^\/status\/[a-z0-9-]+\/embed\/?$/;
+
+function getSecurityHeaders(pathname = ''): Record<string, string> {
+  const framable = STATUS_EMBED_PATH.test(pathname);
   const isProduction = process.env.NODE_ENV === 'production';
   const scriptSource = isProduction
     ? "script-src 'self' 'unsafe-inline'"
     : "script-src 'self' 'unsafe-eval' 'unsafe-inline'";
-  return {
+  const headers: Record<string, string> = {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'X-XSS-Protection': '0',
@@ -731,6 +740,15 @@ function getSecurityHeaders(): Record<string, string> {
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     }),
   };
+  if (framable) {
+    // Public, read-only widget: may be embedded anywhere. Still no scripts from other origins.
+    delete headers['X-Frame-Options'];
+    headers['Content-Security-Policy'] = headers['Content-Security-Policy'].replace(
+      "frame-ancestors 'none'",
+      'frame-ancestors *'
+    );
+  }
+  return headers;
 }
 
 const MCP_SENSITIVE_PREFIXES = ['/oauth/mcp', '/settings/integrations/mcp'];
@@ -799,8 +817,16 @@ export function handleStatusDomainRequest({
     return callbackResponse;
   }
 
-  // 4. Allowed Status Surface Pages (Rewrite to public status route)
+  // 4. Allowed Status Surface Pages (Rewrite to public status route).
+  // Components link to /status/<slug>/..., so accept the page's own prefix as the same page.
+  if (statusRoute.slug) {
+    const own = `/status/${statusRoute.slug}`;
+    if (pathname.startsWith(`${own}/`)) pathname = pathname.slice(own.length);
+  }
   if (isStatusDomainPath(pathname)) {
+    // The raw custom-domain /embed path is the framable widget; frame headers must follow the rewrite.
+    if (pathname === '/embed' && statusRoute.slug)
+      securityHeaders = getSecurityHeaders(`/status/${statusRoute.slug}/embed`);
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return new NextResponse('Method Not Allowed', {
         status: 405,
@@ -854,7 +880,7 @@ export default async function middleware(req: NextRequest) {
 
   let response = NextResponse.next({ request: { headers: forwardedHeaders } });
   response.headers.set('x-request-id', requestId);
-  const securityHeaders = getSecurityHeaders();
+  const securityHeaders = getSecurityHeaders(pathname);
   Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
   applySensitiveAuthHeaders(response, pathname);
 

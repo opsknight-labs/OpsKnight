@@ -1,9 +1,10 @@
 /* eslint-disable security/detect-object-injection -- lookups are keyed by typed enum values (status, tier, urgency), never request input */
 import Link from 'next/link';
-import { Boxes, MonitorCheck, Plus } from 'lucide-react';
+import { Boxes, MonitorCheck, Plus, Wand2 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccess } from '@/lib/access/server';
 import { CAPABILITIES } from '@/lib/authorization';
+import { teamReadWhere } from '@/lib/authorization-filters';
 import { actorHasCapability } from '@/lib/authorization-policy';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { businessServiceReadWhere } from '@/lib/business-services/commands';
@@ -15,14 +16,21 @@ import { pageHeaderActionClass } from '@/components/patterns/PageHeader';
 import { Button } from '@/components/ui/shadcn/button';
 import ListFilterBar from '@/components/intelligence/lists/ListFilterBar';
 import CatalogDirectory, { type CatalogRow } from '@/components/business-service/CatalogDirectory';
+import HygieneToggle from '@/components/business-service/HygieneToggle';
+import { hygieneBadges } from '@/lib/business-services/hygiene';
 import HealthUnavailable from '@/components/business-service/HealthUnavailable';
 import { BS_STATUS_META, CRITICALITY_LABEL } from '@/components/business-service/HealthBadge';
+import HealthDistribution from '@/components/business-service/HealthDistribution';
+import SavedViews from '@/components/business-service/SavedViews';
+import AutoRefresh from '@/components/business-service/AutoRefresh';
 import {
   catalogHref,
   countMatching,
+  distribution,
   hasActiveFilters,
   isImpacted,
   parseCatalogParams,
+  scoreRow,
   type CatalogSearchParams,
 } from '@/components/business-service/catalog-model';
 import type { DetailStatItem } from '@/components/ui/DetailHeroBanner';
@@ -44,8 +52,8 @@ const STATUS_CHIPS = [
 
 /**
  * Business-service catalog: PageHeader (totals, impacted now, tiers) → FilterBar → directory with keyset
- * pages. One `listBusinessServices` call per page; header and footer counts come from one scoped
- * query plus the (cached) health of every visible business service.
+ * pages. One `listBusinessServices` call per page; header and footer counts come from one lean scoped
+ * read (no per-row follower subqueries) plus the (cached) health of every visible business service.
  */
 export default async function BusinessServicesPage({
   searchParams,
@@ -66,12 +74,12 @@ export default async function BusinessServicesPage({
       description: true,
       criticality: true,
       ownerTeamId: true,
+      ownerUserId: true,
+      _count: { select: { members: true } },
       ownerTeam: { select: { id: true, name: true } },
-      _count: { select: { followers: true } },
-      followers: { where: { userId: actor.id }, select: { userId: true } },
     },
   });
-  const byId = new Map(visible.map(row => [row.id, row]));
+  const countable = visible.map(row => ({ ...row, memberCount: row._count.members }));
 
   const list = (cursor: string | null) =>
     listBusinessServices({ filter, cursor, limit: PAGE_SIZE }, actor);
@@ -95,14 +103,65 @@ export default async function BusinessServicesPage({
     'business_services.catalog.unavailable'
   );
 
+  // Follower counts only for the rows on this page, not for every visible business service.
+  const pageIds = engine?.page.items.map(item => item.id) ?? [];
+  const followers = pageIds.length
+    ? await prisma.businessServiceFollower.groupBy({
+        by: ['businessServiceId'],
+        where: { businessServiceId: { in: pageIds } },
+        _count: { _all: true },
+      })
+    : [];
+  const following = pageIds.length
+    ? await prisma.businessServiceFollower.findMany({
+        where: { businessServiceId: { in: pageIds }, userId: actor.id },
+        select: { businessServiceId: true },
+      })
+    : [];
+  const hygieneRows = pageIds.length
+    ? await prisma.businessService.findMany({
+        where: { id: { in: pageIds } },
+        select: {
+          id: true,
+          createdAt: true,
+          lastReviewedAt: true,
+          reviewIntervalDays: true,
+          ownerUserId: true,
+          ownerUser: { select: { status: true } },
+        },
+      })
+    : [];
+  const hygieneById = new Map(
+    hygieneRows.map(row => [
+      row.id,
+      hygieneBadges({ ...row, ownerUserStatus: row.ownerUser?.status ?? null }),
+    ])
+  );
+  const bulkTeams = canManage
+    ? await prisma.team.findMany({
+        where: teamReadWhere(actor),
+        orderBy: { name: 'asc' },
+        take: 200,
+        select: { id: true, name: true },
+      })
+    : [];
+  const isAdmin = actorHasCapability(actor, CAPABILITIES.ADMIN_MANAGE);
+  const hygieneEnabled = isAdmin
+    ? ((
+        await prisma.systemSettings.findUnique({
+          where: { id: 'default' },
+          select: { businessServiceHygieneEnabled: true },
+        })
+      )?.businessServiceHygieneEnabled ?? false)
+    : false;
+  const followerCounts = new Map(followers.map(row => [row.businessServiceId, row._count._all]));
+  const followingIds = new Set(following.map(row => row.businessServiceId));
+
   const impactedNow = engine
     ? [...engine.health.values()].filter(entry => isImpacted(entry.status)).length
     : null;
-  const tierCounts = TIERS.map(tier => ({
-    tier,
-    count: visible.filter(row => row.criticality === tier).length,
-  })).filter(entry => entry.count > 0);
-  const base = { q: '', tier: '', status: '', team: '' } as const;
+  const needsAttention = countable.filter(row => scoreRow(row).needsAttention).length;
+  const base = { q: '', tier: '', status: '', team: '', needs: '' } as const;
   const stats: DetailStatItem[] = [
     { label: 'Business services', value: visible.length.toLocaleString() },
     {
@@ -111,12 +170,17 @@ export default async function BusinessServicesPage({
       href: catalogHref({ ...base, status: 'impacted' }),
       active: query.status === 'impacted' && !query.tier,
     },
-    ...tierCounts.map(({ tier, count }) => ({
-      label: CRITICALITY_LABEL[tier],
-      value: count.toLocaleString(),
-      href: catalogHref({ ...base, tier }),
-      active: query.tier === tier && !query.status,
-    })),
+    ...(needsAttention
+      ? [
+          {
+            label: 'Needs attention',
+            value: needsAttention.toLocaleString(),
+            subtext: 'no owner, tier or services',
+            href: catalogHref({ ...base, needs: 'attention' }),
+            active: query.needs === 'attention',
+          },
+        ]
+      : []),
   ];
 
   const teams = [
@@ -127,7 +191,6 @@ export default async function BusinessServicesPage({
 
   const rows: CatalogRow[] = engine
     ? engine.page.items.map(item => {
-        const extra = byId.get(item.id);
         return {
           id: item.id,
           name: item.name,
@@ -139,8 +202,9 @@ export default async function BusinessServicesPage({
           memberCount: item.memberCount,
           impactedMemberCount: item.health.impactedMemberCount,
           openIncidentCount: item.health.openIncidentCount,
-          followerCount: extra?._count.followers ?? 0,
-          following: Boolean(extra?.followers.length),
+          followerCount: followerCounts.get(item.id) ?? 0,
+          following: followingIds.has(item.id),
+          hygiene: hygieneById.get(item.id),
         };
       })
     : [];
@@ -148,6 +212,7 @@ export default async function BusinessServicesPage({
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <AutoRefresh seconds={30} />
       <PageHeader
         eyebrow="Service Catalog"
         title="Business services"
@@ -156,12 +221,27 @@ export default async function BusinessServicesPage({
         description="What customers rely on, like Checkout or Payments, and how it is doing right now."
         stats={stats}
         secondaryActions={
-          <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>
-            <Link href="/status-dashboard">
-              <MonitorCheck className="h-4 w-4" aria-hidden />
-              Status dashboard
-            </Link>
-          </Button>
+          <>
+            {canManage && (
+              <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>
+                <Link href="/services/business/setup">
+                  <Wand2 className="h-4 w-4" aria-hidden />
+                  Guided setup
+                </Link>
+              </Button>
+            )}
+            {canManage && (
+              <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>
+                <Link href="/services/business/templates">Templates</Link>
+              </Button>
+            )}
+            <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>
+              <Link href="/status-dashboard">
+                <MonitorCheck className="h-4 w-4" aria-hidden />
+                Status dashboard
+              </Link>
+            </Button>
+          </>
         }
         primaryAction={
           canManage ? (
@@ -174,6 +254,8 @@ export default async function BusinessServicesPage({
           ) : undefined
         }
       />
+
+      {engine && <HealthDistribution data={distribution(visible, engine.health)} query={query} />}
 
       <ListFilterBar
         basePath="/services/business"
@@ -200,6 +282,18 @@ export default async function BusinessServicesPage({
             options: TIERS.map(tier => ({ value: tier, label: CRITICALITY_LABEL[tier] })),
           },
           {
+            name: 'needs',
+            label: 'Needs',
+            value: query.needs,
+            anyLabel: 'Anything',
+            options: [
+              { value: 'attention', label: 'Needs attention' },
+              { value: 'no-owner', label: 'No owner' },
+              { value: 'no-tier', label: 'No tier' },
+              { value: 'no-members', label: 'No services' },
+            ],
+          },
+          {
             name: 'team',
             label: 'Owner team',
             value: query.team,
@@ -209,8 +303,13 @@ export default async function BusinessServicesPage({
         ]}
       />
 
+      <SavedViews userId={actor.id} currentHref={catalogHref(query)} filtered={filtered} />
+
+      {isAdmin && <HygieneToggle enabled={hygieneEnabled} />}
+
       {engine ? (
         <CatalogDirectory
+          teams={bulkTeams}
           rows={rows}
           filtered={filtered}
           clearHref="/services/business"
@@ -218,7 +317,7 @@ export default async function BusinessServicesPage({
           pagination={{
             page: engine.cursors.length + 1,
             pageSize: PAGE_SIZE,
-            totalCount: countMatching(visible, engine.health, query),
+            totalCount: countMatching(countable, engine.health, query),
             prevHref: engine.cursors.length
               ? catalogHref(query, engine.cursors.slice(0, -1))
               : undefined,

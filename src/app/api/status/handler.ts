@@ -1,3 +1,4 @@
+import { isStatusPageIpAllowed } from '@/lib/status-pages/ip-allow-gate';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { legacyPublicStatus } from '@/lib/status-pages/status-presentation';
 import { logger } from '@/lib/logger';
@@ -5,13 +6,9 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
-import { createHash } from 'node:crypto';
 import { observeOperationalHistogram } from '@/lib/metrics/operational/registry';
 import { getStatusPageSnapshotByRoute } from '@/lib/status-pages/snapshot';
-import {
-  PRIVATE_STATUS_CACHE_CONTROL,
-  PUBLIC_STATUS_CACHE_CONTROL,
-} from '@/lib/status-pages/cache-policy';
+import { etagMatches, statusCacheControl, statusEtag } from '@/lib/status-pages/cache-policy';
 import { getAppUrl } from '@/lib/app-config';
 import {
   extractStatusSessionToken,
@@ -69,6 +66,8 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
 
     // Check if authentication is required
     if (statusPage.requireAuth) {
+      if (!(await isStatusPageIpAllowed(statusPage.id, req.headers)))
+        return jsonError('Access restricted', 403);
       const cookieHeader = req.headers.get('cookie');
       const statusToken = extractStatusSessionToken(cookieHeader);
       const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
@@ -106,6 +105,13 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
           statusLegacy: legacyPublicStatus(service.status),
         })),
         incidents: snapshot.incidents,
+        // Additive: present only when the page has them, so existing consumers see no change.
+        ...(snapshot.page.serviceLayout
+          ? { page: { serviceLayout: snapshot.page.serviceLayout } }
+          : {}),
+        ...(snapshot.businessServices ? { businessServices: snapshot.businessServices } : {}),
+        ...(snapshot.maintenance ? { maintenance: snapshot.maintenance } : {}),
+        ...(snapshot.announcements?.length ? { announcements: snapshot.announcements } : {}),
         metrics: {
           uptime: snapshot.services.map(service => ({
             serviceId: service.id,
@@ -119,14 +125,11 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
         projection: { revision: snapshot.revision, stale: projected.stale },
       };
       const headers: Record<string, string> = {
-        'Cache-Control':
-          statusPage.requireAuth || statusPage.statusApiRequireToken
-            ? PRIVATE_STATUS_CACHE_CONTROL
-            : PUBLIC_STATUS_CACHE_CONTROL,
+        'Cache-Control': statusCacheControl(statusPage),
         ...(projected.stale ? { Warning: '110 - "Response is stale"' } : {}),
       };
-      const etag = `"${createHash('sha256').update(JSON.stringify(responseData)).digest('base64url')}"`;
-      if (req.headers.get('if-none-match') === etag) {
+      const etag = statusEtag([statusPage.id, snapshot.revision, projected.stale]);
+      if (etagMatches(req.headers.get('if-none-match'), etag)) {
         return new NextResponse(null, { status: 304, headers: { ...headers, ETag: etag } });
       }
       return jsonOk(responseData, 200, { ...headers, ETag: etag });

@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import type { IntelligenceActor } from '../settings/service';
+import { recordDependencyEvent } from './insights/history';
 import { MAX_DEPENDENCIES } from './service';
 import { changeMappingKey } from '../changes/service-mapping';
 
@@ -232,6 +233,7 @@ export async function applyCatalogImport(
           evidence: { type: 'declared', source },
         },
       });
+      await recordDependencyEvent(tx, { ...edge, state: 'ACTIVE', origin: 'DECLARED' });
       declared += 1;
     }
   }

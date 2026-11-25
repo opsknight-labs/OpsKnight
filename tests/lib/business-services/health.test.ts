@@ -521,3 +521,53 @@ describe('computeHealth performance', () => {
     expect(perRun).toBeLessThan(50);
   });
 });
+
+describe('empty services, quorum and hop depth', () => {
+  it('a service with no members is UNKNOWN with a reason', () => {
+    const health = computeHealth(inputs({ businessServices: [bs('empty', [])] })).get('empty')!;
+    expect(health.status).toBe('UNKNOWN');
+    expect(health.unknownReason).toBe('NO_MEMBERS');
+    expect(health.since).toBeNull();
+  });
+
+  it('quorum: 1 of 4 critical members down is degraded, 2 partial, 4 major', () => {
+    const rule = { quorumPartialPct: 50, quorumMajorPct: 100 };
+    const status = (down: string[]) =>
+      computeHealth(
+        inputs({
+          businessServices: [bs('r', ['a', 'b', 'c', 'd'], rule)],
+          incidents: down.map((id, i) => incident(`i${i}`, id, 'HIGH')),
+        })
+      ).get('r')!.status;
+    expect(status(['a'])).toBe('DEGRADED');
+    expect(status(['a', 'b'])).toBe('PARTIAL_OUTAGE');
+    expect(status(['a', 'b', 'c', 'd'])).toBe('MAJOR_OUTAGE');
+  });
+
+  it('without a quorum rule one HIGH incident stays worst-of (major)', () => {
+    const health = computeHealth(
+      inputs({
+        businessServices: [bs('r', ['a', 'b', 'c', 'd'])],
+        incidents: [incident('i', 'a', 'HIGH')],
+      })
+    );
+    expect(health.get('r')!.status).toBe('MAJOR_OUTAGE');
+  });
+
+  it('dependencyHopDepth bounds the dependency walk per business service', () => {
+    const edges = [edge('db', 'a'), edge('a', 'b'), edge('b', 'c'), edge('c', 'd'), edge('d', 'e')];
+    const status = (depth: number | undefined, member: string) =>
+      computeHealth(
+        inputs({
+          businessServices: [bs('x', [member], { dependencyHopDepth: depth })],
+          edges,
+          incidents: [incident('i', 'db', 'HIGH')],
+        })
+      ).get('x')!.status;
+    expect(status(undefined, 'c')).toBe('PARTIAL_OUTAGE'); // depth 3 default
+    expect(status(undefined, 'd')).toBe('OPERATIONAL');
+    expect(status(4, 'd')).toBe('PARTIAL_OUTAGE');
+    expect(status(1, 'b')).toBe('OPERATIONAL');
+    expect(status(1, 'a')).toBe('PARTIAL_OUTAGE');
+  });
+});

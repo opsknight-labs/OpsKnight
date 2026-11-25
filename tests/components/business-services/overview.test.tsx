@@ -13,6 +13,9 @@ import {
 } from '@/components/business-service/OverviewPanels';
 import { describeReason, memberStatuses, reasonIds } from '@/components/business-service/reasons';
 
+vi.mock('@/app/(app)/services/business/actions', () => ({
+  unmarkImpactAction: vi.fn().mockResolvedValue({ ok: true, id: 'x' }),
+}));
 vi.mock('@/contexts/TimezoneContext', () => ({ useTimezone: () => ({ userTimeZone: 'UTC' }) }));
 // The mini graph is an async server component that reads the database; RTL renders the lists.
 vi.mock('@/components/business-service/DependencyMiniGraph', () => ({ default: () => null }));
@@ -156,7 +159,7 @@ describe('business-service overview', () => {
     const { rerender } = render(
       <ImpactTimeline entries={entries} window={window} showIncidents={false} />
     );
-    expect(screen.getByRole('img', { name: '1 impact in the last 30 days' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /^1 impact in the last 30 days/ })).toBeInTheDocument();
     expect(screen.queryByText(/Card auth failing/)).toBeNull();
     expect(screen.getByRole('list', { name: 'Recent impacts' })).toHaveTextContent(
       'Incident · Direct'

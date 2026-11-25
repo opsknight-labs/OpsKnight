@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     const webhooks = webhookId
       ? [await prisma.statusPageWebhook.findFirst({ where: { id: webhookId, statusPageId } })]
       : await prisma.statusPageWebhook.findMany({
-          where: { statusPageId, enabled: true },
+          where: { statusPageId, enabled: true, source: 'ADMIN' },
         });
 
     const validWebhooks = webhooks.filter(w => w !== null);

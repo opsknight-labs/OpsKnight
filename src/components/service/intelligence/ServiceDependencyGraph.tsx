@@ -7,7 +7,8 @@ import { OVERVIEW_CHART_VARS } from '@/components/intelligence/overview/primitiv
 import { cn } from '@/lib/utils';
 
 /**
- * The service between what it depends on (left) and what depends on it (right), as plain server-rendered
+ * The service between what depends on it (left) and what it depends on (right), the same left-to-right
+ * order as the service graph canvas, with arrowheads pointing at the dependency. Plain server-rendered
  * SVG: no client JavaScript. Follows the chart kit's emphasis form: one accent for the focused service,
  * gray for context, and the reserved status tokens only for a service with open incidents, always with
  * the count in text. A suggested edge is dashed and labelled "Suggested", so it never relies on the stroke alone.
@@ -24,7 +25,7 @@ const TOP = 34;
 /** Per side; further neighbours are summarised as "+N more" and remain in the list. */
 export const GRAPH_MAX_PER_SIDE = 7;
 
-const COLUMN_X = { UPSTREAM: 0, FOCUS: (WIDTH - NODE_W) / 2, DOWNSTREAM: WIDTH - NODE_W } as const;
+const COLUMN_X = { DOWNSTREAM: 0, FOCUS: (WIDTH - NODE_W) / 2, UPSTREAM: WIDTH - NODE_W } as const;
 
 const clip = (name: string, max = 22) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
 
@@ -120,15 +121,16 @@ export default function ServiceDependencyGraph({ data }: { data: ServiceDependen
     group: ReturnType<typeof side>,
     heading: string
   ) => {
-    const x = direction === 'UPSTREAM' ? COLUMN_X.UPSTREAM : COLUMN_X.DOWNSTREAM;
-    const focusEdgeX = direction === 'UPSTREAM' ? COLUMN_X.FOCUS : COLUMN_X.FOCUS + NODE_W;
-    const nodeEdgeX = direction === 'UPSTREAM' ? x + NODE_W : x;
+    const upstream = direction === 'UPSTREAM';
+    const x = upstream ? COLUMN_X.UPSTREAM : COLUMN_X.DOWNSTREAM;
+    const focusEdgeX = upstream ? COLUMN_X.FOCUS + NODE_W : COLUMN_X.FOCUS;
+    const nodeEdgeX = upstream ? x : x + NODE_W;
     return (
       <g data-graph-column={direction.toLowerCase()}>
         <text
-          x={direction === 'UPSTREAM' ? x : x + NODE_W}
+          x={upstream ? x + NODE_W : x}
           y={14}
-          textAnchor={direction === 'UPSTREAM' ? 'start' : 'end'}
+          textAnchor={upstream ? 'end' : 'start'}
           className="fill-muted-foreground text-2xs font-medium"
         >
           {heading}
@@ -142,10 +144,11 @@ export default function ServiceDependencyGraph({ data }: { data: ServiceDependen
           return (
             <g key={edge.id} data-edge-status={edge.status.toLowerCase()}>
               <line
-                x1={nodeEdgeX}
-                y1={y + NODE_H / 2}
-                x2={focusEdgeX}
-                y2={focusY + NODE_H / 2}
+                x1={upstream ? focusEdgeX : nodeEdgeX}
+                y1={upstream ? focusY + NODE_H / 2 : y + NODE_H / 2}
+                x2={upstream ? nodeEdgeX : focusEdgeX}
+                y2={upstream ? y + NODE_H / 2 : focusY + NODE_H / 2}
+                markerEnd="url(#dependency-arrow)"
                 className="stroke-(--overview-context)"
                 strokeWidth={suggested ? 1.5 : 2}
                 strokeDasharray={suggested ? '5 4' : undefined}
@@ -171,9 +174,9 @@ export default function ServiceDependencyGraph({ data }: { data: ServiceDependen
         })}
         {group.more > 0 && (
           <text
-            x={direction === 'UPSTREAM' ? x : x + NODE_W}
+            x={upstream ? x + NODE_W : x}
             y={height - 4}
-            textAnchor={direction === 'UPSTREAM' ? 'start' : 'end'}
+            textAnchor={upstream ? 'end' : 'start'}
             className="fill-muted-foreground text-2xs"
           >
             +{group.more} more in the list
@@ -190,8 +193,21 @@ export default function ServiceDependencyGraph({ data }: { data: ServiceDependen
       data-testid="service-dependency-graph"
       className={cn('hidden h-auto w-full max-w-3xl sm:block', OVERVIEW_CHART_VARS)}
     >
-      {column('UPSTREAM', upstream, 'Depends on')}
+      <defs>
+        <marker
+          id="dependency-arrow"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto"
+        >
+          <path d="M0 0L10 5L0 10z" className="fill-(--overview-context)" />
+        </marker>
+      </defs>
       {column('DOWNSTREAM', downstream, 'Depended on by')}
+      {column('UPSTREAM', upstream, 'Depends on')}
       <Node node={data.focus} x={COLUMN_X.FOCUS} y={focusY} focus />
     </svg>
   );

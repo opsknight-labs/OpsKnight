@@ -1,3 +1,4 @@
+import { isStatusPageIpAllowed } from '@/lib/status-pages/ip-allow-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
@@ -9,9 +10,11 @@ import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { getStatusPageSnapshotByRoute } from '@/lib/status-pages/snapshot';
 import { projectPublicStatusEvents } from '@/lib/status-pages/event-projection';
 import {
-  PRIVATE_STATUS_CACHE_CONTROL,
-  PUBLIC_STATUS_CACHE_CONTROL,
+  etagMatches,
+  statusCacheControl,
+  statusEtag,
 } from '@/lib/status-pages/cache-policy';
+import { groupScope } from './public-access';
 import { getAppUrl } from '@/lib/app-config';
 import {
   extractStatusSessionToken,
@@ -74,6 +77,8 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
 
     // Check if authentication is required
     if (statusPage.requireAuth) {
+      if (!(await isStatusPageIpAllowed(statusPage.id, req.headers)))
+        return new NextResponse('Access restricted', { status: 403 });
       const cookieHeader = req.headers.get('cookie');
       const statusToken = extractStatusSessionToken(cookieHeader);
       const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
@@ -100,7 +105,14 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
     if (projected.snapshot) {
       const snapshot = projected.snapshot;
       const pageUrl = getStatusPagePublicUrl(statusPage, getBaseUrl());
-      const events = projectPublicStatusEvents(snapshot);
+      // `?group=<businessServiceId>`: only events touching that group's (nested) member services.
+      const groupId = new URL(req.url).searchParams.get('group');
+      const scope = groupId ? groupScope(snapshot, groupId) : null;
+      if (groupId && !scope) return new NextResponse('Group not found', { status: 404 });
+      const events = projectPublicStatusEvents(snapshot).filter(
+        event =>
+          !scope || (event.affectedServices ?? []).some(service => scope.memberIds.has(service.id))
+      );
       const items = events
         .map(event => {
           const title = event.status ? `${event.title} - ${event.status}` : event.title;
@@ -109,15 +121,21 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
           return `<item><title>${escapeXml(title)}</title><link>${guid}</link><guid isPermaLink="false">${guid}</guid>${createdAt ? `<pubDate>${new Date(createdAt).toUTCString()}</pubDate>` : ''}<description>${escapeXml(event.body ?? event.title)}</description></item>`;
         })
         .join('');
+      const cacheControl = statusCacheControl(statusPage);
+      const etag = statusEtag([statusPage.id, snapshot.revision, projected.stale, 'rss', groupId ?? '']);
+      if (etagMatches(req.headers.get('if-none-match'), etag)) {
+        return new NextResponse(null, {
+          status: 304,
+          headers: { 'Cache-Control': cacheControl, ETag: etag },
+        });
+      }
       return new NextResponse(
-        `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${escapeXml(statusPage.name)} - Status Updates</title><link>${pageUrl}</link><description>Current status and incidents</description>${items}</channel></rss>`,
+        `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${escapeXml(scope ? `${statusPage.name} / ${scope.group.name}` : statusPage.name)} - Status Updates</title><link>${pageUrl}</link><description>Current status and incidents</description>${items}</channel></rss>`,
         {
           headers: {
             'Content-Type': 'application/rss+xml; charset=utf-8',
-            'Cache-Control':
-              statusPage.requireAuth || statusPage.statusApiRequireToken
-                ? PRIVATE_STATUS_CACHE_CONTROL
-                : PUBLIC_STATUS_CACHE_CONTROL,
+            'Cache-Control': cacheControl,
+            ETag: etag,
             ...(projected.stale ? { Warning: '110 - "Response is stale"' } : {}),
           },
         }

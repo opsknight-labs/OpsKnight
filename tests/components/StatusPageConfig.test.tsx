@@ -84,7 +84,7 @@ describe('StatusPageConfig Component', () => {
 
     expect(screen.getByText(/General/)).toBeDefined();
     expect(screen.getByText(/Appearance/)).toBeDefined();
-    expect(screen.getByText(/Design/)).toBeDefined();
+    expect(screen.queryByText(/^Design$/)).toBeNull(); // merged into Appearance
   });
 
   it('renders the sticky save bar', () => {

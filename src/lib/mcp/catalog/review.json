@@ -1072,7 +1072,7 @@
     "routeSha256": "a4ff00ebcae84a4a350764a0f7bc8c0f8b8d1a0750f40a4708eca7c39d43be2e",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-destructive.test.ts",
-    "contractSha256": "44648fb4898f4a6c775552b703718ed20c59494f2ac90a0e7595461bc9f10345",
+    "contractSha256": "593fb0a5f1e5ee1daed1120dd9eea41303c6bdd369225fc5be530c0c1d9a1133",
     "additionalScopes": ["status-pages:read"],
     "impactPreview": "getStatusPagePrivacy",
     "actions": ["status_page.manage"]
@@ -4042,7 +4042,7 @@
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
     "routeSha256": "9e40021138b603ce4f324a9996fbc5997fa6f103d4da14bfeb5b8150afd10c9e",
-    "contractSha256": "bda5296525f33dfac580b23a0a7f982907b26abad28a94850ae5dfcc10ea3971"
+    "contractSha256": "fd8d30b3136827365d152e763a6b5e2aaed19218a880dbe2e7053ac2f3a7cd6a"
   },
   "updateBusinessService": {
     "status": "UNSUPPORTED_WITH_REASON",
@@ -4053,7 +4053,7 @@
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
     "routeSha256": "5eac70acaf47d887f15db82bbb2fa3f51a1475432ade8de7a0e0af470eb9400f",
-    "contractSha256": "bd39456a2c37db0f396dd4dd78552e6dab7a96b79000cfaf6cfa5eefa307dea5"
+    "contractSha256": "c13d4b5d4b4a78ae7f49d8e09ce0ab7730dd612c858afc98f9aba1bcc7bc3d5c"
   },
   "deleteBusinessService": {
     "status": "UNSUPPORTED_WITH_REASON",
@@ -4100,7 +4100,7 @@
     "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.read"],
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "routeSha256": "c4a964b9dcaba1847a7a1e864813ad07b0439cad808d028cf774a38b56955057",
+    "routeSha256": "1b4b7dfd70be01ffe4c0e656c93fe208e99f27f1d348a77ff1def35f2d4a48c9",
     "contractSha256": "67ff1ab5ddaf91b4e30dc2f473f139ed2dd208da772975a6e46b25975bbc8604"
   },
   "getBusinessServiceGraph": {
@@ -4160,6 +4160,94 @@
     "contractSha256": "a7dc251c0a89e8503a82c6c3b713c1711c14b4fdd321c3663f4883ec5a7927f0",
     "actions": ["service.create"]
   },
+  "listBusinessServiceCustomerReports": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "bfdc09108897f9ee32269924eec3effcb95f553132290e9a6ba44346da1ea2be",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "bb2a94dd2874639914e2de27c85485fdfde313936ae4a22fb27499f3dfd52ff4",
+    "actions": ["service.read"]
+  },
+  "listBusinessServiceTemplates": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "tool": null,
+    "routeSha256": "3bb2f82249cb888fe29f6c9609c6cf8b79c4c581c09a2b07773a607d9f1c6919",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "4bf032f373ce38efd23283a9c36c04f8336745a00830e353b0ad9a5bb079fbad",
+    "actions": ["service.create"]
+  },
+  "createBusinessServiceCustomerReport": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Adds customer-reported impact that can lift a business service to degraded and change what stakeholders are told; prepared, reviewed by a person, then committed through the existing REST command.",
+    "tool": null,
+    "routeSha256": "bfdc09108897f9ee32269924eec3effcb95f553132290e9a6ba44346da1ea2be",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "c3242eeca477f0ee28192262d2f78b6e8991271371076797999cba05b27e341c",
+    "actions": ["service.create"]
+  },
+  "bulkEditBusinessServices": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Changes owner, tier, lifecycle, tags or SLO on up to 100 business services. Run with dryRun first; the apply needs approval.",
+    "tool": null,
+    "routeSha256": "574c5986d1f43f64c285b0830ca1d675d62652290b38a3fbe41f54669957ddac",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "0d5cfbc31e1baa9ffdf8978b7f4a72220ac79742e0a4d49a5bf5b1159f288561",
+    "actions": ["service.create"]
+  },
+  "createBusinessServiceTemplate": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Defines defaults that new business services inherit (tier, SLO, owner); prepared, reviewed by a person, then committed through the existing REST command.",
+    "tool": null,
+    "routeSha256": "3bb2f82249cb888fe29f6c9609c6cf8b79c4c581c09a2b07773a607d9f1c6919",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "5fc65ab37b98236904c93aa85da21c148ddeb5f568bf8e27b5a1b85f2e968a83",
+    "actions": ["service.create"]
+  },
+  "updateBusinessServiceTemplate": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Changes defaults that new business services inherit; prepared, reviewed by a person, then committed through the existing REST command.",
+    "tool": null,
+    "routeSha256": "e69df3b1ad5d3ce3c1ba8257eb5341f88d95f6b4491e34ed1539eba740541ae5",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "92d361ecc5271522a8a7ca2d7d798010634a24255ac05d9046b537649777f1a8",
+    "actions": ["service.create"]
+  },
+  "deleteBusinessServiceTemplate": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Removes a template; business services created from it are unchanged. Approval keeps an assistant from deleting shared defaults unreviewed.",
+    "tool": null,
+    "routeSha256": "e69df3b1ad5d3ce3c1ba8257eb5341f88d95f6b4491e34ed1539eba740541ae5",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "13d2cc613c6823b634e9d093f90af8c0347cb9b32eda92a71103a0b67ff0ab0b",
+    "actions": ["service.create"]
+  },
+  "createBusinessServiceFromTemplate": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Creates a business service with template defaults, which sets who owns it and how it is paged; prepared, reviewed by a person, then committed through the existing REST command.",
+    "tool": null,
+    "routeSha256": "c75332be4ffbad2f2bf0440b7054bd3026045c459eac4e46c9c075014607c993",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "c64aeb22b4524472f0b159eee07db6dafac078d557f66f62cea043bd011754e0",
+    "actions": ["service.create"]
+  },
   "setStatusPageBusinessServiceOverride": {
     "status": "APPROVAL_REQUIRED",
     "risk": "R2",
@@ -4181,5 +4269,212 @@
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "dfefe6ad1ae18be7a129ac5a6f3c2b924c9512010e255450ec3ea8ed6cad148d",
     "actions": ["incident.note"]
+  },
+  "getServiceReviewSettings": {
+    "status": "SENSITIVE_READ",
+    "risk": "R2",
+    "reason": "Organization review schedule and recipient ids; administrators only, read-only.",
+    "tool": null,
+    "routeSha256": "5bc112f6d41f9a53df76b5103a98409edb1334b868a4b63a1d815119c05d14e2",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "22e69a1ffc273a44ae2c4de83b244fcaa996bb3c3092c148920608c6840d8784",
+    "actions": ["service_review.manage"]
+  },
+  "updateServiceReviewSettings": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Changes who is emailed monthly service reviews and the schedule; a person approves it.",
+    "tool": null,
+    "routeSha256": "5bc112f6d41f9a53df76b5103a98409edb1334b868a4b63a1d815119c05d14e2",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "5f7415c52a37072648138ac02ca295cc9af2766434a0bb6fd5b13b11a81b3b82",
+    "actions": ["service_review.manage"]
+  },
+  "listServiceReviewRuns": {
+    "status": "SENSITIVE_READ",
+    "risk": "R2",
+    "reason": "Delivery log of monthly reviews; admins see every recipient, others only their own rows.",
+    "tool": null,
+    "routeSha256": "44c4274f1900c4820665e6b383a00b1e691a2ae6f3c5a9490d6b0a6df2b96569",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "5417962a8ca3ade796a1270acb74fd3498373fd35512b12b5a5a7dbe0623bb3f",
+    "actions": ["service_review.read"]
+  },
+  "runServiceReviews": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Sends emails to many recipients, so a person approves it. Each recipient and month is sent once.",
+    "tool": null,
+    "routeSha256": "737d6be8a902c309d4ec87cecdea5ab825deb6fad651897f4a7bc8a44719b516",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "670f3ad19cf984a6bd310ad9e6ec0b0401f2372851f1cef154a61d352bb27d0b",
+    "actions": ["service_review.manage"]
+  },
+  "previewServiceReview": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Emails the requester a preview; reviewed because it sends email.",
+    "tool": null,
+    "routeSha256": "2bc5ed87b94e9a747e6a95cf8f2be2fe4af6cd0f99b20a35efbd80f4d53073e8",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "pending final-SHA parity certification",
+    "contractSha256": "55cdf93b415db1c218e7536e283de61ff330acba681b5a64242442840b61c064",
+    "actions": ["service_review.read"]
+  },
+  "getDependencyGraphAt": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only time travel over the readable dependency graph, bounded and filtered through the existing REST route authorization.",
+    "tool": "dependency_graph_at",
+    "title": "Dependency graph at a past time",
+    "agentDescription": "The dependency graph as it was at a past moment: which services depended on which, and each service and business service status then. Use for 'what did the graph look like last Tuesday' or 'was Checkout affected during the outage'. Optional focus svc:<id> or bs:<id>.",
+    "evidence": "tests/mcp/dependency-graph-tools.test.ts",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "358e476861d121f8c85ccb09c920d9e131fe7cd71b9a8ced94c269de864b4784",
+    "contractSha256": "e2406936dbc268f9854a603ddb7ba7b50244d60eaa81166b15f5f82bba701dad"
+  },
+  "getDependencyGraphDiff": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only change summary over the readable dependency graph, bounded to 100 per list.",
+    "tool": "dependency_graph_changes",
+    "title": "What changed in the dependency graph",
+    "agentDescription": "What changed in the dependency graph since a date: dependencies added or removed, new suggested dependencies awaiting review, and services or business services whose status changed. Use for 'what changed in the graph since last week'.",
+    "evidence": "tests/mcp/dependency-graph-tools.test.ts",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "c2da4325e59486dd13fd3ca89553926c891f0215ba1c07737170df10a46f9ad3",
+    "contractSha256": "05212dc0ea2a5d3143160829b558039c93db5368322406b8c2cf19527b82b03a"
+  },
+  "listDependencyGraphSinglePointsOfFailure": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only ranked list over the readable dependency graph.",
+    "tool": "dependency_single_points_of_failure",
+    "title": "Single points of failure",
+    "agentDescription": "Services that many others depend on but that have no owner team or no on-call, ranked, plus articulation points of the graph. Use for 'what are our single points of failure' or 'which critical dependency is unowned'.",
+    "evidence": "tests/mcp/dependency-graph-tools.test.ts",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "be1df62af3ef45f962140ce48703c11b1ca45ee02c7ba66456df955018cfb77b",
+    "contractSha256": "5cd559d6dedae45542b7a33a2bf0756e521f643c6eb6a64a9c3bdc6988701947"
+  },
+  "getDependencyFailureSimulation": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only what-if over the readable dependency graph; never writes.",
+    "tool": "dependency_failure_blast_radius",
+    "title": "Blast radius of a failure",
+    "agentDescription": "Simulates one or more services failing (comma-separated ids) and returns every service that depends on them with distance, plus each business service projected status and revenue or customer exposure when known. Use for 'blast radius of the payments API' or 'what breaks if X is down'. Nothing is changed.",
+    "evidence": "tests/mcp/dependency-graph-tools.test.ts",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "f327b7f5d604bbf6e134afae834258bfe33716cc50433a4c999fb9d0dd25714e",
+    "contractSha256": "51e0134edf509bad1be724fc9a2ff0022bef4e0fd260cafbed261b72ac46764e"
+  },
+  "simulateDependencyFailure": {
+    "status": "SENSITIVE_READ",
+    "risk": "R2",
+    "reason": "Reviewed side-effect-free what-if (POST body for long id lists); never writes, audits or reserves a replay key. Assistants use dependency_failure_blast_radius.",
+    "tool": null,
+    "routeSha256": "f327b7f5d604bbf6e134afae834258bfe33716cc50433a4c999fb9d0dd25714e",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/dependency-graph-tools.test.ts",
+    "contractSha256": "6e1bc2c8b1ecbee54b396c6eb1e22468b070848795aced009e1469b1b9fd7c50",
+    "actions": ["service.read"],
+    "sideEffectFree": true
+  },
+  "listDependencyGraphViews": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Read-only saved view visible to the caller through the existing REST route authorization.",
+    "tool": null,
+    "routeSha256": "b611415f365e828d0ae5ba19e721bab55a34b1d5e8208a04c9fb2e532d38636d",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/dependency-graph-tools.test.ts",
+    "contractSha256": "3ce307457bfe5e35ef0d22ebe4624a04d376603aca105fbdd062ebf6b810866a",
+    "actions": ["service.read"]
+  },
+  "getDependencyGraphView": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Read-only saved view visible to the caller through the existing REST route authorization.",
+    "tool": null,
+    "routeSha256": "ebf26f5cc82a4ca36f1147b4b06eb46ed75d780ec861b3a393c20a328b5657b6",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/dependency-graph-tools.test.ts",
+    "contractSha256": "eb2126f0d3f3dba6629108d3b6df30b090e3d3f833c28cf779d095795e98b222",
+    "actions": ["service.read"]
+  },
+  "createDependencyGraphView": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: saved graph views are managed in the web app or REST.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "b611415f365e828d0ae5ba19e721bab55a34b1d5e8208a04c9fb2e532d38636d",
+    "contractSha256": "aea131dbca56393fa0f7ca5b4f8fac0907891b16a34f2e01a5072019a4a06912"
+  },
+  "updateDependencyGraphView": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: saved graph views are managed in the web app or REST.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "ebf26f5cc82a4ca36f1147b4b06eb46ed75d780ec861b3a393c20a328b5657b6",
+    "contractSha256": "8dc5d933650a8d578b7ab7e0d5cc6c489c8d7cff3460ce69d8db92fcfadd1967"
+  },
+  "deleteDependencyGraphView": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: saved graph views are managed in the web app or REST.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "ebf26f5cc82a4ca36f1147b4b06eb46ed75d780ec861b3a393c20a328b5657b6",
+    "contractSha256": "4d8e23700bb5e0c9aa454ec3d4fc732376a64bbb6c99cb98acbfb574e5385538"
+  },
+  "revokeDependencyGraphViewShare": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: saved graph views are managed in the web app or REST.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.read"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "9cb41b6058c04d3a64376013e5bb83a53fee1cc0498dce38e575bf988be001df",
+    "contractSha256": "45463ddcb7610857bee2b2dbe2e37bfec56e9ffd500a3e730b24a0535233ea90"
+  },
+  "shareDependencyGraphView": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed: the response is a one-time embed token that a model must never receive.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.update"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "9cb41b6058c04d3a64376013e5bb83a53fee1cc0498dce38e575bf988be001df",
+    "contractSha256": "462e066e839ac8a6823cd40ab1876c5718d39fd93fc19f1894a146bb12821518"
+  },
+  "ingestDependencyEdgeStats": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed: bulk telemetry ingestion belongs to collectors using the REST API, not assistants.",
+    "tool": null,
+    "evidence": "pending final-SHA parity certification",
+    "actions": ["service.update"],
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "routeSha256": "8cc4f881fe651c499fa6462810eff189fe03346970e3fcc19331210913adcf24",
+    "contractSha256": "8d035e9584a261c712d70f2e138a7fe5632b42f6bcf732c3ca399490c6810f84"
   }
 }

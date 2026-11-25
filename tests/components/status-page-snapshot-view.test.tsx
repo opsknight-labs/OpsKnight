@@ -89,7 +89,12 @@ const snapshot: StatusPageSnapshot = {
 
 describe('StatusPageSnapshotView publication parity', () => {
   it('renders every field included by the canonical visibility serializer', () => {
-    render(<StatusPageSnapshotView snapshot={snapshot} stale={false} />);
+    render(
+      <StatusPageSnapshotView
+        snapshot={{ ...snapshot, page: { ...snapshot.page, branding: { showServiceMeta: true } } }}
+        stale={false}
+      />
+    );
 
     expect(screen.getAllByText('Payment processing').length).toBeGreaterThan(0);
     expect(screen.getByText(/Service tier: TIER_1/)).toBeInTheDocument();

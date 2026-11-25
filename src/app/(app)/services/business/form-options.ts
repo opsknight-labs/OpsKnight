@@ -7,6 +7,7 @@ import { businessServiceReadWhere } from '@/lib/business-services/commands';
 
 /** Each picker loads and searches at most this many rows; typing narrows server-side. */
 export const FORM_OPTION_LIMIT = 50;
+const TEAM_SERVICES_LIMIT = 200;
 
 export type BusinessServiceFormOptionKind = 'services' | 'users';
 
@@ -67,34 +68,47 @@ export async function loadBusinessServiceFormOptions(
     dependsOn?: readonly Option[];
   } = {}
 ) {
-  const [services, selectedServices, teams, users, selectedUsers, businessServices] =
-    await Promise.all([
-      searchBusinessServiceFormOptions(actor, 'services'),
-      selected.serviceIds?.length
-        ? searchBusinessServiceFormOptions(actor, 'services', '', selected.serviceIds)
-        : [],
-      prisma.team.findMany({
-        where: teamReadWhere(actor),
-        orderBy: { name: 'asc' },
-        take: 200,
-        select: { id: true, name: true },
-      }),
-      searchBusinessServiceFormOptions(actor, 'users'),
-      selected.userIds?.length
-        ? searchBusinessServiceFormOptions(actor, 'users', '', selected.userIds)
-        : [],
-      prisma.businessService.findMany({
-        where: {
-          AND: [
-            businessServiceReadWhere(actor),
-            selected.businessServiceId ? { id: { not: selected.businessServiceId } } : {},
-          ],
-        },
-        orderBy: { name: 'asc' },
-        take: 200,
-        select: { id: true, name: true },
-      }),
-    ]);
+  const [
+    services,
+    selectedServices,
+    teams,
+    users,
+    selectedUsers,
+    businessServices,
+    escalationPolicies,
+  ] = await Promise.all([
+    searchBusinessServiceFormOptions(actor, 'services'),
+    selected.serviceIds?.length
+      ? searchBusinessServiceFormOptions(actor, 'services', '', selected.serviceIds)
+      : [],
+    prisma.team.findMany({
+      where: teamReadWhere(actor),
+      orderBy: { name: 'asc' },
+      take: 200,
+      select: { id: true, name: true },
+    }),
+    searchBusinessServiceFormOptions(actor, 'users'),
+    selected.userIds?.length
+      ? searchBusinessServiceFormOptions(actor, 'users', '', selected.userIds)
+      : [],
+    prisma.businessService.findMany({
+      where: {
+        AND: [
+          businessServiceReadWhere(actor),
+          selected.businessServiceId ? { id: { not: selected.businessServiceId } } : {},
+        ],
+      },
+      orderBy: { name: 'asc' },
+      take: 200,
+      select: { id: true, name: true },
+    }),
+    prisma.escalationPolicy.findMany({
+      where: { archivedAt: null },
+      orderBy: { name: 'asc' },
+      take: 200,
+      select: { id: true, name: true },
+    }),
+  ]);
   const merge = (first: Option[], extra: Option[]) => {
     const known = new Set(first.map(option => option.id));
     return [...first, ...extra.filter(option => !known.has(option.id))];
@@ -102,10 +116,30 @@ export async function loadBusinessServiceFormOptions(
   return {
     services: merge(services, selectedServices),
     teams,
+    escalationPolicies,
     users: merge(users, selectedUsers),
     businessServices: merge(
       businessServices.map(row => ({ ...row, hint: null })),
       [...(selected.dependsOn ?? [])]
     ),
+  };
+}
+
+/** Services of one team the actor may read, for "add all of a team's services" (bounded). */
+export async function listTeamServiceOptions(
+  actor: AuthorizationActor,
+  teamId: string
+): Promise<{ options: Option[]; truncated: boolean }> {
+  const rows = await prisma.service.findMany({
+    where: { AND: [serviceReadWhere(actor), { teamId }] },
+    orderBy: { name: 'asc' },
+    take: TEAM_SERVICES_LIMIT + 1,
+    select: { id: true, name: true, team: { select: { name: true } } },
+  });
+  return {
+    options: rows
+      .slice(0, TEAM_SERVICES_LIMIT)
+      .map(row => ({ id: row.id, name: row.name, hint: row.team?.name ?? null })),
+    truncated: rows.length > TEAM_SERVICES_LIMIT,
   };
 }

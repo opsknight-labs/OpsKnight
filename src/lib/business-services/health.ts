@@ -18,6 +18,14 @@ export type HealthBusinessService = {
   impactMinUrgency: IncidentUrgency | null;
   impactMaxPriority: string | null;
   ownerTeamId: string | null;
+  /** Quorum rule: share (percent) of critical members impacted that makes it partial / major. */
+  quorumPartialPct?: number | null;
+  quorumMajorPct?: number | null;
+  /** Dependency hops from a member that count as impact; default MAX_DEPTH. */
+  dependencyHopDepth?: number | null;
+  /** Customer reports within the window that lift health to DEGRADED; null = off. */
+  customerReportThreshold?: number | null;
+  customerReportWindowMinutes?: number | null;
   members: ReadonlyArray<{ serviceId: string; critical: boolean; teamId: string | null }>;
 };
 
@@ -62,9 +70,41 @@ export type HealthInputs = {
   impactRows: readonly HealthImpactRow[];
   /** serviceId -> id of the active maintenance window covering it. */
   maintenance: ReadonlyMap<string, string>;
+  /** Recent customer reports (only needed for services with a threshold). */
+  customerReports?: readonly HealthCustomerReport[];
 };
 
+export type HealthCustomerReport = { businessServiceId: string; count: number; windowEnd: Date };
+
+export const DEFAULT_CUSTOMER_REPORT_WINDOW_MINUTES = 60;
+export const MAX_CUSTOMER_REPORT_WINDOW_MINUTES = 1440;
+
+/**
+ * The CUSTOMER_REPORTS reason when reports ending inside the window reach the threshold, else
+ * null. A report counts whole while its window ended inside the lookback (no pro-rating).
+ */
+export function customerReportsReason(
+  bs: Pick<HealthBusinessService, 'customerReportThreshold' | 'customerReportWindowMinutes'>,
+  reports: readonly Pick<HealthCustomerReport, 'count' | 'windowEnd'>[],
+  now: Date
+): Extract<ImpactReason, { kind: 'CUSTOMER_REPORTS' }> | null {
+  const threshold = bs.customerReportThreshold;
+  if (!threshold || threshold < 1) return null;
+  const windowMinutes = Math.min(
+    Math.max(bs.customerReportWindowMinutes ?? DEFAULT_CUSTOMER_REPORT_WINDOW_MINUTES, 1),
+    MAX_CUSTOMER_REPORT_WINDOW_MINUTES
+  );
+  const since = now.getTime() - windowMinutes * 60_000;
+  const reportCount = reports
+    .filter(report => report.windowEnd.getTime() >= since && report.windowEnd.getTime() <= now.getTime() + 300_000)
+    .reduce((sum, report) => sum + report.count, 0);
+  return reportCount >= threshold
+    ? { kind: 'CUSTOMER_REPORTS', status: 'DEGRADED', reportCount, threshold, windowMinutes }
+    : null;
+}
+
 export const MAX_DEPTH = 3;
+export const MAX_HOP_DEPTH = 5;
 const MAX_REASONS = 25;
 
 const RANK = new Map<BsStatus, number>([
@@ -83,6 +123,7 @@ const KIND_ORDER: Record<ImpactReason['kind'], number> = {
   MANUAL: 2,
   NESTED: 3,
   MAINTENANCE: 4,
+  CUSTOMER_REPORTS: 5,
 };
 const URGENCY_RANK: Record<IncidentUrgency, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
 
@@ -100,6 +141,24 @@ export const TIER_THRESHOLDS: Record<BusinessServiceTier, ImpactThreshold> = {
 };
 /** No criticality set: every open incident on a member counts, as before tiers existed. */
 export const GLOBAL_THRESHOLD: ImpactThreshold = { minUrgency: 'LOW', maxPriority: null };
+
+const hopDepth = (bs: Pick<HealthBusinessService, 'dependencyHopDepth'>) =>
+  Math.min(Math.max(bs.dependencyHopDepth ?? MAX_DEPTH, 1), MAX_HOP_DEPTH);
+
+/** Status from the share of critical members impacted; `null` when no rule is set. */
+export function quorumStatus(
+  rule: Pick<HealthBusinessService, 'quorumPartialPct' | 'quorumMajorPct'>,
+  impactedCritical: number,
+  critical: number
+): BsStatus | null {
+  const { quorumPartialPct: partial, quorumMajorPct: major } = rule;
+  if (partial == null && major == null) return null;
+  if (!impactedCritical || !critical) return 'OPERATIONAL';
+  const pct = (impactedCritical / critical) * 100;
+  if (major != null && pct >= major) return 'MAJOR_OUTAGE';
+  if (partial != null && pct >= partial) return 'PARTIAL_OUTAGE';
+  return 'DEGRADED';
+}
 
 export function parsePriority(priority: string | null | undefined): number | null {
   const match = /^P(\d+)$/i.exec(priority?.trim() ?? '');
@@ -126,12 +185,16 @@ export function meetsThreshold(
   return threshold.maxPriority !== null && priority !== null && priority <= threshold.maxPriority;
 }
 
-/** Edges reachable from `serviceId` within MAX_DEPTH, so downstreamDistances walks a tiny graph. */
-function walkEdges(byUpstream: ReadonlyMap<string, readonly string[]>, serviceId: string) {
+/** Edges reachable from `serviceId` within `maxDepth`, so downstreamDistances walks a tiny graph. */
+function walkEdges(
+  byUpstream: ReadonlyMap<string, readonly string[]>,
+  serviceId: string,
+  maxDepth: number
+) {
   const edges: DependencyEdge[] = [];
   const seen = new Set([serviceId]);
   let frontier = [serviceId];
-  for (let depth = 1; depth <= MAX_DEPTH && frontier.length; depth += 1) {
+  for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
     const next: string[] = [];
     for (const upstream of frontier) {
       for (const downstream of byUpstream.get(upstream) ?? []) {
@@ -160,11 +223,13 @@ function byWorst(a: ImpactReason, b: ImpactReason) {
  * Health of every business service in `inputs`. Rules, worst reason wins:
  * - DIRECT: an incident meeting the service's threshold on a member; urgency maps to status,
  *   non-critical members cap at DEGRADED.
- * - DEPENDENCY: a critical member depends (depth <= 3) on the incident's service; caps at PARTIAL_OUTAGE.
+ * - DEPENDENCY: a critical member depends (depth <= dependencyHopDepth, default 3) on the incident's service; caps at PARTIAL_OUTAGE.
  * - MANUAL: a responder marked the incident as impacting; bypasses the threshold.
+ * - Quorum rule (optional): status of DIRECT/DEPENDENCY reasons derives from the share of critical
+ *   members impacted. No members and no reason: UNKNOWN (NO_MEMBERS), not OPERATIONAL.
  * - Exclusions remove every reason for that incident on that business service.
  * - MAINTENANCE: all critical members (all members when none is critical) are in maintenance.
- * - NESTED: a supporting business service (depth <= 3) is impacted by an incident this one has
+ * - NESTED: a supporting business service (depth <= dependencyHopDepth) is impacted by an incident this one has
  *   not unmarked; caps at DEGRADED.
  */
 export function computeHealth(inputs: HealthInputs): Map<string, BusinessServiceHealth> {
@@ -177,6 +242,12 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
       if (list) list.push(entry);
       else membersByService.set(member.serviceId, [entry]);
     }
+  }
+  const reportsByBs = new Map<string, HealthCustomerReport[]>();
+  for (const report of inputs.customerReports ?? []) {
+    const list = reportsByBs.get(report.businessServiceId);
+    if (list) list.push(report);
+    else reportsByBs.set(report.businessServiceId, [report]);
   }
   const latestRows = latestImpactRows(inputs.impactRows);
   const excluded = new Set<string>();
@@ -212,10 +283,14 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
     if (list) list.push(edge.downstreamServiceId);
     else byUpstream.set(edge.upstreamServiceId, [edge.downstreamServiceId]);
   }
+  // One walk to the deepest hop any business service asks for; each service filters by its own.
+  const walkDepth = Math.max(...inputs.businessServices.map(hopDepth), 1);
   const dependentsOf = (serviceId: string) =>
     byUpstream.has(serviceId)
-      ? downstreamDistances(walkEdges(byUpstream, serviceId), serviceId, MAX_DEPTH).distances
+      ? downstreamDistances(walkEdges(byUpstream, serviceId, walkDepth), serviceId, walkDepth)
+          .distances
       : new Map<string, number>();
+  const hopsByBs = new Map(inputs.businessServices.map(bs => [bs.id, hopDepth(bs)]));
   const dependents = new Map<string, Map<string, number>>();
   for (const incident of inputs.incidents) {
     const urgencyStatus = publicStatusForIncidentUrgency(incident.urgency);
@@ -236,7 +311,8 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
     }
     for (const [dependentId, depth] of distances) {
       for (const member of membersByService.get(dependentId) ?? []) {
-        if (!member.critical || !meetsThreshold(incident, thresholds.get(member.bsId)!)) continue;
+        if (!member.critical || depth > hopsByBs.get(member.bsId)!) continue;
+        if (!meetsThreshold(incident, thresholds.get(member.bsId)!)) continue;
         add(member.bsId, incident.id, {
           kind: 'DEPENDENCY',
           status: cap(urgencyStatus, 'PARTIAL_OUTAGE'),
@@ -274,6 +350,25 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
         maintenanceWindowId: inputs.maintenance.get(pool[0].serviceId)!,
       });
     }
+    // Never lowers status and never exceeds DEGRADED on its own; maintenance keeps its status.
+    if (bs.customerReportThreshold && !reasons.some(reason => reason.kind === 'MAINTENANCE')) {
+      const customer = customerReportsReason(bs, reportsByBs.get(bs.id) ?? [], inputs.now);
+      if (customer) reasons.push(customer);
+    }
+    const criticalIds = new Set(critical.map(member => member.serviceId));
+    const impactedCritical = [...(impactedMembers.get(bs.id) ?? [])].filter(id =>
+      criticalIds.has(id)
+    );
+    const quorum = quorumStatus(bs, impactedCritical.length, critical.length);
+    if (quorum) {
+      // The fraction of critical members impacted replaces worst-of for their reasons.
+      for (const [i, reason] of reasons.entries()) {
+        if (reason.kind !== 'DIRECT' && reason.kind !== 'DEPENDENCY') continue;
+        const member = reason.kind === 'DIRECT' ? reason.serviceId : reason.viaServiceId;
+        // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
+        if (criticalIds.has(member)) reasons[i] = { ...reason, status: quorum };
+      }
+    }
     reasons.sort(byWorst);
     own.set(bs.id, { status: reasons[0]?.status ?? 'OPERATIONAL', reasons });
   }
@@ -291,7 +386,8 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
     const reasons = [...mine.reasons];
     const visited = new Set([bs.id]);
     let frontier = [bs.id];
-    for (let depth = 1; depth <= MAX_DEPTH && frontier.length; depth += 1) {
+    const nestedDepth = hopsByBs.get(bs.id)!;
+    for (let depth = 1; depth <= nestedDepth && frontier.length; depth += 1) {
       const next: string[] = [];
       for (const id of frontier) {
         for (const childId of children.get(id) ?? []) {
@@ -321,7 +417,10 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
       frontier = next;
     }
     reasons.sort(byWorst);
-    const status = reasons[0]?.status ?? 'OPERATIONAL';
+    // No members, no supporting services and no reason: nothing is monitored, so say unknown rather than a silent green.
+    // A pure group (supported only by other business services) is not empty.
+    const noMembers = !reasons.length && !bs.members.length && !children.get(bs.id)?.length;
+    const status = reasons[0]?.status ?? (noMembers ? 'UNKNOWN' : 'OPERATIONAL');
     // Since = the earliest incident behind the final status, own or nested alike.
     let since: Date | null = null;
     const incidentIds = new Set<string>();
@@ -335,12 +434,14 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
     result.set(bs.id, {
       businessServiceId: bs.id,
       status,
-      since: status === 'OPERATIONAL' || status === 'MAINTENANCE' ? null : since,
+      since:
+        status === 'OPERATIONAL' || status === 'MAINTENANCE' || status === 'UNKNOWN' ? null : since,
       reasons: reasons.slice(0, MAX_REASONS),
       openIncidentCount: incidentIds.size,
       memberCount: bs.members.length,
       impactedMemberCount: impactedMembers.get(bs.id)?.size ?? 0,
       computedAt: inputs.now,
+      ...(noMembers ? { unknownReason: 'NO_MEMBERS' as const } : {}),
     });
   }
   return result;
@@ -363,7 +464,8 @@ export function incidentImpactSources(
   const sources = new Map<string, BusinessServiceImpactSource>();
   for (const [bsId, item] of health) {
     const reason = item.reasons[0];
-    if (reason && reason.kind !== 'MAINTENANCE') sources.set(bsId, reason.kind);
+    if (reason && reason.kind !== 'MAINTENANCE' && reason.kind !== 'CUSTOMER_REPORTS')
+      sources.set(bsId, reason.kind);
   }
   return sources;
 }
@@ -403,7 +505,7 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
     import('@/lib/service-maintenance/windows'),
     import('@/lib/incident-status'),
   ]);
-  const [businessServices, supports, edges, incidents, impactRows] = await Promise.all([
+  const [businessServices, supports, edges, incidents, impactRows, customerReports] = await Promise.all([
     prisma.businessService.findMany({
       select: {
         id: true,
@@ -411,6 +513,11 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
         impactMinUrgency: true,
         impactMaxPriority: true,
         ownerTeamId: true,
+        quorumPartialPct: true,
+        quorumMajorPct: true,
+        dependencyHopDepth: true,
+        customerReportThreshold: true,
+        customerReportWindowMinutes: true,
         members: {
           select: { serviceId: true, critical: true, service: { select: { teamId: true } } },
         },
@@ -447,6 +554,14 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
         startedAt: true,
       },
     }),
+    // Only services that opted in (threshold set) need reports; none is read otherwise.
+    prisma.customerImpactReport.findMany({
+      where: {
+        businessService: { customerReportThreshold: { not: null } },
+        windowEnd: { gte: new Date(now.getTime() - MAX_CUSTOMER_REPORT_WINDOW_MINUTES * 60_000) },
+      },
+      select: { businessServiceId: true, count: true, windowEnd: true },
+    }),
   ]);
   const memberServiceIds = [
     ...new Set(businessServices.flatMap(bs => bs.members.map(member => member.serviceId))),
@@ -466,6 +581,7 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
     edges,
     incidents,
     impactRows,
+    customerReports,
     maintenance: new Map([...windows].map(([serviceId, window]) => [serviceId, window.id])),
   };
 }

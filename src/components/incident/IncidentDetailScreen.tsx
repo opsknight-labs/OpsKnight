@@ -97,6 +97,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronDown,
+  Network,
   Pause,
   Volume2,
   Wrench,
@@ -849,6 +850,13 @@ export default async function IncidentDetailScreen({
                       businessServices={impactedBusinessServices.filter(impact => !impact.excluded)}
                     />
                   )}
+                  <Link
+                    href={`/services/graph?incident=${encodeURIComponent(incident.id)}`}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Network className="h-3.5 w-3.5" aria-hidden="true" />
+                    Show on graph
+                  </Link>
                   <div className="min-w-0">{rolesContent}</div>
                 </div>
               </div>

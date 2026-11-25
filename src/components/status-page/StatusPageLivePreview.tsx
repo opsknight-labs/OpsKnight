@@ -12,6 +12,8 @@ import {
   DEFAULT_STATUS_PAGE_THEME_ID,
   resolveStatusPageTheme,
   resolveStatusPageThemeDensity,
+  resolveStatusPageColorScheme,
+  compileStatusPageColorSchemeCss,
 } from '@/lib/status-pages/theme-contract';
 import { cn } from '@/lib/utils';
 import {
@@ -205,6 +207,7 @@ function StatusPageLivePreview({
           showRssLink: previewData.showRssLink,
           showApiLink: previewData.showApiLink,
           showSlaMetrics: previewData.branding?.showSlaMetrics !== false,
+          showServiceMeta: previewData.branding?.showServiceMeta === true,
         },
         services: previewData.services,
         mappings: previewData.statusPageServices,
@@ -352,7 +355,9 @@ function StatusPageLivePreview({
   const previewThemeBranding = previewData.branding as typeof previewData.branding & {
     themeId?: unknown;
     themeDensity?: unknown;
+    colorScheme?: unknown;
   };
+  const colorScheme = resolveStatusPageColorScheme(previewThemeBranding?.colorScheme);
   const selectedTheme = resolveStatusPageTheme(previewThemeBranding?.themeId);
   const themeDensity = resolveStatusPageThemeDensity(previewThemeBranding?.themeDensity);
 
@@ -373,6 +378,7 @@ function StatusPageLivePreview({
       data-sp-theme={selectedTheme.id}
       data-sp-theme-version={selectedTheme.version}
       data-sp-density={themeDensity}
+      data-sp-color-scheme={colorScheme}
       style={{
         flex: 1,
         background: `var(--sp-page-bg, ${previewBg})`,
@@ -854,6 +860,9 @@ function StatusPageLivePreview({
               createPortal(
                 <>
                   <style data-status-page-preview-baseline>{STATUS_PAGE_PREVIEW_BASE_CSS}</style>
+                  <style data-status-page-preview-color-scheme>
+                    {compileStatusPageColorSchemeCss(colorScheme, selectedTheme.id)}
+                  </style>
                   {previewData.branding?.customCss && (
                     <style
                       dangerouslySetInnerHTML={{

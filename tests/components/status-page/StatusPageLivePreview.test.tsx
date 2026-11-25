@@ -140,10 +140,12 @@ describe('StatusPageLivePreview Component', () => {
     const host = container.querySelector('.status-page-container');
     const styles = Array.from(host?.shadowRoot?.querySelectorAll('style') ?? []);
 
-    expect(styles).toHaveLength(2);
+    // baseline, then the colour-scheme rules, then customer CSS last so it can override both.
+    expect(styles).toHaveLength(3);
     expect(styles[0].hasAttribute('data-status-page-preview-baseline')).toBe(true);
     expect(styles[0].textContent).toContain('.status-page-button[data-variant="primary"]');
-    expect(styles[1].textContent).toContain('.status-page-button { color: red; }');
+    expect(styles[1].hasAttribute('data-status-page-preview-color-scheme')).toBe(true);
+    expect(styles[2].textContent).toContain('.status-page-button { color: red; }');
   });
 
   it('safely adapts contrast when user sets dark background with default text', () => {

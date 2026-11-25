@@ -1,7 +1,13 @@
-import { Suspense } from 'react';
+import { Suspense, cache } from 'react';
+import { FreezeBanner } from '@/components/business-service/FreezeBanner';
+import AutoRefresh from '@/components/business-service/AutoRefresh';
+import WhyStatusCard, { type WhyReason } from '@/components/business-service/WhyStatusCard';
+import DependencyHealthSummary from '@/components/business-service/DependencyHealthSummary';
+import ActivityPanel from '@/components/business-service/ActivityPanel';
+import { auditReferenceIds } from '@/lib/business-services/audit-diff';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Boxes, ExternalLink, Pencil } from 'lucide-react';
+import { Boxes, ExternalLink, Network, Pencil } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccess } from '@/lib/access/server';
 import { CAPABILITIES } from '@/lib/authorization';
@@ -21,6 +27,8 @@ import {
   type BusinessServiceHealth,
 } from '@/lib/business-services/contract';
 import { orUnavailable } from '@/lib/business-services/dashboards';
+import { FIRST_STEP_SELECT, onCallFor } from '@/lib/business-services/on-call';
+import { computeErrorBudget } from '@/lib/business-services/slo';
 import { SectionCard, SectionSkeleton } from '@/components/analytics/SectionCard';
 import { KpiGridSkeleton } from '@/components/analytics/KpiCard';
 import { PageHeader } from '@/components/patterns';
@@ -34,6 +42,9 @@ import HealthBadge, {
 } from '@/components/business-service/HealthBadge';
 import HealthUnavailable from '@/components/business-service/HealthUnavailable';
 import ImpactTimeline from '@/components/business-service/ImpactTimeline';
+import CustomerImpactPanel from '@/components/business-service/CustomerImpactPanel';
+import { estimateDowntimeCostCents } from '@/lib/business-services/impact-cost';
+import { listCustomerImpactReports } from '@/lib/business-services/customer-reports';
 import {
   DependenciesPanel,
   FollowersPanel,
@@ -75,30 +86,114 @@ function safeLinks(value: unknown): { label: string; url: string }[] {
   });
 }
 
+/** One 30-day stats read per render, shared by the KPI and incident-count sections. */
+const stats30 = cache((id: string, actor: AuthorizationActor) =>
+  getBusinessServiceStats(id, windowOf(30), actor)
+);
+
+const sloStats = (id: string, actor: AuthorizationActor, days: number) =>
+  days === 30 ? stats30(id, actor) : getBusinessServiceStats(id, windowOf(days), actor);
+
 /** Uptime and response KPIs (30 and 90 days). */
-async function KpiSection({ id, actor }: { id: string; actor: AuthorizationActor }) {
-  const now = new Date();
+async function KpiSection({
+  id,
+  actor,
+  slo,
+}: {
+  id: string;
+  actor: AuthorizationActor;
+  slo: { target: number; windowDays: number } | null;
+}) {
   const stats = await orUnavailable(
     Promise.all([
-      getBusinessServiceStats(id, windowOf(30, now), actor),
-      getBusinessServiceStats(id, windowOf(90, now), actor),
+      stats30(id, actor),
+      getBusinessServiceStats(id, windowOf(90), actor),
+      // The error budget is measured over the service's own SLO window.
+      slo ? sloStats(id, actor, slo.windowDays) : null,
     ]),
     'business_services.overview.stats_unavailable'
   );
   if (!stats) {
     return <HealthUnavailable />;
   }
-  return <OverviewKpis last30={stats[0]} last90={stats[1]} />;
+  const budget =
+    slo && stats[2]
+      ? {
+          target: slo.target,
+          windowDays: slo.windowDays,
+          ...computeErrorBudget({
+            targetPercent: slo.target,
+            windowDays: slo.windowDays,
+            downtimeMinutes: stats[2].weightedDowntimeMinutes ?? stats[2].impactMinutes,
+          }),
+        }
+      : null;
+  return <OverviewKpis last30={stats[0]} last90={stats[1]} slo={budget} />;
+}
+
+/** Cost of downtime, customers exposed and customer reports; for readers who may see incidents. */
+async function CustomerImpactSection({
+  item,
+  actor,
+  canAdd,
+}: {
+  item: {
+    id: string;
+    revenuePerHourCents: number | null;
+    currency: string;
+    customersTotal: number | null;
+    customerReportThreshold: number | null;
+    customerReportWindowMinutes: number | null;
+  };
+  actor: AuthorizationActor;
+  canAdd: boolean;
+}) {
+  const data = await orUnavailable(
+    Promise.all([stats30(item.id, actor), listCustomerImpactReports(item.id, actor, 5)]),
+    'business_services.overview.customer_impact_unavailable'
+  );
+  return (
+    <SectionCard
+      id="bs-customer-impact"
+      title="Customer impact"
+      description="What downtime has cost, who is exposed, and what customers are reporting."
+    >
+      {data ? (
+        <CustomerImpactPanel
+          view={{
+            businessServiceId: item.id,
+            estimatedCostCents: estimateDowntimeCostCents(
+              data[0].weightedDowntimeMinutes ?? 0,
+              item.revenuePerHourCents
+            ),
+            currency: item.currency,
+            customersTotal: item.customersTotal,
+            windowDays: 30,
+            threshold: item.customerReportThreshold,
+            thresholdWindowMinutes: item.customerReportWindowMinutes,
+            reports: data[1],
+            canAdd,
+          }}
+        />
+      ) : (
+        <HealthUnavailable />
+      )}
+    </SectionCard>
+  );
 }
 
 async function TimelineSection({
   id,
   actor,
   showIncidents,
+  cost,
+  canUnmark,
 }: {
   id: string;
   actor: AuthorizationActor;
   showIncidents: boolean;
+  cost?: { revenuePerHourCents: number | null; currency: string };
+  canUnmark: boolean;
 }) {
   const window = windowOf(30);
   const entries = await orUnavailable(
@@ -112,7 +207,14 @@ async function TimelineSection({
       description="When this business service was impacted, and how serious it was."
     >
       {entries ? (
-        <ImpactTimeline entries={entries} window={window} showIncidents={showIncidents} />
+        <ImpactTimeline
+          entries={entries}
+          window={window}
+          showIncidents={showIncidents}
+          cost={cost}
+          businessServiceId={id}
+          canUnmark={canUnmark}
+        />
       ) : (
         <HealthUnavailable />
       )}
@@ -181,7 +283,7 @@ async function IncidentCountSection({
   open: number;
 }) {
   const stats = await orUnavailable(
-    getBusinessServiceStats(id, windowOf(30), actor),
+    stats30(id, actor),
     'business_services.overview.stats_unavailable'
   );
   const last30 = stats?.incidentCount ?? null;
@@ -189,6 +291,120 @@ async function IncidentCountSection({
     <SectionCard id="bs-incidents" title="Incidents">
       <OverviewIncidentCounts open={open} last30={last30} />
     </SectionCard>
+  );
+}
+
+/** Status pages tab: loaded only when the tab is open. */
+async function StatusPagesSection({ id, canManage }: { id: string; canManage: boolean }) {
+  const pages = await prisma.statusPageBusinessService.findMany({
+    where: { businessServiceId: id },
+    orderBy: { order: 'asc' },
+    select: {
+      id: true,
+      displayName: true,
+      showOnPage: true,
+      showMembers: true,
+      statusOverride: true,
+      statusOverrideUntil: true,
+      statusPage: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isDefault: true,
+          enabled: true,
+          serviceLayout: true,
+        },
+      },
+    },
+  });
+  return (
+    <div className={TAB_CARD}>
+      <StatusPagesPanel
+        canManage={canManage}
+        pages={pages.map(link => ({
+          id: link.id,
+          pageId: link.statusPage.id,
+          name: link.statusPage.name,
+          href: link.statusPage.enabled
+            ? link.statusPage.isDefault || !link.statusPage.slug
+              ? '/status'
+              : `/status/${link.statusPage.slug}`
+            : null,
+          displayName: link.displayName,
+          showOnPage: link.showOnPage,
+          showMembers: link.showMembers,
+          grouped: link.statusPage.serviceLayout !== 'FLAT',
+          override:
+            link.statusOverride &&
+            (!link.statusOverrideUntil || link.statusOverrideUntil > new Date())
+              ? (link.statusOverride as BusinessServiceHealth['status'])
+              : null,
+          overrideUntil: link.statusOverrideUntil,
+        }))}
+      />
+    </div>
+  );
+}
+
+/** Followers tab: loaded only when the tab is open. */
+async function FollowersSection({ id }: { id: string }) {
+  const [followers, teams, dashboards] = await Promise.all([
+    prisma.businessServiceFollower.findMany({
+      where: { businessServiceId: id },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+      select: { user: { select: { id: true, name: true } } },
+    }),
+    prisma.businessServiceTeamSubscriber.findMany({
+      where: { businessServiceId: id },
+      select: { team: { select: { id: true, name: true } } },
+    }),
+    prisma.statusDashboardBusinessService.findMany({
+      where: { businessServiceId: id },
+      select: { dashboard: { select: { name: true, slug: true } } },
+    }),
+  ]);
+  return (
+    <div className={TAB_CARD}>
+      <FollowersPanel
+        followers={followers.map(({ user }) => ({
+          id: user.id,
+          name: user.name ?? 'Unnamed user',
+        }))}
+        teams={teams.map(({ team }) => team)}
+        dashboards={dashboards.map(({ dashboard }) => dashboard)}
+      />
+    </div>
+  );
+}
+
+/** Activity tab: the BUSINESS_SERVICE audit trail of this service, newest first, with before and after. */
+async function ActivitySection({ id }: { id: string }) {
+  const rows = await prisma.auditLog.findMany({
+    where: { entityType: 'BUSINESS_SERVICE', entityId: id },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 50,
+    select: { id: true, action: true, actorName: true, createdAt: true, details: true },
+  });
+  const ids = [...new Set(rows.flatMap(row => auditReferenceIds(row.details)))];
+  const [teams, users] = ids.length
+    ? await Promise.all([
+        prisma.team.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+        prisma.user.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, name: true, email: true },
+        }),
+      ])
+    : [[], []];
+  const names = new Map<string, string>([
+    ...teams.map(team => [team.id, team.name] as const),
+    ...users.map(user => [user.id, user.name ?? user.email] as const),
+  ]);
+  return (
+    <div className={TAB_CARD}>
+      <ActivityPanel entries={rows} names={names} />
+    </div>
   );
 }
 
@@ -220,6 +436,22 @@ export default async function BusinessServiceOverviewPage({
       criticality: true,
       links: true,
       ownerTeam: { select: { id: true, name: true } },
+      sloTarget: true,
+      sloWindowDays: true,
+      revenuePerHourCents: true,
+      currency: true,
+      customersTotal: true,
+      customerReportThreshold: true,
+      customerReportWindowMinutes: true,
+      ownerUser: { select: { id: true, name: true, email: true } },
+      escalationPolicy: {
+        select: { id: true, name: true, steps: FIRST_STEP_SELECT },
+      },
+      contactChannel: true,
+      tags: true,
+      environment: true,
+      lifecycle: true,
+      lastReviewedAt: true,
       members: {
         orderBy: { createdAt: 'asc' },
         select: {
@@ -237,38 +469,14 @@ export default async function BusinessServiceOverviewPage({
         where: { parent: readWhere },
         select: { parent: { select: { id: true, name: true, criticality: true } } },
       },
-      statusPages: {
-        orderBy: { order: 'asc' },
-        select: {
-          id: true,
-          displayName: true,
-          showOnPage: true,
-          showMembers: true,
-          statusOverride: true,
-          statusOverrideUntil: true,
-          statusPage: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              isDefault: true,
-              enabled: true,
-              serviceLayout: true,
-            },
-          },
-        },
-      },
-      followers: {
-        orderBy: { createdAt: 'asc' },
-        take: 200,
-        select: { user: { select: { id: true, name: true } } },
-      },
-      teamSubscribers: { select: { team: { select: { id: true, name: true } } } },
-      dashboards: { select: { dashboard: { select: { name: true, slug: true } } } },
-      _count: { select: { followers: true } },
+      _count: { select: { followers: true, statusPages: true } },
     },
   });
   if (!item) notFound();
+
+  const tabIds = ['overview', 'members', 'dependencies', 'status-pages', 'followers', 'activity'];
+  const tab = query?.tab && tabIds.includes(query.tab) ? query.tab : 'overview';
+  const canReadAudit = actorHasCapability(actor, CAPABILITIES.AUDIT_READ);
 
   const canManage = actorHasCapability(actor, CAPABILITIES.OPERATIONS_MANAGE);
   const canReadIncidents = authorize({
@@ -296,7 +504,7 @@ export default async function BusinessServiceOverviewPage({
   const wanted = own ? reasonIds(own.reasons) : { services: [], businessServices: [] };
   const missingServices = wanted.services.filter(sid => !knownServices.has(sid));
   const missingBusiness = wanted.businessServices.filter(bid => !knownBusiness.has(bid));
-  const [extraServices, extraBusiness, dependencies] = await Promise.all([
+  const [extraServices, extraBusiness, dependencies, onCall] = await Promise.all([
     missingServices.length
       ? prisma.service.findMany({
           where: { AND: [{ id: { in: missingServices } }, serviceReadWhere(actor)] },
@@ -324,17 +532,55 @@ export default async function BusinessServiceOverviewPage({
           },
         })
       : [],
+    onCallFor(item.escalationPolicy?.steps[0] ?? null, actor),
   ]);
   for (const row of extraServices) knownServices.set(row.id, row.name);
   for (const row of extraBusiness) knownBusiness.set(row.id, row.name);
-  const reasons = own
+  // Open incidents behind DIRECT and DEPENDENCY reasons, so each reason can link to one (readers of incidents only).
+  const reasonServiceIds = own
     ? [
         ...new Set(
-          own.reasons.map(reason =>
-            describeReason(reason, { services: knownServices, businessServices: knownBusiness })
+          own.reasons.flatMap(reason =>
+            reason.kind === 'DIRECT' || reason.kind === 'DEPENDENCY' ? [reason.serviceId] : []
           )
         ),
       ]
+    : [];
+  const openByService = new Map<string, string>();
+  if (canReadIncidents && reasonServiceIds.length) {
+    const open = await prisma.incident.findMany({
+      where: {
+        AND: [
+          incidentReadWhere(actor),
+          { serviceId: { in: reasonServiceIds }, status: { not: 'RESOLVED' } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: { id: true, serviceId: true },
+    });
+    for (const row of open)
+      if (!openByService.has(row.serviceId)) openByService.set(row.serviceId, row.id);
+  }
+  const whyReasons: WhyReason[] = own
+    ? [
+        ...(own.unknownReason === 'NO_MEMBERS'
+          ? [{ text: 'No member services yet, so health is unknown. Add services to monitor it.' }]
+          : []),
+        ...own.reasons.map(reason => {
+          const incidentId =
+            reason.kind === 'DIRECT' || reason.kind === 'DEPENDENCY'
+              ? openByService.get(reason.serviceId)
+              : undefined;
+          return {
+            text: describeReason(reason, {
+              services: knownServices,
+              businessServices: knownBusiness,
+            }),
+            ...(incidentId ? { href: `/incidents/${incidentId}` } : {}),
+          };
+        }),
+      ].filter((reason, index, all) => all.findIndex(other => other.text === reason.text) === index)
     : [];
 
   const technical = [
@@ -358,7 +604,10 @@ export default async function BusinessServiceOverviewPage({
   }));
   const related = (rows: typeof children): OverviewRelated[] =>
     rows.map(row => ({ ...row, status: health?.get(row.id)?.status ?? null }));
-  const following = item.followers.some(follower => follower.user.id === actor.id);
+  const following =
+    (await prisma.businessServiceFollower.count({
+      where: { businessServiceId: item.id, userId: actor.id },
+    })) > 0;
   const links = safeLinks(item.links);
 
   const followButton = (
@@ -372,12 +621,40 @@ export default async function BusinessServiceOverviewPage({
 
   const overview = (
     <div className="space-y-4 sm:space-y-6">
+      <Suspense fallback={null}>
+        <FreezeBanner id={item.id} />
+      </Suspense>
+      {own && <WhyStatusCard status={own.status} reasons={whyReasons} />}
       <Suspense fallback={<KpiGridSkeleton count={4} />}>
-        <KpiSection id={item.id} actor={actor} />
+        <KpiSection
+          id={item.id}
+          actor={actor}
+          slo={
+            item.sloTarget === null
+              ? null
+              : { target: item.sloTarget, windowDays: item.sloWindowDays }
+          }
+        />
       </Suspense>
+      <DependencyHealthSummary
+        supporting={related(children)}
+        technicalCount={technical.length}
+        tabHref={`/services/business/${item.id}?tab=dependencies`}
+      />
       <Suspense fallback={<SectionSkeleton title="Impact, last 30 days" height="h-24" />}>
-        <TimelineSection id={item.id} actor={actor} showIncidents={canReadIncidents} />
+        <TimelineSection
+          id={item.id}
+          actor={actor}
+          showIncidents={canReadIncidents}
+          cost={canReadIncidents ? item : undefined}
+          canUnmark={canManage}
+        />
       </Suspense>
+      {canReadIncidents && (
+        <Suspense fallback={<SectionSkeleton title="Customer impact" height="h-24" />}>
+          <CustomerImpactSection item={item} actor={actor} canAdd={canManage} />
+        </Suspense>
+      )}
       <Suspense fallback={<SectionSkeleton title="Incidents" height="h-40" />}>
         {canReadIncidents ? (
           <IncidentsSection id={item.id} memberIds={memberIds} actor={actor} />
@@ -400,22 +677,36 @@ export default async function BusinessServiceOverviewPage({
           { label: item.name },
         ]}
         badges={
-          own ? (
-            <HealthBadge status={own.status} since={own.since} variant="solid" />
-          ) : (
-            <span className={pageHeaderBadgeClass}>Health unavailable</span>
-          )
+          <>
+            {own ? (
+              <HealthBadge status={own.status} since={own.since} variant="solid" />
+            ) : (
+              <span className={pageHeaderBadgeClass}>Health unavailable</span>
+            )}
+            {item.criticality && (
+              <span className={pageHeaderBadgeClass}>{CRITICALITY_LABEL[item.criticality]}</span>
+            )}
+            {item.lifecycle !== 'ACTIVE' && (
+              <span className={pageHeaderBadgeClass}>{item.lifecycle}</span>
+            )}
+          </>
         }
         description={
           <div className="space-y-2">
             {item.description && <p>{item.description}</p>}
-            {reasons.length > 0 && (
-              <ul
-                aria-label="Why it has this status"
-                className="list-disc space-y-0.5 pl-4 text-xs"
-              >
-                {reasons.map(reason => (
-                  <li key={reason}>{reason}</li>
+            {!item.criticality && (
+              <p className="text-xs text-status-elevated">
+                Criticality is not set, so every open incident on a member counts as impact. Set a
+                tier to filter out low-urgency noise.
+              </p>
+            )}
+            {(item.tags.length > 0 || item.environment) && (
+              <ul aria-label="Tags" className="flex flex-wrap gap-1.5 text-xs">
+                {item.environment && <li className={pageHeaderBadgeClass}>{item.environment}</li>}
+                {item.tags.map(tag => (
+                  <li key={tag} className={pageHeaderBadgeClass}>
+                    {tag}
+                  </li>
                 ))}
               </ul>
             )}
@@ -440,7 +731,24 @@ export default async function BusinessServiceOverviewPage({
           </div>
         }
         stats={[
-          { label: 'Owner team', value: item.ownerTeam?.name ?? 'No owner' },
+          {
+            label: 'Owner',
+            value:
+              item.ownerUser?.name ?? item.ownerUser?.email ?? item.ownerTeam?.name ?? 'No owner',
+            subtext:
+              item.ownerUser && item.ownerTeam
+                ? item.ownerTeam.name
+                : (item.contactChannel ?? undefined),
+          },
+          {
+            label: 'On call now',
+            value: onCall?.names.length ? onCall.names.join(', ') : '—',
+            subtext: onCall?.names.length
+              ? onCall.label
+              : item.escalationPolicy
+                ? item.escalationPolicy.name
+                : 'No escalation policy',
+          },
           {
             label: 'Criticality',
             value: item.criticality ? CRITICALITY_LABEL[item.criticality] : 'Not set',
@@ -457,7 +765,22 @@ export default async function BusinessServiceOverviewPage({
           },
           { label: 'Followers', value: item._count.followers.toLocaleString() },
         ]}
-        secondaryActions={followButton}
+        secondaryActions={
+          <>
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className={cn('gap-1.5', pageHeaderActionClass)}
+            >
+              <Link href={`/services/graph?focus=bs:${item.id}`}>
+                <Network className="h-4 w-4" aria-hidden />
+                Show on graph
+              </Link>
+            </Button>
+            {followButton}
+          </>
+        }
         primaryAction={
           canManage ? (
             <Button asChild size="sm" className={cn('gap-1.5', pageHeaderActionClass)}>
@@ -474,85 +797,76 @@ export default async function BusinessServiceOverviewPage({
         <HealthUnavailable message="Live status could not be loaded. Members, dependencies, status pages and followers below are current; refresh in a moment to try again." />
       )}
 
+      <AutoRefresh seconds={30} />
       <DetailTabs
         label="Business service sections"
-        defaultTab={query?.tab}
+        defaultTab={tab}
+        navigationMode="server"
         tabs={[
-          { id: 'overview', label: 'Overview', content: overview },
+          { id: 'overview', label: 'Overview', content: tab === 'overview' ? overview : null },
           {
             id: 'members',
             label: 'Members',
             count: memberIds.length,
-            content: (
-              <div className={TAB_CARD}>
-                <MembersPanel members={members} supporting={related(children)} />
-              </div>
-            ),
+            content:
+              tab === 'members' ? (
+                <div className={TAB_CARD}>
+                  <MembersPanel members={members} supporting={related(children)} />
+                </div>
+              ) : null,
           },
           {
             id: 'dependencies',
             label: 'Dependencies',
             count: children.length + parents.length + technical.length,
-            content: (
-              <div className={TAB_CARD}>
-                <DependenciesPanel
-                  businessServiceId={item.id}
-                  supporting={related(children)}
-                  dependents={related(parents)}
-                  technical={technical}
-                />
-              </div>
-            ),
+            content:
+              tab === 'dependencies' ? (
+                <div className={TAB_CARD}>
+                  <DependenciesPanel
+                    businessServiceId={item.id}
+                    supporting={related(children)}
+                    dependents={related(parents)}
+                    technical={technical}
+                  />
+                </div>
+              ) : null,
           },
           {
             id: 'status-pages',
             label: 'Status pages',
-            count: item.statusPages.length,
-            content: (
-              <div className={TAB_CARD}>
-                <StatusPagesPanel
-                  canManage={canManage}
-                  pages={item.statusPages.map(link => ({
-                    id: link.id,
-                    pageId: link.statusPage.id,
-                    name: link.statusPage.name,
-                    href: link.statusPage.enabled
-                      ? link.statusPage.isDefault || !link.statusPage.slug
-                        ? '/status'
-                        : `/status/${link.statusPage.slug}`
-                      : null,
-                    displayName: link.displayName,
-                    showOnPage: link.showOnPage,
-                    showMembers: link.showMembers,
-                    grouped: link.statusPage.serviceLayout !== 'FLAT',
-                    override:
-                      link.statusOverride &&
-                      (!link.statusOverrideUntil || link.statusOverrideUntil > new Date())
-                        ? (link.statusOverride as BusinessServiceHealth['status'])
-                        : null,
-                    overrideUntil: link.statusOverrideUntil,
-                  }))}
-                />
-              </div>
-            ),
+            count: item._count.statusPages,
+            content:
+              tab === 'status-pages' ? (
+                <Suspense fallback={<SectionSkeleton title="Status pages" height="h-24" />}>
+                  <StatusPagesSection id={item.id} canManage={canManage} />
+                </Suspense>
+              ) : null,
           },
           {
             id: 'followers',
             label: 'Followers',
             count: item._count.followers,
-            content: (
-              <div className={TAB_CARD}>
-                <FollowersPanel
-                  followers={item.followers.map(({ user }) => ({
-                    id: user.id,
-                    name: user.name ?? 'Unnamed user',
-                  }))}
-                  teams={item.teamSubscribers.map(({ team }) => team)}
-                  dashboards={item.dashboards.map(({ dashboard }) => dashboard)}
-                />
-              </div>
-            ),
+            content:
+              tab === 'followers' ? (
+                <Suspense fallback={<SectionSkeleton title="Followers" height="h-24" />}>
+                  <FollowersSection id={item.id} />
+                </Suspense>
+              ) : null,
           },
+          ...(canReadAudit
+            ? [
+                {
+                  id: 'activity',
+                  label: 'Activity',
+                  content:
+                    tab === 'activity' ? (
+                      <Suspense fallback={<SectionSkeleton title="Activity" height="h-24" />}>
+                        <ActivitySection id={item.id} />
+                      </Suspense>
+                    ) : null,
+                },
+              ]
+            : []),
         ]}
       />
     </div>

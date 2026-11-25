@@ -125,3 +125,23 @@ describe('worstKnownPublicStatus', () => {
     expect(worstKnownPublicStatus(['PARTIAL_OUTAGE', 'MAJOR_OUTAGE'])).toBe('MAJOR_OUTAGE');
   });
 });
+
+describe('business-service group status', () => {
+  it('raises the headline when a pinned group is worse than every member', () => {
+    const overall = deriveOverallPublicHealth(
+      [{ status: 'OPERATIONAL' }, { status: 'OPERATIONAL' }],
+      [{ status: 'MAJOR_OUTAGE' }]
+    );
+    expect(overall.status).toBe('MAJOR_OUTAGE');
+    expect(overall.headline).not.toMatch(/all systems operational/i);
+  });
+
+  it('never lowers severity and ignores UNKNOWN groups', () => {
+    expect(
+      deriveOverallPublicHealth([{ status: 'MAJOR_OUTAGE' }], [{ status: 'OPERATIONAL' }]).status
+    ).toBe('MAJOR_OUTAGE');
+    expect(
+      deriveOverallPublicHealth([{ status: 'OPERATIONAL' }], [{ status: 'UNKNOWN' }]).status
+    ).toBe('OPERATIONAL');
+  });
+});

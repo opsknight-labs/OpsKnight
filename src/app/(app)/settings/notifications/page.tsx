@@ -5,6 +5,7 @@ import { pageHeaderActionClass, pageHeaderBadgeClass } from '@/components/patter
 import { cn } from '@/lib/utils';
 import SystemNotificationSettings from '@/components/settings/SystemNotificationSettings';
 import WeeklyDigestToggle from '@/components/settings/WeeklyDigestToggle';
+import ServiceReviewAdminSection from '@/components/settings/ServiceReviewAdminSection';
 import { hasConfiguredEmailProvider, isWeeklyDigestEnabled } from '@/lib/analytics/digest';
 import { getNotificationProviders } from '@/app/(app)/settings/system/actions';
 import {
@@ -339,6 +340,7 @@ export default async function NotificationProviderSettingsPage() {
         enabled={await isWeeklyDigestEnabled()}
         emailReady={await hasConfiguredEmailProvider()}
       />
+      <ServiceReviewAdminSection />
     </div>
   );
 }

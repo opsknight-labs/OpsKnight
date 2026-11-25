@@ -10,6 +10,7 @@ import type {
 } from '@prisma/client';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import type { PublicServiceStatus } from '@/lib/status-pages/public-contract';
+import type { CatalogNeed } from './scorecard';
 import * as impl from './health-impl';
 
 /** One status vocabulary everywhere: catalog, dashboard, overview and public status pages. */
@@ -45,7 +46,15 @@ export type ImpactReason =
       incidentId: string;
     }
   | { kind: 'MANUAL'; status: BsStatus; incidentId: string; markedById: string | null }
-  | { kind: 'MAINTENANCE'; status: 'MAINTENANCE'; maintenanceWindowId: string };
+  | { kind: 'MAINTENANCE'; status: 'MAINTENANCE'; maintenanceWindowId: string }
+  | {
+      /** Customer reports in the service's window reached its threshold; lifts to DEGRADED at most. */
+      kind: 'CUSTOMER_REPORTS';
+      status: 'DEGRADED';
+      reportCount: number;
+      threshold: number;
+      windowMinutes: number;
+    };
 
 export type BusinessServiceHealth = {
   businessServiceId: string;
@@ -57,6 +66,8 @@ export type BusinessServiceHealth = {
   memberCount: number;
   impactedMemberCount: number;
   computedAt: Date;
+  /** Why the status is UNKNOWN, when it is. */
+  unknownReason?: 'NO_MEMBERS';
 };
 
 export type BusinessServiceListFilter = {
@@ -65,6 +76,8 @@ export type BusinessServiceListFilter = {
   criticality?: readonly BsCriticality[];
   ownerTeamId?: string;
   impactedOnly?: boolean;
+  /** Scorecard gap: attention (any basic missing), no-owner, no-tier or no-members. */
+  needs?: CatalogNeed;
 };
 
 export type BusinessServiceListParams = {
@@ -110,6 +123,9 @@ export type BusinessServiceStats = {
   /** Union of non-excluded impact intervals, so overlapping incidents are not double counted. */
   impactMinutes: number;
   uptimePercent: number;
+  /** Severity-weighted (DEGRADED 25%, PARTIAL 50%, MAJOR 100%) and excluding planned maintenance. */
+  weightedUptimePercent?: number;
+  weightedDowntimeMinutes?: number;
   incidentCount: number;
   mttaMinutes: number | null;
   mttrMinutes: number | null;

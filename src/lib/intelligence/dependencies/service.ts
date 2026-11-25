@@ -4,6 +4,8 @@ import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
+import { wouldCreateCycle } from './graph';
+import { recordDependencyEvent } from './insights/history';
 import { memoizeIntelligenceRead, parseOrThrow, type IntelligenceActor } from '../settings/service';
 
 export const MAX_DEPENDENCIES = 5000;
@@ -12,6 +14,9 @@ const declareSchema = z
   .object({
     upstreamServiceId: z.string().trim().min(1).max(64),
     downstreamServiceId: z.string().trim().min(1).max(64),
+    dependencyType: z.enum(['HARD', 'SOFT']).optional(),
+    note: z.string().trim().max(500).nullable().optional(),
+    criticality: z.enum(['LOW', 'MEDIUM', 'HIGH']).nullable().optional(),
   })
   .strict()
   .refine(value => value.upstreamServiceId !== value.downstreamServiceId, {
@@ -87,14 +92,43 @@ export async function loadActiveEdges(client: Prisma.TransactionClient | typeof 
 
 /** Caller must authorize INTELLIGENCE_MANAGE. Declares (or re-activates) "downstream depends on upstream". */
 export async function declareDependency(input: unknown, actor: IntelligenceActor) {
-  const { upstreamServiceId, downstreamServiceId } = parseOrThrow(declareSchema, input);
+  const { upstreamServiceId, downstreamServiceId, dependencyType, note, criticality } =
+    parseOrThrow(declareSchema, input);
+  // Only what the caller sent changes on an existing edge; null clears a note or criticality.
+  const semantics = {
+    ...(dependencyType !== undefined && { dependencyType }),
+    ...(note !== undefined && { note: note || null }),
+    ...(criticality !== undefined && { criticality }),
+  };
   const key = { upstreamServiceId_downstreamServiceId: { upstreamServiceId, downstreamServiceId } };
   return prisma.$transaction(async tx => {
     const services = await tx.service.count({
       where: { id: { in: [upstreamServiceId, downstreamServiceId] } },
     });
     if (services !== 2) throw invalid('Unknown service');
-    const existing = await tx.serviceDependency.findUnique({ where: key, select: { id: true } });
+    const existing = await tx.serviceDependency.findUnique({
+      where: key,
+      select: { id: true, status: true },
+    });
+    if (existing?.status !== 'ACTIVE') {
+      const cycle = wouldCreateCycle(await loadActiveEdges(tx), {
+        upstreamServiceId,
+        downstreamServiceId,
+      });
+      if (cycle) {
+        const names = new Map(
+          (
+            await tx.service.findMany({
+              where: { id: { in: cycle } },
+              select: { id: true, name: true },
+            })
+          ).map(row => [row.id, row.name])
+        );
+        throw invalid(
+          `That dependency would create a cycle: ${cycle.map(id => names.get(id) ?? 'a service').join(' → ')}.`
+        );
+      }
+    }
     // Rejected edges are a permanent human record, not topology; they never consume the cap.
     if (
       !existing &&
@@ -112,14 +146,23 @@ export async function declareDependency(input: unknown, actor: IntelligenceActor
         status: 'ACTIVE',
         confidence: 1,
         evidence: { type: 'declared' },
+        ...semantics,
       },
       update: {
         origin: 'DECLARED',
         status: 'ACTIVE',
         confidence: 1,
         evidence: { type: 'declared' },
+        ...semantics,
       },
       select: { id: true },
+    });
+    await recordDependencyEvent(tx, {
+      upstreamServiceId,
+      downstreamServiceId,
+      state: 'ACTIVE',
+      origin: 'DECLARED',
+      actorId: actor.actorId,
     });
     await logAudit(
       {
@@ -128,7 +171,7 @@ export async function declareDependency(input: unknown, actor: IntelligenceActor
         entityId: row.id,
         actorId: actor.actorId,
         ...auditSource(actor),
-        newValue: { upstreamServiceId, downstreamServiceId },
+        newValue: { upstreamServiceId, downstreamServiceId, ...semantics },
       },
       tx
     );
@@ -145,12 +188,19 @@ export async function reviewDependency(
   return prisma.$transaction(async tx => {
     const row = await tx.serviceDependency.findUnique({
       where: { id },
-      select: { status: true, upstreamServiceId: true, downstreamServiceId: true },
+      select: { status: true, origin: true, upstreamServiceId: true, downstreamServiceId: true },
     });
     if (!row || row.status !== 'SUGGESTED') return 'not_found';
     await tx.serviceDependency.update({
       where: { id },
       data: { status: decision === 'APPROVE' ? 'ACTIVE' : 'REJECTED' },
+    });
+    await recordDependencyEvent(tx, {
+      upstreamServiceId: row.upstreamServiceId,
+      downstreamServiceId: row.downstreamServiceId,
+      state: decision === 'APPROVE' ? 'ACTIVE' : 'REJECTED',
+      origin: row.origin,
+      actorId: actor.actorId,
     });
     await logAudit(
       {
@@ -180,10 +230,17 @@ export async function removeDependency(
   return prisma.$transaction(async tx => {
     const row = await tx.serviceDependency.findUnique({
       where: { id },
-      select: { upstreamServiceId: true, downstreamServiceId: true },
+      select: { upstreamServiceId: true, downstreamServiceId: true, origin: true },
     });
     if (!row) return 'not_found';
     await tx.serviceDependency.delete({ where: { id } });
+    await recordDependencyEvent(tx, {
+      upstreamServiceId: row.upstreamServiceId,
+      downstreamServiceId: row.downstreamServiceId,
+      state: 'REMOVED',
+      origin: row.origin,
+      actorId: actor.actorId,
+    });
     await logAudit(
       {
         action: 'intelligence.dependency.removed',

@@ -991,35 +991,48 @@ ${R} .status-v3-grade--good { color: var(--status-degraded); background: var(--s
 ${R} .status-v3-grade--below_target { color: var(--status-major-outage); background: var(--status-major-outage-bg); }
 
 /* 90-day history sparkline: fills the row on every width */
-${R} svg.status-v3-history { display: block; inline-size: 100%; block-size: 2.5rem; min-inline-size: 0; }
-${R} svg.status-v3-history .status-operational, ${R} .status-v3-hours__slice.status-operational { color: var(--status-operational); }
-${R} svg.status-v3-history .status-degraded, ${R} .status-v3-hours__slice.status-degraded { color: var(--status-degraded); }
-${R} svg.status-v3-history .status-maintenance, ${R} .status-v3-hours__slice.status-maintenance { color: var(--status-maintenance); }
-${R} svg.status-v3-history .status-partial-outage, ${R} .status-v3-hours__slice.status-partial-outage { color: var(--status-partial-outage); }
-${R} svg.status-v3-history .status-major-outage, ${R} .status-v3-hours__slice.status-major-outage { color: var(--status-major-outage); }
-${R} svg.status-v3-history .status-unknown, ${R} .status-v3-hours__slice.status-unknown { color: var(--status-unknown); }
+${R} .status-v3-history { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; inline-size: 100%; min-inline-size: 0; }
 ${R} .status-v3-history__day {
-  cursor: pointer;
-  transition: opacity .15s ease, transform .15s ease, stroke-width .15s ease, filter .15s ease;
-  transform-box: fill-box;
-  transform-origin: center bottom;
+  position: relative; display: block; block-size: 2rem; min-inline-size: 0; padding: 0; border: 0; border-radius: 2px;
+  background: currentColor; cursor: pointer;
+  transition: opacity .15s ease, transform .15s ease;
 }
-${R} svg.status-v3-history:hover .status-v3-history__day { opacity: .6; }
-${R} svg.status-v3-history .status-v3-history__day:hover,
-${R} svg.status-v3-history .status-v3-history__day[aria-pressed="true"],
-${R} svg.status-v3-history .status-v3-history__day[aria-selected="true"] {
-  opacity: 1;
-  transform: scaleY(1.25);
-  stroke: var(--status-text-strong);
-  stroke-width: .14;
+${R} .status-v3-history__day.status-operational { color: var(--status-operational); }
+${R} .status-v3-history__day.status-degraded { color: var(--status-degraded); }
+${R} .status-v3-history__day.status-maintenance { color: var(--status-maintenance); }
+${R} .status-v3-history__day.status-partial-outage { color: var(--status-partial-outage); }
+${R} .status-v3-history__day.status-major-outage { color: var(--status-major-outage); }
+${R} .status-v3-history__day.status-unknown { color: var(--status-unknown); }
+${R} .status-v3-hours__slice.status-operational { color: var(--status-operational); }
+${R} .status-v3-hours__slice.status-degraded { color: var(--status-degraded); }
+${R} .status-v3-hours__slice.status-maintenance { color: var(--status-maintenance); }
+${R} .status-v3-hours__slice.status-partial-outage { color: var(--status-partial-outage); }
+${R} .status-v3-hours__slice.status-major-outage { color: var(--status-major-outage); }
+${R} .status-v3-hours__slice.status-unknown { color: var(--status-unknown); }
+/* Severity grade: a 99.6% "operational" day reads lighter than a clean 100% one. */
+${R} .status-v3-history__day[data-severity="minor"] { background: color-mix(in srgb, currentColor 72%, var(--status-degraded)); }
+${R} .status-v3-history__day[data-severity="moderate"] { background: color-mix(in srgb, currentColor 50%, var(--status-partial-outage)); }
+${R} .status-v3-history__day[data-severity="severe"] { background: color-mix(in srgb, currentColor 40%, var(--status-major-outage)); }
+${R} .status-v3-history__day[data-severity="none"] { opacity: .55; }
+${R} .status-v3-history:hover .status-v3-history__day:not(:hover) { opacity: .6; }
+${R} .status-v3-history__day:hover, ${R} .status-v3-history__day[aria-pressed="true"] { opacity: 1; transform: scaleY(1.12); outline: 1px solid var(--status-text-strong); }
+${R} .status-v3-history__day:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; z-index: 1; }
+${R} .status-v3-history__day::after {
+  content: attr(data-tip); position: absolute; inset-block-end: calc(100% + 6px); inset-inline-start: 50%; z-index: 5;
+  translate: -50% 0; inline-size: max-content; max-inline-size: 16rem; padding: .3rem .5rem; border-radius: 6px;
+  background: var(--status-text-strong); color: var(--status-panel-bg); font-size: .7rem; line-height: 1.3; font-weight: 500;
+  white-space: normal; text-align: start; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .12s ease;
 }
-${R} svg.status-v3-history .status-v3-history__day:hover:not([aria-pressed="true"]) {
-  filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 65%, transparent));
+${R} .status-v3-history__day:hover::after, ${R} .status-v3-history__day:focus-visible::after { opacity: 1; visibility: visible; }
+${R} .status-v3-history__day:nth-child(-n+8)::after { inset-inline-start: 0; translate: 0 0; }
+${R} .status-v3-history__day:nth-last-child(-n+8)::after { inset-inline-start: auto; inset-inline-end: 0; translate: 0 0; }
+/* 90 bars on wide screens, the latest 30 on narrow ones. */
+${R} .status-v3-history__axis.status-v3-history__axis--narrow { display: none; }
+@media (max-width: 40rem) {
+  ${R} .status-v3-history__day:nth-last-child(n+31) { display: none; }
+  ${R} .status-v3-history__axis.status-v3-history__axis--wide { display: none; }
+  ${R} .status-v3-history__axis.status-v3-history__axis--narrow { display: flex; }
 }
-${R} .status-v3-history__day:focus-visible { outline: none; stroke: var(--primary); stroke-width: .2; }
-/* The strip is one focus stop (listbox + aria-activedescendant); show the ring on it and dim unselected days. */
-${R} svg.status-v3-history:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 2px; }
-${R} svg.status-v3-history:has([aria-selected="true"]) .status-v3-history__day:not([aria-selected="true"]):not(:hover) { opacity: .55; }
 
 /* Incident timeline */
 ${R} .status-v3-incident__updates { list-style: none; margin: .35rem 0 0; padding: 0 0 0 1rem; display: grid; gap: .5rem; border-inline-start: 2px solid var(--status-panel-border); }
@@ -1051,7 +1064,6 @@ ${R} .status-v3-badge--sm { font-size: .75rem; }
   ${R} .status-v3 { gap: 1.75rem; }
   ${R} .status-v3-hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   ${R} .status-v3-service__head, ${R} .status-v3-incident__head { align-items: flex-start; }
-  ${R} .status-v3-history__day { block-size: 1.6rem; }
 }
 /* Responsive: tablets keep a single readable service column */
 @media (min-width: 40.0625rem) and (max-width: 64rem) {
@@ -1785,6 +1797,26 @@ ${R} .status-v3-services__group-icon {
   opacity: 0.85;
 }
 
+${R} .status-v3-services__controls { display: contents; }
+${R} .status-v3-business__subscribe {
+  border: 1px solid var(--status-panel-border); border-radius: 4px; background: var(--status-panel-bg);
+  color: var(--primary); font-size: .72rem; font-weight: 600; padding: .2rem .55rem; cursor: pointer;
+}
+${R} .status-v3-business__subscribe:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--status-panel-border)); }
+${R} .status-v3-business__subscribe:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+${R} .status-subscribe-sticky { display: none; }
+@media (max-width: 40rem) {
+  ${R} .status-subscribe-sticky {
+    display: block; position: sticky; inset-block-end: 0; z-index: 20; padding: .6rem 1rem calc(.6rem + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--status-panel-bg) 92%, transparent); border-block-start: 1px solid var(--status-panel-border);
+    backdrop-filter: blur(6px);
+  }
+  ${R} .status-subscribe-sticky button {
+    inline-size: 100%; min-block-size: 2.75rem; border: 0; border-radius: 8px; background: var(--primary);
+    color: var(--status-text-inverse); font-weight: 600; font-size: .9rem; cursor: pointer;
+  }
+  ${R} .status-subscribe-sticky button:focus-visible { outline: 2px solid var(--status-text-strong); outline-offset: 2px; }
+}
 ${R} .status-v3-services__right-group {
   display: flex;
   align-items: center;
@@ -3117,6 +3149,14 @@ ${R} .status-v3-business__members {
   border-inline-start: 1px solid var(--status-panel-border);
 }
 ${R} .status-v3-business__members[hidden] { display: none; }
+${R} .status-v3-business__children {
+  display: grid;
+  gap: 0.5rem;
+  margin-block-start: 0.5rem;
+  border-inline-start: 1px solid var(--status-panel-border);
+  padding-inline-start: 0.6rem;
+  min-inline-size: 0;
+}
 ${R} .status-v3-business__member {
   display: grid;
   gap: 0.4rem;

@@ -7,10 +7,17 @@ import { computeStatusPageTheme } from '@/lib/status-page-theme';
 import { resolveStatusPageCustomCss } from '@/lib/status-pages/theme-custom-css';
 import {
   DEFAULT_STATUS_PAGE_THEME_ID,
+  compileStatusPageColorSchemeCss,
   compileStatusPageThemeCss,
+  resolveStatusPageColorScheme,
   resolveStatusPageTheme,
   resolveStatusPageThemeDensity,
 } from '@/lib/status-pages/theme-contract';
+
+const colorSchemeScript = (scheme: 'dark' | 'auto') =>
+  scheme === 'dark'
+    ? `document.documentElement.style.colorScheme='dark'`
+    : `try{document.documentElement.style.colorScheme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}catch(e){}`;
 
 /**
  * Themed shell for the published status page.
@@ -49,6 +56,10 @@ export default function StatusPageSnapshotView({
   );
   const themeDensity = resolveStatusPageThemeDensity(themeBranding.themeDensity);
   const builtInThemeCss = compileStatusPageThemeCss(selectedTheme.id, themeDensity);
+  const colorScheme = resolveStatusPageColorScheme(
+    presentation?.colorScheme ?? branding.colorScheme
+  );
+  const colorSchemeCss = compileStatusPageColorSchemeCss(colorScheme, selectedTheme.id);
   const autoRefresh = presentation?.autoRefresh ?? branding.autoRefresh;
 
   return (
@@ -57,6 +68,7 @@ export default function StatusPageSnapshotView({
       data-sp-theme={selectedTheme.id}
       data-sp-theme-version={selectedTheme.version}
       data-sp-density={themeDensity}
+      data-sp-color-scheme={colorScheme}
       style={{
         minHeight: '100vh',
         // Built-in themes define these variables in their CSS layer. Default defines nothing and
@@ -71,8 +83,20 @@ export default function StatusPageSnapshotView({
         ['--status-content-width' as string]: `${maxWidth}px`,
       }}
     >
+      {colorScheme !== 'light' && (
+        // Lets browser chrome (scrollbars, overscroll) follow the page; the paint itself is CSS-only.
+        <script dangerouslySetInnerHTML={{ __html: colorSchemeScript(colorScheme) }} />
+      )}
       {autoRefresh !== false && (
-        <StatusPageAutoRefresh enabled intervalSeconds={Math.max(30, refreshInterval)} />
+        <StatusPageAutoRefresh
+          enabled
+          intervalSeconds={Math.max(30, refreshInterval)}
+          apiPath={
+            snapshot.page.slug && !snapshot.page.isDefault
+              ? `/api/status/${encodeURIComponent(snapshot.page.slug)}`
+              : '/api/status'
+          }
+        />
       )}
       <StatusPageV3
         snapshot={snapshot}
@@ -80,6 +104,7 @@ export default function StatusPageSnapshotView({
         refreshIntervalSeconds={autoRefresh !== false ? Math.max(30, refreshInterval) : null}
       />
       {builtInThemeCss && <style data-status-page-theme>{builtInThemeCss}</style>}
+      {colorSchemeCss && <style data-status-page-color-scheme>{colorSchemeCss}</style>}
       {customCss && (
         <style data-status-page-custom-css dangerouslySetInnerHTML={{ __html: customCss }} />
       )}

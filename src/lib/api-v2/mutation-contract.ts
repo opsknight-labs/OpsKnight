@@ -713,6 +713,42 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     rationale:
       'Parent-scoped idempotent removal emits a timeline event only when an association existed.',
   },
+  'POST /api/v2/dependency-graph/views': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Saved view and audit event; a replay returns the stored view without a second row.',
+  },
+  'PATCH /api/v2/dependency-graph/views/[id]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Owner or admin edit of one saved view; last write wins, audited.',
+  },
+  'DELETE /api/v2/dependency-graph/views/[id]': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Deleting a saved view also ends its embed token; audited.',
+  },
+  'POST /api/v2/dependency-graph/views/[id]/share': {
+    idempotency: 'never',
+    concurrency: 'none',
+    rationale:
+      'The response carries a one-time embed token that is stored only as a hash, so it is never replayed; sharing again replaces the token.',
+  },
+  'DELETE /api/v2/dependency-graph/views/[id]/share': {
+    idempotency: 'required',
+    concurrency: 'none',
+    rationale: 'Revokes the embed token; revoking twice leaves it revoked.',
+  },
+  'POST /api/v2/dependency-graph/simulate': {
+    idempotency: 'natural',
+    concurrency: 'none',
+    rationale: 'Read-only bounded what-if over the dependency graph; nothing is written.',
+  },
+  'POST /api/v2/dependency-graph/edge-stats': {
+    idempotency: 'natural',
+    concurrency: 'none',
+    rationale: 'Each window per edge and source is upserted, so a retry stores the same values.',
+  },
   'POST /api/v2/business-services': {
     idempotency: 'required',
     concurrency: 'none',
@@ -756,8 +792,35 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'POST /api/v2/business-services/import': supported(
     'dryRun only reads; an apply writes every row, member set and audit with the replay record, or nothing.'
   ),
+  'PUT /api/v2/settings/service-reviews': supported(
+    'The settings write and its audit commit with the replay record, so a retry returns the first result.'
+  ),
+  'POST /api/v2/service-reviews/run': supported(
+    'Each (period, kind, recipient) is claimed in a unique row before sending, so a retry or replay can never send a second review.'
+  ),
+  'POST /api/v2/service-reviews/preview': supported(
+    'Emails only the caller; rate limited to 3 per hour and a replay returns the first result without a second email.'
+  ),
   'PUT /api/v2/status-pages/[id]/business-services/[businessServiceId]/override': supported(
     'Override and audit commit with the replay record; the mapping trigger republishes the page.'
+  ),
+  'POST /api/v2/business-services/[id]/customer-reports': supported(
+    'The report, realtime tick and audit commit with the replay record; a repeated externalRef returns the stored report instead of counting twice.'
+  ),
+  'POST /api/v2/business-services/bulk': supported(
+    'Every service applies in its own savepoint inside the replay transaction; per-item results, audits and the realtime tick commit together, or replay as stored. dryRun rolls every item back.'
+  ),
+  'POST /api/v2/business-service-templates': supported(
+    'The template and its audit event commit with the replay record.'
+  ),
+  'PATCH /api/v2/business-service-templates/[id]': supported(
+    'The template change and its audit event commit with the replay record.'
+  ),
+  'DELETE /api/v2/business-service-templates/[id]': supported(
+    'The deletion and its audit event commit with the replay record; business services created from it are unchanged.'
+  ),
+  'POST /api/v2/business-service-templates/[id]/instantiate': supported(
+    'The business service, members, audit and realtime tick commit with the replay record.'
   ),
   'POST /api/v2/incidents/[id]/stakeholder-notify': supported(
     'In-app rows, the email outbox and the audit commit with the replay record, so a retry never sends twice. At most 3 per incident every 10 minutes.'

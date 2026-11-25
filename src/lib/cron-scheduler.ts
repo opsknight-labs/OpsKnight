@@ -48,6 +48,28 @@ let lastJobCleanup = 0;
 let schedulerProfile: SchedulerProfile = 'full';
 let activeLeaseEpoch: number | null = null;
 
+
+let businessServiceSweepsRunning = false;
+
+/**
+ * Business-service ownership hygiene (hourly, admin-enabled, off by default). It may notify many
+ * owners, so it must never hold up the tick: run detached, one at a time per process.
+ */
+function kickBusinessServiceSweeps() {
+  if (businessServiceSweepsRunning) return;
+  businessServiceSweepsRunning = true;
+  void (async () => {
+    try {
+      const { runBusinessServiceHygieneIfDue } = await import('./business-services/hygiene-sweep');
+      await runBusinessServiceHygieneIfDue();
+    } catch (error) {
+      logger.warn('[Cron] Business-service hygiene sweep failed', { error });
+    }
+  })().finally(() => {
+    businessServiceSweepsRunning = false;
+  });
+}
+
 export interface CronSchedulerOptions {
   profile?: SchedulerProfile;
 }
@@ -593,6 +615,9 @@ async function runOnce() {
 
     await assertLease(leaseEpoch);
 
+    // Slow, admin-enabled sweeps run beside the tick so they can never delay jobs or notifications.
+    kickBusinessServiceSweeps();
+
     // Group 2: Secondary tasks (can run in parallel)
     const { processShiftRotations, processUpcomingShiftReminders } =
       await import('./oncall-handoff');
@@ -693,6 +718,17 @@ async function runOnce() {
       }
     } catch (error) {
       logger.warn('[Cron] Weekly analytics digests failed', { error });
+    }
+
+    // Monthly business service reviews: off unless an admin enabled them; idempotent per period.
+    try {
+      const { runScheduledServiceReviews } = await import('./business-services/reviews/run');
+      const reviews = await runScheduledServiceReviews(new Date());
+      if (reviews.sent > 0 || reviews.failed > 0) {
+        logger.info('[Cron] Business service reviews processed', reviews);
+      }
+    } catch (error) {
+      logger.warn('[Cron] Business service reviews failed', { error });
     }
 
     // Group 3: Maintenance tasks (low priority, run last)

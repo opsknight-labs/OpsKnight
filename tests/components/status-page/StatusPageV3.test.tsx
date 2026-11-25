@@ -20,6 +20,12 @@ const service = (over: Partial<PublicStatusService> = {}): PublicStatusService =
   ...over,
 });
 
+// Controls only appear above 8 services, behind a Filter disclosure.
+const fillers = Array.from({ length: 8 }, (_, i) =>
+  service({ id: `filler-${i}`, name: `Filler ${i}` })
+);
+const openFilters = () => fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+
 function snapshotOf(services: PublicStatusService[], over: Partial<PublicStatusPageSnapshot> = {}) {
   return {
     schemaVersion: 3,
@@ -90,9 +96,10 @@ describe('StatusPageV3', () => {
   it('filters services by search term', () => {
     render(
       <StatusPageV3
-        snapshot={snapshotOf([service(), service({ id: 'svc-2', name: 'Payments' })])}
+        snapshot={snapshotOf([service(), service({ id: 'svc-2', name: 'Payments' }), ...fillers])}
       />
     );
+    openFilters();
     fireEvent.change(screen.getByPlaceholderText('Search services'), {
       target: { value: 'payments' },
     });
@@ -106,9 +113,11 @@ describe('StatusPageV3', () => {
         snapshot={snapshotOf([
           service({ id: 'svc-ok', name: 'Alpha API' }),
           service({ id: 'svc-down', name: 'Zeta Gateway', status: 'MAJOR_OUTAGE' }),
+          ...fillers,
         ])}
       />
     );
+    openFilters();
     fireEvent.change(screen.getByRole('combobox', { name: /Sort services/i }), {
       target: { value: 'issues' },
     });
@@ -122,12 +131,12 @@ describe('StatusPageV3', () => {
         snapshot={snapshotOf([
           service(),
           service({ id: 'svc-2', name: 'Payments', status: 'DEGRADED' }),
+          ...fillers,
         ])}
       />
     );
-    fireEvent.change(screen.getByRole('combobox', { name: /filter by status/i }), {
-      target: { value: 'issues' },
-    });
+    openFilters();
+    fireEvent.click(screen.getByRole('button', { name: 'Degraded' }));
     expect(screen.getByText('Payments')).toBeInTheDocument();
     expect(screen.queryByText('Checkout API')).not.toBeInTheDocument();
   });
@@ -139,12 +148,14 @@ describe('StatusPageV3', () => {
           [
             service({ regions: ['eu-west-1'] }),
             service({ id: 'svc-2', name: 'Payments', regions: ['us-east-1'] }),
+            ...fillers.map(f => ({ ...f, regions: ['eu-west-1'] })),
           ],
           { page: { ...snapshotOf([]).page, showServicesByRegion: true } }
         )}
       />
     );
     expect(screen.getByRole('heading', { name: 'eu-west-1' })).toBeInTheDocument();
+    openFilters();
     fireEvent.click(screen.getByRole('button', { name: 'Group by region' }));
     expect(screen.queryByRole('heading', { name: 'eu-west-1' })).not.toBeInTheDocument();
     expect(screen.getByText('Checkout API')).toBeInTheDocument();
@@ -255,7 +266,8 @@ describe('StatusPageV3', () => {
   });
 
   it('explains an empty filter result', () => {
-    render(<StatusPageV3 snapshot={snapshotOf([service()])} />);
+    render(<StatusPageV3 snapshot={snapshotOf([service(), ...fillers])} />);
+    openFilters();
     fireEvent.change(screen.getByPlaceholderText('Search services'), {
       target: { value: 'nothing matches this' },
     });
@@ -272,12 +284,24 @@ describe('StatusPageV3', () => {
     expect(screen.getByText(/Times shown in your local time/)).toBeInTheDocument();
   });
 
-  it('exposes owner and tier with labels a reader can interpret', () => {
+  it('hides owner and tier chips unless the page opts in', () => {
     render(
       <StatusPageV3
         snapshot={snapshotOf([
           service({ slaTier: 'TIER_1', team: { id: 'team-1', name: 'Payments team' } }),
         ])}
+      />
+    );
+    expect(screen.queryByText('Owned by Payments team')).not.toBeInTheDocument();
+  });
+
+  it('exposes owner and tier with labels a reader can interpret', () => {
+    render(
+      <StatusPageV3
+        snapshot={snapshotOf(
+          [service({ slaTier: 'TIER_1', team: { id: 'team-1', name: 'Payments team' } })],
+          { page: { ...snapshotOf([]).page, presentation: { showServiceMeta: true } } }
+        )}
       />
     );
     expect(screen.getByText('Owned by Payments team')).toBeInTheDocument();

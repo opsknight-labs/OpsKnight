@@ -51,10 +51,26 @@ interface StatusPageServicesManagerProps<TFormData extends ServicesFormData> {
   };
   setPrivacySettings?: React.Dispatch<React.SetStateAction<PrivacySettings>>;
   hasSelectedRegions: boolean;
+  /** Services published only because a business service on the page contains them. */
+  viaBusinessServiceIds?: ReadonlySet<string>;
 }
 
 type FilterTab = 'all' | 'selected' | 'unselected' | 'visible' | 'hidden';
 type DensityMode = 'table' | 'cards';
+
+const VIA_BUSINESS_SERVICE_HELP =
+  'Shown because a business service on this page contains it. It is removed from the page automatically if that business service is removed. Select it directly to keep it regardless.';
+
+function ViaBusinessServiceBadge() {
+  return (
+    <span title={VIA_BUSINESS_SERVICE_HELP}>
+      <Badge variant="info" size="xs" className="text-[10px] font-semibold whitespace-nowrap">
+        Added via business service
+      </Badge>
+      <span className="sr-only">{VIA_BUSINESS_SERVICE_HELP}</span>
+    </span>
+  );
+}
 
 export default function StatusPageServicesManager<TFormData extends ServicesFormData>({
   allServices,
@@ -67,6 +83,7 @@ export default function StatusPageServicesManager<TFormData extends ServicesForm
   privacySettings,
   setPrivacySettings,
   hasSelectedRegions,
+  viaBusinessServiceIds,
 }: StatusPageServicesManagerProps<TFormData>) {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -639,6 +656,7 @@ export default function StatusPageServicesManager<TFormData extends ServicesForm
                             setSelectedServices={setSelectedServices}
                             serviceConfigs={serviceConfigs}
                             updateServiceConfig={updateServiceConfig}
+                            viaBusinessServiceIds={viaBusinessServiceIds}
                           />
                         ) : (
                           <ServicesCardView
@@ -647,6 +665,7 @@ export default function StatusPageServicesManager<TFormData extends ServicesForm
                             setSelectedServices={setSelectedServices}
                             serviceConfigs={serviceConfigs}
                             updateServiceConfig={updateServiceConfig}
+                            viaBusinessServiceIds={viaBusinessServiceIds}
                           />
                         )}
                       </div>
@@ -666,6 +685,7 @@ export default function StatusPageServicesManager<TFormData extends ServicesForm
                     setSelectedServices={setSelectedServices}
                     serviceConfigs={serviceConfigs}
                     updateServiceConfig={updateServiceConfig}
+                    viaBusinessServiceIds={viaBusinessServiceIds}
                   />
                 </div>
               ) : (
@@ -675,6 +695,7 @@ export default function StatusPageServicesManager<TFormData extends ServicesForm
                   setSelectedServices={setSelectedServices}
                   serviceConfigs={serviceConfigs}
                   updateServiceConfig={updateServiceConfig}
+                  viaBusinessServiceIds={viaBusinessServiceIds}
                 />
               )}
             </div>
@@ -754,7 +775,9 @@ function ServicesTableView({
   setSelectedServices,
   serviceConfigs,
   updateServiceConfig,
+  viaBusinessServiceIds,
 }: {
+  viaBusinessServiceIds?: ReadonlySet<string>;
   services: ServiceItem[];
   selectedServices: Set<string>;
   setSelectedServices: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -829,6 +852,7 @@ function ServicesTableView({
                     title={isSelected ? 'Click to deselect' : 'Click to select and configure'}
                   >
                     <span className="hover:text-primary transition-colors">{service.name}</span>
+                    {viaBusinessServiceIds?.has(service.id) && <ViaBusinessServiceBadge />}
                     {isSelected && (
                       <Badge variant="success" size="xs" className="text-[10px] font-bold">
                         Active
@@ -961,7 +985,9 @@ function ServicesCardView({
   setSelectedServices,
   serviceConfigs,
   updateServiceConfig,
+  viaBusinessServiceIds,
 }: {
+  viaBusinessServiceIds?: ReadonlySet<string>;
   services: ServiceItem[];
   selectedServices: Set<string>;
   setSelectedServices: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -1015,6 +1041,7 @@ function ServicesCardView({
                 <span className="font-bold text-sm text-foreground truncate" title={service.name}>
                   {service.name}
                 </span>
+                {viaBusinessServiceIds?.has(service.id) && <ViaBusinessServiceBadge />}
               </label>
 
               {service.region && (

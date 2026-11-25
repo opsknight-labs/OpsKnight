@@ -42,6 +42,9 @@ vi.mock('@/app/(app)/settings/system/actions', () => ({
   }),
 }));
 
+// Async server component (loads from the database); jsdom cannot render those, and this suite is about providers.
+vi.mock('@/components/settings/ServiceReviewAdminSection', () => ({ default: () => null }));
+
 vi.mock('@/lib/toast', () => ({
   notify: {
     success: vi.fn(),

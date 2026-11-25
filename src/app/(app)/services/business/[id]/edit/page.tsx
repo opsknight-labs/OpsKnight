@@ -11,6 +11,9 @@ import { PageHeader } from '@/components/patterns';
 import BusinessServiceForm from '@/components/service/BusinessServiceForm';
 import HealthBadge from '@/components/business-service/HealthBadge';
 import { getBusinessServiceHealth } from '@/lib/business-services/contract';
+import { attributesToLines } from '@/lib/business-services/attributes';
+import { centsToMoney } from '@/lib/business-services/impact-cost';
+import { linksToLines, parseBusinessServiceLinks } from '@/lib/business-services/links';
 import { loadBusinessServiceFormOptions } from '../../form-options';
 
 export default async function EditBusinessServicePage({
@@ -33,7 +36,10 @@ export default async function EditBusinessServicePage({
   const [options, health] = await Promise.all([
     loadBusinessServiceFormOptions(actor, {
       serviceIds: item.members.map(member => member.service.id),
-      userIds: item.followers.map(follower => follower.user.id),
+      userIds: [
+        ...item.followers.map(follower => follower.user.id),
+        ...(item.ownerUserId ? [item.ownerUserId] : []),
+      ],
       businessServiceId: item.id,
       dependsOn,
     }),
@@ -60,11 +66,14 @@ export default async function EditBusinessServicePage({
         teams={options.teams}
         users={options.users}
         businessServices={options.businessServices}
+        escalationPolicies={options.escalationPolicies}
         canDelete={permissions.isAdmin}
         initial={{
           id: item.id,
           name: item.name,
           description: item.description ?? '',
+          statusPageSummary: item.statusPageSummary ?? '',
+          linksText: linksToLines(parseBusinessServiceLinks(item.links)),
           tier: item.tier ?? '',
           ownerTeamId: item.ownerTeamId ?? '',
           memberServiceIds: item.members.map(member => member.service.id),
@@ -76,6 +85,31 @@ export default async function EditBusinessServicePage({
             .filter(member => !member.critical)
             .map(member => member.service.id),
           dependsOnBusinessServiceIds: dependsOn.map(child => child.id),
+          teamSubscriberIds: item.teamSubscribers.map(({ team }) => team.id),
+          ownerUserId: item.ownerUserId ?? '',
+          escalationPolicyId: item.escalationPolicyId ?? '',
+          contactChannel: item.contactChannel ?? '',
+          environment: item.environment ?? '',
+          lifecycle: item.lifecycle,
+          tagsText: item.tags.join(', '),
+          attributesText: attributesToLines(item.customAttributes),
+          markReviewed: false,
+          sloTarget: item.sloTarget === null ? '' : String(item.sloTarget),
+          sloWindowDays: String(item.sloWindowDays) as '7' | '30' | '90',
+          quorumPartialPct: item.quorumPartialPct === null ? '' : String(item.quorumPartialPct),
+          quorumMajorPct: item.quorumMajorPct === null ? '' : String(item.quorumMajorPct),
+          dependencyHopDepth: String(item.dependencyHopDepth),
+          customersTotal: item.customersTotal === null ? '' : String(item.customersTotal),
+          revenuePerHour:
+            item.revenuePerHourCents === null ? '' : centsToMoney(item.revenuePerHourCents),
+          currency: item.currency,
+          customerReportThreshold:
+            item.customerReportThreshold === null ? '' : String(item.customerReportThreshold),
+          customerReportWindowMinutes:
+            item.customerReportWindowMinutes === null
+              ? ''
+              : String(item.customerReportWindowMinutes),
+          reviewIntervalDays: item.reviewIntervalDays === null ? '' : String(item.reviewIntervalDays),
         }}
       />
     </div>

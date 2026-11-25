@@ -26,6 +26,8 @@ export function describeReason(reason: ImpactReason, names: ReasonNames): string
       return 'A responder marked an incident as impacting this business service.';
     case 'MAINTENANCE':
       return 'Scheduled maintenance is in progress.';
+    case 'CUSTOMER_REPORTS':
+      return `Customers reported problems (${reason.reportCount} in the last ${reason.windowMinutes} minutes).`;
   }
 }
 

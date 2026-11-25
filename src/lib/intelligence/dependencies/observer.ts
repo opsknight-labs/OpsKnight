@@ -143,6 +143,7 @@ export async function observeDependencyPass(
         GROUP BY p."serviceId", b."serviceId"
         HAVING count(DISTINCT b."id") >= ${OBSERVE_MIN_CO_OCCURRENCES}
       )
+      , inserted AS (
       INSERT INTO "ServiceDependency"
         ("id", "upstreamServiceId", "downstreamServiceId", "origin", "status", "confidence", "evidence", "updatedAt")
       SELECT gen_random_uuid()::text, pairs.up, pairs.down, 'OBSERVED', 'SUGGESTED',
@@ -166,6 +167,11 @@ export async function observeDependencyPass(
       ORDER BY pairs.co DESC
       LIMIT ${MAX_SUGGESTIONS_PER_RUN}
       ON CONFLICT ("upstreamServiceId", "downstreamServiceId") DO NOTHING
+      RETURNING "upstreamServiceId", "downstreamServiceId"
+      )
+      -- History row per new suggestion, in the same statement so it can never drift from the edge.
+      INSERT INTO "ServiceDependencyEvent" ("id", "upstreamServiceId", "downstreamServiceId", "state", "origin")
+      SELECT gen_random_uuid()::text, "upstreamServiceId", "downstreamServiceId", 'SUGGESTED'::"DependencyEventState", 'OBSERVED'::"DependencyOrigin" FROM inserted
     `);
     return { suggestions, more: false };
   });

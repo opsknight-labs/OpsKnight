@@ -250,7 +250,15 @@ export async function enqueueBusinessServiceImpactReconcile(now = new Date()) {
 export async function processBusinessServiceImpactReconcile() {
   const result = await reconcileBusinessServiceImpacts();
   if (result.created || result.updated) logger.info('business_services.impacts_reconciled', result);
-  return result;
+  // Status can change without impact rows changing (maintenance, overrides, edits), so always check.
+  const { emitBusinessServiceStatusChanges } = await import('./status-events');
+  const announced = await emitBusinessServiceStatusChanges().catch(error => {
+    logger.warn('business_services.status_events_failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return 0;
+  });
+  return { ...result, announced };
 }
 
 /**

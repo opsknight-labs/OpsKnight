@@ -1,6 +1,7 @@
 'use client';
 /* eslint-disable security/detect-object-injection -- lookups are keyed by typed enum values (status, tier, urgency), never request input */
 
+import { useState } from 'react';
 import Link from 'next/link';
 import type { BusinessServiceTier } from '@prisma/client';
 import { Boxes, Plus } from 'lucide-react';
@@ -17,7 +18,9 @@ import { Button } from '@/components/ui/shadcn/button';
 import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
 import BusinessServiceFollowButton from '@/components/service/BusinessServiceFollowButton';
 import type { BsStatus } from '@/lib/business-services/contract';
-import HealthBadge, { CRITICALITY_HINT, CRITICALITY_LABEL } from './HealthBadge';
+import { HYGIENE_LABELS, type HygieneReason } from '@/lib/business-services/hygiene';
+import BulkEditBar from './BulkEditBar';
+import HealthBadge, { BS_STATUS_META, CRITICALITY_HINT, CRITICALITY_LABEL } from './HealthBadge';
 
 export type CatalogRow = {
   id: string;
@@ -32,6 +35,8 @@ export type CatalogRow = {
   openIncidentCount: number;
   followerCount: number;
   following: boolean;
+  /** Ownership hygiene findings (stale review, inactive owner). */
+  hygiene?: readonly HygieneReason[];
 };
 
 export type CatalogPagination = {
@@ -68,11 +73,29 @@ function Members({ row }: { row: CatalogRow }) {
   );
 }
 
+function HygieneBadges({ reasons }: { reasons?: readonly HygieneReason[] }) {
+  if (!reasons?.length) return <span className="text-muted-foreground">Clean</span>;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {reasons.map(reason => (
+        <span
+          key={reason}
+          className="whitespace-nowrap rounded-full border border-status-elevated/40 bg-status-elevated/10 px-2 py-0.5 text-xs font-medium text-status-elevated"
+        >
+          {HYGIENE_LABELS[reason]}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const href = (row: CatalogRow) => `/services/business/${row.id}`;
 
 const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   {
     id: 'name',
+    sortKey: 'name',
+    sortValue: (row: CatalogRow) => row.name.toLowerCase(),
     header: 'Business service',
     cell: row => (
       <DirectoryPrimaryCell
@@ -85,12 +108,16 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   },
   {
     id: 'health',
+    sortKey: 'health',
+    sortValue: (row: CatalogRow) => -BS_STATUS_META[row.status].rank,
     header: 'Health',
     cell: row => <HealthBadge status={row.status} since={row.since} variant="solid" />,
     className: 'min-w-[11rem] font-normal',
   },
   {
     id: 'criticality',
+    sortKey: 'criticality',
+    sortValue: (row: CatalogRow) => row.criticality ?? 'TIER_9',
     header: 'Criticality',
     cell: row => <Criticality tier={row.criticality} />,
     // Global `table td` is 600; DESIGN.md wants 400 for secondary cells.
@@ -98,6 +125,8 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   },
   {
     id: 'owner',
+    sortKey: 'owner',
+    sortValue: (row: CatalogRow) => row.ownerTeam?.name.toLowerCase() ?? '\uffff',
     header: 'Owner team',
     cell: row =>
       row.ownerTeam ? (
@@ -109,12 +138,16 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   },
   {
     id: 'members',
+    sortKey: 'members',
+    sortValue: (row: CatalogRow) => row.memberCount,
     header: 'Services',
     cell: row => <Members row={row} />,
     className: 'text-right font-normal',
   },
   {
     id: 'incidents',
+    sortKey: 'incidents',
+    sortValue: (row: CatalogRow) => -row.openIncidentCount,
     header: 'Open incidents',
     cell: row => (
       <span className={row.openIncidentCount ? 'font-medium tabular-nums' : 'tabular-nums'}>
@@ -124,7 +157,15 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
     className: 'text-right font-normal',
   },
   {
+    id: 'hygiene',
+    header: 'Hygiene',
+    cell: row => <HygieneBadges reasons={row.hygiene} />,
+    className: 'font-normal',
+  },
+  {
     id: 'followers',
+    sortKey: 'followers',
+    sortValue: (row: CatalogRow) => row.followerCount,
     header: 'Followers',
     cell: row => <span className="tabular-nums">{row.followerCount.toLocaleString()}</span>,
     className: 'text-right font-normal',
@@ -221,14 +262,27 @@ export default function CatalogDirectory({
   filtered,
   clearHref,
   canManage,
+  teams = [],
 }: {
   rows: readonly CatalogRow[];
   pagination: CatalogPagination;
   filtered: boolean;
   clearHref: string;
   canManage: boolean;
+  /** Owner-team choices for the bulk edit bar. */
+  teams?: ReadonlyArray<{ id: string; name: string }>;
 }) {
   const [view, setView] = useDirectoryView('business-services');
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const pageIds = rows.map(row => row.id);
+  const allSelected = pageIds.length > 0 && pageIds.every(id => selected.has(id));
+  const toggle = (id: string, checked: boolean) =>
+    setSelected(current => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const empty = filtered ? (
     <EmptyState
@@ -250,12 +304,20 @@ export default function CatalogDirectory({
       description="A business service names something customers rely on, like Checkout or Payments, and the technical services behind it. Its health follows their incidents."
       action={
         canManage ? (
-          <Button asChild size="sm" className="gap-1.5">
-            <Link href="/services/business/new">
-              <Plus className="h-4 w-4" aria-hidden />
-              Create a business service
-            </Link>
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button asChild size="sm" className="gap-1.5">
+              <Link href="/services/business/new">
+                <Plus className="h-4 w-4" aria-hidden />
+                Create a business service
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/services/business/setup">Guided setup</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/services/business/templates">Start from a template</Link>
+            </Button>
+          </div>
         ) : undefined
       }
     />
@@ -274,7 +336,26 @@ export default function CatalogDirectory({
             : undefined
         }
         view={rows.length ? { value: view, onChange: setView } : undefined}
+        selectAll={
+          canManage && rows.length && view !== 'cards'
+            ? {
+                checked: allSelected,
+                indeterminate: !allSelected && pageIds.some(id => selected.has(id)),
+                onCheckedChange: checked =>
+                  setSelected(checked ? new Set(pageIds.slice(0, 100)) : new Set()),
+                label: 'Select page',
+              }
+            : undefined
+        }
       />
+      {canManage && selected.size > 0 && (
+        <BulkEditBar
+          ids={[...selected]}
+          names={new Map(rows.map(row => [row.id, row.name]))}
+          teams={teams}
+          onClear={() => setSelected(new Set())}
+        />
+      )}
       {rows.length === 0 ? (
         <div className="p-6">{empty}</div>
       ) : view === 'cards' ? (
@@ -290,6 +371,15 @@ export default function CatalogDirectory({
           getRowId={row => row.id}
           columns={COLUMNS}
           mobileRow={row => <MobileRow row={row} />}
+          selection={
+            canManage
+              ? {
+                  selected,
+                  onToggle: toggle,
+                  rowLabel: row => `Select ${row.name}`,
+                }
+              : undefined
+          }
           rowActions={row => (
             <BusinessServiceFollowButton id={row.id} name={row.name} following={row.following} />
           )}

@@ -1,3 +1,4 @@
+import { isStatusPageIpAllowed } from '@/lib/status-pages/ip-allow-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -82,6 +83,8 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
     }
 
     if (statusPage.requireAuth) {
+      if (!(await isStatusPageIpAllowed(statusPage.id, req.headers)))
+        return jsonError('Access restricted', 403);
       const cookieHeader = req.headers.get('cookie');
       const statusToken = extractStatusSessionToken(cookieHeader);
       const host = req.headers.get('x-forwarded-host') || req.headers.get('host');

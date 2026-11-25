@@ -6,6 +6,7 @@ import { userIdentityStatus } from '@/lib/users/identity-status';
 import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
 import WeeklyDigestToggle from '@/components/settings/WeeklyDigestToggle';
+import MyServiceReview from '@/components/settings/MyServiceReview';
 import SquireHeadsUpSettings from '@/components/settings/SquireHeadsUpSettings';
 import { hasConfiguredEmailProvider, isWeeklyDigestEnabled } from '@/lib/analytics/digest';
 import QuietHoursForm from '@/components/settings/QuietHoursForm';
@@ -256,6 +257,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
               workspaceEnabled={await isWeeklyDigestEnabled()}
               emailReady={await hasConfiguredEmailProvider()}
             />
+            {user?.id && <MyServiceReview userId={user.id} />}
             <SquireHeadsUpSettings
               enabled={user?.squireSettings?.headsUpEnabled ?? true}
               leadMinutes={user?.squireSettings?.headsUpLeadMinutes ?? 60}

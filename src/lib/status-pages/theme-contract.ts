@@ -422,6 +422,73 @@ export function resolveStatusPageThemeDensity(value: unknown): StatusPageThemeDe
   return value === 'compact' ? 'compact' : 'comfortable';
 }
 
+/** Show order in the picker: business-appropriate families first, themed/novelty last. */
+const FAMILY_PICKER_ORDER: readonly StatusPageThemeFamily[] = [
+  'universal',
+  'enterprise',
+  'saas',
+  'regulated',
+  'developer',
+  'consumer',
+  'gaming',
+];
+
+/** Gimmick themes stay available but sit behind an "All themes" disclosure. */
+export function isNicheStatusPageTheme(theme: Pick<StatusPageThemeDefinition, 'family'>): boolean {
+  return theme.family === 'gaming';
+}
+
+/** Stable sort: enterprise-grade families first, original order within a family. */
+export function orderStatusPageThemesForPicker(
+  themes: readonly StatusPageThemeDefinition[]
+): StatusPageThemeDefinition[] {
+  return [...themes].sort(
+    (a, b) => FAMILY_PICKER_ORDER.indexOf(a.family) - FAMILY_PICKER_ORDER.indexOf(b.family)
+  );
+}
+
+export type StatusPageColorScheme = 'light' | 'dark' | 'auto';
+
+/** Unset or unknown keeps today's behaviour: the light shell. */
+export function resolveStatusPageColorScheme(value: unknown): StatusPageColorScheme {
+  return value === 'dark' || value === 'auto' ? value : 'light';
+}
+
+/**
+ * Dark palette applied to light themes when the page opts into `dark`, or into `auto` for visitors
+ * whose OS prefers dark. Pure CSS (a media query), so there is no flash and no script is needed
+ * for the paint. Dark themes are already dark, and `light` emits nothing.
+ */
+export function compileStatusPageColorSchemeCss(scheme: unknown, themeId: unknown): string {
+  const resolved = resolveStatusPageColorScheme(scheme);
+  const selected = resolveStatusPageTheme(themeId);
+  if (resolved === 'light' || selected.mode === 'dark') return '';
+  const accent = selected.id === DEFAULT_STATUS_PAGE_THEME_ID ? '#818cf8' : selected.preview.accent;
+  const body = `
+  color-scheme: dark;
+  --sp-page-bg: #0b1120;
+  --sp-page-text: #f8fafc;
+  --sp-ink: #f8fafc;
+  --sp-ink-strong: #f8fafc;
+  --sp-muted: #cbd5e1;
+  --sp-muted-2: #94a3b8;
+  --sp-panel-bg: #111a2e;
+  --sp-panel-muted-bg: #172033;
+  --sp-panel-border: #2a3650;
+  --sp-panel-muted-border: #222d44;
+  --status-panel-bg: #111a2e;
+  --status-panel-muted-bg: #172033;
+  --status-panel-border: #2a3650;
+  --status-text: #f8fafc;
+  --status-text-strong: #f8fafc;
+  --status-text-muted: #cbd5e1;
+  --status-text-subtle: #94a3b8;
+  --sp-theme-accent: ${accent};`;
+  const rule = (attr: string) =>
+    `.status-page-container[data-sp-color-scheme="${attr}"],\n.status-page-container[data-sp-color-scheme="${attr}"] .status-page-surface {${body}\n}`;
+  return `/* Status Page colour scheme */\n${rule('dark')}\n@media (prefers-color-scheme: dark) {\n${rule('auto')}\n}\n`;
+}
+
 /** Old gallery templates were copied wholesale into branding.customCss. */
 export function isLegacyStatusPageTemplateCss(value: unknown): boolean {
   if (typeof value !== 'string') return false;

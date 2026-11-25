@@ -28,7 +28,8 @@ export default function BusinessServiceFollowButton({
       size="sm"
       variant={optimistic ? 'secondary' : 'outline'}
       aria-pressed={optimistic}
-      aria-label={optimistic ? `Stop following ${name}` : `Follow ${name}`}
+      // A stable name plus aria-pressed; a changing label would be announced twice.
+      aria-label={`Follow ${name}`}
       disabled={isPending}
       className={cn('h-8 gap-1.5 text-xs', className)}
       onClick={() =>

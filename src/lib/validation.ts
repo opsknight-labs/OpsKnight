@@ -1,4 +1,5 @@
 import { z } from 'zod/v3';
+import { MAX_IP_ALLOW_ENTRIES, isValidIpAllowEntry } from '@/lib/status-pages/ip-allow-list';
 
 // Email validation - RFC 5322 compliant
 const _emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -152,6 +153,9 @@ export const StatusPageBrandingSchema = z
     showRssLink: z.boolean().optional(),
     showApiLink: z.boolean().optional(),
     showSlaMetrics: z.boolean().optional(),
+    showServiceMeta: z.boolean().optional(),
+    colorScheme: z.enum(['light', 'dark', 'auto']).optional(),
+    locale: z.enum(['en', 'es', 'fr', 'de', 'pt', 'ja']).optional(),
   })
   .passthrough();
 
@@ -281,6 +285,16 @@ export const StatusPageSettingsSchema = z
     dataRetentionDays: z.number().int().min(1).optional().nullable(),
     requireAuth: z.boolean().optional(),
     authProvider: z.string().optional().nullable(),
+    ipAllowList: z
+      .array(
+        z
+          .string()
+          .trim()
+          .max(60)
+          .refine(isValidIpAllowEntry, 'Use an IPv4/IPv6 address or CIDR range.')
+      )
+      .max(MAX_IP_ALLOW_ENTRIES)
+      .optional(),
     emailProvider: z.string().optional().nullable(),
     enableUptimeExports: z.boolean().optional(),
     statusApiRequireToken: z.boolean().optional(),

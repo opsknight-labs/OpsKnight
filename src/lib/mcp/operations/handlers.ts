@@ -154,6 +154,14 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
   ['listIncidentRoles', async () => (await import('@/app/api/v2/incidents/[id]/roles/route')).GET],
   ['listBusinessServices', async () => (await import('@/app/api/v2/business-services/route')).GET],
   [
+    'listBusinessServiceCustomerReports',
+    async () => (await import('@/app/api/v2/business-services/[id]/customer-reports/route')).GET,
+  ],
+  [
+    'listBusinessServiceTemplates',
+    async () => (await import('@/app/api/v2/business-service-templates/route')).GET,
+  ],
+  [
     'getBusinessService',
     async () => (await import('@/app/api/v2/business-services/[id]/route')).GET,
   ],
@@ -172,6 +180,34 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
   [
     'getBusinessServiceGraph',
     async () => (await import('@/app/api/v2/business-services/[id]/graph/route')).GET,
+  ],
+  [
+    'getDependencyGraphAt',
+    async () => (await import('@/app/api/v2/dependency-graph/at/route')).GET,
+  ],
+  [
+    'getDependencyGraphDiff',
+    async () => (await import('@/app/api/v2/dependency-graph/diff/route')).GET,
+  ],
+  [
+    'listDependencyGraphSinglePointsOfFailure',
+    async () => (await import('@/app/api/v2/dependency-graph/spof/route')).GET,
+  ],
+  [
+    'getDependencyFailureSimulation',
+    async () => (await import('@/app/api/v2/dependency-graph/simulate/route')).GET,
+  ],
+  [
+    'simulateDependencyFailure',
+    async () => (await import('@/app/api/v2/dependency-graph/simulate/route')).POST,
+  ],
+  [
+    'listDependencyGraphViews',
+    async () => (await import('@/app/api/v2/dependency-graph/views/route')).GET,
+  ],
+  [
+    'getDependencyGraphView',
+    async () => (await import('@/app/api/v2/dependency-graph/views/[id]/route')).GET,
   ],
   [
     'setIncidentRole',
@@ -956,8 +992,42 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/business-services/[id]/supporting/route')).PUT,
   ],
   [
+    'updateServiceReviewSettings',
+    async () => (await import('@/app/api/v2/settings/service-reviews/route')).PUT,
+  ],
+  ['runServiceReviews', async () => (await import('@/app/api/v2/service-reviews/run/route')).POST],
+  [
+    'previewServiceReview',
+    async () => (await import('@/app/api/v2/service-reviews/preview/route')).POST,
+  ],
+  [
     'importBusinessServices',
     async () => (await import('@/app/api/v2/business-services/import/route')).POST,
+  ],
+  [
+    'createBusinessServiceCustomerReport',
+    async () => (await import('@/app/api/v2/business-services/[id]/customer-reports/route')).POST,
+  ],
+  [
+    'bulkEditBusinessServices',
+    async () => (await import('@/app/api/v2/business-services/bulk/route')).POST,
+  ],
+  [
+    'createBusinessServiceTemplate',
+    async () => (await import('@/app/api/v2/business-service-templates/route')).POST,
+  ],
+  [
+    'updateBusinessServiceTemplate',
+    async () => (await import('@/app/api/v2/business-service-templates/[id]/route')).PATCH,
+  ],
+  [
+    'deleteBusinessServiceTemplate',
+    async () => (await import('@/app/api/v2/business-service-templates/[id]/route')).DELETE,
+  ],
+  [
+    'createBusinessServiceFromTemplate',
+    async () =>
+      (await import('@/app/api/v2/business-service-templates/[id]/instantiate/route')).POST,
   ],
   [
     'setStatusPageBusinessServiceOverride',

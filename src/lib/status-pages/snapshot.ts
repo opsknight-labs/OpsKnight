@@ -32,7 +32,11 @@ import {
 } from './availability-engine';
 import { projectPublicBranding, projectPublicPresentation } from './branding';
 import { publicUptimeGrade } from './presentation';
-import { deriveOverallPublicHealth, getWorstPublicStatus } from './status-presentation';
+import {
+  deriveOverallPublicHealth,
+  getWorstPublicStatus,
+} from './status-presentation';
+import { buildBusinessHierarchy } from './business-hierarchy';
 import { buildPublicBusinessServices, expandAffectedServiceIds } from './business-services';
 import { activeStatusOverride } from './status-override';
 import { parsePublicStatusPageSnapshot } from './public-contract-schema';
@@ -142,6 +146,7 @@ export async function buildStatusPageSnapshot(
               id: true,
               name: true,
               description: true,
+              statusPageSummary: true,
               members: { select: { serviceId: true } },
             },
           },
@@ -572,7 +577,7 @@ export async function buildStatusPageSnapshot(
   const visibleServices = visibility.showServices ? services : [];
   const groupedLayout = page.serviceLayout !== 'FLAT';
   const servicePosition = new Map(visibleServices.map((service, index) => [service.id, index]));
-  const businessServices =
+  const builtBusinessServices =
     groupedLayout && visibility.showServices
       ? buildPublicBusinessServices(
           shownBusinessServices.map(mapping => ({
@@ -580,7 +585,9 @@ export async function buildStatusPageSnapshot(
             name: mapping.displayName || mapping.businessService.name,
             statusOverride: activeStatusOverride(mapping, now),
             showMembers: mapping.showMembers,
-            description: page.showServiceDescriptions ? mapping.businessService.description : null,
+            description: page.showServiceDescriptions
+              ? mapping.businessService.statusPageSummary || mapping.businessService.description
+              : null,
             memberServiceIds: mapping.businessService.members
               .map(member => member.serviceId)
               .sort((a, b) => (servicePosition.get(a) ?? 0) - (servicePosition.get(b) ?? 0)),
@@ -588,6 +595,29 @@ export async function buildStatusPageSnapshot(
           visibleServices
         )
       : undefined;
+  // Support hierarchy between the business services listed on this page.
+  const supportEdges =
+    builtBusinessServices && builtBusinessServices.length > 1
+      ? await db.businessServiceSupport.findMany({
+          where: {
+            parentId: { in: builtBusinessServices.map(item => item.id) },
+            childId: { in: builtBusinessServices.map(item => item.id) },
+          },
+          select: { parentId: true, childId: true },
+        })
+      : [];
+  const hierarchy = buildBusinessHierarchy(
+    (builtBusinessServices ?? []).map(item => item.id),
+    supportEdges
+  );
+  const businessServices = builtBusinessServices?.map(item => {
+    const node = hierarchy.get(item.id);
+    return {
+      ...item,
+      ...(node?.parentId ? { parentId: node.parentId } : {}),
+      ...(node?.childIds.length ? { childIds: node.childIds } : {}),
+    };
+  });
   // Business services each listed incident affects: engine impact rows plus any linked update
   // that names business services. Sequential: this may run inside an interactive transaction.
   const incidentBusiness = new Map<string, Set<string>>();
@@ -619,7 +649,9 @@ export async function buildStatusPageSnapshot(
     });
     for (const update of linkedUpdates) add(update.incidentId, update.affectedBusinessServiceIds);
   }
-  const overallBase = deriveOverallPublicHealth(visibleServices);
+  // A pinned business-service status (override) can be worse than any member: the page headline
+  // must not stay green while a group row says outage.
+  const overallBase = deriveOverallPublicHealth(visibleServices, businessServices);
   const impactedServiceCount = visibleServices.filter(
     service => service.status !== 'OPERATIONAL' && service.status !== 'UNKNOWN'
   ).length;
@@ -694,7 +726,7 @@ export async function buildStatusPageSnapshot(
       },
       subscription: {
         enabled: page.showSubscribe,
-        channels: ['EMAIL'],
+        channels: ['EMAIL', 'WEBHOOK'],
         verificationRequired: true,
         serviceSelectionSupported: true,
       },
@@ -732,7 +764,10 @@ export async function buildStatusPageSnapshot(
     // Canonical page status matches overall severity. UNKNOWN is confidence, not a worse outage.
     status: overallBase.status,
     statusIncludingUnknown: visibleServices.length
-      ? getWorstPublicStatus(visibleServices.map(service => service.status))
+      ? getWorstPublicStatus([
+          ...visibleServices.map(service => service.status),
+          ...(businessServices ?? []).map(group => group.status),
+        ])
       : overallBase.status,
     overall: {
       ...overallBase,

@@ -539,6 +539,8 @@ model User {
   timeZone                     String     @default("UTC")
   themePreference              ThemePreference @default(SYSTEM)
   emailNotificationsEnabled    Boolean    @default(false)
+  /// Opt-in: this user's team services appear in their monthly service review digest.
+  receiveServiceReviews        Boolean    @default(false)
   smsNotificationsEnabled      Boolean    @default(false)
   voiceNotificationsEnabled    Boolean    @default(false)
   pushNotificationsEnabled     Boolean    @default(false)
@@ -576,7 +578,9 @@ model User {
   incidentRoles               IncidentRoleAssignment[]        @relation("IncidentRoleHolder")
   incidentRolesAssigned       IncidentRoleAssignment[]        @relation("IncidentRoleAssigner")
   businessServiceFollows      BusinessServiceFollower[]
+  ownedBusinessServices       BusinessService[]         @relation("BusinessServiceOwner")
   businessServiceImpactsMarked IncidentBusinessServiceImpact[]
+  customerImpactReportsCreated CustomerImpactReport[]
   auditLogs                   AuditLog[]
   overrides                   OnCallOverride[]             @relation("OverrideUser")
   overrideReplacements        OnCallOverride[]             @relation("OverrideReplacesUser")
@@ -698,6 +702,7 @@ model Team {
   runbooks          Runbook[]          @relation("RunbookOwnerTeam")
   businessServices  BusinessService[]
   businessServiceSubscriptions BusinessServiceTeamSubscriber[]
+  businessServiceTemplates     BusinessServiceTemplate[]
   statusDashboards  StatusDashboard[]
   teamLeadId        String?
   teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
@@ -816,6 +821,7 @@ model EscalationPolicy {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   services    Service[]
+  businessServices BusinessService[]
   automationDecisions IncidentAutomationDecision[]
 }
 
@@ -2719,6 +2725,8 @@ model StatusPage {
   dataRetentionDays           Int?
   requireAuth                 Boolean                    @default(false)
   authProvider                String?
+  /// Optional CIDR allow-list for private pages; empty means no network restriction.
+  ipAllowList                 String[]                   @default([])
   emailProvider               String?
   enableUptimeExports         Boolean                    @default(false)
   statusApiRequireToken       Boolean                    @default(false)
@@ -2919,6 +2927,13 @@ enum BusinessServiceTier {
   TIER_3
 }
 
+enum BusinessServiceLifecycle {
+  ACTIVE
+  BETA
+  DEPRECATED
+  RETIRED
+}
+
 enum BusinessServiceImpactSource {
   DIRECT
   DEPENDENCY
@@ -2943,9 +2958,46 @@ model BusinessService {
   /// Plain-language description shown on status pages.
   statusPageSummary  String?
   ownerTeamId        String?
+  /// SLO availability target in percent (90 to 99.999); null = no SLO.
+  sloTarget          Float?
+  /// SLO rolling window in days (7, 30 or 90).
+  sloWindowDays      Int                                     @default(30)
+  ownerUserId        String?
+  escalationPolicyId String?
+  contactChannel     String?
+  tags               String[]                                @default([])
+  /// Free text such as production or staging.
+  environment        String?
+  lifecycle          BusinessServiceLifecycle                @default(ACTIVE)
+  lastReviewedAt     DateTime?
+  /// Flat { key: string | number | boolean } map, validated on write.
+  customAttributes   Json?
+  /// Quorum rule: when set, status derives from the share of critical members impacted.
+  quorumPartialPct   Int?
+  quorumMajorPct     Int?
+  /// How many dependency hops from a member count as impact (1 to 5).
+  dependencyHopDepth Int                                     @default(3)
+  /// Last health status announced to followers and status-page webhooks; null until first reconcile.
+  lastNotifiedStatus   String?
+  lastNotifiedStatusAt DateTime?
+  /// Opt-in to the monthly service review digest (also needs the org-level switch).
+  includeInReview    Boolean                                 @default(false)
+  /// Customers exposed to this service; null = unknown.
+  customersTotal       Int?
+  /// Estimated revenue per hour of full downtime, integer minor units (cents).
+  revenuePerHourCents  Int?
+  /// ISO 4217 code for revenuePerHourCents.
+  currency             String                                  @default("USD")
+  /// Customer reports within customerReportWindowMinutes that lift health to degraded; null = off.
+  customerReportThreshold     Int?
+  customerReportWindowMinutes Int?
+  /// Review cadence in days; null = org default (180).
+  reviewIntervalDays   Int?
   createdAt          DateTime                                @default(now())
   updatedAt          DateTime                                @updatedAt
   ownerTeam          Team?                                   @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
+  ownerUser          User?                                   @relation("BusinessServiceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  escalationPolicy   EscalationPolicy?                       @relation(fields: [escalationPolicyId], references: [id], onDelete: SetNull)
   members            BusinessServiceMember[]
   followers          BusinessServiceFollower[]
   statusPages        StatusPageBusinessService[]
@@ -2958,8 +3010,53 @@ model BusinessService {
   dashboards         StatusDashboardBusinessService[]
   teamSubscribers    BusinessServiceTeamSubscriber[]
   maintenanceWindows MaintenanceWindowBusinessService[]
+  customerReports    CustomerImpactReport[]
 
   @@index([ownerTeamId])
+  @@index([ownerUserId])
+  @@index([escalationPolicyId])
+}
+
+/// Customer-reported impact signals (support tickets, status inquiries) for a business service.
+model CustomerImpactReport {
+  id                String          @id @default(cuid())
+  businessServiceId String
+  /// zendesk, intercom, manual, api, ...
+  source            String
+  count             Int
+  windowStart       DateTime
+  windowEnd         DateTime
+  /// Caller-supplied id; unique per business service so a retry never double counts.
+  externalRef       String?
+  createdById       String?
+  createdAt         DateTime        @default(now())
+  businessService   BusinessService @relation(fields: [businessServiceId], references: [id], onDelete: Cascade)
+  createdBy         User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([businessServiceId, externalRef])
+  @@index([businessServiceId, windowEnd])
+}
+
+/// Defaults applied when creating a business service from a template.
+model BusinessServiceTemplate {
+  id                String                    @id @default(cuid())
+  name              String                    @unique
+  description       String?
+  criticality       BusinessServiceTier?
+  sloTarget         Float?
+  sloWindowDays     Int                       @default(30)
+  quorumPartialPct  Int?
+  quorumMajorPct    Int?
+  tags              String[]                  @default([])
+  environment       String?
+  lifecycle         BusinessServiceLifecycle  @default(ACTIVE)
+  links             Json?
+  impactMinUrgency  IncidentUrgency?
+  impactMaxPriority String?
+  ownerTeamId       String?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  ownerTeam         Team?                     @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
 }
 
 model BusinessServiceMember {
@@ -3109,11 +3206,16 @@ model StatusPageWebhook {
   events          Json
   enabled         Boolean    @default(true)
   lastTriggeredAt DateTime?
+  /// ADMIN = configured by a page admin; SUBSCRIBER = self-service public webhook subscription.
+  source          String     @default("ADMIN")
+  /// Set once a subscriber endpoint echoed the verification challenge; unverified rows stay disabled.
+  verifiedAt      DateTime?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   statusPage      StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
 
   @@index([statusPageId, enabled])
+  @@index([statusPageId, source])
 }
 
 model CustomField {
@@ -3217,6 +3319,8 @@ model SystemSettings {
   accessReviewLastStartedAt        DateTime?
   /// When true, admins allow outgoing service webhooks to use plain http:// URLs.
   allowInsecureWebhookUrls         Boolean   @default(false)
+  /// Admin switch for the scheduled business-service ownership hygiene sweep (off by default).
+  businessServiceHygieneEnabled    Boolean   @default(false)
 }
 
 model IncidentMetricRollup {
@@ -6055,6 +6159,18 @@ enum DependencyOrigin {
   OBSERVED
 }
 
+/// HARD: the dependent fails when this dependency fails. SOFT: it degrades gracefully.
+enum DependencyType {
+  HARD
+  SOFT
+}
+
+enum DependencyCriticality {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum DependencyStatus {
   ACTIVE
   SUGGESTED
@@ -6079,6 +6195,9 @@ model ServiceDependency {
   status              DependencyStatus @default(ACTIVE)
   confidence          Float            @default(1)
   evidence            Json
+  dependencyType      DependencyType   @default(HARD)
+  note                String?          @db.VarChar(500)
+  criticality         DependencyCriticality?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
@@ -7518,4 +7637,87 @@ model SquireMcpInvestigation {
 
   @@index([actorId, status, createdAt])
   @@index([expiresAt])
+}
+
+/// State an edge entered, so the graph can be replayed at any past moment. No foreign keys: the
+/// history outlives the edge and its services.
+enum DependencyEventState {
+  ACTIVE
+  SUGGESTED
+  REJECTED
+  REMOVED
+}
+
+model ServiceDependencyEvent {
+  id                  String               @id @default(cuid())
+  upstreamServiceId   String
+  downstreamServiceId String
+  state               DependencyEventState
+  origin              DependencyOrigin
+  actorId             String?
+  occurredAt          DateTime             @default(now())
+
+  @@index([occurredAt])
+  @@index([upstreamServiceId, downstreamServiceId, occurredAt])
+}
+
+/// Measured traffic on one dependency edge over one window, pushed by an integration.
+model ServiceDependencyEdgeStats {
+  id                  String   @id @default(cuid())
+  upstreamServiceId   String
+  downstreamServiceId String
+  source              String   @db.VarChar(64)
+  windowStart         DateTime
+  windowSeconds       Int
+  requestCount        Int
+  errorCount          Int
+  createdAt           DateTime @default(now())
+
+  @@unique([upstreamServiceId, downstreamServiceId, source, windowStart])
+  @@index([upstreamServiceId, downstreamServiceId, windowStart])
+  @@index([windowStart])
+}
+
+enum GraphViewVisibility {
+  PRIVATE
+  TEAM
+  ORG
+}
+
+/// A named, shareable dependency-graph view. The embed token is stored only as a SHA-256 hash.
+model SavedGraphView {
+  id               String              @id @default(cuid())
+  name             String              @db.VarChar(120)
+  ownerId          String
+  teamId           String?
+  visibility       GraphViewVisibility @default(PRIVATE)
+  config           Json
+  shareTokenHash   String?             @unique
+  shareExpiresAt   DateTime?
+  shareRevokedAt   DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([ownerId])
+  @@index([visibility, teamId])
+}
+
+/// One row per (period, kind, recipient): the claim that makes a monthly review run idempotent.
+model BusinessServiceReviewRun {
+  id            String   @id @default(cuid())
+  /// Calendar month reviewed, "YYYY-MM".
+  period        String
+  /// DIGEST (per-recipient) or SUMMARY (org portfolio).
+  kind          String
+  /// User id, or lowercased email for summary recipients that are not users.
+  recipientKey  String
+  /// SENT, SKIPPED or FAILED.
+  status        String
+  serviceCount  Int      @default(0)
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([period, kind, recipientKey])
+  @@index([period, createdAt])
 }

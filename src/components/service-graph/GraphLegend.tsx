@@ -5,8 +5,10 @@ import { GRAPH_STATUS_META } from './GraphHealthBadge';
 const STATUSES = [
   GRAPH_STATUS_META.OPERATIONAL,
   GRAPH_STATUS_META.DEGRADED,
+  GRAPH_STATUS_META.PARTIAL_OUTAGE,
   GRAPH_STATUS_META.MAJOR_OUTAGE,
   GRAPH_STATUS_META.MAINTENANCE,
+  GRAPH_STATUS_META.UNKNOWN,
 ];
 
 function Line({ dash }: { dash?: string }) {
@@ -55,6 +57,9 @@ export default function GraphLegend({ grouped, canEdit }: { grouped: boolean; ca
       </span>
       <span className={item}>
         <Line dash="6 4" /> Suggested
+      </span>
+      <span className={item}>
+        <Line dash="10 3 2 3" /> Soft dependency
       </span>
       {STATUSES.map(meta => (
         <span key={meta.label} className={item}>

@@ -41,6 +41,7 @@ const renderLayout = (layout: 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE') =>
       groupByRegion={false}
       showUptimeHistory={false}
       showMetrics={false}
+      filterThreshold={0}
     />
   );
 
@@ -59,7 +60,7 @@ describe('ServiceHealthV3 business layouts', () => {
     expect(within(list).getByText('1 of 2 services affected')).toBeInTheDocument();
     expect(within(list).getByText('1 service')).toBeInTheDocument();
     expect(within(list).queryByText('Payments API')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { expanded: false })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Checkout/ })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Other services' })).toBeInTheDocument();
     expect(screen.getByText('Email delivery')).toBeInTheDocument();
     expect(screen.getByText('2 business services')).toBeInTheDocument();
@@ -83,6 +84,7 @@ describe('ServiceHealthV3 business layouts', () => {
 
   it('search by a member service name reveals its business service', () => {
     renderLayout('BUSINESS_EXPANDABLE');
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'edge' } });
     expect(screen.getByRole('button', { name: /Browsing/ })).toHaveAttribute(
       'aria-expanded',
@@ -92,6 +94,7 @@ describe('ServiceHealthV3 business layouts', () => {
 
   it('status filters apply to the business status', () => {
     renderLayout('BUSINESS');
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
     fireEvent.click(screen.getByRole('button', { name: 'Outage' }));
     const list = screen.getByRole('list', { name: 'Business services' });
     expect(within(list).getByText('Checkout')).toBeInTheDocument();

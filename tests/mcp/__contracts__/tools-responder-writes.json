@@ -95,6 +95,54 @@
     "descriptionSha256": "f7afec0ea41a9839a60455b430f8e4067e744460152eef2b611b728ea29d21e7"
   },
   {
+    "name": "dependency_failure_blast_radius",
+    "title": "Blast radius of a failure",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "aa3a4fc74fa61f6930bf23606f8db1b887f0164ed79b8a21246113206e2df8e2",
+    "descriptionSha256": "6b094c1050961db786493ec6e9dbff3c60610433fdf140168a601a5e1965dd80"
+  },
+  {
+    "name": "dependency_graph_at",
+    "title": "Dependency graph at a past time",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "aa636255a64bb7bac126bbaffd3c1127682563e1ea46d7296d39da995a9292bc",
+    "descriptionSha256": "f34a698f821cc233c378ed82abf242d772304bc63d4f68f20c6dc3c0e774197f"
+  },
+  {
+    "name": "dependency_graph_changes",
+    "title": "What changed in the dependency graph",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "3d4d0eead35eb5c88b5bfe0b812127c84bf2c7131b4cc4be090cd8eaf7160023",
+    "descriptionSha256": "f7edfb3eaad43cd6c7e05a34e5663f7e77b6a41dc73df63bb8716e6bcd5f8955"
+  },
+  {
+    "name": "dependency_single_points_of_failure",
+    "title": "Single points of failure",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "c520a8bafaccf242b5df33900ac4bd6d13165c2f265b482e488f952b9ecbcfa0",
+    "descriptionSha256": "75a032fa0d6a2728e0e3ae2965bbf710e6fbe48d32435b327a4685acfb20fbb4"
+  },
+  {
     "name": "describe_operation",
     "title": "Describe an operation",
     "annotations": {
@@ -461,7 +509,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "09f5b07374e6bee9a009b22bd3c75d3e780bc8aa1bbda22d26bfaa0960bddc85",
+    "inputSchemaSha256": "1b34209eb7cfdeadf22c36a945502941673e44f5aa30351e6ec555773f48bd88",
     "descriptionSha256": "57c12cb6a7474e26672530e10249aebe03b8f5c436fafd66a4ba26e8e7ebf8bd"
   },
   {
@@ -651,7 +699,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "94da30515d8c6f475a2791a36e7f0e05ee8884f2bdb1e0c8b4a1d17b6f5e1b8e",
+    "inputSchemaSha256": "3eb5e02cf7833072c3c88653b872650ff2645778696736d38b03edfb07c13424",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {

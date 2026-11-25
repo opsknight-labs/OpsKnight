@@ -114,6 +114,8 @@ describe('business-service catalog', () => {
         description: null,
         criticality: 'TIER_0' as const,
         ownerTeamId: 't1',
+        ownerUserId: null,
+        memberCount: 1,
       },
       {
         id: 'billing',
@@ -121,13 +123,28 @@ describe('business-service catalog', () => {
         description: 'Invoices and refunds',
         criticality: 'TIER_1' as const,
         ownerTeamId: 't1',
+        ownerUserId: null,
+        memberCount: 1,
       },
-      { id: 'search', name: 'Search', description: null, criticality: null, ownerTeamId: null },
+      {
+        id: 'search',
+        name: 'Search',
+        description: null,
+        criticality: null,
+        ownerTeamId: null,
+        ownerUserId: null,
+        memberCount: 0,
+      },
     ];
     const health = await engine.getBusinessServiceHealth(['checkout', 'billing', 'search'], actor);
     expect(countMatching(visible, health, query)).toBe(1);
     expect(countMatching(visible, health, parseCatalogParams({ q: 'CHE' }).query)).toBe(1);
     expect(countMatching(visible, health, parseCatalogParams({ tier: 'TIER_1' }).query)).toBe(1);
+    // Search has no owner, tier or services; the others are complete enough.
+    const needs = (value: string) => parseCatalogParams({ needs: value }).query;
+    expect(needs('bogus').needs).toBe('');
+    expect(countMatching(visible, health, needs('attention'))).toBe(1);
+    expect(countMatching(visible, health, needs('no-members'))).toBe(1);
     // Like the engine, the query also matches the description.
     expect(countMatching(visible, health, parseCatalogParams({ q: 'refund' }).query)).toBe(1);
     expect(countMatching(visible, health, parseCatalogParams().query)).toBe(3);

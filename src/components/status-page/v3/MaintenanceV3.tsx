@@ -48,7 +48,10 @@ function MaintenanceV3({
     >
       <div className="status-v3-maintenance-inline__head">
         <div className="status-v3-maintenance-inline__title-wrap">
-          <h2 id="status-v3-maintenance-heading" className="status-section-title status-v3-maintenance-inline__title">
+          <h2
+            id="status-v3-maintenance-heading"
+            className="status-section-title status-v3-maintenance-inline__title"
+          >
             Maintenance
           </h2>
           <span className="status-v3-maintenance-inline__subtitle">Scheduled & active windows</span>
@@ -153,10 +156,16 @@ function MaintenanceV3({
                 <p className="status-v3-maintenance-pill__desc">{item.description}</p>
               )}
 
-              {(item.affectedServices && item.affectedServices.length > 0) ||
+              {(item.affectedBusinessServices && item.affectedBusinessServices.length > 0) ||
+              (item.affectedServices && item.affectedServices.length > 0) ||
               (item.affectedRegions && item.affectedRegions.length > 0) ? (
                 <div className="status-v3-maintenance-pill__meta">
                   <span className="status-v3-maintenance-pill__affected-label">Affects:</span>
+                  {item.affectedBusinessServices?.map(service => (
+                    <span key={service.id} className="status-v3-chip status-v3-chip--muted">
+                      {service.name}
+                    </span>
+                  ))}
                   {item.affectedServices?.map(service => (
                     <span
                       key={service.id || service.name}

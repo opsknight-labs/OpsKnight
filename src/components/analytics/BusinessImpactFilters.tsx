@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 
-type Params = { days: number; teamId: string | null; tier: string | null };
+type Params = { days: number; teamId: string | null; tier: string | null; sort?: 'impact' | 'cost' };
 
 const TIERS = [
   ['TIER_0', 'Tier 0'],
@@ -34,6 +34,7 @@ export default function BusinessImpactFilters({
     if (merged.days !== 30) search.set('days', String(merged.days));
     if (merged.teamId) search.set('team', merged.teamId);
     if (merged.tier) search.set('tier', merged.tier);
+    if (merged.sort === 'cost') search.set('sort', 'cost');
     const query = search.toString();
     router.replace(`/insights/business-impact${query ? `?${query}` : ''}`);
   };
@@ -94,9 +95,25 @@ export default function BusinessImpactFilters({
               </SelectContent>
             </Select>
           </FilterField>
+          <FilterField label="Rank by" htmlFor="impact-sort">
+            <Select
+              value={params.sort ?? 'impact'}
+              onValueChange={value => go({ sort: value === 'cost' ? 'cost' : 'impact' })}
+            >
+              <SelectTrigger id="impact-sort" className="h-9 w-[170px] text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="impact">Impacted time</SelectItem>
+                <SelectItem value="cost">Estimated cost</SelectItem>
+              </SelectContent>
+            </Select>
+          </FilterField>
         </>
       }
-      hasActiveFilters={params.days !== 30 || !!params.teamId || !!params.tier}
+      hasActiveFilters={
+        params.days !== 30 || !!params.teamId || !!params.tier || params.sort === 'cost'
+      }
       onClearAll={() => router.replace('/insights/business-impact')}
     />
   );

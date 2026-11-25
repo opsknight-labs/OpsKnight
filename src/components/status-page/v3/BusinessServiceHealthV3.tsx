@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useId } from 'react';
+import { memo, useId, type ReactNode } from 'react';
 import type {
   PublicBusinessService,
   PublicStatusService,
@@ -8,6 +8,8 @@ import type {
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
 import { formatDateTime } from '@/lib/timezone';
+import { useT } from '@/lib/status-pages/i18n/context';
+import { STATUS_LABEL_KEYS, type Translator } from '@/lib/status-pages/i18n';
 import ServiceHistoryV3 from './ServiceHistoryV3';
 
 type RowDisplay = {
@@ -15,6 +17,8 @@ type RowDisplay = {
   showMetrics: boolean;
   showUptimeHistory: boolean;
   showSlaMetrics: boolean;
+  /** Called with the group id; renders a 'Subscribe to this group' action when set. */
+  onSubscribeGroup?: (id: string) => void;
 };
 
 /** The history component draws any row with a status, uptime and segments. */
@@ -30,12 +34,18 @@ function asHistoryRow(item: PublicBusinessService): PublicStatusService {
   };
 }
 
-function tallyText(item: PublicBusinessService) {
+function serviceCountText(count: number, t: Translator) {
+  return count === 1 ? t('business.serviceOne', { count }) : t('business.serviceCount', { count });
+}
+
+function tallyText(item: PublicBusinessService, t: Translator) {
   const total = item.memberServiceIds.length;
-  const noun = total === 1 ? 'service' : 'services';
   return item.impactedServiceCount > 0
-    ? `${item.impactedServiceCount} of ${total} ${noun} affected`
-    : `${total} ${noun}`;
+    ? t(total === 1 ? 'business.affectedOne' : 'business.affectedCount', {
+        impacted: item.impactedServiceCount,
+        total,
+      })
+    : serviceCountText(total, t);
 }
 
 const BusinessIcon = () => (
@@ -73,6 +83,7 @@ const MemberRow = memo(function MemberRow({
   service: PublicStatusService;
   display: RowDisplay;
 }) {
+  const t = useT();
   const presentation = statusPresentation(service.status);
   const affected = service.status !== 'OPERATIONAL';
   return (
@@ -83,7 +94,12 @@ const MemberRow = memo(function MemberRow({
     >
       <div className="status-v3-service__head">
         <span className="status-v3-business__member-name">{service.name}</span>
-        <StatusBadge status={service.status} label={presentation.label} size="xs" showDot />
+        <StatusBadge
+          status={service.status}
+          label={t(STATUS_LABEL_KEYS[service.status])}
+          size="xs"
+          showDot
+        />
       </div>
       {service.description && <p className="status-v3-service__desc">{service.description}</p>}
       {((display.showUptimeHistory && service.history) ||
@@ -113,6 +129,9 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
   open,
   onToggle,
   display,
+  childRows,
+  childCount = 0,
+  level = 1,
 }: {
   item: PublicBusinessService;
   members: PublicStatusService[];
@@ -120,17 +139,27 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
   open: boolean;
   onToggle: () => void;
   display: RowDisplay;
+  /** Nested child business-service rows (already rendered), shown under this row. */
+  childRows?: ReactNode;
+  childCount?: number;
+  /** 1-based depth in the support hierarchy, exposed as aria-level. */
+  level?: number;
 }) {
+  const t = useT();
   const panelId = useId();
   const presentation = statusPresentation(item.status);
   const affected = item.status !== 'OPERATIONAL';
   const row = asHistoryRow(item);
   // Members stay out of view when the page shows only the business service.
-  const canExpand = expandable && item.showMembers !== false;
+  const showMembers = item.showMembers !== false;
+  const canExpand = expandable && (showMembers || childCount > 0);
+  // Without disclosure (non-expandable layout) children are always visible.
+  const showChildren = childCount > 0 && (!expandable || open);
   return (
     <div
       role="listitem"
-      className={`status-v3-service status-service-card status-v3-business${affected ? ' status-v3-service--affected' : ''}`}
+      aria-level={level}
+      className={`status-v3-service status-service-card status-v3-business${level > 1 ? ' status-v3-business--child' : ''}${affected ? ' status-v3-service--affected' : ''}`}
       data-status={presentation.token}
       data-expanded={canExpand ? String(open) : undefined}
     >
@@ -161,8 +190,9 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
               <BusinessIcon />
               <span className="status-v3-service__name">{item.name}</span>
               <span className="sr-only">
-                , {open ? 'hide' : 'show'} {members.length}{' '}
-                {members.length === 1 ? 'service' : 'services'}
+                , {open ? t('business.hide') : t('business.show')}{' '}
+                {serviceCountText(members.length, t)}
+                {childCount > 0 ? `, ${t('business.nested', { count: childCount })}` : ''}
               </span>
             </button>
           ) : (
@@ -174,13 +204,23 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
           <span
             className={`status-v3-business__tally${item.impactedServiceCount > 0 ? ' status-v3-business__tally--impacted' : ''}`}
           >
-            {tallyText(item)}
+            {tallyText(item, t)}
           </span>
         </div>
         <div className="status-v3-service__badges">
+          {display.onSubscribeGroup && (
+            <button
+              type="button"
+              className="status-v3-business__subscribe"
+              onClick={() => display.onSubscribeGroup?.(item.id)}
+              aria-label={t('business.subscribeTo', { name: item.name })}
+            >
+              {t('business.subscribe')}
+            </button>
+          )}
           <StatusBadge
             status={item.status}
-            label={presentation.label}
+            label={t(STATUS_LABEL_KEYS[item.status])}
             size="sm"
             showDot
             pulse={affected}
@@ -191,10 +231,24 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
       {item.description && <p className="status-v3-service__desc">{item.description}</p>}
       {affected && item.statusSince && (
         <p className="status-v3-service__desc" suppressHydrationWarning>
-          {presentation.label} since{' '}
-          <time dateTime={item.statusSince}>
-            {formatDateTime(item.statusSince, display.timeZone, { format: 'short', hour12: true })}
-          </time>
+          {(() => {
+            const [before, after] = t('business.since', {
+              status: t(STATUS_LABEL_KEYS[item.status]),
+              time: '\u0000',
+            }).split('\u0000');
+            return (
+              <>
+                {before}
+                <time dateTime={item.statusSince}>
+                  {formatDateTime(item.statusSince, display.timeZone, {
+                    format: 'short',
+                    hour12: true,
+                  })}
+                </time>
+                {after}
+              </>
+            );
+          })()}
         </p>
       )}
 
@@ -214,12 +268,21 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
           id={panelId}
           className="status-v3-business__members"
           role="list"
-          aria-label={`Services in ${item.name}`}
+          aria-label={t('business.servicesIn', { name: item.name })}
           hidden={!open}
         >
-          {open && members.map(member => (
-            <MemberRow key={member.id} service={member} display={display} />
-          ))}
+          {open &&
+            showMembers &&
+            members.map(member => <MemberRow key={member.id} service={member} display={display} />)}
+        </div>
+      )}
+      {showChildren && (
+        <div
+          role="list"
+          aria-label={t('business.within', { name: item.name })}
+          className="status-v3-business__children"
+        >
+          {childRows}
         </div>
       )}
     </div>

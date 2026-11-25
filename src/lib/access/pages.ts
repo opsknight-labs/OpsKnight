@@ -81,6 +81,11 @@ export const PAGE_ACCESS: readonly PageAccessRule[] = [
     label: 'New business service',
     anyOf: [C.OPERATIONS_MANAGE],
   },
+  {
+    pattern: '/services/business/templates',
+    label: 'Business service templates',
+    anyOf: [C.OPERATIONS_MANAGE],
+  },
   { pattern: '/services/business/[id]', label: 'Business service', anyOf: SERVICE_READ },
   {
     pattern: '/services/business/[id]/edit',

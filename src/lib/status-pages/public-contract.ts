@@ -76,7 +76,7 @@ export type PublicServiceLayout = 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
 
 /**
  * A customer-facing capability (Checkout, Payments) made of published technical services.
- * Status is the worst member status; uptime is the weakest member's; history is merged.
+ * Status is the worst member status; uptime is the union of member downtime; history is merged.
  */
 export interface PublicBusinessService {
   id: string;
@@ -88,6 +88,10 @@ export interface PublicBusinessService {
   showMembers?: false;
   /** Published member services, in page order; their rows live in `services`. */
   memberServiceIds: string[];
+  /** Parent business service on this page (support hierarchy, at most 3 levels). */
+  parentId?: string;
+  /** Child business services on this page, in page order. */
+  childIds?: string[];
   activeIncidentCount: number;
   impactedServiceCount: number;
   uptime?: { days30: PublicUptimeWindow; days90: PublicUptimeWindow };
@@ -182,6 +186,12 @@ export interface PublicStatusBranding {
   showApiLink?: boolean;
   showRssLink?: boolean;
   showSlaMetrics?: boolean;
+  /** Show service tier and owning team chips; off by default. */
+  showServiceMeta?: boolean;
+  /** Visitor colour scheme; unset behaves as `light`. */
+  colorScheme?: 'light' | 'dark' | 'auto';
+  /** Public chrome language (en, es, fr, de, pt, ja); defaults to en. */
+  locale?: 'en' | 'es' | 'fr' | 'de' | 'pt' | 'ja';
 }
 
 /** Chrome and layout that the public renderer reads; kept in sync with branding. */
@@ -194,6 +204,12 @@ export interface PublicPagePresentation {
   showApiLink?: boolean;
   showRssLink?: boolean;
   showSlaMetrics?: boolean;
+  /** Show service tier and owning team chips; off by default. */
+  showServiceMeta?: boolean;
+  /** Visitor colour scheme; unset behaves as `light`. */
+  colorScheme?: 'light' | 'dark' | 'auto';
+  /** Public chrome language (en, es, fr, de, pt, ja); defaults to en. */
+  locale?: 'en' | 'es' | 'fr' | 'de' | 'pt' | 'ja';
 }
 
 /** What this page's engine supports, independent of what the admin chose to show. */

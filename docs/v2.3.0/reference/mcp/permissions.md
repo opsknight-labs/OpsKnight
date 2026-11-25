@@ -100,8 +100,8 @@ Operation columns count catalog operations that need the permission: plain reads
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ |  | 0 | 0 | 0 | 1 |
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ |  | 3 | 7 | 0 | 0 |
 | `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 4 |
-| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 12 | 2 | 0 | 3 |
-| `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 13 |
+| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 19 | 4 | 0 | 4 |
+| `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  |  | 1 | 1 | 0 | 21 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |
 | `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  |  | 5 | 9 | 0 | 2 |
 | `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 11 |
@@ -124,9 +124,11 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | action-items | 1 | 1 | 0 | 0 |
 | audit-exports | 3 | 0 | 0 | 3 |
 | audit-logs | 1 | 1 | 0 | 0 |
-| business-services | 10 | 5 | 2 | 3 |
+| business-service-templates | 5 | 1 | 4 | 0 |
+| business-services | 13 | 6 | 4 | 3 |
 | custom-fields | 5 | 2 | 3 | 0 |
 | dashboards | 10 | 4 | 5 | 1 |
+| dependency-graph | 13 | 7 | 0 | 6 |
 | escalation-policies | 8 | 5 | 3 | 0 |
 | incidents | 48 | 35 | 13 | 0 |
 | integrations | 11 | 6 | 2 | 3 |
@@ -141,12 +143,13 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | schedules | 25 | 13 | 12 | 0 |
 | service-accounts | 6 | 0 | 0 | 6 |
 | service-objectives | 14 | 9 | 5 | 0 |
+| service-reviews | 3 | 1 | 2 | 0 |
 | services | 45 | 21 | 21 | 3 |
-| settings | 8 | 3 | 4 | 1 |
+| settings | 10 | 4 | 5 | 1 |
 | status-pages | 33 | 15 | 11 | 7 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 362 | 164 | 120 | 78 |
+| **All** | 388 | 175 | 129 | 84 |
 
 <details>
 <summary>Operations by area</summary>
@@ -171,16 +174,29 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | --- | --- |
 | `listAuditLogs` | `read_operation` (sensitive reads on) |
 
+### business-service-templates
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createBusinessServiceFromTemplate` | `operation_prepare`, then approval |
+| `createBusinessServiceTemplate` | `operation_prepare`, then approval |
+| `deleteBusinessServiceTemplate` | `operation_prepare`, then approval |
+| `listBusinessServiceTemplates` | `read_operation` |
+| `updateBusinessServiceTemplate` | `operation_prepare`, then approval |
+
 ### business-services
 
 | Operation | How an assistant reaches it |
 | --- | --- |
+| `bulkEditBusinessServices` | `operation_prepare`, then approval |
 | `createBusinessService` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `createBusinessServiceCustomerReport` | `operation_prepare`, then approval |
 | `deleteBusinessService` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `getBusinessService` | `business_service_get` |
 | `getBusinessServiceGraph` | `business_service_graph` |
 | `getBusinessServiceImpactTimeline` | `business_service_health` |
 | `importBusinessServices` | `operation_prepare`, then approval |
+| `listBusinessServiceCustomerReports` | `read_operation` |
 | `listBusinessServiceIncidents` | `business_service_incidents` |
 | `listBusinessServices` | `business_services_list` |
 | `setSupportingBusinessServices` | `operation_prepare`, then approval |
@@ -210,6 +226,24 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `listReportDashboards` | `read_operation` (sensitive reads on) |
 | `replaceReportDashboardWidgets` | `operation_prepare`, then approval |
 | `updateReportDashboard` | `operation_prepare`, then approval |
+
+### dependency-graph
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `createDependencyGraphView` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `deleteDependencyGraphView` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `getDependencyFailureSimulation` | `dependency_failure_blast_radius` |
+| `getDependencyGraphAt` | `dependency_graph_at` |
+| `getDependencyGraphDiff` | `dependency_graph_changes` |
+| `getDependencyGraphView` | `read_operation` |
+| `ingestDependencyEdgeStats` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `listDependencyGraphSinglePointsOfFailure` | `dependency_single_points_of_failure` |
+| `listDependencyGraphViews` | `read_operation` |
+| `revokeDependencyGraphViewShare` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `shareDependencyGraphView` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
+| `simulateDependencyFailure` | `read_operation` (sensitive reads on) |
+| `updateDependencyGraphView` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 
 ### escalation-policies
 
@@ -500,6 +534,14 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `updateServiceObjective` | `operation_prepare`, then approval |
 | `updateServiceObjectiveAlertPolicy` | `operation_prepare`, then approval |
 
+### service-reviews
+
+| Operation | How an assistant reaches it |
+| --- | --- |
+| `listServiceReviewRuns` | `read_operation` (sensitive reads on) |
+| `previewServiceReview` | `operation_prepare`, then approval |
+| `runServiceReviews` | `operation_prepare`, then approval |
+
 ### services
 
 | Operation | How an assistant reaches it |
@@ -557,10 +599,12 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `getAutomationSettings` | `read_operation` (sensitive reads on) |
 | `getChatOpsConfiguration` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `getRunbookSettings` | `read_operation` (sensitive reads on) |
+| `getServiceReviewSettings` | `read_operation` (sensitive reads on) |
 | `getWorkspaceSlaPolicy` | `read_operation` (sensitive reads on) |
 | `updateAutomationSettings` | `operation_prepare`, then approval |
 | `updateChatOpsConfiguration` | `operation_prepare`, then approval |
 | `updateRunbookSettings` | `operation_prepare`, then approval |
+| `updateServiceReviewSettings` | `operation_prepare`, then approval |
 | `updateWorkspaceSlaPolicy` | `operation_prepare`, then approval |
 
 ### status-pages
