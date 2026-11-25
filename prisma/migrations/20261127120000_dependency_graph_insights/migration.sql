@@ -14,7 +14,7 @@ CREATE TABLE "ServiceDependencyEvent" (
     CONSTRAINT "ServiceDependencyEvent_pkey" PRIMARY KEY ("id")
 );
 CREATE INDEX "ServiceDependencyEvent_occurredAt_idx" ON "ServiceDependencyEvent"("occurredAt");
-CREATE INDEX "ServiceDependencyEvent_upstreamServiceId_downstreamServiceId_occurredAt_idx" ON "ServiceDependencyEvent"("upstreamServiceId", "downstreamServiceId", "occurredAt");
+CREATE INDEX "ServiceDependencyEvent_edge_occurredAt_idx" ON "ServiceDependencyEvent"("upstreamServiceId", "downstreamServiceId", "occurredAt");
 
 CREATE TABLE "ServiceDependencyEdgeStats" (
     "id" TEXT NOT NULL,
@@ -28,8 +28,8 @@ CREATE TABLE "ServiceDependencyEdgeStats" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ServiceDependencyEdgeStats_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX "ServiceDependencyEdgeStats_upstreamServiceId_downstreamServiceId_source_windowStart_key" ON "ServiceDependencyEdgeStats"("upstreamServiceId", "downstreamServiceId", "source", "windowStart");
-CREATE INDEX "ServiceDependencyEdgeStats_upstreamServiceId_downstreamServiceId_windowStart_idx" ON "ServiceDependencyEdgeStats"("upstreamServiceId", "downstreamServiceId", "windowStart");
+CREATE UNIQUE INDEX "ServiceDependencyEdgeStats_edge_source_window_key" ON "ServiceDependencyEdgeStats"("upstreamServiceId", "downstreamServiceId", "source", "windowStart");
+CREATE INDEX "ServiceDependencyEdgeStats_edge_window_idx" ON "ServiceDependencyEdgeStats"("upstreamServiceId", "downstreamServiceId", "windowStart");
 CREATE INDEX "ServiceDependencyEdgeStats_windowStart_idx" ON "ServiceDependencyEdgeStats"("windowStart");
 
 CREATE TABLE "SavedGraphView" (
