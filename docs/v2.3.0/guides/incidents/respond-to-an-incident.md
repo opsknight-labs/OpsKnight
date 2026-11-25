@@ -12,7 +12,12 @@ reader:
 verification:
   level: test
   verified_at: 2026-09-29
-  evidence: [tests/docs/journeys/incident-lifecycle.spec.ts, src/lib/incidents/lifecycle.ts, src/lib/incidents/engagement.ts]
+  evidence:
+    [
+      tests/docs/journeys/incident-lifecycle.spec.ts,
+      src/lib/incidents/lifecycle.ts,
+      src/lib/incidents/engagement.ts,
+    ]
 ---
 
 # Respond to an incident end to end
@@ -92,8 +97,9 @@ link) is also behind **Copy summary** beside the incident ID.
 reads **Following** once you do); the avatars beside it are the people following, and select them to open
 the **Subscribers** card, where you choose a role or add teammates.
 
-Left of **Follow**, a green dot and avatars show who else has the incident open right now; hover (or, with
-a screen reader, read) them for names. Nobody shown means you are the only viewer. Someone drops off as soon
+Left of **Follow**, a chip such as **Maya viewing** or **3 viewing**, with their avatars, shows who else has
+the incident open right now; hover, focus or tap it for the full list of names. No chip means you are the
+only viewer. Someone drops off as soon
 as they close the tab or move to another page, or within about a minute and a quarter if their browser goes
 away without saying so. A tab in the background does not count as viewing.
 
