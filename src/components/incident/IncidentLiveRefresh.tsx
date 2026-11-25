@@ -24,6 +24,8 @@ export default function IncidentLiveRefresh({ incidentId }: { incidentId: string
   const seen = useRef<string | null>(null);
   const lastRefresh = useRef(0);
   const pending = useRef(false);
+  /** A server check or refresh is under way: further updates fold into it (the refresh reads the latest). */
+  const probing = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hiddenAt = useRef<number | null>(null);
 
@@ -40,11 +42,13 @@ export default function IncidentLiveRefresh({ incidentId }: { incidentId: string
       }
       // A refresh that fails (offline, or the network not back yet after the laptop wakes) would replace the
       // page with the error screen; check the server answers first and try again shortly if it does not.
+      probing.current = true;
       const reachable =
         navigator.onLine !== false &&
         (await fetch('/api/health', { cache: 'no-store' })
           .then(response => response.ok)
           .catch(() => false));
+      probing.current = false;
       if (!reachable) {
         pending.current = true;
         timer.current = setTimeout(() => void refresh(), RETRY_UNREACHABLE_MS);
@@ -55,7 +59,7 @@ export default function IncidentLiveRefresh({ incidentId }: { incidentId: string
       startTransition(() => router.refresh());
     };
     const schedule = () => {
-      if (timer.current) return;
+      if (timer.current || probing.current) return;
       const wait = Math.max(0, lastRefresh.current + MIN_INTERVAL_MS - Date.now());
       timer.current = setTimeout(() => void refresh(), wait);
     };
