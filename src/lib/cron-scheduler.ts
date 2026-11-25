@@ -48,6 +48,28 @@ let lastJobCleanup = 0;
 let schedulerProfile: SchedulerProfile = 'full';
 let activeLeaseEpoch: number | null = null;
 
+
+let businessServiceSweepsRunning = false;
+
+/**
+ * Business-service ownership hygiene (hourly, admin-enabled, off by default). It may notify many
+ * owners, so it must never hold up the tick: run detached, one at a time per process.
+ */
+function kickBusinessServiceSweeps() {
+  if (businessServiceSweepsRunning) return;
+  businessServiceSweepsRunning = true;
+  void (async () => {
+    try {
+      const { runBusinessServiceHygieneIfDue } = await import('./business-services/hygiene-sweep');
+      await runBusinessServiceHygieneIfDue();
+    } catch (error) {
+      logger.warn('[Cron] Business-service hygiene sweep failed', { error });
+    }
+  })().finally(() => {
+    businessServiceSweepsRunning = false;
+  });
+}
+
 export interface CronSchedulerOptions {
   profile?: SchedulerProfile;
 }
@@ -490,14 +512,6 @@ async function runOnce() {
       logger.warn('[Cron] Business-service impact reconcile enqueue failed', { error });
     }
 
-    // Business-service ownership hygiene: hourly, only when an admin enabled it (off by default).
-    try {
-      const { runBusinessServiceHygieneIfDue } = await import('./business-services/hygiene-sweep');
-      await runBusinessServiceHygieneIfDue();
-    } catch (error) {
-      logger.warn('[Cron] Business-service hygiene sweep failed', { error });
-    }
-
     // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
     const ownership = getSchedulerOwnership(schedulerProfile);
     const jobResult = ownership.backgroundJobs
@@ -600,6 +614,9 @@ async function runOnce() {
     });
 
     await assertLease(leaseEpoch);
+
+    // Slow, admin-enabled sweeps run beside the tick so they can never delay jobs or notifications.
+    kickBusinessServiceSweeps();
 
     // Group 2: Secondary tasks (can run in parallel)
     const { processShiftRotations, processUpcomingShiftReminders } =
