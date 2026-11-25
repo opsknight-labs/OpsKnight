@@ -24,7 +24,7 @@ export default function ServicesSection({ ctx }: { ctx: StatusPageConfigState })
     <StatusPageBusinessLayout
       layout={serviceLayout}
       onLayoutChange={setServiceLayout}
-      businessServices={allBusinessServices}
+      businessServices={allBusinessServices ?? []}
       selectedIds={businessServiceIds}
       configs={businessServiceConfigs}
       onConfigChange={(id, patch) =>

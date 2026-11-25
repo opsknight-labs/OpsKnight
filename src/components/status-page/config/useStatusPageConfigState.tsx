@@ -201,7 +201,7 @@ export const normalizeAnnouncementServiceIds = (value?: string[] | null) => {
 export function useStatusPageConfigState({
   statusPage,
   allServices,
-  allBusinessServices,
+  allBusinessServices = [],
   liveSnapshot,
   draftIncidentId,
 }: StatusPageConfigProps) {

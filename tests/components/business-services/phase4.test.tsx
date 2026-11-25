@@ -50,7 +50,7 @@ const entry = (over: Partial<ImpactTimelineEntry> = {}): ImpactTimelineEntry => 
 
 beforeEach(() => {
   unmark.mockReset().mockResolvedValue({ ok: true, id: 'bs1' });
-  window.localStorage?.clear();
+  globalThis.localStorage?.clear();
 });
 
 describe('ImpactTimeline interaction', () => {

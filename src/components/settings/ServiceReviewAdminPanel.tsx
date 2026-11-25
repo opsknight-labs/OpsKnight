@@ -42,7 +42,9 @@ const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : 'Somet
 export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) {
   const [form, setForm] = useState({ ...config, summaryEmails: config.summaryEmails.join(', ') });
   const [pending, startTransition] = useTransition();
-  const run = (work: () => Promise<void>) => startTransition(() => work().catch(fail));
+  const run = (work: () => Promise<void>) => startTransition(async () => {
+      await work().catch(fail);
+    });
 
   const save = () =>
     run(async () => {

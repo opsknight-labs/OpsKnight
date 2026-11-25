@@ -38,7 +38,7 @@ vi.mock('@/lib/intelligence/dependencies/insights/edge-stats', async importOrigi
 }));
 
 const call = async (
-  handler: (req: NextRequest, ctx: { params: Promise<object> }) => Promise<Response>,
+  handler: (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>,
   who: string,
   url: string,
   body?: unknown

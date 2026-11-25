@@ -363,9 +363,9 @@ export async function findSinglePointsOfFailure(actor: AuthorizationActor, optio
   const candidates = ids.filter(id => (dependents.get(id)?.size ?? 0) >= threshold);
   const policies = await prisma.service.findMany({
     where: { id: { in: candidates } },
-    select: { id: true, escalationPolicy: { select: { steps: { take: 1, select: { id: true } } } } },
+    select: { id: true, policy: { select: { steps: { take: 1, select: { id: true } } } } },
   });
-  const hasOnCall = new Map(policies.map(row => [row.id, (row.escalationPolicy?.steps.length ?? 0) > 0] as const));
+  const hasOnCall = new Map(policies.map(row => [row.id, (row.policy?.steps.length ?? 0) > 0] as const));
   const byService = new Map<string, Array<{ id: string; critical: boolean }>>();
   for (const member of graph.memberEdges)
     (byService.get(member.serviceId) ?? byService.set(member.serviceId, []).get(member.serviceId)!).push({

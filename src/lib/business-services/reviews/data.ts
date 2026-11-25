@@ -60,7 +60,7 @@ export async function collectServiceReviews(
             : computeErrorBudget({
                 targetPercent: target,
                 windowDays: period.days,
-                downtimeMinutes: stats.weightedDowntimeMinutes,
+                downtimeMinutes: stats.weightedDowntimeMinutes ?? stats.impactMinutes,
               });
         const priorBudget =
           target === null || !priorStats
@@ -68,7 +68,7 @@ export async function collectServiceReviews(
             : computeErrorBudget({
                 targetPercent: target,
                 windowDays: prior.days,
-                downtimeMinutes: priorStats.weightedDowntimeMinutes,
+                downtimeMinutes: priorStats.weightedDowntimeMinutes ?? priorStats.impactMinutes,
               });
         const revenue = revenueOf(row);
         out.set(row.id, {
@@ -76,7 +76,7 @@ export async function collectServiceReviews(
           name: row.name,
           criticality: typeof row.criticality === 'string' ? row.criticality : null,
           sloTarget: target,
-          attainmentPercent: target === null ? null : stats.weightedUptimePercent,
+          attainmentPercent: target === null ? null : stats.weightedUptimePercent ?? null,
           budget,
           priorRemainingPercent: priorBudget?.remainingPercent ?? null,
           downtimeMinutes: stats.impactMinutes,

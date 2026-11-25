@@ -8,10 +8,10 @@ export const MAX_IP_ALLOW_ENTRIES = 50;
 function parseV4(s: string): bigint | null {
   const parts = s.split('.');
   if (parts.length !== 4) return null;
-  let n = 0n;
+  let n = BigInt(0);
   for (const part of parts) {
     if (!/^\d{1,3}$/.test(part) || Number(part) > 255) return null;
-    n = (n << 8n) | BigInt(part);
+    n = (n << BigInt(8)) | BigInt(part);
   }
   return n;
 }
@@ -22,7 +22,7 @@ function parseV6(input: string): bigint | null {
   if (s.slice(cut).includes('.')) {
     const v4 = parseV4(s.slice(cut));
     if (v4 === null) return null;
-    s = `${s.slice(0, cut)}${(v4 >> 16n).toString(16)}:${(v4 & 0xffffn).toString(16)}`;
+    s = `${s.slice(0, cut)}${(v4 >> BigInt(16)).toString(16)}:${(v4 & BigInt(0xffff)).toString(16)}`;
   }
   const halves = s.split('::');
   if (halves.length > 2) return null;
@@ -32,10 +32,10 @@ function parseV6(input: string): bigint | null {
   const missing = 8 - head.length - tail.length;
   if (halves.length === 2 ? missing < 1 : missing !== 0) return null;
   const groups = [...head, ...Array<string>(halves.length === 2 ? missing : 0).fill('0'), ...tail];
-  let n = 0n;
+  let n = BigInt(0);
   for (const group of groups) {
     if (!/^[0-9a-f]{1,4}$/i.test(group)) return null;
-    n = (n << 16n) | BigInt(`0x${group}`);
+    n = (n << BigInt(16)) | BigInt(`0x${group}`);
   }
   return n;
 }
@@ -48,7 +48,7 @@ function parseIp(raw: string): ParsedIp | null {
     const value = parseV6(s);
     if (value === null) return null;
     // IPv4-mapped (::ffff:a.b.c.d) is the same host as the IPv4 address.
-    if (value >> 32n === 0xffffn) return { family: 4, value: value & 0xffffffffn };
+    if (value >> BigInt(32) === BigInt(0xffff)) return { family: 4, value: value & BigInt(0xffffffff) };
     return { family: 6, value };
   }
   const value = parseV4(s);
@@ -88,7 +88,7 @@ export function isIpAllowed(ip: string | null | undefined, list: readonly string
   const client = ip ? parseIp(ip) : null;
   // Fail closed: an unidentifiable client cannot satisfy a restriction.
   if (!client) return false;
-  const max = client.family === 4 ? 32n : 128n;
+  const max = client.family === 4 ? BigInt(32) : BigInt(128);
   return list.some(entry => {
     const rule = parseIpAllowEntry(entry);
     if (!rule || rule.family !== client.family) return false;

@@ -173,13 +173,19 @@ export default function ImpactTimeline({
       </div>
       <p className="text-xs text-muted-foreground tabular-nums">
         {describe(active)}
-        {cost && !active.excluded && cost.revenuePerHourCents !== null && (
-          <>
-            {' '}
-            · ~
-            {formatMoney(intervalCostCents(active, cost.revenuePerHourCents, now), cost.currency)}
-          </>
-        )}
+        {cost &&
+          !active.excluded &&
+          cost.revenuePerHourCents != null &&
+          intervalCostCents(active, cost.revenuePerHourCents, now) !== null && (
+            <>
+              {' '}
+              · ~
+              {formatMoney(
+                intervalCostCents(active, cost.revenuePerHourCents, now) ?? 0,
+                cost.currency
+              )}
+            </>
+          )}
       </p>
     </div>
   );

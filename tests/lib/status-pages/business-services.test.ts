@@ -240,11 +240,15 @@ describe('activeStatusOverride', () => {
     ).toBeNull();
   });
   it('ignores unset, UNKNOWN and unrecognised values', () => {
-    expect(activeStatusOverride({ statusOverride: null, statusOverrideUntil: null }, now)).toBeNull();
+    expect(
+      activeStatusOverride({ statusOverride: null, statusOverrideUntil: null }, now)
+    ).toBeNull();
     expect(
       activeStatusOverride({ statusOverride: 'UNKNOWN', statusOverrideUntil: null }, now)
     ).toBeNull();
-    expect(activeStatusOverride({ statusOverride: 'BROKEN', statusOverrideUntil: null }, now)).toBeNull();
+    expect(
+      activeStatusOverride({ statusOverride: 'BROKEN', statusOverrideUntil: null }, now)
+    ).toBeNull();
   });
 });
 
