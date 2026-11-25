@@ -8,8 +8,7 @@ import type {
   PublicStatusService,
 } from '@/lib/status-pages/public-contract';
 import { serviceRegionBucket, serviceSearchKey } from '@/lib/status-pages/presentation';
-import type { I18nKey } from '@/lib/status-pages/i18n';
-import { STATUS_LABEL_KEYS } from '@/lib/status-pages/i18n';
+import { STATUS_LABEL_KEYS, type I18nKey } from '@/lib/status-pages/i18n';
 import { useT } from '@/lib/status-pages/i18n/context';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';

@@ -25,6 +25,7 @@ export default function StatusPageLocaleSetting({
       >
         {STATUS_LOCALES.map(locale => (
           <option key={locale} value={locale}>
+            {/* eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input */}
             {STATUS_LOCALE_LABELS[locale]}
           </option>
         ))}

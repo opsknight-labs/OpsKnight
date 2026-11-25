@@ -43,6 +43,7 @@ export function layoutEmbed(payload: EmbedPayload): {
   };
   const columns: EmbedNode[][] = [];
   const place = (ref: string, status: string, kind: 'bs' | 'svc', column: number) =>
+    // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
     (columns[column] ??= []).push({ ref, status, kind, x: 0, y: 0 });
   const hasBs = payload.businessServices.length > 0;
   if (hasBs) for (const bs of payload.businessServices) place(bs.ref, bs.status, 'bs', 0);

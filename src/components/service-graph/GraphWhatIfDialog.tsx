@@ -60,6 +60,7 @@ export default function GraphWhatIfDialog({
   useEffect(() => {
     if (!serviceId) return;
     let stale = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs local state with the prop/open transition; cannot be derived during render
     setState({ status: 'loading' });
     simulateFailureAction({ serviceIds: [serviceId] })
       .then(result => {

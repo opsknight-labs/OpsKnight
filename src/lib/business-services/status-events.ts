@@ -16,6 +16,7 @@ const BS_STATUS_LABEL: Record<string, string> = {
 };
 
 export function describeStatusChange(name: string, from: string, to: string) {
+  // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
   const label = (status: string) => BS_STATUS_LABEL[status] ?? status;
   return {
     title: `${name} is now ${label(to).toLowerCase()}`,

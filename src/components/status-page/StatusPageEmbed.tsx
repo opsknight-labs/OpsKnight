@@ -47,6 +47,7 @@ function Row({
       <span className="sp-embed__status">
         <span
           className="sp-embed__dot"
+          // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
           style={{ background: DOT[status] ?? DOT.UNKNOWN }}
           aria-hidden="true"
         />

@@ -141,6 +141,7 @@ export default function GraphDependencyDialog({
 }) {
   const [draft, setDraft] = useState(initial);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs local state with the prop/open transition; cannot be derived during render
     if (open) setDraft(initial);
   }, [open, initial]);
   const noteId = useId();

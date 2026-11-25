@@ -118,6 +118,7 @@ export default function GraphInsightsPanel({
   }, [run, focus, hops]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs local state with the prop/open transition; cannot be derived during render
     if (tab === 'changes') void loadDiff(sinceDays);
     if (tab === 'spof') void loadSpof();
   }, [tab, sinceDays, loadDiff, loadSpof]);
@@ -144,6 +145,7 @@ export default function GraphInsightsPanel({
   // The banner's "Back to now" lives in the explorer; keep the controls in step with it.
   useEffect(() => {
     if (!at) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs local state with the prop/open transition; cannot be derived during render
       setSlider(HOURS);
       setPicked('');
     }

@@ -16,6 +16,7 @@ const textWidth = (text: string) => Math.ceil(text.length * 6.4) + 12;
 
 /** Shields-style two-part overall-status badge. `title` is the page name, XML-escaped. */
 export function buildStatusBadge(title: string, status: PublicServiceStatus): string {
+  // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
   const { label, color } = COLORS[status] ?? COLORS.UNKNOWN;
   const left = escapeXml(title.slice(0, 40));
   const lw = textWidth(title.slice(0, 40));

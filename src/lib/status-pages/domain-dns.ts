@@ -16,7 +16,13 @@ const normHost = (value: string) => value.trim().toLowerCase().replace(/\.$/, ''
 export function isCheckableHostname(value: string): boolean {
   const host = normHost(value);
   if (host.length < 4 || host.length > 253 || isIP(host)) return false;
-  if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(host))
+  const labels = host.split('.');
+  if (
+    labels.length < 2 ||
+    !labels.every(
+      label => /^[a-z0-9-]{1,63}$/.test(label) && !label.startsWith('-') && !label.endsWith('-')
+    )
+  )
     return false;
   return !/\.(local|localhost|internal|lan|home|corp|test|invalid|example)$/.test(host);
 }

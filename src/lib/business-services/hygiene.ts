@@ -42,6 +42,7 @@ export function evaluateHygiene(input: HygieneInput, now = new Date()): HygieneR
 
 /** Notification title: stable per reason, so a rolling 7-day dedupe can match on it. */
 export const hygieneTitle = (reason: HygieneReason) =>
+  // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
   `Business service hygiene: ${HYGIENE_LABELS[reason]}`;
 
 export function hygieneMessage(

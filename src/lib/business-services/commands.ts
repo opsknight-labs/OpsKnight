@@ -471,6 +471,7 @@ async function audit(
 /** Only the keys the caller sent, so an omitted field keeps its stored value on update. */
 function pick<K extends keyof ParsedInput>(input: ParsedInput, keys: readonly K[]) {
   return Object.fromEntries(
+    // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
     keys.filter(key => input[key] !== undefined).map(key => [key, input[key]])
   );
 }

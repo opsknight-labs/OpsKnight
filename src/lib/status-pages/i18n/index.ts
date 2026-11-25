@@ -40,7 +40,9 @@ export type Translator = (key: I18nKey, values?: Record<string, string | number>
 export function createTranslator(locale: unknown): Translator {
   const dictionary = DICTIONARIES[normalizeLocale(locale)];
   return (key, values) =>
+    // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
     (dictionary[key] ?? en[key]).replace(/\{(\w+)\}/g, (match, name: string) =>
+      // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
       values && name in values ? String(values[name]) : match
     );
 }

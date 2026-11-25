@@ -220,6 +220,7 @@ export default function ServiceGraphExplorer({
   const [data, setData] = useState(graph);
   const [live, setLive] = useState<GraphStatuses | null>(null);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs local state with the prop/open transition; cannot be derived during render
     setData(graph);
     setLive(null);
   }, [graph]);
@@ -451,9 +452,11 @@ export default function ServiceGraphExplorer({
   const matchSignature = matches.join('|');
   const [fitToken, setFitToken] = useState(0);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs local state with the prop/open transition; cannot be derived during render
     if (matchSignature) setFitToken(token => token + 1);
   }, [matchSignature]);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs local state with the prop/open transition; cannot be derived during render
     if (pathResult) setFitToken(token => token + 1);
   }, [pathResult]);
   const fit = useMemo(
@@ -633,6 +636,7 @@ export default function ServiceGraphExplorer({
                   <SelectItem value="all">Any status</SelectItem>
                   {STATUS_OPTIONS.map(option => (
                     <SelectItem key={option} value={option}>
+                      {/* eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input */}
                       {GRAPH_STATUS_META[option].label}
                     </SelectItem>
                   ))}

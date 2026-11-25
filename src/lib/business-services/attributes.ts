@@ -21,6 +21,7 @@ export function attributesFromLines(
     if (at < 1) return null;
     const key = line.slice(0, at).trim();
     const raw = line.slice(at + 1).trim();
+    // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
     result[key] =
       raw === 'true'
         ? true

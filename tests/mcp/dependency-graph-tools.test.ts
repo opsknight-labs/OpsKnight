@@ -40,6 +40,7 @@ describe('dependency graph MCP tools', () => {
     for (const operation of MCP_OPERATION_MAP.values()) {
       if (!/Dependency(Graph|Failure|EdgeStats)/.test(operation.operationId)) continue;
       const route = `src/app/api/v2${operation.path.replace(/\{(\w+)\}/g, '[$1]')}/route.ts`;
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- test reads route files derived from the in-repo operation map
       const source = readFileSync(route, 'utf8');
       expect(createHash('sha256').update(source).digest('hex'), operation.operationId).toBe(
         operation.routeSha256

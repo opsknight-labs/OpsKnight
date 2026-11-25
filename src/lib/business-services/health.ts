@@ -365,6 +365,7 @@ export function computeHealth(inputs: HealthInputs): Map<string, BusinessService
       for (const [i, reason] of reasons.entries()) {
         if (reason.kind !== 'DIRECT' && reason.kind !== 'DEPENDENCY') continue;
         const member = reason.kind === 'DIRECT' ? reason.serviceId : reason.viaServiceId;
+        // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
         if (criticalIds.has(member)) reasons[i] = { ...reason, status: quorum };
       }
     }

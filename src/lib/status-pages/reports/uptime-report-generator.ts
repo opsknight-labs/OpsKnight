@@ -1,4 +1,6 @@
-import { buildCsv } from '@/lib/csv';
+import { buildCsv, type CsvColumn } from '@/lib/csv';
+
+type CsvRow = Record<string, string | number | boolean | null | undefined>;
 
 export interface StatusPageReportService {
   id: string;
@@ -160,9 +162,7 @@ export function buildEnhancedUptimeCsv(data: StatusPageReportData): string {
 
   // 2. Services Data Table (or privacy notice if services hidden)
   if (data.visibility.showServices) {
-    const serviceColumns: { key: string; header: string }[] = [
-      { key: 'serviceName', header: 'Service Name' },
-    ];
+    const serviceColumns: CsvColumn<CsvRow>[] = [{ key: 'serviceName', header: 'Service Name' }];
     if (data.visibility.showServiceRegion) {
       serviceColumns.push({ key: 'region', header: 'Region' });
     }
@@ -196,7 +196,7 @@ export function buildEnhancedUptimeCsv(data: StatusPageReportData): string {
       return row;
     });
 
-    const servicesCsv = buildCsv(serviceRows, serviceColumns as any);
+    const servicesCsv = buildCsv<CsvRow>(serviceRows, serviceColumns);
     // Strip BOM if present since we append to our header
     lines.push(servicesCsv.replace(/^\uFEFF/, ''));
   } else {
@@ -212,7 +212,7 @@ export function buildEnhancedUptimeCsv(data: StatusPageReportData): string {
     lines.push('');
     lines.push('# BUSINESS SERVICES (trailing 30/90 days, published roll-up)');
     const pct = (value: number | null) => (value === null ? '' : value.toFixed(3));
-    const bsCsv = buildCsv(
+    const bsCsv = buildCsv<CsvRow>(
       data.businessServices.map(b => ({
         name: b.name,
         sla: b.slaTarget.toFixed(3),
@@ -228,7 +228,7 @@ export function buildEnhancedUptimeCsv(data: StatusPageReportData): string {
         { key: 'uptime90', header: 'Uptime 90d %' },
         { key: 'downtime30', header: 'Downtime 30d (Minutes)' },
         { key: 'incidents30', header: 'Incidents 30d' },
-      ] as any
+      ]
     );
     lines.push(bsCsv.replace(/^\uFEFF/, ''));
   }
@@ -245,9 +245,7 @@ export function buildEnhancedUptimeCsv(data: StatusPageReportData): string {
     } else {
       const showAffectedService =
         data.visibility.showServices && data.visibility.showAffectedService;
-      const incidentColumns: { key: string; header: string }[] = [
-        { key: 'title', header: 'Incident Title' },
-      ];
+      const incidentColumns: CsvColumn<CsvRow>[] = [{ key: 'title', header: 'Incident Title' }];
       if (showAffectedService) {
         incidentColumns.push({ key: 'service', header: 'Impacted Service' });
       }
@@ -276,7 +274,7 @@ export function buildEnhancedUptimeCsv(data: StatusPageReportData): string {
         return row;
       });
 
-      const incidentsCsv = buildCsv(incidentRows, incidentColumns as any);
+      const incidentsCsv = buildCsv<CsvRow>(incidentRows, incidentColumns);
       lines.push(incidentsCsv.replace(/^\uFEFF/, ''));
     }
   }
@@ -312,7 +310,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
     curCommands = '';
   };
 
-  const drawHeader = (pageNumber: number, totalPagesPlaceholder: string) => {
+  const drawHeader = () => {
     // Dark Top Navigation Banner (y: 726 to 792, height 66)
     curCommands += '0.07 0.09 0.15 rg\n';
     curCommands += `0 726 ${PAGE_WIDTH} 66 re f\n`;
@@ -371,7 +369,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
   };
 
   // --- PAGE 1: Header + KPI Cards + Services Table ---
-  drawHeader(1, '{{TOTAL_PAGES}}');
+  drawHeader();
 
   // Draw 4 Executive KPI Cards (y: 622 to 684, height 62)
   const cardY = 622;
@@ -469,7 +467,6 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
     const colTargetW = 70;
     const colUptimeW = 80;
     const colDownW = 75;
-    const colBadgeW = 75;
 
     const colNameX = MARGIN_X;
     const colTargetX = colNameX + colNameW;
@@ -495,6 +492,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
     let pageNum = 1;
 
     for (let idx = 0; idx < data.services.length; idx++) {
+      // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
       const s = data.services[idx];
 
       // Check if we need to paginate (keep at least 80pt for footer and potential incidents)
@@ -502,7 +500,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
         drawFooter(pageNum, '{{TOTAL_PAGES}}');
         startNewPage();
         pageNum++;
-        drawHeader(pageNum, '{{TOTAL_PAGES}}');
+        drawHeader();
         currentY = 670;
 
         // Re-draw Table Header Bar on new page
@@ -602,7 +600,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
       drawFooter(pageNum, '{{TOTAL_PAGES}}');
       startNewPage();
       pageNum++;
-      drawHeader(pageNum, '{{TOTAL_PAGES}}');
+      drawHeader();
       currentY = 670;
     } else {
       currentY -= 16;
@@ -633,7 +631,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
         drawFooter(pageNum, '{{TOTAL_PAGES}}');
         startNewPage();
         pageNum++;
-        drawHeader(pageNum, '{{TOTAL_PAGES}}');
+        drawHeader();
         currentY = 670;
         header('BUSINESS SERVICE (CONT.)');
       }
@@ -653,6 +651,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
       curCommands += '0.10 0.15 0.25 rg\n';
       cells.forEach((cell, i) => {
         const text = i === 0 && cell.length > 42 ? `${cell.slice(0, 41)}...` : cell;
+        // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
         curCommands += `BT /F1 8 Tf ${cols[i].x + 6} ${currentY - 9} Td (${escapePdf(text)}) Tj ET\n`;
       });
       currentY -= 18;
@@ -665,7 +664,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
       drawFooter(pageNum, '{{TOTAL_PAGES}}');
       startNewPage();
       pageNum++;
-      drawHeader(pageNum, '{{TOTAL_PAGES}}');
+      drawHeader();
       currentY = 670;
     } else {
       currentY -= 16;
@@ -702,8 +701,6 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
       let incTitleW = 220;
       let incServW = 120;
       const incDateW = 110;
-      const incDurW = 82;
-      const incStatusW = 90;
 
       if (!showAffectedService && showTimestamps) {
         incTitleW = 340;
@@ -739,7 +736,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
           drawFooter(pageNum, '{{TOTAL_PAGES}}');
           startNewPage();
           pageNum++;
-          drawHeader(pageNum, '{{TOTAL_PAGES}}');
+          drawHeader();
           currentY = 670;
         }
 
@@ -806,7 +803,9 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
   objects.push({ id: 5, data: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>' });
 
   finalPages.forEach((streamContent, idx) => {
+    // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
     const pageObjId = pageObjectIds[idx];
+    // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
     const contentObjId = contentObjectIds[idx];
 
     objects.push({

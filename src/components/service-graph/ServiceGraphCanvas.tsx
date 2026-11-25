@@ -376,6 +376,7 @@ export default function ServiceGraphCanvas({
       links.map(link => {
         const lit = emphasis?.linkKeys.has(link.key) ?? false;
         const impacted = lit ? edgeImpactStatus(link, itemByKey) : null;
+        // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
         const color = impacted ? STATUS_HEX[impacted] : undefined;
         const soft = link.dependencyType === 'SOFT';
         const traffic = trafficStyle(link.traffic);

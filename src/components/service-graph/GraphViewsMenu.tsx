@@ -96,6 +96,7 @@ export default function GraphViewsMenu({
   }, []);
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs local state with the prop/open transition; cannot be derived during render
     void load();
     setLegacy(legacyViews());
   }, [open, load]);
