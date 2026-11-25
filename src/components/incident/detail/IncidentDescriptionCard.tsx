@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition, useMemo, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+  useMemo,
+  type ReactNode,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -28,6 +36,38 @@ type IncidentDescriptionCardProps = {
 /** Summary height: context pills, source, alert title and key metric. */
 const CLAMP_PX = 208;
 const FULL_KEY = 'opsknight.incident.descriptionFull';
+const FULL_EVENT = 'opsknight:description-full';
+
+function subscribeFull(notify: () => void) {
+  window.addEventListener('storage', notify);
+  window.addEventListener(FULL_EVENT, notify);
+  return () => {
+    window.removeEventListener('storage', notify);
+    window.removeEventListener(FULL_EVENT, notify);
+  };
+}
+
+function readFull(): boolean {
+  try {
+    const stored = localStorage.getItem(FULL_KEY);
+    if (stored !== null) return stored === '1';
+  } catch {
+    // Storage blocked: use this page's own choice below.
+  }
+  return fullFallback;
+}
+
+/** This page's choice when storage is blocked. */
+let fullFallback = false;
+function writeFull(next: boolean) {
+  fullFallback = next;
+  try {
+    localStorage.setItem(FULL_KEY, next ? '1' : '0');
+  } catch {
+    // Not remembered across visits; fullFallback keeps it for this page.
+  }
+  window.dispatchEvent(new Event(FULL_EVENT));
+}
 
 // Check if string is raw JSON
 function tryParseJson(text: string): string | null {
@@ -437,16 +477,10 @@ export function IncidentDescriptionCard({
   readable = null,
   clamp = false,
 }: IncidentDescriptionCardProps) {
-  const [full, setFull] = useState(false);
+  // The remembered choice lives in localStorage (an external store); the server render is the summary.
+  const full = useSyncExternalStore(subscribeFull, readFull, () => false);
   const [tall, setTall] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(FULL_KEY) === '1') setFull(true);
-    } catch {
-      // Storage blocked: start as the summary.
-    }
-  }, []);
   useEffect(() => {
     const element = contentRef.current;
     if (!clamp || !element) return;
@@ -456,15 +490,7 @@ export function IncidentDescriptionCard({
     observer.observe(element);
     return () => observer.disconnect();
   }, [clamp]);
-  const toggleFull = () => {
-    const next = !full;
-    setFull(next);
-    try {
-      localStorage.setItem(FULL_KEY, next ? '1' : '0');
-    } catch {
-      // Not remembered; the choice still applies now.
-    }
-  };
+  const toggleFull = () => writeFull(!full);
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(description || '');

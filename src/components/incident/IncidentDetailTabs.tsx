@@ -62,14 +62,14 @@ export type IncidentDetailTabsProps = {
  * Tab ids from before the merge (Overview, Response activity, Runbooks) still arrive in links and
  * bookmarks; each opens the tab that now holds its content.
  */
-const TAB_ALIASES: Record<string, string> = {
-  overview: 'notes',
-  response: 'timeline',
-  runbooks: 'automation',
-};
+const TAB_ALIASES = new Map<string, string>([
+  ['overview', 'notes'],
+  ['response', 'timeline'],
+  ['runbooks', 'automation'],
+]);
 
 export function canonicalTab(tabId: string): string {
-  return TAB_ALIASES[tabId] ?? tabId;
+  return TAB_ALIASES.get(tabId) ?? tabId;
 }
 
 /** Maps record anchors used across the page to the tab that renders them. */
