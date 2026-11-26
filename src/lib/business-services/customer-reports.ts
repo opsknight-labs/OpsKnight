@@ -143,6 +143,43 @@ export async function createCustomerImpactReport(
   return result;
 }
 
+/**
+ * Deletes a report its author recorded by mistake. Only the author, and only while they can still
+ * manage the business service; imported reports (no author) stay. Bumps the realtime clock like create.
+ */
+export async function deleteCustomerImpactReport(
+  businessServiceId: string,
+  reportId: string,
+  context: Context
+) {
+  assertCanManageBusinessServices(context.actor);
+  await prisma.$transaction(async tx => {
+    const report = await tx.customerImpactReport.findFirst({
+      where: {
+        id: reportId,
+        businessServiceId,
+        createdById: context.actor.id,
+        businessService: businessServiceWriteWhere(context.actor),
+      },
+      select: { id: true, source: true, count: true },
+    });
+    if (!report) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+    await tx.customerImpactReport.delete({ where: { id: report.id } });
+    await tx.realtimeChange.create({ data: {} });
+    await emitAuditEvent(
+      {
+        action: 'business_service.customer_report.deleted',
+        source: context.source ?? 'UI',
+        target: { type: 'BUSINESS_SERVICE', id: businessServiceId },
+        actor: { type: 'USER', id: context.actor.id },
+        oldValue: { reportId: report.id, source: report.source, count: report.count },
+      },
+      tx
+    );
+  });
+  invalidateBusinessServiceHealth();
+}
+
 /** Newest first; readers need the business service in their read scope. */
 export async function listCustomerImpactReports(
   businessServiceId: string,

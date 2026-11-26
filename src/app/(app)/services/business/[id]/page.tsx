@@ -1,4 +1,4 @@
-import { Suspense, cache } from 'react';
+import { Suspense, cache, type ReactNode } from 'react';
 import { FreezeBanner } from '@/components/business-service/FreezeBanner';
 import AutoRefresh from '@/components/business-service/AutoRefresh';
 import WhyStatusCard, { type WhyReason } from '@/components/business-service/WhyStatusCard';
@@ -174,6 +174,7 @@ async function CustomerImpactSection({
             thresholdWindowMinutes: item.customerReportWindowMinutes,
             reports: data[1],
             canAdd,
+            viewerId: actor.id,
           }}
         />
       ) : (
@@ -349,7 +350,7 @@ async function StatusPagesSection({ id, canManage }: { id: string; canManage: bo
 }
 
 /** Followers tab: loaded only when the tab is open. */
-async function FollowersSection({ id }: { id: string }) {
+async function FollowersSection({ id, followAction }: { id: string; followAction: ReactNode }) {
   const [followers, teams, dashboards] = await Promise.all([
     prisma.businessServiceFollower.findMany({
       where: { businessServiceId: id },
@@ -375,6 +376,7 @@ async function FollowersSection({ id }: { id: string }) {
         }))}
         teams={teams.map(({ team }) => team)}
         dashboards={dashboards.map(({ dashboard }) => dashboard)}
+        followAction={followAction}
       />
     </div>
   );
@@ -862,7 +864,16 @@ export default async function BusinessServiceOverviewPage({
             content:
               tab === 'followers' ? (
                 <Suspense fallback={<SectionSkeleton title="Followers" height="h-24" />}>
-                  <FollowersSection id={item.id} />
+                  <FollowersSection
+                    id={item.id}
+                    followAction={
+                      <BusinessServiceFollowButton
+                        id={item.id}
+                        name={item.name}
+                        following={following}
+                      />
+                    }
+                  />
                 </Suspense>
               ) : null,
           },

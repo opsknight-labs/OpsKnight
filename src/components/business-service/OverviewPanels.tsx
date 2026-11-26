@@ -44,22 +44,22 @@ const BURN_BAR = {
   BREACHED: 'bg-status-critical',
 } as const;
 
-/** Share of the error budget spent, as a meter; the burn state is also written out beside it. */
-function BudgetGauge({ budget }: { budget: ErrorBudget }) {
-  const spent = Math.min(Math.max(100 - budget.remainingPercent, 0), 100);
+/** Share of the error budget left, as a meter, matching the "% left" value above it. */
+export function BudgetGauge({ budget }: { budget: ErrorBudget }) {
+  const left = Math.min(Math.max(budget.remainingPercent, 0), 100);
   return (
     <div
       role="meter"
-      aria-label="Error budget spent"
+      aria-label="Error budget left"
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={Math.round(spent)}
-      aria-valuetext={`${Math.round(spent)}% spent, ${BURN_LABEL[budget.burnState]}`}
+      aria-valuenow={Math.round(left)}
+      aria-valuetext={`${Math.round(left)}% left, ${BURN_LABEL[budget.burnState]}`}
       className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
     >
       <div
         className={cn('h-full rounded-full', BURN_BAR[budget.burnState])}
-        style={{ width: `${spent}%` }}
+        style={{ width: `${left}%` }}
       />
     </div>
   );

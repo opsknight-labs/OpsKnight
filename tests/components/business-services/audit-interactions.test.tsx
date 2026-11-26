@@ -18,6 +18,7 @@ vi.mock('@/app/(app)/services/business/actions', () => ({
 const phase5b = vi.hoisted(() => ({
   bulkEditAction: vi.fn(),
   addCustomerReportAction: vi.fn(),
+  deleteCustomerReportAction: vi.fn(),
   deleteTemplateAction: vi.fn(),
   createTemplateAction: vi.fn(),
   updateTemplateAction: vi.fn(),
@@ -30,6 +31,7 @@ import HealthDistribution from '@/components/business-service/HealthDistribution
 import BusinessServiceFollowButton from '@/components/service/BusinessServiceFollowButton';
 import TemplateManager, { type TemplateView } from '@/components/business-service/TemplateManager';
 import AddCustomerReportForm from '@/components/business-service/AddCustomerReportForm';
+import CustomerImpactPanel from '@/components/business-service/CustomerImpactPanel';
 import HygieneToggle from '@/components/business-service/HygieneToggle';
 import BulkEditBar from '@/components/business-service/BulkEditBar';
 import CatalogDirectory, { type CatalogRow } from '@/components/business-service/CatalogDirectory';
@@ -186,8 +188,18 @@ describe('TemplateManager', () => {
 });
 
 describe('AddCustomerReportForm', () => {
+  it('stays collapsed behind a button until asked for', () => {
+    render(<AddCustomerReportForm businessServiceId="b1" />);
+    expect(screen.queryByLabelText('Customer reports')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add customer report' }));
+    expect(screen.getByLabelText('Customer reports')).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByLabelText('Customer reports')).toBeNull();
+  });
+
   it('rejects bad input without calling the server', () => {
     render(<AddCustomerReportForm businessServiceId="b1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add customer report' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add report' }));
     expect(screen.getByRole('alert')).toHaveTextContent(/whole number/);
     expect(phase5b.addCustomerReportAction).not.toHaveBeenCalled();
@@ -196,9 +208,51 @@ describe('AddCustomerReportForm', () => {
   it('shows a failed result as an error instead of throwing', async () => {
     phase5b.addCustomerReportAction.mockResolvedValue({ ok: false, error: 'Too many reports' });
     render(<AddCustomerReportForm businessServiceId="b1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add customer report' }));
     fireEvent.change(screen.getByLabelText('Customer reports'), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add report' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Too many reports');
+  });
+});
+
+describe('CustomerImpactPanel', () => {
+  const view = {
+    businessServiceId: 'b1',
+    estimatedCostCents: null,
+    currency: 'USD',
+    customersTotal: 1200,
+    windowDays: 30,
+    threshold: null,
+    thresholdWindowMinutes: null,
+    reports: [
+      { id: 'mine', source: 'manual', count: 3, windowEnd: new Date(), createdById: 'u1' },
+      { id: 'theirs', source: 'zendesk', count: 1, windowEnd: new Date(), createdById: 'u2' },
+    ],
+    canAdd: true,
+    viewerId: 'u1',
+  };
+
+  it('labels the customer count as a total, not as customers exposed', () => {
+    render(<CustomerImpactPanel view={view} />);
+    expect(screen.getByText('Total customers')).toBeInTheDocument();
+    expect(screen.queryByText('Customers exposed')).toBeNull();
+  });
+
+  it('offers delete only on reports the viewer recorded, and asks first', async () => {
+    phase5b.deleteCustomerReportAction.mockResolvedValue({ ok: true });
+    render(<CustomerImpactPanel view={view} />);
+    expect(screen.queryByRole('button', { name: /Delete 1 zendesk report/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete 3 manual reports' }));
+    expect(phase5b.deleteCustomerReportAction).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete report' }));
+    await waitFor(() =>
+      expect(phase5b.deleteCustomerReportAction).toHaveBeenCalledWith('b1', 'mine')
+    );
+  });
+
+  it('hides delete from viewers who cannot manage', () => {
+    render(<CustomerImpactPanel view={{ ...view, canAdd: false }} />);
+    expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull();
   });
 });
 

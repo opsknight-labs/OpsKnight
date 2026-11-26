@@ -15,6 +15,7 @@ import {
 import {
   CustomerImpactReportInputSchema,
   createCustomerImpactReport,
+  deleteCustomerImpactReport,
 } from '@/lib/business-services/customer-reports';
 import {
   BusinessServiceTemplateInputSchema,
@@ -117,6 +118,24 @@ export async function addCustomerReportAction(
   try {
     const parsedId = id.parse(businessServiceId);
     await createCustomerImpactReport(parsedId, raw, { actor: await managerActor() });
+    revalidatePath(`/services/business/${parsedId}`);
+    revalidatePath('/services/business');
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Removes a customer report the caller recorded themselves. */
+export async function deleteCustomerReportAction(
+  businessServiceId: string,
+  reportId: string
+): Promise<ActionResult> {
+  try {
+    const parsedId = id.parse(businessServiceId);
+    await deleteCustomerImpactReport(parsedId, id.parse(reportId), {
+      actor: await managerActor(),
+    });
     revalidatePath(`/services/business/${parsedId}`);
     revalidatePath('/services/business');
     return { ok: true };
