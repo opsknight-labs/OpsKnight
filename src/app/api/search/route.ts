@@ -137,6 +137,9 @@ export async function GET(req: NextRequest) {
     };
     const isPrivileged = hasCapability(currentUser.role, CAPABILITIES.INCIDENT_READ_ALL);
     const canReadSensitive = hasCapability(currentUser.role, CAPABILITIES.INCIDENT_SENSITIVE_READ);
+    // A result whose page answers 403 is a dead link: search only what the actor can open.
+    const canReadUsers = hasCapability(currentUser.role, CAPABILITIES.USER_READ_ALL);
+    const canReadPolicies = hasCapability(currentUser.role, CAPABILITIES.POLICY_READ_ALL);
     // Restricted automation-source content must not be matchable (or shown) by text.
     const unrestrictedSource = canReadSensitive
       ? {}
@@ -287,58 +290,62 @@ export async function GET(req: NextRequest) {
         },
       }),
 
-      // Search users
-      prisma.user.findMany({
-        where: {
-          AND: [
-            isPrivileged
-              ? {}
-              : {
+      // Search users (skipped when the actor cannot open user pages)
+      canReadUsers
+        ? prisma.user.findMany({
+            where: {
+              AND: [
+                isPrivileged
+                  ? {}
+                  : {
+                      OR: [
+                        { id: currentUser.id },
+                        { teamMemberships: { some: { teamId: { in: teamIds } } } },
+                      ],
+                    },
+                {
                   OR: [
-                    { id: currentUser.id },
-                    { teamMemberships: { some: { teamId: { in: teamIds } } } },
+                    { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                    { email: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
                   ],
                 },
-            {
-              OR: [
-                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { email: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
               ],
             },
-          ],
-        },
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          avatarUrl: true,
-        },
-      }),
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              avatarUrl: true,
+            },
+          })
+        : Promise.resolve([]),
 
-      // Search escalation policies
-      prisma.escalationPolicy.findMany({
-        where: {
-          AND: [
-            isPrivileged ? {} : { services: { some: { teamId: { in: teamIds } } } },
-            {
-              OR: [
-                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+      // Search escalation policies (skipped when the actor cannot open policy pages)
+      canReadPolicies
+        ? prisma.escalationPolicy.findMany({
+            where: {
+              AND: [
+                isPrivileged ? {} : { services: { some: { teamId: { in: teamIds } } } },
+                {
+                  OR: [
+                    { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                    { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                  ],
+                },
               ],
             },
-          ],
-        },
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
-      }),
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+            },
+          })
+        : Promise.resolve([]),
 
       // Search postmortems (only if Postmortem model exists)
       (async () => {

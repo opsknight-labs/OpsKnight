@@ -4,6 +4,8 @@ import { GET } from '@/app/api/search/route';
 
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn().mockResolvedValue([]),
+  userFindMany: vi.fn().mockResolvedValue([]),
+  policyFindMany: vi.fn().mockResolvedValue([]),
   userFindUnique: vi.fn(),
 }));
 
@@ -25,8 +27,8 @@ vi.mock('@/lib/prisma', () => ({
     incident: { findMany: mocks.findMany },
     service: { findMany: mocks.findMany },
     team: { findMany: mocks.findMany },
-    user: { findUnique: mocks.userFindUnique, findMany: mocks.findMany },
-    escalationPolicy: { findMany: mocks.findMany },
+    user: { findUnique: mocks.userFindUnique, findMany: mocks.userFindMany },
+    escalationPolicy: { findMany: mocks.policyFindMany },
     postmortem: { findMany: mocks.findMany },
     onCallSchedule: { findMany: mocks.findMany },
     runbook: { findMany: mocks.findMany },
@@ -43,6 +45,8 @@ describe('global search RBAC', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.findMany.mockResolvedValue([]);
+    mocks.userFindMany.mockResolvedValue([]);
+    mocks.policyFindMany.mockResolvedValue([]);
   });
 
   it('adds team and assignee scope for regular users', async () => {
@@ -166,6 +170,25 @@ describe('global search RBAC', () => {
         ? expect.stringContaining('"status":"PUBLISHED"')
         : expect.not.stringContaining('"status":"PUBLISHED"')
     );
+  });
+
+  it.each([
+    ['USER', false],
+    ['RESPONDER', true],
+    ['AUDITOR', true],
+    ['ADMIN', true],
+  ])('%s user and policy search matches the pages it can open: %s', async (role, canOpen) => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'u-1',
+      role,
+      status: 'ACTIVE',
+      teamMemberships: [{ teamId: 'team-1' }],
+    });
+
+    await GET(new NextRequest('http://localhost/api/search?q=alice'));
+
+    expect(mocks.userFindMany).toHaveBeenCalledTimes(canOpen ? 1 : 0);
+    expect(mocks.policyFindMany).toHaveBeenCalledTimes(canOpen ? 1 : 0);
   });
 
   it('returns limited, scoped schedule and runbook matches', async () => {
