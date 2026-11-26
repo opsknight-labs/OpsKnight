@@ -23,7 +23,9 @@ export default function MobileSignOutButton({ icon, label, description }: Props)
     setIsSigningOut(true);
     const callbackUrl = '/m/login?callbackUrl=/m';
     try {
-      await promiseWithTimeout(purgeBrowserAuthCaches(), 5_000).catch(() => {});
+      await promiseWithTimeout(purgeBrowserAuthCaches({ releasePush: true }), 5_000).catch(
+        () => {}
+      );
       await promiseWithTimeout(signOut({ callbackUrl }), 8_000);
     } catch {
       router.push(callbackUrl);

@@ -39,7 +39,7 @@ export default function SignOutClient() {
         // Provider logout is best-effort; local logout remains authoritative.
       }
       try {
-        await purgeBrowserAuthCaches();
+        await purgeBrowserAuthCaches({ releasePush: true });
       } catch {
         // Cache cleanup is defense-in-depth; it must never prevent server logout.
       }
