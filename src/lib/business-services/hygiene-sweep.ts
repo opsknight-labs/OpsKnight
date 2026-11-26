@@ -32,9 +32,16 @@ export async function isHygieneEnabled(): Promise<boolean> {
  */
 export async function runBusinessServiceHygieneIfDue(now = new Date()) {
   if (now.getTime() - lastRunAt < SWEEP_INTERVAL_MS) return null;
-  lastRunAt = now.getTime();
   if (!(await isHygieneEnabled())) return null;
-  return runBusinessServiceHygieneSweep(now);
+  // Only a started sweep holds the hourly slot, and a failed one gives it back for a retry.
+  const previous = lastRunAt;
+  lastRunAt = now.getTime();
+  try {
+    return await runBusinessServiceHygieneSweep(now);
+  } catch (error) {
+    lastRunAt = previous;
+    throw error;
+  }
 }
 
 export async function runBusinessServiceHygieneSweep(now = new Date()) {
@@ -76,6 +83,22 @@ export async function runBusinessServiceHygieneSweep(now = new Date()) {
     });
     if (!services.length) break;
     cursor = services[services.length - 1].id;
+    // One schedule lookup per batch instead of one per service.
+    const scheduleIds = [
+      ...new Set(
+        services.flatMap(service => {
+          const id = service.ownerTeamId && service.escalationPolicy?.steps[0]?.targetScheduleId;
+          return id ? [id] : [];
+        })
+      ),
+    ];
+    const staffed = new Set(
+      scheduleIds.length
+        ? (await getActiveOnCallShifts(now, { where: { id: { in: scheduleIds } } })).map(
+            shift => shift.scheduleId
+          )
+        : []
+    );
     const recent = await prisma.inAppNotification.findMany({
       where: {
         entityType: 'BUSINESS_SERVICE',
@@ -92,8 +115,7 @@ export async function runBusinessServiceHygieneSweep(now = new Date()) {
       if (service.ownerTeamId) {
         const scheduleId = service.escalationPolicy?.steps[0]?.targetScheduleId;
         teamUnreachable =
-          activeMembers.length === 0 ||
-          (scheduleId ? (await getActiveOnCallShifts(now, { scheduleId })).length === 0 : false);
+          activeMembers.length === 0 || (scheduleId ? !staffed.has(scheduleId) : false);
       }
       const reasons = evaluateHygiene(
         {

@@ -11,9 +11,11 @@ import {
   businessServiceReadWhere,
   deleteBusinessService,
   healthIncidentIds,
+  serviceIdsOf,
   updateBusinessService,
 } from '@/lib/business-services/commands';
-import { readableIncidentIds } from '@/lib/business-services/stats';
+import { canReadBusinessServiceFinancials } from '@/lib/business-services/financials';
+import { readableIncidentIds, readableServiceIds } from '@/lib/business-services/stats';
 import { getBusinessServiceHealth } from '@/lib/business-services/contract';
 
 const paramsSchema = z.object({ id: z.string().trim().min(1).max(100) }).strict();
@@ -33,7 +35,13 @@ export const GET = defineV2Route({
     const health = (await getBusinessServiceHealth([row.id], actor)).get(row.id);
     const readable = await readableIncidentIds(actor, healthIncidentIds([health]));
     return {
-      data: businessServiceDto(row, health, readable),
+      data: businessServiceDto(
+        row,
+        health,
+        readable,
+        canReadBusinessServiceFinancials(actor),
+        await readableServiceIds(actor, serviceIdsOf([row], [health]))
+      ),
       headers: { 'Cache-Control': 'no-store' },
     };
   },
@@ -60,7 +68,7 @@ export const PATCH = defineV2Route({
       details: { fields: Object.keys(body) },
       tx,
     });
-    return { data: businessServiceDto(updated) };
+    return { data: businessServiceDto(updated, undefined, undefined, true) };
   },
 });
 

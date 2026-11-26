@@ -1,6 +1,7 @@
 import type { PublicMaintenance } from '@/lib/status-pages/public-contract';
 import { formatDateTime } from '@/lib/timezone';
 import StatusBadge from '@/components/incident/StatusBadge';
+import { useStatusLocale, useT } from '@/lib/status-pages/i18n/context';
 
 function countsFor(maintenance: PublicMaintenance[] | undefined) {
   if (!maintenance || maintenance.length === 0)
@@ -33,6 +34,8 @@ function MaintenanceV3({
   maintenance: PublicMaintenance[] | undefined;
   timeZone: string;
 }) {
+  const t = useT();
+  const locale = useStatusLocale();
   const counts = countsFor(maintenance);
   if (!maintenance || maintenance.length === 0) return null;
   const {
@@ -91,12 +94,14 @@ function MaintenanceV3({
         {maintenance.map(item => {
           const isAllDay = item.allDay || item.timeMode === 'ALL_DAY';
           const timeStr = isAllDay
-            ? `All day · ${new Date(item.startAt).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                timeZone: 'UTC',
-              })}`
+            ? t('common.allDay', {
+                date: new Date(item.startAt).toLocaleDateString(locale, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  timeZone: 'UTC',
+                }),
+              })
             : `${formatDateTime(item.startAt, timeZone, { format: 'short', hour12: true })}${
                 item.endAt
                   ? ` – ${formatDateTime(item.endAt, timeZone, { format: 'short', hour12: true })}`

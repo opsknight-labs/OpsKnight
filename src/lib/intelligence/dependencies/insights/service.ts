@@ -1,4 +1,5 @@
 import 'server-only';
+import { canReadBusinessServiceFinancials } from '@/lib/business-services/financials';
 import type { BusinessServiceTier } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { actorHasCapability, type AuthorizationActor } from '@/lib/authorization-policy';
@@ -432,7 +433,21 @@ export async function simulateFailure(
   const maxDepth = Math.min(Math.max(Math.trunc(options.maxDepth ?? 5), 1), 10);
   const graph = await visibleGraph(actor);
   const nodes = new Map(graph.nodes.map(node => [node.id, node]));
-  if (seeds.some(id => !nodes.has(id))) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+  if (seeds.some(id => !nodes.has(id))) {
+    // The unfocused graph holds only the first services by name; a seed beyond that is not "missing".
+    if (graph.truncated)
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        fields: [
+          {
+            field: 'serviceIds',
+            code: 'custom',
+            message: 'The service graph is too large to simulate a service outside its first 2000 services.',
+          },
+        ],
+      });
+    throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+  }
   const active = graph.edges.filter(edge => edge.status === 'ACTIVE');
   const hard = active.filter(edge => edge.dependencyType !== 'SOFT');
   const walk = (edgeSet: typeof active) => {
@@ -490,6 +505,7 @@ export async function simulateFailure(
         ] as const
     )
   );
+  const financials = canReadBusinessServiceFinancials(actor);
   const rankedOut = new Set<BsStatus>(['PARTIAL_OUTAGE', 'MAJOR_OUTAGE']);
   const affectedBusiness = graph.businessServices.flatMap(bs => {
     const projected = health.get(bs.id)?.status ?? 'UNKNOWN';
@@ -515,8 +531,9 @@ export async function simulateFailure(
     affectedBusinessServices: affectedBusiness,
     exposure: {
       note: 'Counts business services projected at partial or major outage; overlapping customers are not de-duplicated. Null when no affected business service has the figure.',
-      revenuePerHourCents: sum('revenuePerHourCents'),
-      customers: sum('customersTotal'),
+      // Financial figures only for actors who may read them; others see the structure, not the money.
+      revenuePerHourCents: financials ? sum('revenuePerHourCents') : null,
+      customers: financials ? sum('customersTotal') : null,
     },
   };
 }

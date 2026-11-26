@@ -8,6 +8,7 @@ import { businessServiceReadWhere } from './commands';
 import { getBusinessServiceStats, type BusinessServiceStats, type TimeWindow } from './contract';
 import { unionDurationMs } from './stats';
 import { estimateDowntimeCostCents } from './impact-cost';
+import { canReadBusinessServiceFinancials } from './financials';
 
 export const IMPACT_REPORT_WINDOWS = [7, 30, 90] as const;
 const TIERS: readonly BusinessServiceTier[] = ['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3'];
@@ -115,7 +116,15 @@ export async function getBusinessImpactReport(
   });
   // Rank every visible service first (one cheap interval query), then run the engine stats
   // for the worst IMPACT_REPORT_LIMIT only, so a truncated report still shows the worst offenders.
-  const services = await rankByImpact(found, window, now);
+  const financials = canReadBusinessServiceFinancials(actor);
+  const services = await rankByImpact(
+    found,
+    window,
+    now,
+    IMPACT_REPORT_LIMIT,
+    // Cost order needs the top spenders, not just the longest outages.
+    financials && params.sort === 'cost' ? service => service.revenuePerHourCents ?? 0 : undefined
+  );
   const stats: BusinessServiceStats[] = [];
   for (let index = 0; index < services.length; index += CONCURRENCY) {
     stats.push(
@@ -133,16 +142,19 @@ export async function getBusinessImpactReport(
     name: service.name,
     criticality: service.criticality,
     ownerTeam: service.ownerTeam,
-    revenuePerHourCents: service.revenuePerHourCents,
-    currency: service.currency,
-    customersTotal: service.customersTotal,
-    estimatedCostCents: estimateDowntimeCostCents(
-      stats.at(index)!.weightedDowntimeMinutes ?? 0,
-      service.revenuePerHourCents
-    ),
+    // Read-scoped actors never see revenue, customers or cost (empty currency = not disclosed).
+    revenuePerHourCents: financials ? service.revenuePerHourCents : null,
+    currency: financials ? service.currency : '',
+    customersTotal: financials ? service.customersTotal : null,
+    estimatedCostCents: financials
+      ? estimateDowntimeCostCents(
+          stats.at(index)!.weightedDowntimeMinutes ?? 0,
+          service.revenuePerHourCents
+        )
+      : null,
     worstMember: worst.get(service.id) ?? null,
   }));
-  rows.sort(compareImpactRows(params.sort));
+  rows.sort(compareImpactRows(financials ? params.sort : 'impact'));
   return { window, params, rows, truncated: found.length > IMPACT_REPORT_LIMIT };
 }
 
@@ -152,12 +164,10 @@ export function compareImpactRows(sort: ImpactReportParams['sort'] = 'impact') {
     stats: Pick<BusinessServiceStats, 'impactMinutes' | 'incidentCount'>;
   };
   return (a: R, b: R) =>
-    (sort === 'cost'
-      ? (b.estimatedCostCents ?? -1) - (a.estimatedCostCents ?? -1)
-      : 0) ||
-      b.stats.impactMinutes - a.stats.impactMinutes ||
-      b.stats.incidentCount - a.stats.incidentCount ||
-      a.name.localeCompare(b.name);
+    (sort === 'cost' ? (b.estimatedCostCents ?? -1) - (a.estimatedCostCents ?? -1) : 0) ||
+    b.stats.impactMinutes - a.stats.impactMinutes ||
+    b.stats.incidentCount - a.stats.incidentCount ||
+    a.name.localeCompare(b.name);
 }
 
 /** Worst first by unioned impact time, then incident count, then name; keeps the top limit. */
@@ -165,7 +175,9 @@ export async function rankByImpact<T extends { id: string; name: string }>(
   found: readonly T[],
   window: TimeWindow,
   now: Date,
-  limit = IMPACT_REPORT_LIMIT
+  limit = IMPACT_REPORT_LIMIT,
+  /** Hourly rate per service: when given, services are ranked by impacted time x rate. */
+  rateOf?: (service: T) => number
 ): Promise<T[]> {
   if (found.length <= limit) return [...found];
   // shortcut: capped at MAX_IMPACT_ROWS intervals, so a very noisy org ranks approximately.
@@ -176,6 +188,7 @@ export async function rankByImpact<T extends { id: string; name: string }>(
       startedAt: { lt: window.to },
       OR: [{ endedAt: null }, { endedAt: { gt: window.from } }],
     },
+    orderBy: { startedAt: 'desc' },
     take: MAX_IMPACT_ROWS,
     select: { businessServiceId: true, startedAt: true, endedAt: true },
   });
@@ -189,12 +202,17 @@ export async function rankByImpact<T extends { id: string; name: string }>(
   const score = new Map(
     found.map(service => {
       const list = spans.get(service.id) ?? [];
-      return [service.id, { minutes: unionDurationMs(list, bounds), count: list.length }] as const;
+      const minutes = unionDurationMs(list, bounds);
+      return [
+        service.id,
+        { minutes, count: list.length, cost: rateOf ? minutes * rateOf(service) : 0 },
+      ] as const;
     })
   );
   return [...found]
     .sort(
       (a, b) =>
+        score.get(b.id)!.cost - score.get(a.id)!.cost ||
         score.get(b.id)!.minutes - score.get(a.id)!.minutes ||
         score.get(b.id)!.count - score.get(a.id)!.count ||
         a.name.localeCompare(b.name)
@@ -219,6 +237,7 @@ async function worstMembers(
       // Only members the reader may see are ever named.
       incident: { service: serviceReadWhere(actor) },
     },
+    orderBy: { startedAt: 'desc' },
     take: MAX_IMPACT_ROWS,
     select: {
       businessServiceId: true,

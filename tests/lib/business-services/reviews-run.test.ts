@@ -116,6 +116,13 @@ describe('runServiceReviews', () => {
     expect(enqueued).toHaveLength(1);
   });
 
+  it('M5: the recipient cap continues past already-claimed recipients on the next run', async () => {
+    const first = await runServiceReviews({ now: NOW, maxRecipients: 1 });
+    expect(first).toMatchObject({ sent: 1, skipped: 0 });
+    const second = await runServiceReviews({ now: NOW, maxRecipients: 1 });
+    expect(second).toMatchObject({ sent: 0, skipped: 1, alreadySent: 1 });
+  });
+
   it('does nothing outside the schedule unless run manually', async () => {
     const early = await runServiceReviews({ now: new Date('2026-12-10T10:00:00Z') });
     expect(early.notDue).toBe(true);

@@ -26,6 +26,11 @@ describe('business service links', () => {
     ).toBeNull();
   });
 
+  it('keeps the good links when one stored link is malformed', () => {
+    const good = { label: 'Runbook', url: 'https://x.io/r' };
+    expect(parseBusinessServiceLinks([good, { label: 'a', url: 'ftp://x' }, 7])).toEqual([good]);
+  });
+
   it('drops malformed stored JSON', () => {
     expect(parseBusinessServiceLinks([{ label: 'a', url: 'ftp://x' }])).toEqual([]);
     expect(parseBusinessServiceLinks(null)).toEqual([]);

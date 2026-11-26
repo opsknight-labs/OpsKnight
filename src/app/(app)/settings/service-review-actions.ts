@@ -7,20 +7,33 @@ import { emitAuditEvent } from '@/lib/audit';
 import { assertAdmin, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { reviewConfigSchema, saveReviewConfig } from '@/lib/business-services/reviews/config';
 import { runServiceReviews, sendReviewPreview } from '@/lib/business-services/reviews/run';
+import { AppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 
-const message = (error: unknown) =>
-  error instanceof Error ? error.message : 'Something went wrong. Try again.';
+// Expected failures come back as data: a thrown Error's message is redacted in production builds.
+// Only validation and domain (AppError) messages reach the browser; anything else (database,
+// email provider, infrastructure) is logged here and replaced by a generic line.
+const reviewActionMessage = (error: unknown) => {
+  if (error instanceof z.ZodError) return error.issues[0]?.message ?? 'Check the settings.';
+  if (error instanceof AppError) return error.userMessage;
+  logger.error('Service review action failed', { component: 'service-review-actions', error });
+  return 'Something went wrong. Try again.';
+};
+type Failed = { success: false; error: string };
 
 /** Own opt-in to receive the monthly review for services of my teams. Responders and admins only. */
 export async function setMyServiceReviews(enabled: boolean) {
   const value = z.boolean().parse(enabled);
   const permissions = await getUserPermissions();
   if (!permissions.isAdmin && !permissions.isResponderOrAbove)
-    throw new Error('Service reviews are available to responders and administrators.');
+    return {
+      success: false,
+      error: 'Service reviews are available to responders and administrators.',
+    } as Failed;
   const user = await getCurrentUser();
   await prisma.user.update({ where: { id: user.id }, data: { receiveServiceReviews: value } });
   revalidatePath('/settings/profile');
-  return { success: true };
+  return { success: true } as const;
 }
 
 export async function saveServiceReviewSettings(input: unknown) {
@@ -29,10 +42,10 @@ export async function saveServiceReviewSettings(input: unknown) {
   try {
     await saveReviewConfig(reviewConfigSchema.parse(input), { id: user.id, source: 'UI' });
   } catch (error) {
-    throw new Error(message(error));
+    return { success: false, error: reviewActionMessage(error) } as Failed;
   }
   revalidatePath('/settings/notifications');
-  return { success: true };
+  return { success: true } as const;
 }
 
 export async function runServiceReviewsNow() {
@@ -47,9 +60,9 @@ export async function sendServiceReviewPreview() {
   await assertAdmin();
   const user = await getCurrentUser();
   try {
-    return await sendReviewPreview(user.id);
+    return { success: true, ...(await sendReviewPreview(user.id)) } as const;
   } catch (error) {
-    throw new Error(message(error));
+    return { success: false, error: reviewActionMessage(error) } as Failed;
   }
 }
 

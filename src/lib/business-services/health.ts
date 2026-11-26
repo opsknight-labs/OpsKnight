@@ -53,7 +53,14 @@ export function latestImpactRows<T extends HealthImpactRow>(rows: readonly T[]):
   for (const row of rows) {
     const key = `${row.incidentId}:${row.businessServiceId}`;
     const current = latest.get(key);
-    if (!current || row.startedAt >= current.startedAt) latest.set(key, row);
+    // On a tie an exclusion wins, so the result does not depend on row order.
+    if (
+      !current ||
+      row.startedAt > current.startedAt ||
+      (row.startedAt.getTime() === current.startedAt.getTime() &&
+        (row.excluded || !current.excluded))
+    )
+      latest.set(key, row);
   }
   return latest;
 }
@@ -96,7 +103,10 @@ export function customerReportsReason(
   );
   const since = now.getTime() - windowMinutes * 60_000;
   const reportCount = reports
-    .filter(report => report.windowEnd.getTime() >= since && report.windowEnd.getTime() <= now.getTime() + 300_000)
+    .filter(
+      report =>
+        report.windowEnd.getTime() >= since && report.windowEnd.getTime() <= now.getTime() + 300_000
+    )
     .reduce((sum, report) => sum + report.count, 0);
   return reportCount >= threshold
     ? { kind: 'CUSTOMER_REPORTS', status: 'DEGRADED', reportCount, threshold, windowMinutes }
@@ -505,64 +515,65 @@ export async function loadHealthInputs(now = new Date()): Promise<HealthInputs> 
     import('@/lib/service-maintenance/windows'),
     import('@/lib/incident-status'),
   ]);
-  const [businessServices, supports, edges, incidents, impactRows, customerReports] = await Promise.all([
-    prisma.businessService.findMany({
-      select: {
-        id: true,
-        criticality: true,
-        impactMinUrgency: true,
-        impactMaxPriority: true,
-        ownerTeamId: true,
-        quorumPartialPct: true,
-        quorumMajorPct: true,
-        dependencyHopDepth: true,
-        customerReportThreshold: true,
-        customerReportWindowMinutes: true,
-        members: {
-          select: { serviceId: true, critical: true, service: { select: { teamId: true } } },
-        },
-      },
-    }),
-    prisma.businessServiceSupport.findMany({ select: { parentId: true, childId: true } }),
-    loadActiveEdges(prisma),
-    (async () => {
-      const all = [];
-      for (let cursor: string | undefined; ;) {
-        const page = await prisma.incident.findMany({
-          where: {
-            status: { in: activeIncidentStatuses() },
-            ...(cursor ? { id: { gt: cursor } } : {}),
+  const [businessServices, supports, edges, incidents, impactRows, customerReports] =
+    await Promise.all([
+      prisma.businessService.findMany({
+        select: {
+          id: true,
+          criticality: true,
+          impactMinUrgency: true,
+          impactMaxPriority: true,
+          ownerTeamId: true,
+          quorumPartialPct: true,
+          quorumMajorPct: true,
+          dependencyHopDepth: true,
+          customerReportThreshold: true,
+          customerReportWindowMinutes: true,
+          members: {
+            select: { serviceId: true, critical: true, service: { select: { teamId: true } } },
           },
-          orderBy: { id: 'asc' },
-          take: INCIDENT_PAGE,
-          select: { id: true, serviceId: true, urgency: true, priority: true, createdAt: true },
-        });
-        all.push(...page);
-        if (page.length < INCIDENT_PAGE) return all;
-        cursor = page[page.length - 1].id;
-      }
-    })(),
-    // Every row of an open incident: manual marks are open, exclusions are ended but still apply.
-    prisma.incidentBusinessServiceImpact.findMany({
-      where: { incident: { status: { in: activeIncidentStatuses() } } },
-      select: {
-        incidentId: true,
-        businessServiceId: true,
-        source: true,
-        excluded: true,
-        createdById: true,
-        startedAt: true,
-      },
-    }),
-    // Only services that opted in (threshold set) need reports; none is read otherwise.
-    prisma.customerImpactReport.findMany({
-      where: {
-        businessService: { customerReportThreshold: { not: null } },
-        windowEnd: { gte: new Date(now.getTime() - MAX_CUSTOMER_REPORT_WINDOW_MINUTES * 60_000) },
-      },
-      select: { businessServiceId: true, count: true, windowEnd: true },
-    }),
-  ]);
+        },
+      }),
+      prisma.businessServiceSupport.findMany({ select: { parentId: true, childId: true } }),
+      loadActiveEdges(prisma),
+      (async () => {
+        const all = [];
+        for (let cursor: string | undefined; ;) {
+          const page = await prisma.incident.findMany({
+            where: {
+              status: { in: activeIncidentStatuses() },
+              ...(cursor ? { id: { gt: cursor } } : {}),
+            },
+            orderBy: { id: 'asc' },
+            take: INCIDENT_PAGE,
+            select: { id: true, serviceId: true, urgency: true, priority: true, createdAt: true },
+          });
+          all.push(...page);
+          if (page.length < INCIDENT_PAGE) return all;
+          cursor = page[page.length - 1].id;
+        }
+      })(),
+      // Every row of an open incident: manual marks are open, exclusions are ended but still apply.
+      prisma.incidentBusinessServiceImpact.findMany({
+        where: { incident: { status: { in: activeIncidentStatuses() } } },
+        select: {
+          incidentId: true,
+          businessServiceId: true,
+          source: true,
+          excluded: true,
+          createdById: true,
+          startedAt: true,
+        },
+      }),
+      // Only services that opted in (threshold set) need reports; none is read otherwise.
+      prisma.customerImpactReport.findMany({
+        where: {
+          businessService: { customerReportThreshold: { not: null } },
+          windowEnd: { gte: new Date(now.getTime() - MAX_CUSTOMER_REPORT_WINDOW_MINUTES * 60_000) },
+        },
+        select: { businessServiceId: true, count: true, windowEnd: true },
+      }),
+    ]);
   const memberServiceIds = [
     ...new Set(businessServices.flatMap(bs => bs.members.map(member => member.serviceId))),
   ];

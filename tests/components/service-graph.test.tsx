@@ -379,3 +379,36 @@ describe('ServiceGraphExplorer insights', () => {
     expect(screen.getByRole('button', { name: 'Show on graph' })).toBeTruthy();
   });
 });
+
+describe('ServiceGraphExplorer live status polling', () => {
+  it('does not start another poll while the previous one is still in flight', async () => {
+    vi.useFakeTimers();
+    try {
+      let release: (value: null) => void = () => {};
+      actions.getGraphStatusesAction.mockClear();
+      actions.getGraphStatusesAction.mockImplementation(
+        () => new Promise<null>(resolve => (release = resolve))
+      );
+      render(
+        <ServiceGraphExplorer
+          graph={graph}
+          teams={[]}
+          canEdit
+          viewer={viewer}
+          focusName={null}
+          initial={{ q: '', team: '', impacted: false, view: 'list' }}
+        />
+      );
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(actions.getGraphStatusesAction).toHaveBeenCalledTimes(1);
+      release(null);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(actions.getGraphStatusesAction).toHaveBeenCalledTimes(2);
+    } finally {
+      actions.getGraphStatusesAction.mockReset().mockResolvedValue(null);
+      vi.useRealTimers();
+    }
+  });
+});

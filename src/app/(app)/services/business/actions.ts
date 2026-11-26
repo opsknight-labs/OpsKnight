@@ -4,6 +4,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod/v3';
 import { AppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import {
   BusinessServiceInputSchema,
@@ -43,7 +44,9 @@ function failure(error: unknown): BusinessServiceActionResult {
     return { ok: false, error: 'Check the highlighted fields.', fieldErrors };
   }
   if (error instanceof AppError) return { ok: false, error: error.userMessage };
-  throw error;
+  // Unexpected: log it and return a result, so callers never see a rejected action (prod redacts the message).
+  logger.error('Business service action failed', { component: 'business-service-actions', error });
+  return { ok: false, error: 'Something went wrong. Try again.' };
 }
 
 function revalidate(id?: string) {
@@ -134,7 +137,11 @@ export async function searchBusinessServiceOptionsAction(
 const previewSchema = z.object({
   criticality: z.enum(['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3']).nullable(),
   impactMinUrgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).nullable(),
-  impactMaxPriority: z.string().max(4).regex(/^P\d$/i).nullable(),
+  impactMaxPriority: z
+    .string()
+    .max(4)
+    .regex(/^P[1-9]$/i)
+    .nullable(),
   memberServiceIds: z.array(idSchema).max(500),
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { projectPublicStatusEvents } from '@/lib/status-pages/event-projection';
+import { eventInGroupScope, projectPublicStatusEvents } from '@/lib/status-pages/event-projection';
 import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 
 function snapshot(overrides: Partial<PublicStatusPageSnapshot>): PublicStatusPageSnapshot {
@@ -144,5 +144,74 @@ describe('public event projection', () => {
     expect(projectPublicStatusEvents(input)).toEqual(projectPublicStatusEvents(input));
     // Same publishedAt ΓçÆ stable tie-break by id.
     expect(projectPublicStatusEvents(input).map(event => event.id)).toEqual(['m-1', 'm-2']);
+  });
+});
+
+describe('group feed scope (P7)', () => {
+  const scope = { memberIds: new Set(['svc-a']), groupIds: new Set(['bs-1']) };
+  const events = projectPublicStatusEvents(
+    snapshot({
+      incidents: [
+        {
+          id: 'inc-member',
+          title: 'Member incident',
+          status: 'OPEN',
+          createdAt: '2026-09-09T10:00:00.000Z',
+          service: { id: 'svc-a', name: 'A' },
+        },
+        {
+          id: 'inc-tagged',
+          title: 'Tagged incident',
+          status: 'OPEN',
+          createdAt: '2026-09-09T09:00:00.000Z',
+          businessServices: [{ id: 'bs-1', name: 'Checkout' }],
+        },
+        {
+          id: 'inc-other',
+          title: 'Other group',
+          status: 'OPEN',
+          createdAt: '2026-09-09T08:00:00.000Z',
+          service: { id: 'svc-z', name: 'Z' },
+          businessServices: [{ id: 'bs-2', name: 'Other' }],
+        },
+      ],
+      announcements: [
+        {
+          id: 'ann-wide',
+          title: 'Page-wide notice',
+          message: '',
+          type: 'INFO',
+          startDate: '2026-09-09T07:00:00.000Z',
+          endDate: null,
+        },
+        {
+          id: 'ann-biz',
+          title: 'Named business service',
+          message: '',
+          type: 'INFO',
+          startDate: '2026-09-09T06:00:00.000Z',
+          endDate: null,
+          affectedBusinessServices: [{ id: 'bs-1', name: 'Checkout' }],
+        },
+        {
+          id: 'ann-other',
+          title: 'Elsewhere',
+          message: '',
+          type: 'INFO',
+          startDate: '2026-09-09T05:00:00.000Z',
+          endDate: null,
+          affectedServices: [{ id: 'svc-z', name: 'Z' }],
+        },
+      ],
+    })
+  );
+
+  it('keeps member, tagged and page-wide events and drops other groups', () => {
+    expect(
+      events
+        .filter(event => eventInGroupScope(event, scope))
+        .map(event => event.id)
+        .sort()
+    ).toEqual(['ann-biz', 'ann-wide', 'inc-member', 'inc-tagged']);
   });
 });

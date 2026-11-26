@@ -126,6 +126,8 @@ export type BusinessServiceStats = {
   /** Severity-weighted (DEGRADED 25%, PARTIAL 50%, MAJOR 100%) and excluding planned maintenance. */
   weightedUptimePercent?: number;
   weightedDowntimeMinutes?: number;
+  /** Window length minus planned maintenance: the denominator of the weighted uptime. */
+  weightedWindowMinutes?: number;
   incidentCount: number;
   mttaMinutes: number | null;
   mttrMinutes: number | null;

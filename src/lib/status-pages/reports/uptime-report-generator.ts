@@ -606,7 +606,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
       currentY -= 16;
     }
     curCommands += '0.10 0.15 0.25 rg\n';
-    curCommands += `BT /F2 11 Tf ${MARGIN_X} ${currentY} Td (Business Services) Tj ET\n`;
+    curCommands += `BT /F2 11 Tf ${MARGIN_X} ${currentY} Td (Business Services - trailing 30/90 days, not the report month) Tj ET\n`;
     currentY -= 14;
     const cols = [
       { x: MARGIN_X, title: 'BUSINESS SERVICE' },

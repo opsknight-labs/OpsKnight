@@ -22,7 +22,8 @@ import {
   emitBusinessServiceStatusChanges,
 } from '@/lib/business-services/status-events';
 
-const row = (lastNotifiedStatus: string | null) => ({
+const row = (lastNotifiedStatus: string | null, lastNotifiedStatusAt: Date | null = null) => ({
+  lastNotifiedStatusAt,
   id: 'bs1',
   name: 'Checkout',
   lastNotifiedStatus,
@@ -65,7 +66,27 @@ describe('emitBusinessServiceStatusChanges', () => {
     expect(await emitBusinessServiceStatusChanges()).toBe(0);
     mocks.findMany.mockResolvedValue([row('MAJOR_OUTAGE')]);
     expect(await emitBusinessServiceStatusChanges()).toBe(0);
+    // The lost race still announced once (deduplicated downstream); the unchanged status did not.
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the same dedupe key when a failed announcement is retried, and records nothing', async () => {
+    const at = new Date('2026-11-20T10:00:00Z');
+    mocks.findMany.mockResolvedValue([row('OPERATIONAL', at)]);
+    mocks.webhook.mockRejectedValueOnce(new Error('boom'));
+    expect(await emitBusinessServiceStatusChanges(new Date('2026-11-26T10:00:00Z'))).toBe(0);
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+    expect(await emitBusinessServiceStatusChanges(new Date('2026-11-26T10:01:00Z'))).toBe(1);
+    const keys = mocks.notify.mock.calls.map(call => call[0].dedupeKey);
+    expect(keys[0]).toBe(keys[1]);
+  });
+
+  it('debounces a change that follows another within the window', async () => {
+    const now = new Date('2026-11-26T10:00:00Z');
+    mocks.findMany.mockResolvedValue([row('OPERATIONAL', new Date(now.getTime() - 60_000))]);
+    expect(await emitBusinessServiceStatusChanges(now)).toBe(0);
     expect(mocks.notify).not.toHaveBeenCalled();
+    expect(mocks.updateMany).not.toHaveBeenCalled();
   });
 
   it('describes a change in plain words', () => {

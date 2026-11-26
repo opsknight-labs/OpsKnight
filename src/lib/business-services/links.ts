@@ -20,8 +20,12 @@ export type BusinessServiceLink = z.infer<typeof BusinessServiceLinkSchema>;
 
 /** Stored JSON back to typed links; anything malformed is dropped rather than thrown. */
 export function parseBusinessServiceLinks(value: unknown): BusinessServiceLink[] {
-  const parsed = z.array(BusinessServiceLinkSchema).safeParse(value);
-  return parsed.success ? parsed.data : [];
+  if (!Array.isArray(value)) return [];
+  // Per item, so one bad stored link does not blank the rest (and a save does not wipe them).
+  return value.flatMap(item => {
+    const parsed = BusinessServiceLinkSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
 /** Form text, one "Label | https://url" per line. Returns null when a line is invalid. */

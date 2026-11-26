@@ -13,7 +13,6 @@ export default function WhyStatusCard({
   status: BsStatus;
   reasons: readonly WhyReason[];
 }) {
-  if (reasons.length === 0) return null;
   return (
     <SectionCard
       id="bs-why"
@@ -21,10 +20,12 @@ export default function WhyStatusCard({
       description={
         status === 'OPERATIONAL'
           ? 'Nothing is affecting it right now.'
-          : 'What is driving the current status. Open an incident for the detail.'
+          : reasons.length === 0
+            ? 'No incident, maintenance or dependency is recorded for this status.'
+            : 'What is driving the current status. Open an incident for the detail.'
       }
     >
-      <ul className="space-y-1.5 text-sm">
+      <ul className="space-y-1.5 text-sm" hidden={reasons.length === 0}>
         {reasons.map(reason => (
           <li key={reason.text} className="flex gap-2">
             <span

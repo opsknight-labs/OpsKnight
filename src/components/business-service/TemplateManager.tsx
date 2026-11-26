@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { notify } from '@/lib/toast';
 import {
   createTemplateAction,
@@ -88,6 +89,8 @@ export default function TemplateManager({
       lifecycle: template.lifecycle,
       ownerTeamId: template.ownerTeamId ?? NONE,
     });
+    // The form sits beside the list; move focus to it so keyboard and screen-reader users land on the edit.
+    document.getElementById('tpl-name')?.focus();
   };
   const reset = () => {
     setEditing(null);
@@ -135,17 +138,13 @@ export default function TemplateManager({
     });
   };
 
-  const remove = (template: TemplateView) =>
-    startTransition(async () => {
-      const result = await deleteTemplateAction(template.id);
-      if (!result.ok) {
-        notify.error(result.error);
-        return;
-      }
-      notify.success('Template deleted');
-      if (editing === template.id) reset();
-      router.refresh();
-    });
+  const remove = async (template: TemplateView) => {
+    const result = await deleteTemplateAction(template.id);
+    if (!result.ok) return { error: result.error };
+    notify.success('Template deleted');
+    if (editing === template.id) reset();
+    router.refresh();
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
@@ -172,20 +171,38 @@ export default function TemplateManager({
                   </p>
                 </div>
                 <Button asChild size="sm" variant="outline">
-                  <Link href={`/services/business/new?template=${template.id}`}>Use</Link>
-                </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={() => load(template)}>
-                  Edit
+                  <Link
+                    href={`/services/business/new?template=${template.id}`}
+                    aria-label={`Use template ${template.name}`}
+                  >
+                    Use
+                  </Link>
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  disabled={isPending}
-                  onClick={() => remove(template)}
+                  aria-label={`Edit template ${template.name}`}
+                  onClick={() => load(template)}
                 >
-                  Delete
+                  Edit
                 </Button>
+                <DeleteConfirmDialog
+                  title="Delete this template?"
+                  description={`${template.name} will be removed. Business services already created from it are not affected.`}
+                  onConfirm={() => remove(template)}
+                  trigger={
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={isPending}
+                      aria-label={`Delete template ${template.name}`}
+                    >
+                      Delete
+                    </Button>
+                  }
+                />
               </li>
             ))}
           </ul>

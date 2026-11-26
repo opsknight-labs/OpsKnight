@@ -9,9 +9,11 @@ import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { parseCatalog } from '@/lib/intelligence/dependencies/import';
 import {
   assertCanManageBusinessServices,
+  businessServiceReadWhere,
   createBusinessService,
   updateBusinessService,
 } from './commands';
+import { invalidateBusinessServiceHealth } from './health';
 
 export const MAX_IMPORT_ROWS = 1000;
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -452,6 +454,8 @@ export async function importBusinessServices(
   if (input.dryRun || plan.issues.length) return { ...plan, applied: false };
 
   const apply = async (tx: Prisma.TransactionClient) => {
+    // The same lock as every support-graph writer, so concurrent imports and edits cannot close a cycle.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('business-service-support', 0))`;
     const idByName = new Map<string, string>();
     for (const entry of resolved) {
       const { row } = entry;
@@ -460,6 +464,7 @@ export async function importBusinessServices(
         ...(row.description !== undefined ? { description: row.description } : {}),
         ...(entry.ownerTeamId !== undefined ? { ownerTeamId: entry.ownerTeamId } : {}),
         ...(entry.memberServiceIds ? { memberServiceIds: entry.memberServiceIds } : {}),
+        ...(row.criticality !== undefined ? { criticality: row.criticality } : {}),
       };
       const saved =
         entry.existingId === null
@@ -467,11 +472,6 @@ export async function importBusinessServices(
           : change.action === 'unchanged' || !Object.keys(fields).length
             ? { id: entry.existingId }
             : await updateBusinessService(entry.existingId, fields, context, tx);
-      if (row.criticality !== undefined)
-        await tx.businessService.update({
-          where: { id: saved.id },
-          data: { criticality: row.criticality },
-        });
       idByName.set(lower(row.name), saved.id);
     }
     for (const { row } of resolved) {
@@ -482,10 +482,20 @@ export async function importBusinessServices(
         const known = idByName.get(lower(ref));
         const found = known
           ? { id: known }
-          : await tx.businessService.findFirstOrThrow({
-              where: { name: { equals: ref, mode: 'insensitive' } },
+          : await tx.businessService.findFirst({
+              where: {
+                AND: [
+                  { name: { equals: ref, mode: 'insensitive' } },
+                  businessServiceReadWhere(context.actor),
+                ],
+              },
               select: { id: true },
             });
+        if (!found)
+          throw new AppError({
+            code: 'RESOURCE_NOT_FOUND',
+            userMessage: `Unknown business service "${ref}".`,
+          });
         childIds.push(found.id);
       }
       await tx.businessServiceSupport.deleteMany({
@@ -496,6 +506,19 @@ export async function importBusinessServices(
         skipDuplicates: true,
       });
     }
+    // The plan was validated before the lock: recheck the stored graph now that this import is in it.
+    const stored = new Map<string, Set<string>>();
+    for (const edge of await tx.businessServiceSupport.findMany({
+      select: { parentId: true, childId: true },
+    }))
+      stored.set(edge.parentId, new Set([...(stored.get(edge.parentId) ?? []), edge.childId]));
+    if (hasCycle(stored))
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'The dependencies between business services would form a cycle.',
+      });
+    // Edge-only changes touch no business service row, so tick the clock for the health caches.
+    await tx.realtimeChange.create({ data: {} });
     await emitAuditEvent(
       {
         action: 'business_service.imported',
@@ -514,5 +537,6 @@ export async function importBusinessServices(
     );
   };
   await (client ? apply(client) : prisma.$transaction(apply, { timeout: 120_000 }));
+  invalidateBusinessServiceHealth();
   return { ...plan, applied: true };
 }

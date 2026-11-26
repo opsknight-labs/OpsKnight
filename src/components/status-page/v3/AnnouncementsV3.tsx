@@ -4,6 +4,7 @@ import { memo, useMemo, useState } from 'react';
 import type { PublicAnnouncement, PublicChangelogEntry } from '@/lib/status-pages/public-contract';
 import { formatDateTime } from '@/lib/timezone';
 import StatusBadge from '@/components/incident/StatusBadge';
+import { useStatusLocale, useT } from '@/lib/status-pages/i18n/context';
 
 function announcementTypeLabel(typeUpper: string, fallback: string): string {
   switch (typeUpper) {
@@ -202,16 +203,20 @@ function ChangelogAffects({ services }: { services?: { id?: string; name: string
 }
 
 function AnnouncementCard({ item, timeZone }: { item: PublicAnnouncement; timeZone: string }) {
+  const t = useT();
+  const locale = useStatusLocale();
   const typeUpper = (item.type || 'INFO').toUpperCase();
   const badgeLabel = announcementTypeLabel(typeUpper, item.type);
   const isAllDay = item.allDay || item.timeMode === 'ALL_DAY';
   const absolute = isAllDay
-    ? `All day · ${new Date(item.startDate).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        timeZone: 'UTC',
-      })}`
+    ? t('common.allDay', {
+        date: new Date(item.startDate).toLocaleDateString(locale, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'UTC',
+        }),
+      })
     : formatDateTime(item.startDate, timeZone, { format: 'short', hour12: true });
   const relative = isAllDay
     ? absolute

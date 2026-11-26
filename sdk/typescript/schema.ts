@@ -900,9 +900,9 @@ export type BusinessService = {
   quorumPartialPct: number | null;
   quorumMajorPct: number | null;
   dependencyHopDepth: number;
-  customersTotal: number | null;
-  revenuePerHourCents: number | null;
-  currency: string;
+  customersTotal?: number | null;
+  revenuePerHourCents?: number | null;
+  currency?: string;
   customerReportThreshold: number | null;
   customerReportWindowMinutes: number | null;
   reviewIntervalDays: number | null;
@@ -956,11 +956,11 @@ export type BusinessServiceImpactTimeline = {
   mttrMinutes: number | null;
   weightedDowntimeMinutes: number;
   weightedUptimePercent: number;
-  currency: string;
-  customersTotal: number | null;
-  estimatedCostCents: number | null;
+  currency?: string;
+  customersTotal?: number | null;
+  estimatedCostCents?: number | null;
   entries: Array<{
-    costCents: number | null;
+    costCents?: number | null;
     incidentId: string | null;
     incidentTitle: string | null;
     urgency: 'LOW' | 'MEDIUM' | 'HIGH' | null;

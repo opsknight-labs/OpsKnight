@@ -125,6 +125,7 @@ async function KpiSection({
             targetPercent: slo.target,
             windowDays: slo.windowDays,
             downtimeMinutes: stats[2].weightedDowntimeMinutes ?? stats[2].impactMinutes,
+            windowMinutes: stats[2].weightedWindowMinutes,
           }),
         }
       : null;
@@ -474,9 +475,17 @@ export default async function BusinessServiceOverviewPage({
   });
   if (!item) notFound();
 
-  const tabIds = ['overview', 'members', 'dependencies', 'status-pages', 'followers', 'activity'];
-  const tab = query?.tab && tabIds.includes(query.tab) ? query.tab : 'overview';
   const canReadAudit = actorHasCapability(actor, CAPABILITIES.AUDIT_READ);
+  // Only tabs this viewer is offered: ?tab=activity without audit access falls back to the overview.
+  const tabIds = [
+    'overview',
+    'members',
+    'dependencies',
+    'status-pages',
+    'followers',
+    ...(canReadAudit ? ['activity'] : []),
+  ];
+  const tab = query?.tab && tabIds.includes(query.tab) ? query.tab : 'overview';
 
   const canManage = actorHasCapability(actor, CAPABILITIES.OPERATIONS_MANAGE);
   const canReadIncidents = authorize({
@@ -797,7 +806,7 @@ export default async function BusinessServiceOverviewPage({
         <HealthUnavailable message="Live status could not be loaded. Members, dependencies, status pages and followers below are current; refresh in a moment to try again." />
       )}
 
-      <AutoRefresh seconds={30} />
+      <AutoRefresh seconds={60} />
       <DetailTabs
         label="Business service sections"
         defaultTab={tab}
@@ -838,7 +847,11 @@ export default async function BusinessServiceOverviewPage({
             content:
               tab === 'status-pages' ? (
                 <Suspense fallback={<SectionSkeleton title="Status pages" height="h-24" />}>
-                  <StatusPagesSection id={item.id} canManage={canManage} />
+                  <StatusPagesSection
+                    id={item.id}
+                    // The status-page settings are admin-only, so Configure links need ADMIN_MANAGE.
+                    canManage={actorHasCapability(actor, CAPABILITIES.ADMIN_MANAGE)}
+                  />
                 </Suspense>
               ) : null,
           },

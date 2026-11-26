@@ -18,6 +18,6 @@ export const POST = defineV2Route({
       { actor, source: 'API' },
       tx
     );
-    return { status: 201, data: businessServiceDto(created) };
+    return { status: 201, data: businessServiceDto(created, undefined, undefined, true) };
   },
 });

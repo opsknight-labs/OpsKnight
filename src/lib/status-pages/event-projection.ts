@@ -29,6 +29,28 @@ export interface PublicStatusEventV3 {
   updatedAt?: string;
   affectedServices?: Array<{ id: string; name: string }>;
   affectedRegions?: string[];
+  /** Business services the event names; used to scope group feeds, not rendered. */
+  affectedBusinessServiceIds?: string[];
+}
+
+const businessIds = (refs: Array<{ id: string }> | undefined) =>
+  refs?.length ? { affectedBusinessServiceIds: refs.map(ref => ref.id) } : {};
+
+/**
+ * Whether an event belongs in a group's feed: it names a member service or a business service in
+ * the group's scope, or it names nothing at all (page-wide), which concerns every group.
+ */
+export function eventInGroupScope(
+  event: PublicStatusEventV3,
+  scope: { memberIds: ReadonlySet<string>; groupIds: ReadonlySet<string> }
+): boolean {
+  const services = event.affectedServices ?? [];
+  const groups = event.affectedBusinessServiceIds ?? [];
+  if (!services.length && !groups.length) return true;
+  return (
+    services.some(service => scope.memberIds.has(service.id)) ||
+    groups.some(id => scope.groupIds.has(id))
+  );
 }
 
 /** Deterministic FNV-1a key so an event without a disclosed id still dedupes stably across surfaces. */
@@ -81,6 +103,7 @@ export function projectPublicStatusEvents(
         ? { affectedServices: [{ id: incident.service.id, name: incident.service.name }] }
         : {}),
       ...(incident.service?.regions?.length ? { affectedRegions: incident.service.regions } : {}),
+      ...businessIds(incident.businessServices),
     });
   }
 
@@ -95,6 +118,7 @@ export function projectPublicStatusEvents(
       ...(item.updatedAt ? { updatedAt: item.updatedAt } : {}),
       ...(item.affectedServices?.length ? { affectedServices: item.affectedServices } : {}),
       ...(item.affectedRegions?.length ? { affectedRegions: item.affectedRegions } : {}),
+      ...businessIds(item.affectedBusinessServices),
     });
   }
 
@@ -108,6 +132,7 @@ export function projectPublicStatusEvents(
       publishedAt: item.startDate,
       ...(item.affectedServices?.length ? { affectedServices: item.affectedServices } : {}),
       ...(item.affectedRegions?.length ? { affectedRegions: item.affectedRegions } : {}),
+      ...businessIds(item.affectedBusinessServices),
     });
   }
 

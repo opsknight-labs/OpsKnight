@@ -48,6 +48,7 @@ const STATUS_CHIPS = [
   { value: 'DEGRADED', label: BS_STATUS_META.DEGRADED.label, tone: 'elevated' },
   { value: 'MAINTENANCE', label: BS_STATUS_META.MAINTENANCE.label, tone: 'info' },
   { value: 'OPERATIONAL', label: BS_STATUS_META.OPERATIONAL.label, tone: 'ok' },
+  { value: 'UNKNOWN', label: BS_STATUS_META.UNKNOWN.label },
 ] as const;
 
 /**
@@ -212,7 +213,7 @@ export default async function BusinessServicesPage({
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <AutoRefresh seconds={30} />
+      <AutoRefresh seconds={60} />
       <PageHeader
         eyebrow="Service Catalog"
         title="Business services"

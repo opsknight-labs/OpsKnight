@@ -62,8 +62,11 @@ export function computeErrorBudget(input: {
   targetPercent: number;
   windowDays: number;
   downtimeMinutes: number;
+  /** Window minus planned maintenance; pass it whenever downtime already excludes maintenance. */
+  windowMinutes?: number;
 }): ErrorBudget {
-  const allowedMinutes = input.windowDays * 24 * 60 * (1 - input.targetPercent / 100);
+  const allowedMinutes =
+    (input.windowMinutes ?? input.windowDays * 24 * 60) * (1 - input.targetPercent / 100);
   const consumedMinutes = Math.max(input.downtimeMinutes, 0);
   const remainingPercent =
     allowedMinutes > 0

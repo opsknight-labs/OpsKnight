@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod/v3';
 import { AppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { logAudit } from '@/lib/audit';
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor, getCurrentUser, getUserPermissions } from '@/lib/rbac';
@@ -42,7 +43,9 @@ function failure(error: unknown): { ok: false; error: string } {
   if (error instanceof z.ZodError)
     return { ok: false, error: error.issues[0]?.message ?? 'Check the highlighted fields.' };
   if (error instanceof AppError) return { ok: false, error: error.userMessage };
-  throw error;
+  // Unexpected: log it and return a result, so callers never see a rejected action (prod redacts the message).
+  logger.error('Business service action failed', { component: 'business-service-actions', error });
+  return { ok: false, error: 'Something went wrong. Try again.' };
 }
 
 const refresh = () => {
@@ -88,9 +91,7 @@ export async function deleteTemplateAction(templateId: string): Promise<ActionRe
   }
 }
 
-export async function bulkEditAction(
-  raw: z.input<typeof BulkEditInputSchema>
-): Promise<
+export async function bulkEditAction(raw: z.input<typeof BulkEditInputSchema>): Promise<
   ActionResult<{
     dryRun: boolean;
     results: BulkItemResult[];

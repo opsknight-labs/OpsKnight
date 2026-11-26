@@ -15,6 +15,9 @@ export default function DependencyHealthSummary({
 }) {
   if (supporting.length === 0 && technicalCount === 0) return null;
   const impacted = supporting.filter(row => row.status && isImpacted(row.status)).length;
+  const healthy = supporting.filter(row => row.status === 'OPERATIONAL').length;
+  // Unknown, unloaded and maintenance are not "healthy": say so instead of folding them in.
+  const unsure = supporting.length - impacted - healthy;
   return (
     <SectionCard id="bs-dependency-health" title="Dependency health">
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -23,9 +26,13 @@ export default function DependencyHealthSummary({
           <dd className="font-medium tabular-nums">
             {supporting.length === 0
               ? 'None'
-              : impacted === 0
-                ? `${supporting.length} healthy`
-                : `${impacted} of ${supporting.length} impacted`}
+              : [
+                  impacted ? `${impacted} of ${supporting.length} impacted` : null,
+                  healthy ? `${healthy} healthy` : null,
+                  unsure ? `${unsure} unknown or in maintenance` : null,
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
           </dd>
         </div>
         <div>

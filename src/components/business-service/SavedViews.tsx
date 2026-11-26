@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useSyncExternalStore } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { Bookmark, X } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
@@ -17,7 +17,8 @@ const parse = (raw: string): View[] => {
           (v): v is View =>
             typeof v?.name === 'string' &&
             typeof v?.href === 'string' &&
-            v.href.startsWith('/services/business')
+            // The catalog itself only: not /services/businessX or a detail page.
+            (v.href === '/services/business' || v.href.startsWith('/services/business?'))
         )
       : [];
   } catch {
@@ -72,6 +73,8 @@ export default function SavedViews({
   const views = parse(raw);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState('');
+  const [announce, setAnnounce] = useState('');
+  const groupRef = useRef<HTMLDivElement>(null);
 
   if (!views.length && !filtered) return null;
   const save = () => {
@@ -80,16 +83,24 @@ export default function SavedViews({
     write(key, [{ name: label, href: currentHref }, ...views.filter(v => v.name !== label)]);
     setName('');
     setNaming(false);
+    setAnnounce(`Saved view ${label}`);
+    // The Save control and the name field unmount; keep keyboard focus inside the group.
+    groupRef.current?.focus();
   };
   return (
     <div
-      className="flex flex-wrap items-center gap-2 text-xs"
+      ref={groupRef}
+      tabIndex={-1}
+      className="flex flex-wrap items-center gap-2 text-xs focus-visible:outline-hidden"
       role="group"
       aria-label="Saved views"
     >
       <span className="inline-flex items-center gap-1 font-medium text-muted-foreground">
         <Bookmark className="h-3.5 w-3.5" aria-hidden />
         Views
+      </span>
+      <span role="status" className="sr-only">
+        {announce}
       </span>
       {views.map(view => (
         <span
@@ -106,12 +117,14 @@ export default function SavedViews({
           <button
             type="button"
             aria-label={`Remove saved view ${view.name}`}
-            onClick={() =>
+            onClick={() => {
               write(
                 key,
                 views.filter(v => v.name !== view.name)
-              )
-            }
+              );
+              setAnnounce(`Removed saved view ${view.name}`);
+              groupRef.current?.focus();
+            }}
             className="ml-1 rounded-full p-1.5 text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="h-3 w-3" aria-hidden />

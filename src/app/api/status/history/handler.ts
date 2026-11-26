@@ -1,4 +1,5 @@
 import { isStatusPageIpAllowed } from '@/lib/status-pages/ip-allow-gate';
+import { concealedServiceIdsForPage } from '@/lib/status-pages/member-concealment';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -49,7 +50,10 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
       return jsonError('Status page not found or disabled', 404);
     }
     // Include only services that are actually published; filter early for efficiency at large scale.
-    const publishedServices = statusPage.services.filter(sp => sp.showOnPage);
+    const concealed = await concealedServiceIdsForPage(prisma, statusPage);
+    const publishedServices = statusPage.services.filter(
+      sp => sp.showOnPage && !concealed.has(sp.serviceId)
+    );
 
     // Publication contract must be derived after the page is loaded — computing it before
     // would reference an undefined settings object and would let callers request history beyond

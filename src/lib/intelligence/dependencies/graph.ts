@@ -213,18 +213,26 @@ export interface DerivedStatus {
  * excluded, since they already show their own incident.
  */
 export function derivedDependencyStatuses(
-  edges: readonly DependencyEdge[],
+  edges: ReadonlyArray<DependencyEdge & { dependencyType?: 'HARD' | 'SOFT' }>,
   sources: ReadonlyMap<string, { incidentId: string; urgency: 'HIGH' | 'MEDIUM' | 'LOW' }>,
   maxDepth = 3
 ): Map<string, DerivedStatus> {
   const result = new Map<string, DerivedStatus>();
   const worse = (a: DerivedStatus['status'], b: DerivedStatus['status']) =>
     a === 'PARTIAL_OUTAGE' && b === 'DEGRADED';
+  const hardEdges = edges.filter(edge => edge.dependencyType !== 'SOFT');
   for (const [serviceId, source] of sources) {
-    const status = source.urgency === 'LOW' ? 'DEGRADED' : 'PARTIAL_OUTAGE';
-    const { distances } = downstreamDistances(edges, serviceId, maxDepth);
-    for (const [dependent, depth] of distances) {
+    const urgencyStatus = source.urgency === 'LOW' ? 'DEGRADED' : 'PARTIAL_OUTAGE';
+    // No node cap: the depth bound and the edge cap already limit the walk, and a silent cap here
+    // would drop dependents from the status. A SOFT edge never proves the dependent is down, so
+    // services reached only through one are capped at DEGRADED (as simulateFailure treats them).
+    const hard = downstreamDistances(hardEdges, serviceId, maxDepth, Infinity).distances;
+    const all = downstreamDistances(edges, serviceId, maxDepth, Infinity).distances;
+    for (const [dependent, allDepth] of all) {
       if (sources.has(dependent)) continue;
+      const hardDepth = hard.get(dependent);
+      const status = hardDepth === undefined ? 'DEGRADED' : urgencyStatus;
+      const depth = hardDepth ?? allDepth;
       const current = result.get(dependent);
       if (
         !current ||

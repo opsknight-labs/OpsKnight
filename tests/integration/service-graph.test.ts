@@ -124,6 +124,21 @@ describe('service graph view', () => {
     expect(graph!.truncated).toBe(false);
   });
 
+  it('marks only frontier nodes that still have unloaded neighbours as boundary', async () => {
+    const s = await scenario();
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const run = async (hops: number) =>
+      getServiceGraphForActor(actorFor(admin, 'ADMIN'), undefined, {
+        focus: { kind: 'svc', id: s.web.id },
+        hops,
+        access: 'service',
+      });
+    // hops=2 ends on db and hidden; disk and cache lie beyond them.
+    expect(new Set((await run(2))!.boundaryIds)).toEqual(new Set([s.store.id, s.hidden.id]));
+    // hops=3 reaches disk and cache, which are leaves: nothing is left unloaded.
+    expect((await run(3))!.boundaryIds).toEqual([]);
+  });
+
   it('never shows or walks through services a scoped reader cannot see', async () => {
     const s = await scenario();
     const user = await createTestUser({ role: 'USER' });
