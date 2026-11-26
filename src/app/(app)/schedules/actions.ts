@@ -98,15 +98,20 @@ export async function createSchedule(
 
   try {
     const normalizedName = await assertScheduleNameAvailable(name);
-    const schedule = await prisma.onCallSchedule.create({
-      data: { name: normalizedName, timeZone },
-    });
-    await logAudit({
-      action: 'schedule.created',
-      entityType: 'SCHEDULE',
-      entityId: schedule.id,
-      actorId,
-      details: { name: normalizedName, timeZone },
+    await prisma.$transaction(async tx => {
+      const schedule = await tx.onCallSchedule.create({
+        data: { name: normalizedName, timeZone },
+      });
+      await logAudit(
+        {
+          action: 'schedule.created',
+          entityType: 'SCHEDULE',
+          entityId: schedule.id,
+          actorId,
+          details: { name: normalizedName, timeZone },
+        },
+        tx
+      );
     });
 
     revalidatePath('/schedules');
@@ -154,16 +159,21 @@ export async function updateSchedule(
 
   try {
     const normalizedName = await assertScheduleNameAvailable(name, { excludeId: scheduleId });
-    await prisma.onCallSchedule.update({
-      where: { id: scheduleId },
-      data: { name: normalizedName, timeZone },
-    });
-    await logAudit({
-      action: 'schedule.updated',
-      entityType: 'SCHEDULE',
-      entityId: scheduleId,
-      actorId,
-      details: { name: normalizedName, timeZone },
+    await prisma.$transaction(async tx => {
+      await tx.onCallSchedule.update({
+        where: { id: scheduleId },
+        data: { name: normalizedName, timeZone },
+      });
+      await logAudit(
+        {
+          action: 'schedule.updated',
+          entityType: 'SCHEDULE',
+          entityId: scheduleId,
+          actorId,
+          details: { name: normalizedName, timeZone },
+        },
+        tx
+      );
     });
 
     const scheduleName = await getScheduleName(scheduleId);
@@ -373,13 +383,19 @@ export async function addLayerUser(
   }
 
   try {
-    const assignment = await addScheduleLayerUser(layerId, userId);
-    await logAudit({
-      action: 'schedule.member.added',
-      entityType: 'SCHEDULE',
-      entityId: assignment.scheduleId,
-      actorId,
-      details: { layerId, userId, position: assignment.position },
+    const assignment = await runSerializableTransaction(async tx => {
+      const added = await addScheduleLayerUser(layerId, userId, tx);
+      await logAudit(
+        {
+          action: 'schedule.member.added',
+          entityType: 'SCHEDULE',
+          entityId: added.scheduleId,
+          actorId,
+          details: { layerId, userId, position: added.position },
+        },
+        tx
+      );
+      return added;
     });
 
     const scheduleName = await getScheduleName(assignment.scheduleId);
@@ -589,13 +605,19 @@ export async function moveLayerUser(
   }
 
   try {
-    const result = await moveScheduleLayerUser(layerId, userId, direction);
-    await logAudit({
-      action: 'schedule.member.reordered',
-      entityType: 'SCHEDULE',
-      entityId: result.scheduleId,
-      actorId,
-      details: { layerId, userId, direction },
+    const result = await runSerializableTransaction(async tx => {
+      const moved = await moveScheduleLayerUser(layerId, userId, direction, tx);
+      await logAudit(
+        {
+          action: 'schedule.member.reordered',
+          entityType: 'SCHEDULE',
+          entityId: moved.scheduleId,
+          actorId,
+          details: { layerId, userId, direction },
+        },
+        tx
+      );
+      return moved;
     });
 
     revalidatePath(`/schedules/${result.scheduleId}`);
@@ -617,16 +639,23 @@ export async function removeLayerUser(
   }
 
   try {
-    const result = await removeScheduleLayerUser(layerId, userId);
+    const result = await runSerializableTransaction(async tx => {
+      const removed = await removeScheduleLayerUser(layerId, userId, tx);
+      if (removed.removed) {
+        await logAudit(
+          {
+            action: 'schedule.member.removed',
+            entityType: 'SCHEDULE',
+            entityId: removed.scheduleId,
+            actorId,
+            details: { layerId, userId },
+          },
+          tx
+        );
+      }
+      return removed;
+    });
     if (result.removed) {
-      await logAudit({
-        action: 'schedule.member.removed',
-        entityType: 'SCHEDULE',
-        entityId: result.scheduleId,
-        actorId,
-        details: { layerId, userId },
-      });
-
       const scheduleName = await getScheduleName(result.scheduleId);
       await notifyScheduleMembers(
         result.scheduleId,
@@ -690,27 +719,26 @@ export async function createOverride(
   }
 
   try {
-    const override = await createScheduleOverrideMutation({
-      scheduleId,
-      userId,
-      replacesUserId,
-      start: startDate,
-      end: endDate,
-    });
-
-    await logAudit({
-      action: 'schedule.override.created',
-      entityType: 'SCHEDULE',
-      entityId: scheduleId,
-      actorId,
-      details: {
-        overrideId: override.id,
-        userId,
-        replacesUserId,
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-      },
-    });
+    await createScheduleOverrideMutation(
+      { scheduleId, userId, replacesUserId, start: startDate, end: endDate },
+      (tx, created) =>
+        logAudit(
+          {
+            action: 'schedule.override.created',
+            entityType: 'SCHEDULE',
+            entityId: scheduleId,
+            actorId,
+            details: {
+              overrideId: created.id,
+              userId,
+              replacesUserId,
+              start: startDate.toISOString(),
+              end: endDate.toISOString(),
+            },
+          },
+          tx
+        )
+    );
 
     const scheduleName = await getScheduleName(scheduleId);
     const recipientIds =
@@ -755,15 +783,18 @@ export async function deleteOverride(
       );
     }
 
-    await prisma.onCallOverride.delete({
-      where: { id: overrideId },
-    });
-    await logAudit({
-      action: 'schedule.override.deleted',
-      entityType: 'SCHEDULE',
-      entityId: scheduleId,
-      actorId,
-      details: { overrideId, userId: override.userId, replacesUserId: override.replacesUserId },
+    await prisma.$transaction(async tx => {
+      await tx.onCallOverride.delete({ where: { id: overrideId } });
+      await logAudit(
+        {
+          action: 'schedule.override.deleted',
+          entityType: 'SCHEDULE',
+          entityId: scheduleId,
+          actorId,
+          details: { overrideId, userId: override.userId, replacesUserId: override.replacesUserId },
+        },
+        tx
+      );
     });
 
     const scheduleName = await getScheduleName(scheduleId);
