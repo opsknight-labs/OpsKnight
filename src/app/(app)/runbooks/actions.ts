@@ -89,20 +89,29 @@ function parseJson(value: string, label: string): unknown {
   }
 }
 
-export async function createRunbookAction(formData: FormData) {
+export async function createRunbookAction(formData: FormData): Promise<{ error: string } | void> {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
   const templateName = z.enum(RUNBOOK_TEMPLATES).parse(readString(formData, 'template') || 'empty');
-  const created = await createRunbook(
-    {
-      name: readString(formData, 'name'),
-      slug: readString(formData, 'slug'),
-      description: readString(formData, 'description'),
-      ...parseRunbookMetadataForm(formData),
-      definition: runbookTemplate(templateName),
-      inputs: runbookTemplateInputs(templateName),
-    },
-    actor.id
-  );
+  let created: { id: string };
+  try {
+    created = await createRunbook(
+      {
+        name: readString(formData, 'name'),
+        slug: readString(formData, 'slug'),
+        description: readString(formData, 'description'),
+        ...parseRunbookMetadataForm(formData),
+        definition: runbookTemplate(templateName),
+        inputs: runbookTemplateInputs(templateName),
+      },
+      actor.id
+    );
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { error: 'A runbook with this slug already exists. Choose a different slug.' };
+    }
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    throw error;
+  }
   revalidatePath('/runbooks');
   redirect(`/runbooks/${created.id}`);
 }
