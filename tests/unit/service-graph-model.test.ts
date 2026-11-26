@@ -319,10 +319,10 @@ describe('createReuseCache', () => {
     const started = performance.now();
     const second = pass('svc:7');
     expect(performance.now() - started).toBeLessThan(50);
-    const changed = second.filter((node, i) => node !== first[i]).map(node => node.key);
-    expect(changed).toEqual(['svc:7']);
-    const third = pass('svc:9');
-    expect(third.filter((node, i) => node !== second[i]).map(node => node.key)).toEqual(['svc:7', 'svc:9']);
+    const changed = (before: typeof first, after: typeof first) =>
+      after.filter((node, i) => node !== before.at(i)).map(node => node.key);
+    expect(changed(first, second)).toEqual(['svc:7']);
+    expect(changed(second, pass('svc:9'))).toEqual(['svc:7', 'svc:9']);
   });
 });
 
@@ -378,7 +378,7 @@ describe('edgeAppearance', () => {
     for (const diff of ['added', 'removed'] as const) {
       const look = edgeAppearance(link('svc:a', 'svc:b', { diff }), false, null);
       expect(statusHues.has(look.stroke as never)).toBe(false);
-      expect(look.stroke).toBe(EDGE_STROKE[diff]);
+      expect(look.stroke).toBe(diff === 'added' ? EDGE_STROKE.added : EDGE_STROKE.removed);
       expect(look.label).toEqual({ text: diff === 'added' ? 'new' : 'removed', tone: 'neutral' });
     }
   });

@@ -99,7 +99,6 @@ const LABEL_CLASS = {
 
 const TIER_LABEL = { TIER_0: 'Tier 0', TIER_1: 'Tier 1', TIER_2: 'Tier 2', TIER_3: 'Tier 3' } as const;
 
-
 function useLayout(request: LayoutRequest): LayoutResult | null {
   const [state, setState] = useState<{ request: LayoutRequest; result: LayoutResult } | null>(null);
   useEffect(() => {

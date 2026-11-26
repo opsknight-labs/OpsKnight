@@ -2,16 +2,41 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Check, Crosshair, Network, Power, Route, Unlink, Waypoints, X } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Check,
+  Crosshair,
+  FoldVertical,
+  MessageCircleQuestion,
+  Network,
+  Power,
+  Route,
+  UnfoldVertical,
+  Unlink,
+  Waypoints,
+  X,
+} from 'lucide-react';
 import { RelativeTime, SeverityBadge } from '@/components/patterns';
 import { Button } from '@/components/ui/shadcn/button';
 import type { ImpactReason } from '@/lib/business-services/contract';
 import { formatGraphFocus } from '@/lib/service-graph/focus';
+import { openSquire, type SquireEvidenceHandle } from '@/components/squire/squire-bus';
 import type { GraphNodeDetails } from '@/app/(app)/services/graph/actions';
 import GraphHealthBadge, { GRAPH_STATUS_META } from './GraphHealthBadge';
 import type { GraphItem, GraphLink, ImpactMode } from './model';
 
 export type PanelRelation = { link: GraphLink; other: GraphItem | null };
+
+/** What the highlighted blast radius or root-cause path reaches. */
+export type ImpactSummary = {
+  affected: number;
+  /** Items per hop, index 0 = one hop away. */
+  perHop: number[];
+  /** Reached items the filters hide (shown muted on the canvas). */
+  hidden: number;
+};
+
+export type SquireAsk = { label: string; question: string; evidence?: SquireEvidenceHandle };
 
 type Props = {
   item: GraphItem;
@@ -34,7 +59,17 @@ type Props = {
   onWhatIf?: () => void;
   /** How many of the node's open incidents the panel lists before linking to the full list. */
   incidentsHref?: string | null;
+  /** Selects a related node on the canvas. */
+  onSelectRelation?: (key: string) => void;
+  impactSummary?: ImpactSummary | null;
+  /** Business services: fold the members into this node, or show them again. */
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  /** The in-app assistant, when it is enabled for this viewer: its name and prefilled questions. */
+  squire?: { name: string; asks: readonly SquireAsk[] } | null;
 };
+
+const MAX_QUESTION = 400;
 
 function reasonText(reason: ImpactReason, nameOf: (key: string) => string): string {
   const label = GRAPH_STATUS_META[reason.status]?.label ?? reason.status;
@@ -71,6 +106,11 @@ export default function GraphSidePanel({
   onPathPoint,
   onWhatIf,
   incidentsHref = null,
+  onSelectRelation,
+  impactSummary = null,
+  collapsed = false,
+  onToggleCollapse,
+  squire = null,
 }: Props) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -94,7 +134,17 @@ export default function GraphSidePanel({
           {relations.map(({ link, other }) => (
             <li key={link.key} className="flex items-center gap-2 text-sm">
               <span className="min-w-0 flex-1 truncate" title={other?.name}>
-                {other?.name ?? 'Hidden service'}
+                {other && onSelectRelation ? (
+                  <button
+                    type="button"
+                    className="max-w-full truncate rounded-sm text-left font-medium underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => onSelectRelation(other.key)}
+                  >
+                    {other.name}
+                  </button>
+                ) : (
+                  (other?.name ?? 'Hidden service')
+                )}
                 {link.kind === 'member' && (
                   <span className="text-xs text-muted-foreground"> · member</span>
                 )}
@@ -151,7 +201,8 @@ export default function GraphSidePanel({
   return (
     <aside
       aria-labelledby="graph-panel-title"
-      className="flex max-h-[70vh] w-full flex-col overflow-y-auto rounded-lg border bg-card shadow-xs lg:max-h-none lg:w-80 lg:shrink-0"
+      // Below lg it is a bottom sheet over the graph, so the canvas keeps the full width.
+      className="fixed inset-x-0 bottom-0 z-[var(--z-fixed)] flex max-h-[60vh] w-full flex-col overflow-y-auto rounded-t-xl border bg-card pb-[env(safe-area-inset-bottom)] shadow-lg lg:static lg:z-auto lg:max-h-none lg:w-80 lg:shrink-0 lg:rounded-lg lg:pb-0 lg:shadow-xs"
       onKeyDown={event => {
         if (event.key === 'Escape') onClose();
       }}
@@ -291,6 +342,47 @@ export default function GraphSidePanel({
                 </>
               )}
             </div>
+            {impactMode && impactSummary && (
+              <p className="text-xs text-muted-foreground" aria-live="polite">
+                <span className="font-semibold tabular-nums text-foreground">
+                  {impactSummary.affected}
+                </span>{' '}
+                {impactMode === 'blast' ? 'affected' : 'upstream'}
+                {impactSummary.perHop.length > 0 &&
+                  ` · ${impactSummary.perHop
+                    .map((count, hop) => `${count} at ${hop + 1} hop${hop ? 's' : ''}`)
+                    .join(', ')}`}
+                {impactSummary.hidden > 0 &&
+                  ` · ${impactSummary.hidden} hidden by filters, shown muted`}
+              </p>
+            )}
+          </section>
+        )}
+        {onToggleCollapse && item.kind === 'bs' && (
+          <Button size="sm" variant="outline" aria-pressed={collapsed} onClick={onToggleCollapse}>
+            {collapsed ? (
+              <UnfoldVertical className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <FoldVertical className="h-4 w-4" aria-hidden="true" />
+            )}
+            {collapsed ? 'Show member services' : 'Collapse into one node'}
+          </Button>
+        )}
+        {squire && squire.asks.length > 0 && (
+          <section className="flex flex-wrap gap-2" aria-label={`Ask ${squire.name}`}>
+            {squire.asks.map(ask => (
+              <Button
+                key={ask.label}
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  openSquire({ question: ask.question.slice(0, MAX_QUESTION), evidence: ask.evidence })
+                }
+              >
+                <MessageCircleQuestion className="h-4 w-4" aria-hidden="true" />
+                Ask {squire.name} {ask.label}
+              </Button>
+            ))}
           </section>
         )}
         {onWhatIf && item.kind === 'svc' && (

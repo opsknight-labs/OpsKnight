@@ -80,8 +80,10 @@ describe('service graph layout', () => {
     const route = result.routes.ac;
     expect(route.length).toBeGreaterThanOrEqual(2);
     // Orthogonal: every segment is horizontal or vertical.
-    for (let i = 1; i < route.length; i += 1)
-      expect(route[i].x === route[i - 1].x || route[i].y === route[i - 1].y).toBe(true);
+    route.reduce((a, b) => {
+      expect(a.x === b.x || a.y === b.y).toBe(true);
+      return b;
+    });
     // Starts on a's right side and ends on c's left side, in page coordinates.
     expect(route[0].x).toBeCloseTo(result.positions.a.x + 100);
     expect(route.at(-1)!.x).toBeCloseTo(result.positions.c.x);

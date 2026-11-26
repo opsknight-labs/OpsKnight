@@ -11,6 +11,7 @@ import {
   diffGraphAction,
   findSpofAction,
   getGraphAtAction,
+  getGraphTimelineAction,
 } from '@/app/(app)/services/graph/actions';
 import {
   clampMoment,
@@ -30,7 +31,9 @@ const SINCE_OPTIONS = [
   { days: 7, label: '7 days' },
   { days: 30, label: '30 days' },
 ] as const;
-const HOURS = TIME_TRAVEL_DAYS * 24;
+/** The slider moves a day at a time; the date-time field above it picks an exact hour. */
+const DAYS = TIME_TRAVEL_DAYS;
+type Timeline = { days: number; incidents: number[]; changes: number[] };
 const tabClass = (active: boolean) =>
   cn(
     'inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
@@ -70,7 +73,8 @@ export default function GraphInsightsPanel({
   const [sinceDays, setSinceDays] = useState<number>(7);
   const [diff, setDiff] = useState<GraphDiff | null>(null);
   const [spof, setSpof] = useState<SpofReport | null>(null);
-  const [slider, setSlider] = useState(HOURS);
+  const [slider, setSlider] = useState(DAYS);
+  const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [picked, setPicked] = useState('');
   const request = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -128,14 +132,14 @@ export default function GraphInsightsPanel({
     if (!moment) {
       request.current++;
       setLoading(false);
-      setSlider(HOURS);
+      setSlider(DAYS);
       setPicked('');
       onTravel(null, null);
       return;
     }
     const at = clampMoment(moment);
     setPicked(toLocalInput(at));
-    setSlider(Math.round(HOURS - (Date.now() - at.getTime()) / 3_600_000));
+    setSlider(Math.round(DAYS - (Date.now() - at.getTime()) / DAY_MS));
     timer.current = setTimeout(async () => {
       const snapshot = await run(() => getGraphAtAction({ at: at.toISOString(), ...scope }));
       if (snapshot) onTravel(snapshot, at);
@@ -146,10 +150,33 @@ export default function GraphInsightsPanel({
   useEffect(() => {
     if (!at) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs local state with the prop/open transition; cannot be derived during render
-      setSlider(HOURS);
+      setSlider(DAYS);
       setPicked('');
     }
   }, [at]);
+
+  // Tick marks for the slider: incidents opened and dependency changes per day. Decorative, so a
+  // failure leaves the slider without ticks rather than showing an error.
+  useEffect(() => {
+    if (tab !== 'time' || timeline) return;
+    let alive = true;
+    getGraphTimelineAction({ ...scope })
+      .catch(() => null)
+      .then(result => {
+        if (alive && result?.ok) setTimeline(result.data);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scope is focus + hops
+  }, [tab, timeline, focus, hops]);
+  const dayCounts = (value: number) => {
+    const ago = DAYS - value;
+    return {
+      incidents: timeline?.incidents.at(ago) ?? 0,
+      changes: timeline?.changes.at(ago) ?? 0,
+    };
+  };
 
   // Fixed when the panel mounts; the server clamps anyway.
   const [{ min, max }] = useState(() => ({
@@ -203,20 +230,58 @@ export default function GraphInsightsPanel({
             <input
               type="range"
               aria-label="Time, last 90 days"
-              aria-valuetext={at ? at.toLocaleString() : 'Now'}
+              aria-valuetext={
+                at
+                  ? `${at.toLocaleString()}${timeline ? `; ${dayCounts(slider).incidents} incidents opened and ${dayCounts(slider).changes} dependency changes in the day before` : ''}`
+                  : 'Now'
+              }
               className="w-full accent-primary"
               min={0}
-              max={HOURS}
+              max={DAYS}
               step={1}
               value={slider}
               onChange={event => {
-                const hours = Number(event.target.value);
-                if (hours >= HOURS) travel(null);
-                else travel(new Date(Date.now() - (HOURS - hours) * 3_600_000));
+                const days = Number(event.target.value);
+                if (days >= DAYS) travel(null);
+                else travel(new Date(Date.now() - (DAYS - days) * DAY_MS));
               }}
             />
-            <div className="flex justify-between text-2xs text-muted-foreground">
+            {timeline && (
+              <div className="relative h-3" aria-hidden="true" data-testid="timeline-ticks">
+                {timeline.incidents.map((count, ago) =>
+                  count > 0 && ago < DAYS ? (
+                    <span
+                      key={`i${ago}`}
+                      title={`${count} incident${count === 1 ? '' : 's'} opened`}
+                      className="absolute top-0 h-1.5 w-0.5 -translate-x-1/2 rounded-full bg-status-critical"
+                      style={{ left: `${((DAYS - ago - 0.5) / DAYS) * 100}%` }}
+                    />
+                  ) : null
+                )}
+                {timeline.changes.map((count, ago) =>
+                  count > 0 && ago < DAYS ? (
+                    <span
+                      key={`c${ago}`}
+                      title={`${count} dependency change${count === 1 ? '' : 's'}`}
+                      className="absolute bottom-0 h-1.5 w-0.5 -translate-x-1/2 rounded-full bg-ink-500"
+                      style={{ left: `${((DAYS - ago - 0.5) / DAYS) * 100}%` }}
+                    />
+                  ) : null
+                )}
+              </div>
+            )}
+            <div className="flex justify-between gap-2 text-2xs text-muted-foreground">
               <span>{TIME_TRAVEL_DAYS} days ago</span>
+              {timeline && (
+                <span className="inline-flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-1.5 w-0.5 rounded-full bg-status-critical" aria-hidden="true" /> incidents
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-1.5 w-0.5 rounded-full bg-ink-500" aria-hidden="true" /> changes
+                  </span>
+                </span>
+              )}
               <span>Now</span>
             </div>
           </div>
@@ -248,8 +313,8 @@ export default function GraphInsightsPanel({
               ))}
             </div>
             <span className="text-2xs text-muted-foreground">
-              <span className="font-semibold text-status-ok-deep dark:text-emerald-400">Green dashed</span> = added,{' '}
-              <span className="font-semibold text-status-critical-deep dark:text-red-400">red dashed</span> = removed
+              Lines marked <span className="font-semibold text-foreground">new</span> were added,{' '}
+              faint dashed lines marked <span className="font-semibold text-foreground">removed</span> were removed
             </span>
           </div>
           {diff && (
@@ -263,8 +328,8 @@ export default function GraphInsightsPanel({
                 </p>
               )}
               {total === 0 && <p className="text-muted-foreground">Nothing changed in this period.</p>}
-              <EdgeList title="Added" tone="text-status-ok-deep dark:text-emerald-400" rows={diff.addedDependencies} />
-              <EdgeList title="Removed" tone="text-status-critical-deep dark:text-red-400" rows={diff.removedDependencies} />
+              <EdgeList title="Added" tone="text-foreground" rows={diff.addedDependencies} />
+              <EdgeList title="Removed" tone="text-muted-foreground" rows={diff.removedDependencies} />
               {seesSuggestions && <EdgeList title="Newly suggested" tone="text-muted-foreground" rows={diff.newlySuggestedDependencies} />}
               <StatusList title="Service status changes" rows={diff.serviceStatusChanges} />
               <StatusList title="Business service status changes" rows={diff.businessServiceStatusChanges} />

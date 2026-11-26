@@ -13,7 +13,19 @@ import {
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Download, History, List, Network, Plus, RefreshCcw, Repeat, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Boxes,
+  ChevronDown,
+  Download,
+  History,
+  List,
+  Network,
+  Plus,
+  RefreshCcw,
+  Repeat,
+  X,
+} from 'lucide-react';
 import type { BusinessServiceTier } from '@prisma/client';
 import { FilterBar, FilterChip, FilterField } from '@/components/patterns';
 import {
@@ -61,7 +73,7 @@ import GraphDependencyDialog, { EMPTY_DRAFT, type DependencyDraft } from './Grap
 import { GRAPH_STATUS_META } from './GraphHealthBadge';
 import GraphLegend from './GraphLegend';
 import GraphListView from './GraphListView';
-import GraphSidePanel, { type PanelRelation } from './GraphSidePanel';
+import GraphSidePanel, { type ImpactSummary, type PanelRelation, type SquireAsk } from './GraphSidePanel';
 import GraphSkeleton from './GraphSkeleton';
 import GraphInsightsPanel from './GraphInsightsPanel';
 import GraphViewsMenu, { type AppliedView } from './GraphViewsMenu';
@@ -78,6 +90,7 @@ import {
   GROUP_THRESHOLD,
   applyStatuses,
   buildGraphModel,
+  collapseBusinessServices,
   exportGraphJson,
   formatErrorRate,
   formatRate,
@@ -86,6 +99,7 @@ import {
   impactSubgraph,
   matchItems,
   mergeViews,
+  revealEmphasis,
   svcKey,
   type GraphLink,
   type ImpactMode,
@@ -212,6 +226,8 @@ export default function ServiceGraphExplorer({
     seesSuggestions: boolean;
     embedEnabled: boolean;
     teams: ReadonlyArray<{ id: string; name: string }>;
+    /** The in-app assistant's name when it is enabled for this viewer; null hides "Ask". */
+    squireName?: string | null;
   };
 }) {
   const router = useRouter();
@@ -250,6 +266,9 @@ export default function ServiceGraphExplorer({
     to: null,
   });
   const [showCycles, setShowCycles] = useState(false);
+  // Business services folded into one node each (their members hidden, links moved onto them).
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const [legendOpen, setLegendOpen] = useState(false);
   const [details, setDetails] = useState<Record<string, GraphNodeDetails | null>>({});
   const [pending, setPending] = useState<Pending>(null);
   const [dialog, setDialog] = useState<{ draft: DependencyDraft; fixedEnds: boolean } | null>(null);
@@ -331,9 +350,10 @@ export default function ServiceGraphExplorer({
     const items = live && !travel ? applyStatuses(baseModel.items, live) : baseModel.items;
     return items === baseModel.items ? baseModel : { ...baseModel, items: [...items] };
   }, [baseModel, live, travel]);
+  const shown = useMemo(() => collapseBusinessServices(model, collapsed), [model, collapsed]);
   const visible = useMemo(
     () =>
-      filterGraph(model, {
+      filterGraph(shown, {
         query: filterMode ? query : '',
         teamId,
         impactedOnly,
@@ -341,7 +361,7 @@ export default function ServiceGraphExplorer({
         statuses: status ? [status] : [],
         origin,
       }),
-    [model, query, filterMode, teamId, impactedOnly, tier, status, origin]
+    [shown, query, filterMode, teamId, impactedOnly, tier, status, origin]
   );
   const byKey = useMemo(() => new Map(model.items.map(item => [item.key, item])), [model]);
   const nameOf = useCallback(
@@ -409,8 +429,19 @@ export default function ServiceGraphExplorer({
     return { dependsOn, usedBy };
   }, [selected, model, byKey]);
 
+  // Member service -> the collapsed business services hiding it, to unfold when one is selected.
+  const collapsedOwners = useMemo(() => {
+    const owners = new Map<string, string[]>();
+    for (const link of model.links)
+      if (link.kind === 'member' && collapsed.has(link.source))
+        owners.set(link.target, [...(owners.get(link.target) ?? []), link.source]);
+    return owners;
+  }, [model.links, collapsed]);
+
   // What the canvas lights up: a path between two picked nodes, else dependency cycles, else the
-  // blast radius / root-cause path of the selected node.
+  // blast radius / root-cause path of the selected node. Impact and paths walk every loaded link,
+  // not just the filtered ones, so a filter never silently cuts them short; what they reach through
+  // hidden items is brought back muted (revealEmphasis).
   const cycles = useMemo(
     () =>
       findCycles(
@@ -420,15 +451,15 @@ export default function ServiceGraphExplorer({
     [data.edges]
   );
   const pathResult = useMemo(
-    () => (path.from && path.to ? findPath(visible.links, path.from, path.to) : null),
-    [path, visible.links]
+    () => (path.from && path.to ? findPath(shown.links, path.from, path.to) : null),
+    [path, shown.links]
   );
   const impact = useMemo(
     () =>
       impactMode && selectedKey && byKey.has(selectedKey)
-        ? impactSubgraph(visible.links, selectedKey, impactMode)
+        ? impactSubgraph(shown.links, selectedKey, impactMode)
         : null,
-    [impactMode, selectedKey, visible.links, byKey]
+    [impactMode, selectedKey, shown.links, byKey]
   );
   const emphasis = useMemo<Emphasis | null>(() => {
     if (pathResult)
@@ -438,7 +469,7 @@ export default function ServiceGraphExplorer({
       return {
         keys,
         linkKeys: new Set(
-          visible.links
+          shown.links
             .filter(
               link => link.kind === 'dependency' && keys.has(link.source) && keys.has(link.target)
             )
@@ -446,8 +477,21 @@ export default function ServiceGraphExplorer({
         ),
       };
     }
-    return impact ? { keys: impact.keys, linkKeys: impact.linkKeys } : null;
-  }, [pathResult, showCycles, cycles, visible.links, impact]);
+    return impact ? { keys: impact.keys, linkKeys: impact.linkKeys, depth: impact.depth } : null;
+  }, [pathResult, showCycles, cycles, shown.links, impact]);
+  const onCanvas = useMemo(() => revealEmphasis(visible, shown, emphasis), [visible, shown, emphasis]);
+  const impactSummary = useMemo<ImpactSummary | null>(() => {
+    if (!impact) return null;
+    const perHop: number[] = [];
+    for (const hop of impact.depth.values())
+      if (hop > 0) perHop[hop - 1] = (perHop[hop - 1] ?? 0) + 1;
+    const filtered = new Set(visible.items.map(entry => entry.key));
+    return {
+      affected: impact.keys.size - 1,
+      perHop: Array.from(perHop, count => count ?? 0),
+      hidden: [...impact.keys].filter(key => !filtered.has(key)).length,
+    };
+  }, [impact, visible.items]);
 
   // Search highlights and jumps; it only hides non-matches when "Hide non-matches" is on.
   const matches = useMemo(
@@ -457,6 +501,8 @@ export default function ServiceGraphExplorer({
   const matchSet = useMemo(() => new Set(matches), [matches]);
   const matchSignature = matches.join('|');
   const [fitToken, setFitToken] = useState(0);
+  // A node picked from the side panel's relations; the canvas pans to it until the next re-fit.
+  const [fitTo, setFitTo] = useState<{ key: string; token: number } | null>(null);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs local state with the prop/open transition; cannot be derived during render
     if (matchSignature) setFitToken(token => token + 1);
@@ -467,11 +513,29 @@ export default function ServiceGraphExplorer({
   }, [pathResult]);
   const fit = useMemo(
     () => {
-      const keys = pathResult?.keys ?? matches;
+      const keys = fitTo?.token === fitToken ? [fitTo.key] : (pathResult?.keys ?? matches);
       return keys.length ? { keys, token: fitToken } : null;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-fit only when the token changes
     [fitToken]
+  );
+
+  const selectRelation = (key: string) => {
+    const owners = collapsedOwners.get(key);
+    if (owners) setCollapsed(current => new Set([...current].filter(bs => !owners.includes(bs))));
+    select(key);
+    setFitTo({ key, token: fitToken + 1 });
+    setFitToken(fitToken + 1);
+  };
+  const toggleCollapse = (key: string) =>
+    setCollapsed(current => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  const collapsible = useMemo(
+    () => [...new Set(model.links.filter(link => link.kind === 'member').map(link => link.source))],
+    [model.links]
   );
 
   const announcement = selected
@@ -564,10 +628,10 @@ export default function ServiceGraphExplorer({
     [serviceOptions, editableTeamIds]
   );
   const spofIds = useMemo(() => new Set(spof?.singlePointsOfFailure.map(row => row.serviceId)), [spof]);
-  const canvasItems = useMemo(() => markSpof(visible.items, spofIds), [visible.items, spofIds]);
+  const canvasItems = useMemo(() => markSpof(onCanvas.items, spofIds), [onCanvas.items, spofIds]);
   const canvasLinks = useMemo(
-    () => (diff ? overlayDiff(visible.items, visible.links, diff) : visible.links),
-    [visible, diff]
+    () => (diff ? overlayDiff(onCanvas.items, onCanvas.links, diff) : onCanvas.links),
+    [onCanvas, diff]
   );
   const atBoundary =
     selected?.kind === 'svc' && (data.boundaryIds ?? []).includes(selected.id) ? selected : null;
@@ -578,6 +642,26 @@ export default function ServiceGraphExplorer({
           .filter(item => item && item.key !== incidentKey && item.openIncidents > 0)
       : [];
   const pendingDetails = pending?.link;
+  const squireAsks = useMemo<SquireAsk[]>(() => {
+    if (!selected || !viewer.squireName) return [];
+    const what = selected.kind === 'bs' ? 'business service' : 'service';
+    const asks: SquireAsk[] = [
+      {
+        label: `about this ${what}`,
+        question: `What depends on the ${what} ${selected.name}, what does it depend on, and what is its current health?`,
+        evidence:
+          selected.kind === 'svc'
+            ? { kind: 'service', id: selected.id, label: selected.name }
+            : undefined,
+      },
+    ];
+    if (pathResult && pathResult.keys.length > 1)
+      asks.push({
+        label: 'about this path',
+        question: `Explain the dependency path ${pathResult.keys.map(nameOf).join(' → ')} and where a failure along it would hurt most.`,
+      });
+    return asks;
+  }, [selected, viewer.squireName, pathResult, nameOf]);
   const layoutId = `${data.focus ? formatGraphFocus(data.focus) : 'all'}:${hops}:${graph.incident?.id ?? ''}`;
 
   return (
@@ -687,6 +771,19 @@ export default function ServiceGraphExplorer({
                 onClick={() => setShowCycles(value => !value)}
               >
                 {cycles.length === 1 ? '1 dependency cycle' : `${cycles.length} dependency cycles`}
+              </FilterChip>
+            )}
+            {collapsible.length > 0 && (
+              <FilterChip
+                icon={<Boxes className="h-3.5 w-3.5" aria-hidden="true" />}
+                active={collapsed.size > 0}
+                onClick={() =>
+                  setCollapsed(current => (current.size ? new Set() : new Set(collapsible)))
+                }
+              >
+                {grouped && collapsed.size === 0
+                  ? 'Large graph: collapse business services'
+                  : 'Collapse business services'}
               </FilterChip>
             )}
             {data.focus && (
@@ -902,25 +999,29 @@ export default function ServiceGraphExplorer({
         </InlineNotice>
       )}
 
-      <GraphInsightsPanel
-        focus={data.focus ? formatGraphFocus(data.focus) : null}
-        hops={hops}
-        seesSuggestions={viewer.seesSuggestions}
-        at={travel?.at ?? null}
-        onTravel={onTravel}
-        onDiff={setDiff}
-        onSpof={setSpof}
-        onShowSuggested={() => setOrigin('OBSERVED')}
-        onSelectService={serviceId => select(svcKey(serviceId))}
-      />
-
-      <GraphLegend grouped={grouped} canEdit={canEdit} />
-      <p className="text-2xs text-muted-foreground">
-        Statuses refresh every 30 seconds while this tab is open.
-      </p>
-
       <div className="flex flex-col gap-4 lg:flex-row">
-        <div className="min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
+          {/* One mount point in both views, so switching view keeps an open insight. On the graph it
+              floats over the canvas's top-left corner instead of pushing the canvas down. */}
+          <div
+            className={cn(
+              view === 'graph' && visible.items.length > 0
+                ? 'absolute left-2 top-2 z-10 max-h-[calc(100%-1rem)] w-[min(28rem,calc(100%-1rem))] overflow-y-auto rounded-lg shadow-md'
+                : 'mb-4'
+            )}
+          >
+            <GraphInsightsPanel
+              focus={data.focus ? formatGraphFocus(data.focus) : null}
+              hops={hops}
+              seesSuggestions={viewer.seesSuggestions}
+              at={travel?.at ?? null}
+              onTravel={onTravel}
+              onDiff={setDiff}
+              onSpof={setSpof}
+              onShowSuggested={() => setOrigin('OBSERVED')}
+              onSelectService={serviceId => selectRelation(svcKey(serviceId))}
+            />
+          </div>
           {view === 'list' ? (
             <GraphListView
               items={visible.items}
@@ -933,7 +1034,7 @@ export default function ServiceGraphExplorer({
             <GraphListView items={[]} links={[]} selectedKey={null} onSelect={key => select(key)} />
           ) : (
             <div
-              className="h-[70vh] min-h-[420px] overflow-hidden rounded-lg border bg-card"
+              className="relative h-[70vh] min-h-[420px] overflow-hidden rounded-lg border bg-card"
               aria-label="Service dependency graph. Focus a service and use the arrow keys to move along dependencies, or use the List view for a table."
               role="region"
             >
@@ -957,14 +1058,40 @@ export default function ServiceGraphExplorer({
                   }
                   onLinkClick={link =>
                     link.diff !== 'removed' &&
-                    setPending({
-                      link,
-                      mode: link.suggested && canEdit ? 'review' : canEdit ? 'remove' : 'details',
-                    })
+                    setPending({ link, mode: link.suggested && canEdit ? 'review' : 'details' })
                   }
                 />
               </CanvasBoundary>
+              <div className="absolute bottom-2 left-14 z-10 max-w-[calc(100%-4.5rem)] sm:max-w-[36rem]">
+                {legendOpen && (
+                  <div
+                    id="graph-legend"
+                    className="mb-2 max-h-[45vh] overflow-y-auto rounded-lg border bg-card p-3 shadow-md"
+                  >
+                    <GraphLegend grouped={grouped} canEdit={canEdit} />
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="bg-card shadow-xs"
+                  aria-expanded={legendOpen}
+                  aria-controls="graph-legend"
+                  onClick={() => setLegendOpen(open => !open)}
+                >
+                  Legend
+                  <ChevronDown
+                    className={cn('h-3.5 w-3.5 transition-transform', legendOpen && 'rotate-180')}
+                    aria-hidden="true"
+                  />
+                </Button>
+              </div>
             </div>
+          )}
+          {view === 'list' && (
+            <p className="mt-2 text-2xs text-muted-foreground">
+              Statuses refresh every 30 seconds while this tab is open.
+            </p>
           )}
         </div>
         {selected && (
@@ -994,6 +1121,15 @@ export default function ServiceGraphExplorer({
             onClose={() => select(null)}
             onDisconnect={link => setPending({ link, mode: 'remove' })}
             onReview={reviewEdge}
+            onSelectRelation={selectRelation}
+            impactSummary={impactSummary}
+            collapsed={collapsed.has(selected.key)}
+            onToggleCollapse={
+              selected.kind === 'bs' && collapsible.includes(selected.key)
+                ? () => toggleCollapse(selected.key)
+                : undefined
+            }
+            squire={viewer.squireName ? { name: viewer.squireName, asks: squireAsks } : null}
           />
         )}
       </div>
@@ -1026,7 +1162,7 @@ export default function ServiceGraphExplorer({
                 (pending.mode === 'review'
                   ? `The observer suggests ${linkLabel(pending.link)} (confidence ${Math.round((pending.link.confidence ?? 0) * 100)}%). Accept it to make it part of the topology, or reject it so it is not suggested again.`
                   : pending.mode === 'details'
-                    ? linkLabel(pending.link)
+                    ? `${linkLabel(pending.link)}${pending.link.merged && pending.link.merged > 1 ? ` (${pending.link.merged} dependencies combined by a collapsed business service)` : ''}`
                     : `${linkLabel(pending.link)} will no longer be part of the topology. Incident correlation and business-service impact stop following it.`)}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1101,6 +1237,38 @@ export default function ServiceGraphExplorer({
                   }}
                 >
                   Accept
+                </Button>
+              </>
+            ) : pending?.mode === 'details' && canEdit && pending.link.dependencyId ? (
+              <>
+                {pending.link.origin === 'DECLARED' && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const link = pending.link;
+                      setPending(null);
+                      setDialog({
+                        fixedEnds: true,
+                        draft: {
+                          dependentId: link.source.slice(4),
+                          dependencyId: link.target.slice(4),
+                          dependencyType: link.dependencyType ?? 'HARD',
+                          note: link.note ?? '',
+                          criticality: link.criticality ?? '',
+                        },
+                      });
+                    }}
+                  >
+                    Edit
+                  </Button>
+                )}
+                {/* Removing is a second step: it opens the confirmation. */}
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setPending({ link: pending.link, mode: 'remove' })}
+                >
+                  Remove…
                 </Button>
               </>
             ) : pending?.mode === 'remove' ? (

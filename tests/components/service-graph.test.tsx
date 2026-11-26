@@ -10,6 +10,7 @@ const actions = vi.hoisted(() => ({
   getGraphStatusesAction: vi.fn().mockResolvedValue(null),
   expandNeighboursAction: vi.fn().mockResolvedValue(null),
   getGraphAtAction: vi.fn(),
+  getGraphTimelineAction: vi.fn().mockResolvedValue({ ok: false, message: 'x' }),
   diffGraphAction: vi.fn().mockResolvedValue({ ok: false, message: 'x' }),
   findSpofAction: vi.fn().mockResolvedValue({ ok: false, message: 'x' }),
   simulateFailureAction: vi.fn().mockResolvedValue({ ok: false, message: 'x' }),
