@@ -4,6 +4,10 @@ import { assertPasswordOperationAllowed } from '@/lib/authentication-policy';
 
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
+import { z } from 'zod/v3';
+import { assertRecentAuthentication } from '@/lib/access/step-up';
+import { sendPasswordChangedNotice } from '@/lib/password-reset';
 import { revalidatePath } from 'next/cache';
 import { generateApiKey } from '@/lib/api-keys';
 import { disallowedScopesForRole } from '@/lib/api-scope-registry';
@@ -24,6 +28,12 @@ import {
 } from '@/lib/api-v2/service-accounts';
 import { invalidateV2AuthCache } from '@/lib/api-v2/auth';
 import { updateNotificationPreferences as updateSharedNotificationPreferences } from '@/lib/notifications/preferences';
+
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().max(1024),
+  newPassword: z.string().max(1024),
+  confirmPassword: z.string().max(1024),
+});
 
 type ActionState = {
   error?: string | null;
@@ -508,9 +518,19 @@ export async function updatePassword(
   try {
     const user = await getCurrentUser();
     await assertPasswordOperationAllowed();
-    const currentPassword = (formData.get('currentPassword') as string | null) ?? '';
-    const newPassword = (formData.get('newPassword') as string | null) ?? '';
-    const confirmPassword = (formData.get('confirmPassword') as string | null) ?? '';
+    const fields = passwordChangeSchema.safeParse({
+      currentPassword: formData.get('currentPassword') ?? '',
+      newPassword: formData.get('newPassword') ?? '',
+      confirmPassword: formData.get('confirmPassword') ?? '',
+    });
+    if (!fields.success) return { error: 'Invalid password change request.' };
+    const { currentPassword, newPassword, confirmPassword } = fields.data;
+
+    // Every attempt counts, so the current password cannot be guessed from a stolen session.
+    const rate = await checkRateLimit(`settings:password-change:${user.id}`, 10, 15 * 60_000);
+    if (!rate.allowed) {
+      return { error: 'Too many password change attempts. Try again in a few minutes.' };
+    }
 
     const passwordError = validatePasswordStrength(newPassword);
     if (passwordError) {
@@ -523,7 +543,13 @@ export async function updatePassword(
 
     const credentials = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { passwordHash: true },
+      select: {
+        passwordHash: true,
+        name: true,
+        email: true,
+        phoneNumber: true,
+        smsNotificationsEnabled: true,
+      },
     });
     if (!credentials) return { error: 'User not found.' };
 
@@ -532,6 +558,9 @@ export async function updatePassword(
       if (!valid) {
         return { error: 'Current password is incorrect.' };
       }
+    } else {
+      // An SSO-only account has no current password to prove, so require a fresh sign-in instead.
+      await assertRecentAuthentication(undefined, 'setting a local password');
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
@@ -572,6 +601,12 @@ export async function updatePassword(
     const { invalidateSessionSecurityProjection } =
       await import('@/lib/session-security-projection');
     invalidateSessionSecurityProjection(user.id);
+
+    await sendPasswordChangedNotice(
+      { ...credentials, id: user.id },
+      `settings:${user.id}:${randomUUID()}`,
+      new Date()
+    );
 
     revalidatePath('/settings/security');
     return { success: true };
