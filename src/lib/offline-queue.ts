@@ -73,7 +73,15 @@ const MAX_BACKOFF_MS = 5 * 60 * 1000;
 const MAX_PARALLEL_LANES = 4;
 const MAX_OPERATIONS_PER_FLUSH = 32;
 const BACKGROUND_SYNC_TIMEOUT_MS = 3_000;
-const TERMINAL_STATES = new Set<OfflineQueueState>(['SUCCEEDED', 'FAILED', 'FORBIDDEN']);
+// CONFLICT is final too: the server already judged the request against newer incident state, and
+// replaying it cannot change that. If it stayed a lane blocker, every later action on the incident
+// would sit PENDING forever (nothing in the UI resolves it); it stays visible until retention ends.
+const TERMINAL_STATES = new Set<OfflineQueueState>([
+  'SUCCEEDED',
+  'FAILED',
+  'FORBIDDEN',
+  'CONFLICT',
+]);
 const EXECUTOR_ID = `window:${generateId()}`;
 
 const hasIndexedDb = () => typeof indexedDB !== 'undefined';
@@ -321,8 +329,8 @@ async function cleanupTerminalRequests(now = Date.now()) {
   const items = await listQueuedRequests();
   const expired = items.filter(
     item =>
-      item.completedAt &&
-      now - item.completedAt > TERMINAL_RETENTION_MS &&
+      // updatedAt covers CONFLICT rows written before it was terminal (no completedAt).
+      now - (item.completedAt ?? item.updatedAt) > TERMINAL_RETENTION_MS &&
       TERMINAL_STATES.has(item.state)
   );
   await Promise.all(expired.map(item => removeQueuedRequest(item.id)));
@@ -583,7 +591,7 @@ export const flushQueuedRequests = async () => {
     const queue = await listQueuedRequests();
     const now = Date.now();
     const candidates = firstPerLane(queue).filter(item => {
-      if (item.state === 'AUTH_REQUIRED' || item.state === 'CONFLICT') return false;
+      if (item.state === 'AUTH_REQUIRED') return false;
       if (item.state === 'SENDING') return (item.leaseUntil ?? 0) <= now;
       return item.state === 'PENDING' && (item.nextAttemptAt == null || item.nextAttemptAt <= now);
     });

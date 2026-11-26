@@ -11,7 +11,7 @@ const SENDING_LEASE_MS = 60 * 1000;
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
 const MAX_PARALLEL_LANES = 4;
 const MAX_OPERATIONS_PER_FLUSH = 32;
-const TERMINAL_QUEUE_STATES = new Set(['SUCCEEDED', 'FAILED', 'FORBIDDEN']);
+const TERMINAL_QUEUE_STATES = new Set(['SUCCEEDED', 'FAILED', 'FORBIDDEN', 'CONFLICT']);
 const EXECUTOR_ID = `sw:${randomId()}`;
 
 function randomId() {
@@ -354,7 +354,7 @@ const flushQueuedRequests = async () => {
       const queue = await listQueuedRequests(principal);
       const now = Date.now();
       const candidates = firstPerLane(queue).filter(item => {
-        if (item.state === 'AUTH_REQUIRED' || item.state === 'CONFLICT') return false;
+        if (item.state === 'AUTH_REQUIRED') return false;
         if (item.state === 'SENDING') return (item.leaseUntil || 0) <= now;
         return item.state === 'PENDING' && (item.nextAttemptAt == null || item.nextAttemptAt <= now);
       });
