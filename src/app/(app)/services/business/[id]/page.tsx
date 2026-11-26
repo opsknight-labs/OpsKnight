@@ -125,6 +125,7 @@ async function KpiSection({
             targetPercent: slo.target,
             windowDays: slo.windowDays,
             downtimeMinutes: stats[2].weightedDowntimeMinutes ?? stats[2].impactMinutes,
+            windowMinutes: stats[2].weightedWindowMinutes,
           }),
         }
       : null;
