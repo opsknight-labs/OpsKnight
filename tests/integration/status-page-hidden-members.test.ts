@@ -73,6 +73,47 @@ describe('showMembers=false does not leak member services (P2)', () => {
     expect(rss).not.toContain('Ledger Postgres Primary');
   });
 
+  it('keeps a hidden group member the admin also published directly (Codex P1)', async () => {
+    const slug = `hd-${Math.random().toString(36).slice(2, 8)}`;
+    const page = await createTestStatusPage({
+      enabled: true,
+      enableUptimeExports: true,
+      slug,
+      serviceLayout: 'BUSINESS_EXPANDABLE',
+    });
+    const secret = await createTestService('Ledger Postgres Primary');
+    const pinned = await createTestService('Pinned Checkout API');
+    await linkServiceToStatusPage(page.id, secret.id, { viaBusinessService: true });
+    // Explicitly selected by an admin AND also a member of the hidden group.
+    await linkServiceToStatusPage(page.id, pinned.id, { viaBusinessService: false });
+    const bs = await testPrisma.businessService.create({
+      data: {
+        name: 'Payments',
+        members: { create: [{ serviceId: secret.id }, { serviceId: pinned.id }] },
+      },
+    });
+    await testPrisma.statusPageBusinessService.create({
+      data: { statusPageId: page.id, businessServiceId: bs.id, order: 0, showMembers: false },
+    });
+    await publishStatusPageSnapshot(page.id);
+
+    const response = await getStatusResponse(req(`/api/status?slug=${slug}`), slug);
+    if (!response) throw new Error('status response expected');
+    const text = JSON.stringify(await response.json());
+    expect(text).toContain('Pinned Checkout API');
+    expect(text).not.toContain('Ledger Postgres Primary');
+    const history = await getStatusHistoryResponse(
+      req(`/api/status/history?slug=${slug}&serviceId=${pinned.id}`),
+      slug
+    );
+    expect(history.status).toBe(200);
+    const hiddenHistory = await getStatusHistoryResponse(
+      req(`/api/status/history?slug=${slug}&serviceId=${secret.id}`),
+      slug
+    );
+    expect(hiddenHistory.status).toBe(404);
+  });
+
   it('keeps the hidden member out of the uptime export', async () => {
     const { slug, secret } = await fixture();
     const response = await getUptimeExportResponse(

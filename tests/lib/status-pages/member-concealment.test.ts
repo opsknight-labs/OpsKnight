@@ -73,6 +73,15 @@ describe('concealHiddenGroupMembers', () => {
     expect(JSON.stringify(out)).not.toContain('secret');
   });
 
+  it('keeps a service the admin published directly, even inside a hidden group', () => {
+    const out = concealHiddenGroupMembers(snapshot(), new Set(['secret']));
+    expect(out.services.map(s => s.id)).toContain('secret');
+    expect(out.incidents[0].service?.id).toBe('secret');
+    expect(out.businessServices?.find(g => g.id === 'hidden')?.memberServiceIds).toContain(
+      'secret'
+    );
+  });
+
   it('is a no-op when every group lists its members', () => {
     const input = snapshot();
     input.businessServices = [group('visible', ['shared'])] as never;

@@ -1,5 +1,5 @@
 import 'server-only';
-import { concealHiddenGroupMembers } from './member-concealment';
+import { concealForPage } from './member-concealment';
 import { IncidentEventType, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import prisma from '@/lib/prisma';
@@ -1225,7 +1225,11 @@ export async function getStatusPageSnapshot(pageId: string): Promise<{
     if (payload && statusSnapshotIntegrity(payload) === manifest.integrityHash) {
       const current = parseStatusPageSnapshot(pageId, payload);
       if (current)
-        return { snapshot: concealHiddenGroupMembers(current), stale: false, servingState: 'LIVE' };
+        return {
+          snapshot: await concealForPage(prisma, pageId, current),
+          stale: false,
+          servingState: 'LIVE',
+        };
     }
   }
 
@@ -1237,7 +1241,7 @@ export async function getStatusPageSnapshot(pageId: string): Promise<{
     if (previous) {
       addOperationalMetric('opsknight_status_page_stale_serves_total', 1, { surface: 'snapshot' });
       return {
-        snapshot: concealHiddenGroupMembers(previous),
+        snapshot: await concealForPage(prisma, pageId, previous),
         stale: true,
         servingState: 'STALE_OK',
       };
