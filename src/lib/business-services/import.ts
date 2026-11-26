@@ -4,9 +4,9 @@ import { parse as parseYaml } from 'yaml';
 import type { BusinessServiceTier, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
-import { emitAuditEvent, type AuditEventSource } from '@/lib/audit';
+import { emitAuditEvent, type AuditEventActor, type AuditEventSource } from '@/lib/audit';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { parseCatalog } from '@/lib/intelligence/dependencies/import';
+import { parseCatalog, type CatalogEntity } from '@/lib/intelligence/dependencies/import';
 import {
   assertCanManageBusinessServices,
   businessServiceReadWhere,
@@ -162,12 +162,15 @@ function yamlRows(input: string, issues: ImportIssue[]): ImportRow[] {
 /**
  * Backstage catalog: each System is a business service; Components whose spec.system names it
  * are its members (by the opsknight.com/service-id annotation, else by name); a System's
- * dependsOn on other Systems becomes its supporting business services.
+ * dependsOn on other Systems becomes its supporting business services. With `domains`, each
+ * spec.domain of a System also becomes a business service supported by its Systems.
  */
-function backstageRows(input: string): ImportRow[] {
-  const entities = parseCatalog(input);
+export function backstageRowsFromEntities(
+  entities: readonly CatalogEntity[],
+  options: { domains?: boolean } = {}
+): ImportRow[] {
   const systems = entities.filter(entity => entity.kind === 'system');
-  return systems.map((system, index) => {
+  const rows: ImportRow[] = systems.map((system, index) => {
     const key = system.name.toLowerCase();
     const members = entities
       .filter(
@@ -181,7 +184,22 @@ function backstageRows(input: string): ImportRow[] {
       .map(ref => ref.replace(/^system:/i, '').replace(/^[^/]+\//, ''));
     return { line: index + 1, name: system.name, members, dependsOn };
   });
+  if (!options.domains) return rows;
+  const domains = new Map<string, string[]>();
+  for (const system of systems)
+    if (system.domain)
+      domains.set(system.domain, [...(domains.get(system.domain) ?? []), system.name]);
+  return [
+    ...rows,
+    ...[...domains].map(([name, dependsOn], index) => ({
+      line: rows.length + index + 1,
+      name,
+      dependsOn,
+    })),
+  ];
 }
+
+const backstageRows = (input: string) => backstageRowsFromEntities(parseCatalog(input));
 
 /** Parses a file into rows plus row-level issues; throws for unreadable or oversized input. */
 export function parseBusinessServiceImport(input: string, format: ImportFormat) {
@@ -437,7 +455,12 @@ async function resolveImport(rows: ImportRow[], parseIssues: ImportIssue[]) {
   };
 }
 
-type Context = { actor: AuthorizationActor; source?: AuditEventSource };
+type Context = {
+  actor: AuthorizationActor;
+  source?: AuditEventSource;
+  /** Audit as this actor instead of the user, e.g. a scheduled sync. */
+  auditActor?: AuditEventActor;
+};
 
 /**
  * Imports business services from CSV, YAML or a Backstage catalog. With `dryRun` it only returns
@@ -450,6 +473,20 @@ export async function importBusinessServices(
 ): Promise<ImportPlan & { applied: boolean }> {
   assertCanManageBusinessServices(context.actor);
   const { rows, issues } = parseBusinessServiceImport(input.content, input.format);
+  return applyImportRows(rows, issues, input, context, client);
+}
+
+/** The validated, all-or-nothing apply behind importBusinessServices, for already parsed rows. */
+export async function applyImportRows(
+  rows: ImportRow[],
+  issues: ImportIssue[],
+  input: { format: ImportFormat; dryRun: boolean },
+  context: Context,
+  client?: Prisma.TransactionClient
+): Promise<ImportPlan & { applied: boolean }> {
+  assertCanManageBusinessServices(context.actor);
+  if (rows.length > MAX_IMPORT_ROWS)
+    throw invalid(`An import holds at most ${MAX_IMPORT_ROWS} business services.`);
   const { resolved, plan } = await resolveImport(rows, issues);
   if (input.dryRun || plan.issues.length) return { ...plan, applied: false };
 
@@ -524,7 +561,7 @@ export async function importBusinessServices(
         action: 'business_service.imported',
         source: context.source ?? 'UI',
         target: { type: 'BUSINESS_SERVICE', id: null },
-        actor: { type: 'USER', id: context.actor.id },
+        actor: context.auditActor ?? { type: 'USER', id: context.actor.id },
         metadata: {
           format: input.format,
           ...plan.summary,

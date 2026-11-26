@@ -795,6 +795,9 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'PUT /api/v2/settings/service-reviews': supported(
     'The settings write and its audit commit with the replay record, so a retry returns the first result.'
   ),
+  'PUT /api/v2/settings/business-service-scorecard': supported(
+    'The rubric write and its audit commit with the replay record, so a retry returns the first result.'
+  ),
   'POST /api/v2/service-reviews/run': supported(
     'Each (period, kind, recipient) is claimed in a unique row before sending, so a retry or replay can never send a second review.'
   ),

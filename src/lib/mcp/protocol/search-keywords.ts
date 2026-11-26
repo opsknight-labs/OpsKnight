@@ -58,4 +58,16 @@ export const MCP_SEARCH_KEYWORDS = new Map<string, readonly string[]>([
   ['listUsers', ['people', 'person', 'directory', 'colleague']],
   ['listAuditLogs', ['audit', 'who changed', 'trail', 'history']],
   ['getIntegrationDiagnostics', ['health', 'failing', 'deliveries', 'webhook']],
+  ['createBusinessService', ['new business service', 'add product', 'catalog']],
+  ['updateBusinessService', ['change owner', 'add member', 'edit business service', 'tier']],
+  [
+    'markIncidentBusinessServiceImpact',
+    ['customer impact', 'affects', 'business impact', 'declare impact'],
+  ],
+  ['unmarkIncidentBusinessServiceImpact', ['not affected', 'remove impact', 'false impact']],
+  ['createBusinessServiceCustomerReport', ['support tickets', 'customer reports', 'complaints']],
+  ['notifyIncidentStakeholders', ['stakeholders', 'tell leadership', 'business update']],
+  ['listBusinessServiceChanges', ['deploys', 'releases', 'rollout']],
+  ['getBusinessServiceSlaReport', ['monthly report', 'uptime report', 'attainment']],
+  ['getBusinessServiceScorecard', ['scorecard', 'maturity', 'level', 'readiness']],
 ]);

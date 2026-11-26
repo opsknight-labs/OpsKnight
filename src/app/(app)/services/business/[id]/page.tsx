@@ -4,6 +4,8 @@ import AutoRefresh from '@/components/business-service/AutoRefresh';
 import WhyStatusCard, { type WhyReason } from '@/components/business-service/WhyStatusCard';
 import DependencyHealthSummary from '@/components/business-service/DependencyHealthSummary';
 import ActivityPanel from '@/components/business-service/ActivityPanel';
+import ChangesSection from '@/components/business-service/ChangesPanel';
+import SlaReportMenu from '@/components/business-service/SlaReportMenu';
 import { auditReferenceIds } from '@/lib/business-services/audit-diff';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -483,6 +485,7 @@ export default async function BusinessServiceOverviewPage({
     'dependencies',
     'status-pages',
     'followers',
+    'changes',
     ...(canReadAudit ? ['activity'] : []),
   ];
   const tab = query?.tab && tabIds.includes(query.tab) ? query.tab : 'overview';
@@ -787,6 +790,10 @@ export default async function BusinessServiceOverviewPage({
                 Show on graph
               </Link>
             </Button>
+            <SlaReportMenu
+              businessServiceId={item.id}
+              className={cn('gap-1.5', pageHeaderActionClass)}
+            />
             {followButton}
           </>
         }
@@ -863,6 +870,16 @@ export default async function BusinessServiceOverviewPage({
               tab === 'followers' ? (
                 <Suspense fallback={<SectionSkeleton title="Followers" height="h-24" />}>
                   <FollowersSection id={item.id} />
+                </Suspense>
+              ) : null,
+          },
+          {
+            id: 'changes',
+            label: 'Changes',
+            content:
+              tab === 'changes' ? (
+                <Suspense fallback={<SectionSkeleton title="Changes" height="h-24" />}>
+                  <ChangesSection businessServiceId={item.id} actor={actor} />
                 </Suspense>
               ) : null,
           },

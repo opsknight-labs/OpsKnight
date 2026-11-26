@@ -1115,6 +1115,47 @@ export const V2_OPERATIONS: readonly V2OperationDefinition[] = [
     'item',
     'StakeholderNotification'
   ),
+  // Business services: scorecards, changes and SLA reports.
+  op(
+    'get',
+    '/settings/business-service-scorecard',
+    'getBusinessServiceScorecardRubric',
+    'services:read',
+    'item',
+    'BusinessServiceScorecardRubric'
+  ),
+  op(
+    'put',
+    '/settings/business-service-scorecard',
+    'updateBusinessServiceScorecardRubric',
+    'services:write',
+    'item',
+    'BusinessServiceScorecardRubric'
+  ),
+  op(
+    'get',
+    '/business-services/{id}/scorecard',
+    'getBusinessServiceScorecard',
+    'services:read',
+    'item',
+    'BusinessServiceScorecard'
+  ),
+  op(
+    'get',
+    '/business-services/{id}/changes',
+    'listBusinessServiceChanges',
+    'services:read',
+    'list',
+    'BusinessServiceChange'
+  ),
+  op(
+    'get',
+    '/business-services/{id}/sla-report',
+    'getBusinessServiceSlaReport',
+    'services:read',
+    'item',
+    'BusinessServiceSlaReport'
+  ),
   op(
     'get',
     '/status-pages/{id}/services',

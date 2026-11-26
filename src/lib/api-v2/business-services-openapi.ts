@@ -56,6 +56,76 @@ const LINK: Schema = object({
 
 const LIFECYCLE = ['ACTIVE', 'BETA', 'DEPRECATED', 'RETIRED'];
 
+const slug: Schema = { type: 'string', pattern: '^[a-z0-9][a-z0-9_-]{0,39}$' };
+const SCORECARD_CHECK: Schema = {
+  oneOf: [
+    object(
+      {
+        type: { const: 'field' },
+        field: {
+          type: 'string',
+          enum: [
+            'owner',
+            'tier',
+            'members',
+            'slo',
+            'links',
+            'description',
+            'reviewed',
+            'escalationPolicy',
+            'contactChannel',
+            'statusPageSummary',
+          ],
+        },
+        maxAgeDays: { type: 'integer', minimum: 1, maximum: 730, description: 'reviewed only.' },
+      },
+      ['type', 'field']
+    ),
+    object(
+      {
+        type: { const: 'attribute' },
+        key: { type: 'string', minLength: 1, maxLength: 64 },
+        equals: { type: ['string', 'number', 'boolean'], description: 'Absent: must be set.' },
+      },
+      ['type', 'key']
+    ),
+    object({ type: { const: 'slo' }, state: { type: 'string', enum: ['OK', 'NOT_BREACHED'] } }),
+    object({
+      type: { const: 'hygiene' },
+      flag: { type: 'string', enum: ['REVIEW_OVERDUE', 'OWNER_INACTIVE', 'TEAM_NO_ONCALL'] },
+    }),
+  ],
+};
+const SCORECARD_RUBRIC: Schema = object({
+  levels: {
+    type: 'array',
+    maxItems: 5,
+    description: 'Lowest first; a level is reached when it and every lower level pass.',
+    items: object({ id: slug, label: { type: 'string', minLength: 1, maxLength: 40 } }),
+  },
+  rules: {
+    type: 'array',
+    minItems: 1,
+    maxItems: 50,
+    items: object(
+      {
+        id: slug,
+        label: { type: 'string', minLength: 1, maxLength: 80 },
+        check: SCORECARD_CHECK,
+        level: slug,
+        teamIds: ids(50),
+        tiers: {
+          type: 'array',
+          maxItems: 4,
+          items: { type: 'string', enum: ['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3'] },
+        },
+        deadline: { type: 'string', format: 'date', description: 'Initiative deadline (UTC).' },
+      },
+      ['id', 'label', 'check']
+    ),
+  },
+});
+
 const input = {
   name: { type: 'string', minLength: 1, maxLength: 120 },
   description: { type: ['string', 'null'], maxLength: 2000 },
@@ -469,6 +539,74 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     recipientCount: { type: 'integer' },
     emailCount: { type: 'integer' },
   }),
+  BusinessServiceScorecardRubric: SCORECARD_RUBRIC,
+  BusinessServiceScorecard: object({
+    businessServiceId: id,
+    checks: {
+      type: 'array',
+      items: object({
+        id: string,
+        label: string,
+        passed: { type: 'boolean' },
+        level: nullableString,
+        deadline: nullableString,
+        overdue: { type: 'boolean' },
+      }),
+    },
+    score: { type: 'integer', minimum: 0, maximum: 100 },
+    level: { oneOf: [{ type: 'null' }, object({ id: string, label: string })] },
+    basics: object({
+      owner: { type: 'boolean' },
+      tier: { type: 'boolean' },
+      members: { type: 'boolean' },
+    }),
+    needsAttention: { type: 'boolean' },
+  }),
+  BusinessServiceChange: object({
+    id,
+    serviceId: id,
+    serviceName: string,
+    source: string,
+    kind: { type: 'string', enum: ['DEPLOY', 'CONFIG', 'FEATURE_FLAG', 'INFRA'] },
+    summary: string,
+    version: nullableString,
+    url: nullableString,
+    occurredAt: date,
+    riskScore: { type: ['number', 'null'], minimum: 0, maximum: 1 },
+  }),
+  BusinessServiceSlaReport: withoutRequired(
+    object({
+      businessServiceId: id,
+      name: string,
+      month: { type: 'string', pattern: '^\\d{4}-\\d{2}$' },
+      from: date,
+      to: date,
+      monthToDate: { type: 'boolean' },
+      uptimePercent: { type: 'number' },
+      weightedUptimePercent: { type: 'number' },
+      downtimeMinutes: { type: 'number' },
+      weightedDowntimeMinutes: { type: 'number' },
+      sloTarget: { type: ['number', 'null'] },
+      sloMet: { type: ['boolean', 'null'] },
+      incidentCount: { type: 'integer' },
+      mttaMinutes: { type: ['number', 'null'] },
+      mttrMinutes: { type: ['number', 'null'] },
+      incidents: {
+        type: 'array',
+        items: object({
+          id,
+          title: string,
+          urgency: { type: ['string', 'null'] },
+          source,
+          impactStartedAt: date,
+          impactEndedAt: nullableDate,
+          impactMinutes: { type: 'number' },
+        }),
+      },
+      estimatedCostCents: { type: ['integer', 'null'] },
+      currency: string,
+    })
+  ),
 };
 
 const templateInput = {
@@ -819,5 +957,46 @@ export const BUSINESS_SERVICE_OPERATIONS: {
       'Responder or Admin; requires an Idempotency-Key. Template defaults apply, and any field in the body overrides them. The template owner team must be visible to the caller.',
     status: 201,
     body: object(input, ['name']),
+  },
+  {
+    method: 'get',
+    path: '/settings/business-service-scorecard',
+    summary: 'Read the business service scorecard rubric',
+    description:
+      'Any service reader. Without a saved rubric this is the default: the seven original checks in Bronze, Silver and Gold.',
+  },
+  {
+    method: 'put',
+    path: '/settings/business-service-scorecard',
+    summary: 'Replace the business service scorecard rubric',
+    description:
+      'Admin only; audited. Rule and level ids are unique; scoped teams must exist. A rule with a deadline is overdue once it fails after that day.',
+    body: SCORECARD_RUBRIC,
+  },
+  {
+    method: 'get',
+    path: '/business-services/{id}/scorecard',
+    summary: 'Score a business service against the rubric',
+    description:
+      'Checks in scope, score, level reached and overdue initiatives. SLO rules use the error budget over the service SLO window.',
+  },
+  {
+    method: 'get',
+    path: '/business-services/{id}/changes',
+    summary: 'List changes on the member services of a business service',
+    description:
+      'Deploys, config, feature-flag and infrastructure changes (GitHub, GitLab, Argo CD, Terraform, Vercel), newest first. Team-scoped readers see changes of their teams services only.',
+    query: {
+      ...windowQuery,
+      limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+    },
+  },
+  {
+    method: 'get',
+    path: '/business-services/{id}/sla-report',
+    summary: 'Monthly SLA report of a business service',
+    description:
+      'Uptime, severity-weighted uptime against the SLO target (met or missed), downtime minutes and incidents for one UTC month (default: this month, to date). estimatedCostCents and currency only for Responders and Admins.',
+    query: { month: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$', description: 'YYYY-MM.' } },
   },
 ];

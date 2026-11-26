@@ -4034,22 +4034,22 @@
     "contractSha256": "374b7b104eb907adf8ca0b7c6045ab20ba1d0b96dee422168575b74e44c2a9c9"
   },
   "createBusinessService": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "reason": "Creates a business service, which sets who owns it, what it rolls up and how impact is paged; prepared, reviewed by a person, then committed through the existing REST command.",
     "tool": null,
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
     "routeSha256": "a768e0c05d5b3eb3ffec088a2a61bf3e6f487aec64de7838ab02594383b06fe2",
     "contractSha256": "fd8d30b3136827365d152e763a6b5e2aaed19218a880dbe2e7053ac2f3a7cd6a"
   },
   "updateBusinessService": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "reason": "Changes owner, members, tier or SLO of a business service, and with them what stakeholders are told; prepared, reviewed by a person, then committed through the existing REST command.",
     "tool": null,
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
     "routeSha256": "a420daf65090cbe486c3f5e679fb92f398590265e61c8fca145887bb9e2c9711",
@@ -4476,5 +4476,62 @@
     "resourceFilter": "existing REST route authorization and scoped projection",
     "routeSha256": "8cc4f881fe651c499fa6462810eff189fe03346970e3fcc19331210913adcf24",
     "contractSha256": "8d035e9584a261c712d70f2e138a7fe5632b42f6bcf732c3ca399490c6810f84"
+  },
+  "getBusinessServiceScorecardRubric": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Read-only scorecard rubric (rules, levels, scopes and deadlines) through the existing REST route authorization.",
+    "tool": null,
+    "routeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "contractSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "actions": ["service.read"]
+  },
+  "updateBusinessServiceScorecardRubric": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: the scorecard rubric is organization configuration, changed by an administrator in Settings or REST.",
+    "tool": null,
+    "routeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "contractSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "actions": ["service_review.manage"]
+  },
+  "getBusinessServiceScorecard": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Read-only scorecard of one business service through the existing REST route authorization and scoped projection.",
+    "tool": null,
+    "routeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "contractSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "actions": ["service.read"]
+  },
+  "listBusinessServiceChanges": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only changes on the member services of one business service, limited to changes the caller may read.",
+    "tool": "business_service_changes",
+    "title": "Changes behind a business service",
+    "agentDescription": "Deploys, config, feature-flag and infrastructure changes on the member services of a business service in a window (default 30 days), newest first, with source, version and risk score. Use for 'what changed before Checkout broke'.",
+    "routeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "contractSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "actions": ["service.read"]
+  },
+  "getBusinessServiceSlaReport": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Read-only monthly SLA figures of one business service; cost fields only for financial readers, enforced by the REST route.",
+    "tool": null,
+    "routeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "contractSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "actions": ["service.read"]
   }
 }
