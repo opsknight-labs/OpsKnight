@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import type { ImpactTimelineEntry } from '@/lib/business-services/contract';
 import ImpactTimeline, {
   TIMELINE_CAP,
@@ -54,7 +54,24 @@ beforeEach(() => {
 });
 
 describe('ImpactTimeline interaction', () => {
-  it('shows details on keyboard focus and lets a responder unmark a manual impact', async () => {
+  it('is one chart with one tab stop: arrow keys move between days and select them', () => {
+    render(<ImpactTimeline entries={[entry()]} window={window} showIncidents now={now} />);
+    const group = screen.getByRole('group', { name: /1 impact in the last 30 days/ });
+    const days = within(group).getAllByRole('button');
+    expect(days).toHaveLength(30);
+    expect(days.filter(day => day.tabIndex === 0)).toHaveLength(1);
+    // The impact started two days ago: its column holds the tab stop.
+    const impacted = days.find(day => day.tabIndex === 0)!;
+    expect(impacted.getAttribute('aria-label')).toMatch(/1h 0m of impact, worst partial outage/);
+    expect(impacted.getAttribute('title')).toMatch(/UTC/);
+    fireEvent.keyDown(impacted, { key: 'ArrowRight' });
+    const next = days[days.indexOf(impacted) + 1]!;
+    expect(next).toHaveFocus();
+    expect(next).toHaveAttribute('tabindex', '0');
+    expect(next).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('lists a selected day and asks before a responder unmarks a manual impact', async () => {
     render(
       <ImpactTimeline
         entries={[entry()]}
@@ -65,21 +82,44 @@ describe('ImpactTimeline interaction', () => {
         now={now}
       />
     );
-    const bar = screen.getByRole('button', { name: /Partial outage, Marked by a responder/ });
-    fireEvent.focus(bar);
+    const group = screen.getByRole('group', { name: /impact in the last 30 days/ });
+    fireEvent.click(
+      within(group)
+        .getAllByRole('button')
+        .find(day => day.tabIndex === 0)!
+    );
     expect(screen.getByTestId('impact-detail')).toHaveTextContent('Card auth failing');
     fireEvent.click(screen.getByRole('button', { name: 'Unmark' }));
-    expect(unmark).toHaveBeenCalledWith('i1', 'bs1');
+    expect(unmark).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Unmark impact' }));
+    await waitFor(() => expect(unmark).toHaveBeenCalledWith('i1', 'bs1'));
   });
 
   it('hides Unmark from readers who cannot manage, and warns when the list was cut', () => {
     const many = Array.from({ length: TIMELINE_CAP }, (_, i) =>
-      entry({ incidentId: `i${i}`, source: 'DIRECT' })
+      entry({ incidentId: `i${i}`, source: 'MANUAL' })
     );
     render(<ImpactTimeline entries={many} window={window} showIncidents now={now} />);
-    fireEvent.focus(screen.getAllByRole('button', { name: /Partial outage/ })[0]!);
     expect(screen.queryByRole('button', { name: 'Unmark' })).toBeNull();
     expect(screen.getByRole('note')).toHaveTextContent(`newest ${TIMELINE_CAP}`);
+  });
+
+  it('offers the 7/30/90 window switch as links', () => {
+    render(
+      <ImpactTimeline
+        entries={[]}
+        window={window}
+        showIncidents
+        now={now}
+        ranges={[7, 30, 90].map(days => ({ days, href: `?impact=${days}`, current: days === 30 }))}
+      />
+    );
+    const nav = screen.getByRole('navigation', { name: 'Impact window' });
+    expect(within(nav).getByRole('link', { name: '30 days' })).toHaveAttribute(
+      'aria-current',
+      'true'
+    );
+    expect(within(nav).getByRole('link', { name: '7 days' })).toHaveAttribute('href', '?impact=7');
   });
 
   it('counts overlapping impact once per day', () => {

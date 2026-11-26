@@ -125,15 +125,17 @@ describe('ImpactTimeline', () => {
     }) as unknown as ImpactTimelineEntry;
   const window = { from: new Date('2026-11-01T00:00:00Z'), to: new Date('2026-11-22T00:00:00Z') };
 
-  it('keeps the selected detail after a refresh hands back new entry objects, with a stable UTC timestamp', async () => {
+  it('keeps the selected day after a refresh hands back new entry objects; local time with UTC in the tooltip', async () => {
     const props = { window, showIncidents: true, now: window.to } as const;
     const { rerender } = render(
       <ImpactTimeline {...props} entries={[entry('2026-11-10T10:00:00Z')]} />
     );
-    const bar = screen.getAllByRole('button').find(b => b.getAttribute('aria-pressed') !== null)!;
-    expect(bar.getAttribute('aria-label')).toContain('started 2026-11-10 10:00 UTC');
-    fireEvent.click(bar);
-    expect(screen.getByTestId('impact-detail')).toBeInTheDocument();
+    const day = screen.getAllByRole('button').find(b => b.tabIndex === 0)!;
+    expect(day.getAttribute('title')).toContain('UTC');
+    fireEvent.click(day);
+    const detail = screen.getByTestId('impact-detail');
+    // The viewer's zone is UTC in this test; the tooltip always carries the UTC reading.
+    expect(within(detail).getByTitle('2026-11-10 10:00 UTC')).toBeInTheDocument();
     rerender(<ImpactTimeline {...props} entries={[entry('2026-11-10T10:00:00Z')]} />);
     await waitFor(() => expect(screen.getByTestId('impact-detail')).toBeInTheDocument());
   });

@@ -13,8 +13,12 @@ const notifyMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ notify: notifyMock }));
 
 const follow = vi.fn();
+const addMembers = vi.fn();
+const search = vi.fn();
 vi.mock('@/app/(app)/services/business/actions', () => ({
   followBusinessServiceAction: (...a: unknown[]) => follow(...a),
+  addBusinessServiceMembersAction: (...a: unknown[]) => addMembers(...a),
+  searchBusinessServiceOptionsAction: (...a: unknown[]) => search(...a),
 }));
 const phase5b = vi.hoisted(() => ({
   bulkEditAction: vi.fn(),
@@ -33,6 +37,7 @@ import BusinessServiceFollowButton from '@/components/service/BusinessServiceFol
 import TemplateManager, { type TemplateView } from '@/components/business-service/TemplateManager';
 import AddCustomerReportForm from '@/components/business-service/AddCustomerReportForm';
 import CustomerImpactPanel from '@/components/business-service/CustomerImpactPanel';
+import AddMembersDialog from '@/components/business-service/AddMembersDialog';
 import HygieneToggle from '@/components/business-service/HygieneToggle';
 import BulkEditBar from '@/components/business-service/BulkEditBar';
 import CatalogDirectory, { type CatalogRow } from '@/components/business-service/CatalogDirectory';
@@ -254,6 +259,27 @@ describe('CustomerImpactPanel', () => {
   it('hides delete from viewers who cannot manage', () => {
     render(<CustomerImpactPanel view={{ ...view, canAdd: false }} />);
     expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull();
+  });
+});
+
+describe('AddMembersDialog', () => {
+  it('adds the picked services that are not members yet, as non-critical when switched off', async () => {
+    search.mockResolvedValue([
+      { id: 'api', name: 'Checkout API', hint: 'Payments' },
+      { id: 'old', name: 'Old', hint: null },
+    ]);
+    addMembers.mockResolvedValue({ ok: true, id: 'b1' });
+    render(<AddMembersDialog businessServiceId="b1" existingIds={['old']} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add services' }));
+    fireEvent.change(screen.getByLabelText('Search services'), { target: { value: 'o' } });
+    fireEvent.click(await screen.findByText('Checkout API', {}, { timeout: 2000 }));
+    fireEvent.click(screen.getByText('Old'));
+    expect(screen.getByText('1 already a member and will be skipped.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 service' }));
+    await waitFor(() =>
+      expect(addMembers).toHaveBeenCalledWith('b1', { serviceIds: ['api'], critical: false })
+    );
   });
 });
 
