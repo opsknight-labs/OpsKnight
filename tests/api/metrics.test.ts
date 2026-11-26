@@ -28,6 +28,10 @@ vi.mock('@/lib/prisma', () => ({
     user: {
       count: vi.fn(),
     },
+    notification: {
+      aggregate: vi.fn(),
+      fields: { maxAttempts: 'maxAttempts-field-ref' },
+    },
   },
 }));
 
@@ -227,6 +231,35 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
       );
     expect(Number(mutationLastSeenLine?.split(' ').at(1))).toBeGreaterThanOrEqual(3);
     expect(Number(mutationLastSeenLine?.split(' ').at(1))).toBeLessThan(10);
+  });
+  it('counts ambiguous UNKNOWN pages as undelivered and leaves out terminal FAILED ones', async () => {
+    process.env.PROMETHEUS_SCRAPE_TOKEN = 'notification-backlog-test';
+    vi.mocked(prisma.notification.aggregate).mockResolvedValue({
+      _count: { id: 4 },
+      _min: { createdAt: new Date(Date.now() - 90_000) },
+    } as never);
+    const response = await GET(
+      new Request('http://localhost:3000/api/metrics', {
+        headers: { authorization: 'Bearer notification-backlog-test' },
+      })
+    );
+    const text = await response.text();
+
+    const [args] = vi.mocked(prisma.notification.aggregate).mock.calls[0] as unknown as [
+      { where: unknown },
+    ];
+    expect(args.where).toEqual({
+      OR: [
+        { status: { in: ['PENDING', 'UNKNOWN'] } },
+        // Only failures with attempts left are retried; the rest are terminal.
+        { status: 'FAILED', attempts: { lt: 'maxAttempts-field-ref' } },
+      ],
+    });
+    expect(text).toContain('opsknight_notifications_undelivered 4');
+    const ageLine = text
+      .split('\n')
+      .find(line => line.startsWith('opsknight_notifications_oldest_undelivered_age_seconds '));
+    expect(Number(ageLine?.split(' ').at(1))).toBeGreaterThanOrEqual(90);
   });
   it('exports Automation maintenance queues separately from other scheduled tasks', async () => {
     process.env.PROMETHEUS_SCRAPE_TOKEN = 'automation-metrics-test';

@@ -1218,7 +1218,7 @@ export const OPERATIONAL_METRICS = [
   },
   {
     name: 'opsknight_notifications_undelivered',
-    help: 'Pending or retryable failed notification deliveries',
+    help: 'Pending, unreconciled UNKNOWN or retryable failed notification deliveries',
     kind: 'gauge',
     labels: [],
     scope: 'cluster_snapshot',
@@ -1226,7 +1226,7 @@ export const OPERATIONAL_METRICS = [
   },
   {
     name: 'opsknight_notifications_oldest_undelivered_age_seconds',
-    help: 'Age of the oldest pending or retryable failed notification',
+    help: 'Age of the oldest pending, unreconciled UNKNOWN or retryable failed notification',
     kind: 'gauge',
     labels: [],
     scope: 'cluster_snapshot',

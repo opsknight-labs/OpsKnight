@@ -153,8 +153,15 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
         prisma.user.count({ where: { status: 'ACTIVE' } })
       ),
       collectWithTimeout('notifications', DB_COLLECTOR_TIMEOUT_MS, async () => {
+        // Backlog = waiting (PENDING), ambiguous and not yet reconciled (UNKNOWN), or failed with
+        // attempts left. A FAILED row out of attempts is terminal and will never be retried.
         const value = await prisma.notification.aggregate({
-          where: { status: { in: ['PENDING', 'FAILED'] } },
+          where: {
+            OR: [
+              { status: { in: ['PENDING', 'UNKNOWN'] } },
+              { status: 'FAILED', attempts: { lt: prisma.notification.fields.maxAttempts } },
+            ],
+          },
           _count: { id: true },
           _min: { createdAt: true },
         });
