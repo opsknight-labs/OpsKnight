@@ -315,17 +315,33 @@ export async function deletePolicy(policyId: string) {
     };
   }
 
+  const actorId = currentUser.id;
   try {
     await prisma.$transaction(async tx => {
+      // A service assigning this policy takes a key-share FK lock; FOR UPDATE serializes that
+      // assignment with this check, so the foreign key cannot silently null a service's policy.
+      await tx.$queryRaw`SELECT "id" FROM "EscalationPolicy" WHERE "id" = ${policyId} FOR UPDATE`;
+      const [services, versionRefs, decisions] = await Promise.all([
+        tx.service.count({ where: { escalationPolicyId: policyId } }),
+        tx.automationVersionPolicyRef.count({ where: { escalationPolicyId: policyId } }),
+        tx.incidentAutomationDecision.count({ where: { escalationPolicyId: policyId } }),
+      ]);
+      if (services || versionRefs || decisions) {
+        throw new Error(
+          'Cannot delete policy: a service or automation started using it. Nothing was deleted; reassign them first.'
+        );
+      }
       await tx.escalationRule.deleteMany({ where: { policyId } });
       await tx.escalationPolicy.delete({ where: { id: policyId } });
-    });
-
-    await logAudit({
-      action: 'escalation_policy.deleted',
-      entityType: 'ESCALATION_POLICY',
-      entityId: policyId,
-      actorId: currentUser.id,
+      await logAudit(
+        {
+          action: 'escalation_policy.deleted',
+          entityType: 'ESCALATION_POLICY',
+          entityId: policyId,
+          actorId,
+        },
+        tx
+      );
     });
 
     revalidatePath('/policies');
