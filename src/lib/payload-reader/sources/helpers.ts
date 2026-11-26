@@ -11,6 +11,7 @@ export function at(data: unknown, path: string): unknown {
   let node: unknown = data;
   for (const part of path.split('.')) {
     if (Array.isArray(node)) node = node[Number(part)];
+    // eslint-disable-next-line security/detect-object-injection -- reads a path into parsed payload data; the result is only read
     else if (isObj(node)) node = node[part];
     else return undefined;
   }

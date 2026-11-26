@@ -694,6 +694,7 @@ export default function IncidentTimeline({
     // After the "All" list renders, the row is the hash target: it scrolls into view and highlights.
     requestAnimationFrame(() => {
       const hash = `#timeline-${rowId}`;
+      // eslint-disable-next-line security/detect-possible-timing-attacks -- compares the page URL hash, which is not a secret
       if (window.location.hash === hash)
         document.getElementById(`timeline-${rowId}`)?.scrollIntoView({ block: 'center' });
       else window.location.hash = hash;

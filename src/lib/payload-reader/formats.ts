@@ -63,6 +63,7 @@ function tryLogfmt(text: string): Record<string, string> | undefined {
   if (covered < text.replace(/\s+/g, '').length * 0.6) return undefined;
   const out: Record<string, string> = {};
   for (const [, key, raw] of pairs) {
+    // eslint-disable-next-line security/detect-object-injection -- sets a parsed key on a plain local object that is only read back, never merged into shared state
     out[key] = raw.startsWith('"') ? raw.slice(1, -1).replace(/\\"/g, '"') : raw;
   }
   return out;
@@ -70,6 +71,7 @@ function tryLogfmt(text: string): Record<string, string> | undefined {
 
 /** `a=1&b=two`: form-encoded, one line, no spaces. */
 function tryForm(text: string): Record<string, string> | undefined {
+  // eslint-disable-next-line security/detect-unsafe-regex -- linear: every repeated part is delimited by a character it excludes
   if (!/^[^\s&=]+=[^\s&]*(&[^\s&=]+=[^\s&]*)+$/.test(text)) return undefined;
   try {
     return Object.fromEntries(new URLSearchParams(text));
@@ -101,7 +103,8 @@ function tryKeyValue(text: string): Record<string, unknown> | undefined {
   for (const line of lines) {
     const match = /^\s*https?:/.test(line)
       ? null
-      : line.match(/^(\s*)(?:-\s+)?([-\w .()/]{1,60}):(?:\s+(.*))?$/);
+      : // eslint-disable-next-line security/detect-unsafe-regex -- linear: every repeated part is delimited by a character it excludes
+        line.match(/^(\s*)(?:-\s+)?([-\w .()/]{1,60}):(?:\s+(.*))?$/);
     if (!match) {
       if (open && Object.keys(open.child).length === 0) {
         const prev = open.parent[open.key];
@@ -116,10 +119,12 @@ function tryKeyValue(text: string): Record<string, unknown> | undefined {
     const value = (match[3] ?? '').trim().replace(/^["']|["']$/g, '');
     if (value === '') {
       const child: Record<string, unknown> = {};
+      // eslint-disable-next-line security/detect-object-injection -- sets a parsed key on a plain local object that is only read back, never merged into shared state
       parent[key] = child;
       stack.push({ indent, node: child });
       open = { parent, key, child };
     } else {
+      // eslint-disable-next-line security/detect-object-injection -- sets a parsed key on a plain local object that is only read back, never merged into shared state
       parent[key] = value;
       open = null;
     }
@@ -136,6 +141,7 @@ function tryXml(text: string): Record<string, unknown> | undefined {
     .replace(/<\?[\s\S]*?\?>/g, '')
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+  // eslint-disable-next-line security/detect-unsafe-regex -- linear: every repeated part is delimited by a character it excludes
   const tokens = body.match(/<\/?[A-Za-z_][\w:.-]*(?:\s[^>]*)?\/?>|[^<]+/g);
   if (!tokens) return undefined;
   type Node = { name: string; attrs: Record<string, string>; children: Node[]; text: string };
@@ -147,6 +153,7 @@ function tryXml(text: string): Record<string, unknown> | undefined {
     } else if (token.startsWith('<')) {
       const name = token.match(/^<([A-Za-z_][\w:.-]*)/)?.[1] ?? 'node';
       const attrs: Record<string, string> = {};
+      // eslint-disable-next-line security/detect-object-injection -- sets a parsed key on a plain local object that is only read back, never merged into shared state
       for (const [, k, v] of token.matchAll(/([\w:.-]+)="([^"]*)"/g)) attrs[k] = v;
       const node: Node = { name, attrs, children: [], text: '' };
       stack[stack.length - 1].children.push(node);
@@ -206,6 +213,7 @@ function expand(value: unknown, depth = 0): unknown {
     let n = 0;
     for (const [k, v] of Object.entries(value)) {
       if (n++ >= 500) break;
+      // eslint-disable-next-line security/detect-object-injection -- sets a parsed key on a plain local object that is only read back, never merged into shared state
       out[k] = expand(v, depth + 1);
     }
     return out;

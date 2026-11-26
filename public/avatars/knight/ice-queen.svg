@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-6 -22 132 148" role="img" aria-label="OpsKnight knight avatar">
+
+<defs>
+<radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#3c6a9a"/><stop offset="1" stop-color="#0b1a2e"/></radialGradient>
+<linearGradient id="cyl" x1="0" x2="1" y1="0" y2="0">
+<stop offset="0" stop-color="#101c36"/><stop offset=".18" stop-color="#3d5a8f"/><stop offset=".38" stop-color="#9bb7e8"/><stop offset=".46" stop-color="#e0ecff"/><stop offset=".62" stop-color="#3d5a8f"/><stop offset="1" stop-color="#101c36"/>
+</linearGradient>
+<linearGradient id="plate" x1="0" x2="1" y1="0" y2="1">
+<stop offset="0" stop-color="#9bb7e8"/><stop offset=".45" stop-color="#3d5a8f"/><stop offset="1" stop-color="#101c36"/>
+</linearGradient>
+<linearGradient id="dome" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#e0ecff" stop-opacity=".9"/><stop offset=".5" stop-color="#9bb7e8" stop-opacity=".2"/><stop offset="1" stop-color="#101c36" stop-opacity=".25"/></linearGradient>
+<radialGradient id="eye"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#e0f4ff"/><stop offset="1" stop-color="#e0f4ff" stop-opacity="0"/></radialGradient>
+<filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2"/></filter>
+</defs>
+<rect x="-30" y="-40" width="180" height="200" fill="url(#bg)"/>
+<!-- plate shoulders: three overlapping lames each side, riveted -->
+<g>
+<path fill="url(#plate)" stroke="#101c36" stroke-width="1" d="M-4 128C-4 104 10 92 32 92L52 94L52 128Z"/>
+<path fill="url(#plate)" stroke="#101c36" stroke-width="1" d="M124 128C124 104 110 92 88 92L68 94L68 128Z"/>
+<path fill="none" stroke="#e0ecff" stroke-opacity=".6" stroke-width="1.6" stroke-linecap="round" d="M4 112C10 100 20 96 34 96"/>
+<path fill="none" stroke="#e0ecff" stroke-opacity=".6" stroke-width="1.6" stroke-linecap="round" d="M116 112C110 100 100 96 86 96"/>
+<path fill="none" stroke="#101c36" stroke-opacity=".7" stroke-width="1.4" d="M0 116C8 108 22 104 50 105M120 116C112 108 98 104 70 105"/>
+<circle cx="18" cy="104" r="1.9" fill="#e0ecff"/><circle cx="102" cy="104" r="1.9" fill="#e0ecff"/>
+<circle cx="30" cy="100" r="1.9" fill="#e0ecff"/><circle cx="90" cy="100" r="1.9" fill="#e0ecff"/>
+</g>
+<!-- breastplate and gorget -->
+<path fill="url(#cyl)" d="M44 90H76L82 126H38Z"/>
+<path fill="#E9F4FF" d="M56 98H64V126H56Z"/>
+<path fill="#9fc2e6" d="M60 98H64V126H60Z"/>
+<path fill="url(#plate)" d="M34 86C34 92 40 96 60 96C80 96 86 92 86 86L88 92C88 100 76 104 60 104C44 104 32 100 32 92Z"/>
+<path fill="none" stroke="#101c36" stroke-opacity=".6" stroke-width="1.2" d="M36 94C46 99 74 99 84 94"/>
+<!-- long hair falling behind the helm and over the pauldrons, with a braid -->
+<path fill="#e8eef8" d="M32 40C14 52 10 90 18 122C26 120 32 108 34 90Z"/><path fill="#e8eef8" d="M88 40C106 52 110 90 102 122C94 120 88 108 86 90Z"/>
+<path fill="#8fa4c4" opacity=".55" d="M22 70C20 92 22 108 26 118C30 108 32 96 32 84Z"/><path fill="#8fa4c4" opacity=".55" d="M98 70C100 92 98 108 94 118C90 108 88 96 88 84Z"/>
+<g class="head">
+<!-- plume or crest -->
+<path fill="#9fc2e6" d="M56 14C56 2 58 -6 60 -10C62 -6 64 2 64 14Z"/><path fill="#E9F4FF" d="M57 14C57 4 58.5 -3 60 -8C61.5 -3 63 4 63 14Z"/>
+<!-- great helm -->
+<path fill="url(#cyl)" stroke="#101c36" stroke-width="1.2" d="M31 30C31 14 44 6 60 6C76 6 89 14 89 30L91 70C91 81 85 88 76 90H44C35 88 29 81 29 70Z"/>
+<path fill="url(#dome)" d="M33 28C33 15 45 8 60 8C75 8 87 15 87 28C80 22 70 20 60 20C50 20 40 22 33 28Z"/>
+<path fill="#101c36" opacity=".35" d="M58.4 8H61.6V90H58.4Z"/>
+<path fill="none" stroke="#e0ecff" stroke-opacity=".75" stroke-width="2" stroke-linecap="round" d="M36 30C37 20 44 12 54 9"/>
+<!-- brow band and lower band, riveted -->
+<path fill="url(#plate)" stroke="#101c36" stroke-width=".9" d="M30 31H90V36H30Z"/>
+<path fill="url(#plate)" stroke="#101c36" stroke-width=".9" d="M29.5 72H90.5V78H29.5Z"/>
+<g fill="#e0ecff"><circle cx="36" cy="33.5" r="1.1"/><circle cx="48" cy="33.5" r="1.1"/><circle cx="60" cy="33.5" r="1.1"/><circle cx="72" cy="33.5" r="1.1"/><circle cx="84" cy="33.5" r="1.1"/><circle cx="37" cy="75" r="1.1"/><circle cx="60" cy="75" r="1.1"/><circle cx="83" cy="75" r="1.1"/></g>
+<!-- visor slit and the cross slit below it -->
+<path fill="#06080c" d="M33 41H87L86 49H34Z"/>
+<path fill="#06080c" d="M57.5 49H62.5V66C62.5 67.4 61.4 68.5 60 68.5C58.6 68.5 57.5 67.4 57.5 66Z"/>
+<path fill="none" stroke="#101c36" stroke-opacity=".8" stroke-width="1" d="M33 41H87M34 49H86"/>
+<!-- glowing eyes behind the slit -->
+<g class="eye">
+<ellipse cx="46" cy="45" rx="9" ry="5" fill="url(#eye)" filter="url(#soft)"/><ellipse cx="74" cy="45" rx="9" ry="5" fill="url(#eye)" filter="url(#soft)"/>
+<ellipse cx="46" cy="45" rx="4.2" ry="2.2" fill="#e0f4ff"/><ellipse cx="74" cy="45" rx="4.2" ry="2.2" fill="#e0f4ff"/>
+<ellipse cx="46" cy="44.6" rx="2" ry="1" fill="#fff"/><ellipse cx="74" cy="44.6" rx="2" ry="1" fill="#fff"/>
+</g>
+<rect class="lids" x="33" y="41" width="54" height="8" fill="#06080c"/>
+<!-- breath holes -->
+<g fill="#06080c"><circle cx="73" cy="55" r="1.4"/><circle cx="79" cy="55" r="1.4"/><circle cx="73" cy="60" r="1.4"/><circle cx="79" cy="60" r="1.4"/><circle cx="73" cy="65" r="1.4"/><circle cx="79" cy="65" r="1.4"/><circle cx="46" cy="55" r="1.4"/><circle cx="41" cy="55" r="1.4"/><circle cx="46" cy="60" r="1.4"/><circle cx="41" cy="60" r="1.4"/><circle cx="46" cy="65" r="1.4"/><circle cx="41" cy="65" r="1.4"/></g>
+<!-- emblem on the brow: a small cross -->
+<path fill="#E9F4FF" d="M58.6 11H61.4V19H65V21.6H61.4V28H58.6V21.6H55V19H58.6Z" opacity=".95"/>
+</g>
+</svg>

@@ -1,5 +1,6 @@
 'use server';
 
+import { getDefaultAvatar } from '@/lib/avatar';
 import { timingSafeEqual } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
@@ -137,6 +138,7 @@ export async function bootstrapAdmin(formData: FormData) {
             data: {
               name,
               email,
+              avatarUrl: getDefaultAvatar(name, email),
               role: 'ADMIN',
               status: 'ACTIVE',
               passwordHash,

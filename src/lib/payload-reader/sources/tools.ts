@@ -49,6 +49,7 @@ function statusFrom(
 ): PayloadStatus | null {
   if (!value) return null;
   const v = value.trim().toLowerCase();
+  // eslint-disable-next-line security/detect-object-injection -- looks up a status or level in a fixed table, with a fallback
   return map[v] ?? normalizeStatus(v);
 }
 
@@ -312,6 +313,7 @@ export const rollbar: SourceReader = {
           : event === 'deploy'
             ? 'info'
             : 'firing',
+      // eslint-disable-next-line security/detect-object-injection -- looks up a status or level in a fixed table, with a fallback
       severity: level ? (ROLLBAR_LEVEL[level] ?? level.toLowerCase()) : null,
       condition:
         event === 'exp_repeat_item' && str(data, 'data.occurrences')
@@ -747,6 +749,7 @@ export const icinga: SourceReader = {
     const perf = at(result, 'performance_data');
     return readNagiosLike({
       ...data,
+      // eslint-disable-next-line security/detect-object-injection -- looks up a status or level in a fixed table, with a fallback
       state: typeof code === 'number' ? (states[code] ?? String(code)) : at(data, 'state'),
       output: at(data, 'output') ?? str(result, 'output'),
       perfdata: Array.isArray(perf) ? perf.join(' ') : at(data, 'perfdata'),
@@ -873,6 +876,7 @@ export const uptimeKuma: SourceReader = {
   read: data => {
     const code = at(data, 'heartbeat.status');
     const [word, status] =
+      // eslint-disable-next-line security/detect-object-injection -- looks up a status or level in a fixed table, with a fallback
       typeof code === 'number' ? (KUMA_STATUS[code] ?? [null, null]) : [null, null];
     const name = str(data, 'monitor.name');
     const time = str(data, 'heartbeat.time');
@@ -1629,6 +1633,7 @@ export const graylog: SourceReader = {
     return {
       title: str(data, 'event_definition_title') ?? str(event, 'message'),
       status: at(event, 'alert') === false ? 'info' : 'firing',
+      // eslint-disable-next-line security/detect-object-injection -- looks up a status or level in a fixed table, with a fallback
       severity: priority ? (GRAYLOG_PRIORITY[priority] ?? priority.toLowerCase()) : null,
       condition: str(data, 'event_definition_description'),
       measured:

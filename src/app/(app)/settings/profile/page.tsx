@@ -149,6 +149,9 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
           windowDays: 30,
         })
       : null;
+  // The metrics object carries an internal accumulator under a Symbol key. Client components accept only
+  // plain objects, and passing it made every refresh (e.g. after picking an avatar) log a React error.
+  const slaMetricsForClient = slaMetrics ? Object.fromEntries(Object.entries(slaMetrics)) : null;
 
   const totalTeams = user?.teamMemberships?.length ?? 0;
   const totalSchedules = user?.layerAssignments?.length ?? 0;
@@ -222,7 +225,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
         teamsLed={user?.teamsLed ?? []}
         layerAssignments={user?.layerAssignments ?? []}
         escalationRules={user?.escalationRules ?? []}
-        slaMetrics={slaMetrics}
+        slaMetrics={slaMetricsForClient as typeof slaMetrics}
         profileContent={
           <>
             <ProfileForm
