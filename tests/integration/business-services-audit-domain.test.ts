@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resetBusinessServiceHealthCacheForTests } from '@/lib/business-services/health';
+import { createBusinessServiceTemplate } from '@/lib/business-services/templates';
 import { readableServiceIds } from '@/lib/business-services/stats';
 import {
   serviceIdsOf,
@@ -322,5 +323,18 @@ describe('L3 out-of-scope members', () => {
     const dto = businessServiceDto(row, null, undefined, false, allowed);
     expect(dto.members.find(m => m.id === hidden.id)).toMatchObject({ name: 'Restricted service' });
     expect(dto.members.find(m => m.id === visible.id)!.name).toBe(visible.name);
+  });
+});
+
+describe('L4 template audit target', () => {
+  it('does not file a template id under BUSINESS_SERVICE', async () => {
+    const actor = actorFor(await createTestUser({ role: 'ADMIN' }), 'ADMIN');
+    const template = await createBusinessServiceTemplate(
+      { name: `Tpl-${Math.random().toString(36).slice(2, 8)}` },
+      { actor }
+    );
+    const entries = await db.auditLog.findMany({ where: { entityId: template.id } });
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.every(entry => entry.entityType !== 'BUSINESS_SERVICE')).toBe(true);
   });
 });
