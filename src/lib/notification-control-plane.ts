@@ -210,6 +210,19 @@ export type CentralNotificationPayload =
       escalationGeneration?: number | null;
     }
   | {
+      /** A plain, non-incident message posted by the bot (business-service status, error budget). */
+      kind: 'CHAT_TEXT';
+      provider: 'SLACK' | 'MICROSOFT_TEAMS';
+      /** Slack channel id or #name; Teams channel id. */
+      channel: string;
+      /** Teams only. */
+      tenantId?: string;
+      teamId?: string;
+      title: string;
+      text: string;
+      url?: string;
+    }
+  | {
       kind: 'MICROSOFT_TEAMS_CHANNEL';
       destinationId: string;
       incident: IncidentPresentation & {
@@ -380,6 +393,7 @@ function channelForPayload(payload: CentralNotificationPayload): NotificationCha
   if (payload.kind === 'INCIDENT_WHATSAPP') return 'WHATSAPP';
   if (payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK') return 'SLACK';
   if (payload.kind === 'MICROSOFT_TEAMS_CHANNEL') return 'MICROSOFT_TEAMS';
+  if (payload.kind === 'CHAT_TEXT') return payload.provider;
   if (payload.kind === 'STATUS_PAGE_WEBHOOK') return 'WEBHOOK';
   return payload.kind;
 }
@@ -425,6 +439,16 @@ function isCentralNotificationPayload(value: unknown): value is CentralNotificat
       return isRecord(value.incident) && hasText(value.incident.id);
     case 'MICROSOFT_TEAMS_CHANNEL':
       return hasText(value.destinationId) && isRecord(value.incident) && hasText(value.incident.id);
+    case 'CHAT_TEXT':
+      return (
+        hasText(value.channel) &&
+        hasText(value.title) &&
+        hasText(value.text) &&
+        (value.provider === 'SLACK' ||
+          (value.provider === 'MICROSOFT_TEAMS' &&
+            hasText(value.tenantId) &&
+            hasText(value.teamId)))
+      );
     case 'WEBHOOK':
       return hasText(value.url) && isRecord(value.payload);
     case 'STATUS_PAGE_WEBHOOK':
@@ -1470,6 +1494,44 @@ async function dispatchPayload(
             error: result.error || 'Status-page webhook delivery failed',
             statusCode: result.statusCode,
             retryAfterMs: result.retryAfterMs,
+          };
+    }
+    case 'CHAT_TEXT': {
+      const links = payload.url ? [{ label: 'Open in OpsKnight', url: payload.url }] : [];
+      if (payload.provider === 'SLACK') {
+        const [{ sendSlackChannelText }, { slackTextBody }] = await Promise.all([
+          import('./slack'),
+          import('./chat-text'),
+        ]);
+        return executeProvider(CircuitBreakers.slack(), () =>
+          sendSlackChannelText(payload.channel, slackTextBody(payload.title, payload.text, links))
+        );
+      }
+      const [{ postMicrosoftTeamsChannelCard }, { teamsTextCard }] = await Promise.all([
+        import('./microsoft-teams/client'),
+        import('./chat-text'),
+      ]);
+      const result = await postMicrosoftTeamsChannelCard({
+        tenantId: payload.tenantId ?? '',
+        teamId: payload.teamId ?? '',
+        channelId: payload.channel,
+        incidentId: notificationId,
+        card: teamsTextCard(payload.title, payload.text, links),
+      });
+      // Creating a Teams activity is not idempotent: once the request may have landed, a retry
+      // could post it twice, so an ambiguous outcome counts as sent.
+      if (!result.success && result.errorCode === 'AMBIGUOUS_SIDE_EFFECT') {
+        logger.warn('notification.chat_text_ambiguous', { notificationId, error: result.error });
+        return { success: true, errorCode: result.errorCode };
+      }
+      return result.success
+        ? { success: true, providerMessageId: result.providerMessageId }
+        : {
+            success: false,
+            error: result.error,
+            statusCode: result.statusCode,
+            retryAfterMs: result.retryAfterMs,
+            errorCode: result.errorCode,
           };
     }
     case 'MICROSOFT_TEAMS_CHANNEL': {

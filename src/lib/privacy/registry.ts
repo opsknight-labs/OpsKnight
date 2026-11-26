@@ -241,7 +241,7 @@ export const personalDataRegistry = [
   {
     domain: 'status-page-subscriptions',
     models: ['StatusPageSubscription', 'StatusPageSubscriptionToken'],
-    fields: ['email', 'phone', 'token', 'verificationToken', 'preferences'],
+    fields: ['email', 'phone', 'targetEncrypted', 'token', 'verificationToken', 'preferences'],
     purpose: [
       'Subscription verification',
       'public status notification delivery',

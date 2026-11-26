@@ -214,6 +214,10 @@ describe('status page middleware serving routes', () => {
     expect(isAllowedStatusApi('/api/status/acme/subscribe/webhook', 'POST')).toBe(true);
     expect(isAllowedStatusApi('/api/status/acme/subscribe/webhook', 'GET')).toBe(false);
     expect(isAllowedStatusApi('/api/status/acme/subscribe/other', 'POST')).toBe(false);
+    for (const p of ['chat', 'sms', 'sms/verify']) {
+      expect(isAllowedStatusApi(`/api/status/acme/subscribe/${p}`, 'POST')).toBe(true);
+      expect(isAllowedStatusApi(`/api/status/acme/subscribe/${p}`, 'GET')).toBe(false);
+    }
     for (const p of ['/history', '/embed', '/incidents/abc']) {
       expect(isStatusDomainPath(p)).toBe(true);
     }

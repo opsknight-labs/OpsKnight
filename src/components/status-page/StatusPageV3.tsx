@@ -152,6 +152,8 @@ export default function StatusPageV3({
   const hasSlugRoutes = Boolean(page.slug && !page.isDefault);
   const webhookSlug =
     hasSlugRoutes && page.subscription?.channels?.includes('WEBHOOK') ? page.slug : null;
+  const subscribeSlug = hasSlugRoutes ? page.slug : null;
+  const subscribeChannels = page.subscription?.channels ?? null;
   const apiPath =
     page.slug && !page.isDefault ? `/api/status/${encodeURIComponent(page.slug)}` : '/api/status';
 
@@ -281,6 +283,8 @@ export default function StatusPageV3({
               <StatusPageSubscribe
                 statusPageId={page.id}
                 webhookSlug={webhookSlug}
+                subscribeSlug={subscribeSlug}
+                channels={subscribeChannels}
                 services={serviceOptions}
                 rssHref={rssHref}
                 apiHref={showApi ? apiPath : null}
@@ -298,6 +302,8 @@ export default function StatusPageV3({
             open={subscribeOpen}
             statusPageId={page.id}
             webhookSlug={webhookSlug}
+            subscribeSlug={subscribeSlug}
+            channels={subscribeChannels}
             services={serviceOptions}
             rssHref={rssHref}
             apiHref={showApi ? apiPath : null}

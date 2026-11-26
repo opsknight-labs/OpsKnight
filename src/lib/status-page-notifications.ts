@@ -35,6 +35,7 @@ import {
 import type { AnnouncementFanoutDeliveryMode } from '@/lib/status-pages/announcement-fanout-contract';
 import { selectAnnouncementRecipientsNeedingReplacement } from '@/lib/status-pages/announcement-recipient-reconciliation';
 import { subscriberServiceFilter } from '@/lib/status-pages/subscription-policy';
+import { notifyChannelSubscribers } from '@/lib/status-pages/subscriber-channels';
 
 export async function notifyStatusPageSubscribers(
   incidentId: string,
@@ -129,10 +130,6 @@ export async function notifyStatusPageSubscribers(
 
     for (const page of statusPages) {
       const emailConfig = emailConfigMap.get(page.id);
-      if (!emailConfig?.enabled) {
-        logger.warn(`Email not configured for status page ${page.name} (${page.id})`);
-        continue;
-      }
 
       // Check if this service is currently in an active scheduled maintenance window on this status page
       const now = new Date();
@@ -180,6 +177,28 @@ export async function notifyStatusPageSubscribers(
       const brandLogoUrl = resolveBrandLogoUrl(logoUrl, statusPageUrl);
       const presentation = buildSubscriberIncidentPresentation(page, incident);
       const subject = formatSubject(displayName, presentation.incident.title, eventType);
+      const policy = statusNotificationPriority(eventType);
+      // SMS, Slack and Teams subscribers do not depend on the page's email provider.
+      totalSent += await notifyChannelSubscribers({
+        page,
+        serviceIds: [incident.serviceId],
+        title: subject,
+        message:
+          presentation.incident.description?.trim().slice(0, 1_000) ||
+          (presentation.showAffectedService
+            ? `Affected: ${presentation.incident.service?.name ?? 'Service'}`
+            : 'See the status page for details.'),
+        eventKey: effectiveDeliveryKey,
+        templateKey: `status-page-incident-${eventType}`,
+        sourceType: 'STATUS_PAGE_INCIDENT',
+        sourceId: `${page.id}:${incidentId}`,
+        incidentId,
+        ...policy,
+      });
+      if (!emailConfig?.enabled) {
+        logger.warn(`Email not configured for status page ${page.name} (${page.id})`);
+        continue;
+      }
       const html = await formatEmailBody(
         displayName,
         presentation.incident,
@@ -195,7 +214,6 @@ export async function notifyStatusPageSubscribers(
       );
 
       const PAGE_SIZE = 500;
-      const policy = statusNotificationPriority(eventType);
       const fanout = await beginNotificationFanout({
         statusPageId: page.id,
         sourceType: 'STATUS_PAGE_INCIDENT',
@@ -218,6 +236,7 @@ export async function notifyStatusPageSubscribers(
           await prisma.statusPageSubscription.findMany({
             where: {
               statusPageId: page.id,
+              channel: 'EMAIL',
               state: 'ACTIVE',
               verified: true,
               unsubscribedAt: null,
@@ -493,10 +512,31 @@ export async function notifyStatusPageSubscribersAnnouncement(
     }
 
     const appBaseUrl = getBaseUrl();
+    const audience = await resolveAnnouncementAudience(
+      statusPageId,
+      announcement.affectedServiceIds,
+      announcement.affectedBusinessServiceIds
+    );
+    // SMS, Slack and Teams subscribers do not depend on the page's email provider. Scoped to
+    // business services with nothing published here: nobody is affected.
+    const channelSent =
+      audience.scoped && audience.serviceIds.length === 0
+        ? 0
+        : await notifyChannelSubscribers({
+            page,
+            serviceIds: audience.scoped ? audience.serviceIds : null,
+            title: `[${page.organizationName || page.name}] ${announcementPresentation(announcement.type as string).label}: ${announcement.title}`,
+            message: (announcement.message || '').slice(0, 1_000) || 'See the status page.',
+            eventKey: announcementGenerationEventKey(notificationGeneration),
+            templateKey: 'status-page-announcement',
+            sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
+            sourceId: announcement.id,
+            trafficClass: 'BULK',
+          });
     const emailConfig = await getStatusPageEmailConfig(page.id);
     if (!emailConfig.enabled) {
       logger.warn(`Email not configured for status page ${page.name} (${page.id})`);
-      return { sent: 0, failed: 1 };
+      return { sent: channelSent, failed: 1 };
     }
 
     const displayName = page.organizationName || page.name;
@@ -546,11 +586,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
     let failed = 0;
     let cursor: string | undefined = fanout.cursor ?? undefined;
 
-    const { scoped, serviceIds: affectedIds } = await resolveAnnouncementAudience(
-      statusPageId,
-      announcement.affectedServiceIds,
-      announcement.affectedBusinessServiceIds
-    );
+    const { scoped, serviceIds: affectedIds } = audience;
     const hasScopedServices = affectedIds.length > 0;
     if (scoped && !hasScopedServices) {
       // Names only business services with nothing published here: nobody is affected, so nobody is mailed.
@@ -596,12 +632,19 @@ export async function notifyStatusPageSubscribersAnnouncement(
         where: hasScopedServices
           ? {
               statusPageId,
+              channel: 'EMAIL',
               state: 'ACTIVE',
               verified: true,
               unsubscribedAt: null,
               ...subscriberServiceFilter(affectedIds),
             }
-          : { statusPageId, state: 'ACTIVE', verified: true, unsubscribedAt: null },
+          : {
+              statusPageId,
+              channel: 'EMAIL',
+              state: 'ACTIVE',
+              verified: true,
+              unsubscribedAt: null,
+            },
         orderBy: { id: 'asc' },
         take: PAGE_SIZE,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
