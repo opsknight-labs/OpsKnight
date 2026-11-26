@@ -75,4 +75,15 @@ export async function lockResponderPolicy(client: Prisma.TransactionClient, poli
   await client.$queryRaw`SELECT id FROM "EscalationPolicy" WHERE id=${policyId} FOR UPDATE`;
 }
 
+/**
+ * Steps are part of the policy's REST representation. The revision trigger fires only on an UPDATE of
+ * the policy row, so a step change must touch it or a stale v2 If-Match still passes and overwrites it.
+ */
+export async function bumpResponderPolicyRevision(
+  client: Prisma.TransactionClient,
+  policyId: string
+) {
+  await client.escalationPolicy.update({ where: { id: policyId }, data: { updatedAt: new Date() } });
+}
+
 export const assertResponderPolicySnapshotSafe = captureResponderSnapshot;

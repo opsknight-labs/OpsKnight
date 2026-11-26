@@ -3,6 +3,7 @@ import { z } from 'zod/v3';
 import { transitionPolicyArchive } from '@/lib/escalation/policy-lifecycle';
 import {
   assertResponderPolicySnapshotSafe,
+  bumpResponderPolicyRevision,
   lockResponderPolicy,
 } from '@/lib/escalation/automation-snapshot';
 
@@ -368,6 +369,7 @@ export async function addPolicyStep(
   try {
     const nextStepOrder = await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, policyId);
+      await bumpResponderPolicyRevision(tx, policyId);
       const targetId = step.targetUserId ?? step.targetTeamId ?? (step.targetScheduleId as string);
       if (!(await escalationTargetExists(tx, targetType, targetId))) {
         throw new Error(`The selected ${targetType.toLowerCase()} no longer exists.`);
@@ -457,6 +459,7 @@ export async function updatePolicyStep(
   try {
     await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, existing.policyId);
+      await bumpResponderPolicyRevision(tx, existing.policyId);
       const targetId = step.targetUserId ?? step.targetTeamId ?? (step.targetScheduleId as string);
       if (!(await escalationTargetExists(tx, step.targetType, targetId))) {
         throw new Error(`The selected ${step.targetType.toLowerCase()} no longer exists.`);
@@ -512,6 +515,7 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
   try {
     await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, policyId);
+      await bumpResponderPolicyRevision(tx, policyId);
       await tx.escalationRule.delete({
         where: { id: stepId },
       });
@@ -602,6 +606,7 @@ export async function movePolicyStep(
     // Swap step orders and positional delays via temporary negative index to satisfy @@unique([policyId, stepOrder])
     await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, policyId);
+      await bumpResponderPolicyRevision(tx, policyId);
       await tx.escalationRule.update({
         where: { id: stepId },
         data: { stepOrder: -1 },
@@ -659,6 +664,7 @@ export async function reorderPolicySteps(
   try {
     await prisma.$transaction(async tx => {
       await lockResponderPolicy(tx, policyId);
+      await bumpResponderPolicyRevision(tx, policyId);
       // Verify all steps belong to the policy
       const steps = await tx.escalationRule.findMany({
         where: {

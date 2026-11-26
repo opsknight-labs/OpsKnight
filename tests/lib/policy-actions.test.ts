@@ -3,13 +3,21 @@ import prisma from '@/lib/prisma';
 import {
   lockResponderPolicy,
   assertResponderPolicySnapshotSafe,
+  bumpResponderPolicyRevision,
 } from '@/lib/escalation/automation-snapshot';
-import { movePolicyStep, reorderPolicySteps, updatePolicyStep } from '@/app/(app)/policies/actions';
+import {
+  addPolicyStep,
+  deletePolicyStep,
+  movePolicyStep,
+  reorderPolicySteps,
+  updatePolicyStep,
+} from '@/app/(app)/policies/actions';
 import { ESCALATION_STEP_CHANNELS_SUBMITTED } from '@/lib/escalation/policy-validation';
 
 vi.mock('@/lib/escalation/automation-snapshot', () => ({
   lockResponderPolicy: vi.fn(),
   assertResponderPolicySnapshotSafe: vi.fn(),
+  bumpResponderPolicyRevision: vi.fn(),
 }));
 
 vi.mock('@/lib/rbac', () => ({
@@ -55,6 +63,44 @@ describe('Policy Step Actions', () => {
     prismaMock.user.findFirst.mockResolvedValue({ name: 'Ada', role: 'RESPONDER' });
     prismaMock.team.count.mockResolvedValue(1);
     prismaMock.onCallSchedule.count.mockResolvedValue(1);
+  });
+
+  describe('policy revision', () => {
+    // The v2 If-Match revision only moves when the policy row itself is updated.
+    it('bumps the policy revision for every UI step mutation', async () => {
+      prismaMock.escalationRule.findUnique.mockResolvedValue({
+        id: 'step-1',
+        policyId: 'pol-1',
+        stepOrder: 1,
+        delayMinutes: 10,
+        targetType: 'USER',
+        targetUserId: 'user-1',
+        targetTeamId: null,
+        targetScheduleId: null,
+        notificationChannels: [],
+        notifyOnlyTeamLead: false,
+        policy: { id: 'pol-1' },
+      });
+      prismaMock.escalationRule.findMany.mockResolvedValue([
+        { id: 'step-0', stepOrder: 0, delayMinutes: 0 },
+        { id: 'step-1', stepOrder: 1, delayMinutes: 10 },
+      ]);
+      const form = new FormData();
+      form.append('targetType', 'USER');
+      form.append('targetUserId', 'user-1');
+      form.append('delayMinutes', '5');
+
+      await addPolicyStep('pol-1', form);
+      await updatePolicyStep('step-1', form);
+      await deletePolicyStep('step-1');
+      await movePolicyStep('step-1', 'up');
+      await reorderPolicySteps('pol-1', ['step-1', 'step-0']);
+
+      expect(vi.mocked(bumpResponderPolicyRevision)).toHaveBeenCalledTimes(5);
+      expect(vi.mocked(bumpResponderPolicyRevision).mock.calls.map(call => call[1])).toEqual(
+        Array(5).fill('pol-1')
+      );
+    });
   });
 
   describe('movePolicyStep', () => {
