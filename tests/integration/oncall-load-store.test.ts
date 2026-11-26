@@ -33,6 +33,11 @@ const at = (daysAgo: number, hour: number, minute = 0) =>
   new Date(TODAY.getTime() - daysAgo * DAY + hour * 3_600_000 + minute * 60_000);
 /** A Saturday (UTC) inside the window. */
 const SATURDAY_AGO = ((TODAY.getUTCDay() + 1) % 7) + 7;
+/** A recent day whose 03:30Z is a Tuesday to Friday, so the "night" page is a weekday page in UTC and in New York. */
+const NIGHT_AGO = [3, 4, 5, 6, 7, 8, 9].find(n => {
+  const weekday = new Date(TODAY.getTime() - n * DAY).getUTCDay();
+  return weekday >= 2 && weekday <= 5;
+}) as number;
 
 beforeEach(async () => {
   if (!new URL(process.env.DATABASE_URL ?? '').pathname.endsWith('_test')) {
@@ -88,10 +93,15 @@ async function seed() {
     return incident;
   };
   // Asha: nine pages. 03:30Z is the evening before in New York (night); one on a Saturday afternoon.
-  const night = await page(asha.id, at(3, 3, 30));
+  const night = await page(asha.id, at(NIGHT_AGO, 3, 30));
   // A second channel for the same incident in the same hour is still one page.
   await db.notification.create({
-    data: { userId: asha.id, incidentId: night.id, channel: 'SMS', createdAt: at(3, 3, 40) },
+    data: {
+      userId: asha.id,
+      incidentId: night.id,
+      channel: 'SMS',
+      createdAt: at(NIGHT_AGO, 3, 40),
+    },
   });
   await page(asha.id, at(SATURDAY_AGO, 14));
   for (let day = 20; day <= 26; day += 1) await page(asha.id, at(day, 15));

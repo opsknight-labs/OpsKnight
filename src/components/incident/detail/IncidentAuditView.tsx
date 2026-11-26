@@ -123,6 +123,7 @@ export default function IncidentAuditView({ incidentId }: { incidentId: string }
       )}
     >
       {label}
+      {/* eslint-disable-next-line security/detect-object-injection -- key is one of the fixed filter names */}
       <span className="text-2xs font-semibold tabular-nums opacity-75">{counts[key]}</span>
     </button>
   );

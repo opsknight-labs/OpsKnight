@@ -56,6 +56,7 @@ import { projectMcpData } from '../core/projection';
 import { attachMcpSkills } from './skills';
 import { attachMcpApps } from './apps';
 import { MCP_WEB_PAGES, mcpWebOrigin } from '../core/web-links';
+import { isMcpViewScope } from '../auth/consent-offer';
 import {
   BULK_ACKNOWLEDGE_LIMIT,
   KNOWLEDGE_SOURCES,
@@ -830,15 +831,19 @@ export function createOpsKnightMcpServer(
             : operation.risk === 'R0' || writesEnabled)))
   );
   // Discovery only; every prepare and commit rechecks authority and the native review.
-  const approvalGated = writesEnabled
-    ? MCP_CATALOG.filter(
-        operation =>
-          !disabled.has(operation.operationId) &&
-          isMcpApprovalGated(operation) &&
-          !runsDirect(operation) &&
-          hasOperationAuthority(actor, operation)
-      )
-    : [];
+  // A view-only connection (every scope a view scope) is never offered approval requests, even for a
+  // preview operation that itself needs only a read scope.
+  const viewOnlyConnection = (actor.apiKey?.scopes ?? []).every(isMcpViewScope);
+  const approvalGated =
+    writesEnabled && !viewOnlyConnection
+      ? MCP_CATALOG.filter(
+          operation =>
+            !disabled.has(operation.operationId) &&
+            isMcpApprovalGated(operation) &&
+            !runsDirect(operation) &&
+            hasOperationAuthority(actor, operation)
+        )
+      : [];
   // The role allows these but this connection was not granted their scopes. Search lists them so
   // an assistant can explain the fix; describe and call still refuse them.
   const needsConsent = MCP_CATALOG.filter(

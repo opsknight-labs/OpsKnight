@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -44,16 +44,21 @@ export function useAutosave<T>({
   const latestDataRef = useRef<T>(data);
   const latestSnapshotRef = useRef(currentSnapshot);
   const committedSnapshotRef = useRef(currentSnapshot);
+  // Mirrors the ref so render can compare without reading a ref.
+  const [committedSnapshot, setCommittedSnapshot] = useState(currentSnapshot);
   const onSaveRef = useRef(onSave);
   const enabledRef = useRef(enabled);
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
   const operationGenerationRef = useRef(0);
 
-  latestDataRef.current = data;
-  latestSnapshotRef.current = currentSnapshot;
-  onSaveRef.current = onSave;
-  enabledRef.current = enabled;
+  // Keep the latest values in refs for timers and callbacks; layout effects run before the effects below.
+  useLayoutEffect(() => {
+    latestDataRef.current = data;
+    latestSnapshotRef.current = currentSnapshot;
+    onSaveRef.current = onSave;
+    enabledRef.current = enabled;
+  });
 
   const clearDebounce = useCallback(() => {
     if (debounceRef.current) {
@@ -77,10 +82,7 @@ export function useAutosave<T>({
     clearIdleTimer();
 
     try {
-      while (
-        enabledRef.current &&
-        committedSnapshotRef.current !== latestSnapshotRef.current
-      ) {
+      while (enabledRef.current && committedSnapshotRef.current !== latestSnapshotRef.current) {
         const snapshotData = latestDataRef.current;
         const snapshotKey = latestSnapshotRef.current;
         const generation = ++operationGenerationRef.current;
@@ -111,12 +113,10 @@ export function useAutosave<T>({
         }
 
         committedSnapshotRef.current = snapshotKey;
+        setCommittedSnapshot(snapshotKey);
       }
 
-      if (
-        mountedRef.current &&
-        committedSnapshotRef.current === latestSnapshotRef.current
-      ) {
+      if (mountedRef.current && committedSnapshotRef.current === latestSnapshotRef.current) {
         const generation = operationGenerationRef.current;
         setHasPendingChanges(false);
         setStatus('saved');
@@ -195,7 +195,7 @@ export function useAutosave<T>({
     void drainQueue();
   }, [clearDebounce, clearIdleTimer, drainQueue]);
 
-  const hasUncommittedSnapshot = committedSnapshotRef.current !== currentSnapshot;
+  const hasUncommittedSnapshot = committedSnapshot !== currentSnapshot;
 
   return {
     status,

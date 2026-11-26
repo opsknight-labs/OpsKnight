@@ -62,9 +62,12 @@ function merge(
   specific: ReturnType<SourceReader['read']>
 ): Omit<ReadablePayload, 'format' | 'source'> {
   const pick = <K extends keyof typeof base>(k: K) =>
+    // eslint-disable-next-line security/detect-object-injection -- k is a key of the reader result type
     (specific[k] ?? null) !== null && specific[k] !== ''
-      ? (specific[k] as (typeof base)[K])
-      : base[k];
+      ? // eslint-disable-next-line security/detect-object-injection -- k is a key of the reader result type
+        (specific[k] as (typeof base)[K])
+      : // eslint-disable-next-line security/detect-object-injection -- k is a key of the reader result type
+        base[k];
   const links = uniqBy(
     [...(specific.links ?? []), ...base.links].filter(l => isHttpUrl(l.url)),
     l => l.url

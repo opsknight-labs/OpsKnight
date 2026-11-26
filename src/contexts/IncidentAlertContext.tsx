@@ -5,6 +5,7 @@ import React, {
   useContext,
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useCallback,
   useMemo,
@@ -153,7 +154,9 @@ export function IncidentAlertProvider({
     return map;
   });
   const incidentsMapRef = useRef<Map<string, CriticalIncidentSummary>>(incidentsMap);
-  incidentsMapRef.current = incidentsMap;
+  useLayoutEffect(() => {
+    incidentsMapRef.current = incidentsMap;
+  }, [incidentsMap]);
 
   // Global banner dismissal timestamp in sessionStorage (persists across page navigation)
   const [dismissedAt, setDismissedAt] = useState<number | null>(() => {
@@ -189,7 +192,8 @@ export function IncidentAlertProvider({
   const [isAcknowledging, setIsAcknowledging] = useState(false);
 
   // Connection and known incident ID tracking
-  const mountTimestampRef = useRef<number>(Date.now());
+  // Read once per mount: both the recency window and the auto-dismiss timer start from it.
+  const [mountTimestamp] = useState(() => Date.now());
   const hasInitializedRef = useRef<boolean>(initialIncidents.length > 0);
   const knownIncidentIdsRef = useRef<Set<string>>(new Set(initialIncidents.map(i => i.id)));
   const toastedIdsRef = useRef<Set<string>>(new Set(initialIncidents.map(i => i.id)));
@@ -208,7 +212,7 @@ export function IncidentAlertProvider({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const isPausedRef = useRef(false);
   const remainingMsRef = useRef<number>(AUTO_DISMISS_TIMEOUT_MS);
-  const timerStartRef = useRef<number>(Date.now());
+  const timerStartRef = useRef<number>(mountTimestamp);
 
   const dismissBanner = useCallback(() => {
     const now = Date.now();
@@ -433,13 +437,14 @@ export function IncidentAlertProvider({
 
   // Derive visible active critical incidents scoped to the four-hour recency threshold.
   const activeCriticalIncidents = useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity -- the recency window is measured from the moment incidents change
     const now = Date.now();
     return Array.from(incidentsMap.values())
       .filter(inc => {
         const createdMs = new Date(inc.createdAt).getTime();
         return (
           !isNaN(createdMs) &&
-          (now - createdMs <= RECENCY_THRESHOLD_MS || createdMs >= mountTimestampRef.current - 5000)
+          (now - createdMs <= RECENCY_THRESHOLD_MS || createdMs >= mountTimestamp - 5000)
         );
       })
       .sort((a, b) => {
@@ -461,7 +466,7 @@ export function IncidentAlertProvider({
         if (rankA !== rankB) return rankA - rankB;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [incidentsMap]);
+  }, [incidentsMap, mountTimestamp]);
 
   // Filter out contextually suppressed incidents (when user is inside that incident's war room)
   const displayableIncidents = useMemo(() => {
@@ -518,11 +523,7 @@ export function IncidentAlertProvider({
     timerStartRef.current = Date.now();
     isPausedRef.current = false;
 
-    if (remaining <= 0) {
-      dismissBanner();
-      return;
-    }
-
+    // An already-expired banner dismisses on the next tick (a 0 ms timer), not synchronously in the effect.
     timerRef.current = setTimeout(() => {
       dismissBanner();
     }, remaining);

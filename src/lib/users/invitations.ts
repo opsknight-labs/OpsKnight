@@ -1,3 +1,4 @@
+import { getDefaultAvatar } from '@/lib/avatar';
 import 'server-only';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
@@ -139,6 +140,7 @@ async function executeInvitation(
         data: {
           name: command.values.name,
           email: command.values.email,
+          avatarUrl: getDefaultAvatar(command.values.name, command.values.email),
           role: command.values.role,
           roleSource: 'MANUAL',
           status: 'INVITED',

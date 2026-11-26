@@ -170,9 +170,11 @@ export default function TimelineGraph({
           {LEGEND.map(kind => (
             <span key={kind} className="inline-flex items-center gap-1">
               <span
+                // eslint-disable-next-line security/detect-object-injection -- kind is one of the fixed marker kinds
                 className={cn('h-1.5 w-1.5 rounded-full', MARKER_STYLE[kind].dot)}
                 aria-hidden
               />
+              {/* eslint-disable-next-line security/detect-object-injection -- kind is one of the fixed marker kinds */}
               {MARKER_STYLE[kind].name}
             </span>
           ))}
