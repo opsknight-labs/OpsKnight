@@ -265,6 +265,24 @@ export function peekPrePagingSnapshot(): PrePagingSnapshot | null {
   return current;
 }
 
+/**
+ * Keeps an active snapshot from going stale while no alert arrives. Reads only start a refresh and still
+ * serve the old snapshot, so after a quiet spell the first alert would otherwise be judged by policy from
+ * before the last rule, window or policy change (a window created a minute ago would not hold it). Only
+ * runs while some policy is not OFF; the timer never keeps the process alive.
+ */
+let keepFresh: ReturnType<typeof setTimeout> | null = null;
+function scheduleRefresh(snapshot: PrePagingSnapshot | null): void {
+  if (keepFresh) clearTimeout(keepFresh);
+  keepFresh = null;
+  if (!snapshot || !needsLookups(snapshot)) return;
+  keepFresh = setTimeout(() => {
+    keepFresh = null;
+    void refreshPrePagingSnapshot();
+  }, PREPAGING_LIMITS.cacheRefreshMs);
+  keepFresh.unref?.();
+}
+
 /** Single-flight refresh. Failures keep the previous snapshot and are logged at debug level. */
 export function refreshPrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
   if (loading) return loading;
@@ -272,6 +290,7 @@ export function refreshPrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
     .then(snapshot => {
       current = snapshot;
       if (needsLookups(snapshot)) void warmNoiseLookupClient(warmLookupStatement);
+      scheduleRefresh(snapshot);
       return snapshot;
     })
     .catch(error => {
@@ -281,6 +300,7 @@ export function refreshPrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
           error: error instanceof Error ? error.message : String(error),
         }
       );
+      scheduleRefresh(current);
       return current;
     })
     .finally(() => {
@@ -305,6 +325,8 @@ export async function primePrePagingSnapshot(): Promise<PrePagingSnapshot | null
 export function resetPrePagingSnapshot(): void {
   current = null;
   loading = null;
+  if (keepFresh) clearTimeout(keepFresh);
+  keepFresh = null;
 }
 
 /** Index-backed reads for the hook, bound to the ingestion transaction. */
