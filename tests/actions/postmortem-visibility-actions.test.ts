@@ -6,12 +6,21 @@ const mocks = vi.hoisted(() => ({
   getCurrentAuthorizationActor: vi.fn(),
   findFirst: vi.fn(),
   update: vi.fn(),
+  count: vi.fn(),
+  findMany: vi.fn(),
   logAudit: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
-  default: { postmortem: { findFirst: mocks.findFirst, update: mocks.update } },
+  default: {
+    postmortem: {
+      findFirst: mocks.findFirst,
+      update: mocks.update,
+      count: mocks.count,
+      findMany: mocks.findMany,
+    },
+  },
 }));
 vi.mock('@/lib/rbac', () => ({
   assertResponderOrAbove: mocks.assertResponderOrAbove,
@@ -27,7 +36,7 @@ vi.mock('@/lib/intelligence/postmortems/loaders', () => ({
   getPostmortemAssistForActor: vi.fn(),
 }));
 
-import { togglePostmortemPublicStatus } from '@/app/(app)/postmortems/actions';
+import { getAllPostmortems, togglePostmortemPublicStatus } from '@/app/(app)/postmortems/actions';
 
 const responder: AuthorizationActor = {
   id: 'responder-1',
@@ -71,5 +80,38 @@ describe('togglePostmortemPublicStatus', () => {
         newValue: { isPublic: true },
       })
     );
+  });
+});
+
+describe('getAllPostmortems status filter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.count.mockResolvedValue(0);
+    mocks.findMany.mockResolvedValue([]);
+  });
+
+  it('never widens a USER asking for drafts to published rows', async () => {
+    mocks.getCurrentAuthorizationActor.mockResolvedValue({ ...responder, role: 'USER' });
+
+    await getAllPostmortems({ status: 'DRAFT' });
+
+    const clauses = mocks.findMany.mock.calls[0][0].where.AND;
+    // Published-only read scope AND status DRAFT: an empty list, not the published postmortems.
+    expect(clauses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: 'PUBLISHED' }),
+        expect.objectContaining({ status: 'DRAFT' }),
+      ])
+    );
+  });
+
+  it('lets a responder filter by any status', async () => {
+    mocks.getCurrentAuthorizationActor.mockResolvedValue(responder);
+
+    await getAllPostmortems({ status: 'DRAFT' });
+
+    const clauses = mocks.findMany.mock.calls[0][0].where.AND;
+    expect(JSON.stringify(clauses)).not.toContain('PUBLISHED');
+    expect(clauses).toEqual(expect.arrayContaining([expect.objectContaining({ status: 'DRAFT' })]));
   });
 });

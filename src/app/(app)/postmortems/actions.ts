@@ -4,12 +4,7 @@ import prisma from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import { revalidatePath } from 'next/cache';
-import {
-  getCurrentAuthorizationActor,
-  getCurrentUser,
-  assertResponderOrAbove,
-  getUserPermissions,
-} from '@/lib/rbac';
+import { getCurrentAuthorizationActor, getCurrentUser, assertResponderOrAbove } from '@/lib/rbac';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { postmortemEditWhere } from '@/lib/postmortems/authorization';
 import { logAudit } from '@/lib/audit';
@@ -410,15 +405,10 @@ export async function getAllPostmortems(
   const safePage = parsePageParam(options.page);
   const safeLimit = parsePageSizeParam(options.limit, 50, 100);
 
-  const [permissions, actor] = await Promise.all([
-    getUserPermissions(),
-    getCurrentAuthorizationActor(),
-  ]);
-  const selectedWhere: Prisma.PostmortemWhereInput = permissions.isResponderOrAbove
-    ? status
-      ? { status }
-      : {}
-    : { status: 'PUBLISHED' as const };
+  const actor = await getCurrentAuthorizationActor();
+  // postmortemReadWhere already limits actors without draft access to published rows, so asking
+  // for DRAFT or ARCHIVED returns nothing for them instead of silently listing published ones.
+  const selectedWhere: Prisma.PostmortemWhereInput = status ? { status } : {};
 
   if (serviceId && serviceId !== 'all') {
     selectedWhere.incident = { serviceId };
