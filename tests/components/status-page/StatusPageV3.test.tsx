@@ -348,6 +348,109 @@ describe('StatusPageV3', () => {
     expect(screen.queryByRole('button', { name: 'View 90-day history' })).not.toBeInTheDocument();
   });
 
+  it('shows business-service rows and their bars even when every member is concealed', () => {
+    const history = {
+      rangeStart: '2026-09-09T00:00:00.000Z',
+      rangeEnd: '2026-09-10T00:00:00.000Z',
+      coverage: 'COMPLETE' as const,
+      segments: [],
+    };
+    render(
+      <StatusPageV3
+        snapshot={snapshotOf([], {
+          page: { ...snapshotOf([]).page, serviceLayout: 'BUSINESS_EXPANDABLE' },
+          businessServices: [
+            {
+              id: 'b1',
+              name: 'Payments',
+              status: 'OPERATIONAL',
+              showMembers: false,
+              memberServiceIds: [],
+              memberCount: 3,
+              activeIncidentCount: 0,
+              impactedServiceCount: 0,
+              history,
+            },
+          ],
+        })}
+      />
+    );
+    expect(screen.getByText('Payments')).toBeInTheDocument();
+    expect(screen.getByText('3 services')).toBeInTheDocument();
+    expect(document.querySelectorAll('.status-v3-history__day').length).toBeGreaterThan(0);
+  });
+
+  it("lists the inspected day's incidents with links to them", () => {
+    render(
+      <StatusPageV3
+        snapshot={snapshotOf(
+          [
+            service({
+              history: {
+                rangeStart: '2026-09-09T00:00:00.000Z',
+                rangeEnd: '2026-09-10T00:00:00.000Z',
+                coverage: 'COMPLETE',
+                segments: [
+                  {
+                    startAt: '2026-09-09T10:00:00.000Z',
+                    endAt: '2026-09-09T11:00:00.000Z',
+                    status: 'MAJOR_OUTAGE',
+                  },
+                ],
+              },
+            }),
+          ],
+          {
+            page: { ...snapshotOf([]).page, slug: 'acme', isDefault: false },
+            incidents: [
+              {
+                id: 'inc-1',
+                title: 'Card payments failing',
+                status: 'RESOLVED',
+                createdAt: '2026-09-09T10:00:00.000Z',
+                resolvedAt: '2026-09-09T11:00:00.000Z',
+                service: { id: 'svc-1', name: 'Checkout API' },
+              },
+              {
+                id: 'inc-2',
+                title: 'Other service',
+                status: 'RESOLVED',
+                createdAt: '2026-09-09T10:00:00.000Z',
+                resolvedAt: '2026-09-09T11:00:00.000Z',
+                service: { id: 'svc-2', name: 'Search' },
+              },
+            ],
+          }
+        )}
+      />
+    );
+    fireEvent.click(document.querySelector('.status-v3-history__day') as Element);
+    const dialog = screen.getByRole('dialog');
+    const link = Array.from(dialog.querySelectorAll('a')).find(
+      a => a.textContent === 'Card payments failing'
+    );
+    expect(link).toHaveAttribute('href', '/status/acme/incidents/inc-1');
+    expect(dialog.textContent).not.toContain('Other service');
+  });
+
+  it('renders page chrome in the page locale', () => {
+    render(
+      <StatusPageV3
+        stale
+        snapshot={snapshotOf([service()], {
+          page: {
+            ...snapshotOf([]).page,
+            presentation: { locale: 'de' },
+            contactEmail: 'help@example.com',
+          },
+        })}
+      />
+    );
+    expect(screen.getByText('Letztes verifiziertes Status-Update wird angezeigt.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Dienste' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Kontakt' }).length).toBeGreaterThan(0);
+  });
+
   it('opens the 24-hour inspector when a history day is selected and provides navigation and close actions', () => {
     render(
       <StatusPageV3

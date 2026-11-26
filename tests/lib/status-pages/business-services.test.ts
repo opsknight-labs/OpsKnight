@@ -116,6 +116,7 @@ describe('buildPublicBusinessServices', () => {
       status: 'PARTIAL_OUTAGE',
       statusSince: '2026-11-21T10:00:00.000Z',
       memberServiceIds: ['api', 'db', 'cdn'],
+      memberCount: 3,
       activeIncidentCount: 2,
       impactedServiceCount: 2,
     });
@@ -134,7 +135,11 @@ describe('buildPublicBusinessServices', () => {
       [{ id: 'b2', name: 'Data', memberServiceIds: ['db', 'missing'] }],
       services
     );
-    expect(group).toMatchObject({ status: 'OPERATIONAL', memberServiceIds: ['db'] });
+    expect(group).toMatchObject({
+      status: 'OPERATIONAL',
+      memberServiceIds: ['db'],
+      memberCount: 1,
+    });
     expect(group.statusSince).toBe('2026-11-20T00:00:00.000Z');
   });
 

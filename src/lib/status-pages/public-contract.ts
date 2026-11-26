@@ -88,6 +88,8 @@ export interface PublicBusinessService {
   showMembers?: false;
   /** Published member services, in page order; their rows live in `services`. */
   memberServiceIds: string[];
+  /** Published members, counted before `showMembers: false` empties `memberServiceIds`. */
+  memberCount?: number;
   /** Parent business service on this page (support hierarchy, at most 3 levels). */
   parentId?: string;
   /** Child business services on this page, in page order. */
@@ -115,12 +117,7 @@ export interface PublicRegionStatus {
 export type PublicIncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 export type PublicIncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH';
 export type PublicIncidentUpdateType =
-  | 'INVESTIGATING'
-  | 'IDENTIFIED'
-  | 'MONITORING'
-  | 'ACKNOWLEDGED'
-  | 'RESOLVED'
-  | 'UPDATE';
+  'INVESTIGATING' | 'IDENTIFIED' | 'MONITORING' | 'ACKNOWLEDGED' | 'RESOLVED' | 'UPDATE';
 
 export interface PublicIncidentUpdate {
   id: string;
@@ -327,6 +324,8 @@ export interface PublicStatusPageSnapshot {
     showServicesByRegion: boolean;
     /** Additive in schema 3: present only when the page groups services by business service. */
     serviceLayout?: PublicServiceLayout;
+    /** Business-service groups start expanded (affected ones always do). */
+    expandGroupsByDefault?: boolean;
     showRegionHeatmap: boolean;
     showPostIncidentReview: boolean;
     showChangelog: boolean;

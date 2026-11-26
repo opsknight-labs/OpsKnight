@@ -73,6 +73,7 @@ export async function GET(
       parentId: group.parentId ?? null,
       childIds: group.childIds ?? [],
       members,
+      memberCount: group.memberCount ?? group.memberServiceIds.length,
       activeIncidentCount: group.activeIncidentCount,
       impactedServiceCount: group.impactedServiceCount,
       ...(group.uptime ? { uptime: group.uptime } : {}),

@@ -62,6 +62,7 @@ describe('concealHiddenGroupMembers', () => {
     const out = concealHiddenGroupMembers(snapshot());
     expect(out.services.map(s => s.id)).toEqual(['shared', 'open']);
     expect(out.businessServices?.find(g => g.id === 'hidden')?.memberServiceIds).toEqual([]);
+    expect(out.businessServices?.find(g => g.id === 'hidden')?.memberCount).toBe(2);
     expect(out.businessServices?.find(g => g.id === 'visible')?.memberServiceIds).toEqual([
       'shared',
     ]);

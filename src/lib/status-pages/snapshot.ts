@@ -731,6 +731,7 @@ export async function buildStatusPageSnapshot(
       showSubscribe: page.showSubscribe,
       showServicesByRegion: page.showServicesByRegion,
       ...(groupedLayout ? { serviceLayout: page.serviceLayout } : {}),
+      ...(groupedLayout && page.expandGroupsByDefault ? { expandGroupsByDefault: true } : {}),
       showRegionHeatmap: page.showRegionHeatmap,
       showPostIncidentReview: page.showPostIncidentReview,
       showChangelog: page.showChangelog,

@@ -1,7 +1,17 @@
 'use client';
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type {
+  PublicIncident,
   PublicStatusService,
   PublicHistorySlice,
   PublicServiceStatus,
@@ -12,20 +22,32 @@ import { describeUptimeWindow } from '@/lib/status-pages/presentation';
 import { formatDateTime } from '@/lib/timezone';
 import { barSeverity, barTooltip } from '@/lib/status-pages/history-bars';
 import StatusBadge from '@/components/incident/StatusBadge';
-import { useT } from '@/lib/status-pages/i18n/context';
+import { useStatusLocale, useT } from '@/lib/status-pages/i18n/context';
+import {
+  formatLocalizedDateTime,
+  type I18nKey,
+  type StatusLocale,
+  type Translator,
+} from '@/lib/status-pages/i18n';
 
-function gradeLabel(grade: string | undefined): string | undefined {
-  switch (grade) {
-    case 'EXCELLENT':
-      return 'Excellent';
-    case 'GOOD':
-      return 'Good';
-    case 'BELOW_TARGET':
-      return 'Below SLA';
-    default:
-      return undefined;
-  }
+const GRADE_KEYS = new Map<string | undefined, I18nKey>([
+  ['EXCELLENT', 'grade.excellent'],
+  ['GOOD', 'grade.good'],
+  ['BELOW_TARGET', 'grade.belowTarget'],
+]);
+
+function gradeLabel(grade: string | undefined, t: Translator): string | undefined {
+  const key = GRADE_KEYS.get(grade);
+  return key ? t(key) : undefined;
 }
+
+/** Published incidents for the day inspector, provided by the services section. */
+export const HistoryIncidentsContext = createContext<{
+  incidents: PublicIncident[];
+  href?: (incidentId: string) => string;
+}>({ incidents: [] });
+
+const DAY_MS = 86_400_000;
 
 function presentationForStatus(status: string): { token: string; label: string } {
   const normalized: PublicServiceStatus = normalizePublicStatus(status);
@@ -34,12 +56,12 @@ function presentationForStatus(status: string): { token: string; label: string }
 
 const HOUR_TICKS = ['00:00', '06:00', '12:00', '18:00', '24:00'];
 
-function minuteToClock(minute: number): string {
-  const h = Math.floor(minute / 60);
-  const m = minute % 60;
-  const period = h >= 12 ? 'PM' : 'AM';
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${h12}:${m.toString().padStart(2, '0')} ${period}`;
+/** Minute of a UTC day as a clock time in the page locale's own 12/24-hour convention. */
+function minuteToClock(minute: number, locale: StatusLocale): string {
+  return formatLocalizedDateTime(new Date(minute * 60_000), locale, 'UTC', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 const StatusBreakdownBar = memo(function StatusBreakdownBar({
@@ -95,6 +117,8 @@ function ServiceHistoryV3Inner({
   showUptimeInline = true,
   showHistoryBars = true,
   showSlaMetrics = true,
+  incidentServiceIds,
+  businessServiceId,
 }: {
   service: PublicStatusService;
   timeZone: string;
@@ -102,8 +126,14 @@ function ServiceHistoryV3Inner({
   showUptimeInline?: boolean;
   showHistoryBars?: boolean;
   showSlaMetrics?: boolean;
+  /** Services whose incidents the day inspector lists; defaults to this row's own id. */
+  incidentServiceIds?: readonly string[];
+  /** A business-service row also lists incidents tagged with the group itself. */
+  businessServiceId?: string;
 }) {
   const t = useT();
+  const locale = useStatusLocale();
+  const historyIncidents = useContext(HistoryIncidentsContext);
   // Days are bucketed in UTC on purpose: the visitor's zone is only known after hydration, and
   // re-bucketing then would redraw every bar. Timestamps elsewhere still follow the visitor.
   const days = useMemo(
@@ -154,7 +184,11 @@ function ServiceHistoryV3Inner({
     if (at < 0) return;
     event.preventDefault();
     const next = buttons.at(
-      event.key === 'Home' ? 0 : event.key === 'End' ? -1 : Math.min(buttons.length - 1, Math.max(0, at + delta))
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? -1
+          : Math.min(buttons.length - 1, Math.max(0, at + delta))
     );
     next?.focus();
     const index = next ? Number(next.id.slice(next.id.lastIndexOf('-') + 1)) : NaN;
@@ -178,9 +212,27 @@ function ServiceHistoryV3Inner({
   const rawMeasuredDays = service.uptime?.days90?.measuredDays ?? days.length;
   const measuredDays = Number.isFinite(rawMeasuredDays) ? Math.round(rawMeasuredDays) : days.length;
   const isPartialWindow = measuredDays > 0 && measuredDays < 90;
-  const uptimeLabel = isPartialWindow
-    ? ` · ${measuredDays}-day uptime (partial)`
-    : ' · 90-day uptime';
+  const uptimeLabel = ` · ${
+    isPartialWindow ? t('uptime.partialWindow', { days: measuredDays }) : t('uptime.window90')
+  }`;
+  // Incidents overlapping the inspected (UTC) day, from the already-published incident feed.
+  const dayIncidents = (() => {
+    if (!day) return [];
+    const start = Date.parse(`${day.date}T00:00:00.000Z`);
+    const ids = new Set(incidentServiceIds ?? [service.id]);
+    return historyIncidents.incidents.filter(incident => {
+      const relevant =
+        ids.has(incident.service?.id ?? '') ||
+        (businessServiceId !== undefined &&
+          (incident.businessServices ?? []).some(item => item.id === businessServiceId));
+      if (!relevant || !incident.createdAt) return false;
+      const from = Date.parse(incident.createdAt);
+      // An open incident runs to the end of the published history.
+      const to = Date.parse(incident.resolvedAt ?? service.history?.rangeEnd ?? incident.createdAt);
+      return from < start + DAY_MS && to >= start;
+    });
+  })();
+  const daysAgo = (count: number) => t('uptime.daysAgo', { count });
 
   return (
     <div className="status-v3-uptime" ref={ref}>
@@ -191,7 +243,7 @@ function ServiceHistoryV3Inner({
             <span className="status-v3-uptime__unit">{uptimeLabel}</span>
           </span>
           {showGrade && grade && (
-            <StatusBadge status={grade} label={gradeLabel(grade) ?? grade} size="xs" showDot />
+            <StatusBadge status={grade} label={gradeLabel(grade, t) ?? grade} size="xs" showDot />
           )}
         </div>
       ) : null}
@@ -225,27 +277,36 @@ function ServiceHistoryV3Inner({
             })}
           </div>
 
-          <div className="status-v3-history__axis status-v3-history__axis--narrow" aria-hidden="true">
-            <span>{days.length > 30 ? '30 days ago' : days.length > 1 ? `${days.length} days ago` : 'Yesterday'}</span>
+          <div
+            className="status-v3-history__axis status-v3-history__axis--narrow"
+            aria-hidden="true"
+          >
+            <span>
+              {days.length > 30
+                ? daysAgo(30)
+                : days.length > 1
+                  ? daysAgo(days.length)
+                  : t('uptime.yesterday')}
+            </span>
             <span>{t('common.today')}</span>
           </div>
           <div className="status-v3-history__axis status-v3-history__axis--wide" aria-hidden="true">
             {days.length <= 30 ? (
               <>
-                <span>{days.length > 1 ? `${days.length} days ago` : 'Yesterday'}</span>
+                <span>{days.length > 1 ? daysAgo(days.length) : t('uptime.yesterday')}</span>
                 <span>{t('common.today')}</span>
               </>
             ) : days.length <= 60 ? (
               <>
-                <span>{days.length} days ago</span>
-                <span>30 days ago</span>
+                <span>{daysAgo(days.length)}</span>
+                <span>{daysAgo(30)}</span>
                 <span>{t('common.today')}</span>
               </>
             ) : (
               <>
-                <span>{days.length >= 90 ? '90 days ago' : `${days.length} days ago`}</span>
-                <span>60 days ago</span>
-                <span>30 days ago</span>
+                <span>{daysAgo(days.length >= 90 ? 90 : days.length)}</span>
+                <span>{daysAgo(60)}</span>
+                <span>{daysAgo(30)}</span>
                 <span>{t('common.today')}</span>
               </>
             )}
@@ -368,20 +429,44 @@ function ServiceHistoryV3Inner({
 
           <div className="status-v3-inspector__chips">
             <span className="status-v3-chip">
-              <span className="status-v3-inspector__chip-label">Availability</span>
+              <span className="status-v3-inspector__chip-label">{t('uptime.availability')}</span>
               {day.availabilityPercent != null ? `${day.availabilityPercent}%` : '—'}
             </span>
             <span className="status-v3-chip">
-              <span className="status-v3-inspector__chip-label">Incidents</span>
+              <span className="status-v3-inspector__chip-label">{t('uptime.incidents')}</span>
               {day.incidentCount}
             </span>
             {grade && (
               <span className="status-v3-chip">
-                <span className="status-v3-inspector__chip-label">SLA</span>
-                {gradeLabel(grade) ?? grade}
+                <span className="status-v3-inspector__chip-label">{t('uptime.sla')}</span>
+                {gradeLabel(grade, t) ?? grade}
               </span>
             )}
           </div>
+
+          {dayIncidents.length > 0 && (
+            <ul
+              className="status-v3-inspector__chips"
+              aria-label={t('uptime.incidents')}
+              style={{ margin: 0, padding: 0 }}
+            >
+              {dayIncidents.map((incident, index) => {
+                const id = incident.id ?? incident.publicEventId;
+                const title = incident.title?.trim() || t('incident.title');
+                return (
+                  <li key={id ?? index} className="status-v3-chip">
+                    {id && historyIncidents.href ? (
+                      <a href={historyIncidents.href(id)} style={{ color: 'inherit' }}>
+                        {title}
+                      </a>
+                    ) : (
+                      title
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
           {day.timeline && day.timeline.length > 1 && (
             <StatusBreakdownBar timeline={day.timeline} />
@@ -401,7 +486,7 @@ function ServiceHistoryV3Inner({
                     insetInlineStart: `${(slice.startMinute / dayTotal) * 100}%`,
                     inlineSize: `${((slice.endMinute - slice.startMinute) / dayTotal) * 100}%`,
                   }}
-                  title={`${minuteToClock(slice.startMinute)} – ${minuteToClock(slice.endMinute)} · ${statusPresentation(slice.status).label}`}
+                  title={`${minuteToClock(slice.startMinute, locale)} – ${minuteToClock(slice.endMinute, locale)} · ${statusPresentation(slice.status).label}`}
                 />
               ))}
             </div>

@@ -233,6 +233,7 @@ export const StatusPageSettingsSchema = z
       .optional()
       .transform(ids => (ids ? Array.from(new Set(ids)) : ids)),
     serviceLayout: z.enum(['FLAT', 'BUSINESS', 'BUSINESS_EXPANDABLE']).optional(),
+    expandGroupsByDefault: z.boolean().optional(),
     /** Per-business-service presentation on this page, keyed by business service id. */
     businessServiceConfigs: z
       .record(
