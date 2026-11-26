@@ -321,7 +321,8 @@ export default async function IncidentDetailScreen({
     serviceId: incident.serviceId,
     canManage: canManageIncident,
   });
-  const postmortem = incident.status === 'RESOLVED' ? await getPostmortem(id) : null;
+  // Not gated on RESOLVED: a reopened incident still has its postmortem.
+  const postmortem = await getPostmortem(id);
 
   // Rendering an incident must not perform hidden Jira or provider network I/O.
   // Persisted state is refreshed by background webhooks or explicit sync actions.

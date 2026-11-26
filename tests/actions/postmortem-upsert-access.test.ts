@@ -100,4 +100,33 @@ describe('upsertPostmortem creating a postmortem', () => {
     ).rejects.toThrow('at most 100 action items');
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
+
+  it('still edits an existing postmortem after its incident was reopened', async () => {
+    mocks.incidentFindUnique.mockResolvedValue({
+      id: 'inc-1',
+      status: 'OPEN',
+      assigneeId: null,
+      service: { team: { members: [] } },
+    });
+    mocks.postmortemFindUnique.mockResolvedValue({ createdById: responder.id });
+    mocks.transaction.mockResolvedValue({ id: 'pm-1' });
+
+    await expect(
+      upsertPostmortem('inc-1', { title: 'Outage', expectedRevision: 3 })
+    ).resolves.toMatchObject({ success: true });
+  });
+
+  it('still refuses to create a postmortem for an incident that is not resolved', async () => {
+    mocks.incidentFindUnique.mockResolvedValue({
+      id: 'inc-1',
+      status: 'OPEN',
+      assigneeId: null,
+      service: { team: { members: [] } },
+    });
+
+    await expect(upsertPostmortem('inc-1', { title: 'Outage' })).rejects.toThrow(
+      'only be created for resolved incidents'
+    );
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
 });

@@ -188,16 +188,16 @@ export async function upsertPostmortem(incidentId: string, input: PostmortemData
     throw new Error('Incident not found');
   }
 
-  if (incident.status !== 'RESOLVED') {
-    throw new Error('Postmortems can only be created for resolved incidents');
-  }
-
   const existing = await prisma.postmortem.findUnique({
     where: { incidentId },
     select: { createdById: true },
   });
 
   if (!existing) {
+    // A reopened incident keeps its postmortem editable; only creating one needs a resolution.
+    if (incident.status !== 'RESOLVED') {
+      throw new Error('Postmortems can only be created for resolved incidents');
+    }
     // Creating makes the caller the author and so an editor, so they must be able to read the incident.
     const readable = await prisma.incident.count({
       where: { AND: [{ id: incidentId }, incidentReadWhere(await getCurrentAuthorizationActor())] },
