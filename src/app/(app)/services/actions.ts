@@ -134,6 +134,17 @@ export async function updateService(serviceId: string, formData: FormData) {
   const teamId = formData.get('teamId') as string;
   const escalationPolicyId = formData.get('escalationPolicyId') as string;
 
+  if (currentUser.role !== 'ADMIN') {
+    // Same rule as team service assignment: only administrators move a service between teams.
+    const current = await prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { teamId: true },
+    });
+    if (current?.teamId && (teamId || null) !== current.teamId) {
+      throw new Error('Unauthorized. Only administrators can move a service between teams.');
+    }
+  }
+
   if (teamId && currentUser.role !== 'ADMIN') {
     const destinationMembership = await prisma.teamMember.findUnique({
       where: { userId_teamId: { teamId, userId: currentUser.id } },
