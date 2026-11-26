@@ -10,7 +10,7 @@ import AddMembersDialog from '@/components/business-service/AddMembersDialog';
 import CopyLinkButton from '@/components/business-service/CopyLinkButton';
 import DetailsPanel from '@/components/business-service/DetailsPanel';
 import { dailyImpactMinutes } from '@/components/business-service/impact-days';
-import InlineNotice from '@/components/ui/InlineNotice';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 import { auditReferenceIds } from '@/lib/business-services/audit-diff';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';

@@ -20,6 +20,7 @@ const props = {
   config: {
     enabled: true,
     freezeWarningEnabled: false,
+    errorBudgetAlertsEnabled: false,
     dayOfMonth: 1,
     hour: 9,
     timeZone: 'UTC',
