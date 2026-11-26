@@ -38,8 +38,9 @@ export async function updateQuietHoursPreferences(
       formData.get('quietHoursWeekendAllDay') === 'on' ||
       formData.get('quietHoursWeekendAllDay') === 'true';
 
-    const startValue = String(formData.get('quietHoursStart') || '18:00');
-    const endValue = String(formData.get('quietHoursEnd') || '08:00');
+    // A missing or cleared time is invalid input, never a silent 18:00/08:00 default.
+    const startValue = String(formData.get('quietHoursStart') ?? '');
+    const endValue = String(formData.get('quietHoursEnd') ?? '');
     const startMinutes = parseTimeToMinutes(startValue);
     const endMinutes = parseTimeToMinutes(endValue);
 

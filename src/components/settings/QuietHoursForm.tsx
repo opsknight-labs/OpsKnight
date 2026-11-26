@@ -89,7 +89,8 @@ export default function QuietHoursForm({
     data: currentSettings,
     onSave: handleAutoSave,
     delay: 500,
-    enabled: true,
+    // A time input reads '' while it is being retyped; save once both times are complete.
+    enabled: Boolean(startTime && endTime),
   });
 
   useEffect(() => {
