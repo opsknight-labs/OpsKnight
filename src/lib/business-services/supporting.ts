@@ -11,13 +11,18 @@ import {
   businessServiceReadWhere,
   businessServiceWriteWhere,
 } from './commands';
-import { wouldCreateSupportCycle as engineCycleCheck } from './contract';
+import { wouldCreateSupportCycle as engineCycleCheck } from './stats';
+import { invalidateBusinessServiceHealth } from './health';
 
 export const SupportingInputSchema = z
   .object({ businessServiceIds: z.array(z.string().trim().min(1).max(100)).max(100) })
   .strict();
 
-type CycleCheck = (parentId: string, childId: string) => Promise<boolean>;
+type CycleCheck = (
+  parentId: string,
+  childId: string,
+  client: Prisma.TransactionClient
+) => Promise<boolean>;
 
 /**
  * Replaces the business services that support (sit underneath) `parentId`. Only added edges
@@ -33,6 +38,8 @@ export async function setSupportingBusinessServices(
   const childIds = [...new Set(SupportingInputSchema.parse(raw).businessServiceIds)];
   const cycle = options.wouldCreateSupportCycle ?? engineCycleCheck;
   const run = async (tx: Prisma.TransactionClient) => {
+    // Same lock as replaceSupports: one support-graph writer at a time, so two edges cannot close a cycle.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('business-service-support', 0))`;
     // Sequential: interactive transactions cannot run queries in parallel.
     // Out-of-scope business services look the same as missing ones.
     const parent = await tx.businessService.count({
@@ -52,7 +59,7 @@ export async function setSupportingBusinessServices(
     });
     const before = new Set(current.map(edge => edge.childId));
     for (const childId of childIds.filter(id => !before.has(id)))
-      if (await cycle(parentId, childId))
+      if (await cycle(parentId, childId, tx))
         throw new AppError({
           code: 'VALIDATION_FAILED',
           userMessage:
@@ -66,6 +73,7 @@ export async function setSupportingBusinessServices(
       data: childIds.map(childId => ({ parentId, childId })),
       skipDuplicates: true,
     });
+    await tx.realtimeChange.create({ data: {} });
     await emitAuditEvent(
       {
         action: 'business_service.supporting_updated',
@@ -79,5 +87,7 @@ export async function setSupportingBusinessServices(
     );
     return { businessServiceId: parentId, supportingBusinessServiceIds: childIds };
   };
-  return options.client ? run(options.client) : prisma.$transaction(run);
+  const result = await (options.client ? run(options.client) : prisma.$transaction(run));
+  invalidateBusinessServiceHealth();
+  return result;
 }

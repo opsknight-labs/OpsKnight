@@ -7,6 +7,7 @@ import {
   impactReportCsv,
   parseImpactReportParams,
 } from '@/lib/business-services/impact-report';
+import { setSupportingBusinessServices } from '@/lib/business-services/supporting';
 import { setupMcpReadDatabase } from '../helpers/mcp-read-scenarios';
 import { createTestTeam, createTestUser, testPrisma as db } from '../helpers/test-db';
 
@@ -55,5 +56,40 @@ describe('M2 financial visibility', () => {
       const csv = impactReportCsv(report);
       expect(csv.includes('1234')).toBe(visible);
     }
+  });
+});
+
+describe('H1 concurrent supporting updates', () => {
+  it('never stores a cycle when A->B and B->A are set at the same time', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const actor = actorFor(admin, 'ADMIN');
+    const tag = Math.random().toString(36).slice(2, 8);
+    const [a, b] = await Promise.all(
+      ['A', 'B'].map(n => db.businessService.create({ data: { name: `${n}-${tag}` } }))
+    );
+    for (let round = 0; round < 5; round++) {
+      await db.businessServiceSupport.deleteMany({});
+      const results = await Promise.allSettled([
+        setSupportingBusinessServices(a.id, { businessServiceIds: [b.id] }, { actor }),
+        setSupportingBusinessServices(b.id, { businessServiceIds: [a.id] }, { actor }),
+      ]);
+      expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+      expect(await db.businessServiceSupport.count()).toBe(1);
+    }
+  });
+
+  it('bumps the realtime clock so health caches refresh', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const tag = Math.random().toString(36).slice(2, 8);
+    const [a, b] = await Promise.all(
+      ['A', 'B'].map(n => db.businessService.create({ data: { name: `${n}-${tag}` } }))
+    );
+    const before = await db.realtimeChange.count();
+    await setSupportingBusinessServices(
+      a.id,
+      { businessServiceIds: [b.id] },
+      { actor: actorFor(admin, 'ADMIN') }
+    );
+    expect(await db.realtimeChange.count()).toBeGreaterThan(before);
   });
 });
