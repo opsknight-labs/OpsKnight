@@ -402,6 +402,30 @@ describe('CreateIncidentModal', () => {
     });
   });
 
+  it('ignores a repeated Cmd+Enter while the first create is in flight', async () => {
+    mockOpenOptions = { serviceId: 'srv-checkout' };
+    mockCreateIncident.mockImplementationOnce(
+      () => new Promise(resolve => setTimeout(() => resolve({ id: 'inc-new-123' }), 30))
+    );
+
+    render(<CreateIncidentModal />);
+
+    const titleInput = await screen.findByPlaceholderText(
+      /Primary database connection pool exhausted/i
+    );
+    fireEvent.change(titleInput, { target: { value: 'Production Incident' } });
+
+    fireEvent.keyDown(titleInput, { key: 'Enter', metaKey: true });
+    fireEvent.keyDown(titleInput, { key: 'Enter', ctrlKey: true });
+
+    // useActionState queues a second dispatch until the first settles, so wait it out.
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/incidents/inc-new-123'));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mockCreateIncident).toHaveBeenCalledTimes(1);
+    const formData = mockCreateIncident.mock.calls[0][0] as FormData;
+    expect(formData.get('idempotencyKey')).toBeTruthy();
+  });
+
   it('shows warning popup when a required custom field has no defaultValue and is not filled', async () => {
     mockOpenOptions = { serviceId: 'srv-checkout' };
     mockGetIncidentCreationContext.mockResolvedValueOnce({

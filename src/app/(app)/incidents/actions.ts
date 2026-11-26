@@ -22,7 +22,13 @@ import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
 } from '@/lib/incidents/operator-lifecycle';
-import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/incidents/creation';
+import {
+  executeIncidentCreation,
+  recordIncidentCreationTelemetry,
+  type IncidentCreationResult,
+  type IncidentCreationSource,
+} from '@/lib/incidents/creation';
+import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
 import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 import { applyIncidentUrgencyChange } from '@/lib/incidents/urgency-command';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
@@ -164,7 +170,7 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
         },
       })
     : [];
-  const result = await executeIncidentCreation({
+  const creationInput = {
     ...(defaultRoles.length ? { defaultRoles } : {}),
     title,
     description,
@@ -178,7 +184,21 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
     customFields: [...customFieldMap].map(([fieldId, value]) => ({ fieldId, value })),
     source,
     actor: { id: currentUser.id, name: currentUser.name ?? undefined },
-  });
+  };
+  // A double submit (Cmd/Ctrl+Enter) sends the same key twice; the second call replays the first.
+  const idempotencyKey = String(formData.get('idempotencyKey') ?? '').trim();
+  let result: IncidentCreationResult;
+  if (idempotencyKey) {
+    const execution = await executeIdempotentIncidentCreation(creationInput, {
+      key: `${source}:${idempotencyKey}`,
+      principalId: currentUser.id,
+    });
+    if (!execution.replayed) recordIncidentCreationTelemetry(execution.value.telemetry);
+    const { telemetry: _telemetry, ...publicResult } = execution.value;
+    result = publicResult;
+  } else {
+    result = await executeIncidentCreation(creationInput);
+  }
   revalidatePath('/incidents');
   revalidatePath(`/incidents/${result.id}`);
   revalidatePath('/');

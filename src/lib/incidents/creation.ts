@@ -474,15 +474,18 @@ export async function executeIncidentCreation(
     TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD
   );
   const { telemetry, ...publicResult } = result;
-  if (telemetry) {
-    addOperationalMetric('opsknight_incident_classification_total', 1, {
-      priority_source: telemetry.prioritySource,
-      urgency_source: telemetry.urgencySource,
-    });
-    if (telemetry.engagementDeferred)
-      addOperationalMetric('opsknight_engagement_deferred_total', 1, {
-        urgency: telemetry.urgency,
-      });
-  }
+  recordIncidentCreationTelemetry(telemetry);
   return publicResult;
+}
+
+export function recordIncidentCreationTelemetry(telemetry: IncidentCreationResult['telemetry']) {
+  if (!telemetry) return;
+  addOperationalMetric('opsknight_incident_classification_total', 1, {
+    priority_source: telemetry.prioritySource,
+    urgency_source: telemetry.urgencySource,
+  });
+  if (telemetry.engagementDeferred)
+    addOperationalMetric('opsknight_engagement_deferred_total', 1, {
+      urgency: telemetry.urgency,
+    });
 }

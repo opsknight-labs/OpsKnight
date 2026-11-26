@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   executeIncidentCreation: vi.fn(),
+  executeIdempotentIncidentCreation: vi.fn(),
   assertCanCreateIncidentForService: vi.fn(),
   getCurrentUser: vi.fn(),
   revalidatePath: vi.fn(),
@@ -10,6 +11,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({ default: {} }));
 vi.mock('@/lib/incidents/creation', () => ({
   executeIncidentCreation: mocks.executeIncidentCreation,
+  recordIncidentCreationTelemetry: vi.fn(),
+}));
+vi.mock('@/lib/incidents/idempotent-commands', () => ({
+  executeIdempotentIncidentCreation: mocks.executeIdempotentIncidentCreation,
 }));
 vi.mock('@/lib/incidents/operator-lifecycle', () => ({
   updateIncidentStatus: vi.fn(),
@@ -92,6 +97,24 @@ describe('incident creation action adapters', () => {
       expect.objectContaining({ source: 'MOBILE' })
     );
     expect(result).toEqual({ id: 'inc-existing', outcome: 'MERGED' });
+  });
+
+  it('replays a double submit through the idempotent engine when the form carries a key', async () => {
+    mocks.executeIdempotentIncidentCreation.mockResolvedValue({
+      value: { id: 'inc-1', outcome: 'CREATED', telemetry: { urgency: 'HIGH' } },
+      replayed: false,
+    });
+    const form = formData();
+    form.append('idempotencyKey', 'attempt-1');
+
+    const result = await createIncident(form);
+
+    expect(mocks.executeIdempotentIncidentCreation).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Database latency', source: 'WEB' }),
+      { key: 'WEB:attempt-1', principalId: 'user-1' }
+    );
+    expect(mocks.executeIncidentCreation).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'inc-1', outcome: 'CREATED' });
   });
 
   it('rejects an invalid urgency before invoking the domain engine', async () => {
