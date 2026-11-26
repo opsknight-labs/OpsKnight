@@ -1247,6 +1247,25 @@ export const BASIC_CASES: readonly SquireBasicEvalCase[] = [
     mustNotContain: ['MCP', 'From the OpsKnight docs'],
   },
   {
+    id: 'urgency-list-defaults-to-open',
+    question: 'show high urgency incidents',
+    expectIntent: 'SEARCH_INCIDENTS',
+    mustContain: ['unresolved (OPEN or ACKNOWLEDGED)'],
+  },
+  {
+    id: 'starter-curly-apostrophe',
+    question: 'I’m new',
+    expectIntent: 'GUIDANCE',
+    mustContain: ['Getting started'],
+  },
+  {
+    id: 'starter-apostrophe',
+    question: "I'm new",
+    expectIntent: 'GUIDANCE',
+    mustContain: ['Getting started', 'acknowledge'],
+    mustNotContain: ['From the OpsKnight docs'],
+  },
+  {
     id: 'starter-how-use',
     question: 'how do I use this',
     expectIntent: 'GUIDANCE',

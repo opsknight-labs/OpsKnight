@@ -109,6 +109,25 @@ describe('Squire operation catalog', () => {
     expect(replay.ok).toBe(false);
   });
 
+  it('offers a reopen card for a resolved incident, and reopens it only on confirmation', async () => {
+    const { admin, incident } = await world();
+    await db.incident.update({
+      where: { id: incident.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
+    // Models often leave out the empty body of a command; the card is still built.
+    const proposal = await buildOperationProposal(admin, {
+      operationId: 'reopenIncident',
+      args: { path: { id: incident.id } },
+    });
+    expect(proposal).not.toBeNull();
+    expect((await db.incident.findUnique({ where: { id: incident.id } }))!.status).toBe('RESOLVED');
+    expect(await executeSquireAction(admin, proposal!.token)).toMatchObject({ ok: true });
+    expect((await db.incident.findUnique({ where: { id: incident.id } }))!.status).not.toBe(
+      'RESOLVED'
+    );
+  });
+
   it('applies a routine incident change (a tag) as the person', async () => {
     const { admin, incident } = await world();
     const proposal = await buildOperationProposal(admin, {

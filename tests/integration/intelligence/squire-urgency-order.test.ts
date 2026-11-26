@@ -98,6 +98,24 @@ describe('incidents listed most urgent first', () => {
     expect(next.items.map(item => item.title)).toEqual(['medium b', 'medium a', 'low b', 'low a']);
   });
 
+  it('lists the oldest incidents first when asked, across urgencies', async () => {
+    const search = buildSquireTools(actor, { personal: true }).find(
+      tool => tool.name === 'search_incidents'
+    )!;
+    const result = (await search.execute!({ status: 'unresolved', oldestFirst: true })) as {
+      items: Array<{ title: string }>;
+    };
+    expect(result.items.map(item => item.title)).toEqual([
+      'low a',
+      'medium a',
+      'high a',
+      'medium b',
+      'high b',
+      'low b',
+      'high c',
+    ]);
+  });
+
   it('puts HIGH first in basic mode, and "show more" continues the list', async () => {
     const ask = (message: string) =>
       planBasicTurn({ actor, message, incident: null }).then(result => result.text);

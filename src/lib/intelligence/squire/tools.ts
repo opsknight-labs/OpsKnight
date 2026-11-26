@@ -138,6 +138,18 @@ function words(query: string): string[] {
  * Tools that return people's names, notes or timelines are offered only when the request may carry Personal
  * data (`personal`), so a provider limited to Internal data never receives them.
  */
+const LIST_SELECT = {
+  id: true,
+  title: true,
+  status: true,
+  urgency: true,
+  createdAt: true,
+  resolvedAt: true,
+  updatedAt: true,
+  service: { select: { name: true } },
+  assignee: { select: { name: true } },
+} as const;
+
 export function buildSquireTools(
   actor: AuthorizationActor,
   options: {
@@ -302,7 +314,7 @@ export function buildSquireTools(
     ),
     readTool(
       'search_incidents',
-      'Find incidents the person can see. All filters optional: title words, status ("unresolved" = open or acknowledged), urgency, serviceId, unassigned (no person and no team assigned); without words it lists by filter. Returns `total` (the exact count for exactly these filters: state the count from it and say which filter it is for, never from the rows you see; for one service pass serviceId instead of sampling) and at most 10 rows, most urgent then newest, each with a ready `shortId` (copy it, never derive it) and assignee; pass offset 10, 20... for the next pages.',
+      'Find incidents the person can see. All filters optional: title words, status ("unresolved" = open or acknowledged), urgency, serviceId, unassigned (no person and no team assigned); without words it lists by filter. Returns `total` (the exact count for exactly these filters: state the count from it and say which filter it is for, never from the rows you see; for one service pass serviceId instead of sampling) and at most 10 rows, most urgent then newest (oldestFirst: true gives the oldest incidents first, for "the oldest open incident"), each with a ready `shortId` (copy it, never derive it) and assignee; pass offset 10, 20... for the next pages.',
       {
         type: 'object',
         properties: {
@@ -311,6 +323,7 @@ export function buildSquireTools(
           urgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
           serviceId: idSchema,
           unassigned: { type: 'boolean' },
+          oldestFirst: { type: 'boolean' },
           offset: { type: 'integer', minimum: 0, maximum: 2000 },
         },
         additionalProperties: false,
@@ -324,6 +337,7 @@ export function buildSquireTools(
             urgency: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
             serviceId: z.string().trim().min(1).max(64).optional(),
             unassigned: z.boolean().optional(),
+            oldestFirst: z.boolean().optional(),
           })
           .strict()
           .safeParse(input);
@@ -350,29 +364,29 @@ export function buildSquireTools(
         const [total, rows] = await Promise.all([
           prisma.incident.count({ where }),
           // Most urgent first (HIGH, MEDIUM, LOW), then newest: the database enum cannot be sorted into that order.
-          pageByUrgency({
-            take: MAX_ROWS,
-            skip: parsed.data.offset,
-            count: tier => prisma.incident.count({ where: { AND: [where, { urgency: tier }] } }),
-            fetch: (tier, skip, take) =>
-              prisma.incident.findMany({
-                where: { AND: [where, { urgency: tier }] },
-                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-                skip,
-                take,
-                select: {
-                  id: true,
-                  title: true,
-                  status: true,
-                  urgency: true,
-                  createdAt: true,
-                  resolvedAt: true,
-                  updatedAt: true,
-                  service: { select: { name: true } },
-                  assignee: { select: { name: true } },
-                },
+          // "The oldest" is by age alone, across urgencies.
+          parsed.data.oldestFirst
+            ? prisma.incident.findMany({
+                where,
+                orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+                skip: parsed.data.offset,
+                take: MAX_ROWS,
+                select: LIST_SELECT,
+              })
+            : pageByUrgency({
+                take: MAX_ROWS,
+                skip: parsed.data.offset,
+                count: tier =>
+                  prisma.incident.count({ where: { AND: [where, { urgency: tier }] } }),
+                fetch: (tier, skip, take) =>
+                  prisma.incident.findMany({
+                    where: { AND: [where, { urgency: tier }] },
+                    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+                    skip,
+                    take,
+                    select: LIST_SELECT,
+                  }),
               }),
-          }),
         ]);
         return {
           total,

@@ -128,7 +128,7 @@ export function glossaryAnswer(text: string): string | null {
 }
 
 export const STARTER_PATTERN =
-  /\b(?:i am|i m|im) (?:new|a beginner|just starting)\b|\bwhere (?:do|should|can) i (?:start|begin)\b|\bnew here\b|\b(?:get(?:ting)? started|how (?:do|can) i (?:use|get started with) (?:this|you|squire|opsknight|it))\b|^how (?:does|do) this work[\s?!.]*$/;
+  /\b(?:i am|i['’]?m|i m|im) (?:new|a beginner|just starting)\b|\bwhere (?:do|should|can) i (?:start|begin)\b|\bnew here\b|\b(?:get(?:ting)? started|how (?:do|can) i (?:use|get started with) (?:this|you|squire|opsknight|it))\b|^how (?:does|do) this work[\s?!.]*$/;
 
 export const STARTER = [
   '## Getting started',
