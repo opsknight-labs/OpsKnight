@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
+import { logAudit } from '@/lib/audit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { prismaToAppError } from '@/lib/prisma-errors';
@@ -19,10 +20,10 @@ const WEBHOOK_NOT_FOUND = {
   userMessage: LEGACY_NOT_FOUND_MESSAGE,
 };
 
+/** The signed-in admin, or the error response to return. */
 async function requireAdmin() {
   try {
-    await assertAdmin();
-    return null;
+    return await assertAdmin();
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
     return jsonError('Unable to authorize this request', 500);
@@ -31,7 +32,7 @@ async function requireAdmin() {
 
 export async function GET(req: NextRequest) {
   const authError = await requireAdmin();
-  if (authError) return authError;
+  if (authError instanceof Response) return authError;
 
   try {
     const { searchParams } = new URL(req.url);
@@ -64,8 +65,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAdmin();
-  if (authError) return authError;
+  const admin = await requireAdmin();
+  if (admin instanceof Response) return admin;
 
   try {
     let body: unknown;
@@ -99,14 +100,22 @@ export async function POST(req: NextRequest) {
     }
 
     const secret = randomBytes(32).toString('hex');
-    const webhook = await prisma.statusPageWebhook.create({
-      data: {
-        statusPageId,
-        url,
-        secret: await encrypt(secret),
-        events,
-        enabled: true,
-      },
+    const encryptedSecret = await encrypt(secret);
+    const webhook = await prisma.$transaction(async tx => {
+      const created = await tx.statusPageWebhook.create({
+        data: { statusPageId, url, secret: encryptedSecret, events, enabled: true },
+      });
+      await logAudit(
+        {
+          action: 'status_page.webhook.created',
+          entityType: 'STATUS_PAGE',
+          entityId: statusPageId,
+          actorId: admin.id,
+          details: { webhookId: created.id, events },
+        },
+        tx
+      );
+      return created;
     });
 
     logger.info('api.status_page.webhook.created', { webhookId: webhook.id, statusPageId });
@@ -118,8 +127,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const authError = await requireAdmin();
-  if (authError) return authError;
+  const admin = await requireAdmin();
+  if (admin instanceof Response) return admin;
 
   try {
     let body: unknown;
@@ -208,7 +217,25 @@ export async function PATCH(req: NextRequest) {
 
     const existing = await prisma.statusPageWebhook.findFirst({ where: { id, statusPageId } });
     if (!existing) return jsonError(new AppError(WEBHOOK_NOT_FOUND), 404);
-    const webhook = await prisma.statusPageWebhook.update({ where: { id }, data: updateData });
+    const webhook = await prisma.$transaction(async tx => {
+      const updated = await tx.statusPageWebhook.update({ where: { id }, data: updateData });
+      await logAudit(
+        {
+          action: 'status_page.webhook.updated',
+          entityType: 'STATUS_PAGE',
+          entityId: statusPageId,
+          actorId: admin.id,
+          // Field names only: a webhook URL can carry a credential in its path or query.
+          details: {
+            webhookId: id,
+            changed: Object.keys(updateData),
+            ...(typeof updateData.enabled === 'boolean' ? { enabled: updateData.enabled } : {}),
+          },
+        },
+        tx
+      );
+      return updated;
+    });
 
     logger.info('api.status_page.webhook.updated', { webhookId: id });
     return jsonOk({ webhook }, 200);
@@ -223,8 +250,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const authError = await requireAdmin();
-  if (authError) return authError;
+  const admin = await requireAdmin();
+  if (admin instanceof Response) return admin;
 
   try {
     const id = new URL(req.url).searchParams.get('id');
@@ -246,7 +273,22 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const deleted = await prisma.statusPageWebhook.deleteMany({ where: { id, statusPageId } });
+    const deleted = await prisma.$transaction(async tx => {
+      const result = await tx.statusPageWebhook.deleteMany({ where: { id, statusPageId } });
+      if (result.count > 0) {
+        await logAudit(
+          {
+            action: 'status_page.webhook.deleted',
+            entityType: 'STATUS_PAGE',
+            entityId: statusPageId,
+            actorId: admin.id,
+            details: { webhookId: id },
+          },
+          tx
+        );
+      }
+      return result;
+    });
     if (deleted.count === 0) return jsonError(new AppError(WEBHOOK_NOT_FOUND), 404);
 
     logger.info('api.status_page.webhook.deleted', { webhookId: id });

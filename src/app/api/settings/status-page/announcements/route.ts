@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
+import { logAudit } from '@/lib/audit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import {
   StatusAnnouncementCreateSchema,
@@ -101,8 +102,9 @@ function effectiveNotificationTiming(
 }
 
 export async function POST(req: NextRequest) {
+  let admin: Awaited<ReturnType<typeof assertAdmin>>;
   try {
-    await assertAdmin();
+    admin = await assertAdmin();
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
   }
@@ -205,6 +207,20 @@ export async function POST(req: NextRequest) {
           deliveryMode: 'ALL_ELIGIBLE',
         });
       }
+      await logAudit(
+        {
+          action: 'status_page.announcement.created',
+          entityType: 'STATUS_PAGE',
+          entityId: statusPageId,
+          actorId: admin.id,
+          details: {
+            announcementId: announcement.id,
+            title: announcement.title,
+            type: announcement.type,
+          },
+        },
+        tx
+      );
       return { announcement, generation };
     });
 
@@ -450,6 +466,16 @@ export async function PATCH(req: NextRequest) {
           tx
         );
 
+      await logAudit(
+        {
+          action: 'status_page.announcement.updated',
+          entityType: 'STATUS_PAGE',
+          entityId: statusPageId,
+          actorId,
+          details: { announcementId: id, title: announcement.title },
+        },
+        tx
+      );
       return { announcement, generation };
     });
 
@@ -473,8 +499,9 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  let admin: Awaited<ReturnType<typeof assertAdmin>>;
   try {
-    await assertAdmin();
+    admin = await assertAdmin();
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
   }
@@ -496,7 +523,7 @@ export async function DELETE(req: NextRequest) {
       await lockAnnouncementMutation(tx, statusPageId, id);
       const existing = await tx.statusPageAnnouncement.findFirst({
         where: { id, statusPageId },
-        select: { id: true },
+        select: { id: true, title: true },
       });
       if (!existing) throw new AnnouncementNotFoundError();
 
@@ -508,6 +535,16 @@ export async function DELETE(req: NextRequest) {
         'Announcement was deleted before provider delivery.'
       );
       await tx.statusPageAnnouncement.delete({ where: { id } });
+      await logAudit(
+        {
+          action: 'status_page.announcement.deleted',
+          entityType: 'STATUS_PAGE',
+          entityId: statusPageId,
+          actorId: admin.id,
+          details: { announcementId: id, title: existing.title },
+        },
+        tx
+      );
     });
 
     logger.info('api.status_page.announcement.deleted', { announcementId: id, statusPageId });
