@@ -7,6 +7,18 @@ const object = (
   properties: Record<string, Schema>,
   required = Object.keys(properties)
 ): Schema => ({ type: 'object', properties, required, additionalProperties: false });
+/** Financial fields are returned only to actors who can manage operations, so they are optional. */
+const FINANCIAL_KEYS = [
+  'customersTotal',
+  'revenuePerHourCents',
+  'currency',
+  'estimatedCostCents',
+  'costCents',
+];
+const withoutRequired = (schema: Schema, keys = FINANCIAL_KEYS): Schema => ({
+  ...schema,
+  required: (schema.required as string[]).filter(key => !keys.includes(key)),
+});
 const ids = (maxItems: number): Schema => ({
   type: 'array',
   items: { type: 'string', minLength: 1, maxLength: 100 },
@@ -136,46 +148,48 @@ const health: Schema = object(
 );
 
 export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
-  BusinessService: object({
-    id,
-    name: string,
-    description: nullableString,
-    tier: nullableString,
-    statusPageSummary: nullableString,
-    links: { type: 'array', items: LINK },
-    criticality: tier,
-    impactMinUrgency: { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] },
-    impactMaxPriority: nullableString,
-    ownerTeam: { oneOf: [object({ id, name: string }), { type: 'null' }] },
-    sloTarget: { type: ['number', 'null'] },
-    sloWindowDays: { type: 'integer', enum: [7, 30, 90] },
-    ownerUser: { oneOf: [object({ id, name: string }), { type: 'null' }] },
-    escalationPolicy: { oneOf: [object({ id, name: string }), { type: 'null' }] },
-    contactChannel: nullableString,
-    tags: { type: 'array', items: string },
-    environment: nullableString,
-    lifecycle: { type: 'string', enum: LIFECYCLE },
-    lastReviewedAt: nullableDate,
-    customAttributes: { type: ['object', 'null'], additionalProperties: true },
-    quorumPartialPct: { type: ['integer', 'null'] },
-    quorumMajorPct: { type: ['integer', 'null'] },
-    dependencyHopDepth: { type: 'integer', minimum: 1, maximum: 5 },
-    customersTotal: { type: ['integer', 'null'] },
-    revenuePerHourCents: { type: ['integer', 'null'] },
-    currency: string,
-    customerReportThreshold: { type: ['integer', 'null'] },
-    customerReportWindowMinutes: { type: ['integer', 'null'] },
-    reviewIntervalDays: { type: ['integer', 'null'] },
-    members: {
-      type: 'array',
-      items: object({ id, name: string, status: string, critical: { type: 'boolean' } }),
-    },
-    dependsOn: { type: 'array', items: object({ id, name: string }) },
-    followers: { type: 'array', items: object({ id, name: string }) },
-    health: { oneOf: [health, { type: 'null' }] },
-    createdAt: date,
-    updatedAt: date,
-  }),
+  BusinessService: withoutRequired(
+    object({
+      id,
+      name: string,
+      description: nullableString,
+      tier: nullableString,
+      statusPageSummary: nullableString,
+      links: { type: 'array', items: LINK },
+      criticality: tier,
+      impactMinUrgency: { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] },
+      impactMaxPriority: nullableString,
+      ownerTeam: { oneOf: [object({ id, name: string }), { type: 'null' }] },
+      sloTarget: { type: ['number', 'null'] },
+      sloWindowDays: { type: 'integer', enum: [7, 30, 90] },
+      ownerUser: { oneOf: [object({ id, name: string }), { type: 'null' }] },
+      escalationPolicy: { oneOf: [object({ id, name: string }), { type: 'null' }] },
+      contactChannel: nullableString,
+      tags: { type: 'array', items: string },
+      environment: nullableString,
+      lifecycle: { type: 'string', enum: LIFECYCLE },
+      lastReviewedAt: nullableDate,
+      customAttributes: { type: ['object', 'null'], additionalProperties: true },
+      quorumPartialPct: { type: ['integer', 'null'] },
+      quorumMajorPct: { type: ['integer', 'null'] },
+      dependencyHopDepth: { type: 'integer', minimum: 1, maximum: 5 },
+      customersTotal: { type: ['integer', 'null'] },
+      revenuePerHourCents: { type: ['integer', 'null'] },
+      currency: string,
+      customerReportThreshold: { type: ['integer', 'null'] },
+      customerReportWindowMinutes: { type: ['integer', 'null'] },
+      reviewIntervalDays: { type: ['integer', 'null'] },
+      members: {
+        type: 'array',
+        items: object({ id, name: string, status: string, critical: { type: 'boolean' } }),
+      },
+      dependsOn: { type: 'array', items: object({ id, name: string }) },
+      followers: { type: 'array', items: object({ id, name: string }) },
+      health: { oneOf: [health, { type: 'null' }] },
+      createdAt: date,
+      updatedAt: date,
+    })
+  ),
   BusinessServiceIncident: object({
     id,
     title: string,
@@ -184,42 +198,47 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     impactStartedAt: date,
     impactEndedAt: nullableDate,
   }),
-  BusinessServiceImpactTimeline: object({
-    businessServiceId: id,
-    window: object({ from: date, to: date }),
-    impactMinutes: { type: 'number', minimum: 0 },
-    uptimePercent: { type: 'number', minimum: 0, maximum: 100 },
-    incidentCount: { type: 'integer', minimum: 0 },
-    mttaMinutes: { type: ['number', 'null'] },
-    mttrMinutes: { type: ['number', 'null'] },
-    weightedDowntimeMinutes: { type: 'number', minimum: 0 },
-    weightedUptimePercent: { type: 'number', minimum: 0, maximum: 100 },
-    currency: string,
-    customersTotal: { type: ['integer', 'null'] },
-    estimatedCostCents: {
-      type: ['integer', 'null'],
-      description: 'Weighted downtime x revenue per hour; null without a revenue rate.',
-    },
-    entries: {
-      type: 'array',
-      items: object({
-        costCents: {
-          type: ['integer', 'null'],
-          description: 'Null when no rate is set, the interval is excluded or the incident is unreadable.',
-        },
-        incidentId: {
-          ...nullableString,
-          description: 'Null when the caller cannot read the incident.',
-        },
-        incidentTitle: nullableString,
-        urgency: { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] },
-        source,
-        excluded: { type: 'boolean' },
-        startedAt: date,
-        endedAt: nullableDate,
-      }),
-    },
-  }),
+  BusinessServiceImpactTimeline: withoutRequired(
+    object({
+      businessServiceId: id,
+      window: object({ from: date, to: date }),
+      impactMinutes: { type: 'number', minimum: 0 },
+      uptimePercent: { type: 'number', minimum: 0, maximum: 100 },
+      incidentCount: { type: 'integer', minimum: 0 },
+      mttaMinutes: { type: ['number', 'null'] },
+      mttrMinutes: { type: ['number', 'null'] },
+      weightedDowntimeMinutes: { type: 'number', minimum: 0 },
+      weightedUptimePercent: { type: 'number', minimum: 0, maximum: 100 },
+      currency: string,
+      customersTotal: { type: ['integer', 'null'] },
+      estimatedCostCents: {
+        type: ['integer', 'null'],
+        description: 'Weighted downtime x revenue per hour; null without a revenue rate.',
+      },
+      entries: {
+        type: 'array',
+        items: withoutRequired(
+          object({
+            costCents: {
+              type: ['integer', 'null'],
+              description:
+                'Null when no rate is set, the interval is excluded or the incident is unreadable.',
+            },
+            incidentId: {
+              ...nullableString,
+              description: 'Null when the caller cannot read the incident.',
+            },
+            incidentTitle: nullableString,
+            urgency: { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] },
+            source,
+            excluded: { type: 'boolean' },
+            startedAt: date,
+            endedAt: nullableDate,
+          })
+        ),
+      },
+    })
+  ),
   IncidentBusinessServiceImpactChange: object({
     incidentId: id,
     businessServiceId: id,
@@ -370,18 +389,34 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     status: { type: ['string', 'null'], enum: [...OVERRIDE_STATUSES, null] },
     until: { type: ['string', 'null'], format: 'date-time' },
   }),
-  BusinessServiceCustomerReport: object({
-    id,
-    businessServiceId: id,
-    source: string,
-    count: { type: 'integer', minimum: 1 },
-    windowStart: date,
-    windowEnd: date,
-    externalRef: nullableString,
-    createdById: nullableString,
-    createdAt: date,
-    created: { type: 'boolean', description: 'False when an existing report with this externalRef was returned.' },
-  }, ['id', 'businessServiceId', 'source', 'count', 'windowStart', 'windowEnd', 'externalRef', 'createdById', 'createdAt']),
+  BusinessServiceCustomerReport: object(
+    {
+      id,
+      businessServiceId: id,
+      source: string,
+      count: { type: 'integer', minimum: 1 },
+      windowStart: date,
+      windowEnd: date,
+      externalRef: nullableString,
+      createdById: nullableString,
+      createdAt: date,
+      created: {
+        type: 'boolean',
+        description: 'False when an existing report with this externalRef was returned.',
+      },
+    },
+    [
+      'id',
+      'businessServiceId',
+      'source',
+      'count',
+      'windowStart',
+      'windowEnd',
+      'externalRef',
+      'createdById',
+      'createdAt',
+    ]
+  ),
   BusinessServiceTemplate: object({
     id,
     name: string,
@@ -679,7 +714,8 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     method: 'get',
     path: '/business-services/{id}/customer-reports',
     summary: 'List customer-reported impact for a business service',
-    description: 'Newest first, at most 200 (limit, default 50). Requires read access to the business service.',
+    description:
+      'Newest first, at most 200 (limit, default 50). Requires read access to the business service.',
     query: { limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 } },
   },
   {
@@ -691,7 +727,11 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     status: 201,
     body: object(
       {
-        source: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$', description: 'zendesk, intercom, manual, api, ...' },
+        source: {
+          type: 'string',
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$',
+          description: 'zendesk, intercom, manual, api, ...',
+        },
         count: { type: 'integer', minimum: 1, maximum: 1000000 },
         windowStart: date,
         windowEnd: { ...date, description: 'Not in the future; at most 7 days after windowStart.' },
@@ -714,8 +754,16 @@ export const BUSINESS_SERVICE_OPERATIONS: {
             ownerTeamId: nullableString,
             criticality: tier,
             lifecycle: { type: 'string', enum: LIFECYCLE },
-            addTags: { type: 'array', maxItems: 20, items: { type: 'string', minLength: 1, maxLength: 40 } },
-            removeTags: { type: 'array', maxItems: 20, items: { type: 'string', minLength: 1, maxLength: 40 } },
+            addTags: {
+              type: 'array',
+              maxItems: 20,
+              items: { type: 'string', minLength: 1, maxLength: 40 },
+            },
+            removeTags: {
+              type: 'array',
+              maxItems: 20,
+              items: { type: 'string', minLength: 1, maxLength: 40 },
+            },
             markReviewed: { const: true },
             sloTarget: { type: ['number', 'null'], minimum: 90, maximum: 99.999 },
             sloWindowDays: { type: 'integer', enum: [7, 30, 90] },
@@ -752,7 +800,8 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     method: 'delete',
     path: '/business-service-templates/{id}',
     summary: 'Delete a business service template',
-    description: 'Responder or Admin; requires an Idempotency-Key. Business services created from it are unchanged.',
+    description:
+      'Responder or Admin; requires an Idempotency-Key. Business services created from it are unchanged.',
   },
   {
     method: 'post',

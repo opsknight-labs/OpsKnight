@@ -13,6 +13,7 @@ import {
   healthIncidentIds,
   updateBusinessService,
 } from '@/lib/business-services/commands';
+import { canReadBusinessServiceFinancials } from '@/lib/business-services/financials';
 import { readableIncidentIds } from '@/lib/business-services/stats';
 import { getBusinessServiceHealth } from '@/lib/business-services/contract';
 
@@ -33,7 +34,7 @@ export const GET = defineV2Route({
     const health = (await getBusinessServiceHealth([row.id], actor)).get(row.id);
     const readable = await readableIncidentIds(actor, healthIncidentIds([health]));
     return {
-      data: businessServiceDto(row, health, readable),
+      data: businessServiceDto(row, health, readable, canReadBusinessServiceFinancials(actor)),
       headers: { 'Cache-Control': 'no-store' },
     };
   },
@@ -60,7 +61,7 @@ export const PATCH = defineV2Route({
       details: { fields: Object.keys(body) },
       tx,
     });
-    return { data: businessServiceDto(updated) };
+    return { data: businessServiceDto(updated, undefined, undefined, true) };
   },
 });
 

@@ -12,6 +12,7 @@ import {
   createBusinessService,
   healthIncidentIds,
 } from '@/lib/business-services/commands';
+import { canReadBusinessServiceFinancials } from '@/lib/business-services/financials';
 import { readableIncidentIds } from '@/lib/business-services/stats';
 
 const csv = <T extends string>(values: readonly [T, ...T[]]) =>
@@ -76,6 +77,7 @@ export const GET = defineV2Route({
         })
       : [];
     const byId = new Map(rows.map(row => [row.id, row]));
+    const financials = canReadBusinessServiceFinancials(actor);
     const readable = await readableIncidentIds(
       actor,
       healthIncidentIds(page.items.map(item => item.health))
@@ -83,7 +85,7 @@ export const GET = defineV2Route({
     return {
       data: page.items.flatMap(item => {
         const row = byId.get(item.id);
-        return row ? [businessServiceDto(row, item.health, readable)] : [];
+        return row ? [businessServiceDto(row, item.health, readable, financials)] : [];
       }),
       pagination: {
         limit: pagination.limit,
@@ -113,6 +115,6 @@ export const POST = defineV2Route({
       details: { name: created.name },
       tx,
     });
-    return { status: 201, data: businessServiceDto(created) };
+    return { status: 201, data: businessServiceDto(created, undefined, undefined, true) };
   },
 });

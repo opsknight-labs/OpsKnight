@@ -34,4 +34,27 @@ describe('rankByImpact', () => {
     expect(await rankByImpact(found, window, now, 2)).toEqual(found);
     expect(findMany).not.toHaveBeenCalled();
   });
+
+  it('orders the scan by newest interval so the cap keeps recent impact', async () => {
+    findMany.mockClear();
+    findMany.mockResolvedValue([]);
+    await rankByImpact(
+      ['a', 'b', 'c'].map(id => ({ id, name: id })),
+      window,
+      now,
+      2
+    );
+    expect(findMany.mock.calls[0][0]).toMatchObject({ orderBy: { startedAt: 'desc' } });
+  });
+
+  it('keeps the costliest services for cost ranking, not the longest outages', async () => {
+    const found = ['long', 'pricey', 'idle'].map(id => ({ id, name: id }));
+    findMany.mockResolvedValue([
+      { businessServiceId: 'long', startedAt: at(0), endedAt: at(10) },
+      { businessServiceId: 'pricey', startedAt: at(0), endedAt: at(2) },
+    ]);
+    const rate = { long: 1, pricey: 1000, idle: 0 } as Record<string, number>;
+    const top = await rankByImpact(found, window, now, 1, s => rate[s.id]);
+    expect(top.map(s => s.id)).toEqual(['pricey']);
+  });
 });
