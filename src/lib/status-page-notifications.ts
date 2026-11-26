@@ -269,7 +269,10 @@ export async function notifyStatusPageSubscribers(
                 subject,
                 contentId: fanout.contentId,
                 unsubscribeUrl: `${statusPageUrl}/unsubscribe/${unsubscribeTokens.get(sub.id)}`,
-                listUnsubscribeUrl: oneClickUnsubscribeUrl(appBaseUrl, unsubscribeTokens.get(sub.id)),
+                listUnsubscribeUrl: oneClickUnsubscribeUrl(
+                  appBaseUrl,
+                  unsubscribeTokens.get(sub.id)
+                ),
                 providerScope: {
                   statusPageId: page.id,
                   subscriptionId: sub.id,
@@ -405,6 +408,37 @@ async function formatEmailBody(
   return html;
 }
 
+/**
+ * Services an announcement affects on one page. A business service named on it expands to its
+ * members that are published on THIS page; an announcement that names scopes but resolves to no
+ * service is `scoped` with an empty list, which must notify nobody (never widen to everyone).
+ */
+export async function resolveAnnouncementAudience(
+  statusPageId: string,
+  rawServices: unknown,
+  rawBusinessServices: unknown
+): Promise<{ scoped: boolean; serviceIds: string[] }> {
+  const strings = (value: unknown) =>
+    Array.isArray(value)
+      ? value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+      : [];
+  const direct = strings(rawServices);
+  const businessIds = strings(rawBusinessServices);
+  const members = businessIds.length
+    ? await prisma.businessServiceMember.findMany({
+        where: {
+          businessServiceId: { in: businessIds },
+          service: { statusPageServices: { some: { statusPageId, showOnPage: true } } },
+        },
+        select: { serviceId: true },
+      })
+    : [];
+  return {
+    scoped: direct.length > 0 || businessIds.length > 0,
+    serviceIds: [...new Set([...direct, ...members.map(member => member.serviceId)])],
+  };
+}
+
 export async function notifyStatusPageSubscribersAnnouncement(
   announcementId: string,
   statusPageId: string,
@@ -512,25 +546,17 @@ export async function notifyStatusPageSubscribersAnnouncement(
     let failed = 0;
     let cursor: string | undefined = fanout.cursor ?? undefined;
 
-    const rawAffected = announcement.affectedServiceIds;
-    const directAffectedIds: string[] = Array.isArray(rawAffected)
-      ? rawAffected.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
-      : [];
-    // A business service named on the update affects every one of its member services.
-    const rawBusiness = announcement.affectedBusinessServiceIds;
-    const businessIds = Array.isArray(rawBusiness)
-      ? rawBusiness.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
-      : [];
-    const businessMembers = businessIds.length
-      ? await prisma.businessServiceMember.findMany({
-          where: { businessServiceId: { in: businessIds } },
-          select: { serviceId: true },
-        })
-      : [];
-    const affectedIds = [
-      ...new Set([...directAffectedIds, ...businessMembers.map(member => member.serviceId)]),
-    ];
+    const { scoped, serviceIds: affectedIds } = await resolveAnnouncementAudience(
+      statusPageId,
+      announcement.affectedServiceIds,
+      announcement.affectedBusinessServiceIds
+    );
     const hasScopedServices = affectedIds.length > 0;
+    if (scoped && !hasScopedServices) {
+      // Names only business services with nothing published here: nobody is affected, so nobody is mailed.
+      await recordFanoutPage(fanout.id, { cursor, materialized: 0, failed: 0, complete: true });
+      return { sent: 0, failed: 0, skipped: true };
+    }
 
     while (true) {
       if (!(await bulkQueueHasCapacity())) {
