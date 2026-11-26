@@ -5,7 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import { revalidatePath } from 'next/cache';
 import { getCurrentAuthorizationActor, getCurrentUser, assertResponderOrAbove } from '@/lib/rbac';
-import { postmortemReadWhere } from '@/lib/authorization-filters';
+import { incidentReadWhere, postmortemReadWhere } from '@/lib/authorization-filters';
 import { postmortemEditWhere } from '@/lib/postmortems/authorization';
 import { logAudit } from '@/lib/audit';
 import { CAPABILITIES, hasCapability, capabilitiesOf } from '@/lib/authorization';
@@ -194,6 +194,14 @@ export async function upsertPostmortem(incidentId: string, input: PostmortemData
     where: { incidentId },
     select: { createdById: true },
   });
+
+  if (!existing) {
+    // Creating makes the caller the author and so an editor, so they must be able to read the incident.
+    const readable = await prisma.incident.count({
+      where: { AND: [{ id: incidentId }, incidentReadWhere(await getCurrentAuthorizationActor())] },
+    });
+    if (!readable) throw new Error('Incident not found');
+  }
 
   if (
     existing &&
