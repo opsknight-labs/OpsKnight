@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const refresh = vi.fn();
+const push = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh, push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ refresh, push, replace: vi.fn() }),
   usePathname: () => '/services/business/x',
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -12,12 +13,17 @@ const notifyMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ notify: notifyMock }));
 
 const follow = vi.fn();
+const addMembers = vi.fn();
+const search = vi.fn();
 vi.mock('@/app/(app)/services/business/actions', () => ({
   followBusinessServiceAction: (...a: unknown[]) => follow(...a),
+  addBusinessServiceMembersAction: (...a: unknown[]) => addMembers(...a),
+  searchBusinessServiceOptionsAction: (...a: unknown[]) => search(...a),
 }));
 const phase5b = vi.hoisted(() => ({
   bulkEditAction: vi.fn(),
   addCustomerReportAction: vi.fn(),
+  deleteCustomerReportAction: vi.fn(),
   deleteTemplateAction: vi.fn(),
   createTemplateAction: vi.fn(),
   updateTemplateAction: vi.fn(),
@@ -30,6 +36,8 @@ import HealthDistribution from '@/components/business-service/HealthDistribution
 import BusinessServiceFollowButton from '@/components/service/BusinessServiceFollowButton';
 import TemplateManager, { type TemplateView } from '@/components/business-service/TemplateManager';
 import AddCustomerReportForm from '@/components/business-service/AddCustomerReportForm';
+import CustomerImpactPanel from '@/components/business-service/CustomerImpactPanel';
+import AddMembersDialog from '@/components/business-service/AddMembersDialog';
 import HygieneToggle from '@/components/business-service/HygieneToggle';
 import BulkEditBar from '@/components/business-service/BulkEditBar';
 import CatalogDirectory, { type CatalogRow } from '@/components/business-service/CatalogDirectory';
@@ -157,10 +165,23 @@ const template: TemplateView = {
   ownerTeamName: null,
 };
 
+const templateAction = (name: string) => {
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for API' }), {
+    button: 0,
+    pointerType: 'mouse',
+  });
+  fireEvent.click(screen.getByRole('menuitem', { name }));
+};
+
 describe('TemplateManager', () => {
+  it('shows an empty state without templates', () => {
+    render(<TemplateManager templates={[]} teams={[]} />);
+    expect(screen.getByText('No templates yet')).toBeInTheDocument();
+  });
+
   it('asks before deleting and does not call the server on Cancel', async () => {
     render(<TemplateManager templates={[template]} teams={[]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete template API' }));
+    templateAction('Delete…');
     expect(phase5b.deleteTemplateAction).not.toHaveBeenCalled();
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
@@ -170,24 +191,34 @@ describe('TemplateManager', () => {
   it('deletes after confirmation', async () => {
     phase5b.deleteTemplateAction.mockResolvedValue({ ok: true });
     render(<TemplateManager templates={[template]} teams={[]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete template API' }));
+    templateAction('Delete…');
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(phase5b.deleteTemplateAction).toHaveBeenCalledWith('t1'));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
-  it('moves focus to the form when editing and names the row actions', () => {
+  it('moves focus to the form when editing and names the row actions', async () => {
     render(<TemplateManager templates={[template]} teams={[]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit template API' }));
-    expect(screen.getByLabelText('Name')).toHaveFocus();
+    templateAction('Edit');
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveFocus());
     expect(screen.getByRole('link', { name: 'Use template API' })).toBeInTheDocument();
   });
 });
 
 describe('AddCustomerReportForm', () => {
+  it('stays collapsed behind a button until asked for', () => {
+    render(<AddCustomerReportForm businessServiceId="b1" />);
+    expect(screen.queryByLabelText('Customer reports')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add customer report' }));
+    expect(screen.getByLabelText('Customer reports')).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByLabelText('Customer reports')).toBeNull();
+  });
+
   it('rejects bad input without calling the server', () => {
     render(<AddCustomerReportForm businessServiceId="b1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add customer report' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add report' }));
     expect(screen.getByRole('alert')).toHaveTextContent(/whole number/);
     expect(phase5b.addCustomerReportAction).not.toHaveBeenCalled();
@@ -196,9 +227,72 @@ describe('AddCustomerReportForm', () => {
   it('shows a failed result as an error instead of throwing', async () => {
     phase5b.addCustomerReportAction.mockResolvedValue({ ok: false, error: 'Too many reports' });
     render(<AddCustomerReportForm businessServiceId="b1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add customer report' }));
     fireEvent.change(screen.getByLabelText('Customer reports'), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add report' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Too many reports');
+  });
+});
+
+describe('CustomerImpactPanel', () => {
+  const view = {
+    businessServiceId: 'b1',
+    estimatedCostCents: null,
+    currency: 'USD',
+    customersTotal: 1200,
+    windowDays: 30,
+    threshold: null,
+    thresholdWindowMinutes: null,
+    reports: [
+      { id: 'mine', source: 'manual', count: 3, windowEnd: new Date(), createdById: 'u1' },
+      { id: 'theirs', source: 'zendesk', count: 1, windowEnd: new Date(), createdById: 'u2' },
+    ],
+    canAdd: true,
+    viewerId: 'u1',
+  };
+
+  it('labels the customer count as a total, not as customers exposed', () => {
+    render(<CustomerImpactPanel view={view} />);
+    expect(screen.getByText('Total customers')).toBeInTheDocument();
+    expect(screen.queryByText('Customers exposed')).toBeNull();
+  });
+
+  it('offers delete only on reports the viewer recorded, and asks first', async () => {
+    phase5b.deleteCustomerReportAction.mockResolvedValue({ ok: true });
+    render(<CustomerImpactPanel view={view} />);
+    expect(screen.queryByRole('button', { name: /Delete 1 zendesk report/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete 3 manual reports' }));
+    expect(phase5b.deleteCustomerReportAction).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete report' }));
+    await waitFor(() =>
+      expect(phase5b.deleteCustomerReportAction).toHaveBeenCalledWith('b1', 'mine')
+    );
+  });
+
+  it('hides delete from viewers who cannot manage', () => {
+    render(<CustomerImpactPanel view={{ ...view, canAdd: false }} />);
+    expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull();
+  });
+});
+
+describe('AddMembersDialog', () => {
+  it('adds the picked services that are not members yet, as non-critical when switched off', async () => {
+    search.mockResolvedValue([
+      { id: 'api', name: 'Checkout API', hint: 'Payments' },
+      { id: 'old', name: 'Old', hint: null },
+    ]);
+    addMembers.mockResolvedValue({ ok: true, id: 'b1' });
+    render(<AddMembersDialog businessServiceId="b1" existingIds={['old']} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add services' }));
+    fireEvent.change(screen.getByLabelText('Search services'), { target: { value: 'o' } });
+    fireEvent.click(await screen.findByText('Checkout API', {}, { timeout: 2000 }));
+    fireEvent.click(screen.getByText('Old'));
+    expect(screen.getByText('1 already a member and will be skipped.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 service' }));
+    await waitFor(() =>
+      expect(addMembers).toHaveBeenCalledWith('b1', { serviceIds: ['api'], critical: false })
+    );
   });
 });
 
@@ -247,7 +341,7 @@ describe('CatalogDirectory selection', () => {
     expect(screen.queryByRole('region', { name: 'Bulk edit' })).toBeNull();
   });
 
-  it('has no sort buttons: the directory is keyset-paged, a client sort only reorders one page', () => {
+  it('sorts on the server: a header click navigates to the sorted URL, keeping the filters', () => {
     render(
       <CatalogDirectory
         rows={[row('a'), row('b')]}
@@ -255,10 +349,29 @@ describe('CatalogDirectory selection', () => {
         filtered={false}
         clearHref="/services/business"
         canManage={false}
+        query={{ ...parseCatalogParams({ q: 'pay' }).query }}
       />
     );
     const table = screen.getByRole('table', { name: 'Business services' });
-    expect(within(table).queryAllByRole('button', { name: /sort/i })).toHaveLength(0);
+    fireEvent.click(within(table).getByRole('button', { name: /Criticality/ }));
+    expect(push).toHaveBeenCalledWith('/services/business?q=pay&sort=tier_asc');
+  });
+
+  it('keeps healthy rows quiet and hides the optional columns by default', () => {
+    render(
+      <CatalogDirectory
+        rows={[{ ...row('a'), since: new Date() }]}
+        pagination={pagination}
+        filtered={false}
+        clearHref="/services/business"
+        canManage={false}
+      />
+    );
+    const table = screen.getByRole('table', { name: 'Business services' });
+    expect(within(table).queryByText(/since/)).toBeNull();
+    expect(within(table).queryByRole('columnheader', { name: 'Followers' })).toBeNull();
+    expect(within(table).queryByRole('columnheader', { name: 'Hygiene' })).toBeNull();
+    expect(within(table).getByRole('columnheader', { name: /Error budget/ })).toBeInTheDocument();
   });
 });
 
@@ -276,10 +389,13 @@ describe('BulkEditBar', () => {
     render(bar());
     const apply = () => screen.getByRole('button', { name: 'Apply to 1' });
     expect(apply()).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /^Tags/ }));
     fireEvent.change(screen.getByLabelText('Add tags'), { target: { value: 'pci' } });
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(await screen.findByText(/Preview: 1 ok/)).toBeInTheDocument();
     await waitFor(() => expect(apply()).toBeEnabled());
+    if (!screen.queryByLabelText('Add tags'))
+      fireEvent.click(screen.getByRole('button', { name: /^Tags/ }));
     fireEvent.change(screen.getByLabelText('Add tags'), { target: { value: 'pci, legacy' } });
     expect(screen.queryByText(/Preview: 1 ok/)).toBeNull();
     expect(apply()).toBeDisabled();
@@ -293,6 +409,7 @@ describe('BulkEditBar', () => {
       results: [{ id: 'a', ok: true }],
     });
     render(bar());
+    fireEvent.click(screen.getByRole('button', { name: /^SLO/ }));
     fireEvent.click(screen.getByLabelText('Clear SLO target'));
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     await waitFor(() =>

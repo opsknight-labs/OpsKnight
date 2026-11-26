@@ -8,7 +8,7 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
-import type { BusinessServiceTier } from '@prisma/client';
+import type { BusinessServiceLifecycle, BusinessServiceTier } from '@prisma/client';
 import { RelativeTime } from '@/components/patterns';
 import { toneClasses, type ToneKey } from '@/components/patterns/status-tone';
 import type { BsStatus } from '@/lib/business-services/contract';
@@ -35,6 +35,13 @@ export const CRITICALITY_LABEL: Readonly<Record<BusinessServiceTier, string>> = 
   TIER_1: 'Tier 1',
   TIER_2: 'Tier 2',
   TIER_3: 'Tier 3',
+};
+
+export const LIFECYCLE_LABEL: Readonly<Record<BusinessServiceLifecycle, string>> = {
+  ACTIVE: 'Active',
+  BETA: 'Beta',
+  DEPRECATED: 'Deprecated',
+  RETIRED: 'Retired',
 };
 
 export const CRITICALITY_HINT: Readonly<Record<BusinessServiceTier, string>> = {

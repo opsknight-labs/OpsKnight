@@ -4,7 +4,15 @@
  */
 
 export type EntityType =
-  'incident' | 'service' | 'team' | 'user' | 'schedule' | 'runbook' | 'policy' | 'postmortem';
+  | 'incident'
+  | 'service'
+  | 'businessService'
+  | 'team'
+  | 'user'
+  | 'schedule'
+  | 'runbook'
+  | 'policy'
+  | 'postmortem';
 
 export type SearchResult = {
   type: EntityType;
@@ -13,12 +21,15 @@ export type SearchResult = {
   subtitle?: string;
   href: string;
   avatarUrl?: string | null;
+  /** Business-service health for the status dot; live only, never kept in recents. */
+  status?: string;
 };
 
 /** Entity groups in display order, with the heading the palette shows. */
 export const ENTITY_GROUPS: ReadonlyArray<{ type: EntityType; label: string }> = [
   { type: 'incident', label: 'Incidents' },
   { type: 'service', label: 'Services' },
+  { type: 'businessService', label: 'Business services' },
   { type: 'user', label: 'People' },
   { type: 'team', label: 'Teams' },
   { type: 'schedule', label: 'Schedules' },

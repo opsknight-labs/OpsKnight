@@ -30,7 +30,13 @@ vi.mock('@/lib/prisma', () => ({
     postmortem: { findMany: mocks.findMany },
     onCallSchedule: { findMany: mocks.findMany },
     runbook: { findMany: mocks.findMany },
+    businessService: { findMany: mocks.findMany },
   },
+}));
+vi.mock('@/lib/business-services/health', () => ({
+  getHealthSnapshot: vi.fn().mockResolvedValue({
+    health: new Map([['bs-1', { status: 'DEGRADED' }]]),
+  }),
 }));
 
 describe('global search RBAC', () => {
@@ -162,5 +168,32 @@ describe('global search RBAC', () => {
       expect(args.take).toBeLessThanOrEqual(8);
       expect(args.select).toBeDefined();
     }
+  });
+
+  it("finds business services in the actor's read scope, with their health", async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'user-1',
+      role: 'USER',
+      status: 'ACTIVE',
+      teamMemberships: [{ teamId: 'team-1' }],
+    });
+    mocks.findMany.mockImplementation(async (args?: { select?: Record<string, unknown> }) =>
+      args?.select?.criticality ? [{ id: 'bs-1', name: 'Checkout', criticality: 'TIER_0' }] : []
+    );
+    const response = await GET(new NextRequest('http://localhost/api/search?q=checkout'));
+    const body = await response.json();
+    const results = body.data?.results ?? body.results;
+    expect(results).toEqual([
+      expect.objectContaining({
+        type: 'businessService',
+        id: 'bs-1',
+        href: '/services/business/bs-1',
+        status: 'DEGRADED',
+        subtitle: 'Business service - Tier 0 - Degraded',
+      }),
+    ]);
+    const query = mocks.findMany.mock.calls.find(([args]) => args?.select?.criticality)![0];
+    // The business-service read rule, not an unscoped query.
+    expect(JSON.stringify(query.where.AND[0])).toContain('team-1');
   });
 });

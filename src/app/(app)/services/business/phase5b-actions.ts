@@ -15,6 +15,7 @@ import {
 import {
   CustomerImpactReportInputSchema,
   createCustomerImpactReport,
+  deleteCustomerImpactReport,
 } from '@/lib/business-services/customer-reports';
 import {
   BusinessServiceTemplateInputSchema,
@@ -125,6 +126,24 @@ export async function addCustomerReportAction(
   }
 }
 
+/** Removes a customer report the caller recorded themselves. */
+export async function deleteCustomerReportAction(
+  businessServiceId: string,
+  reportId: string
+): Promise<ActionResult> {
+  try {
+    const parsedId = id.parse(businessServiceId);
+    await deleteCustomerImpactReport(parsedId, id.parse(reportId), {
+      actor: await managerActor(),
+    });
+    revalidatePath(`/services/business/${parsedId}`);
+    revalidatePath('/services/business');
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 /** Admin switch for the scheduled ownership hygiene sweep. */
 export async function setHygieneEnabledAction(enabled: boolean): Promise<ActionResult> {
   try {
@@ -159,6 +178,7 @@ export async function setHygieneEnabledAction(enabled: boolean): Promise<ActionR
       );
     });
     revalidatePath('/services/business');
+    revalidatePath('/settings/notifications');
     return { ok: true };
   } catch (error) {
     return failure(error);

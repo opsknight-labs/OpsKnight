@@ -1,8 +1,10 @@
 'use client';
+/* eslint-disable security/detect-object-injection -- lookups are keyed by typed enum values (source, status, tier), never request input */
 
 import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { Boxes, Plus, X } from 'lucide-react';
+import { ArrowUpRight, Boxes, Plus, X } from 'lucide-react';
+import type { BusinessServiceTier } from '@prisma/client';
 import {
   Popover,
   PopoverAnchor,
@@ -18,6 +20,14 @@ import {
   CommandList,
 } from '@/components/ui/shadcn/command';
 import { notify } from '@/lib/toast';
+import { cn } from '@/lib/utils';
+import { toneClasses } from '@/components/patterns/status-tone';
+import type { BsStatus } from '@/lib/business-services/contract';
+import HealthBadge, {
+  BS_STATUS_META,
+  CRITICALITY_HINT,
+  CRITICALITY_LABEL,
+} from '@/components/business-service/HealthBadge';
 import {
   searchIncidentDetailBusinessServices,
   setIncidentDetailBusinessImpact,
@@ -29,7 +39,31 @@ export type IncidentImpactChip = {
   source: 'DIRECT' | 'DEPENDENCY' | 'NESTED' | 'MANUAL';
   excluded: boolean;
   active: boolean;
+  criticality?: BusinessServiceTier | null;
+  /** Current health; null or missing when it could not be read. */
+  status?: BsStatus | null;
 };
+
+type PickerOption = {
+  id: string;
+  name: string;
+  criticality?: BusinessServiceTier | null;
+  status?: BsStatus | null;
+};
+
+/** Health dot: colour plus the label for assistive tech (the visible chip text carries the name). */
+function HealthDot({ status }: { status?: BsStatus | null }) {
+  if (!status) return null;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'h-2 w-2 shrink-0 rounded-full',
+        toneClasses(BS_STATUS_META[status].tone).solid
+      )}
+    />
+  );
+}
 
 const REASON: Record<IncidentImpactChip['source'], string> = {
   DIRECT: 'Its service is affected',
@@ -67,7 +101,7 @@ export default function IncidentImpacts({
   const open = openProp ?? ownOpen;
   const setOpen = onOpenChange ?? setOwnOpen;
   const [query, setQuery] = useState('');
-  const [options, setOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [options, setOptions] = useState<PickerOption[]>([]);
   const shown = impacts.filter(impact => !impact.excluded);
 
   useEffect(() => {
@@ -86,11 +120,16 @@ export default function IncidentImpacts({
     };
   }, [open, query]);
 
-  const change = (businessServiceId: string, impacted: boolean) =>
+  const change = (businessServiceId: string, impacted: boolean, name?: string) =>
     startTransition(async () => {
       try {
         await setIncidentDetailBusinessImpact(incidentId, businessServiceId, impacted);
         setOpen(false);
+        if (!impacted && name)
+          notify.success(`${name} is no longer marked as impacted`, {
+            // Undo marks it again from now; the removed intervals stay out of its uptime.
+            action: { label: 'Undo', onClick: () => change(businessServiceId, true) },
+          });
       } catch {
         notify.error('Could not change the impacted business services.');
       }
@@ -108,29 +147,67 @@ export default function IncidentImpacts({
       </span>
       <ul className="flex min-w-0 flex-wrap gap-1.5" aria-label="Affected business services">
         {shown.map(impact => {
-          const reason = REASON[impact.source] + (impact.active ? '' : ' (ended)');
+          const reason = REASON[impact.source];
+          const status = impact.status ? BS_STATUS_META[impact.status].label : null;
           return (
             <li key={impact.id} className="inline-flex items-center gap-0.5">
-              {linkable ? (
-                <Link
-                  href={`/services/business/${impact.id}`}
-                  title={reason}
-                  className={`${chip} transition-colors hover:border-foreground/30 hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring`}
-                >
-                  {impact.name}
-                  <span className="sr-only">: {reason}</span>
-                </Link>
-              ) : (
-                <span className={chip} title={reason}>
-                  {impact.name}
-                  <span className="sr-only">: {reason}</span>
-                </span>
-              )}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      chip,
+                      'transition-colors hover:border-foreground/30 hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+                      // Ended impacts read as history: dashed and muted, with the word, not only the style.
+                      !impact.active && 'border-dashed text-muted-foreground shadow-none'
+                    )}
+                  >
+                    <HealthDot status={impact.active ? impact.status : null} />
+                    {impact.name}
+                    {impact.criticality && (
+                      <span className="font-normal text-muted-foreground">
+                        {CRITICALITY_LABEL[impact.criticality]}
+                      </span>
+                    )}
+                    {!impact.active && <span className="font-normal">· ended</span>}
+                    <span className="sr-only">
+                      {status ? `, ${status}` : ''}: {reason}
+                    </span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 space-y-2 p-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{impact.name}</span>
+                    {impact.status && <HealthBadge status={impact.status} />}
+                  </div>
+                  {impact.criticality && (
+                    <p className="text-xs text-muted-foreground">
+                      {CRITICALITY_LABEL[impact.criticality]} ·{' '}
+                      {CRITICALITY_HINT[impact.criticality]}
+                    </p>
+                  )}
+                  <p>
+                    {reason}
+                    {impact.active ? '.' : '. The impact has ended.'}
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {linkable && (
+                      <Link
+                        href={`/services/business/${impact.id}`}
+                        className="inline-flex items-center gap-1 text-xs font-medium hover:underline focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Open business service
+                        <ArrowUpRight className="h-3 w-3" aria-hidden />
+                      </Link>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
               {canEdit && (
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => change(impact.id, false)}
+                  onClick={() => change(impact.id, false, impact.name)}
                   aria-label={`Not impacting ${impact.name}`}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
@@ -177,9 +254,20 @@ export default function IncidentImpacts({
                         key={option.id}
                         value={option.id}
                         onSelect={() => change(option.id, true)}
-                        className="cursor-pointer rounded-md py-1.5 text-xs"
+                        className="cursor-pointer gap-2 rounded-md py-1.5 text-xs"
                       >
-                        {option.name}
+                        <HealthDot status={option.status} />
+                        <span className="min-w-0 flex-1 truncate">{option.name}</span>
+                        {option.status && option.status !== 'OPERATIONAL' && (
+                          <span className="shrink-0 text-muted-foreground">
+                            {BS_STATUS_META[option.status].label}
+                          </span>
+                        )}
+                        {option.criticality && (
+                          <span className="shrink-0 text-muted-foreground">
+                            {CRITICALITY_LABEL[option.criticality]}
+                          </span>
+                        )}
                       </CommandItem>
                     ))}
                 </CommandGroup>

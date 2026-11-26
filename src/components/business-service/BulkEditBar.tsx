@@ -1,10 +1,13 @@
 'use client';
+/* eslint-disable security/detect-object-injection -- lookups are keyed by typed enum values (tier, lifecycle), never request input */
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, X } from 'lucide-react';
+import { Check, ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
+import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { Input } from '@/components/ui/shadcn/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import {
   Select,
   SelectContent,
@@ -15,6 +18,7 @@ import {
 import { notify } from '@/lib/toast';
 import { bulkEditAction } from '@/app/(app)/services/business/phase5b-actions';
 import type { BulkItemResult } from '@/lib/business-services/bulk';
+import { CRITICALITY_LABEL, LIFECYCLE_LABEL } from './HealthBadge';
 
 const KEEP = '__keep__';
 const CLEAR = '__clear__';
@@ -64,7 +68,42 @@ function Pick({
   );
 }
 
-/** Bulk change for the selected business services: preview first (dry run), then apply. */
+/** One attribute menu on the bar: its button shows the pending change, the popover holds the control. */
+function AttributeMenu({
+  label,
+  summary,
+  children,
+}: {
+  label: string;
+  /** The pending change, e.g. "Tier 1"; undefined when this attribute is left alone. */
+  summary?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          size="sm"
+          variant={summary ? 'secondary' : 'ghost'}
+          className="h-8 gap-1 text-xs"
+        >
+          {label}
+          {summary && <span className="max-w-[9rem] truncate font-normal">: {summary}</span>}
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" aria-hidden />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="start" className="w-64 space-y-2 p-3 text-sm">
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Bulk change for the selected business services as a floating bar at the bottom of the viewport:
+ * one menu per attribute, a dry-run preview in a popover, then apply.
+ */
 export default function BulkEditBar({
   ids,
   names,
@@ -86,6 +125,7 @@ export default function BulkEditBar({
   const [clearSlo, setClearSlo] = useState(false);
   const [reviewed, setReviewed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [results, setResults] = useState<{
     dryRun: boolean;
     items: BulkItemResult[];
@@ -116,6 +156,7 @@ export default function BulkEditBar({
     const next = changes();
     if (!Object.keys(next).length) {
       setError('Choose at least one change.');
+      setPreviewOpen(true);
       return;
     }
     setError(null);
@@ -123,9 +164,11 @@ export default function BulkEditBar({
       const result = await bulkEditAction({ ids: [...ids], changes: next, dryRun });
       if (!result.ok) {
         setError(result.error);
+        setPreviewOpen(true);
         return;
       }
       setResults({ dryRun: result.dryRun, items: result.results, key: currentKey });
+      setPreviewOpen(true);
       if (!result.dryRun) {
         notify.success(
           `Updated ${result.summary.ok} business service${result.summary.ok === 1 ? '' : 's'}${result.summary.failed ? `, ${result.summary.failed} failed` : ''}`
@@ -136,43 +179,76 @@ export default function BulkEditBar({
     });
   };
 
+  const teamName = teams.find(item => item.id === team)?.name;
+  const tags = [
+    ...tagList(addTags).map(tag => `+${tag}`),
+    ...tagList(removeTags).map(tag => `−${tag}`),
+  ];
+  const showResults = results && (!results.dryRun || results.key === currentKey);
+
   return (
-    <section aria-label="Bulk edit" className="space-y-3 border-b bg-muted/40 px-4 py-3 text-sm">
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-medium">
+    <section
+      aria-label="Bulk edit"
+      className="fixed bottom-10 left-1/2 z-40 w-[min(56rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-lg motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2"
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        <p className="mr-1 whitespace-nowrap font-medium tabular-nums">
           {ids.length} selected
-          <span className="ml-2 font-normal text-muted-foreground">up to 100 at a time</span>
+          <span className="sr-only">, up to 100 at a time</span>
         </p>
-        <Button type="button" variant="ghost" size="sm" onClick={onClear} className="gap-1">
-          <X className="h-4 w-4" aria-hidden />
-          Clear selection
-        </Button>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Pick
-          id="bulk-team"
-          label="Owner team"
-          value={team}
-          onChange={setTeam}
-          clearable
-          options={teams.map(item => ({ value: item.id, label: item.name }))}
-        />
-        <Pick
-          id="bulk-tier"
+        <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden />
+        <AttributeMenu
+          label="Owner"
+          summary={team === KEEP ? undefined : team === CLEAR ? 'Clear' : teamName}
+        >
+          <Pick
+            id="bulk-team"
+            label="Owner team"
+            value={team}
+            onChange={setTeam}
+            clearable
+            options={teams.map(item => ({ value: item.id, label: item.name }))}
+          />
+        </AttributeMenu>
+        <AttributeMenu
           label="Criticality"
-          value={tier}
-          onChange={setTier}
-          clearable
-          options={TIERS.map(item => ({ value: item, label: item.replace('TIER_', 'Tier ') }))}
-        />
-        <Pick
-          id="bulk-lifecycle"
+          summary={
+            tier === KEEP
+              ? undefined
+              : tier === CLEAR
+                ? 'Clear'
+                : CRITICALITY_LABEL[tier as (typeof TIERS)[number]]
+          }
+        >
+          <Pick
+            id="bulk-tier"
+            label="Criticality"
+            value={tier}
+            onChange={setTier}
+            clearable
+            options={TIERS.map(item => ({ value: item, label: CRITICALITY_LABEL[item] }))}
+          />
+        </AttributeMenu>
+        <AttributeMenu
           label="Lifecycle"
-          value={lifecycle}
-          onChange={setLifecycle}
-          options={LIFECYCLES.map(item => ({ value: item, label: item }))}
-        />
-        <div className="space-y-1">
+          summary={
+            lifecycle === KEEP
+              ? undefined
+              : LIFECYCLE_LABEL[lifecycle as (typeof LIFECYCLES)[number]]
+          }
+        >
+          <Pick
+            id="bulk-lifecycle"
+            label="Lifecycle"
+            value={lifecycle}
+            onChange={setLifecycle}
+            options={LIFECYCLES.map(item => ({ value: item, label: LIFECYCLE_LABEL[item] }))}
+          />
+        </AttributeMenu>
+        <AttributeMenu
+          label="SLO"
+          summary={clearSlo ? 'Clear' : slo.trim() ? `${slo.trim()}%` : undefined}
+        >
           <label htmlFor="bulk-slo" className="text-xs font-semibold">
             SLO target (%)
           </label>
@@ -185,100 +261,131 @@ export default function BulkEditBar({
             placeholder="No change"
             className="h-9"
           />
-          <label className="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
+          <div className="flex items-center gap-2 text-xs">
+            <Checkbox
+              id="bulk-clear-slo"
               checked={clearSlo}
-              onChange={event => setClearSlo(event.target.checked)}
+              onCheckedChange={checked => setClearSlo(checked === true)}
             />
-            Clear SLO target
-          </label>
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="bulk-add-tags" className="text-xs font-semibold">
-            Add tags
-          </label>
-          <Input
-            id="bulk-add-tags"
-            value={addTags}
-            onChange={event => setAddTags(event.target.value)}
-            placeholder="payments, pci"
-            className="h-9"
-          />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="bulk-remove-tags" className="text-xs font-semibold">
-            Remove tags
-          </label>
-          <Input
-            id="bulk-remove-tags"
-            value={removeTags}
-            onChange={event => setRemoveTags(event.target.value)}
-            placeholder="legacy"
-            className="h-9"
-          />
-        </div>
-        <label className="flex items-center gap-2 self-end pb-2 text-sm">
-          <input
-            type="checkbox"
+            <label htmlFor="bulk-clear-slo">Clear SLO target</label>
+          </div>
+        </AttributeMenu>
+        <AttributeMenu label="Tags" summary={tags.length ? tags.join(' ') : undefined}>
+          <div className="space-y-1">
+            <label htmlFor="bulk-add-tags" className="text-xs font-semibold">
+              Add tags
+            </label>
+            <Input
+              id="bulk-add-tags"
+              value={addTags}
+              onChange={event => setAddTags(event.target.value)}
+              placeholder="payments, pci"
+              className="h-9"
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="bulk-remove-tags" className="text-xs font-semibold">
+              Remove tags
+            </label>
+            <Input
+              id="bulk-remove-tags"
+              value={removeTags}
+              onChange={event => setRemoveTags(event.target.value)}
+              placeholder="legacy"
+              className="h-9"
+            />
+          </div>
+        </AttributeMenu>
+        <div className="flex items-center gap-2 px-2 text-xs">
+          <Checkbox
+            id="bulk-reviewed"
             checked={reviewed}
-            onChange={event => setReviewed(event.target.checked)}
+            onCheckedChange={checked => setReviewed(checked === true)}
           />
-          Mark as reviewed today
-        </label>
-      </div>
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={isPending}
-          onClick={() => run(true)}
-        >
-          Preview
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={isPending || !freshPreview}
-          title={freshPreview ? undefined : 'Preview these changes first'}
-          onClick={() => run(false)}
-        >
-          Apply to {ids.length}
-        </Button>
-      </div>
-      {results && (!results.dryRun || results.key === currentKey) && (
-        <div role="status" className="space-y-1 text-xs">
-          <p className="font-medium">
-            {results.dryRun ? 'Preview: ' : 'Result: '}
-            {results.items.filter(item => item.ok).length} ok,{' '}
-            {results.items.filter(item => !item.ok).length} failed
-          </p>
-          <ul className="max-h-40 space-y-0.5 overflow-auto">
-            {results.items.map(item => (
-              <li key={item.id} className="flex items-start gap-1.5">
-                {item.ok ? (
-                  <Check
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-operational"
-                    aria-hidden
-                  />
-                ) : (
-                  <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden />
-                )}
-                <span>
-                  {names.get(item.id) ?? item.id}
-                  {!item.ok && <span className="text-muted-foreground"> · {item.error}</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <label htmlFor="bulk-reviewed" className="whitespace-nowrap">
+            Mark reviewed today
+          </label>
         </div>
-      )}
+        <div className="ml-auto flex items-center gap-1.5">
+          <Popover open={previewOpen} onOpenChange={setPreviewOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8"
+                disabled={isPending}
+                onClick={event => {
+                  // Run the dry run instead of only toggling the popover; results open it.
+                  event.preventDefault();
+                  run(true);
+                }}
+              >
+                Preview
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="end" className="w-80 p-3 text-xs">
+              {error && (
+                <p role="alert" className="text-destructive">
+                  {error}
+                </p>
+              )}
+              {!error && !showResults && (
+                <p className="text-muted-foreground">The changes were edited; preview again.</p>
+              )}
+              {!error && showResults && (
+                <div role="status" className="space-y-1">
+                  <p className="font-medium">
+                    {results.dryRun ? 'Preview: ' : 'Result: '}
+                    {results.items.filter(item => item.ok).length} ok,{' '}
+                    {results.items.filter(item => !item.ok).length} failed
+                  </p>
+                  <ul className="max-h-48 space-y-0.5 overflow-auto">
+                    {results.items.map(item => (
+                      <li key={item.id} className="flex items-start gap-1.5">
+                        {item.ok ? (
+                          <Check
+                            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-ok"
+                            aria-hidden
+                          />
+                        ) : (
+                          <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden />
+                        )}
+                        <span>
+                          {names.get(item.id) ?? item.id}
+                          {!item.ok && (
+                            <span className="text-muted-foreground"> · {item.error}</span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8"
+            disabled={isPending || !freshPreview}
+            title={freshPreview ? undefined : 'Preview these changes first'}
+            onClick={() => run(false)}
+          >
+            Apply to {ids.length}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={onClear}
+            aria-label="Clear selection"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </Button>
+        </div>
+      </div>
     </section>
   );
 }

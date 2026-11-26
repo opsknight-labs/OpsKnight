@@ -58,6 +58,7 @@ describe('BulkEditBar', () => {
         onClear={vi.fn()}
       />
     );
+    fireEvent.click(screen.getByRole('button', { name: /^Tags/ }));
     fireEvent.change(screen.getByLabelText('Add tags'), { target: { value: 'pci, api' } });
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     await waitFor(() => expect(screen.getByRole('status')).toBeTruthy());
@@ -81,6 +82,8 @@ describe('CatalogDirectory selection and hygiene', () => {
       clearHref: '/services/business',
       pagination: { page: 1, pageSize: 25, totalCount: 2 },
     };
+    // Hygiene is an optional column: the viewer has turned every column on.
+    window.localStorage.setItem('opsknight:directory-columns:business-services', '');
     const { unmount } = render(<CatalogDirectory {...props} canManage={false} />);
     expect(screen.getAllByText('Review overdue').length).toBeGreaterThan(0);
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);

@@ -1,11 +1,17 @@
+/* eslint-disable security/detect-object-injection -- status is a typed enum value, never request input */
 import Link from 'next/link';
 import type { BsStatus } from '@/lib/business-services/contract';
 import { SectionCard } from '@/components/analytics/SectionCard';
+import { toneClasses } from '@/components/patterns/status-tone';
 import { cn } from '@/lib/utils';
+import { BS_STATUS_META } from './HealthBadge';
 
 export type WhyReason = { text: string; href?: string };
 
-/** The reasons behind the current status, each linking to its incident when the reader may open it. */
+/**
+ * The reasons behind the current status, each linking to its incident when the reader may open it.
+ * Carries the status tone as a left accent so an impacted service reads as such at a glance.
+ */
 export default function WhyStatusCard({
   status,
   reasons,
@@ -16,6 +22,11 @@ export default function WhyStatusCard({
   return (
     <SectionCard
       id="bs-why"
+      className={
+        status === 'OPERATIONAL'
+          ? undefined
+          : cn('border-l-4', toneClasses(BS_STATUS_META[status].tone).borderLeft)
+      }
       title="Why this status"
       description={
         status === 'OPERATIONAL'

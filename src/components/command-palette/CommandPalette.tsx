@@ -51,6 +51,10 @@ import {
 } from '@/components/ui/shadcn/command';
 import { DialogOverlay, DialogPortal } from '@/components/ui/shadcn/dialog';
 import UserAvatar from '@/components/UserAvatar';
+import { BS_STATUS_META } from '@/components/business-service/HealthBadge';
+import { toneClasses } from '@/components/patterns/status-tone';
+import type { BsStatus } from '@/lib/business-services/contract';
+import { cn } from '@/lib/utils';
 import PaletteKnowledgeResults from '@/components/search/PaletteKnowledgeResults';
 import { openSquire } from '@/components/squire/squire-bus';
 import {
@@ -341,6 +345,7 @@ const SUGGESTION_IDS = ['create-incident', 'nav-incidents', 'nav-services', 'key
 const ENTITY_ICONS: Record<EntityType, LucideIcon> = {
   incident: Zap,
   service: Server,
+  businessService: Boxes,
   team: Users,
   user: User,
   schedule: Calendar,
@@ -368,6 +373,20 @@ function ItemText({ title, subtitle }: { title: string; subtitle?: string }) {
   );
 }
 
+/** Health dot for a business-service result; the subtitle carries the same status in words. */
+function StatusDot({ status }: { status: string }) {
+  const meta = Object.prototype.hasOwnProperty.call(BS_STATUS_META, status)
+    ? BS_STATUS_META[status as BsStatus]
+    : null;
+  if (!meta) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className={cn('h-2 w-2 shrink-0 rounded-full', toneClasses(meta.tone).solid)}
+    />
+  );
+}
+
 function EntityItem({ result, onSelect }: { result: SearchResult; onSelect: () => void }) {
   const Icon = ENTITY_ICONS[result.type];
   return (
@@ -389,6 +408,7 @@ function EntityItem({ result, onSelect }: { result: SearchResult; onSelect: () =
         <Icon aria-hidden="true" />
       )}
       <ItemText title={result.title} subtitle={result.subtitle} />
+      {result.type === 'businessService' && result.status && <StatusDot status={result.status} />}
     </CommandItem>
   );
 }

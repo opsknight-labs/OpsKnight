@@ -345,7 +345,7 @@ export async function searchIncidentDetailBusinessServices(query: string) {
   if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_MANAGE }).allowed) return [];
   const { businessServiceReadWhere } = await import('@/lib/business-services/commands');
   const needle = z.string().max(120).parse(query).trim();
-  return prisma.businessService.findMany({
+  const rows = await prisma.businessService.findMany({
     where: {
       AND: [
         businessServiceReadWhere(actor),
@@ -354,6 +354,12 @@ export async function searchIncidentDetailBusinessServices(query: string) {
     },
     orderBy: { name: 'asc' },
     take: 20,
-    select: { id: true, name: true },
+    select: { id: true, name: true, criticality: true },
   });
+  // Health beside each option, so the responder picks the one that is actually hurting.
+  const { getHealthSnapshot } = await import('@/lib/business-services/health');
+  const health = await getHealthSnapshot()
+    .then(snapshot => snapshot.health)
+    .catch(() => null);
+  return rows.map(row => ({ ...row, status: health?.get(row.id)?.status ?? null }));
 }

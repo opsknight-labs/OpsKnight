@@ -919,6 +919,7 @@ export default async function IncidentDetailScreen({
                   {(canManageIncident || canAddIncidentNote) && (
                     <NotifyStakeholdersButton
                       incidentId={incident.id}
+                      incidentStatus={incident.status}
                       businessServices={impactedBusinessServices.filter(impact => !impact.excluded)}
                     />
                   )}

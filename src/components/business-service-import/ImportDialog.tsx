@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { notify } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 import { importBusinessServicesAction } from '@/app/(app)/services/business/setup/actions';
 import type { ImportFormat, ImportPlan } from '@/lib/business-services/import';
 
@@ -31,13 +32,13 @@ const FORMATS: Array<{ value: ImportFormat; label: string; example: string }> = 
     value: 'csv',
     label: 'CSV',
     example:
-      'name,description,criticality,owner_team,members,depends_on\nCheckout,Paying for an order,TIER_0,Payments,checkout-api;payments-api,Payments',
+      'name,description,criticality,owner_team,members,depends_on,attr.cost_center\nCheckout,Paying for an order,TIER_0,Payments,checkout-api;payments-api,Payments,cc-104',
   },
   {
     value: 'yaml',
     label: 'YAML',
     example:
-      'businessServices:\n  - name: Checkout\n    criticality: TIER_0\n    ownerTeam: Payments\n    members: [checkout-api, payments-api]\n    dependsOn: [Payments]',
+      'businessServices:\n  - name: Checkout\n    criticality: TIER_0\n    ownerTeam: Payments\n    members: [checkout-api, payments-api]\n    dependsOn: [Payments]\n    attributes: { cost_center: cc-104 }',
   },
   {
     value: 'backstage',
@@ -53,7 +54,7 @@ const ACTION_LABEL = { create: 'New', update: 'Changes', unchanged: 'Unchanged' 
  * "Import" secondary action for the business-service catalog: paste or upload CSV, YAML or a
  * Backstage catalog, review the dry-run diff, then apply it all at once.
  */
-export default function ImportBusinessServicesButton() {
+export default function ImportBusinessServicesButton({ className }: { className?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [format, setFormat] = useState<ImportFormat>('csv');
@@ -90,7 +91,7 @@ export default function ImportBusinessServicesButton() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="gap-1.5">
+        <Button type="button" variant="outline" size="sm" className={cn('gap-1.5', className)}>
           <Upload className="h-4 w-4" aria-hidden />
           Import
         </Button>

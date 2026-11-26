@@ -14,6 +14,7 @@ import {
   updateBusinessService,
 } from '@/lib/business-services/commands';
 import { previewBusinessServiceImpact } from '@/lib/business-services/impact-preview';
+import prisma from '@/lib/prisma';
 import { listTeamServiceOptions, searchBusinessServiceFormOptions } from './form-options';
 
 export type BusinessServiceActionResult =
@@ -76,6 +77,54 @@ export async function updateBusinessServiceAction(
     const actor = await managerActor();
     const parsedId = idSchema.parse(id);
     await updateBusinessService(parsedId, BusinessServiceInputSchema.parse(raw), { actor });
+    revalidate(parsedId);
+    return { ok: true, id: parsedId };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+const addMembersSchema = z
+  .object({ serviceIds: z.array(idSchema).min(1).max(50), critical: z.boolean() })
+  .strict();
+
+/**
+ * Adds services to a business service from its Members tab. Only the member set (and, for
+ * non-critical additions, the non-critical set) changes; everything else keeps its stored value.
+ * Write scope, reference checks and the audit entry come from updateBusinessService.
+ */
+export async function addBusinessServiceMembersAction(
+  id: string,
+  raw: z.input<typeof addMembersSchema>
+): Promise<BusinessServiceActionResult> {
+  try {
+    const actor = await managerActor();
+    const parsedId = idSchema.parse(id);
+    const input = addMembersSchema.parse(raw);
+    await prisma.$transaction(async tx => {
+      const current = await tx.businessServiceMember.findMany({
+        where: { businessServiceId: parsedId },
+        select: { serviceId: true, critical: true },
+      });
+      const existing = new Set(current.map(member => member.serviceId));
+      const added = input.serviceIds.filter(serviceId => !existing.has(serviceId));
+      await updateBusinessService(
+        parsedId,
+        {
+          memberServiceIds: [...existing, ...added],
+          ...(input.critical
+            ? {}
+            : {
+                nonCriticalServiceIds: [
+                  ...current.filter(member => !member.critical).map(member => member.serviceId),
+                  ...added,
+                ],
+              }),
+        },
+        { actor },
+        tx
+      );
+    });
     revalidate(parsedId);
     return { ok: true, id: parsedId };
   } catch (error) {

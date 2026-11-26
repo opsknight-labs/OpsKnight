@@ -11,8 +11,10 @@ const notifyMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ notify: notifyMock }));
 
 const notifyStakeholders = vi.hoisted(() => vi.fn());
+const previewRecipients = vi.hoisted(() => vi.fn());
 vi.mock('@/app/(app)/incidents/[id]/stakeholder-actions', () => ({
   notifyStakeholdersAction: notifyStakeholders,
+  previewStakeholderRecipientsAction: previewRecipients,
 }));
 vi.mock('@/app/(app)/services/business/actions', () => ({
   createBusinessServiceAction: vi.fn(),
@@ -31,9 +33,47 @@ import { mapServerErrors } from '@/components/service/BusinessServiceForm';
 import ImpactTimeline from '@/components/business-service/ImpactTimeline';
 import type { ImpactTimelineEntry } from '@/lib/business-services/contract';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  previewRecipients.mockResolvedValue({ ok: true, recipientCount: 4 });
+});
 
 describe('NotifyStakeholdersButton', () => {
+  it('starts at the stage the incident is in and previews the recipient count', async () => {
+    render(
+      <NotifyStakeholdersButton
+        incidentId="i1"
+        incidentStatus="ACKNOWLEDGED"
+        businessServices={[{ id: 'b', name: 'Checkout' }]}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Notify stakeholders/ }));
+    const message = (await screen.findByLabelText('Message')) as HTMLTextAreaElement;
+    expect(message.value).toMatch(/found the cause/);
+    expect(await screen.findByText('Up to 4 people will get it.')).toBeInTheDocument();
+    expect(previewRecipients).toHaveBeenCalledWith('i1', ['b']);
+  });
+
+  it('asks before a stage change replaces an edited message', async () => {
+    render(
+      <NotifyStakeholdersButton
+        incidentId="i1"
+        businessServices={[{ id: 'b', name: 'Checkout' }]}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Notify stakeholders/ }));
+    const dialog = await screen.findByRole('dialog');
+    const message = within(dialog).getByLabelText('Message') as HTMLTextAreaElement;
+    fireEvent.change(message, { target: { value: 'My own words' } });
+    fireEvent.click(within(dialog).getByRole('combobox'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Resolved' }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('You changed the message');
+    expect(message.value).toBe('My own words');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep my message' }));
+    expect(message.value).toBe('My own words');
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+  });
+
   it('keeps "$&" in a service name literal in the seeded message', async () => {
     render(
       <NotifyStakeholdersButton incidentId="i1" businessServices={[{ id: 'b', name: 'Pay$&Go' }]} />
@@ -125,15 +165,17 @@ describe('ImpactTimeline', () => {
     }) as unknown as ImpactTimelineEntry;
   const window = { from: new Date('2026-11-01T00:00:00Z'), to: new Date('2026-11-22T00:00:00Z') };
 
-  it('keeps the selected detail after a refresh hands back new entry objects, with a stable UTC timestamp', async () => {
+  it('keeps the selected day after a refresh hands back new entry objects; local time with UTC in the tooltip', async () => {
     const props = { window, showIncidents: true, now: window.to } as const;
     const { rerender } = render(
       <ImpactTimeline {...props} entries={[entry('2026-11-10T10:00:00Z')]} />
     );
-    const bar = screen.getAllByRole('button').find(b => b.getAttribute('aria-pressed') !== null)!;
-    expect(bar.getAttribute('aria-label')).toContain('started 2026-11-10 10:00 UTC');
-    fireEvent.click(bar);
-    expect(screen.getByTestId('impact-detail')).toBeInTheDocument();
+    const day = screen.getAllByRole('button').find(b => b.tabIndex === 0)!;
+    expect(day.getAttribute('title')).toContain('UTC');
+    fireEvent.click(day);
+    const detail = screen.getByTestId('impact-detail');
+    // The viewer's zone is UTC in this test; the tooltip always carries the UTC reading.
+    expect(within(detail).getByTitle('2026-11-10 10:00 UTC')).toBeInTheDocument();
     rerender(<ImpactTimeline {...props} entries={[entry('2026-11-10T10:00:00Z')]} />);
     await waitFor(() => expect(screen.getByTestId('impact-detail')).toBeInTheDocument());
   });
