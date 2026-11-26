@@ -1253,6 +1253,12 @@ export const BASIC_CASES: readonly SquireBasicEvalCase[] = [
     mustContain: ['unresolved (OPEN or ACKNOWLEDGED)'],
   },
   {
+    id: 'starter-curly-apostrophe',
+    question: 'I’m new',
+    expectIntent: 'GUIDANCE',
+    mustContain: ['Getting started'],
+  },
+  {
     id: 'starter-apostrophe',
     question: "I'm new",
     expectIntent: 'GUIDANCE',
