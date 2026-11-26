@@ -254,20 +254,30 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
         if (preferencesProvided) await syncSubscriptionServices(existing.id);
       }
     } else {
-      const created = await prisma.statusPageSubscription.create({
-        data: {
-          statusPageId,
-          email: normalizedEmail,
-          token: hashSubscriptionToken(token),
-          verificationToken: hashSubscriptionToken(verificationToken),
-          verificationTokenExpiresAt: verificationExpiresAt,
-          verified: false,
-          state: 'PENDING',
-          timezone: subscriberTimezone,
-          ...(preferencesProvided ? { preferences: normalizedPreferences ?? Prisma.DbNull } : {}),
-        },
-        select: { id: true },
-      });
+      let created: { id: string };
+      try {
+        created = await prisma.statusPageSubscription.create({
+          data: {
+            statusPageId,
+            email: normalizedEmail,
+            token: hashSubscriptionToken(token),
+            verificationToken: hashSubscriptionToken(verificationToken),
+            verificationTokenExpiresAt: verificationExpiresAt,
+            verified: false,
+            state: 'PENDING',
+            timezone: subscriberTimezone,
+            ...(preferencesProvided ? { preferences: normalizedPreferences ?? Prisma.DbNull } : {}),
+          },
+          select: { id: true },
+        });
+      } catch (error) {
+        // A concurrent first subscribe for this address won the race and sends the verification
+        // email; answer exactly as the non-racing path does so the form cannot reveal the race.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          return subscriptionAccepted();
+        }
+        throw error;
+      }
       if (preferencesProvided) await syncSubscriptionServices(created.id);
     }
 
