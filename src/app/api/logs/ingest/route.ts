@@ -46,8 +46,13 @@ export async function POST(req: NextRequest) {
 
     const { level, message, context } = parsed.data;
 
+    // This endpoint is unauthenticated. The logger lifts component, requestId, userId, duration
+    // and error to first-class log fields, so a caller must not be able to set them: keep what
+    // the client claimed under one key instead.
+    const { component, requestId, userId, duration, error, ...clientFields } = context ?? {};
     const logContext = {
-      ...context,
+      ...clientFields,
+      clientClaims: { component, requestId, userId, duration, error },
       source: 'client',
       userAgent: req.headers.get('user-agent'),
     };
