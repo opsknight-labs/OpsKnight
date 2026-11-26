@@ -27,6 +27,7 @@ export async function readIncidentAnalysisState(
     where: { AND: [{ id: incidentId }, incidentReadWhere(actor)] },
     select: {
       serviceId: true,
+      createdAt: true,
       updatedAt: true,
       intelligenceFingerprint: { select: { updatedAt: true, sourceUpdatedAt: true } },
     },
@@ -35,7 +36,9 @@ export async function readIncidentAnalysisState(
   const [policy, settings, snapshots, jobs] = await Promise.all([
     resolveEffectivePolicy(incident.serviceId),
     getIntelligenceSettings(),
-    prisma.intelligenceAnalysisSnapshot.findMany({ where: { incidentId }, take: 6 }),
+    // One snapshot per finding kind (unique on incident + kind), so there is no row to cap: a limit below the
+    // number of kinds made `fresh` impossible and left every incident reading "not verified".
+    prisma.intelligenceAnalysisSnapshot.findMany({ where: { incidentId } }),
     prisma.intelligenceWorkItem.findMany({
       where: {
         subjectKey: incidentId,
@@ -141,6 +144,20 @@ export async function readIncidentAnalysisState(
       message: pending
         ? 'Refreshing recommendations. Earlier suggestions are shown until fresh analysis finishes.'
         : 'Recommendations have not been verified against the current incident and policy.',
+    };
+  // Nothing is queued and nothing was ever indexed, and the incident is older than the history analysis
+  // covers: no job is ever going to run, so "waiting" would never end.
+  if (
+    !jobs.length &&
+    !incident.intelligenceFingerprint &&
+    !relevant.length &&
+    Date.now() - incident.createdAt.getTime() > settings.lookbackDays * 86_400_000
+  )
+    return {
+      ...base,
+      canRefresh: false,
+      status: 'UNAVAILABLE',
+      message: `This incident is older than the ${settings.lookbackDays} days of history Intelligence analyses, so it has no recommendations.`,
     };
   if (!fresh || pending || !incident.intelligenceFingerprint)
     return {
