@@ -46,7 +46,6 @@ export interface RetentionResult {
   aiResults: number;
   actionReceipts: number;
   dependencyObservations?: number;
-  noiseDecisions?: number;
   knowledgeChunks?: number;
   proactiveNotes?: number;
   metricAnomalies?: number;
@@ -284,12 +283,7 @@ export async function purgeExpiredIntelligenceData(
           SELECT bucket, "serviceId" FROM "DependencyObservationBucket"
           WHERE bucket < ${cutoff(30)} ORDER BY bucket, "serviceId" LIMIT ${limit})`)
     );
-    const noiseDecisions = await step('NoiseDecision', tx =>
-      tx.$executeRaw(Prisma.sql`
-        DELETE FROM "NoiseDecision" WHERE id IN (
-          SELECT id FROM "NoiseDecision" WHERE "createdAt" < ${cutoff(settings.correlationRetentionDays)}
-          ORDER BY "createdAt", id LIMIT ${limit})`)
-    );
+    // Pre-paging decisions are trimmed by the noise sweep (`sweepPrePagingControls`), on the same cutoff.
     // Squire memory (F4): incident-linked knowledge follows the fingerprint retention (and all derived
     // knowledge goes while the index is off); proactive notes are findings and follow finding retention.
     const knowledgeChunks = await step('KnowledgeChunk', tx =>
@@ -328,7 +322,6 @@ export async function purgeExpiredIntelligenceData(
       aiReservations,
       aiResults,
       actionReceipts,
-      ...(noiseDecisions > 0 ? { noiseDecisions } : {}),
       ...(dependencyObservations > 0 ? { dependencyObservations } : {}),
       ...(knowledgeChunks > 0 ? { knowledgeChunks } : {}),
       ...(proactiveNotes > 0 ? { proactiveNotes } : {}),
