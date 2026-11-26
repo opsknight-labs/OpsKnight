@@ -43,6 +43,7 @@ import {
 import { logger } from '@/lib/logger';
 import { notify as toast } from '@/lib/toast';
 import Link from 'next/link';
+import { exportToCsv } from '@/lib/export-csv';
 import {
   TwilioLogo,
   WhatsAppLogo,
@@ -361,45 +362,24 @@ export default function NotificationOperations({
         morePages = body.pagination.hasMore;
       }
 
-      const headers = [
-        'ID',
-        'Channel',
-        'Status',
-        'Category',
-        'Template',
-        'Destination',
-        'Source',
-        'Attempts',
-        'Latency(ms)',
-        'Timestamp',
-        'Error',
-      ];
-      const csvRows = [
-        headers,
-        ...allRows.map(r => [
-          r.id,
-          r.channel,
-          r.status,
-          r.category,
-          r.templateKey || '',
-          r.recipientDisplay || '',
-          r.incident?.title || r.sourceType || '',
-          r.attempts,
-          r.lastAttempt?.latencyMs ?? '',
-          r.createdAt,
-          r.errorMsg || '',
-        ]),
-      ];
-      const csv = csvRows
-        .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-        .join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `notification-operations-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      // exportToCsv neutralises spreadsheet formulas (=, +, -, @) in untrusted cells such as incident titles.
+      exportToCsv(
+        `notification-operations-${new Date().toISOString().slice(0, 10)}`,
+        [
+          { header: 'ID', accessor: r => r.id },
+          { header: 'Channel', accessor: r => r.channel },
+          { header: 'Status', accessor: r => r.status },
+          { header: 'Category', accessor: r => r.category },
+          { header: 'Template', accessor: r => r.templateKey || '' },
+          { header: 'Destination', accessor: r => r.recipientDisplay || '' },
+          { header: 'Source', accessor: r => r.incident?.title || r.sourceType || '' },
+          { header: 'Attempts', accessor: r => r.attempts },
+          { header: 'Latency(ms)', accessor: r => r.lastAttempt?.latencyMs ?? '' },
+          { header: 'Timestamp', accessor: r => r.createdAt },
+          { header: 'Error', accessor: r => r.errorMsg || '' },
+        ],
+        allRows
+      );
       toast.success(`Exported ${allRows.length} notification operations to CSV.`);
     } catch (err) {
       logger.error('notification_operations.export_failed', { error: String(err) });
