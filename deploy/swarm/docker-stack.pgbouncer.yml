@@ -15,7 +15,7 @@ version: '3.8'
 
 services:
   opsknight-pgbouncer:
-    image: ${OPSKNIGHT_PGBOUNCER_IMAGE:-ghcr.io/opsknight-labs/opsknight-pgbouncer:1.26.0}
+    image: ${OPSKNIGHT_PGBOUNCER_IMAGE:-ghcr.io/opsknight-labs/opsknight-pgbouncer:1.26.1}
     environment:
       PGBOUNCER_AUTH_FILE: /run/secrets/pgbouncer_userlist
       PGBOUNCER_DB_PASSWORD_FILE: /run/secrets/pgbouncer_db_password

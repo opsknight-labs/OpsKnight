@@ -558,7 +558,7 @@ async function main() {
   if (usePgBouncer) {
     // Reuse the repository's pinned base and production configuration entrypoint.
     const poolImageRef =
-      'ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75';
+      'ghcr.io/icoretech/pgbouncer-docker:1.26.1@sha256:c6696e27b0af0b7897eb191bcb4edf295e790a9411cb1f67d3a2d0b7ac06e962';
     try {
       await invoke(['image', 'inspect', poolImageRef]);
     } catch {

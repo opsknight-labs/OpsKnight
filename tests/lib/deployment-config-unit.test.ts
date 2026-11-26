@@ -877,9 +877,9 @@ describe('deployment configuration invariants', () => {
       '${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support'
     );
 
-    // PgBouncer 1.26.0 security update and dynamic entrypoint
+    // PgBouncer 1.26.1 security update and dynamic entrypoint
     expect(pgbouncer).toContain(
-      'ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75'
+      'ghcr.io/icoretech/pgbouncer-docker:1.26.1@sha256:c6696e27b0af0b7897eb191bcb4edf295e790a9411cb1f67d3a2d0b7ac06e962'
     );
     expect(pgbouncer).toContain('../images/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro');
     expect(pgbouncer).toContain('/usr/bin/psql -h 127.0.0.1 -p 6432');
@@ -892,11 +892,19 @@ describe('deployment configuration invariants', () => {
       'DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://'
     );
 
-    // Helm PgBouncer aligns on 1.26.0 security update
+    // Helm PgBouncer aligns on 1.26.1 security update
     const helm = read('deploy/kubernetes/helm/opsknight/values.yaml');
-    expect(helm).toContain("tag: '1.26.0'");
+    expect(helm).toContain("tag: '1.26.1'");
     expect(helm).toContain(
-      "digest: 'sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75'"
+      "digest: 'sha256:c6696e27b0af0b7897eb191bcb4edf295e790a9411cb1f67d3a2d0b7ac06e962'"
+    );
+    expect(read('deploy/images/pgbouncer/Dockerfile')).toContain(
+      'FROM ghcr.io/icoretech/pgbouncer-docker:1.26.1@sha256:c6696e27b0af0b7897eb191bcb4edf295e790a9411cb1f67d3a2d0b7ac06e962'
+    );
+    expect(
+      read('deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-deployment.yaml')
+    ).toContain(
+      'image: ghcr.io/icoretech/pgbouncer-docker@sha256:c6696e27b0af0b7897eb191bcb4edf295e790a9411cb1f67d3a2d0b7ac06e962'
     );
 
     // Dedicated one-shot migration contract

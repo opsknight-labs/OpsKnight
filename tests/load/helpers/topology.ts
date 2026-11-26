@@ -295,7 +295,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     k8sNamespace: 'helm-test',
     deployCommands: [
       'kubectl create namespace helm-test --dry-run=client -o yaml | kubectl apply -f -',
-      'helm upgrade --install opsknight deploy/kubernetes/helm/opsknight -n helm-test -f deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml -f tests/load/deploy/kubernetes/helm/values-load-cert.yaml --set image.repository=opsknight-certification --set-string image.tag=local --set image.pullPolicy=Never --set pgbouncer.enabled=true --set pgbouncer.image.repository=opsknight-pgbouncer --set-string pgbouncer.image.tag=1.26.0 --set-string pgbouncer.image.digest="" --set pgbouncer.image.pullPolicy=Never --set postgresql.image.pullPolicy=Never --wait --timeout 5m',
+      'helm upgrade --install opsknight deploy/kubernetes/helm/opsknight -n helm-test -f deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml -f tests/load/deploy/kubernetes/helm/values-load-cert.yaml --set image.repository=opsknight-certification --set-string image.tag=local --set image.pullPolicy=Never --set pgbouncer.enabled=true --set pgbouncer.image.repository=opsknight-pgbouncer --set-string pgbouncer.image.tag=1.26.1 --set-string pgbouncer.image.digest="" --set pgbouncer.image.pullPolicy=Never --set postgresql.image.pullPolicy=Never --wait --timeout 5m',
       'pkill -f "kubectl -n helm-test port-forward" 2>/dev/null || true',
       'nohup bash -c "while true; do kubectl -n helm-test port-forward service/opsknight 3100:80 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
       'nohup bash -c "while true; do kubectl -n helm-test port-forward service/opsknight-postgresql 5432:5432 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
@@ -350,7 +350,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     k8sNamespace: 'kustomize-test',
     deployCommands: [
       'kubectl create namespace kustomize-test --dry-run=client -o yaml | kubectl apply -f -',
-      'kubectl kustomize tests/load/deploy/kubernetes/kustomize/load-cert-overlay | sed "s/namespace: opsknight/namespace: kustomize-test/g; s|ghcr.io/opsknight-labs/opsknight:split-runtime-image-required|opsknight-certification:local|g; s|ghcr.io/icoretech/pgbouncer-docker@[^ \\"]*|opsknight-pgbouncer:1.26.0|g; s/imagePullPolicy: Always/imagePullPolicy: Never/g" | kubectl apply -f -',
+      'kubectl kustomize tests/load/deploy/kubernetes/kustomize/load-cert-overlay | sed "s/namespace: opsknight/namespace: kustomize-test/g; s|ghcr.io/opsknight-labs/opsknight:split-runtime-image-required|opsknight-certification:local|g; s|ghcr.io/icoretech/pgbouncer-docker@[^ \\"]*|opsknight-pgbouncer:1.26.1|g; s/imagePullPolicy: Always/imagePullPolicy: Never/g" | kubectl apply -f -',
       'kubectl rollout status statefulset/opsknight-postgres -n kustomize-test --timeout=5m && kubectl rollout status deployment -n kustomize-test --timeout=5m',
       'pkill -f "kubectl -n kustomize-test port-forward" 2>/dev/null || true',
       'nohup bash -c "while true; do kubectl -n kustomize-test port-forward service/opsknight-service 3100:80 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
@@ -818,7 +818,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     k8sNamespace: 'helm-test',
     deployCommands: [
       'kubectl create namespace helm-test --dry-run=client -o yaml | kubectl apply -f -',
-      'helm upgrade --install opsknight deploy/kubernetes/helm/opsknight -n helm-test -f deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml -f tests/load/deploy/kubernetes/helm/values-load-cert.yaml --set image.repository=opsknight-certification --set-string image.tag=local --set image.pullPolicy=Never --set pgbouncer.enabled=true --set pgbouncer.image.repository=opsknight-pgbouncer --set-string pgbouncer.image.tag=1.26.0 --set-string pgbouncer.image.digest="" --set pgbouncer.image.pullPolicy=Never --set postgresql.image.pullPolicy=Never --wait --timeout 5m',
+      'helm upgrade --install opsknight deploy/kubernetes/helm/opsknight -n helm-test -f deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml -f tests/load/deploy/kubernetes/helm/values-load-cert.yaml --set image.repository=opsknight-certification --set-string image.tag=local --set image.pullPolicy=Never --set pgbouncer.enabled=true --set pgbouncer.image.repository=opsknight-pgbouncer --set-string pgbouncer.image.tag=1.26.1 --set-string pgbouncer.image.digest="" --set pgbouncer.image.pullPolicy=Never --set postgresql.image.pullPolicy=Never --wait --timeout 5m',
       'pkill -f "kubectl -n helm-test port-forward" 2>/dev/null || true',
       'nohup bash -c "while true; do kubectl -n helm-test port-forward service/opsknight 3100:80 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
       'nohup bash -c "while true; do kubectl -n helm-test port-forward service/opsknight-postgresql 5432:5432 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
@@ -954,7 +954,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     k8sNamespace: 'kustomize-test',
     deployCommands: [
       'kubectl create namespace kustomize-test --dry-run=client -o yaml | kubectl apply -f -',
-      'kubectl kustomize tests/load/deploy/kubernetes/kustomize/load-cert-overlay | sed "s/name: opsknight$/name: kustomize-test/g; s/namespace: opsknight/namespace: kustomize-test/g; s|ghcr.io/opsknight-labs/opsknight:split-runtime-image-required|opsknight-certification:local|g; s|ghcr.io/icoretech/pgbouncer-docker@[^ \\"]*|opsknight-pgbouncer:1.26.0|g; s/imagePullPolicy: Always/imagePullPolicy: Never/g" | kubectl apply -f -',
+      'kubectl kustomize tests/load/deploy/kubernetes/kustomize/load-cert-overlay | sed "s/name: opsknight$/name: kustomize-test/g; s/namespace: opsknight/namespace: kustomize-test/g; s|ghcr.io/opsknight-labs/opsknight:split-runtime-image-required|opsknight-certification:local|g; s|ghcr.io/icoretech/pgbouncer-docker@[^ \\"]*|opsknight-pgbouncer:1.26.1|g; s/imagePullPolicy: Always/imagePullPolicy: Never/g" | kubectl apply -f -',
       'kubectl rollout status statefulset/opsknight-postgres -n kustomize-test --timeout=5m && kubectl rollout status deployment -n kustomize-test --timeout=5m',
       'pkill -f "kubectl -n kustomize-test port-forward" 2>/dev/null || true',
       'nohup bash -c "while true; do kubectl -n kustomize-test port-forward service/opsknight-service 3100:80 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
@@ -1194,8 +1194,8 @@ function getAugmentedEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
     ENCRYPTION_KEY: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
     OPSKNIGHT_IMAGE: 'opsknight-certification:local',
     OPSKNIGHT_PULL_POLICY: 'never',
-    PGBOUNCER_IMAGE: 'opsknight-pgbouncer:1.26.0',
-    OPSKNIGHT_PGBOUNCER_IMAGE: 'opsknight-pgbouncer:1.26.0',
+    PGBOUNCER_IMAGE: 'opsknight-pgbouncer:1.26.1',
+    OPSKNIGHT_PGBOUNCER_IMAGE: 'opsknight-pgbouncer:1.26.1',
     AUTO_LABEL_DATABASE_NODE: 'true',
     SWARM_RESOLVE_IMAGE_NEVER: 'true',
     OPSKNIGHT_LOAD_CERT_DB: 'true',

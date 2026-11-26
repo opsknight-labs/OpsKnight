@@ -15,7 +15,7 @@ NS="${DOCKERHUB_NAMESPACE:?set DOCKERHUB_NAMESPACE}"
 OWNER="${GHCR_OWNER:-opsknight-labs}"
 IMAGES="opsknight opsknight-agent opsknight-pgbouncer opsknight-test"
 # shortcut: pgbouncer is versioned separately from the app; keep in sync with docker-image.yml.
-PGBOUNCER_VERSION="${PGBOUNCER_VERSION:-1.26.0}"
+PGBOUNCER_VERSION="${PGBOUNCER_VERSION:-1.26.1}"
 
 copy() {
   local image="$1" tag="$2" owner="${3:-$OWNER}"

@@ -32,7 +32,7 @@ deploy/
 │   │   └── monitoring/
 │   └── helm/opsknight/
 ├── images/
-│   └── pgbouncer/                         # Shared PgBouncer 1.26.0 dynamic image
+│   └── pgbouncer/                         # Shared PgBouncer 1.26.1 dynamic image
 └── scripts/
     ├── check-layout.cjs                   # CI guard enforcing canonical deploy/ tree
     ├── validate-runtime-capacity.cjs      # Connection pool capacity calculator
