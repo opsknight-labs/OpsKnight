@@ -223,6 +223,7 @@ export async function getBusinessServiceStats(
     weightedUptimePercent:
       slo.windowMs > 0 ? Math.max(0, (1 - slo.downtimeMs / slo.windowMs) * 100) : 100,
     weightedDowntimeMinutes: slo.downtimeMs / MINUTE,
+    weightedWindowMinutes: slo.windowMs / MINUTE,
     incidentCount: aggregate?.incidents ?? 0,
     mttaMinutes: minutes(aggregate?.mtta),
     mttrMinutes: minutes(aggregate?.mttr),

@@ -20,6 +20,18 @@ describe('computeErrorBudget', () => {
   });
 });
 
+describe('computeErrorBudget with maintenance', () => {
+  it('shrinks the allowed minutes with the window minus maintenance', () => {
+    const b = computeErrorBudget({
+      targetPercent: 99.9,
+      windowDays: 30,
+      windowMinutes: 15 * 24 * 60,
+      downtimeMinutes: 0,
+    });
+    expect(b.allowedMinutes).toBeCloseTo(21.6);
+  });
+});
+
 describe('weightedDowntime', () => {
   it('weights severity and takes the heaviest weight where intervals overlap', () => {
     const { downtimeMs, windowMs } = weightedDowntime(

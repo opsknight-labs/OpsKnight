@@ -12,6 +12,8 @@ import {
   impactReportCsv,
   parseImpactReportParams,
 } from '@/lib/business-services/impact-report';
+import { collectServiceReviews } from '@/lib/business-services/reviews/data';
+import { reviewPeriod } from '@/lib/business-services/reviews/period';
 import { createCustomerImpactReport } from '@/lib/business-services/customer-reports';
 import {
   reconcileBusinessServiceImpacts,
@@ -261,5 +263,36 @@ describe('M4 customer report idempotency', () => {
     ).rejects.toMatchObject({ code: 'RESOURCE_CONFLICT' });
     const retry = await createCustomerImpactReport(bs.id, body, { actor });
     expect(retry.created).toBe(false);
+  });
+});
+
+describe('M6 review cost uses weighted downtime', () => {
+  it('prices a LOW-urgency hour at a quarter, like the stats do', async () => {
+    const { service, bs } = await impactScenario();
+    await db.businessService.update({
+      where: { id: bs.id },
+      data: { revenuePerHourCents: 600_000 },
+    });
+    const now = new Date();
+    const period = reviewPeriod(now, 'UTC');
+    const start = new Date(period.to.getTime() - 3 * 3_600_000);
+    const incident = await createTestIncident('Slow', service.id, {
+      urgency: 'LOW',
+      status: 'RESOLVED',
+      createdAt: start,
+      resolvedAt: new Date(start.getTime() + 3_600_000),
+    });
+    await db.incidentBusinessServiceImpact.create({
+      data: {
+        incidentId: incident.id,
+        businessServiceId: bs.id,
+        source: 'DIRECT',
+        startedAt: start,
+        endedAt: new Date(start.getTime() + 3_600_000),
+      },
+    });
+    const review = (await collectServiceReviews([bs.id], period, 'UTC')).get(bs.id)!;
+    expect(review.downtimeMinutes).toBeCloseTo(60, 0);
+    expect(review.estimatedCostCents).toBe(150_000);
   });
 });
