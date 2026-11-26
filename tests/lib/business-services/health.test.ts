@@ -3,6 +3,7 @@ import {
   computeHealth,
   impactThreshold,
   incidentImpactSources,
+  latestImpactRows,
   meetsThreshold,
   type HealthBusinessService,
   type HealthIncident,
@@ -569,5 +570,20 @@ describe('empty services, quorum and hop depth', () => {
     expect(status(4, 'd')).toBe('PARTIAL_OUTAGE');
     expect(status(1, 'b')).toBe('OPERATIONAL');
     expect(status(1, 'a')).toBe('PARTIAL_OUTAGE');
+  });
+});
+
+describe('latestImpactRows ties', () => {
+  it('lets an exclusion win over a mark with the same start, whatever the order', () => {
+    const startedAt = new Date('2026-11-22T10:00:00Z');
+    const base = { incidentId: 'i1', businessServiceId: 'b1', createdById: null, startedAt };
+    const mark = { ...base, source: 'MANUAL' as const, excluded: false };
+    const unmark = { ...base, source: 'MANUAL' as const, excluded: true };
+    for (const rows of [
+      [mark, unmark],
+      [unmark, mark],
+    ]) {
+      expect([...latestImpactRows(rows).values()][0].excluded).toBe(true);
+    }
   });
 });

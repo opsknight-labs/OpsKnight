@@ -7,9 +7,16 @@ import {
   impactReportCsv,
   parseImpactReportParams,
 } from '@/lib/business-services/impact-report';
+import { setIncidentImpactCommand, syncIncidentImpacts } from '@/lib/business-services/impacts';
 import { setSupportingBusinessServices } from '@/lib/business-services/supporting';
 import { setupMcpReadDatabase } from '../helpers/mcp-read-scenarios';
-import { createTestTeam, createTestUser, testPrisma as db } from '../helpers/test-db';
+import {
+  createTestIncident,
+  createTestService,
+  createTestTeam,
+  createTestUser,
+  testPrisma as db,
+} from '../helpers/test-db';
 
 setupMcpReadDatabase();
 beforeEach(() => resetBusinessServiceHealthCacheForTests());
@@ -91,5 +98,61 @@ describe('H1 concurrent supporting updates', () => {
       { actor: actorFor(admin, 'ADMIN') }
     );
     expect(await db.realtimeChange.count()).toBeGreaterThan(before);
+  });
+});
+
+async function impactScenario() {
+  const tag = Math.random().toString(36).slice(2, 8);
+  const service = await createTestService(`svc-${tag}`);
+  const bs = await db.businessService.create({
+    data: { name: `BS-${tag}`, members: { create: [{ serviceId: service.id }] } },
+  });
+  return { service, bs };
+}
+
+describe('H2 incident resolved before the first impact sync', () => {
+  it('records a closed interval for an incident that was resolved before any sync ran', async () => {
+    const { service, bs } = await impactScenario();
+    const createdAt = new Date(Date.now() - 3 * 3_600_000);
+    const resolvedAt = new Date(Date.now() - 2 * 3_600_000);
+    const incident = await createTestIncident('Quick outage', service.id, {
+      status: 'RESOLVED',
+      createdAt,
+      resolvedAt,
+    });
+    await syncIncidentImpacts([incident.id]);
+    const rows = await db.incidentBusinessServiceImpact.findMany({
+      where: { incidentId: incident.id, businessServiceId: bs.id },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].startedAt.getTime()).toBe(createdAt.getTime());
+    expect(rows[0].endedAt?.getTime()).toBe(resolvedAt.getTime());
+    // Replays converge.
+    await syncIncidentImpacts([incident.id]);
+    expect(
+      await db.incidentBusinessServiceImpact.count({ where: { incidentId: incident.id } })
+    ).toBe(1);
+  });
+});
+
+describe('M1 sync versus unmark', () => {
+  it('never leaves a counted interval behind after an unmark that ran concurrently with a sync', async () => {
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const actor = actorFor(admin, 'ADMIN');
+    const { service, bs } = await impactScenario();
+    for (let round = 0; round < 15; round++) {
+      const incident = await createTestIncident(`Race ${round}`, service.id);
+      await Promise.all([
+        syncIncidentImpacts([incident.id]),
+        setIncidentImpactCommand(
+          { incidentId: incident.id, businessServiceId: bs.id, impacted: false },
+          actor
+        ),
+      ]);
+      const counted = await db.incidentBusinessServiceImpact.count({
+        where: { incidentId: incident.id, businessServiceId: bs.id, excluded: false },
+      });
+      expect(counted).toBe(0);
+    }
   });
 });

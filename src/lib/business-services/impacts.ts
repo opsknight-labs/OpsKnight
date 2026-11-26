@@ -53,7 +53,7 @@ export async function syncIncidentImpacts(
 ): Promise<{ created: number; updated: number }> {
   const ids = [...new Set(incidentIds)];
   if (!ids.length) return { created: 0, updated: 0 };
-  const [snapshot, incidents, rows] = await Promise.all([
+  const [snapshot, incidents] = await Promise.all([
     getHealthSnapshot(),
     prisma.incident.findMany({
       where: { id: { in: ids } },
@@ -67,91 +67,113 @@ export async function syncIncidentImpacts(
         resolvedAt: true,
       },
     }),
-    prisma.incidentBusinessServiceImpact.findMany({
+  ]);
+  const readRows = (db: Prisma.TransactionClient | typeof prisma) =>
+    db.incidentBusinessServiceImpact.findMany({
       where: { incidentId: { in: ids } },
       select: IMPACT_ROW_SELECT,
-    }),
-  ]);
-  const rowsByIncident = new Map<string, typeof rows>();
-  for (const row of rows) {
-    rowsByIncident.set(row.incidentId, [...(rowsByIncident.get(row.incidentId) ?? []), row]);
-  }
-  const creates: Prisma.IncidentBusinessServiceImpactCreateManyInput[] = [];
-  const updates = new Map<
-    string,
-    { ids: string[]; data: Prisma.IncidentBusinessServiceImpactUpdateManyMutationInput }
-  >();
-  const queue = (id: string, data: Prisma.IncidentBusinessServiceImpactUpdateManyMutationInput) => {
-    const key = JSON.stringify(data);
-    const entry = updates.get(key);
-    if (entry) entry.ids.push(id);
-    else updates.set(key, { ids: [id], data });
-  };
+    });
 
-  for (const incident of incidents) {
-    const active = isActiveIncidentStatus(incident.status);
-    const existing = rowsByIncident.get(incident.id) ?? [];
-    const desired: Map<string, BusinessServiceImpactSource> = active
-      ? incidentImpactSources({ ...snapshot.inputs, impactRows: existing }, incident)
-      : new Map();
-    const endedAt = active ? now : (incident.resolvedAt ?? now);
-    // Any stray open interval that is not the latest is closed (concurrent writers).
-    const latest = latestImpactRows(existing);
-    const latestIds = new Set([...latest.values()].map(row => row.id));
-    for (const row of existing) {
-      if (row.endedAt === null && !latestIds.has(row.id)) queue(row.id, { endedAt: now });
+  const plan = (rows: Awaited<ReturnType<typeof readRows>>) => {
+    const rowsByIncident = new Map<string, typeof rows>();
+    for (const row of rows) {
+      rowsByIncident.set(row.incidentId, [...(rowsByIncident.get(row.incidentId) ?? []), row]);
     }
-    for (const row of latest.values()) {
-      const open = row.endedAt === null;
-      const want = desired.get(row.businessServiceId);
-      const impacting = !row.excluded && (row.source === 'MANUAL' ? active : !!want);
-      if (!impacting) {
-        if (open) queue(row.id, { endedAt });
-        continue;
+    const creates: Prisma.IncidentBusinessServiceImpactCreateManyInput[] = [];
+    const updates = new Map<
+      string,
+      { ids: string[]; data: Prisma.IncidentBusinessServiceImpactUpdateManyMutationInput }
+    >();
+    const lockKeys = new Set<string>();
+    const queue = (
+      id: string,
+      data: Prisma.IncidentBusinessServiceImpactUpdateManyMutationInput
+    ) => {
+      const key = JSON.stringify(data);
+      const entry = updates.get(key);
+      if (entry) entry.ids.push(id);
+      else updates.set(key, { ids: [id], data });
+    };
+
+    for (const incident of incidents) {
+      const active = isActiveIncidentStatus(incident.status);
+      const existing = rowsByIncident.get(incident.id) ?? [];
+      // An incident resolved before its first sync has no rows yet: compute what it impacted
+      // while it was open, so its downtime still reaches stats, SLOs and reviews.
+      const resolvedUnseen = !active && incident.status === 'RESOLVED' && existing.length === 0;
+      const desired: Map<string, BusinessServiceImpactSource> =
+        active || resolvedUnseen
+          ? incidentImpactSources({ ...snapshot.inputs, impactRows: existing }, incident)
+          : new Map();
+      const endedAt = active ? now : (incident.resolvedAt ?? now);
+      // Any stray open interval that is not the latest is closed (concurrent writers).
+      const latest = latestImpactRows(existing);
+      const latestIds = new Set([...latest.values()].map(row => row.id));
+      for (const row of existing) {
+        lockKeys.add(`${incident.id}:${row.businessServiceId}`);
+        if (row.endedAt === null && !latestIds.has(row.id)) queue(row.id, { endedAt: now });
       }
-      const source = row.source === 'MANUAL' ? 'MANUAL' : want!;
-      if (!open) {
+      for (const row of latest.values()) {
+        const open = row.endedAt === null;
+        const want = desired.get(row.businessServiceId);
+        const impacting = !row.excluded && (row.source === 'MANUAL' ? active : !!want);
+        if (!impacting) {
+          if (open) queue(row.id, { endedAt });
+          continue;
+        }
+        const source = row.source === 'MANUAL' ? 'MANUAL' : want!;
+        if (!open) {
+          creates.push({
+            incidentId: incident.id,
+            businessServiceId: row.businessServiceId,
+            source,
+            startedAt: now,
+            createdById: row.source === 'MANUAL' ? row.createdById : null,
+          });
+        } else if (source !== row.source) {
+          queue(row.id, { source });
+        }
+      }
+      const known = new Set(existing.map(row => row.businessServiceId));
+      for (const [businessServiceId, source] of desired) {
+        lockKeys.add(`${incident.id}:${businessServiceId}`);
+        if (known.has(businessServiceId) || !snapshot.byId.has(businessServiceId)) continue;
+        // The first interval starts with the incident, even when this sync runs late.
         creates.push({
           incidentId: incident.id,
-          businessServiceId: row.businessServiceId,
+          businessServiceId,
           source,
-          startedAt: now,
-          createdById: row.source === 'MANUAL' ? row.createdById : null,
+          startedAt: incident.createdAt,
+          ...(resolvedUnseen ? { endedAt: incident.resolvedAt ?? incident.createdAt } : {}),
         });
-      } else if (source !== row.source) {
-        queue(row.id, { source });
       }
     }
-    const known = new Set(existing.map(row => row.businessServiceId));
-    for (const [businessServiceId, source] of desired) {
-      if (known.has(businessServiceId) || !snapshot.byId.has(businessServiceId)) continue;
-      // The first interval starts with the incident, even when this sync runs late.
-      creates.push({
-        incidentId: incident.id,
-        businessServiceId,
-        source,
-        startedAt: incident.createdAt,
-      });
-    }
-  }
+    return { creates, updates, lockKeys };
+  };
 
-  let updated = 0;
-  for (const update of updates.values()) {
-    const result = await prisma.incidentBusinessServiceImpact.updateMany({
-      where: { id: { in: update.ids } },
-      data: update.data,
-    });
-    updated += result.count;
-  }
-  // skipDuplicates rides the open-interval unique index, so a concurrent sync cannot double-open.
-  const created = creates.length
-    ? (
-        await prisma.incidentBusinessServiceImpact.createMany({
-          data: creates,
-          skipDuplicates: true,
-        })
-      ).count
-    : 0;
+  const first = plan(await readRows(prisma));
+  if (!first.creates.length && !first.updates.size) return { created: 0, updated: 0 };
+  // Pair locks (shared with setIncidentImpactCommand) keep a concurrent unmark from being undone
+  // by a stale plan: rows are re-read under the locks and the plan is rebuilt from them.
+  const keys = [...first.lockKeys].sort();
+  const { created, updated } = await prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(k, 0)) FROM (SELECT k FROM unnest(${keys.map(key => `bs-impact:${key}`)}::text[]) AS t(k) ORDER BY k) AS locks`;
+    const { creates, updates } = plan(await readRows(tx));
+    let updated = 0;
+    for (const update of updates.values()) {
+      const result = await tx.incidentBusinessServiceImpact.updateMany({
+        where: { id: { in: update.ids } },
+        data: update.data,
+      });
+      updated += result.count;
+    }
+    // skipDuplicates rides the open-interval unique index, so a concurrent sync cannot double-open.
+    const created = creates.length
+      ? (await tx.incidentBusinessServiceImpact.createMany({ data: creates, skipDuplicates: true }))
+          .count
+      : 0;
+    return { created, updated };
+  });
   return { created, updated };
 }
 
