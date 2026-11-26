@@ -67,10 +67,28 @@ describe('central escalation notification intents', () => {
     mocks.deliverCentralNotification.mockResolvedValue({ success: true, claimed: true });
   });
 
-  it('does not widen a voice-only step to an enabled email channel', async () => {
+  it('pages on the recipient own channel when the step channels do not overlap theirs', async () => {
     mocks.getUserNotificationChannels.mockResolvedValue(['EMAIL']);
     const plan = await planEscalationNotificationIntents({ ...input, stepChannels: ['VOICE'] });
+    expect(plan.intents.map(intent => intent.channel)).toEqual(['EMAIL']);
+    expect(plan.inAppUserIds).toEqual(['user-1']);
+    expect(plan.unreachableUserIds).toEqual([]);
+  });
+
+  it('keeps only the overlapping channels when the step and recipient share some', async () => {
+    mocks.getUserNotificationChannels.mockResolvedValue(['EMAIL', 'SMS']);
+    const plan = await planEscalationNotificationIntents({
+      ...input,
+      stepChannels: ['SMS', 'VOICE'],
+    });
+    expect(plan.intents.map(intent => intent.channel)).toEqual(['SMS']);
+  });
+
+  it('records an unreachable responder only when they have no external channel at all', async () => {
+    mocks.getUserNotificationChannels.mockResolvedValue([]);
+    const plan = await planEscalationNotificationIntents({ ...input, stepChannels: ['VOICE'] });
     expect(plan.intents).toEqual([]);
+    expect(plan.unreachableUserIds).toEqual(['user-1']);
     expect(plan.inAppUserIds).toEqual(['user-1']);
   });
 

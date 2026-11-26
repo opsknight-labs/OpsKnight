@@ -214,7 +214,10 @@ export async function planEscalationNotificationIntents(input: {
 
     let channels = enabledChannels as NotificationDeliveryChannel[];
     if (stepChannels && stepChannels.length > 0) {
-      channels = channels.filter(channel => stepChannels.includes(channel));
+      const selected = channels.filter(channel => stepChannels.includes(channel));
+      // No overlap: page on the recipient's own enabled channels rather than leaving them
+      // in-app only. Matches sendUserNotification's fallback for the same situation.
+      channels = selected.length > 0 ? selected : channels;
     }
 
     const quietHours = filterChannelsForQuietHours(channels, incident.urgency, recipient);
