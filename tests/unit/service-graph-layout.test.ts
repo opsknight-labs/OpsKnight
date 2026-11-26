@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fromElkGraph,
   gridLayout,
+  routePath,
   runLayout,
   toElkGraph,
   type LayoutRequest,
@@ -59,6 +60,43 @@ describe('service graph layout', () => {
     });
     expect(result.positions.bs.x).toBeLessThan(result.positions.web.x);
     expect(result.positions.web.x).toBeLessThan(result.positions.db.x);
+  });
+
+  it('returns ELK orthogonal routes in absolute coordinates, inside groups too', async () => {
+    const result = await runLayout(new ELK(), {
+      nodes: [
+        { id: 'a', width: 100, height: 40, group: 't1' },
+        { id: 'b', width: 100, height: 40, group: 't1' },
+        { id: 'c', width: 100, height: 40, group: 't1' },
+        { id: 'd', width: 100, height: 40, group: 't2' },
+      ],
+      edges: [
+        { id: 'ab', source: 'a', target: 'b' },
+        { id: 'ac', source: 'a', target: 'c' },
+        { id: 'ad', source: 'a', target: 'd' },
+      ],
+      grouped: true,
+    });
+    const route = result.routes.ac;
+    expect(route.length).toBeGreaterThanOrEqual(2);
+    // Orthogonal: every segment is horizontal or vertical.
+    for (let i = 1; i < route.length; i += 1)
+      expect(route[i].x === route[i - 1].x || route[i].y === route[i - 1].y).toBe(true);
+    // Starts on a's right side and ends on c's left side, in page coordinates.
+    expect(route[0].x).toBeCloseTo(result.positions.a.x + 100);
+    expect(route.at(-1)!.x).toBeCloseTo(result.positions.c.x);
+    // Cross-team edges are not routed by ELK; the canvas draws them as steps.
+    expect(result.routes.ad).toBeUndefined();
+  });
+
+  it('builds a path through a route and finds its halfway point', () => {
+    const { path, x, y } = routePath([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 30 },
+    ]);
+    expect(path).toBe('M0 0 L10 0 L10 30');
+    expect({ x, y }).toEqual({ x: 10, y: 10 });
   });
 
   it('converts group-relative positions to absolute ones', () => {

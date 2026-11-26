@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   articulationPoints,
+  countByDaysAgo,
   diffEdges,
   diffStatuses,
   fanOut,
@@ -86,5 +87,15 @@ describe('articulationPoints', () => {
     const chain = Array.from({ length: 5000 }, (_, i) => e(`n${i}`, `n${i + 1}`));
     expect(articulationPoints(chain)).toHaveLength(4999);
     expect(articulationPoints([e('a', 'b'), e('c', 'd')])).toEqual([]);
+  });
+});
+
+describe('countByDaysAgo', () => {
+  it('buckets times into 24-hour steps back from now and drops anything outside the window', () => {
+    const now = new Date('2026-06-10T12:00:00Z');
+    const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
+    expect(
+      countByDaysAgo([hoursAgo(1), hoursAgo(23), hoursAgo(25), hoursAgo(71), hoursAgo(73), hoursAgo(-1)], now, 3)
+    ).toEqual([2, 1, 1]);
   });
 });

@@ -27,6 +27,7 @@ import {
   diffGraph,
   findSinglePointsOfFailure,
   getGraphAt,
+  graphTimeline,
   simulateFailure,
 } from '@/lib/intelligence/dependencies/insights/service';
 import {
@@ -349,6 +350,7 @@ const spofSchema = z.object({ threshold: z.number().int().min(1).max(200).option
 const simulateSchema = z
   .object({ serviceIds: z.array(id).min(1).max(20), maxDepth: z.number().int().min(1).max(10).optional() })
   .strict();
+const timelineSchema = z.object({ ...scope }).strict();
 const viewIdSchema = z.object({ id }).strict();
 const shareSchema = z.object({ id, expiresInDays: z.number().int().min(1).max(90).default(30) }).strict();
 const embedSchema = z.object({ enabled: z.boolean() }).strict();
@@ -369,6 +371,13 @@ export async function diffGraphAction(input: unknown) {
   return insight('changes', actor =>
     diffGraph(actor, new Date(p.data.since), { focus: p.data.focus, hops: p.data.hops })
   );
+}
+
+/** Per-day incident and change counts for the time-travel slider's tick marks. */
+export async function getGraphTimelineAction(input: unknown) {
+  const p = timelineSchema.safeParse(input);
+  if (!p.success) return invalid<Awaited<ReturnType<typeof graphTimeline>>>();
+  return insight('timeline', actor => graphTimeline(actor, p.data));
 }
 
 export async function findSpofAction(input: unknown) {
