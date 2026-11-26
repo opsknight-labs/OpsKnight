@@ -1,12 +1,17 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { notify as toast } from '@/lib/toast';
+import { useTimezone } from '@/contexts/TimezoneContext';
+import { formatDateTime } from '@/lib/timezone';
+import { nextReviewRun } from '@/lib/business-services/reviews/period';
+import TimeZoneSelect from '@/components/TimeZoneSelect';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { Switch } from '@/components/ui/shadcn/switch';
 import {
   runServiceReviewsNow,
@@ -39,6 +44,13 @@ type Props = {
 
 const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : 'Something went wrong.');
 
+const RUN_STATUS: Record<string, string> = {
+  SENT: 'Sent',
+  SKIPPED: 'Skipped, nothing to report',
+  FAILED: 'Failed',
+  PENDING: 'Sending',
+};
+
 /** Admin switch, schedule, summary recipients, team opt-in and recent runs. Everything is off by default. */
 export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) {
   // Day and hour stay strings while typing: Number('') is 0, which would save an empty box as a valid value.
@@ -48,14 +60,48 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
     hour: String(config.hour),
     summaryEmails: config.summaryEmails.join(', '),
   });
-  const [pending, startTransition] = useTransition();
-  const run = (work: () => Promise<void>) =>
+  const router = useRouter();
+  const { userTimeZone } = useTimezone();
+  // Per action, so saving does not grey out the team buttons and one team does not block another.
+  const [busyKeys, setBusyKeys] = useState<ReadonlySet<string>>(new Set());
+  const [, startTransition] = useTransition();
+  const [confirmRun, setConfirmRun] = useState(false);
+  const busy = (key: string) => busyKeys.has(key);
+  const run = (key: string, work: () => Promise<void>) => {
+    setBusyKeys(current => new Set(current).add(key));
     startTransition(async () => {
       await work().catch(fail);
+      setBusyKeys(current => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
     });
+  };
+  const day = Number(form.dayOfMonth);
+  const hour = Number(form.hour);
+  let validZone = true;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: form.timeZone });
+  } catch {
+    validZone = false;
+  }
+  const nextRun =
+    form.enabled &&
+    validZone &&
+    Number.isInteger(day) &&
+    day >= 1 &&
+    day <= 28 &&
+    Number.isInteger(hour) &&
+    hour >= 0 &&
+    hour <= 23 &&
+    form.dayOfMonth.trim() !== '' &&
+    form.hour.trim() !== ''
+      ? nextReviewRun(new Date(), { dayOfMonth: day, hour, timeZone: form.timeZone })
+      : null;
 
   const save = () =>
-    run(async () => {
+    run('save', async () => {
       if (form.dayOfMonth.trim() === '' || form.hour.trim() === '') {
         toast.error('Enter a day of the month and an hour.');
         return;
@@ -82,6 +128,7 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
         return;
       }
       toast.success('Service review settings saved');
+      router.refresh();
     });
 
   return (
@@ -90,14 +137,14 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
       description="A monthly digest of SLO attainment, error budget, downtime and incidents. Off until you turn it on; each person gets one email for only their own services."
       footer={
         <div className="flex flex-wrap gap-2">
-          <Button onClick={save} disabled={pending}>
-            Save
+          <Button onClick={save} disabled={busy('save')}>
+            {busy('save') ? 'Saving…' : 'Save'}
           </Button>
           <Button
             variant="outline"
-            disabled={pending}
+            disabled={busy('preview')}
             onClick={() =>
-              run(async () => {
+              run('preview', async () => {
                 const r = await sendServiceReviewPreview();
                 if (!r.success) {
                   toast.error(r.error);
@@ -109,27 +156,33 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
               })
             }
           >
-            Send preview to me
+            {busy('preview') ? 'Sending…' : 'Send preview to me'}
           </Button>
-          <DeleteConfirmDialog
+          <Button
+            variant="outline"
+            disabled={busy('run') || !config.enabled}
+            onClick={() => setConfirmRun(true)}
+          >
+            {busy('run') ? 'Sending reviews…' : 'Run now'}
+          </Button>
+          <ConfirmDialog
+            isOpen={confirmRun}
+            variant="info"
             title="Send the service reviews now?"
-            description="This emails every included owner their review immediately, outside the schedule. Reviews already sent for the period are skipped."
+            message="Every included owner gets their review now, outside the schedule. Reviews already sent for this period are skipped, so nobody gets one twice."
             confirmText="Send now"
-            onConfirm={async () => {
-              try {
+            cancelText="Not now"
+            onCancel={() => setConfirmRun(false)}
+            onConfirm={() => {
+              setConfirmRun(false);
+              run('run', async () => {
                 const r = await runServiceReviewsNow();
                 toast.success(
                   `Sent ${r.sent}, already sent ${r.alreadySent}, skipped ${r.skipped}, failed ${r.failed}`
                 );
-              } catch (error) {
-                return { error: error instanceof Error ? error.message : 'Could not run reviews.' };
-              }
+                router.refresh();
+              });
             }}
-            trigger={
-              <Button variant="outline" disabled={pending || !config.enabled}>
-                Run now
-              </Button>
-            }
           />
         </div>
       }
@@ -176,13 +229,22 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
             value={form.hour}
             onChange={e => setForm(f => ({ ...f, hour: e.target.value }))}
           />
-          <Input
-            className="w-56"
-            aria-label="Time zone"
-            value={form.timeZone}
-            onChange={e => setForm(f => ({ ...f, timeZone: e.target.value }))}
-          />
+          <div className="w-64">
+            <TimeZoneSelect
+              name="timeZone"
+              id="sr-timezone"
+              defaultValue={form.timeZone}
+              onChange={timeZone => setForm(f => ({ ...f, timeZone }))}
+            />
+          </div>
         </div>
+        <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">
+          {!form.enabled
+            ? 'Turn on service reviews to schedule the next run.'
+            : nextRun
+              ? `Next run: ${formatDateTime(nextRun, form.timeZone, { format: 'datetime' })} (${form.timeZone})${form.timeZone === userTimeZone ? '' : `, ${formatDateTime(nextRun, userTimeZone, { format: 'datetime' })} your time`}.`
+              : 'Enter a day from 1 to 28 and an hour from 0 to 23 to see the next run.'}
+        </p>
       </SettingsRow>
       <SettingsRow
         label="Portfolio summary recipients"
@@ -216,11 +278,12 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={pending}
+                  disabled={busy(`team:${team.id}`) || team.included === team.total}
                   onClick={() =>
-                    run(async () => {
+                    run(`team:${team.id}`, async () => {
                       const r = await setTeamServicesInReview(team.id, true);
                       toast.success(`${r.count} services included`);
+                      router.refresh();
                     })
                   }
                 >
@@ -229,11 +292,12 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={pending}
+                  disabled={busy(`team:${team.id}`) || team.included === 0}
                   onClick={() =>
-                    run(async () => {
+                    run(`team:${team.id}`, async () => {
                       const r = await setTeamServicesInReview(team.id, false);
                       toast.success(`${r.count} services removed`);
+                      router.refresh();
                     })
                   }
                 >
@@ -251,12 +315,23 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
         <ul className="space-y-1 text-sm">
           {runs.length === 0 ? <li className="text-muted-foreground">No runs yet.</li> : null}
           {runs.slice(0, 10).map(r => (
-            <li key={`${r.period}-${r.kind}-${r.recipient}`} className="flex justify-between gap-3">
+            <li
+              key={`${r.period}-${r.kind}-${r.recipient}`}
+              className="flex flex-wrap justify-between gap-x-3"
+            >
               <span>
                 {r.period} · {r.kind === 'SUMMARY' ? 'Summary' : 'Digest'} · {r.recipient}
               </span>
-              <span className="text-muted-foreground">
-                {r.status.toLowerCase()} · {r.serviceCount} services
+              <span className="text-muted-foreground tabular-nums">
+                <span
+                  className={r.status === 'FAILED' ? 'font-medium text-destructive' : undefined}
+                >
+                  {RUN_STATUS[r.status] ?? r.status}
+                </span>{' '}
+                · {r.serviceCount} {r.serviceCount === 1 ? 'service' : 'services'} ·{' '}
+                <time dateTime={r.createdAt}>
+                  {formatDateTime(r.createdAt, userTimeZone, { format: 'datetime' })}
+                </time>
               </span>
             </li>
           ))}

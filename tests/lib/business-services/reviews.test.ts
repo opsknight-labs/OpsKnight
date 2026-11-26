@@ -8,7 +8,12 @@ import {
   type ReviewService,
 } from '@/lib/business-services/reviews/digest';
 import { applyBudgetRisk, evaluateFreeze } from '@/lib/business-services/reviews/freeze';
-import { isRunDue, priorPeriod, reviewPeriod } from '@/lib/business-services/reviews/period';
+import {
+  isRunDue,
+  nextReviewRun,
+  priorPeriod,
+  reviewPeriod,
+} from '@/lib/business-services/reviews/period';
 import { estimateCostCents, revenueOf } from '@/lib/business-services/reviews/data';
 import { normalizeConfig, reviewConfigSchema } from '@/lib/business-services/reviews/config';
 import {
@@ -181,6 +186,22 @@ describe('period and schedule', () => {
     expect(isRunDue(new Date('2026-12-01T09:00:00Z'), schedule)).toBe(true);
     expect(isRunDue(new Date('2026-12-03T20:00:00Z'), schedule)).toBe(true);
     expect(isRunDue(new Date('2026-12-04T10:00:00Z'), schedule)).toBe(false);
+  });
+
+  it('finds the next run this month or next, across the year end and in the zone', () => {
+    const schedule = { dayOfMonth: 1, hour: 9, timeZone: 'UTC' };
+    expect(nextReviewRun(new Date('2026-11-26T12:00:00Z'), schedule)?.toISOString()).toBe(
+      '2026-12-01T09:00:00.000Z'
+    );
+    expect(nextReviewRun(new Date('2026-12-01T09:00:00Z'), schedule)?.toISOString()).toBe(
+      '2027-01-01T09:00:00.000Z'
+    );
+    expect(
+      nextReviewRun(new Date('2026-11-26T12:00:00Z'), {
+        ...schedule,
+        timeZone: 'Europe/Berlin',
+      })?.toISOString()
+    ).toBe('2026-12-01T08:00:00.000Z');
   });
 });
 
