@@ -142,14 +142,12 @@ describe('business impact report', () => {
   it('parses only known windows and tiers', () => {
     expect(parseImpactReportParams({ days: '365', tier: 'TIER_9', team: 'x y' })).toEqual({
       days: 30,
-      sort: 'impact',
       teamId: null,
       tier: null,
       sort: 'impact',
     });
     expect(parseImpactReportParams(new URLSearchParams('days=90&tier=TIER_1&team=t1'))).toEqual({
       days: 90,
-      sort: 'impact',
       teamId: 't1',
       tier: 'TIER_1',
       sort: 'impact',
