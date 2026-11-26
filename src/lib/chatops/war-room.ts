@@ -297,7 +297,7 @@ export async function ensurePostmortemDraft(incidentId: string): Promise<string 
         incidentId,
         title: `Postmortem: ${incident.title}`,
         summary: 'Automated postmortem draft generated upon incident resolution.',
-        impact: { service: incident.service.name, urgency: incident.urgency },
+        impact: { servicesAffected: [incident.service.name] },
         rootCause: 'TBD — Auto-generated on Incident Resolution',
         resolution: 'Incident marked as RESOLVED.',
         lessons: 'Timeline and notes captured from incident lifecycle.',

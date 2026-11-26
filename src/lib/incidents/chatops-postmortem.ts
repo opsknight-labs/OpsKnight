@@ -5,6 +5,8 @@ import { getBaseUrl } from '@/lib/env-validation';
 import { authorizeChatOpsIncidentInTransaction } from './chatops-lifecycle';
 import { loadPostmortemEvents } from './event-filters';
 import { createDraftActionItemRows } from '@/lib/postmortems/action-item-commands';
+import { AppError } from '@/lib/errors';
+import { logAudit } from '@/lib/audit';
 
 export async function executeChatOpsPostmortemCommand(input: {
   incidentId: string;
@@ -22,9 +24,22 @@ export async function executeChatOpsPostmortemCommand(input: {
       return { created: false, title: existing.title, status: existing.status, timelineCount: 0 };
     const incident = await tx.incident.findUnique({
       where: { id: input.incidentId },
-      select: { title: true, urgency: true, service: { select: { name: true } } },
+      select: {
+        title: true,
+        status: true,
+        createdAt: true,
+        resolvedAt: true,
+        service: { select: { name: true } },
+      },
     });
     if (!incident) throw new Error('Incident not found');
+    // Same rule as the web editor and API: an open incident's draft could not be edited afterwards.
+    if (incident.status !== 'RESOLVED') {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'Postmortems can only be created for resolved incidents.',
+      });
+    }
     const [notes, events] = await Promise.all([
       tx.incidentNote.findMany({
         where: { incidentId: input.incidentId },
@@ -75,7 +90,16 @@ export async function executeChatOpsPostmortemCommand(input: {
             incidentId: input.incidentId,
             title: `Postmortem: ${incident.title}`,
             summary: `Automated postmortem draft generated from Slack war-room #${input.channelName}`,
-            impact: { service: incident.service.name, urgency: incident.urgency },
+            impact: {
+              servicesAffected: [incident.service.name],
+              downtimeMinutes: Math.max(
+                0,
+                Math.floor(
+                  ((incident.resolvedAt ?? new Date()).getTime() - incident.createdAt.getTime()) /
+                    60_000
+                )
+              ),
+            },
             rootCause: 'TBD — Generated from Slack War Room',
             resolution: 'Generated via ChatOps.',
             lessons: 'Timeline and notes captured from Slack war-room channel.',
@@ -86,6 +110,17 @@ export async function executeChatOpsPostmortemCommand(input: {
           },
         });
         await createDraftActionItemRows(tx, postmortem, actionItems);
+        await logAudit(
+          {
+            action: 'postmortem.created',
+            entityType: 'INCIDENT',
+            entityId: input.incidentId,
+            actorId: input.actor.id,
+            source: 'INTEGRATION',
+            details: { incidentId: input.incidentId, postmortemId: postmortem.id, via: 'chatops' },
+          },
+          tx
+        );
         await tx.incidentEvent.create({
           data: {
             incidentId: input.incidentId,
