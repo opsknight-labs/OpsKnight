@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { apiV2Error, apiV2Success, authenticateV2Request, enforceV2Authorization, enforceV2RateLimit } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
+import { canReadSharedObjectiveHistory } from '@/lib/slo/authorization';
 import { resolveEscalationTargetDetailed } from '@/lib/escalation/target-resolution';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
@@ -39,6 +40,8 @@ export const GET = withV2Observability(async function GET(
     const now = new Date();
     const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const visibleIncident = { AND: [{ serviceId: id }, incidentReadWhere(actor)] };
+    // Shared snapshots include private incidents' contributions, so scoped readers get none.
+    const sharedSnapshots = canReadSharedObjectiveHistory(actor);
     const [activeIncidentCount, recentIncidents, recentAlertCount, failedNotificationCount, objectives] = await Promise.all([
       prisma.incident.count({ where: { AND: [visibleIncident, { status: { not: 'RESOLVED' } }] } }),
       prisma.incident.findMany({
@@ -54,8 +57,8 @@ export const GET = withV2Observability(async function GET(
       prisma.serviceObjective.findMany({
         where: { serviceId: id, activeTo: null }, orderBy: { id: 'asc' }, take: 11,
         select: {
-          id: true, name: true, metricType: true, target: true,
-          snapshots: { orderBy: { periodEnd: 'desc' }, take: 1,
+          lineageId: true, name: true, metricType: true, target: true,
+          snapshots: { orderBy: { periodEnd: 'desc' }, take: sharedSnapshots ? 1 : 0,
             select: { periodEnd: true, value: true, breached: true, dataState: true },
           },
         },
@@ -90,8 +93,10 @@ export const GET = withV2Observability(async function GET(
       last24Hours: { linkedAlertCount: recentAlertCount, failedNotificationCount },
       onCallCoverage: { ...onCallCoverage, basis: 'CURRENT_FIRST_UNCONDITIONAL_STEP' },
       objectives: objectives.slice(0, 10).map(objective => ({
-        id: objective.id, name: objective.name, metricType: objective.metricType,
-        target: objective.target, latestSnapshot: objective.snapshots[0] ?? null,
+        id: objective.lineageId, name: objective.name,
+        metricType: objective.metricType,
+        target: objective.target,
+        latestSnapshot: sharedSnapshots ? (objective.snapshots[0] ?? null) : null,
       })),
       truncated: { objectives: objectives.length > 10, recentIncidents: recentIncidents.length > 5 },
     }, { headers: { ...rlHeaders, 'Cache-Control': 'no-store' } });

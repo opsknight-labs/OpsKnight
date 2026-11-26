@@ -2718,7 +2718,7 @@
     "tool": "service_get_health",
     "title": "Get service health",
     "agentDescription": "Read a service's health in one call: active incident count, recent incidents, last-24-hour figures, on-call coverage and latest objectives. Use for 'is service X healthy' questions.",
-    "routeSha256": "1f8c67c3879489c5a25033447bae853e3036fbcacbf9a9a936a489287abe6a75",
+    "routeSha256": "3c456e5d3cc58cfac5226f3e169fd4fb6738de7181e60272a4a28bb3fc39ae0f",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "pending final-SHA parity certification",
     "contractSha256": "7f2d16fa08af26faa3f372067dec0de03f42dd636e124fc131a2551c3bd6107a",
