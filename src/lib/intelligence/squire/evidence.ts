@@ -44,7 +44,16 @@ function trimRows(result: unknown, limit = MAX_RESULT_BYTES): unknown {
         (entry): entry is [string, unknown[]] => Array.isArray(entry[1]) && entry[1].length > 1
       )
       .sort((a, b) => bytes(b[1]) - bytes(a[1]))[0];
-    if (!longest) return null;
+    if (!longest) {
+      // A generic read nests its rows one level down ({ data: { items: [...] } }): trim inside the largest object.
+      const nested = Object.entries(object)
+        .filter(([, value]) => value && typeof value === 'object' && !Array.isArray(value))
+        .sort((a, b) => bytes(b[1]) - bytes(a[1]))[0];
+      if (!nested) return null;
+      const target = limit - (bytes(current) - bytes(nested[1]));
+      const inner = target > 0 ? trimRows(nested[1], target) : null;
+      return inner === null ? null : { ...object, [nested[0]]: inner };
+    }
     current = { ...object, [longest[0]]: longest[1].slice(0, Math.floor(longest[1].length / 2)) };
   }
   return current;

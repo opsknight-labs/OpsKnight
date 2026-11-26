@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const nav = vi.hoisted(() => ({ pathname: '/', refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -869,6 +869,79 @@ describe('answers that finish in the background', () => {
     expect(
       screen.queryByRole('button', { name: 'Keep working in the background' })
     ).not.toBeInTheDocument();
+  });
+
+  describe('a handed-off answer finishes', () => {
+    const turn = (status: string) => ({
+      id: 'bg1',
+      title: 'Why is checkout slow?',
+      status,
+      conversationId: 'c1',
+      failure: null,
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+    });
+    /** Hands off, then lets the server report `status` for the turn on the next poll. */
+    async function handOffThen(status: () => string) {
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+        String(url).includes('/conversations/c1')
+          ? Response.json({
+              data: {
+                conversation: {
+                  id: 'c1',
+                  incidentId: null,
+                  messages: [
+                    { role: 'user', content: 'Why is checkout slow?' },
+                    { role: 'assistant', content: 'The pool is exhausted.' },
+                  ],
+                },
+              },
+            })
+          : openStream(investigating, init?.signal)
+      );
+      backgroundFetch.mockImplementation(async (_url: string, init?: RequestInit) =>
+        init?.method === 'POST'
+          ? Response.json({ data: { id: 'bg1' } }, { status: 202 })
+          : Response.json({ data: { turns: [turn(status())] } })
+      );
+      render(<SquireLauncher name="Pip" history={{ retentionDays: 30 }} aiEnabled />);
+      fireEvent.click(screen.getByRole('button', { name: /Ask Pip/ }));
+      await ask('Why is checkout slow?');
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Keep working in the background' })
+      );
+      await screen.findByText(/Pip is finishing this in the background/);
+    }
+    const polls = () => backgroundFetch.mock.calls.filter(([, init]) => !init?.method).length;
+    beforeEach(() => {
+      window.localStorage.clear();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it('replaces the placeholder in the open chat, then stops polling', async () => {
+      let status = 'RUNNING';
+      await handOffThen(() => status);
+      status = 'DONE';
+      await act(() => vi.advanceTimersByTimeAsync(5_100));
+      expect(await screen.findByText('The pool is exhausted.')).toBeInTheDocument();
+      expect(screen.queryByText(/is finishing this in the background/)).not.toBeInTheDocument();
+      const after = polls();
+      await act(() => vi.advanceTimersByTimeAsync(60_000));
+      expect(polls()).toBe(after);
+    });
+
+    it('cues the person when the panel is closed, with a count and an Open action', async () => {
+      let status = 'RUNNING';
+      await handOffThen(() => status);
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      status = 'DONE';
+      await act(() => vi.advanceTimersByTimeAsync(5_100));
+      expect(await screen.findByTestId('squire-ready-badge')).toHaveTextContent('1');
+      expect(screen.getByText('Pip has an answer ready')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+      expect(await screen.findByText('The pool is exhausted.')).toBeInTheDocument();
+    });
   });
 
   it('says why when an answer cannot move to the background, and keeps it streaming', async () => {

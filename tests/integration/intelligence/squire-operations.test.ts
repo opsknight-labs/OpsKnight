@@ -92,7 +92,7 @@ describe('Squire operation catalog', () => {
     expect(proposal!.incidentId).toBeUndefined();
     expect(proposal!.href).toBe(`/services/${service.id}`);
     expect(proposal!.preview).toContainEqual({
-      label: 'name',
+      label: 'Name',
       value: `${service.name} → Checkout v2`,
     });
     // Nothing changed yet: a proposal is only a card.
@@ -179,7 +179,7 @@ describe('Squire operation catalog', () => {
       href: `/services/${service.id}`,
     });
     expect(undo.incidentId).toBeUndefined();
-    expect(undo.preview).toContainEqual({ label: 'name', value: `Checkout v2 → ${service.name}` });
+    expect(undo.preview).toContainEqual({ label: 'Name', value: `Checkout v2 → ${service.name}` });
     // The stored outcome keeps the undo card (an operation follow-up has no incident).
     expect(await readSquireActionOutcome(admin, proposal!.receiptId!)).toMatchObject({
       result: { followUp: { token: undo.token, confirmLabel: 'Undo' } },

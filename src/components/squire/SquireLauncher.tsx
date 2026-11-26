@@ -860,6 +860,8 @@ export default function SquireLauncher({
    * notification. `leaving`: the tab is closing or hidden, so the request must outlive the page.
    */
   const { handOff, cancel: cancelBackground } = background;
+  // The turn handed off from this chat, and the question count then: a new question since means "moved on".
+  const handedOff = useRef<{ id: string; seq: number } | null>(null);
   const keepWorking = useCallback(
     async (leaving = false) => {
       const payload = liveRequestRef.current;
@@ -872,11 +874,13 @@ export default function SquireLauncher({
           if (outcome.ok && outcome.id) void cancelBackground(outcome.id);
           return;
         }
-        if (outcome.ok)
+        if (outcome.ok) {
           haltLive(
             `${name} is finishing this in the background. You will get a notification when the answer is ready.`
           );
-        else if (!leaving) setHandOffError(outcome.message);
+          // After haltLive, which fences the live answer by moving the question count on.
+          handedOff.current = { id: outcome.id, seq: requestSeq.current };
+        } else if (!leaving) setHandOffError(outcome.message);
       } finally {
         handingOffRef.current = false;
       }
@@ -1097,6 +1101,30 @@ export default function SquireLauncher({
     },
     [markOpened, openSaved]
   );
+  // A handed-off answer ended: replace the placeholder when the person is still looking at it, else cue them.
+  const { finished, clearFinished } = background;
+  const [cue, setCue] = useState<{ text: string; conversationId: string | null } | null>(null);
+  useEffect(() => {
+    if (!finished) return;
+    clearFinished();
+    const here =
+      openRef.current && handedOff.current?.id === finished.id
+        ? handedOff.current.seq === requestSeq.current
+        : false;
+    if (finished.status === 'DONE' && finished.conversationId) {
+      if (here) {
+        markOpened(finished.id);
+        void openSaved(finished.conversationId);
+      } else if (!openRef.current)
+        setCue({ text: `${name} has an answer ready`, conversationId: finished.conversationId });
+    } else if (finished.status !== 'DONE' && !here)
+      setCue({ text: `${name} could not finish that answer.`, conversationId: null });
+    else if (finished.status !== 'DONE') setHandOffError(`${name} could not finish that answer.`);
+  }, [finished, clearFinished, markOpened, openSaved, name]);
+  // Opening the panel (by any route) clears the cue.
+  useEffect(() => {
+    if (open) setCue(null);
+  }, [open]);
   const readyIds = useMemo(() => new Set(readyBackground.map(turn => turn.id)), [readyBackground]);
 
   const removeSaved = useCallback(
@@ -1248,14 +1276,63 @@ export default function SquireLauncher({
             state={busy || !online ? mascotState : incidentAttention ? 'alert' : 'idle'}
           />
           <span>Ask {name}</span>
-          {answerReady !== null && (
+          {readyBackground.length > 0 ? (
             <>
-              <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
-              <span className="sr-only">, an answer is ready</span>
+              <span
+                data-testid="squire-ready-badge"
+                className="min-w-5 rounded-full bg-primary px-1.5 text-center text-xs font-semibold text-primary-foreground"
+                aria-hidden="true"
+              >
+                {readyBackground.length}
+              </span>
+              <span className="sr-only">
+                , {readyBackground.length} answer{readyBackground.length === 1 ? '' : 's'} ready
+              </span>
             </>
+          ) : (
+            answerReady !== null && (
+              <>
+                <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
+                <span className="sr-only">, an answer is ready</span>
+              </>
+            )
           )}
         </button>
       )}
+      <div
+        role="status"
+        aria-live="polite"
+        className={cue ? 'fixed bottom-20 right-4 z-50' : 'sr-only'}
+      >
+        {cue && (
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-lg">
+            <span>{cue.text}</span>
+            {cue.conversationId && (
+              <button
+                type="button"
+                className="font-medium underline underline-offset-2"
+                onClick={() => {
+                  const id = cue.conversationId!;
+                  const turn = background.turns.find(item => item.conversationId === id);
+                  if (turn) markOpened(turn.id);
+                  setOpen(true);
+                  void openSaved(id);
+                }}
+              >
+                Open
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label="Dismiss"
+              className="text-muted-foreground"
+              onClick={() => setCue(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </div>
       {open && (
         <section
           ref={dialogRef}

@@ -73,6 +73,9 @@ import {
   PROPOSE_PLAN_TOOL,
   PROPOSE_RUNBOOK_FROM_FIX_TOOL,
   PROPOSE_RUNBOOK_STEPS_TOOL,
+  PROPOSE_RUNBOOK_PUBLISH_TOOL,
+  buildRunbookPublishProposal,
+  runbookPublishInput,
   runbookFromFixInput,
   runbookStepsInput,
 } from './plans';
@@ -129,8 +132,14 @@ const PROPOSAL_EXTRA_TOOLS: AiToolDefinition[] = [
     ...PROPOSE_RUNBOOK_STEPS_TOOL,
     validate: input => runbookStepsInput.safeParse(input).success,
   },
+  {
+    ...PROPOSE_RUNBOOK_PUBLISH_TOOL,
+    validate: input => runbookPublishInput.safeParse(input).success,
+  },
 ];
 const MAX_CITATIONS = 8;
+/** A tool argument that carries no free text: an id, an enum, a number or a time. */
+const PLAIN_VALUE = /^[A-Za-z0-9_.:-]{1,64}$/;
 
 async function* typed(text: string): AsyncGenerator<SquireEvent> {
   for (let i = 0; i < text.length; i += CHUNK)
@@ -490,6 +499,24 @@ async function* squireTurn(
         // whether a proposal was made after reading third-party text (alerts, notes, payloads).
         const ranClasses: AiDataClass[] = [];
         let readUntrusted = false;
+        // Only a card whose text could come from what was read carries the warning: ids, enums, times and
+        // text the person typed themselves do not.
+        const typed = [...history, { content: question }]
+          .filter(message => !('role' in message) || message.role === 'user')
+          .map(message => String(message.content).toLowerCase())
+          .join('\n');
+        const freeText = (value: unknown): boolean =>
+          typeof value === 'string'
+            ? !PLAIN_VALUE.test(value) && !typed.includes(value.trim().toLowerCase())
+            : Array.isArray(value)
+              ? value.some(freeText)
+              : value && typeof value === 'object'
+                ? Object.values(value).some(freeText)
+                : false;
+        const untrustedFlag = (card: { untrustedContext?: boolean }, input: unknown) =>
+          card.untrustedContext || (readUntrusted && freeText(input))
+            ? { untrustedContext: true }
+            : {};
         // Text before a tool call and text after it are separate paragraphs, never glued together.
         let stepEnded = false;
         const emittedCoverage = new Set<string>();
@@ -567,7 +594,9 @@ async function* squireTurn(
             const plan = event.call.name === PROPOSE_PLAN_TOOL.name;
             const remember = event.call.name === REMEMBER_FACT_TOOL.name;
             const fix = event.call.name === PROPOSE_RUNBOOK_FROM_FIX_TOOL.name;
-            const runbookSteps = event.call.name === PROPOSE_RUNBOOK_STEPS_TOOL.name;
+            const runbookPublish = event.call.name === PROPOSE_RUNBOOK_PUBLISH_TOOL.name;
+            const runbookSteps =
+              runbookPublish || event.call.name === PROPOSE_RUNBOOK_STEPS_TOOL.name;
             if (!action && !operation && !plan && !remember && !fix && !runbookSteps) continue;
             // The model was told a card is shown only if still valid: say so when one is not.
             if (proposals >= MAX_PROPOSALS) {
@@ -577,15 +606,17 @@ async function* squireTurn(
             }
             if (fix || runbookSteps) {
               // These cards refuse with a reason (role needed, not resolved, no draft): say it, not a generic drop.
-              const built = await (fix ? buildRunbookFromFixProposal : buildRunbookStepsProposal)(
-                actor,
-                event.call.input
-              ).catch(() => null);
+              const builder = fix
+                ? buildRunbookFromFixProposal
+                : runbookPublish
+                  ? buildRunbookPublishProposal
+                  : buildRunbookStepsProposal;
+              const built = await builder(actor, event.call.input).catch(() => null);
               if (built && 'token' in built) {
                 proposals += 1;
                 yield {
                   type: 'proposal',
-                  proposal: { ...built, ...(readUntrusted ? { untrustedContext: true } : {}) },
+                  proposal: { ...built, ...untrustedFlag(built, event.call.input) },
                 };
               } else yield { type: 'notice', text: built?.refusal ?? PROPOSAL_DROPPED_NOTICE };
               continue;
@@ -603,7 +634,7 @@ async function* squireTurn(
               proposals += 1;
               yield {
                 type: 'proposal',
-                proposal: { ...proposal, ...(readUntrusted ? { untrustedContext: true } : {}) },
+                proposal: { ...proposal, ...untrustedFlag(proposal, event.call.input) },
               };
             } else if (!droppedNotice) {
               droppedNotice = true;

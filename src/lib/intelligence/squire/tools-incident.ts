@@ -295,11 +295,16 @@ export function buildIncidentTools(
     ),
     readTool(
       'incident_analytics',
-      'Incident analytics over the last N hours (default 168, at most 720), optionally for one service id: total, counts by status and urgency, mean time to acknowledge and resolve (SLA elapsed time, excluding paused time), and the noisiest services. Only incidents you can see are counted.',
+      'Incident analytics over the last N hours (default 168, at most 720), optionally for one service id: total, counts by status and urgency, mean time to acknowledge and resolve (SLA elapsed time, excluding paused time), and the noisiest services. For a previous period ("this week vs last week") call it twice, the second time with endingAt set to the start of the first window (its window.since); never subtract two rolling windows. Only incidents you can see are counted.',
       objectInput(
         {
           serviceId: idSchema,
           hours: { type: 'integer', minimum: 1, maximum: MAX_ANALYTICS_HOURS },
+          endingAt: {
+            type: 'string',
+            maxLength: 40,
+            description: 'ISO time the window ends at; default now.',
+          },
         },
         []
       ),
@@ -308,6 +313,7 @@ export function buildIncidentTools(
           .object({
             serviceId: id.optional(),
             hours: z.number().int().min(1).max(MAX_ANALYTICS_HOURS).optional(),
+            endingAt: z.iso.datetime().optional(),
           })
           .strict()
           .safeParse(input ?? {});
@@ -316,7 +322,8 @@ export function buildIncidentTools(
         const services = guarded(() => serviceReadWhere(actor));
         if (!readable || !services) return NOT_FOUND;
         const hours = parsed.data.hours ?? 168;
-        const since = new Date(Date.now() - hours * 3_600_000);
+        const until = parsed.data.endingAt ? new Date(parsed.data.endingAt) : new Date();
+        const since = new Date(until.getTime() - hours * 3_600_000);
         if (parsed.data.serviceId) {
           const visible = await prisma.service.findFirst({
             where: { AND: [{ id: parsed.data.serviceId }, services] },
@@ -326,7 +333,7 @@ export function buildIncidentTools(
         }
         const where = {
           AND: [
-            { createdAt: { gte: since } },
+            { createdAt: { gte: since, lt: until } },
             ...(parsed.data.serviceId ? [{ serviceId: parsed.data.serviceId }] : []),
             readable,
           ],
@@ -357,7 +364,7 @@ export function buildIncidentTools(
             ? Math.round((value / 60_000) * 10) / 10
             : null;
         return {
-          window: { hours, since: since.toISOString() },
+          window: { hours, since: since.toISOString(), until: until.toISOString() },
           serviceId: parsed.data.serviceId ?? null,
           total: totals._count._all,
           byStatus: Object.fromEntries(byStatus.map(row => [row.status, row._count._all])),
