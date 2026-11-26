@@ -353,6 +353,7 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
   ServiceReviewSettings: object({
     enabled: { type: 'boolean' },
     freezeWarningEnabled: { type: 'boolean' },
+    errorBudgetAlertsEnabled: { type: 'boolean' },
     dayOfMonth: { type: 'integer', minimum: 1, maximum: 28 },
     hour: { type: 'integer', minimum: 0, maximum: 23 },
     timeZone: string,
@@ -682,6 +683,7 @@ export const BUSINESS_SERVICE_OPERATIONS: {
         ...{
           enabled: { type: 'boolean' },
           freezeWarningEnabled: { type: 'boolean' },
+          errorBudgetAlertsEnabled: { type: 'boolean' },
           dayOfMonth: { type: 'integer', minimum: 1, maximum: 28 },
           hour: { type: 'integer', minimum: 0, maximum: 23 },
           timeZone: string,

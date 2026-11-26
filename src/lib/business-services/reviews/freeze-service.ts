@@ -2,7 +2,7 @@ import 'server-only';
 
 import prisma from '@/lib/prisma';
 import { getBusinessServiceStats } from '../stats';
-import { computeErrorBudget } from '../slo';
+import { computeErrorBudget, type ErrorBudget } from '../slo';
 import { isFreezeWarningEnabled } from './config';
 import { SYSTEM_ACTOR } from './data';
 import { evaluateFreeze, type FreezeEvaluation } from './freeze';
@@ -10,24 +10,29 @@ import { evaluateFreeze, type FreezeEvaluation } from './freeze';
 const NO_FREEZE: FreezeEvaluation = { warn: false, level: 'none', message: null };
 const MAX_SERVICES_PER_CHANGE = 25;
 
+/** The rolling-window error budget of a business service with an SLO (also used by budget alerts). */
+export async function errorBudgetFor(
+  row: { id: string; sloTarget: number; sloWindowDays: number | null },
+  to = new Date()
+): Promise<ErrorBudget> {
+  const windowDays = row.sloWindowDays ?? 30;
+  const from = new Date(to.getTime() - windowDays * 86_400_000);
+  const stats = await getBusinessServiceStats(row.id, { from, to }, SYSTEM_ACTOR);
+  return computeErrorBudget({
+    targetPercent: row.sloTarget,
+    windowDays,
+    downtimeMinutes: stats.weightedDowntimeMinutes ?? stats.impactMinutes,
+    windowMinutes: stats.weightedWindowMinutes,
+  });
+}
+
 async function evaluateOne(row: {
   id: string;
   sloTarget: number | null;
   sloWindowDays: number | null;
 }): Promise<FreezeEvaluation> {
   if (row.sloTarget === null) return NO_FREEZE;
-  const windowDays = row.sloWindowDays ?? 30;
-  const to = new Date();
-  const from = new Date(to.getTime() - windowDays * 86_400_000);
-  const stats = await getBusinessServiceStats(row.id, { from, to }, SYSTEM_ACTOR);
-  return evaluateFreeze(
-    computeErrorBudget({
-      targetPercent: row.sloTarget,
-      windowDays,
-      downtimeMinutes: stats.weightedDowntimeMinutes ?? stats.impactMinutes,
-      windowMinutes: stats.weightedWindowMinutes,
-    })
-  );
+  return evaluateFreeze(await errorBudgetFor({ ...row, sloTarget: row.sloTarget }));
 }
 
 /**

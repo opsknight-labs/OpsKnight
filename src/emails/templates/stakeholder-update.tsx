@@ -25,6 +25,11 @@ export type StakeholderUpdateEmailProps = {
   dashboardUrl: string;
   /** Notification settings, to stop following. */
   settingsUrl?: string;
+  /** Overrides for non-incident updates (error budgets): band label, tone and eyebrow. */
+  label?: string;
+  tone?: ReturnType<typeof statusUpdatePresentation>['tone'];
+  eyebrow?: string;
+  buttonLabel?: string;
 };
 
 /** Plain-language stakeholder update: the business impact, not the component. */
@@ -36,8 +41,13 @@ export function StakeholderUpdateEmail({
   postedAt,
   dashboardUrl,
   settingsUrl,
+  eyebrow = 'Stakeholder update',
+  buttonLabel = 'View status dashboard',
+  ...override
 }: StakeholderUpdateEmailProps) {
-  const { label, tone } = statusUpdatePresentation(phase);
+  const presentation = statusUpdatePresentation(phase);
+  const label = override.label ?? presentation.label;
+  const tone = override.tone ?? presentation.tone;
   const names = businessServiceNames.join(', ');
   return (
     <EmailLayout
@@ -50,7 +60,7 @@ export function StakeholderUpdateEmail({
         />
       }
     >
-      <HeaderBand tone={tone} eyebrow="Stakeholder update" title={label} subtitle={title} />
+      <HeaderBand tone={tone} eyebrow={eyebrow} title={label} subtitle={title} />
       <Content>
         <Badge tone={tone}>{label}</Badge>
         <Paragraph muted small>
@@ -64,7 +74,7 @@ export function StakeholderUpdateEmail({
           {postedAt ? `\n\nSent ${postedAt}` : null}
         </Callout>
         <Button href={dashboardUrl} tone={tone}>
-          View status dashboard
+          {buttonLabel}
         </Button>
         <LinkFallback href={dashboardUrl} />
       </Content>

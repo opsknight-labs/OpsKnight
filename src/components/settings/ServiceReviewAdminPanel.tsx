@@ -28,6 +28,7 @@ type Props = {
   config: {
     enabled: boolean;
     freezeWarningEnabled: boolean;
+    errorBudgetAlertsEnabled: boolean;
     dayOfMonth: number;
     hour: number;
     timeZone: string;
@@ -69,6 +70,7 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
       const saved = await saveServiceReviewSettings({
         enabled: form.enabled,
         freezeWarningEnabled: form.freezeWarningEnabled,
+        errorBudgetAlertsEnabled: form.errorBudgetAlertsEnabled,
         dayOfMonth: Number(form.dayOfMonth),
         hour: Number(form.hour),
         timeZone: form.timeZone,
@@ -149,6 +151,18 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
           checked={form.freezeWarningEnabled}
           onCheckedChange={freezeWarningEnabled => setForm(f => ({ ...f, freezeWarningEnabled }))}
           aria-label="Warn when an error budget is exhausted"
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Alert on error budget changes"
+        description="Tells the owner and followers in-app, by email and in the business service's Slack or Teams channels when a budget turns at risk, is breached or recovers."
+      >
+        <Switch
+          checked={form.errorBudgetAlertsEnabled}
+          onCheckedChange={errorBudgetAlertsEnabled =>
+            setForm(f => ({ ...f, errorBudgetAlertsEnabled }))
+          }
+          aria-label="Alert on error budget changes"
         />
       </SettingsRow>
       <SettingsRow
