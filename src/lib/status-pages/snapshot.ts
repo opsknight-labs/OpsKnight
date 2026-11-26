@@ -1,4 +1,5 @@
 import 'server-only';
+import { concealHiddenGroupMembers } from './member-concealment';
 import { IncidentEventType, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import prisma from '@/lib/prisma';
@@ -32,10 +33,7 @@ import {
 } from './availability-engine';
 import { projectPublicBranding, projectPublicPresentation } from './branding';
 import { publicUptimeGrade } from './presentation';
-import {
-  deriveOverallPublicHealth,
-  getWorstPublicStatus,
-} from './status-presentation';
+import { deriveOverallPublicHealth, getWorstPublicStatus } from './status-presentation';
 import { buildBusinessHierarchy } from './business-hierarchy';
 import { buildPublicBusinessServices, expandAffectedServiceIds } from './business-services';
 import { activeStatusOverride } from './status-override';
@@ -1226,7 +1224,8 @@ export async function getStatusPageSnapshot(pageId: string): Promise<{
     const payload = await store.readSnapshot(pageId, manifest.revision);
     if (payload && statusSnapshotIntegrity(payload) === manifest.integrityHash) {
       const current = parseStatusPageSnapshot(pageId, payload);
-      if (current) return { snapshot: current, stale: false, servingState: 'LIVE' };
+      if (current)
+        return { snapshot: concealHiddenGroupMembers(current), stale: false, servingState: 'LIVE' };
     }
   }
 
@@ -1237,7 +1236,11 @@ export async function getStatusPageSnapshot(pageId: string): Promise<{
     const previous = lastGood ? parseStatusPageSnapshot(pageId, lastGood.payload) : null;
     if (previous) {
       addOperationalMetric('opsknight_status_page_stale_serves_total', 1, { surface: 'snapshot' });
-      return { snapshot: previous, stale: true, servingState: 'STALE_OK' };
+      return {
+        snapshot: concealHiddenGroupMembers(previous),
+        stale: true,
+        servingState: 'STALE_OK',
+      };
     }
   }
 
