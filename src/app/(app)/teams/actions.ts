@@ -1,6 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { assignTeamServices } from '@/lib/teams/service-commands';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { revalidatePath } from 'next/cache';
@@ -56,12 +57,21 @@ export async function createTeam(
     return { error: error instanceof Error ? error.message : 'Failed to validate team name.' };
   }
 
-  const team = await prisma.team.create({
-    data: {
-      name: normalizedName,
-      description: description || null,
-    },
-  });
+  let team: Awaited<ReturnType<typeof prisma.team.create>>;
+  try {
+    team = await prisma.team.create({
+      data: {
+        name: normalizedName,
+        description: description || null,
+      },
+    });
+  } catch (error) {
+    // A concurrent create of the same name passes the check above and loses on the unique index.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return { error: 'A team with that name already exists.' };
+    }
+    throw error;
+  }
 
   const actorId = currentUser.id;
   await logAudit({
