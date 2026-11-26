@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAvatar } from '@dicebear/core';
+import { createAvatar, type Style } from '@dicebear/core';
 import {
   initials,
   shapes,
@@ -19,24 +19,27 @@ import {
 } from '@dicebear/collection';
 import { logger } from '@/lib/logger';
 
-// Map of locally compiled DiceBear style engines (0ms in-process generation, 0 external network calls)
-const STYLE_ENGINES: Record<string, any> = {
-  initials,
-  shapes,
-  personas,
-  identicon,
-  avataaars,
-  bottts,
-  thumbs,
-  lorelei,
-  notionists,
-  'open-peeps': openPeeps,
-  micah,
-  miniavs,
-  'pixel-art': pixelArt,
-  rings,
-  glass,
-};
+// Locally compiled DiceBear style engines (in-process generation, no external network calls). A Map, so a
+// request's `style` is looked up by key and can never reach an inherited property.
+const STYLE_ENGINES = new Map<string, Style<object>>(
+  Object.entries({
+    initials,
+    shapes,
+    personas,
+    identicon,
+    avataaars,
+    bottts,
+    thumbs,
+    lorelei,
+    notionists,
+    'open-peeps': openPeeps,
+    micah,
+    miniavs,
+    'pixel-art': pixelArt,
+    rings,
+    glass,
+  })
+);
 
 function sanitizeXml(str: string): string {
   return str
@@ -47,12 +50,18 @@ function sanitizeXml(str: string): string {
     .replace(/'/g, '&apos;');
 }
 
+/** Letters in any script, digits, whitespace, hyphen and underscore only (prevents XML injection / reflected XSS). */
+function cleanSeed(value: string): string {
+  return value.replace(/[^\p{L}\p{N}\s_-]/gu, '');
+}
+
 function generateFallbackSvg(seed: string, bgColor: string, radius: number): string {
-  // Sanitize seed to safe alphanumeric characters only (prevent XML injection / reflected XSS)
-  const cleanSeed = seed
-    .replace(/[^a-zA-Z0-9\s_-]/g, '')
-    .replace(/-(male|female|nb|other|neutral)$/, '');
-  const initial = sanitizeXml(cleanSeed.trim().slice(0, 2).toUpperCase() || 'U');
+  // The seed is already sanitized; strip a legacy gender suffix and take the first two characters (by code
+  // point, so a letter outside the Latin range is not split).
+  const stripped = cleanSeed(seed).replace(/-(male|female|nb|other|neutral)$/, '');
+  const initial = sanitizeXml(
+    Array.from(stripped.trim()).slice(0, 2).join('').toUpperCase() || 'U'
+  );
   const safeBg = /^[a-fA-F0-9]{6}$/.test(bgColor) ? bgColor : '6366f1';
   const rx = radius === 0 ? 0 : 50;
 
@@ -70,10 +79,9 @@ export async function GET(request: NextRequest) {
   const backgroundColor = searchParams.get('backgroundColor') || '6366f1';
   const radiusParam = searchParams.get('radius') || '50';
 
-  // Sanitize seed to alphanumeric, whitespace, hyphen, underscore only
-  const sanitizedSeed = decodeURIComponent(rawSeed)
-    .replace(/[^a-zA-Z0-9\s_-]/g, '')
-    .slice(0, 64);
+  // Sanitize seed to letters (any script), digits, whitespace, hyphen and underscore only. searchParams has
+  // already decoded the value, so decoding again would throw on a literal "%" (a 500 for that seed).
+  const sanitizedSeed = cleanSeed(rawSeed).slice(0, 64);
 
   // Validate radius is a number between 0-50
   const parsedRadius = parseInt(radiusParam, 10);
@@ -83,7 +91,7 @@ export async function GET(request: NextRequest) {
   const bgColor = /^[a-fA-F0-9]{6}$/.test(backgroundColor) ? backgroundColor : '6366f1';
 
   // Resolve style engine
-  const styleEngine = STYLE_ENGINES[styleParam] || STYLE_ENGINES.initials;
+  const styleEngine = STYLE_ENGINES.get(styleParam) ?? initials;
 
   const securityHeaders = {
     'Content-Type': 'image/svg+xml; charset=utf-8',

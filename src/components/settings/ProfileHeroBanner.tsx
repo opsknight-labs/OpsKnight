@@ -50,23 +50,26 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
 
   const displayName = user.name || 'User';
 
-  const handleAvatarSelect = async (selectedAvatarUrl: string) => {
-    startTransition(async () => {
+  const handleAvatarSelect = async (selectedAvatarUrl: string): Promise<boolean> => {
+    try {
       const formData = new FormData();
       formData.append('avatarUrl', selectedAvatarUrl);
-
       const result = await updateProfile({ error: null, success: false }, formData);
-
-      if (result.success) {
-        toast.success('Avatar updated');
-        setCurrentAvatarUrl(selectedAvatarUrl);
-        updateCurrentUser(selectedAvatarUrl, user.gender);
-        await update({ force: true });
-        router.refresh();
-      } else {
-        toast.error(result.error || 'Failed to update avatar');
+      if (!result.success) {
+        toast.error(result.error || 'Could not update your avatar. Please try again.');
+        return false;
       }
-    });
+      setCurrentAvatarUrl(selectedAvatarUrl);
+      updateCurrentUser(selectedAvatarUrl, user.gender);
+      toast.success('Avatar updated');
+      // The avatar is saved; refreshing the session and page is best effort and must not fail the pick.
+      await update({ force: true }).catch(() => undefined);
+      router.refresh();
+      return true;
+    } catch {
+      toast.error('Could not update your avatar. Check your connection and try again.');
+      return false;
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
