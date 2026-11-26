@@ -20,6 +20,23 @@ vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
 
+const providers = vi.hoisted(() => ({ sms: true }));
+vi.mock('@/lib/notification-providers', () => ({
+  getEmailConfig: async () => ({ enabled: true }),
+  getSMSConfig: async () => ({ enabled: providers.sms }),
+  getVoiceConfig: async () => ({ enabled: false }),
+  getPushConfig: async () => ({ enabled: true }),
+  getWhatsAppConfig: async () => ({ enabled: false }),
+}));
+
+const channelFlags = {
+  emailNotificationsEnabled: false,
+  smsNotificationsEnabled: false,
+  pushNotificationsEnabled: false,
+  voiceNotificationsEnabled: false,
+  whatsappNotificationsEnabled: false,
+};
+
 describe('updateUserProfile Action', () => {
   const prismaMock = prisma as unknown as {
     user: {
@@ -46,6 +63,7 @@ describe('updateUserProfile Action', () => {
             name: 'Alice',
             email: 'alice@example.com',
             role: 'USER',
+            ...channelFlags,
           };
         }
         return null;
@@ -94,6 +112,7 @@ describe('updateUserProfile Action', () => {
             name: 'Alice',
             email: 'alice@example.com',
             role: 'USER',
+            ...channelFlags,
           };
         }
         return null;
@@ -122,6 +141,7 @@ describe('updateUserProfile Action', () => {
             name: 'Alice',
             email: 'alice@example.com',
             role: 'USER',
+            ...channelFlags,
             accessGrants: [
               {
                 id: 'grant-1',
@@ -134,7 +154,7 @@ describe('updateUserProfile Action', () => {
           };
         }
         if (args.where.id === 'admin-1') {
-          return { email: 'root@example.com', role: 'ADMIN', phoneNumber: null };
+          return { email: 'root@example.com', role: 'ADMIN', ...channelFlags };
         }
         return null;
       }
@@ -148,5 +168,52 @@ describe('updateUserProfile Action', () => {
     const result = await updateUserProfile('admin-1', formData);
     expect(result?.error).toMatch(/assigned administrator/);
     expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  describe('notification channel validation', () => {
+    const save = async (fields: Record<string, string>) => {
+      vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'alice@example.com' } });
+      prismaMock.user.findUnique.mockImplementation(
+        async (args: { where: { id?: string; email?: string } }) =>
+          args.where.email === 'alice@example.com' || args.where.id === 'user-1'
+            ? { id: 'user-1', email: 'alice@example.com', role: 'USER', ...channelFlags }
+            : null
+      );
+      prismaMock.user.update.mockResolvedValue({ id: 'user-1', role: 'USER' });
+      const formData = new FormData();
+      formData.append('name', 'Alice');
+      formData.append('email', 'alice@example.com');
+      for (const [key, value] of Object.entries(fields)) formData.append(key, value);
+      return updateUserProfile('user-1', formData);
+    };
+
+    beforeEach(() => {
+      providers.sms = true;
+    });
+
+    it('rejects SMS paging with no phone number', async () => {
+      const result = await save({ smsNotificationsEnabled: 'true', phoneNumber: '' });
+      expect(result?.error).toMatch(/phone number is required/i);
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a phone number that is not E.164', async () => {
+      const result = await save({ smsNotificationsEnabled: 'true', phoneNumber: '555-1234' });
+      expect(result?.error).toMatch(/E\.164/);
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects switching SMS on when no SMS provider is configured', async () => {
+      providers.sms = false;
+      const result = await save({ smsNotificationsEnabled: 'true', phoneNumber: '+14155550100' });
+      expect(result?.error).toMatch(/no SMS provider/);
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('saves SMS paging with a valid E.164 number and a configured provider', async () => {
+      const result = await save({ smsNotificationsEnabled: 'true', phoneNumber: '+14155550100' });
+      expect(result).toEqual({ success: true });
+      expect(prismaMock.user.update).toHaveBeenCalled();
+    });
   });
 });

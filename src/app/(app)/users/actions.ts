@@ -30,6 +30,13 @@ import {
   type UserDependencyReport,
 } from '@/lib/users/dependencies';
 import { bulkUpdateUserSecurityState, updateUserSecurityState } from '@/lib/users/admin-invariants';
+import {
+  assertNotificationProvidersAvailable,
+  assertPhoneForNotificationChannels,
+  notificationPreferencesInput,
+  prepareNotificationProviderAvailability,
+} from '@/lib/notifications/preferences';
+import { AppError } from '@/lib/errors';
 
 export async function assertUserIsNotSoleOwner(userId: string) {
   const ownedMemberships = await prisma.teamMember.findMany({
@@ -710,7 +717,15 @@ export async function updateUserProfile(
   // Check email uniqueness if email is changed
   const existingUser = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true, role: true, phoneNumber: true },
+    select: {
+      email: true,
+      role: true,
+      emailNotificationsEnabled: true,
+      smsNotificationsEnabled: true,
+      pushNotificationsEnabled: true,
+      voiceNotificationsEnabled: true,
+      whatsappNotificationsEnabled: true,
+    },
   });
 
   if (!existingUser) {
@@ -731,28 +746,45 @@ export async function updateUserProfile(
     }
   }
 
-  // Validate voice notifications if requested
-  const voiceRequested = formData.has('voiceNotificationsEnabled')
-    ? formData.get('voiceNotificationsEnabled') === 'true'
-    : false;
-  if (voiceRequested) {
-    const effectivePhone = phoneNumber ? phoneNumber.trim() : existingUser.phoneNumber;
-    if (!effectivePhone) {
-      return {
-        error: 'A valid phone number is required when Voice notifications are enabled.',
-      };
-    }
-    const phoneRegex = /^\+[1-9]\d{1,14}$/;
-    if (!phoneRegex.test(effectivePhone)) {
-      return { error: 'Phone number must be in E.164 format (e.g., +1234567890)' };
-    }
-    const { getVoiceConfig } = await import('@/lib/notification-providers');
-    const voiceConfig = await getVoiceConfig();
-    if (!voiceConfig.enabled) {
-      return {
-        error: 'Voice notifications cannot be enabled because Twilio Voice is not configured.',
-      };
-    }
+  // Same channel rules as the self-service notification preferences: E.164 number, a number for
+  // phone channels, and a configured provider for any channel being switched on.
+  const channel = (field: string, current: boolean) =>
+    formData.has(field) ? formData.get(field) === 'true' : current;
+  const requested = {
+    emailEnabled: channel('emailNotificationsEnabled', existingUser.emailNotificationsEnabled),
+    smsEnabled: channel('smsNotificationsEnabled', existingUser.smsNotificationsEnabled),
+    pushEnabled: channel('pushNotificationsEnabled', existingUser.pushNotificationsEnabled),
+    voiceEnabled: channel('voiceNotificationsEnabled', existingUser.voiceNotificationsEnabled),
+    whatsappEnabled: channel(
+      'whatsappNotificationsEnabled',
+      existingUser.whatsappNotificationsEnabled
+    ),
+  };
+  const savedPhone = phoneNumber?.trim() || null;
+  const preferences = notificationPreferencesInput.safeParse({
+    ...requested,
+    phoneNumber: savedPhone,
+  });
+  if (!preferences.success) {
+    return { error: preferences.error.issues[0]?.message ?? 'Invalid notification preferences.' };
+  }
+  try {
+    assertPhoneForNotificationChannels(requested, savedPhone);
+    // Only a channel being switched on needs a live provider; an already-enabled one never blocks an edit.
+    const switchedOn = {
+      emailEnabled: requested.emailEnabled && !existingUser.emailNotificationsEnabled,
+      smsEnabled: requested.smsEnabled && !existingUser.smsNotificationsEnabled,
+      pushEnabled: requested.pushEnabled && !existingUser.pushNotificationsEnabled,
+      voiceEnabled: requested.voiceEnabled && !existingUser.voiceNotificationsEnabled,
+      whatsappEnabled: requested.whatsappEnabled && !existingUser.whatsappNotificationsEnabled,
+    };
+    assertNotificationProvidersAvailable(
+      switchedOn,
+      await prepareNotificationProviderAvailability(switchedOn)
+    );
+  } catch (error) {
+    if (error instanceof AppError) return { error: error.userMessage };
+    throw error;
   }
 
   // Role validation
