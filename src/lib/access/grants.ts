@@ -234,16 +234,18 @@ export async function activateBreakGlass(input: {
     });
     if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND' });
   }
-  const recent = await prisma.accessGrant.count({
-    where: { userId: input.userId, source: 'BREAK_GLASS', createdAt: { gte: since } },
-  });
-  if (recent >= MAX_BREAK_GLASS_PER_DAY) {
-    throw new AppError({
-      code: 'ACCESS_REQUEST_LIMITED',
-      userMessage: 'You have used emergency access too often today. Ask an administrator.',
-    });
-  }
   const grant = await prisma.$transaction(async tx => {
+    // Lock the user row so parallel activations count and create one at a time.
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${input.userId} FOR UPDATE`;
+    const recent = await tx.accessGrant.count({
+      where: { userId: input.userId, source: 'BREAK_GLASS', createdAt: { gte: since } },
+    });
+    if (recent >= MAX_BREAK_GLASS_PER_DAY) {
+      throw new AppError({
+        code: 'ACCESS_REQUEST_LIMITED',
+        userMessage: 'You have used emergency access too often today. Ask an administrator.',
+      });
+    }
     const created = await createRoleGrant(tx, {
       userId: input.userId,
       role: 'RESPONDER',
