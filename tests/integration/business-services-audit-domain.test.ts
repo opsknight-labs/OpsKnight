@@ -345,7 +345,9 @@ describe('M9 import', () => {
     const actor = actorFor(await createTestUser({ role: 'ADMIN' }), 'ADMIN');
     const tag = Math.random().toString(36).slice(2, 8);
     const [a, b] = ['A', 'B'].map(n => `${n}-${tag}`);
-    await Promise.all([a, b].map(name => db.businessService.create({ data: { name } })));
+    const created = await Promise.all(
+      [a, b].map(name => db.businessService.create({ data: { name } }))
+    );
     const results = await Promise.allSettled([
       importBusinessServices(
         { content: `Name,Depends On\n${a},${b}`, format: 'csv', dryRun: false },
@@ -357,7 +359,11 @@ describe('M9 import', () => {
       ),
     ]);
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
-    expect(await db.businessServiceSupport.count()).toBe(1);
+    expect(
+      await db.businessServiceSupport.count({
+        where: { parentId: { in: created.map(c => c.id) } },
+      })
+    ).toBe(1);
   });
 
   it('applies criticality through the audited update and ticks the realtime clock', async () => {
