@@ -656,7 +656,15 @@ async function releaseHeldIncident(
       where: { incidentId, endedAt: null, reason: 'maintenance-window' },
       select: { id: true },
     });
-    if (!hold) return false;
+    if (!hold) {
+      // Not held any more (e.g. an integration acknowledged it, then a person suppressed it):
+      // drop the stale link so it neither blocks the window from finishing nor counts as held.
+      await tx.incident.update({
+        where: { id: incidentId },
+        data: { maintenanceWindow: { disconnect: true } },
+      });
+      return false;
+    }
     // Overlapping maintenance: the service is still under another window, so hand
     // the hold to it instead of paging; that window's own end releases it.
     const at = new Date(Math.max(now.getTime(), Date.now()));

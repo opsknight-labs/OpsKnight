@@ -442,10 +442,10 @@ export function updateDataForCommand(
   }
   // A maintenance link means "held by that window". Once a person takes an incident out
   // of that hold it is theirs: a later manual suppression must not be released by the
-  // window's end sweep, nor hidden as maintenance-held.
+  // window's end sweep, nor hidden as maintenance-held. An integration ack/resolve keeps
+  // the link, so a person suppressing it afterwards (into SUPPRESSED) drops it too.
   if (
-    incident.status === 'SUPPRESSED' &&
-    data.status !== 'SUPPRESSED' &&
+    (incident.status === 'SUPPRESSED') !== (data.status === 'SUPPRESSED') &&
     input.source !== 'SYSTEM' &&
     input.source !== 'EVENT'
   ) {
