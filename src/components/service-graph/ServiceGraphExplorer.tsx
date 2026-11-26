@@ -359,13 +359,19 @@ export default function ServiceGraphExplorer({
   );
   useEffect(() => {
     let stopped = false;
+    let inFlight = false; // a slow response must not stack requests behind the timer
     const poll = async () => {
-      if (document.hidden) return;
-      const next = await getGraphStatusesAction({
-        services: serviceIds,
-        businessServices: businessIds,
-      }).catch(() => null);
-      if (!stopped && next) setLive(next);
+      if (document.hidden || inFlight) return;
+      inFlight = true;
+      try {
+        const next = await getGraphStatusesAction({
+          services: serviceIds,
+          businessServices: businessIds,
+        }).catch(() => null);
+        if (!stopped && next) setLive(next);
+      } finally {
+        inFlight = false;
+      }
     };
     const timer = window.setInterval(poll, POLL_MS);
     const onVisible = () => !document.hidden && void poll();
