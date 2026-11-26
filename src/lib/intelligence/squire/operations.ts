@@ -502,6 +502,7 @@ async function inPersonZone(userId: string, value: string): Promise<string> {
     .catch(() => null);
   const timeZone = row?.timeZone || 'UTC';
   return value.replace(
+    // eslint-disable-next-line security/detect-unsafe-regex -- fixed ISO-8601 shape with bounded optional groups
     /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/g,
     iso => {
       const date = new Date(iso);

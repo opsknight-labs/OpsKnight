@@ -110,6 +110,7 @@ const ASKING = '(?:what is|what are|what does|what do|whats|define|explain|meani
 const MATCHERS = TERMS.map(
   term =>
     [
+      // eslint-disable-next-line security/detect-non-literal-regexp -- built from the fixed TERMS table above, never from input
       new RegExp(
         `^${ASKING}\\s+(?:an?\\s+|the\\s+)?(?:${term.names})(?:\\s+(?:mean|means|stand for))?[\\s?!.]*$`
       ),

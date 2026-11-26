@@ -1104,6 +1104,7 @@ export default function SquireLauncher({
   // A handed-off answer ended: replace the placeholder when the person is still looking at it, else cue them.
   const { finished, clearFinished } = background;
   const [cue, setCue] = useState<{ text: string; conversationId: string | null } | null>(null);
+  /* eslint-disable react-hooks/set-state-in-effect -- both effects react to external events: a finished background answer, and the panel opening */
   useEffect(() => {
     if (!finished) return;
     clearFinished();
@@ -1125,6 +1126,7 @@ export default function SquireLauncher({
   useEffect(() => {
     if (open) setCue(null);
   }, [open]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const readyIds = useMemo(() => new Set(readyBackground.map(turn => turn.id)), [readyBackground]);
 
   const removeSaved = useCallback(

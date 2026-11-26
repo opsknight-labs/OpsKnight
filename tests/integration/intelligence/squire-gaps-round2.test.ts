@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- tool results are untyped JSON in these assertions */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { incidentRef } from '@/lib/intelligence/incident-ux/explain';

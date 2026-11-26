@@ -69,12 +69,15 @@ export function useSquireBackground({ enabled, open }: { enabled: boolean; open:
     };
   }, []);
 
+  /** When the list was last read; a watched answer is only "gone" after a read made since the hand-off. */
+  const refreshedAt = useRef(0);
   const refresh = useCallback(async () => {
     try {
       const response = await fetch(BACKGROUND_URL, { cache: 'no-store' });
       if (!response.ok) return;
       const body = (await response.json()) as { data?: { turns?: BackgroundTurn[] } };
       if (alive.current) setTurns(body.data?.turns ?? []);
+      refreshedAt.current = Date.now();
     } catch {
       // Offline or the server is restarting: the next poll tries again.
     }
@@ -112,8 +115,12 @@ export function useSquireBackground({ enabled, open }: { enabled: boolean; open:
     if (!watching || turns.length === 0) return;
     const turn = turns.find(item => item.id === watching.id);
     if (turn && isActive(turn)) return;
+    // An older list that does not hold the new answer yet is not proof that it vanished.
+    if (!turn && refreshedAt.current < watching.since) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- reacts to the polled list arriving, which is external data */
     setWatching(null);
     if (turn) setFinished(turn);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [turns, watching]);
 
   /**

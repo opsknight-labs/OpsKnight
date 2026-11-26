@@ -15,6 +15,7 @@ import { formatWhen, type CollectBasicEvidence } from './reads';
 const PROBLEM =
   /\b(?:down|broken|not working|isn'?t working|stopped working|slow|failing|crashed|crashing|outage|unavailable|erroring|timing out|can'?t (?:log ?in|pay|checkout|load)|something(?:'?s| is) (?:broken|wrong))\b/;
 const SUBJECT =
+  // eslint-disable-next-line security/detect-unsafe-regex -- fixed pattern over a short chat message; alternations are bounded words, no nested quantifiers on the same text
   /\b(?:my|our|the) (?:website|site|app|application|api|checkout|server|service|system|platform|page)\b|\b(?:customers?|users?|clients?) (?:say|says|are|is|report\w*|complain\w*|can'?t|cannot|affected|impacted|seeing)\b|^something(?:'?s| is) (?:broken|wrong|down)|\b(?:i|we) (?:got|received|have|get) (?:an? )?(?:alert|page|notification|text|call)\b/;
 const IMPACT = /\b(?:customers?|users?|clients?) (?:are |is )?(?:affected|impacted)\b/;
 const LISTING = /^(?:show|list|find|which|how many|count|what (?:services|incidents))\b/;
@@ -222,6 +223,7 @@ export async function slaBreachAnswer(
       const sla = projectIncidentSlaState(row, { now });
       if (!sla.valid) continue;
       const phases = (['ack', 'resolve'] as const).flatMap(name => {
+        // eslint-disable-next-line security/detect-object-injection -- name is the literal 'ack' | 'resolve'
         const phase = sla[name];
         if (phase.status !== 'BREACHED') return [];
         const late = formatTimeMinutesMs(Math.max(0, phase.elapsedMs - phase.targetMs));

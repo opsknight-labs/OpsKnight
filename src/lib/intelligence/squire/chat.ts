@@ -138,8 +138,8 @@ const PROPOSAL_EXTRA_TOOLS: AiToolDefinition[] = [
   },
 ];
 const MAX_CITATIONS = 8;
-/** A tool argument that carries no free text: an id, an enum, a number or a time. */
-const PLAIN_VALUE = /^[A-Za-z0-9_.:-]{1,64}$/;
+/** A tool argument that carries no free text: an id or number (has a digit), a time, or an UPPER_CASE enum. A bare word is text. */
+const PLAIN_VALUE = /^(?:[A-Z][A-Z0-9_]{0,63}|[A-Za-z0-9_.:-]{0,63}\d[A-Za-z0-9_.:-]{0,63})$/;
 
 async function* typed(text: string): AsyncGenerator<SquireEvent> {
   for (let i = 0; i < text.length; i += CHUNK)
