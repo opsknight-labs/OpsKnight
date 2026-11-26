@@ -16,7 +16,9 @@ import {
   createTopologySource,
   removeTopologySource,
   requestTopologySync,
+  setTopologySourceBusinessSync,
 } from '@/lib/intelligence/dependencies/topology-sources';
+import { assertCanManageBusinessServices } from '@/lib/business-services/commands';
 import { createJiraIssue, getDecryptedJiraConfig } from '@/lib/jira';
 import { getAlertQualityLeaderboard } from '@/lib/intelligence/triage/alert-quality';
 import { logAudit } from '@/lib/audit';
@@ -104,6 +106,16 @@ const text = (form: FormData, name: string) => {
   const value = form.get(name);
   return typeof value === 'string' ? value : '';
 };
+
+/** Business-service sync flags from a form; turning it on also needs business-service management. */
+async function businessSyncFlags(form: FormData) {
+  const syncBusinessServices = text(form, 'syncBusinessServices') === 'on';
+  if (syncBusinessServices) assertCanManageBusinessServices(await getCurrentAuthorizationActor());
+  return {
+    syncBusinessServices,
+    syncDomains: syncBusinessServices && text(form, 'syncDomains') === 'on',
+  };
+}
 
 export async function declareDependencyAction(
   _state: DependencyActionState,
@@ -203,6 +215,7 @@ export async function addTopologySourceAction(
         url: text(form, 'url'),
         intervalMinutes: Number.isFinite(interval) ? Math.round(interval) : 60,
         enabled: true,
+        ...(await businessSyncFlags(form)),
       },
       { actorId: actor.id, source: 'UI' }
     );
@@ -246,6 +259,30 @@ export async function syncTopologySourceAction(
     return queued
       ? { message: 'Sync queued; the result appears here once the lane has pulled it.', ok: true }
       : { message: 'That source no longer exists.', ok: false };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function setTopologySourceBusinessSyncAction(
+  _state: DependencyActionState,
+  form: FormData
+): Promise<DependencyActionState> {
+  try {
+    const actor = await assertCapability(CAPABILITIES.INTELLIGENCE_MANAGE);
+    const flags = await businessSyncFlags(form);
+    const result = await setTopologySourceBusinessSync(text(form, 'id'), flags, {
+      actorId: actor.id,
+      source: 'UI',
+    });
+    revalidatePath(PATH);
+    if (result === 'not_found') return { message: 'That source no longer exists.', ok: false };
+    return {
+      message: flags.syncBusinessServices
+        ? 'Business services sync from this catalog on its next pull.'
+        : 'Business-service sync is off. Synced business services are kept.',
+      ok: true,
+    };
   } catch (error) {
     return failure(error);
   }

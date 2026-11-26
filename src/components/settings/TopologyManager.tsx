@@ -5,6 +5,7 @@ import {
   addTopologySourceAction,
   importCatalogAction,
   removeTopologySourceAction,
+  setTopologySourceBusinessSyncAction,
   syncTopologySourceAction,
   type DependencyActionState,
 } from '@/app/(app)/settings/intelligence/response/actions';
@@ -89,6 +90,7 @@ export function AddTopologySourceForm() {
       <Button type="submit" disabled={pending}>
         {pending ? 'Saving…' : 'Add source'}
       </Button>
+      <BusinessSyncFields idPrefix={id} className="sm:col-span-4" />
       <div className="sm:col-span-4">
         <Status state={state} />
       </div>
@@ -96,16 +98,97 @@ export function AddTopologySourceForm() {
   );
 }
 
+/** The two business-service sync switches, shared by the add form and each source. */
+function BusinessSyncFields({
+  idPrefix,
+  className,
+  defaults,
+}: {
+  idPrefix: string;
+  className?: string;
+  defaults?: { syncBusinessServices: boolean; syncDomains: boolean };
+}) {
+  return (
+    <fieldset className={className}>
+      <legend className="sr-only">Business services</legend>
+      <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+        <label htmlFor={`${idPrefix}-bs`} className="inline-flex items-center gap-2">
+          <input
+            id={`${idPrefix}-bs`}
+            name="syncBusinessServices"
+            type="checkbox"
+            defaultChecked={defaults?.syncBusinessServices}
+            className="h-4 w-4 rounded border-border"
+          />
+          Sync Systems as business services
+        </label>
+        <label htmlFor={`${idPrefix}-domains`} className="inline-flex items-center gap-2">
+          <input
+            id={`${idPrefix}-domains`}
+            name="syncDomains"
+            type="checkbox"
+            defaultChecked={defaults?.syncDomains}
+            className="h-4 w-4 rounded border-border"
+          />
+          Include Domains
+        </label>
+      </div>
+    </fieldset>
+  );
+}
+
+type BusinessSyncSummary = {
+  status: 'OK' | 'FAILED';
+  created: number;
+  updated: number;
+  removed: string[];
+  skipped: string[];
+  unmatched: string[];
+  error?: string;
+};
+
 type SourceRow = {
   id: string;
   name: string;
   url: string;
   enabled: boolean;
   intervalMinutes: number;
+  syncBusinessServices: boolean;
+  syncDomains: boolean;
   lastSyncedAt: Date | null;
   lastStatus: string | null;
-  lastSummary: { matched: number; edgesDeclared: number; unmatched: string[] } | null;
+  lastSummary: {
+    matched: number;
+    edgesDeclared: number;
+    unmatched: string[];
+    businessServices?: BusinessSyncSummary;
+  } | null;
 };
+
+export function describeBusinessSync(summary: BusinessSyncSummary): string {
+  if (summary.status === 'FAILED')
+    return `business services not synced: ${summary.error ?? 'failed'}`;
+  const parts = [`business services ${summary.created} created, ${summary.updated} updated`];
+  if (summary.removed.length) parts.push(`${summary.removed.length} marked removed`);
+  if (summary.skipped.length) parts.push(`${summary.skipped.length} owned by another source`);
+  if (summary.unmatched.length) parts.push(`${summary.unmatched.length} references unmatched`);
+  return parts.join(', ');
+}
+
+function BusinessSyncForm({ source }: { source: SourceRow }) {
+  const [state, action, pending] = useActionState(setTopologySourceBusinessSyncAction, initial);
+  const id = useId();
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="id" value={source.id} />
+      <BusinessSyncFields idPrefix={id} defaults={source} />
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        Save
+      </Button>
+      <Status state={state} />
+    </form>
+  );
+}
 
 function SourceActions({ id }: { id: string }) {
   const [syncState, sync, syncing] = useActionState(syncTopologySourceAction, initial);
@@ -153,7 +236,11 @@ export function TopologySourceList({
               {source.lastSummary
                 ? ` · ${source.lastSummary.matched} matched, ${source.lastSummary.edgesDeclared} edges declared${source.lastSummary.unmatched.length ? `, ${source.lastSummary.unmatched.length} unmatched` : ''}`
                 : ''}
+              {source.syncBusinessServices && source.lastSummary?.businessServices
+                ? ` · ${describeBusinessSync(source.lastSummary.businessServices)}`
+                : ''}
             </p>
+            {canManage && <BusinessSyncForm source={source} />}
           </div>
           {canManage && <SourceActions id={source.id} />}
         </li>

@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
-import { emitAuditEvent, type AuditEventSource } from '@/lib/audit';
+import { emitAuditEvent, type AuditEventActor, type AuditEventSource } from '@/lib/audit';
 import {
   AUTHORIZATION_ACTIONS,
   authorize,
@@ -388,7 +388,12 @@ function conflict(error: unknown): never {
   throw error;
 }
 
-type CommandContext = { actor: AuthorizationActor; source?: AuditEventSource };
+type CommandContext = {
+  actor: AuthorizationActor;
+  source?: AuditEventSource;
+  /** Audit as this actor instead of the user, e.g. a scheduled catalog sync. */
+  auditActor?: AuditEventActor;
+};
 
 async function audit(
   tx: Prisma.TransactionClient,
@@ -402,7 +407,7 @@ async function audit(
       action,
       source: context.source ?? 'UI',
       target: { type: 'BUSINESS_SERVICE', id },
-      actor: { type: 'USER', id: context.actor.id },
+      actor: context.auditActor ?? { type: 'USER', id: context.actor.id },
       ...(newValue ? { newValue } : {}),
     },
     tx

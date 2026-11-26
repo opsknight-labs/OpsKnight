@@ -2993,6 +2993,10 @@ model BusinessService {
   customerReportWindowMinutes Int?
   /// Review cadence in days; null = org default (180).
   reviewIntervalDays   Int?
+  /// Set by a scheduled catalog sync ("backstage:<sourceId>:<name>"); null = created by hand.
+  externalKey          String?                                 @unique(map: "uq_business_service_external_key")
+  /// When the sync last missed its catalog entity. The business service is kept, never deleted.
+  externalRemovedAt    DateTime?
   createdAt          DateTime                                @default(now())
   updatedAt          DateTime                                @updatedAt
   ownerTeam          Team?                                   @relation(fields: [ownerTeamId], references: [id], onDelete: SetNull)
@@ -6268,6 +6272,10 @@ model TopologySource {
   url             String
   enabled         Boolean   @default(true)
   intervalMinutes Int       @default(60)
+  /// Also sync Backstage Systems as business services, members = components with spec.system.
+  syncBusinessServices Boolean @default(false)
+  /// With syncBusinessServices: each Domain becomes a business service supported by its Systems.
+  syncDomains     Boolean   @default(false)
   lastSyncedAt    DateTime?
   lastStatus      String?
   lastSummary     Json?

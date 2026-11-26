@@ -15,6 +15,10 @@ import {
   type IntelligenceSettingsView,
 } from '../settings/service';
 import { applyCatalogImport, MAX_IMPORT_BYTES, parseCatalog, type ImportSummary } from './import';
+import {
+  syncBusinessServicesFromCatalog,
+  type BusinessServiceSyncSummary,
+} from '@/lib/business-services/catalog-sync';
 
 /** Sources are checked for being due this often; each source has its own interval. */
 export const TOPOLOGY_SYNC_CHECK_INTERVAL_MS = 5 * 60_000;
@@ -44,7 +48,13 @@ export const topologySourceInputSchema = z
       .max(24 * 60)
       .default(60),
     enabled: z.boolean().default(true),
+    syncBusinessServices: z.boolean().default(false),
+    syncDomains: z.boolean().default(false),
   })
+  .strict();
+
+export const topologySourceBusinessSyncSchema = z
+  .object({ syncBusinessServices: z.boolean(), syncDomains: z.boolean() })
   .strict();
 
 export interface TopologySourceView {
@@ -55,7 +65,9 @@ export interface TopologySourceView {
   intervalMinutes: number;
   lastSyncedAt: Date | null;
   lastStatus: string | null;
-  lastSummary: ImportSummary | null;
+  syncBusinessServices: boolean;
+  syncDomains: boolean;
+  lastSummary: (ImportSummary & { businessServices?: BusinessServiceSyncSummary }) | null;
 }
 
 const auditSource = (actor: IntelligenceActor) => ({
@@ -76,9 +88,11 @@ export async function listTopologySources(
     url: row.url,
     enabled: row.enabled,
     intervalMinutes: row.intervalMinutes,
+    syncBusinessServices: row.syncBusinessServices,
+    syncDomains: row.syncDomains,
     lastSyncedAt: row.lastSyncedAt,
     lastStatus: row.lastStatus,
-    lastSummary: (row.lastSummary as ImportSummary | null) ?? null,
+    lastSummary: (row.lastSummary as TopologySourceView['lastSummary']) ?? null,
   }));
 }
 
@@ -116,7 +130,13 @@ export async function createTopologySource(input: unknown, actor: IntelligenceAc
         entityId: row.id,
         actorId: actor.actorId,
         ...auditSource(actor),
-        newValue: { name: parsed.name, url: parsed.url, intervalMinutes: parsed.intervalMinutes },
+        newValue: {
+          name: parsed.name,
+          url: parsed.url,
+          intervalMinutes: parsed.intervalMinutes,
+          syncBusinessServices: parsed.syncBusinessServices,
+          syncDomains: parsed.syncDomains,
+        },
       },
       tx
     );
@@ -147,6 +167,39 @@ export async function removeTopologySource(
       tx
     );
     return 'removed';
+  });
+}
+
+/**
+ * Turns the scheduled business-service sync of a source on or off. The caller authorizes
+ * INTELLIGENCE_MANAGE and business-service management. Audited with old and new values.
+ */
+export async function setTopologySourceBusinessSync(
+  id: string,
+  input: unknown,
+  actor: IntelligenceActor
+): Promise<'updated' | 'not_found'> {
+  const parsed = parseOrThrow(topologySourceBusinessSyncSchema, input);
+  return prisma.$transaction(async tx => {
+    const row = await tx.topologySource.findUnique({
+      where: { id },
+      select: { syncBusinessServices: true, syncDomains: true },
+    });
+    if (!row) return 'not_found';
+    await tx.topologySource.update({ where: { id }, data: parsed });
+    await logAudit(
+      {
+        action: 'intelligence.topology.source.updated',
+        entityType: 'SYSTEM_CONFIG',
+        entityId: id,
+        actorId: actor.actorId,
+        ...auditSource(actor),
+        oldValue: row,
+        newValue: parsed,
+      },
+      tx
+    );
+    return 'updated';
   });
 }
 
@@ -222,9 +275,10 @@ export async function syncTopologySource(
       error instanceof Error && error.name === 'AbortError' ? 'Timed out' : 'Fetch failed'
     );
   }
-  let summary: ImportSummary;
+  let summary: NonNullable<TopologySourceView['lastSummary']>;
+  let entities: ReturnType<typeof parseCatalog>;
   try {
-    const entities = parseCatalog(text);
+    entities = parseCatalog(text);
     summary = await withDbBudget({ maxDbMs: Math.max(settings.maxDbMs, 5000) }, tx =>
       applyCatalogImport(tx, entities, null, `source:${source.name}`)
     );
@@ -235,6 +289,12 @@ export async function syncTopologySource(
         : 'Import failed'
     );
   }
+  // Its own transaction and result: a business-service problem never undoes declared dependencies.
+  if (source.syncBusinessServices)
+    summary = {
+      ...summary,
+      businessServices: await syncBusinessServicesFromCatalog(source, entities),
+    };
   await prisma.topologySource.update({
     where: { id },
     data: {
