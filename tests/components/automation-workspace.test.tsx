@@ -109,6 +109,33 @@ it('switches to SHADOW immediately without a confirmation step', async () => {
   expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 });
 
+it('confirms before stepping a LIVE service down to SHADOW and keeps LIVE when cancelled', async () => {
+  api.area.mockResolvedValue({ ...base, mode: 'LIVE' });
+  api.action.mockResolvedValue({ ok: true, data: {} });
+  render(<AutomationWorkspace serviceId="service" />);
+  fireEvent.change(await screen.findByLabelText('Automation mode'), {
+    target: { value: 'SHADOW' },
+  });
+  const dialog = await screen.findByRole('alertdialog');
+  expect(dialog).toHaveTextContent('Switch this service to shadow mode?');
+  expect(dialog).toHaveTextContent(
+    'New incidents stop using automation routing and use the service default.'
+  );
+  expect(api.action).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Keep LIVE' }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  expect(api.action).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('Automation mode')).toHaveValue('LIVE');
+
+  fireEvent.change(screen.getByLabelText('Automation mode'), { target: { value: 'SHADOW' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Switch to SHADOW' }));
+  await waitFor(() =>
+    expect(api.action).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'mode', mode: 'SHADOW' })
+    )
+  );
+});
+
 it('explains read-only access instead of silently hiding publish controls', async () => {
   api.area.mockResolvedValue({ ...base, canPublish: false, canEdit: false });
   render(<AutomationWorkspace serviceId="service" />);
