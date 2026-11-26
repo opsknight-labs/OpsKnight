@@ -47,7 +47,7 @@ export default async function EditBusinessServicePage({
   ]);
   const status = health.get(item.id);
   return (
-    <div className="mx-auto w-full max-w-[1200px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+    <div className="space-y-4 sm:space-y-6">
       <PageHeader
         eyebrow="Service catalog"
         title={`Edit ${item.name}`}
@@ -109,7 +109,8 @@ export default async function EditBusinessServicePage({
             item.customerReportWindowMinutes === null
               ? ''
               : String(item.customerReportWindowMinutes),
-          reviewIntervalDays: item.reviewIntervalDays === null ? '' : String(item.reviewIntervalDays),
+          reviewIntervalDays:
+            item.reviewIntervalDays === null ? '' : String(item.reviewIntervalDays),
         }}
       />
     </div>

@@ -16,10 +16,10 @@ import { distribution, parseCatalogParams } from '@/components/business-service/
 import { diffAuditDetails } from '@/lib/business-services/audit-diff';
 import { countAgainstDraft } from '@/lib/business-services/impact-preview';
 
-const { unmark } = vi.hoisted(() => ({ unmark: vi.fn() }));
+const { unmark, create } = vi.hoisted(() => ({ unmark: vi.fn(), create: vi.fn() }));
 vi.mock('@/app/(app)/services/business/actions', () => ({
   unmarkImpactAction: unmark,
-  createBusinessServiceAction: vi.fn(),
+  createBusinessServiceAction: create,
   updateBusinessServiceAction: vi.fn(),
   deleteBusinessServiceAction: vi.fn(),
   searchBusinessServiceOptionsAction: vi.fn().mockResolvedValue([]),
@@ -268,6 +268,75 @@ describe('form', () => {
       '#bs-name'
     );
     await waitFor(() => expect(name).toHaveFocus());
+  });
+
+  it('edits links as rows and tags as chips, and sends them in the stored shape', async () => {
+    create.mockResolvedValue({ ok: true, id: 'new' });
+    render(<BusinessServiceForm services={[]} teams={[]} users={[]} />);
+    expect(screen.getByRole('heading', { name: 'Basics' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Checkout' } });
+    fireEvent.change(screen.getByLabelText('Link 1 label'), { target: { value: 'Runbook' } });
+    fireEvent.change(screen.getByLabelText('Link 1 URL'), {
+      target: { value: 'https://wiki.example.com/rb' },
+    });
+    const tags = screen.getByLabelText('Tags');
+    fireEvent.change(tags, { target: { value: 'pci' } });
+    fireEvent.keyDown(tags, { key: 'Enter' });
+    fireEvent.change(tags, { target: { value: 'payments' } });
+    fireEvent.keyDown(tags, { key: ',' });
+    expect(screen.getByRole('button', { name: 'Remove tag pci' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create business service' }));
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create.mock.calls[0][0]).toMatchObject({
+      links: [{ label: 'Runbook', url: 'https://wiki.example.com/rb' }],
+      tags: ['pci', 'payments'],
+    });
+  });
+
+  it('marks unsaved changes, links Cancel to the detail page when editing, and has a danger zone', () => {
+    render(
+      <BusinessServiceForm
+        services={[{ id: 's1', name: 'API' }]}
+        teams={[]}
+        users={[]}
+        canDelete
+        initial={{
+          ...formValueFromTemplate({ tags: [], lifecycle: 'ACTIVE' } as never),
+          id: 'bs1',
+          name: 'Checkout',
+          memberServiceIds: ['s1'],
+        }}
+      />
+    );
+    expect(screen.getByRole('link', { name: 'Cancel' })).toHaveAttribute(
+      'href',
+      '/services/business/bs1'
+    );
+    expect(screen.getByRole('heading', { name: 'Danger zone' })).toBeInTheDocument();
+    expect(screen.queryByText('Unsaved changes')).toBeNull();
+    // The member row's critical control is a labelled switch, not a struck-through button.
+    const critical = screen.getByRole('switch', { name: /API is critical/ });
+    expect(critical).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(critical);
+    expect(screen.getByRole('switch', { name: /API is critical/ })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    );
+    expect(screen.getByText('Non-critical')).toBeInTheDocument();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    // In-app links now ask first.
+    fireEvent.click(screen.getByRole('link', { name: 'Cancel' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Leave with unsaved changes?');
+  });
+
+  it('keeps quorum and hops under Advanced, and opens it for an error there', async () => {
+    const { container } = render(<BusinessServiceForm services={[]} teams={[]} users={[]} />);
+    const details = container.querySelector('details')!;
+    expect(details).not.toHaveAttribute('open');
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } });
+    fireEvent.change(screen.getByLabelText('Partial at (% down)'), { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create business service' }));
+    await waitFor(() => expect(details).toHaveAttribute('open'));
   });
 
   it('previews what the thresholds would count', async () => {

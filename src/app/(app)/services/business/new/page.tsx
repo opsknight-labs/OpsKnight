@@ -23,7 +23,7 @@ export default async function NewBusinessServicePage({
   ]);
   const template = templates.find(item => item.id === query?.template);
   return (
-    <div className="mx-auto w-full max-w-[1200px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+    <div className="space-y-4 sm:space-y-6">
       <PageHeader
         eyebrow="Service catalog"
         title="New business service"
@@ -36,7 +36,10 @@ export default async function NewBusinessServicePage({
         description="Name what customers rely on and pick the technical services behind it."
       />
       {templates.length > 0 && (
-        <nav aria-label="Start from a template" className="flex flex-wrap items-center gap-2 text-sm">
+        <nav
+          aria-label="Start from a template"
+          className="flex flex-wrap items-center gap-2 text-sm"
+        >
           <span className="text-muted-foreground">Start from</span>
           <Link
             href="/services/business/new"

@@ -165,10 +165,23 @@ const template: TemplateView = {
   ownerTeamName: null,
 };
 
+const templateAction = (name: string) => {
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for API' }), {
+    button: 0,
+    pointerType: 'mouse',
+  });
+  fireEvent.click(screen.getByRole('menuitem', { name }));
+};
+
 describe('TemplateManager', () => {
+  it('shows an empty state without templates', () => {
+    render(<TemplateManager templates={[]} teams={[]} />);
+    expect(screen.getByText('No templates yet')).toBeInTheDocument();
+  });
+
   it('asks before deleting and does not call the server on Cancel', async () => {
     render(<TemplateManager templates={[template]} teams={[]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete template API' }));
+    templateAction('Delete…');
     expect(phase5b.deleteTemplateAction).not.toHaveBeenCalled();
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
@@ -178,17 +191,17 @@ describe('TemplateManager', () => {
   it('deletes after confirmation', async () => {
     phase5b.deleteTemplateAction.mockResolvedValue({ ok: true });
     render(<TemplateManager templates={[template]} teams={[]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete template API' }));
+    templateAction('Delete…');
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(phase5b.deleteTemplateAction).toHaveBeenCalledWith('t1'));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
-  it('moves focus to the form when editing and names the row actions', () => {
+  it('moves focus to the form when editing and names the row actions', async () => {
     render(<TemplateManager templates={[template]} teams={[]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit template API' }));
-    expect(screen.getByLabelText('Name')).toHaveFocus();
+    templateAction('Edit');
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveFocus());
     expect(screen.getByRole('link', { name: 'Use template API' })).toBeInTheDocument();
   });
 });
