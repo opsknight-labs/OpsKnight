@@ -4,16 +4,28 @@ const mocks = vi.hoisted(() => ({
   createRunbook: vi.fn(),
   redirect: vi.fn(),
   revalidatePath: vi.fn(),
+  assertCapability: vi.fn(),
+  logAudit: vi.fn(),
+  settings: {
+    findUnique: vi.fn(),
+    upsert: vi.fn(),
+  },
 }));
 
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 vi.mock('@/lib/rbac', () => ({
-  assertCapability: vi.fn().mockResolvedValue({ id: 'user-1' }),
+  assertCapability: mocks.assertCapability,
   getUserPermissions: vi.fn(),
 }));
-vi.mock('@/lib/prisma', () => ({ default: {} }));
-vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
+vi.mock('@/lib/prisma', () => ({
+  default: {
+    systemSettings: mocks.settings,
+    $transaction: async (callback: (tx: { systemSettings: typeof mocks.settings }) => unknown) =>
+      callback({ systemSettings: mocks.settings }),
+  },
+}));
+vi.mock('@/lib/audit', () => ({ logAudit: mocks.logAudit }));
 vi.mock('@/lib/runbooks/versioning', () => ({
   archiveRunbook: vi.fn(),
   cloneVersionToDraft: vi.fn(),
@@ -52,7 +64,11 @@ vi.mock('@/lib/runbooks/lifecycle', () => ({
 }));
 vi.mock('@/lib/intelligence/ops-insights/handlers', () => ({ enqueueOpsInsights: vi.fn() }));
 
-import { createRunbookAction } from '@/app/(app)/runbooks/actions';
+import {
+  createRunbookAction,
+  updateIncidentRemediationBudgetAction,
+} from '@/app/(app)/runbooks/actions';
+import { CAPABILITIES } from '@/lib/authorization';
 
 function form(slug: string) {
   const data = new FormData();
@@ -64,7 +80,10 @@ function form(slug: string) {
 }
 
 describe('createRunbookAction', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.assertCapability.mockResolvedValue({ id: 'user-1' });
+  });
 
   it('returns a slug error, not a thrown unique-constraint error, for an existing slug', async () => {
     mocks.createRunbook.mockRejectedValue(
@@ -91,5 +110,53 @@ describe('createRunbookAction', () => {
     await createRunbookAction(form('restart-api'));
 
     expect(mocks.redirect).toHaveBeenCalledWith('/runbooks/rb-1');
+  });
+});
+
+describe('updateIncidentRemediationBudgetAction', () => {
+  const budgetForm = () => {
+    const data = new FormData();
+    data.set('executions', '100');
+    data.set('writes', '100');
+    data.set('nonIdempotent', '100');
+    return data;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.assertCapability.mockResolvedValue({ id: 'admin-1' });
+  });
+
+  it('requires the administrator capability, not the runbook-author one', async () => {
+    mocks.assertCapability.mockRejectedValue(new Error('forbidden'));
+
+    await expect(updateIncidentRemediationBudgetAction(budgetForm())).rejects.toThrow('forbidden');
+
+    expect(mocks.assertCapability).toHaveBeenCalledWith(CAPABILITIES.ADMIN_MANAGE);
+    expect(mocks.settings.upsert).not.toHaveBeenCalled();
+  });
+
+  it('audits the previous ceilings with the new ones', async () => {
+    const previous = {
+      runbookAutoExecutionsPerIncident: 3,
+      runbookAutoWritesPerIncident: 3,
+      runbookAutoNonIdempotentPerIncident: 0,
+    };
+    mocks.settings.findUnique.mockResolvedValue(previous);
+
+    await updateIncidentRemediationBudgetAction(budgetForm());
+
+    expect(mocks.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'runbook.incident_budget.updated',
+        oldValue: previous,
+        newValue: {
+          runbookAutoExecutionsPerIncident: 100,
+          runbookAutoWritesPerIncident: 100,
+          runbookAutoNonIdempotentPerIncident: 100,
+        },
+      }),
+      expect.anything()
+    );
   });
 });

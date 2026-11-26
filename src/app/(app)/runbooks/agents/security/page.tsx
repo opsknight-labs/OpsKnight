@@ -38,7 +38,7 @@ export default async function RunbookFleetSecurityPage() {
   const capabilities = permissions.capabilities;
   const canManage = capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const canManageSecrets = capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
-  const canManageBudgets = capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE);
+  const canManageBudgets = capabilities.includes(CAPABILITIES.ADMIN_MANAGE);
   const canManageRetention = capabilities.includes(CAPABILITIES.ADMIN_MANAGE);
 
   const [settings, signingKeys] = await Promise.all([

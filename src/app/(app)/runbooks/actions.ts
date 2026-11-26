@@ -415,7 +415,8 @@ export async function updateRunbookArtifactRetentionAction(formData: FormData) {
 }
 
 export async function updateIncidentRemediationBudgetAction(formData: FormData) {
-  const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
+  // Same requirement as the runbook settings API (RUNBOOK_SETTINGS_MANAGE): these are global ceilings.
+  const actor = await assertCapability(CAPABILITIES.ADMIN_MANAGE);
   const number = z.coerce.number().int().min(0).max(100);
   const data = z
     .object({
@@ -430,6 +431,14 @@ export async function updateIncidentRemediationBudgetAction(formData: FormData) 
       runbookAutoNonIdempotentPerIncident: formData.get('nonIdempotent'),
     });
   await prisma.$transaction(async tx => {
+    const previous = await tx.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: {
+        runbookAutoExecutionsPerIncident: true,
+        runbookAutoWritesPerIncident: true,
+        runbookAutoNonIdempotentPerIncident: true,
+      },
+    });
     await tx.systemSettings.upsert({
       where: { id: 'default' },
       create: { id: 'default', ...data },
@@ -441,6 +450,7 @@ export async function updateIncidentRemediationBudgetAction(formData: FormData) 
         entityType: 'SYSTEM_CONFIG',
         entityId: 'default',
         actorId: actor.id,
+        oldValue: previous,
         newValue: data,
       },
       tx
