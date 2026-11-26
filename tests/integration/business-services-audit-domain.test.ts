@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resetBusinessServiceHealthCacheForTests } from '@/lib/business-services/health';
+import { importBusinessServices } from '@/lib/business-services/import';
 import { createBusinessServiceTemplate } from '@/lib/business-services/templates';
 import { readableServiceIds } from '@/lib/business-services/stats';
 import {
@@ -336,5 +337,44 @@ describe('L4 template audit target', () => {
     const entries = await db.auditLog.findMany({ where: { entityId: template.id } });
     expect(entries.length).toBeGreaterThan(0);
     expect(entries.every(entry => entry.entityType !== 'BUSINESS_SERVICE')).toBe(true);
+  });
+});
+
+describe('M9 import', () => {
+  it('concurrent imports cannot store a dependency cycle', async () => {
+    const actor = actorFor(await createTestUser({ role: 'ADMIN' }), 'ADMIN');
+    const tag = Math.random().toString(36).slice(2, 8);
+    const [a, b] = ['A', 'B'].map(n => `${n}-${tag}`);
+    await Promise.all([a, b].map(name => db.businessService.create({ data: { name } })));
+    const results = await Promise.allSettled([
+      importBusinessServices(
+        { content: `Name,Depends On\n${a},${b}`, format: 'csv', dryRun: false },
+        { actor }
+      ),
+      importBusinessServices(
+        { content: `Name,Depends On\n${b},${a}`, format: 'csv', dryRun: false },
+        { actor }
+      ),
+    ]);
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+    expect(await db.businessServiceSupport.count()).toBe(1);
+  });
+
+  it('applies criticality through the audited update and ticks the realtime clock', async () => {
+    const actor = actorFor(await createTestUser({ role: 'ADMIN' }), 'ADMIN');
+    const name = `Crit-${Math.random().toString(36).slice(2, 8)}`;
+    const bs = await db.businessService.create({ data: { name } });
+    const before = await db.realtimeChange.count();
+    await importBusinessServices(
+      { content: `Name,Criticality\n${name},1`, format: 'csv', dryRun: false },
+      { actor }
+    );
+    expect((await db.businessService.findUniqueOrThrow({ where: { id: bs.id } })).criticality).toBe(
+      'TIER_1'
+    );
+    expect(await db.realtimeChange.count()).toBeGreaterThan(before);
+    expect(
+      await db.auditLog.count({ where: { entityId: bs.id, action: 'business_service.updated' } })
+    ).toBe(1);
   });
 });
