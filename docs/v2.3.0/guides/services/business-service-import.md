@@ -6,10 +6,13 @@ product_area: services
 audience: [administrator, responder]
 verification:
   level: source
-  verified_at: 2026-11-22
+  verified_at: 2026-11-27
   evidence:
     - src/lib/business-services/setup.ts
     - src/lib/business-services/import.ts
+    - src/lib/business-services/catalog-sync.ts
+    - src/lib/intelligence/dependencies/topology-sources.ts
+    - src/components/settings/TopologyManager.tsx
     - src/components/business-service-setup/SetupWizard.tsx
     - src/components/business-service-import/ImportDialog.tsx
     - src/app/api/v2/business-services/import/route.ts
@@ -87,6 +90,30 @@ Paste `catalog-info.yaml` documents. Each `System` becomes a business service. E
 whose `spec.system` names that system becomes a member, matched by its
 `opsknight.com/service-id` annotation, otherwise by name. A system's `dependsOn` on other systems
 becomes its supporting business services.
+
+### Keep them in sync with Backstage
+
+A Backstage topology source can also keep business services up to date on its schedule. Open
+**Settings → Intelligence → Services & changes → Import topology from Backstage**, then tick
+**Sync Systems as business services** when you add a source, or on an existing source and
+**Save**. Tick **Include Domains** to also turn each Domain into a business service supported by
+its Systems. You need permission to manage intelligence settings.
+
+Each sync maps Systems the same way as the paste import above, with the same checks, and applies
+all of them or none:
+
+- Each synced business service is tied to its source by an external key, so a later sync updates
+  it instead of creating a new one.
+- A business service you created by hand with the same name is taken over by the sync, not
+  duplicated. A name another source already syncs is left alone and reported.
+- When a System leaves the catalog, its business service is marked as removed, not deleted. It
+  is restored if the System comes back. Business services created by hand are never deleted.
+- When no Component of a System matches a service, its current members are kept.
+- References that match nothing are dropped and reported instead of failing the sync.
+
+The source's last result lists how many business services were created, updated, marked removed,
+owned by another source or left with unmatched references. Every sync, removal and restore is in
+the audit log. A failed business-service sync never undoes the dependencies the source imported.
 
 ## API
 
