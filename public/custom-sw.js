@@ -428,11 +428,21 @@ const normalizePushPayload = raw => {
   };
 };
 
+// Only the responder shell (/m) may be reused: a desktop tab on the same origin can hold unsaved work.
+const isMobileShellWindow = client => {
+  try {
+    const url = new URL(client.url);
+    return url.origin === self.location.origin && (url.pathname === '/m' || url.pathname.startsWith('/m/'));
+  } catch {
+    return false;
+  }
+};
+
 const focusOrOpen = async path => {
   const safePath = safeAppPath(path, '/m');
   const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
   for (const client of windowClients) {
-    if (!client.url.startsWith(self.location.origin)) continue;
+    if (!isMobileShellWindow(client)) continue;
     if ('focus' in client) await client.focus();
     if ('navigate' in client) return client.navigate(safePath);
     return client;
