@@ -75,6 +75,8 @@ export const BusinessServiceInputSchema = z
     customerReportThreshold: z.number().int().min(1).max(100_000).nullable().optional(),
     customerReportWindowMinutes: z.number().int().min(5).max(1440).nullable().optional(),
     reviewIntervalDays: z.number().int().min(7).max(730).nullable().optional(),
+    /** Publish status-page updates on impact/recovery without approval (meant for TIER_0). */
+    autoPublishStatusUpdates: z.boolean().optional(),
   })
   .strict();
 
@@ -110,6 +112,7 @@ export const BUSINESS_SERVICE_SELECT = {
   customerReportThreshold: true,
   customerReportWindowMinutes: true,
   reviewIntervalDays: true,
+  autoPublishStatusUpdates: true,
   createdAt: true,
   updatedAt: true,
   ownerTeam: { select: { id: true, name: true } },
@@ -447,6 +450,7 @@ function columns(input: ParsedInput) {
       'customerReportThreshold',
       'customerReportWindowMinutes',
       'reviewIntervalDays',
+      'autoPublishStatusUpdates',
     ]),
     ...(input.customAttributes !== undefined
       ? { customAttributes: input.customAttributes ?? Prisma.DbNull }
@@ -501,7 +505,21 @@ function auditFields(
       input.customerReportThreshold !== undefined
         ? input.customerReportThreshold
         : (current?.customerReportThreshold ?? null),
+    autoPublishStatusUpdates: input.autoPublishStatusUpdates ?? null,
   };
+}
+
+/** A contact channel that names a chat channel must exist in the connected workspace. */
+async function assertContactChannel(value: string | null | undefined) {
+  if (!value) return;
+  const { validateContactChannel } = await import('./chat-channels');
+  const problem = await validateContactChannel(value);
+  if (problem)
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      userMessage: problem,
+      fields: [{ field: 'contactChannel', code: 'invalid', message: problem }],
+    });
 }
 
 export async function createBusinessService(
@@ -511,6 +529,7 @@ export async function createBusinessService(
 ) {
   assertCanManageBusinessServices(context.actor);
   const input = BusinessServiceInputSchema.parse(raw);
+  await assertContactChannel(input.contactChannel);
   const run = async (tx: Prisma.TransactionClient) => {
     await assertReferencesExist(tx, input, context.actor);
     const created = await tx.businessService
@@ -536,6 +555,8 @@ export async function updateBusinessService(
   client?: Prisma.TransactionClient
 ) {
   assertCanManageBusinessServices(context.actor);
+  // The workspace check calls Slack/Teams, so it runs before the transaction opens.
+  if (typeof raw.contactChannel === 'string') await assertContactChannel(raw.contactChannel.trim());
   const run = async (tx: Prisma.TransactionClient) => {
     const current = await tx.businessService.findFirst({
       where: { AND: [{ id }, businessServiceWriteWhere(context.actor)] },
@@ -724,6 +745,7 @@ export function businessServiceDto(
     ownerUser: row.ownerUser ? { id: row.ownerUser.id, name: row.ownerUser.name } : null,
     escalationPolicy: row.escalationPolicy,
     contactChannel: row.contactChannel,
+    autoPublishStatusUpdates: row.autoPublishStatusUpdates,
     tags: row.tags,
     environment: row.environment,
     lifecycle: row.lifecycle,

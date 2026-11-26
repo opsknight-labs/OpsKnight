@@ -2,7 +2,10 @@ import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { triggerStatusPageWebhooks } from '@/lib/status-page-webhooks';
+import { getBaseUrl } from '@/lib/env-validation';
 import { getHealthSnapshot } from './health';
+import { businessServiceChatTargets, enqueueBusinessServiceChat } from './chat-channels';
+import { draftStatusPageUpdates } from './status-page-drafts';
 
 export const BUSINESS_SERVICE_STATUS_EVENT = 'business_service.status_changed';
 /** A status must hold this long since the last announcement before the next one goes out. */
@@ -28,10 +31,11 @@ export function describeStatusChange(name: string, from: string, to: string) {
 
 /**
  * Announces business-service status changes found by the 60 s impact reconcile: in-app to
- * followers and via status-page webhooks (pages that show the business service). The first run per
- * business service only records a baseline. Delivery is at least once: announce under a
- * stable per-transition key, then compare-and-set `lastNotifiedStatus`; a short debounce stops flapping.
- * shortcut: Slack/Teams and an announcement draft are not wired (those channels are incident-keyed).
+ * followers, status-page webhooks and a drafted (or, when opted in, published) update on pages
+ * that show the business service, and Slack/Teams posts to its contact channel and owner team's
+ * channels. The first run per business service only records a baseline. Delivery is at least
+ * once: every step writes under a stable per-transition key, then `lastNotifiedStatus` is
+ * compare-and-set; a short debounce stops flapping.
  */
 export async function emitBusinessServiceStatusChanges(now = new Date()): Promise<number> {
   const [snapshot, rows] = await Promise.all([
@@ -40,12 +44,15 @@ export async function emitBusinessServiceStatusChanges(now = new Date()): Promis
       select: {
         id: true,
         name: true,
+        contactChannel: true,
+        ownerTeamId: true,
+        autoPublishStatusUpdates: true,
         lastNotifiedStatus: true,
         lastNotifiedStatusAt: true,
         followers: { select: { userId: true } },
         statusPages: {
           where: { showOnPage: true, statusPage: { enabled: true } },
-          select: { statusPageId: true },
+          select: { statusPageId: true, displayName: true },
         },
       },
     }),
@@ -99,6 +106,26 @@ export async function emitBusinessServiceStatusChanges(now = new Date()): Promis
           },
           `${changeKey}:${BUSINESS_SERVICE_STATUS_EVENT}`
         );
+      const targets = await businessServiceChatTargets(row);
+      if (targets.length)
+        await enqueueBusinessServiceChat({
+          businessServiceId: row.id,
+          targets,
+          title: text.title,
+          text: text.message,
+          url: `${getBaseUrl()}/services/business/${row.id}`,
+          templateKey: 'business-service-status-chat',
+          eventKey: changeKey,
+        });
+      if (row.statusPages.length)
+        await draftStatusPageUpdates({
+          businessService: row,
+          pages: row.statusPages,
+          from,
+          to: health.status,
+          changeKey,
+          now,
+        });
       if ((await claim()).count) announced += 1;
     } catch (error) {
       // The other business services still go out; this one is retried on the next run.

@@ -23,6 +23,8 @@ import {
   lockAnnouncementMutation,
   suppressUndeliveredAnnouncementIntents,
 } from '@/lib/status-pages/announcement-commands';
+import { emitAuditEvent } from '@/lib/audit';
+import { AUTO_DRAFT_ID_PREFIX } from '@/lib/business-services/status-page-drafts';
 
 class InvalidDateError extends Error {
   constructor(public readonly fieldName: string) {
@@ -139,9 +141,7 @@ export async function POST(req: NextRequest) {
     if (!(await affectedServicesBelongToPage(statusPageId, normalizedAffectedServiceIds))) {
       return jsonError('Affected services must belong to this status page.', 400);
     }
-    if (
-      !(await affectedBusinessServicesBelongToPage(statusPageId, normalizedBusinessServiceIds))
-    ) {
+    if (!(await affectedBusinessServicesBelongToPage(statusPageId, normalizedBusinessServiceIds))) {
       return jsonError('Affected business services must be on this status page.', 400);
     }
     // Private incidents never reach a public page (status drafts never offer them either).
@@ -229,8 +229,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  let actorId: string;
   try {
-    await assertAdmin();
+    actorId = (await assertAdmin()).id;
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
   }
@@ -435,6 +436,19 @@ export async function PATCH(req: NextRequest) {
           });
         }
       }
+
+      // Publishing a draft (including one drafted from a business-service status change) is an approval.
+      if (!existing.isActive && nextIsActive)
+        await emitAuditEvent(
+          {
+            action: 'status_page.announcement.published',
+            source: 'UI',
+            actor: { type: 'USER', id: actorId },
+            target: { type: 'STATUS_PAGE', id: statusPageId },
+            metadata: { announcementId: id, autoDrafted: id.startsWith(AUTO_DRAFT_ID_PREFIX) },
+          },
+          tx
+        );
 
       return { announcement, generation };
     });

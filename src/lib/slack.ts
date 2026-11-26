@@ -606,6 +606,71 @@ export async function sendSlackMessageToChannel(
   }
 }
 
+function slackChannelParam(channel: string): string {
+  const value = channel.trim();
+  return /^[CGDU][A-Z0-9]+$/.test(value) || value.startsWith('#') ? value : `#${value}`;
+}
+
+/** Posts a non-incident message (text + blocks) with the global bot token. Single attempt by default. */
+export async function sendSlackChannelText(
+  channel: string,
+  body: { text: string; blocks?: unknown[] },
+  options: { maxAttempts?: number } = {}
+): Promise<SlackDeliveryResult> {
+  if (!channel.trim())
+    return { success: false, error: 'Slack channel is required', errorCode: 'CHANNEL_REQUIRED' };
+  const botToken = await getSlackBotToken();
+  if (!botToken)
+    return {
+      success: false,
+      error: 'No Slack bot token configured for channel delivery',
+      errorCode: 'SLACK_BOT_TOKEN_MISSING',
+    };
+  try {
+    const response = await retryFetch(
+      'https://slack.com/api/chat.postMessage',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${botToken}` },
+        body: JSON.stringify({ channel: slackChannelParam(channel), ...body }),
+      },
+      { maxAttempts: options.maxAttempts ?? 1, initialDelayMs: 1000 }
+    );
+    const data = (await response.json()) as { ok?: boolean; error?: string };
+    if (!response.ok || !data.ok)
+      return slackFailure(data.error || `HTTP ${response.status}`, response);
+    return { success: true };
+  } catch (error: unknown) {
+    const err = error as { message?: string; statusCode?: number; retryAfterMs?: number };
+    return {
+      success: false,
+      error: err.message || 'Slack API error',
+      statusCode: err.statusCode,
+      retryAfterMs: err.retryAfterMs,
+    };
+  }
+}
+
+/**
+ * Whether the connected workspace's bot can see this channel id. Null when it cannot be checked
+ * (no bot token, Slack unreachable): callers keep the value as free text then.
+ */
+export async function slackChannelExists(channelId: string): Promise<boolean | null> {
+  const botToken = await getSlackBotToken();
+  if (!botToken) return null;
+  try {
+    const response = await fetch(
+      `https://slack.com/api/conversations.info?channel=${encodeURIComponent(channelId)}`,
+      { headers: { Authorization: `Bearer ${botToken}` }, signal: AbortSignal.timeout(5_000) }
+    );
+    const data = (await response.json()) as { ok?: boolean; error?: string };
+    if (data.ok) return true;
+    return data.error === 'channel_not_found' ? false : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Send interactive Slack message with ack/resolve buttons
  */

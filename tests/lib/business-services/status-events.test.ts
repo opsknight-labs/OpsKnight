@@ -6,6 +6,17 @@ const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   webhook: vi.fn(),
   health: new Map<string, { status: string; since: Date | null }>(),
+  targets: vi.fn(),
+  chat: vi.fn(),
+  drafts: vi.fn(),
+}));
+vi.mock('@/lib/env-validation', () => ({ getBaseUrl: () => 'https://ops.example' }));
+vi.mock('@/lib/business-services/chat-channels', () => ({
+  businessServiceChatTargets: mocks.targets,
+  enqueueBusinessServiceChat: mocks.chat,
+}));
+vi.mock('@/lib/business-services/status-page-drafts', () => ({
+  draftStatusPageUpdates: mocks.drafts,
 }));
 vi.mock('@/lib/prisma', () => ({
   default: { businessService: { findMany: mocks.findMany, updateMany: mocks.updateMany } },
@@ -27,8 +38,11 @@ const row = (lastNotifiedStatus: string | null, lastNotifiedStatusAt: Date | nul
   id: 'bs1',
   name: 'Checkout',
   lastNotifiedStatus,
+  contactChannel: '#checkout',
+  ownerTeamId: 't1',
+  autoPublishStatusUpdates: false,
   followers: [{ userId: 'u1' }],
-  statusPages: [{ statusPageId: 'p1' }],
+  statusPages: [{ statusPageId: 'p1', displayName: null }],
 });
 
 describe('emitBusinessServiceStatusChanges', () => {
@@ -36,6 +50,43 @@ describe('emitBusinessServiceStatusChanges', () => {
     vi.clearAllMocks();
     mocks.health.set('bs1', { status: 'MAJOR_OUTAGE', since: null });
     mocks.updateMany.mockResolvedValue({ count: 1 });
+    mocks.targets.mockResolvedValue([{ provider: 'SLACK', channel: '#checkout' }]);
+    mocks.chat.mockResolvedValue(1);
+    mocks.drafts.mockResolvedValue(1);
+  });
+
+  it('posts to chat and drafts status-page updates under the transition key', async () => {
+    mocks.findMany.mockResolvedValue([row('OPERATIONAL')]);
+    expect(await emitBusinessServiceStatusChanges()).toBe(1);
+    const chat = mocks.chat.mock.calls[0][0];
+    expect(chat).toMatchObject({
+      businessServiceId: 'bs1',
+      targets: [{ provider: 'SLACK', channel: '#checkout' }],
+      title: 'Checkout is now major outage',
+      url: 'https://ops.example/services/business/bs1',
+    });
+    expect(mocks.drafts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: 'OPERATIONAL',
+        to: 'MAJOR_OUTAGE',
+        changeKey: chat.eventKey,
+        pages: [{ statusPageId: 'p1', displayName: null }],
+      })
+    );
+  });
+
+  it('does not record the change when drafting fails, so the next run retries it', async () => {
+    mocks.findMany.mockResolvedValue([row('OPERATIONAL')]);
+    mocks.drafts.mockRejectedValueOnce(new Error('db down'));
+    expect(await emitBusinessServiceStatusChanges()).toBe(0);
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('skips chat when the business service has no chat target', async () => {
+    mocks.findMany.mockResolvedValue([row('OPERATIONAL')]);
+    mocks.targets.mockResolvedValue([]);
+    expect(await emitBusinessServiceStatusChanges()).toBe(1);
+    expect(mocks.chat).not.toHaveBeenCalled();
   });
 
   it('records a baseline without announcing the first status', async () => {

@@ -99,6 +99,11 @@ const input = {
   customerReportThreshold: { type: ['integer', 'null'], minimum: 1, maximum: 100000 },
   customerReportWindowMinutes: { type: ['integer', 'null'], minimum: 5, maximum: 1440 },
   reviewIntervalDays: { type: ['integer', 'null'], minimum: 7, maximum: 730 },
+  autoPublishStatusUpdates: {
+    type: 'boolean',
+    description:
+      'Publish status-page updates on impact and recovery without approval (meant for TIER_0). Off: a draft waits for approval.',
+  },
 };
 
 /** Why a business service has its status; the worst reason is first. */
@@ -165,6 +170,7 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
       ownerUser: { oneOf: [object({ id, name: string }), { type: 'null' }] },
       escalationPolicy: { oneOf: [object({ id, name: string }), { type: 'null' }] },
       contactChannel: nullableString,
+      autoPublishStatusUpdates: { type: 'boolean' },
       tags: { type: 'array', items: string },
       environment: nullableString,
       lifecycle: { type: 'string', enum: LIFECYCLE },
