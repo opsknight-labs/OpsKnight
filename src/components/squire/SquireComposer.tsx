@@ -33,6 +33,16 @@ const MENTION_KIND: Partial<Record<SearchResult['type'], SquireMentionKind>> = {
   user: 'person',
 };
 
+/** Order of kinds in the @ list. */
+const MENTION_RANK: ReadonlyArray<SearchResult['type']> = [
+  'service',
+  'team',
+  'runbook',
+  'schedule',
+  'user',
+  'incident',
+];
+
 /** "@" and at least the search's two characters, at the end of the text, with no space yet. */
 const MENTION_QUERY = /(?:^|\s)@([^\s@]{2,40})$/;
 
@@ -99,8 +109,18 @@ export default function SquireComposer({
       ? (MENTION_QUERY.exec(value)?.[1] ?? '')
       : '';
   const search = useEntitySearch(mentionQuery);
+  // Named things first (a service or team is what people usually mean); the many incidents come last.
   const found = mentionQuery
-    ? search.results.filter(result => MENTION_KIND[result.type]).slice(0, 8)
+    ? search.results
+        .filter(result => MENTION_KIND[result.type])
+        .map((result, position) => ({ result, position }))
+        .sort(
+          (a, b) =>
+            MENTION_RANK.indexOf(a.result.type) - MENTION_RANK.indexOf(b.result.type) ||
+            a.position - b.position
+        )
+        .map(item => item.result)
+        .slice(0, 8)
     : [];
   // While "@text" is typed the popup shows results, "Searching…" or "No matches".
   const mentionPanel = Boolean(mentionQuery) && closedFor !== value;
@@ -175,6 +195,13 @@ export default function SquireComposer({
                 className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 text-sm sm:min-h-8 ${index === current ? 'bg-accent text-accent-foreground' : ''}`}
               >
                 <span className="min-w-0 flex-1 truncate">{result.title}</span>
+                {(result.subtitle || result.type === 'incident') && (
+                  // Tells apart records with the same title: the short id Squire uses in answers, then status and service.
+                  <span className="max-w-[50%] shrink truncate text-xs text-muted-foreground">
+                    {result.type === 'incident' ? `#${result.id.slice(-5).toUpperCase()} · ` : ''}
+                    {result.subtitle}
+                  </span>
+                )}
                 <span className="shrink-0 text-xs capitalize text-muted-foreground">
                   {MENTION_KIND[result.type]}
                 </span>

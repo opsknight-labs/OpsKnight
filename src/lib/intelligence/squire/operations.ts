@@ -474,7 +474,11 @@ const CARD_TITLES: Partial<Record<string, string>> = {
 export const cardTitle = (operation: Operation) => {
   const known = CARD_TITLES[operation.operationId];
   if (known) return known;
-  const text = summaryOf(operation);
+  // The catalog summary can end in API wording ("Create incident with idempotency").
+  const text = summaryOf(operation).replace(
+    / with (?:idempotency|domain validation|validation|etag).*$/i,
+    ''
+  );
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
@@ -689,15 +693,23 @@ export async function buildOperationProposal(
       ? { ifMatch: read.etag }
       : {};
   const record = (target && typeof target === 'object' ? target : {}) as Record<string, unknown>;
-  let args: OperationArgs;
-  try {
-    args = validateOperationArgs(
+  const validate = (extra: Record<string, unknown>) =>
+    validateOperationArgs(
       operation.operationId,
-      { ...parsed.data.args, ...ifMatch, idempotencyKey: `squire-${id}` },
+      { ...parsed.data.args, ...extra, ...ifMatch, idempotencyKey: `squire-${id}` },
       isMcpApprovalGated(operation) ? 'approved' : 'generic'
     );
+  let args: OperationArgs;
+  try {
+    args = validate({});
   } catch {
-    return null;
+    // A command with nothing to say ("reopen", "escalate") needs an empty body: models often leave it out.
+    if (parsed.data.args && 'body' in parsed.data.args) return null;
+    try {
+      args = validate({ body: {} });
+    } catch {
+      return null;
+    }
   }
   const changes = changesOf(operation, args);
   const rows = reviewDiff(changes, target);
