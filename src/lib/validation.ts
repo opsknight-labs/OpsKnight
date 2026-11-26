@@ -57,6 +57,8 @@ export const EventSchema = z.object({
 export const NotificationPatchSchema = z
   .object({
     markAllAsRead: z.boolean().optional(),
+    /** With markAllAsRead: only alerts created at or before this instant (a queued offline mark-all). */
+    readUpTo: z.string().datetime().optional(),
     notificationIds: z.array(z.string()).optional(),
   })
   .refine(data => data.markAllAsRead || (data.notificationIds && data.notificationIds.length > 0), {
