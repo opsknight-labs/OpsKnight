@@ -166,6 +166,28 @@ describe('status page middleware serving routes', () => {
     expect(isAllowedStatusApi('/api/users', 'GET')).toBe(false);
   });
 
+  it('frames only the token-gated graph embed page, nothing else loosened', async () => {
+    const { getSecurityHeaders } = await import('@/middleware');
+    const framable = getSecurityHeaders('/graph-embed/abc_DEF-123');
+    expect(framable['X-Frame-Options']).toBeUndefined();
+    expect(framable['Content-Security-Policy']).toContain('frame-ancestors *');
+    for (const path of [
+      '/graph-embed',
+      '/graph-embed/',
+      '/graph-embed/tok/extra',
+      '/api/graph-embed/tok',
+      '/services/graph',
+      '/settings',
+    ]) {
+      const headers = getSecurityHeaders(path);
+      expect(headers['X-Frame-Options'], path).toBe('DENY');
+      expect(headers['Content-Security-Policy'], path).toContain("frame-ancestors 'none'");
+    }
+    // Same carve-out in the static headers, so they do not re-add DENY to the embed page.
+    const config = (await import('node:fs')).readFileSync('next.config.ts', 'utf8');
+    expect(config).toContain('graph-embed/[^/]+/?$');
+  });
+
   it('allows group JSON on custom domains and pins the slug to the resolved route', async () => {
     const { isAllowedStatusApi } = await import('@/middleware');
     expect(isAllowedStatusApi('/api/status/acme/groups/bs_1', 'GET', 'acme')).toBe(true);

@@ -728,9 +728,11 @@ export async function fetchPublishedStatusDomain(
 
 /** The only framable surface of a status page: the compact embed widget. */
 const STATUS_EMBED_PATH = /^\/status\/[a-z0-9-]+\/embed\/?$/;
+/** The token-gated, anonymized graph embed is framable too; its JSON API and everything else is not. */
+const GRAPH_EMBED_PATH = /^\/graph-embed\/[A-Za-z0-9_-]+\/?$/;
 
-function getSecurityHeaders(pathname = ''): Record<string, string> {
-  const framable = STATUS_EMBED_PATH.test(pathname);
+export function getSecurityHeaders(pathname = ''): Record<string, string> {
+  const framable = STATUS_EMBED_PATH.test(pathname) || GRAPH_EMBED_PATH.test(pathname);
   const isProduction = process.env.NODE_ENV === 'production';
   const scriptSource = isProduction
     ? "script-src 'self' 'unsafe-inline'"

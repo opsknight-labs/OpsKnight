@@ -199,8 +199,9 @@ const nextConfig: NextConfig = {
 
     return [
       {
-        // The status-page embed widget is the one framable surface; middleware sets its headers.
-        source: '/((?!status/[^/]+/embed/?$).*)',
+        // The status-page embed widget and the token-gated graph embed are the framable surfaces;
+        // middleware sets their headers.
+        source: '/((?!status/[^/]+/embed/?$|graph-embed/[^/]+/?$).*)',
         headers: [
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
           {
