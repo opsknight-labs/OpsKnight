@@ -28,6 +28,7 @@ import {
 } from '@/app/(app)/incidents/bulk-actions';
 import { useToast } from '@/hooks/use-product-notification';
 import Pagination from './Pagination';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 import EscalationStatusBadge from './EscalationStatusBadge';
 import StatusBadge from '@/components/patterns/StatusBadge';
@@ -102,6 +103,17 @@ type IncidentsListTableProps = {
 
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 type BulkActionMode = 'reassign' | 'priority' | 'snooze' | 'urgency' | 'status' | null;
+type BulkActionName =
+  | 'acknowledge'
+  | 'resolve'
+  | 'reassign'
+  | 'priority'
+  | 'snooze'
+  | 'unsnooze'
+  | 'suppress'
+  | 'unsuppress'
+  | 'urgency'
+  | 'status';
 
 function statusTone(status: IncidentStatus) {
   return toneClasses(incidentStatusTone(status));
@@ -345,6 +357,12 @@ export default function IncidentsListTable({
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<BulkActionMode>(null);
+  // A picked select value waits here for confirmation: a closed select changes on arrow keys.
+  const [pendingBulkChange, setPendingBulkChange] = useState<{
+    action: BulkActionName;
+    value: string | number;
+    summary: string;
+  } | null>(null);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
@@ -711,24 +729,17 @@ export default function IncidentsListTable({
     toggleSelectWithRange,
   ]);
 
-  const handleBulkAction = async (
-    action:
-      | 'acknowledge'
-      | 'resolve'
-      | 'reassign'
-      | 'priority'
-      | 'snooze'
-      | 'unsnooze'
-      | 'suppress'
-      | 'unsuppress'
-      | 'urgency'
-      | 'status',
-    value?: string | number
-  ) => {
+  const requestBulkChange = (action: BulkActionName, value: string | number, summary: string) => {
+    if (isPending) return;
+    setPendingBulkChange({ action, value, summary });
+  };
+
+  const handleBulkAction = async (action: BulkActionName, value?: string | number) => {
     if (selectedIds.size === 0) {
       showToast('Please select incidents first', 'error');
       return;
     }
+    if (isPending) return;
 
     startTransition(async () => {
       try {
@@ -833,7 +844,15 @@ export default function IncidentsListTable({
               {bulkAction === 'reassign' && (
                 <div className="flex items-center gap-2">
                   <select
-                    onChange={e => e.target.value && handleBulkAction('reassign', e.target.value)}
+                    disabled={isPending}
+                    onChange={e =>
+                      e.target.value &&
+                      requestBulkChange(
+                        'reassign',
+                        e.target.value,
+                        `Reassign to ${users.find(u => u.id === e.target.value)?.name ?? 'the selected user'}`
+                      )
+                    }
                     className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
                     aria-label="Select assignee for bulk reassignment"
                     defaultValue=""
@@ -856,7 +875,14 @@ export default function IncidentsListTable({
               {bulkAction === 'priority' && (
                 <div className="flex items-center gap-2">
                   <select
-                    onChange={e => handleBulkAction('priority', e.target.value)}
+                    disabled={isPending}
+                    onChange={e =>
+                      requestBulkChange(
+                        'priority',
+                        e.target.value,
+                        `Set priority to ${e.target.value || 'Auto (Default)'}`
+                      )
+                    }
                     className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
                     aria-label="Select priority for bulk update"
                     defaultValue=""
@@ -882,8 +908,9 @@ export default function IncidentsListTable({
                   <select
                     onChange={e => {
                       const mins = Number(e.target.value);
-                      if (mins) handleBulkAction('snooze', mins);
+                      if (mins) requestBulkChange('snooze', mins, `Snooze for ${mins} minutes`);
                     }}
+                    disabled={isPending}
                     className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
                     aria-label="Select snooze duration"
                     defaultValue=""
@@ -907,7 +934,15 @@ export default function IncidentsListTable({
               {bulkAction === 'urgency' && (
                 <div className="flex items-center gap-2">
                   <select
-                    onChange={e => e.target.value && handleBulkAction('urgency', e.target.value)}
+                    disabled={isPending}
+                    onChange={e =>
+                      e.target.value &&
+                      requestBulkChange(
+                        'urgency',
+                        e.target.value,
+                        `Set urgency to ${e.target.value}`
+                      )
+                    }
                     className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
                     aria-label="Select urgency"
                     defaultValue=""
@@ -928,7 +963,11 @@ export default function IncidentsListTable({
               {bulkAction === 'status' && (
                 <div className="flex items-center gap-2">
                   <select
-                    onChange={e => e.target.value && handleBulkAction('status', e.target.value)}
+                    disabled={isPending}
+                    onChange={e =>
+                      e.target.value &&
+                      requestBulkChange('status', e.target.value, `Set status to ${e.target.value}`)
+                    }
                     className="h-9 rounded-md bg-white text-slate-900 px-2 text-sm shadow-xs"
                     aria-label="Select status"
                     defaultValue=""
@@ -968,23 +1007,48 @@ export default function IncidentsListTable({
                     Resolve
                   </Button>
 
-                  <Button size="sm" variant="secondary" onClick={() => setBulkAction('reassign')}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={isPending}
+                    onClick={() => setBulkAction('reassign')}
+                  >
                     Reassign
                   </Button>
 
-                  <Button size="sm" variant="secondary" onClick={() => setBulkAction('priority')}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={isPending}
+                    onClick={() => setBulkAction('priority')}
+                  >
                     Priority
                   </Button>
 
-                  <Button size="sm" variant="secondary" onClick={() => setBulkAction('snooze')}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={isPending}
+                    onClick={() => setBulkAction('snooze')}
+                  >
                     Snooze
                   </Button>
 
-                  <Button size="sm" variant="secondary" onClick={() => setBulkAction('urgency')}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={isPending}
+                    onClick={() => setBulkAction('urgency')}
+                  >
                     Urgency
                   </Button>
 
-                  <Button size="sm" variant="secondary" onClick={() => setBulkAction('status')}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={isPending}
+                    onClick={() => setBulkAction('status')}
+                  >
                     Status
                   </Button>
 
@@ -1537,6 +1601,26 @@ export default function IncidentsListTable({
           itemsPerPage={pagination.itemsPerPage}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={pendingBulkChange !== null}
+        title="Apply to selected incidents?"
+        message={`${pendingBulkChange?.summary ?? ''} for ${selectedCount} selected incident${selectedCount === 1 ? '' : 's'}.`}
+        confirmText="Apply"
+        cancelText="Cancel"
+        variant="warning"
+        onConfirm={() => {
+          const change = pendingBulkChange;
+          setPendingBulkChange(null);
+          setBulkAction(null);
+          if (change) void handleBulkAction(change.action, change.value);
+        }}
+        onCancel={() => {
+          setPendingBulkChange(null);
+          // Back to the action buttons so the same value can be picked again.
+          setBulkAction(null);
+        }}
+      />
 
       {/* Centralized Resolve Incident Modal */}
       <ResolveIncidentModal
