@@ -80,51 +80,6 @@ export interface CronSchedulerOptions {
   profile?: SchedulerProfile;
 }
 
-async function notifyOverdueActionItems(now: Date): Promise<number> {
-  const { default: prisma } = await import('./prisma');
-  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const [items, admins] = await Promise.all([
-    prisma.actionItem.findMany({
-      where: {
-        status: { in: ['OPEN', 'IN_PROGRESS', 'BLOCKED'] },
-        dueDate: { lt: now },
-      },
-      select: { id: true, title: true, ownerId: true },
-      orderBy: { dueDate: 'asc' },
-      take: 500,
-    }),
-    prisma.user.findMany({
-      where: { role: 'ADMIN', status: 'ACTIVE' },
-      select: { id: true },
-    }),
-  ]);
-  if (items.length === 0) return 0;
-  const existing = await prisma.inAppNotification.findMany({
-    where: {
-      entityType: 'ACTION_ITEM',
-      entityId: { in: items.map(item => item.id) },
-      createdAt: { gte: since },
-    },
-    select: { userId: true, entityId: true },
-  });
-  const existingKeys = new Set(existing.map(row => `${row.userId}:${row.entityId}`));
-  const rows = items.flatMap(item => {
-    const recipients = new Set([...(item.ownerId ? [item.ownerId] : []), ...admins.map(a => a.id)]);
-    return Array.from(recipients)
-      .filter(userId => !existingKeys.has(`${userId}:${item.id}`))
-      .map(userId => ({
-        userId,
-        type: 'ACTION_ITEM' as const,
-        title: 'Overdue postmortem action item',
-        message: item.title,
-        entityType: 'ACTION_ITEM',
-        entityId: item.id,
-      }));
-  });
-  if (rows.length === 0) return 0;
-  return (await prisma.inAppNotification.createMany({ data: rows })).count;
-}
-
 /**
  * Get or create the singleton scheduler state from database
  * Uses upsert to avoid race conditions on initial creation
@@ -848,7 +803,14 @@ async function runOnce() {
         await performDataCleanup(false).catch(cleanupErr => {
           logger.warn('[Cron] Daily data cleanup completed with warnings', { error: cleanupErr });
         });
-        const overdueNotifications = await notifyOverdueActionItems(now);
+        // Its own failure must not skip SLA drift detection or the rollups below.
+        let overdueNotifications = 0;
+        try {
+          const { notifyOverdueActionItems } = await import('./action-item-overdue-notifications');
+          overdueNotifications = await notifyOverdueActionItems(now);
+        } catch (overdueErr) {
+          logger.warn('[Cron] Overdue action item notifications failed', { error: overdueErr });
+        }
         // Run automated SLA drift detection and self-healing
         try {
           const { runSLADriftDetection } = await import('./sla-drift-detection');
