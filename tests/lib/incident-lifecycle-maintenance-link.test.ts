@@ -31,7 +31,7 @@ describe('maintenance link on lifecycle commands', () => {
   it('drops the link when a person suppresses an incident an integration already acknowledged', () => {
     const data = updateDataForCommand(
       snapshot('ACKNOWLEDGED'),
-      { incidentId: 'inc-1', command: 'SUPPRESS', source: 'API', actor: { id: 'user-1' } },
+      { incidentId: 'inc-1', command: 'SUPPRESS', source: 'REST_API', actor: { id: 'user-1' } },
       now
     );
     expect(data.maintenanceWindow).toEqual({ disconnect: true });

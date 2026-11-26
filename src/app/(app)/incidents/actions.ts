@@ -25,6 +25,7 @@ import {
 import {
   executeIncidentCreation,
   recordIncidentCreationTelemetry,
+  type IncidentCreationInput,
   type IncidentCreationResult,
   type IncidentCreationSource,
 } from '@/lib/incidents/creation';
@@ -182,7 +183,7 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
         },
       })
     : [];
-  const creationInput = {
+  const creationInput: IncidentCreationInput = {
     ...(defaultRoles.length ? { defaultRoles } : {}),
     title,
     description,
