@@ -2750,6 +2750,8 @@ model StatusPage {
   assets                      StatusPageAsset[]
   routeOperations             StatusPageRouteOperation[]
   serviceLayout               StatusPageServiceLayout    @default(FLAT)
+  /// Business-service groups start expanded on the public page (affected ones always open).
+  expandGroupsByDefault       Boolean                    @default(false)
   businessServices            StatusPageBusinessService[]
 
   @@index([enabled])

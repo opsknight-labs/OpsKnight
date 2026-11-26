@@ -142,6 +142,17 @@ export interface StatusPagePreviewData {
   maintenance?: unknown[];
   uptimeExcellentThreshold?: number | null;
   uptimeGoodThreshold?: number | null;
+  /** The unsaved business-service layout, so the preview shows the same group rows. */
+  serviceLayout?: 'FLAT' | 'BUSINESS' | 'BUSINESS_EXPANDABLE';
+  expandGroupsByDefault?: boolean;
+  businessServices?: Array<{
+    id: string;
+    name: string;
+    memberServiceIds: string[];
+    showMembers?: boolean;
+    parentIds?: string[];
+  }>;
+  directServiceIds?: string[];
 }
 
 export interface StatusPageLivePreviewProps {
@@ -233,6 +244,10 @@ function StatusPageLivePreview({
         showTeamInformation: previewData.privacySettings?.showTeamInformation,
         regions: previewData.regions,
         maintenance: previewData.maintenance,
+        serviceLayout: previewData.serviceLayout,
+        expandGroupsByDefault: previewData.expandGroupsByDefault,
+        businessServices: previewData.businessServices,
+        directServiceIds: previewData.directServiceIds,
         thresholds: {
           uptimeExcellent:
             typeof previewData.uptimeExcellentThreshold === 'number'

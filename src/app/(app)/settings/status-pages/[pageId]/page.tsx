@@ -78,12 +78,19 @@ export default async function StatusPageWorkspacePage({
   const allBusinessServices = (
     await prisma.businessService.findMany({
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, members: { select: { serviceId: true } } },
+      select: {
+        id: true,
+        name: true,
+        members: { select: { serviceId: true } },
+        // Edges where this service is the child: the business services it supports.
+        supports: { select: { parentId: true } },
+      },
     })
   ).map(item => ({
     id: item.id,
     name: item.name,
     memberServiceIds: item.members.map(member => member.serviceId),
+    parentIds: item.supports.map(edge => edge.parentId),
   }));
   if (!statusPage) notFound();
 

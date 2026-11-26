@@ -149,3 +149,85 @@ describe('ServiceHealthV3 business layouts', () => {
     expect(screen.queryByRole('list', { name: 'Services in Checkout' })).not.toBeInTheDocument();
   });
 });
+
+describe('ServiceHealthV3 business groups as dropdowns', () => {
+  const base = {
+    services,
+    layout: 'BUSINESS_EXPANDABLE' as const,
+    timeZone: 'UTC',
+    groupByRegion: false,
+    showUptimeHistory: false,
+    showMetrics: false,
+  };
+
+  it('makes the "N services ›" count part of the disclosure button', () => {
+    render(<ServiceHealthV3 {...base} businessServices={businessServices} />);
+    const browsing = screen.getByRole('button', { name: /Browsing/ });
+    const count = within(browsing).getByText('1 service');
+    fireEvent.click(count);
+    expect(browsing).toHaveAttribute('aria-expanded', 'true');
+    expect(browsing.querySelector('.status-v3-business__chevron')).not.toBeNull();
+  });
+
+  it('counts members of a group that hides them', () => {
+    render(
+      <ServiceHealthV3
+        {...base}
+        businessServices={[
+          {
+            ...businessServices[0],
+            showMembers: false,
+            memberServiceIds: [],
+            memberCount: 2,
+          },
+        ]}
+      />
+    );
+    expect(screen.getByText('1 of 2 services affected')).toBeInTheDocument();
+    expect(screen.queryByText(/of 0/)).not.toBeInTheDocument();
+  });
+
+  it('renders the section when only business rows exist', () => {
+    render(
+      <ServiceHealthV3
+        {...base}
+        services={[]}
+        businessServices={[{ ...businessServices[1], memberServiceIds: [], memberCount: 4 }]}
+      />
+    );
+    expect(screen.getByText('Browsing')).toBeInTheDocument();
+    expect(screen.getByText('4 services')).toBeInTheDocument();
+  });
+
+  it('offers filters by visible row count, not service count, on grouped pages', () => {
+    const groups = ['a', 'b', 'c'].map(id => ({
+      ...businessServices[1],
+      id,
+      name: `Group ${id}`,
+      memberServiceIds: [],
+      memberCount: 1,
+    }));
+    render(
+      <ServiceHealthV3 {...base} services={[]} businessServices={groups} filterThreshold={2} />
+    );
+    expect(screen.getByRole('button', { name: 'Filter' })).toBeInTheDocument();
+  });
+
+  it('starts every group open when the page expands groups by default', () => {
+    render(<ServiceHealthV3 {...base} businessServices={businessServices} expandByDefault />);
+    expect(screen.getByRole('button', { name: /Browsing/ })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+  });
+
+  it('links the active incident count on a group row to the incidents section', () => {
+    render(
+      <ServiceHealthV3 {...base} businessServices={businessServices} incidentsHref="#incidents" />
+    );
+    expect(screen.getByRole('link', { name: '1 active incident' })).toHaveAttribute(
+      'href',
+      '#incidents'
+    );
+  });
+});

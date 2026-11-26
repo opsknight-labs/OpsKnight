@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
       businessServiceIds,
       businessServiceConfigs,
       serviceLayout,
+      expandGroupsByDefault,
       serviceConfigs = {},
       privacyMode,
       showIncidentDetails,
@@ -264,6 +265,8 @@ export async function POST(req: NextRequest) {
     if (showServiceRegions !== undefined) updateData.showServiceRegions = showServiceRegions;
     if (showServicesByRegion !== undefined) updateData.showServicesByRegion = showServicesByRegion;
     if (serviceLayout !== undefined) updateData.serviceLayout = serviceLayout;
+    if (expandGroupsByDefault !== undefined)
+      updateData.expandGroupsByDefault = expandGroupsByDefault;
     if (showServiceOwners !== undefined) updateData.showServiceOwners = showServiceOwners;
     if (showServiceSlaTier !== undefined) updateData.showServiceSlaTier = showServiceSlaTier;
     if (showTeamInformation !== undefined) updateData.showTeamInformation = showTeamInformation;

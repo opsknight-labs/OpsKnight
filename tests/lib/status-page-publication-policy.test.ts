@@ -209,6 +209,7 @@ describe('classifyStatusPageChange', () => {
     // These render data that showServiceRegions already gates.
     expect(classify({ showServicesByRegion: true }).classes).toEqual(['PRESENTATION']);
     expect(classify({ showRegionHeatmap: true }).classes).toEqual(['PRESENTATION']);
+    expect(classify({ expandGroupsByDefault: true }).classes).toEqual(['PRESENTATION']);
     expect(classify({ showChangelog: false }).classes).toEqual(['PRIVACY_TIGHTENING']);
   });
 

@@ -13,6 +13,7 @@ const DESC_CLAMP_AT = 180;
 // Industry standard (Atlassian Statuspage, GitHub, Cloudflare): inline feed is
 // Active + Recent ~14d. Full 90d is History — paginated / on-demand.
 const RECENT_DISPLAY_DAYS = 14;
+const BUSINESS_FILTER = 'business:';
 
 function formatDuration(t: Translator, start?: string, end?: string): string | null {
   if (!start) return null;
@@ -429,22 +430,31 @@ export default function IncidentsV3({
   const [visible, setVisible] = useState(INITIAL_VISIBLE);
   const [showHistory, setShowHistory] = useState(false);
 
-  const services = useMemo(() => {
+  const [services, groups] = useMemo(() => {
     const byId = new Map<string, string>();
+    const groupById = new Map<string, string>();
     for (const incident of incidents) {
       if (incident.service?.id && incident.service.name)
         byId.set(incident.service.id, incident.service.name);
+      for (const group of incident.businessServices ?? []) groupById.set(group.id, group.name);
     }
-    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    const sorted = (map: Map<string, string>) =>
+      [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    return [sorted(byId), sorted(groupById)] as const;
   }, [incidents]);
 
-  const filtered = useMemo(
-    () =>
-      service === 'all'
-        ? incidents
-        : incidents.filter(incident => incident.service?.id === service),
-    [incidents, service]
-  );
+  // Filter values: 'all', a service id, or `business:<id>` for a business service group.
+  const filtered = useMemo(() => {
+    if (service === 'all') return incidents;
+    const groupId = service.startsWith(BUSINESS_FILTER)
+      ? service.slice(BUSINESS_FILTER.length)
+      : null;
+    return incidents.filter(incident =>
+      groupId
+        ? (incident.businessServices ?? []).some(group => group.id === groupId)
+        : incident.service?.id === service
+    );
+  }, [incidents, service]);
 
   // Industry: main feed = Active + Recent 14d. Older (14d→90d) lives behind "Incident history".
   // Fixed at mount — feed is ≤ 50 items; re-parsing bounds on every render is wasteful.
@@ -550,7 +560,7 @@ export default function IncidentsV3({
               {tallyTotal} total
             </span>
           )}
-          {services.length > 1 && (
+          {services.length + groups.length > 1 && (
             <label className="status-v3-filter">
               <span className="sr-only">{t('incidents.filterByService')}</span>
               <select
@@ -561,11 +571,32 @@ export default function IncidentsV3({
                 }}
               >
                 <option value="all">All services ({incidents.length})</option>
-                {services.map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
+                {groups.length > 0 ? (
+                  <>
+                    <optgroup label={t('incidents.groups')}>
+                      {groups.map(([id, name]) => (
+                        <option key={id} value={`${BUSINESS_FILTER}${id}`}>
+                          {name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    {services.length > 0 && (
+                      <optgroup label={t('incidents.servicesGroup')}>
+                        {services.map(([id, name]) => (
+                          <option key={id} value={id}>
+                            {name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </>
+                ) : (
+                  services.map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))
+                )}
               </select>
             </label>
           )}

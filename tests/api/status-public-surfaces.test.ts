@@ -76,6 +76,7 @@ describe('group endpoint', () => {
     expect(res.headers.get('cache-control')).toContain('s-maxage=30');
     const body = await res.json();
     expect(body.members.map((m: { id: string }) => m.id)).toEqual(['s1']);
+    expect(body.memberCount).toBe(1);
     expect(JSON.stringify(body)).not.toContain('secret');
     expect(body.incidents.map((i: { id: string }) => i.id)).toEqual(['i1']);
   });

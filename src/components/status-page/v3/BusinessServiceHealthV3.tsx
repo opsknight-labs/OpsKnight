@@ -19,6 +19,8 @@ type RowDisplay = {
   showSlaMetrics: boolean;
   /** Called with the group id; renders a 'Subscribe to this group' action when set. */
   onSubscribeGroup?: (id: string) => void;
+  /** Where the active-incident chip on a group row points; plain text when unset. */
+  incidentsHref?: string;
 };
 
 /** The history component draws any row with a status, uptime and segments. */
@@ -39,7 +41,8 @@ function serviceCountText(count: number, t: Translator) {
 }
 
 function tallyText(item: PublicBusinessService, t: Translator) {
-  const total = item.memberServiceIds.length;
+  // memberServiceIds is emptied for groups that hide their members; memberCount is not.
+  const total = item.memberCount ?? item.memberServiceIds.length;
   return item.impactedServiceCount > 0
     ? t(total === 1 ? 'business.affectedOne' : 'business.affectedCount', {
         impacted: item.impactedServiceCount,
@@ -153,6 +156,17 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
   // Members stay out of view when the page shows only the business service.
   const showMembers = item.showMembers !== false;
   const canExpand = expandable && (showMembers || childCount > 0);
+  const tally = (
+    <span
+      className={`status-v3-business__tally${item.impactedServiceCount > 0 ? ' status-v3-business__tally--impacted' : ''}`}
+    >
+      {tallyText(item, t)}
+    </span>
+  );
+  const incidentText = t(
+    item.activeIncidentCount === 1 ? 'business.incidentOne' : 'business.incidentCount',
+    { count: item.activeIncidentCount }
+  );
   // Without disclosure (non-expandable layout) children are always visible.
   const showChildren = childCount > 0 && (!expandable || open);
   return (
@@ -166,6 +180,7 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
       <div className="status-v3-service__head">
         <div className="status-v3-service__lead">
           {canExpand ? (
+            // The whole "Name  N services ›" line is the disclosure, so clicking the count expands.
             <button
               type="button"
               className="status-v3-business__toggle"
@@ -173,6 +188,9 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
               aria-controls={panelId}
               onClick={onToggle}
             >
+              <BusinessIcon />
+              <span className="status-v3-service__name">{item.name}</span>
+              {tally}
               <svg
                 className="status-v3-business__chevron"
                 width="12"
@@ -187,11 +205,8 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
               >
                 <polyline points="9 6 15 12 9 18" />
               </svg>
-              <BusinessIcon />
-              <span className="status-v3-service__name">{item.name}</span>
               <span className="sr-only">
-                , {open ? t('business.hide') : t('business.show')}{' '}
-                {serviceCountText(members.length, t)}
+                , {open ? t('business.hide') : t('business.show')}
                 {childCount > 0 ? `, ${t('business.nested', { count: childCount })}` : ''}
               </span>
             </button>
@@ -199,13 +214,21 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
             <>
               <BusinessIcon />
               <span className="status-v3-service__name">{item.name}</span>
+              {tally}
             </>
           )}
-          <span
-            className={`status-v3-business__tally${item.impactedServiceCount > 0 ? ' status-v3-business__tally--impacted' : ''}`}
-          >
-            {tallyText(item, t)}
-          </span>
+          {item.activeIncidentCount > 0 &&
+            (display.incidentsHref ? (
+              <a
+                className="status-v3-chip"
+                href={display.incidentsHref}
+                style={{ textDecoration: 'none' }}
+              >
+                {incidentText}
+              </a>
+            ) : (
+              <span className="status-v3-chip">{incidentText}</span>
+            ))}
         </div>
         <div className="status-v3-service__badges">
           {display.onSubscribeGroup && (
@@ -260,6 +283,8 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
           showUptimeInline={display.showMetrics}
           showHistoryBars={display.showUptimeHistory}
           showSlaMetrics={display.showSlaMetrics}
+          incidentServiceIds={item.memberServiceIds}
+          businessServiceId={item.id}
         />
       )}
 
