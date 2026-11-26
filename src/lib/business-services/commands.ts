@@ -668,6 +668,9 @@ export type IncidentBusinessServiceImpactView = {
   excluded: boolean;
   /** Still impacting now (open incident, open impact). */
   active: boolean;
+  criticality: Prisma.BusinessServiceGetPayload<{ select: { criticality: true } }>['criticality'];
+  /** Current health of the business service; null when the snapshot could not be read. */
+  status: BusinessServiceHealth['status'] | null;
 };
 
 /**
@@ -685,10 +688,18 @@ export async function impactedBusinessServicesForIncident(
   if (!views.size) return [];
   const visible = await prisma.businessService.findMany({
     where: { AND: [{ id: { in: [...views.keys()] } }, businessServiceReadWhere(actor)] },
-    select: { id: true, name: true },
+    select: { id: true, name: true, criticality: true },
     orderBy: { name: 'asc' },
   });
-  return visible.map(service => ({ ...service, ...views.get(service.id)! }));
+  const { getHealthSnapshot } = await import('./health');
+  const health = await getHealthSnapshot({ requireIds: visible.map(service => service.id) })
+    .then(snapshot => snapshot.health)
+    .catch(() => null);
+  return visible.map(service => ({
+    ...service,
+    ...views.get(service.id)!,
+    status: health?.get(service.id)?.status ?? null,
+  }));
 }
 
 type BusinessServiceRow = Prisma.BusinessServiceGetPayload<{
