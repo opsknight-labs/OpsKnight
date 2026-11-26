@@ -32,8 +32,8 @@ export function escalationConditionsMatch(
           : condition.field === 'SUPPORT_HOURS_STATE'
             ? context.supportHoursState
             : null;
-    if (actual === null) return false;
-    const included = condition.values.includes(actual);
+    // An incident with no priority is not in any listed set, so the negative operators match it.
+    const included = actual !== null && condition.values.includes(actual);
     if (condition.operator === 'IN' || condition.operator === 'EQUALS') return included;
     if (condition.operator === 'NOT_IN' || condition.operator === 'NOT_EQUALS') return !included;
     return false;
