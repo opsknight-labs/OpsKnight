@@ -101,12 +101,6 @@ type UserDetailProfile = {
     createdAt: Date | string;
     service?: { id: string; name: string } | null;
   }>;
-  auditLogs: Array<{
-    id: string;
-    action: string;
-    createdAt: Date | string;
-    details?: Record<string, unknown> | string | null;
-  }>;
 };
 
 type UserDetailTabsProps = {
