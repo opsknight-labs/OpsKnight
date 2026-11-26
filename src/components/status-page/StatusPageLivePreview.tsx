@@ -16,6 +16,7 @@ import {
   compileStatusPageColorSchemeCss,
 } from '@/lib/status-pages/theme-contract';
 import { cn } from '@/lib/utils';
+import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import {
   Monitor,
   Tablet,
@@ -138,8 +139,8 @@ export interface StatusPagePreviewData {
   layout: string;
   privacySettings?: StatusPagePreviewPrivacySettings | null;
   enableUptimeExports?: boolean;
-  regions?: unknown[];
-  maintenance?: unknown[];
+  regions?: PublicStatusPageSnapshot['regions'];
+  maintenance?: PublicStatusPageSnapshot['maintenance'];
   uptimeExcellentThreshold?: number | null;
   uptimeGoodThreshold?: number | null;
   /** The unsaved business-service layout, so the preview shows the same group rows. */
