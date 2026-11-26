@@ -4180,6 +4180,9 @@
           "contactChannel": {
             "type": ["string", "null"]
           },
+          "autoPublishStatusUpdates": {
+            "type": "boolean"
+          },
           "tags": {
             "type": "array",
             "items": {
@@ -4435,6 +4438,7 @@
           "ownerUser",
           "escalationPolicy",
           "contactChannel",
+          "autoPublishStatusUpdates",
           "tags",
           "environment",
           "lifecycle",
@@ -5020,6 +5024,9 @@
           "freezeWarningEnabled": {
             "type": "boolean"
           },
+          "errorBudgetAlertsEnabled": {
+            "type": "boolean"
+          },
           "dayOfMonth": {
             "type": "integer",
             "minimum": 1,
@@ -5046,6 +5053,7 @@
         "required": [
           "enabled",
           "freezeWarningEnabled",
+          "errorBudgetAlertsEnabled",
           "dayOfMonth",
           "hour",
           "timeZone",
@@ -5448,6 +5456,422 @@
           }
         },
         "required": ["incidentId", "businessServices", "recipientCount", "emailCount"],
+        "additionalProperties": false
+      },
+      "BusinessServiceScorecardRubric": {
+        "type": "object",
+        "properties": {
+          "levels": {
+            "type": "array",
+            "maxItems": 5,
+            "description": "Lowest first; a level is reached when it and every lower level pass.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                }
+              },
+              "required": ["id", "label"],
+              "additionalProperties": false
+            }
+          },
+          "rules": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "check": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "field"
+                        },
+                        "field": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "tier",
+                            "members",
+                            "slo",
+                            "links",
+                            "description",
+                            "reviewed",
+                            "escalationPolicy",
+                            "contactChannel",
+                            "statusPageSummary"
+                          ]
+                        },
+                        "maxAgeDays": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 730,
+                          "description": "reviewed only."
+                        }
+                      },
+                      "required": ["type", "field"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "attribute"
+                        },
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "equals": {
+                          "type": ["string", "number", "boolean"],
+                          "description": "Absent: must be set."
+                        }
+                      },
+                      "required": ["type", "key"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "slo"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["OK", "NOT_BREACHED"]
+                        }
+                      },
+                      "required": ["type", "state"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "const": "hygiene"
+                        },
+                        "flag": {
+                          "type": "string",
+                          "enum": ["REVIEW_OVERDUE", "OWNER_INACTIVE", "TEAM_NO_ONCALL"]
+                        }
+                      },
+                      "required": ["type", "flag"],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "level": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                },
+                "teamIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "maxItems": 50
+                },
+                "tiers": {
+                  "type": "array",
+                  "maxItems": 4,
+                  "items": {
+                    "type": "string",
+                    "enum": ["TIER_0", "TIER_1", "TIER_2", "TIER_3"]
+                  }
+                },
+                "deadline": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Initiative deadline (UTC)."
+                }
+              },
+              "required": ["id", "label", "check"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["levels", "rules"],
+        "additionalProperties": false
+      },
+      "BusinessServiceScorecard": {
+        "type": "object",
+        "properties": {
+          "businessServiceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "passed": {
+                  "type": "boolean"
+                },
+                "level": {
+                  "type": ["string", "null"]
+                },
+                "deadline": {
+                  "type": ["string", "null"]
+                },
+                "overdue": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["id", "label", "passed", "level", "deadline", "overdue"],
+              "additionalProperties": false
+            }
+          },
+          "score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "level": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "label"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "basics": {
+            "type": "object",
+            "properties": {
+              "owner": {
+                "type": "boolean"
+              },
+              "tier": {
+                "type": "boolean"
+              },
+              "members": {
+                "type": "boolean"
+              }
+            },
+            "required": ["owner", "tier", "members"],
+            "additionalProperties": false
+          },
+          "needsAttention": {
+            "type": "boolean"
+          }
+        },
+        "required": ["businessServiceId", "checks", "score", "level", "basics", "needsAttention"],
+        "additionalProperties": false
+      },
+      "BusinessServiceChange": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["DEPLOY", "CONFIG", "FEATURE_FLAG", "INFRA"]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "version": {
+            "type": ["string", "null"]
+          },
+          "url": {
+            "type": ["string", "null"]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "riskScore": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "id",
+          "serviceId",
+          "serviceName",
+          "source",
+          "kind",
+          "summary",
+          "version",
+          "url",
+          "occurredAt",
+          "riskScore"
+        ],
+        "additionalProperties": false
+      },
+      "BusinessServiceSlaReport": {
+        "type": "object",
+        "properties": {
+          "businessServiceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}$"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "monthToDate": {
+            "type": "boolean"
+          },
+          "uptimePercent": {
+            "type": "number"
+          },
+          "weightedUptimePercent": {
+            "type": "number"
+          },
+          "downtimeMinutes": {
+            "type": "number"
+          },
+          "weightedDowntimeMinutes": {
+            "type": "number"
+          },
+          "sloTarget": {
+            "type": ["number", "null"]
+          },
+          "sloMet": {
+            "type": ["boolean", "null"]
+          },
+          "incidentCount": {
+            "type": "integer"
+          },
+          "mttaMinutes": {
+            "type": ["number", "null"]
+          },
+          "mttrMinutes": {
+            "type": ["number", "null"]
+          },
+          "incidents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "title": {
+                  "type": "string"
+                },
+                "urgency": {
+                  "type": ["string", "null"]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": ["DIRECT", "DEPENDENCY", "NESTED", "MANUAL"]
+                },
+                "impactStartedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "impactEndedAt": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                },
+                "impactMinutes": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "urgency",
+                "source",
+                "impactStartedAt",
+                "impactEndedAt",
+                "impactMinutes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "estimatedCostCents": {
+            "type": ["integer", "null"]
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "businessServiceId",
+          "name",
+          "month",
+          "from",
+          "to",
+          "monthToDate",
+          "uptimePercent",
+          "weightedUptimePercent",
+          "downtimeMinutes",
+          "weightedDowntimeMinutes",
+          "sloTarget",
+          "sloMet",
+          "incidentCount",
+          "mttaMinutes",
+          "mttrMinutes",
+          "incidents"
+        ],
         "additionalProperties": false
       },
       "DependencyGraphAt": {
@@ -37160,6 +37584,16 @@
             }
           },
           {
+            "name": "attribute",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 241,
+              "description": "Custom attribute filter as key=value, e.g. cost_center=ops. \"true\", \"false\" and numbers also match their typed values."
+            }
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -37454,6 +37888,10 @@
                     "type": ["integer", "null"],
                     "minimum": 7,
                     "maximum": 730
+                  },
+                  "autoPublishStatusUpdates": {
+                    "type": "boolean",
+                    "description": "Publish status-page updates on impact and recovery without approval (meant for TIER_0). Off: a draft waits for approval."
                   }
                 },
                 "required": ["name"],
@@ -37845,6 +38283,10 @@
                     "type": ["integer", "null"],
                     "minimum": 7,
                     "maximum": 730
+                  },
+                  "autoPublishStatusUpdates": {
+                    "type": "boolean",
+                    "description": "Publish status-page updates on impact and recovery without approval (meant for TIER_0). Off: a draft waits for approval."
                   }
                 },
                 "required": [],
@@ -39462,6 +39904,9 @@
                     "type": "boolean"
                   },
                   "freezeWarningEnabled": {
+                    "type": "boolean"
+                  },
+                  "errorBudgetAlertsEnabled": {
                     "type": "boolean"
                   },
                   "dayOfMonth": {
@@ -41103,6 +41548,10 @@
                     "type": ["integer", "null"],
                     "minimum": 7,
                     "maximum": 730
+                  },
+                  "autoPublishStatusUpdates": {
+                    "type": "boolean",
+                    "description": "Publish status-page updates on impact and recovery without approval (meant for TIER_0). Off: a draft waits for approval."
                   }
                 },
                 "required": ["name"],
@@ -41187,6 +41636,661 @@
         "x-required-scope": "services:write",
         "x-idempotency": "supported",
         "x-concurrency": "none"
+      }
+    },
+    "/settings/business-service-scorecard": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Read the business service scorecard rubric",
+        "description": "Any service reader. Without a saved rubric this is the default: the seven original checks in Bronze, Silver and Gold.\n\nRequires API scope `services:read` (Services read).",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BusinessServiceScorecardRubric"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getBusinessServiceScorecardRubric",
+        "x-required-scope": "services:read"
+      },
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Replace the business service scorecard rubric",
+        "description": "Admin only; audited. Rule and level ids are unique; scoped teams must exist. A rule with a deadline is overdue once it fails after that day.\n\nRequires API scope `services:write` (Services manage).",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Makes retries safe. A replay returns the original result with `Idempotency-Replayed: true`. Keys are scoped to the credential and operation and retained for 7 days; reusing a key with a different body returns 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "levels": {
+                    "type": "array",
+                    "maxItems": 5,
+                    "description": "Lowest first; a level is reached when it and every lower level pass.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40
+                        }
+                      },
+                      "required": ["id", "label"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "rules": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "check": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "const": "field"
+                                },
+                                "field": {
+                                  "type": "string",
+                                  "enum": [
+                                    "owner",
+                                    "tier",
+                                    "members",
+                                    "slo",
+                                    "links",
+                                    "description",
+                                    "reviewed",
+                                    "escalationPolicy",
+                                    "contactChannel",
+                                    "statusPageSummary"
+                                  ]
+                                },
+                                "maxAgeDays": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 730,
+                                  "description": "reviewed only."
+                                }
+                              },
+                              "required": ["type", "field"],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "const": "attribute"
+                                },
+                                "key": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64
+                                },
+                                "equals": {
+                                  "type": ["string", "number", "boolean"],
+                                  "description": "Absent: must be set."
+                                }
+                              },
+                              "required": ["type", "key"],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "const": "slo"
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": ["OK", "NOT_BREACHED"]
+                                }
+                              },
+                              "required": ["type", "state"],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "const": "hygiene"
+                                },
+                                "flag": {
+                                  "type": "string",
+                                  "enum": ["REVIEW_OVERDUE", "OWNER_INACTIVE", "TEAM_NO_ONCALL"]
+                                }
+                              },
+                              "required": ["type", "flag"],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "level": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                        },
+                        "teamIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "maxItems": 50
+                        },
+                        "tiers": {
+                          "type": "array",
+                          "maxItems": 4,
+                          "items": {
+                            "type": "string",
+                            "enum": ["TIER_0", "TIER_1", "TIER_2", "TIER_3"]
+                          }
+                        },
+                        "deadline": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "Initiative deadline (UTC)."
+                        }
+                      },
+                      "required": ["id", "label", "check"],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": ["levels", "rules"],
+                "additionalProperties": false
+              },
+              "example": {
+                "levels": [
+                  {
+                    "id": "bronze",
+                    "label": "Bronze"
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "owner",
+                    "label": "Has an owner",
+                    "check": {
+                      "type": "field",
+                      "field": "owner"
+                    },
+                    "level": "bronze"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BusinessServiceScorecardRubric"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "updateBusinessServiceScorecardRubric",
+        "x-required-scope": "services:write",
+        "x-idempotency": "supported",
+        "x-concurrency": "none"
+      }
+    },
+    "/business-services/{id}/scorecard": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "Score a business service against the rubric",
+        "description": "Checks in scope, score, level reached and overdue initiatives. SLO rules use the error budget over the service SLO window.\n\nRequires API scope `services:read` (Services read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BusinessServiceScorecard"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getBusinessServiceScorecard",
+        "x-required-scope": "services:read"
+      }
+    },
+    "/business-services/{id}/changes": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "List changes on the member services of a business service",
+        "description": "Deploys, config, feature-flag and infrastructure changes (GitHub, GitLab, Argo CD, Terraform, Vercel), newest first. Team-scoped readers see changes of their teams services only.\n\nRequires API scope `services:read` (Services read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Default: 30 days before to."
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Default: now. At most 400 days wide."
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BusinessServiceChange"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "listBusinessServiceChanges",
+        "x-required-scope": "services:read"
+      }
+    },
+    "/business-services/{id}/sla-report": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "Monthly SLA report of a business service",
+        "description": "Uptime, severity-weighted uptime against the SLO target (met or missed), downtime minutes and incidents for one UTC month (default: this month, to date). estimatedCostCents and currency only for Responders and Admins.\n\nRequires API scope `services:read` (Services read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "description": "YYYY-MM."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BusinessServiceSlaReport"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getBusinessServiceSlaReport",
+        "x-required-scope": "services:read"
       }
     },
     "/dependency-graph/at": {

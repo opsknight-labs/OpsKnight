@@ -255,13 +255,14 @@ describe('TQ-11: tools/list stays small', () => {
     // Dependency graph insights curate dependency_graph_at, dependency_graph_changes,
     // dependency_single_points_of_failure and dependency_failure_blast_radius (at/since/threshold
     // and a bounded serviceIds list with depth): about 1.1 KB. business_service_changes (id, from,
-    // to, limit): about 0.35 KB.
+    // to, limit): about 0.35 KB. business_services_list gains the attribute=key=value filter:
+    // about 0.4 KB.
     const named = tools.filter(tool => MCP_CATALOG.some(operation => operation.tool === tool.name));
     const namedBytes = named.reduce(
       (total, tool) => total + Buffer.byteLength(JSON.stringify(tool.inputSchema)),
       0
     );
-    expect(namedBytes).toBeLessThanOrEqual(22000);
+    expect(namedBytes).toBeLessThanOrEqual(22800);
     expect(bytes).toBeGreaterThan(namedBytes);
   });
 });
