@@ -13,10 +13,24 @@ import {
   scheduleReadWhere,
   serviceReadWhere,
 } from '@/lib/authorization-filters';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import {
+  AUTHORIZATION_ACTIONS,
+  authorize,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
+import { businessServiceReadWhere } from '@/lib/business-services/commands';
 import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 
 const INSENSITIVE_MODE = 'insensitive' as const;
+
+const BUSINESS_STATUS_LABEL = new Map<string, string>([
+  ['OPERATIONAL', 'Operational'],
+  ['DEGRADED', 'Degraded'],
+  ['PARTIAL_OUTAGE', 'Partial outage'],
+  ['MAJOR_OUTAGE', 'Major outage'],
+  ['MAINTENANCE', 'Maintenance'],
+  ['UNKNOWN', 'Unknown'],
+]);
 
 type IncidentWithService = {
   id: string;
@@ -82,6 +96,7 @@ type SearchResponses = [
   PostmortemSearchResult[] | [],
   Array<{ id: string; name: string; timeZone: string }>,
   Array<{ id: string; name: string; description: string }>,
+  Array<{ id: string; name: string; criticality: string | null }>,
 ];
 
 /** Read scope for a resource, or null when the actor may not read it at all. */
@@ -134,6 +149,11 @@ export async function GET(req: NextRequest) {
     const serviceAccess = serviceReadWhere(actor);
     const scheduleAccess = readScope(() => scheduleReadWhere(actor));
     const runbookAccess = readScope(() => runbookReadWhere(actor));
+    // Business services follow their own read rule (service read, scoped to the actor's teams).
+    const businessServiceAccess = authorize({ actor, action: AUTHORIZATION_ACTIONS.SERVICE_READ })
+      .allowed
+      ? readScope(() => businessServiceReadWhere(actor))
+      : null;
 
     const rate = await checkRateLimit(`api:search:user:${currentUser.id}`, 30, 60_000);
     if (!rate.allowed) {
@@ -401,10 +421,46 @@ export async function GET(req: NextRequest) {
             select: { id: true, name: true, description: true },
           })
         : Promise.resolve([]),
+
+      // Search business services (skipped when the actor has no service read)
+      businessServiceAccess
+        ? prisma.businessService.findMany({
+            where: {
+              AND: [
+                businessServiceAccess,
+                {
+                  OR: [
+                    { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                    { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                  ],
+                },
+              ],
+            },
+            take: 5,
+            orderBy: { name: 'asc' },
+            select: { id: true, name: true, criticality: true },
+          })
+        : Promise.resolve([]),
     ];
 
-    const [incidents, services, teams, users, policies, postmortemsResult, schedules, runbooks] =
-      (await Promise.all(searchPromises)) as SearchResponses;
+    const [
+      incidents,
+      services,
+      teams,
+      users,
+      policies,
+      postmortemsResult,
+      schedules,
+      runbooks,
+      businessServices,
+    ] = (await Promise.all(searchPromises)) as SearchResponses;
+    // Health for the status dot, from the cached snapshot; a miss leaves the dot off.
+    const businessHealth = businessServices.length
+      ? await import('@/lib/business-services/health')
+          .then(({ getHealthSnapshot }) => getHealthSnapshot())
+          .then(snapshot => snapshot.health)
+          .catch(() => null)
+      : null;
 
     // Handle postmortems result (unwrap promise if needed)
     const postmortems = Array.isArray(postmortemsResult) ? postmortemsResult : [];
@@ -433,6 +489,24 @@ export async function GET(req: NextRequest) {
         href: `/services/${s.id}`,
         priority: 4,
       })),
+      ...businessServices.map(b => {
+        const status = businessHealth?.get(b.id)?.status;
+        return {
+          type: 'businessService' as const,
+          id: b.id,
+          title: b.name,
+          subtitle: [
+            'Business service',
+            b.criticality ? b.criticality.replace('TIER_', 'Tier ') : null,
+            status ? BUSINESS_STATUS_LABEL.get(status) : null,
+          ]
+            .filter(Boolean)
+            .join(' - '),
+          href: `/services/business/${b.id}`,
+          priority: 4,
+          ...(status ? { status } : {}),
+        };
+      }),
       ...teams.map(t => ({
         type: 'team' as const,
         id: t.id,
