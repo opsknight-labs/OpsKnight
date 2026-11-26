@@ -71,4 +71,13 @@ describe('noise policy form scope', () => {
     fireEvent.change(select, { target: { value: '' } });
     expect(push).toHaveBeenLastCalledWith('/settings/intelligence/noise-controls');
   });
+
+  it('submits the scope and revision it was rendered with, even while a navigation is pending', () => {
+    const { container } = renderForm();
+    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'svc_checkout' } });
+    const sent = new FormData(container.querySelector('form') as HTMLFormElement);
+    // Publishing before the page for Checkout has loaded must not send the global revision for Checkout.
+    expect(sent.get('serviceId')).toBe('');
+    expect(sent.get('expectedRevision')).toBe('2');
+  });
 });

@@ -153,11 +153,12 @@ export async function readIncidentAnalysisState(
     !relevant.length &&
     Date.now() - incident.createdAt.getTime() > settings.lookbackDays * 86_400_000
   )
+    // `canRefresh` stays as the policy and permissions give it: an operator can still request analysis
+    // for any incident by hand; only the automatic backfill stops at the lookback.
     return {
       ...base,
-      canRefresh: false,
       status: 'UNAVAILABLE',
-      message: `This incident is older than the ${settings.lookbackDays} days of history Intelligence analyses, so it has no recommendations.`,
+      message: `This incident is older than the ${settings.lookbackDays} days of history Intelligence analyses automatically, so it has no recommendations unless analysis is requested.`,
     };
   if (!fresh || pending || !incident.intelligenceFingerprint)
     return {

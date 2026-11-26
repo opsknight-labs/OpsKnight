@@ -83,7 +83,8 @@ function ServiceSelect({
   onChange,
 }: {
   id: string;
-  name: string;
+  /** Omit for a select that only navigates and must not be submitted with its form. */
+  name?: string;
   services: Option[];
   allowAll?: string;
   defaultValue?: string;
@@ -208,9 +209,11 @@ export function NoisePolicyForm({
             <label htmlFor={`${id}-service`} className={labelClass}>
               Service
             </label>
+            {/* The select only navigates. It is not submitted: until the page for the chosen scope has
+                loaded, this form still carries the scope and revision it was rendered with, together. */}
+            <input type="hidden" name="serviceId" value={selectedServiceId ?? ''} />
             <ServiceSelect
               id={`${id}-service`}
-              name="serviceId"
               services={services}
               allowAll="All services (global)"
               defaultValue={selectedServiceId ?? ''}

@@ -108,11 +108,13 @@ it('says an incident older than the analysed history is unavailable instead of w
     where: { id: incident.id },
     data: { createdAt: new Date(Date.now() - 45 * 86_400_000) },
   });
+  // An operator can still ask for analysis by hand, whatever the age.
   expect(await readIncidentAnalysisState(actor, incident.id)).toMatchObject({
     status: 'UNAVAILABLE',
-    canRefresh: false,
+    canRefresh: true,
     message: expect.stringContaining('older than the 30 days'),
   });
+  expect(await requestIncidentAnalysis(actor, incident.id)).toBe('requested');
 });
 it('labels source edits stale and never mistakes a stale fingerprint for fresh analysis', async () => {
   const { actor, incident } = await fixture();
