@@ -2,6 +2,7 @@
 
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { AppError } from '@/lib/errors';
 import { assignTeamServices } from '@/lib/teams/service-commands';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { revalidatePath } from 'next/cache';
@@ -118,24 +119,33 @@ export async function updateTeam(teamId: string, formData: FormData) {
   }
 
   const actorId = currentUser.id;
-  await runSerializableTransaction(async tx => {
-    await requireTeamAccess(tx, teamId, { id: actorId }, true);
-    await setTeamLead(teamId, { userId: teamLeadId || null }, { id: actorId }, { client: tx });
-    await tx.team.update({
-      where: { id: teamId },
-      data: { name: normalizedName, description: description || null },
+  try {
+    await runSerializableTransaction(async tx => {
+      await requireTeamAccess(tx, teamId, { id: actorId }, true);
+      await setTeamLead(teamId, { userId: teamLeadId || null }, { id: actorId }, { client: tx });
+      await tx.team.update({
+        where: { id: teamId },
+        data: { name: normalizedName, description: description || null },
+      });
+      await logAudit(
+        {
+          action: 'team.updated',
+          entityType: 'TEAM',
+          entityId: teamId,
+          actorId,
+          details: { name: normalizedName },
+        },
+        tx
+      );
     });
-    await logAudit(
-      {
-        action: 'team.updated',
-        entityType: 'TEAM',
-        entityId: teamId,
-        actorId,
-        details: { name: normalizedName },
-      },
-      tx
-    );
-  });
+  } catch (error) {
+    // Show the rule that was broken (inactive lead, lost access, name taken in a race) in the form.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return { error: 'A team with that name already exists.' };
+    }
+    if (error instanceof AppError) return { error: error.userMessage };
+    throw error;
+  }
 
   revalidatePath('/teams');
   revalidatePath('/services');

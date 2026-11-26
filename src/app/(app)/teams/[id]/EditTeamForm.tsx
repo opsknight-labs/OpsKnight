@@ -13,6 +13,7 @@ type Member = {
   role: string;
   user: {
     name: string;
+    status?: string;
   };
 };
 
@@ -107,11 +108,21 @@ export default function EditTeamForm({
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs ring-offset-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">No team lead designated</option>
-            {members.map(member => (
-              <option key={member.userId} value={member.userId}>
-                {member.user.name} ({member.role})
-              </option>
-            ))}
+            {members
+              // A disabled member cannot be picked as lead; keep the current lead listed so the
+              // select still shows who it is.
+              .filter(
+                member =>
+                  !member.user.status ||
+                  member.user.status === 'ACTIVE' ||
+                  member.userId === team.teamLeadId
+              )
+              .map(member => (
+                <option key={member.userId} value={member.userId}>
+                  {member.user.name} ({member.role})
+                  {member.user.status && member.user.status !== 'ACTIVE' ? ' · disabled' : ''}
+                </option>
+              ))}
           </select>
         </div>
       </div>

@@ -298,6 +298,10 @@ export async function setTeamLead(
   return run(options, async tx => {
     const team = await requireTeamAccess(tx, teamId, actor, true);
     checkRevision(team.revision, options);
+    // Unchanged is a no-op, even when the current lead has since been disabled: otherwise every
+    // later team edit would fail until someone picked a new lead.
+    if (team.teamLeadId === userId)
+      return { teamId, userId, revision: team.revision, teamLeadId: userId };
     if (
       userId &&
       !(await tx.teamMember.findFirst({
@@ -306,8 +310,6 @@ export async function setTeamLead(
       }))
     )
       throw conflict('Team lead must be an active member of this team.');
-    if (team.teamLeadId === userId)
-      return { teamId, userId, revision: team.revision, teamLeadId: userId };
     const updated = await tx.team.update({ where: { id: teamId }, data: { teamLeadId: userId } });
     await audit(tx, actor, 'team.lead_updated', teamId, null, { teamLeadId: userId });
     return { teamId, userId, revision: updated.revision, teamLeadId: userId };
