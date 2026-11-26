@@ -57,9 +57,11 @@ describe('NotifyStakeholdersButton', () => {
     fireEvent.change(within(dialog).getByLabelText('Message'), { target: { value: 'Hello' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Send update' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Rate limited');
+    // The ids shown in the dialog are the ids sent, so a changed impact set is rejected, not mailed.
     expect(notifyStakeholders).toHaveBeenCalledWith('i1', {
       phase: 'investigating',
       message: 'Hello',
+      businessServiceIds: ['b'],
     });
     fireEvent.change(within(dialog).getByLabelText('Message'), {
       target: { value: 'Hello again' },

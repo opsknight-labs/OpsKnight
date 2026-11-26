@@ -89,7 +89,12 @@ export default function NotifyStakeholdersButton({
   const send = () =>
     startTransition(async () => {
       setError(null);
-      const result = await notifyStakeholdersAction(incidentId, { phase, message });
+      const result = await notifyStakeholdersAction(incidentId, {
+        phase,
+        message,
+        // Send exactly the services the dialog lists; the server rejects any that stopped being impacted.
+        businessServiceIds: businessServices.map(service => service.id),
+      });
       if (!result.ok) {
         setError(result.error);
         return;
