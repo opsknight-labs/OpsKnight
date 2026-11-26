@@ -28,9 +28,8 @@ vi.mock('@/app/(app)/services/business/phase5b-actions', () => ({
 
 import NotifyStakeholdersButton from '@/components/incident/detail/NotifyStakeholdersButton';
 import { mapServerErrors } from '@/components/service/BusinessServiceForm';
-import ImpactTimeline, {
-  type ImpactTimelineEntry,
-} from '@/components/business-service/ImpactTimeline';
+import ImpactTimeline from '@/components/business-service/ImpactTimeline';
+import type { ImpactTimelineEntry } from '@/lib/business-services/contract';
 
 beforeEach(() => vi.clearAllMocks());
 

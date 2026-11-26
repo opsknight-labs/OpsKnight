@@ -48,7 +48,9 @@ describe('showMembers=false does not leak member services (P2)', () => {
 
   it('keeps the hidden member out of the JSON status, history and RSS', async () => {
     const { slug, secret, bs, open } = await fixture();
-    const json = await (await getStatusResponse(req(`/api/status?slug=${slug}`), slug)).json();
+    const response = await getStatusResponse(req(`/api/status?slug=${slug}`), slug);
+    if (!response) throw new Error('status response expected');
+    const json = await response.json();
     const text = JSON.stringify(json);
     expect(text).not.toContain('Ledger Postgres Primary');
     expect(text).not.toContain(secret.id);
