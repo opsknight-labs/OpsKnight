@@ -5,6 +5,8 @@ import { triggerStatusPageWebhooks } from '@/lib/status-page-webhooks';
 import { getHealthSnapshot } from './health';
 
 export const BUSINESS_SERVICE_STATUS_EVENT = 'business_service.status_changed';
+/** A status must hold this long since the last announcement before the next one goes out. */
+export const STATUS_CHANGE_DEBOUNCE_MS = 3 * 60_000;
 
 const BS_STATUS_LABEL: Record<string, string> = {
   OPERATIONAL: 'Operational',
@@ -27,8 +29,8 @@ export function describeStatusChange(name: string, from: string, to: string) {
 /**
  * Announces business-service status changes found by the 60 s impact reconcile: in-app to
  * followers and via status-page webhooks (pages that show the business service). The first run per
- * business service only records a baseline. A compare-and-set on `lastNotifiedStatus` makes
- * each change fire once even when several instances reconcile at the same time.
+ * business service only records a baseline. Delivery is at least once: announce under a
+ * stable per-transition key, then compare-and-set `lastNotifiedStatus`; a short debounce stops flapping.
  * shortcut: Slack/Teams and an announcement draft are not wired (those channels are incident-keyed).
  */
 export async function emitBusinessServiceStatusChanges(now = new Date()): Promise<number> {
@@ -39,6 +41,7 @@ export async function emitBusinessServiceStatusChanges(now = new Date()): Promis
         id: true,
         name: true,
         lastNotifiedStatus: true,
+        lastNotifiedStatusAt: true,
         followers: { select: { userId: true } },
         statusPages: {
           where: { showOnPage: true, statusPage: { enabled: true } },
@@ -51,15 +54,28 @@ export async function emitBusinessServiceStatusChanges(now = new Date()): Promis
   for (const row of rows) {
     const health = snapshot.health.get(row.id);
     if (!health || health.status === row.lastNotifiedStatus) continue;
-    const claimed = await prisma.businessService.updateMany({
-      where: { id: row.id, lastNotifiedStatus: row.lastNotifiedStatus },
-      data: { lastNotifiedStatus: health.status, lastNotifiedStatusAt: now },
-    });
-    if (!claimed.count || row.lastNotifiedStatus === null) continue; // lost the race, or baseline
-    announced += 1;
+    const claim = () =>
+      prisma.businessService.updateMany({
+        where: { id: row.id, lastNotifiedStatus: row.lastNotifiedStatus },
+        data: { lastNotifiedStatus: health.status, lastNotifiedStatusAt: now },
+      });
+    if (row.lastNotifiedStatus === null) {
+      await claim(); // first run per business service: baseline only
+      continue;
+    }
+    // Debounce: a status that flaps back within the window never announces either flip.
+    if (
+      row.lastNotifiedStatusAt &&
+      now.getTime() - row.lastNotifiedStatusAt.getTime() < STATUS_CHANGE_DEBOUNCE_MS
+    )
+      continue;
     const from = row.lastNotifiedStatus;
     const text = describeStatusChange(row.name, from, health.status);
+    // The key names the transition, not the attempt, so a retry after a crash is deduplicated.
+    const changeKey = `${row.id}:${from}:${health.status}:${row.lastNotifiedStatusAt?.getTime() ?? 0}`;
     try {
+      // At least once: announce first, record the change last. A failure leaves the change
+      // unrecorded, so the next reconcile announces it again under the same key.
       if (row.followers.length)
         await createInAppNotifications({
           userIds: row.followers.map(follower => follower.userId),
@@ -67,7 +83,7 @@ export async function emitBusinessServiceStatusChanges(now = new Date()): Promis
           ...text,
           entityType: 'BUSINESS_SERVICE',
           entityId: row.id,
-          dedupeKey: `business-service-status:${row.id}:${health.status}:${now.getTime()}`,
+          dedupeKey: `business-service-status:${changeKey}`,
         });
       for (const { statusPageId } of row.statusPages)
         await triggerStatusPageWebhooks(
@@ -81,10 +97,11 @@ export async function emitBusinessServiceStatusChanges(now = new Date()): Promis
             since: health.since?.toISOString() ?? null,
             changedAt: now.toISOString(),
           },
-          `${row.id}:${BUSINESS_SERVICE_STATUS_EVENT}:${health.status}:${now.getTime()}`
+          `${changeKey}:${BUSINESS_SERVICE_STATUS_EVENT}`
         );
+      if ((await claim()).count) announced += 1;
     } catch (error) {
-      // The change is recorded; a failed announcement must not stop the other business services.
+      // The other business services still go out; this one is retried on the next run.
       logger.warn('business_services.status_event_failed', {
         id: row.id,
         error: error instanceof Error ? error.message : String(error),
