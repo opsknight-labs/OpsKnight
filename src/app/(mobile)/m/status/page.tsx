@@ -59,6 +59,9 @@ function announcementIcon(type: string) {
   return Megaphone;
 }
 
+/** Worst first; a long catalog must not push incidents off the phone screen. */
+const BUSINESS_ROW_LIMIT = 10;
+
 export default async function MobileStatusPage() {
   await requirePageAccess('/m/status');
   const context = await getRequestActorContext();
@@ -205,7 +208,7 @@ export default async function MobileStatusPage() {
           </h2>
           <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
             <ul>
-              {businessServices.map((item, index) => (
+              {businessServices.slice(0, BUSINESS_ROW_LIMIT).map((item, index) => (
                 <li
                   key={item.id}
                   className={`flex min-h-[52px] items-center gap-3 px-3.5 py-2.5 ${index > 0 ? 'border-t border-border/70' : ''}`}
@@ -228,6 +231,11 @@ export default async function MobileStatusPage() {
                 </li>
               ))}
             </ul>
+            {businessServices.length > BUSINESS_ROW_LIMIT && (
+              <p className="border-t border-border/70 px-3.5 py-2.5 text-xs text-muted-foreground">
+                Showing the {BUSINESS_ROW_LIMIT} most affected of {businessServices.length}.
+              </p>
+            )}
           </Card>
         </section>
       )}

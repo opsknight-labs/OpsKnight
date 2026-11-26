@@ -396,7 +396,9 @@ export default function DetailTabs({
         {children
           ? children
           : tabs.map(tab =>
-              tab.content ? (
+              tab.content ||
+              // Server mode: the clicked tab has no content until the RSC round trip lands; show a placeholder, not a blank card.
+              (navigationMode === 'server' && tab.id === currentTab) ? (
                 <TabsContent
                   key={tab.id}
                   value={tab.id}
@@ -407,7 +409,14 @@ export default function DetailTabs({
                     contentClassName
                   )}
                 >
-                  {tab.content}
+                  {tab.content ?? (
+                    <div
+                      role="status"
+                      aria-busy="true"
+                      aria-label={`Loading ${tab.label}`}
+                      className="h-40 animate-pulse rounded-lg border bg-muted/40"
+                    />
+                  )}
                 </TabsContent>
               ) : null
             )}

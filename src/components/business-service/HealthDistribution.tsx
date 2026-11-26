@@ -113,8 +113,9 @@ export default function HealthDistribution({
                   return (
                     <td key={status} className="px-2 py-1 text-right tabular-nums">
                       {count === 0 ? (
-                        <span className="text-muted-foreground" aria-label="none">
-                          –
+                        <span className="text-muted-foreground">
+                          <span aria-hidden="true">–</span>
+                          <span className="sr-only">none</span>
                         </span>
                       ) : (
                         <Link
