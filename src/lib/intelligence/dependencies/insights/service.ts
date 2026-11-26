@@ -600,8 +600,8 @@ export async function simulateFailure(
   });
   const exposed = affectedBusiness.filter(bs => rankedOut.has(bs.projectedStatus));
   const sum = (key: 'revenuePerHourCents' | 'customersTotal') => {
-    // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
     const values = exposed
+      // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
       .map(bs => extras.get(bs.id)?.[key])
       .filter((v): v is number => typeof v === 'number');
     return values.length ? values.reduce((a, b) => a + b, 0) : null;
