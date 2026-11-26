@@ -15,6 +15,7 @@ import { Prisma } from '@prisma/client';
 import { isValidTimeZone } from '@/lib/timezone';
 import { hashSubscriptionToken } from './subscription-tokens';
 import { subscriptionRequestAction } from './subscription-policy';
+import { pageSubscriberChannels } from './subscriber-channel-policy';
 import {
   getStatusPageLogoUrl,
   getStatusPagePublicUrl,
@@ -116,7 +117,8 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
         })
       );
     }
-    if (!statusPage.showSubscribe) return jsonError('Subscriptions are disabled.', 404);
+    if (!statusPage.showSubscribe || !pageSubscriberChannels(statusPage).includes('EMAIL'))
+      return jsonError('Subscriptions are disabled.', 404);
     if (statusPage.requireAuth) {
       const cookieHeader = req.headers.get('cookie');
       const statusToken = extractStatusSessionToken(cookieHeader);
@@ -141,106 +143,15 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
       }
     }
 
-    // Industry-standard service picker: optional preferences.selectedServiceIds, validated against page's services
-    const preferencesProvided = rawPreferences !== undefined;
-    let normalizedPreferences: {
-      selectedServiceIds?: string[];
-      selectedBusinessServiceIds?: string[];
-    } | null = null;
-    let normalizedServiceIds: string[] | null = null;
-    let normalizedBusinessServiceIds: string[] = [];
-    if (preferencesProvided) {
-      const pickedServices = rawPreferences?.selectedServiceIds;
-      const pickedBusiness = rawPreferences?.selectedBusinessServiceIds;
-      if (pickedServices !== undefined || pickedBusiness !== undefined) {
-        // Explicit Selected mode — empty or all-invalid must not widen to "all".
-        if ((pickedServices?.length ?? 0) + (pickedBusiness?.length ?? 0) === 0) {
-          return jsonError(
-            new AppError({
-              code: 'VALIDATION_FAILED',
-              userMessage:
-                'Select at least one service to follow, or leave service selection empty for all updates.',
-              fields: [
-                {
-                  field: 'preferences.selectedServiceIds',
-                  code: 'empty',
-                  message: 'Empty selection is not valid when service selection is provided.',
-                },
-              ],
-            })
-          );
-        }
-        const [allowed, allowedBusiness] = await Promise.all([
-          pickedServices?.length
-            ? prisma.statusPageService.findMany({
-                where: { statusPageId, showOnPage: true },
-                select: { serviceId: true },
-              })
-            : [],
-          // Business services are offered only while the page groups by them.
-          pickedBusiness?.length && statusPage.serviceLayout !== 'FLAT'
-            ? prisma.statusPageBusinessService.findMany({
-                where: { statusPageId, showOnPage: true },
-                select: { businessServiceId: true },
-              })
-            : [],
-        ]);
-        const allowedSet = new Set(allowed.map(r => r.serviceId));
-        const allowedBusinessSet = new Set(allowedBusiness.map(r => r.businessServiceId));
-        const filtered = [...new Set((pickedServices ?? []).filter(id => allowedSet.has(id)))];
-        const filteredBusiness = [
-          ...new Set((pickedBusiness ?? []).filter(id => allowedBusinessSet.has(id))),
-        ];
-        if (filtered.length + filteredBusiness.length === 0) {
-          return jsonError(
-            new AppError({
-              code: 'VALIDATION_FAILED',
-              userMessage: 'None of the selected services are available on this status page.',
-              fields: [
-                {
-                  field: 'preferences.selectedServiceIds',
-                  code: 'invalid',
-                  message: 'No valid service selected.',
-                },
-              ],
-            })
-          );
-        }
-        normalizedPreferences = {
-          selectedServiceIds: filtered,
-          ...(filteredBusiness.length ? { selectedBusinessServiceIds: filteredBusiness } : {}),
-        };
-        normalizedServiceIds = filtered;
-        normalizedBusinessServiceIds = filteredBusiness;
-      } else {
-        // preferences: {} with no selectedServiceIds — treat as "all" (null) but still considered provided
-        normalizedPreferences = null;
-        normalizedServiceIds = null;
-      }
-    }
-
-    async function syncSubscriptionServices(subscriptionId: string) {
-      if (!preferencesProvided) return;
-      await prisma.$transaction(async tx => {
-        await tx.statusPageSubscriptionService.deleteMany({ where: { subscriptionId } });
-        await tx.statusPageSubscriptionBusinessService.deleteMany({ where: { subscriptionId } });
-        if (normalizedServiceIds?.length) {
-          await tx.statusPageSubscriptionService.createMany({
-            data: normalizedServiceIds.map(serviceId => ({ subscriptionId, serviceId })),
-            skipDuplicates: true,
-          });
-        }
-        if (normalizedBusinessServiceIds.length) {
-          await tx.statusPageSubscriptionBusinessService.createMany({
-            data: normalizedBusinessServiceIds.map(businessServiceId => ({
-              subscriptionId,
-              businessServiceId,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      });
-    }
+    const selection = await resolveSubscriptionSelection(statusPage, rawPreferences);
+    if ('error' in selection) return selection.error;
+    const {
+      provided: preferencesProvided,
+      preferences: normalizedPreferences,
+      serviceIds: normalizedServiceIds,
+    } = selection;
+    const syncSubscriptionServices = (subscriptionId: string) =>
+      syncSubscriptionSelection(subscriptionId, selection);
 
     const token = randomBytes(32).toString('hex');
     const verificationToken = randomBytes(32).toString('hex');
@@ -320,9 +231,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             verificationTokenExpiresAt: verificationExpiresAt,
             verified: false,
             timezone: subscriberTimezone,
-            ...(preferencesProvided
-              ? { preferences: normalizedPreferences ?? Prisma.DbNull }
-              : {}),
+            ...(preferencesProvided ? { preferences: normalizedPreferences ?? Prisma.DbNull } : {}),
           },
         });
 
@@ -338,9 +247,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             verificationToken: hashSubscriptionToken(verificationToken),
             verificationTokenExpiresAt: verificationExpiresAt,
             timezone: subscriberTimezone,
-            ...(preferencesProvided
-              ? { preferences: normalizedPreferences ?? Prisma.DbNull }
-              : {}),
+            ...(preferencesProvided ? { preferences: normalizedPreferences ?? Prisma.DbNull } : {}),
           },
         });
         if (refreshed.count === 0) return subscriptionAccepted();
@@ -357,9 +264,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           verified: false,
           state: 'PENDING',
           timezone: subscriberTimezone,
-          ...(preferencesProvided
-            ? { preferences: normalizedPreferences ?? Prisma.DbNull }
-            : {}),
+          ...(preferencesProvided ? { preferences: normalizedPreferences ?? Prisma.DbNull } : {}),
         },
         select: { id: true },
       });
@@ -470,4 +375,130 @@ function subscriptionAccepted() {
     },
     200
   );
+}
+
+export type SubscriptionPreferencesInput = {
+  selectedServiceIds?: string[];
+  selectedBusinessServiceIds?: string[];
+  timezone?: string;
+};
+
+export type SubscriptionSelection = {
+  /** False: the request said nothing about services, so stored picks stay as they are. */
+  provided: boolean;
+  preferences: { selectedServiceIds?: string[]; selectedBusinessServiceIds?: string[] } | null;
+  /** Null = every service on the page. */
+  serviceIds: string[] | null;
+  businessServiceIds: string[];
+};
+
+/**
+ * Validates a subscriber's service / business-service picks against what the page offers. An
+ * explicit selection that is empty or entirely invalid is rejected rather than widened to "all".
+ * Shared by every subscriber channel (email, SMS, Slack, Teams).
+ */
+export async function resolveSubscriptionSelection(
+  statusPage: { id: string; serviceLayout?: string | null },
+  rawPreferences: SubscriptionPreferencesInput | undefined
+): Promise<SubscriptionSelection | { error: Response }> {
+  const statusPageId = statusPage.id;
+  const provided = rawPreferences !== undefined;
+  if (!provided) return { provided, preferences: null, serviceIds: null, businessServiceIds: [] };
+  const pickedServices = rawPreferences?.selectedServiceIds;
+  const pickedBusiness = rawPreferences?.selectedBusinessServiceIds;
+  // preferences: {} with no selection means "all", but still counts as provided.
+  if (pickedServices === undefined && pickedBusiness === undefined)
+    return { provided, preferences: null, serviceIds: null, businessServiceIds: [] };
+  if ((pickedServices?.length ?? 0) + (pickedBusiness?.length ?? 0) === 0) {
+    return {
+      error: jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage:
+            'Select at least one service to follow, or leave service selection empty for all updates.',
+          fields: [
+            {
+              field: 'preferences.selectedServiceIds',
+              code: 'empty',
+              message: 'Empty selection is not valid when service selection is provided.',
+            },
+          ],
+        })
+      ),
+    };
+  }
+  const [allowed, allowedBusiness] = await Promise.all([
+    pickedServices?.length
+      ? prisma.statusPageService.findMany({
+          where: { statusPageId, showOnPage: true },
+          select: { serviceId: true },
+        })
+      : [],
+    // Business services are offered only while the page groups by them.
+    pickedBusiness?.length && statusPage.serviceLayout !== 'FLAT'
+      ? prisma.statusPageBusinessService.findMany({
+          where: { statusPageId, showOnPage: true },
+          select: { businessServiceId: true },
+        })
+      : [],
+  ]);
+  const allowedSet = new Set(allowed.map(r => r.serviceId));
+  const allowedBusinessSet = new Set(allowedBusiness.map(r => r.businessServiceId));
+  const filtered = [...new Set((pickedServices ?? []).filter(id => allowedSet.has(id)))];
+  const filteredBusiness = [
+    ...new Set((pickedBusiness ?? []).filter(id => allowedBusinessSet.has(id))),
+  ];
+  if (filtered.length + filteredBusiness.length === 0) {
+    return {
+      error: jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'None of the selected services are available on this status page.',
+          fields: [
+            {
+              field: 'preferences.selectedServiceIds',
+              code: 'invalid',
+              message: 'No valid service selected.',
+            },
+          ],
+        })
+      ),
+    };
+  }
+  return {
+    provided,
+    preferences: {
+      selectedServiceIds: filtered,
+      ...(filteredBusiness.length ? { selectedBusinessServiceIds: filteredBusiness } : {}),
+    },
+    serviceIds: filtered,
+    businessServiceIds: filteredBusiness,
+  };
+}
+
+/** Replaces a subscription's service picks with `selection` (no-op when none was provided). */
+export async function syncSubscriptionSelection(
+  subscriptionId: string,
+  selection: SubscriptionSelection
+) {
+  if (!selection.provided) return;
+  await prisma.$transaction(async tx => {
+    await tx.statusPageSubscriptionService.deleteMany({ where: { subscriptionId } });
+    await tx.statusPageSubscriptionBusinessService.deleteMany({ where: { subscriptionId } });
+    if (selection.serviceIds?.length) {
+      await tx.statusPageSubscriptionService.createMany({
+        data: selection.serviceIds.map(serviceId => ({ subscriptionId, serviceId })),
+        skipDuplicates: true,
+      });
+    }
+    if (selection.businessServiceIds.length) {
+      await tx.statusPageSubscriptionBusinessService.createMany({
+        data: selection.businessServiceIds.map(businessServiceId => ({
+          subscriptionId,
+          businessServiceId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+  });
 }
