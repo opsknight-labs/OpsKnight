@@ -5,6 +5,8 @@ import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
+import { logAudit } from '@/lib/audit';
+import { guardLegacyDashboardApi } from '@/lib/dashboard/legacy-api-guard';
 
 const UpdateDashboardSchema = z.object({
   name: z.string().min(1).max(200).trim().optional(),
@@ -49,6 +51,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const guard = await guardLegacyDashboardApi('read');
+    if ('response' in guard) return guard.response;
 
     const dashboard = await prisma.dashboard.findUnique({
       where: { id },
@@ -107,6 +111,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const guard = await guardLegacyDashboardApi('write');
+    if ('response' in guard) return guard.response;
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
@@ -210,6 +216,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       });
     });
 
+    await logAudit({
+      action: 'dashboard.updated',
+      entityType: 'DASHBOARD',
+      entityId: id,
+      actorId: user.id,
+      source: 'API',
+      details: { visibility: dashboard.visibility, teamId: dashboard.teamId },
+      oldValue: { visibility: existing.visibility, teamId: existing.teamId },
+    });
+
     return NextResponse.json({ success: true, dashboard });
   } catch (error) {
     logger.error('api.dashboard.put.error', {
@@ -230,6 +246,8 @@ export async function DELETE(
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const guard = await guardLegacyDashboardApi('write');
+    if ('response' in guard) return guard.response;
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
@@ -262,6 +280,13 @@ export async function DELETE(
     }
 
     await prisma.dashboard.delete({ where: { id } });
+    await logAudit({
+      action: 'dashboard.deleted',
+      entityType: 'DASHBOARD',
+      entityId: id,
+      actorId: user.id,
+      source: 'API',
+    });
 
     return NextResponse.json({ success: true, message: 'Dashboard deleted' });
   } catch (error) {

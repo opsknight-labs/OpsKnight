@@ -25,6 +25,9 @@ const mocks = vi.hoisted(() => ({
     $transaction: vi.fn(),
   },
   getServerSession: vi.fn(),
+  assertCapability: vi.fn(),
+  checkRateLimit: vi.fn(),
+  logAudit: vi.fn(),
 }));
 
 vi.mock('next-auth', () => ({
@@ -32,6 +35,9 @@ vi.mock('next-auth', () => ({
 }));
 vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/lib/prisma', () => ({ default: mocks.prisma }));
+vi.mock('@/lib/rbac', () => ({ assertCapability: mocks.assertCapability }));
+vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.checkRateLimit }));
+vi.mock('@/lib/audit', () => ({ logAudit: mocks.logAudit }));
 vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
@@ -47,9 +53,73 @@ describe('Dashboards API CRUD Contract', () => {
     vi.clearAllMocks();
     mocks.getServerSession.mockResolvedValue({ user: { email: mockUser.email } });
     mocks.prisma.user.findUnique.mockResolvedValue(mockUser);
+    mocks.assertCapability.mockResolvedValue({ id: mockUser.id });
+    mocks.checkRateLimit.mockResolvedValue({ allowed: true, remaining: 10, resetAt: Date.now() });
     mocks.prisma.$transaction.mockImplementation(
       async (callback: (tx: typeof mocks.prisma) => Promise<unknown>) => callback(mocks.prisma)
     );
+  });
+
+  describe('report.read gate, rate limit and audit', () => {
+    it('refuses every verb to a user without report.read', async () => {
+      mocks.assertCapability.mockRejectedValue(new Error('forbidden'));
+      const params = { params: Promise.resolve({ id: 'd-1' }) };
+      const post = new NextRequest('http://localhost/api/dashboards', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'x' }),
+      });
+      const put = new NextRequest('http://localhost/api/dashboards/d-1', {
+        method: 'PUT',
+        body: JSON.stringify({ visibility: 'PUBLIC' }),
+      });
+
+      const statuses = [
+        (await getDashboards()).status,
+        (await createDashboard(post)).status,
+        (await getDashboardById(put, params)).status,
+        (await updateDashboard(put, params)).status,
+        (await deleteDashboard(put, params)).status,
+      ];
+
+      expect(statuses.every(status => status >= 400 && status !== 401)).toBe(true);
+      expect(mocks.prisma.dashboard.create).not.toHaveBeenCalled();
+      expect(mocks.prisma.dashboard.update).not.toHaveBeenCalled();
+      expect(mocks.prisma.dashboard.delete).not.toHaveBeenCalled();
+    });
+
+    it('answers 429 once the per-user limit is exhausted', async () => {
+      mocks.checkRateLimit.mockResolvedValue({ allowed: false, remaining: 0, resetAt: Date.now() + 5000 });
+
+      const res = await getDashboards();
+
+      expect(res.status).toBe(429);
+      expect(mocks.prisma.dashboard.findMany).not.toHaveBeenCalled();
+    });
+
+    it('audits the creation of a dashboard with the acting user', async () => {
+      mocks.prisma.dashboard.create.mockResolvedValue({
+        id: 'new-dash',
+        visibility: 'PUBLIC',
+        teamId: null,
+        widgets: [],
+      });
+      const req = new NextRequest('http://localhost/api/dashboards', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Board', visibility: 'PUBLIC' }),
+      });
+
+      const res = await createDashboard(req);
+
+      expect(res.status).toBe(201);
+      expect(mocks.logAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'dashboard.created',
+          entityType: 'DASHBOARD',
+          entityId: 'new-dash',
+          actorId: 'user-1',
+        })
+      );
+    });
   });
 
   describe('GET /api/dashboards', () => {
@@ -310,6 +380,9 @@ describe('Dashboards API CRUD Contract', () => {
       );
       expect(res.status).toBe(200);
       expect(mocks.prisma.dashboard.delete).toHaveBeenCalledWith({ where: { id: 'd-1' } });
+      expect(mocks.logAudit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'dashboard.deleted', entityId: 'd-1', actorId: 'user-1' })
+      );
     });
 
     it('prevents deleting templates', async () => {
