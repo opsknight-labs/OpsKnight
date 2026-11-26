@@ -11,6 +11,54 @@ const UNUSABLE_ENDPOINT_STATUSES: readonly NotificationEndpointStatus[] = [
   'OPTED_OUT',
 ];
 
+const BLOCKED_ENDPOINT_STATUSES: readonly NotificationEndpointStatus[] = ['BOUNCED', 'OPTED_OUT'];
+const HASH_KEY_CONFIG = 'notification_endpoint_hash_key';
+
+function endpointHashKeyBytes(): Buffer {
+  const key = process.env.NEXTAUTH_SECRET?.trim() || getEncryptionKey();
+  if (!key) throw new Error('Notification encryption is not configured');
+  return /^[a-f0-9]{64}$/i.test(key)
+    ? Buffer.from(key, 'hex')
+    : crypto.createHash('sha256').update(key).digest();
+}
+
+let hashKeyChangedAtCache: Promise<Date | null> | undefined;
+
+/** Test hook: forget the cached hash-key state. */
+export function resetEndpointHashKeyStateForTests() {
+  hashKeyChangedAtCache = undefined;
+}
+
+/**
+ * When the address-hash key last changed, or null if it has not since this was first recorded.
+ * The hash key is NEXTAUTH_SECRET, so rotating it re-hashes every address; recording a key
+ * fingerprint lets a mismatch be told apart from a person genuinely changing their address.
+ */
+function hashKeyChangedAt(): Promise<Date | null> {
+  hashKeyChangedAtCache ??= (async () => {
+    const keyId = crypto
+      .createHmac('sha256', endpointHashKeyBytes())
+      .update('opsknight:endpoint-hash-key-id')
+      .digest('hex')
+      .slice(0, 16);
+    const row = await prisma.systemConfig.findUnique({ where: { key: HASH_KEY_CONFIG } });
+    const stored = row?.value as { keyId?: string; changedAt?: string | null } | null | undefined;
+    if (stored?.keyId === keyId) return stored.changedAt ? new Date(stored.changedAt) : null;
+    const changedAt = stored?.keyId ? new Date() : null;
+    const value = { keyId, changedAt: changedAt?.toISOString() ?? null };
+    await prisma.systemConfig.upsert({
+      where: { key: HASH_KEY_CONFIG },
+      create: { key: HASH_KEY_CONFIG, value },
+      update: { value },
+    });
+    return changedAt;
+  })().catch(() => {
+    hashKeyChangedAtCache = undefined; // do not cache a failed read
+    return null;
+  });
+  return hashKeyChangedAtCache;
+}
+
 function normalizedEndpointAddress(channel: NotificationChannel, address: string): string {
   const value = address.trim();
   if (channel === 'EMAIL') return value.toLowerCase();
@@ -23,13 +71,8 @@ export function notificationEndpointAddressHash(
   channel: NotificationChannel,
   address: string
 ): string {
-  const key = process.env.NEXTAUTH_SECRET?.trim() || getEncryptionKey();
-  if (!key) throw new Error('Notification encryption is not configured');
-  const keyBytes = /^[a-f0-9]{64}$/i.test(key)
-    ? Buffer.from(key, 'hex')
-    : crypto.createHash('sha256').update(key).digest();
   return crypto
-    .createHmac('sha256', keyBytes)
+    .createHmac('sha256', endpointHashKeyBytes())
     .update(`${channel}\u001f${normalizedEndpointAddress(channel, address)}`)
     .digest('hex');
 }
@@ -42,6 +85,7 @@ export async function syncUserNotificationEndpoint(
   // the endpoint-health migration. Preserve delivery until the new client is live.
   if (!store.userNotificationEndpoint) return { available: true, status: 'UNVERIFIED' };
   const addressHash = notificationEndpointAddressHash(input.channel, input.address);
+  const keyChangedAt = await hashKeyChangedAt();
   const endpoint =
     typeof store.userNotificationEndpoint.upsert === 'function'
       ? await store.userNotificationEndpoint.upsert({
@@ -54,7 +98,7 @@ export async function syncUserNotificationEndpoint(
           },
           update: {},
         })
-      : (await store.userNotificationEndpoint.findUnique({
+      : ((await store.userNotificationEndpoint.findUnique({
           where: { userId_channel: { userId: input.userId, channel: input.channel } },
         })) ??
         (await store.userNotificationEndpoint.create({
@@ -64,8 +108,21 @@ export async function syncUserNotificationEndpoint(
             addressHash,
             status: 'UNVERIFIED',
           },
-        }));
+        })));
   if (endpoint.addressHash !== addressHash) {
+    // The hash key changed after this row was last written, so the mismatch is the rotation, not a
+    // new address: keep the provider's bounce or opt-out and only re-stamp the hash.
+    if (
+      BLOCKED_ENDPOINT_STATUSES.includes(endpoint.status) &&
+      keyChangedAt &&
+      endpoint.updatedAt < keyChangedAt
+    ) {
+      await store.userNotificationEndpoint.update({
+        where: { id: endpoint.id },
+        data: { addressHash },
+      });
+      return { available: false, status: endpoint.status };
+    }
     await store.userNotificationEndpoint.update({
       where: { id: endpoint.id },
       data: {
