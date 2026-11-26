@@ -6,6 +6,7 @@ import { formatDateTime } from '@/lib/timezone';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
 import { useT } from '@/lib/status-pages/i18n/context';
+import type { Translator } from '@/lib/status-pages/i18n';
 
 const INITIAL_VISIBLE = 8;
 const DESC_CLAMP_AT = 180;
@@ -13,26 +14,22 @@ const DESC_CLAMP_AT = 180;
 // Active + Recent ~14d. Full 90d is History — paginated / on-demand.
 const RECENT_DISPLAY_DAYS = 14;
 
-function formatDuration(start?: string, end?: string): string | null {
+function formatDuration(t: Translator, start?: string, end?: string): string | null {
   if (!start) return null;
   const s = Date.parse(start);
   if (Number.isNaN(s)) return null;
   const e = end ? Date.parse(end) : Date.now();
   if (Number.isNaN(e) || e < s) return null;
   const mins = Math.max(1, Math.floor((e - s) / 60000));
-  const ongoing = !end;
-  if (mins < 60) return ongoing ? `Ongoing · ${mins}m` : `Resolved in ${mins}m`;
   const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h < 24) {
-    const tail = m ? ` ${m}m` : '';
-    return ongoing ? `Ongoing · ${h}h${tail}` : `Resolved in ${h}h${tail}`;
-  }
   const d = Math.floor(h / 24);
-  const rh = h % 24;
-  return ongoing
-    ? `Ongoing · ${d}d${rh ? ` ${rh}h` : ''}`
-    : `Resolved in ${d}d${rh ? ` ${rh}h` : ''}`;
+  const duration =
+    mins < 60
+      ? `${mins}m`
+      : h < 24
+        ? `${h}h${mins % 60 ? ` ${mins % 60}m` : ''}`
+        : `${d}d${h % 24 ? ` ${h % 24}h` : ''}`;
+  return t(end ? 'incidents.resolvedIn' : 'incidents.ongoing', { duration });
 }
 
 function IncidentImpactIcon({ impact }: { impact?: string }) {
@@ -177,7 +174,7 @@ const IncidentCard = memo(function IncidentCard({
     ? formatDateTime(incident.createdAt, timeZone, { format: 'relative' })
     : null;
   const durationLabel = incident.createdAt
-    ? formatDuration(incident.createdAt, incident.resolvedAt ?? undefined)
+    ? formatDuration(t, incident.createdAt, incident.resolvedAt ?? undefined)
     : null;
 
   const hasService = Boolean(incident.service?.name);
