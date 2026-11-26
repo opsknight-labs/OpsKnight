@@ -135,3 +135,80 @@ it('persists the readable production identity when creating a service account', 
     })
   );
 });
+
+describe('administrator service accounts need the console', () => {
+  const adminAccount = { ...account('ACTIVE'), role: 'ADMIN' };
+  const tokenInput = {
+    serviceAccountId: 'sa_1',
+    name: 'deploy',
+    scopes: ['incidents:read'],
+    actorId: 'admin_1',
+  };
+
+  it('refuses an API caller creating an ADMIN service account', async () => {
+    await expect(
+      createServiceAccount({ name: 'root bot', role: 'ADMIN', actorId: 'admin_1' })
+    ).rejects.toMatchObject({ code: 'INVALID_SERVICE_ACCOUNT_ROLE' });
+  });
+
+  it('allows the console to create an ADMIN service account', async () => {
+    const create = vi.fn(async () => ({ ...adminAccount, name: 'root bot' }));
+    await createServiceAccount({
+      name: 'root bot',
+      role: 'ADMIN',
+      actorId: 'admin_1',
+      consoleSession: true,
+      tx: { user: { create } } as unknown as import('@prisma/client').Prisma.TransactionClient,
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an API caller minting a non-expiring token for an ADMIN account', async () => {
+    vi.mocked(prisma.user.findUnique as any).mockResolvedValue(adminAccount);
+    await expect(
+      issueServiceAccountToken({ ...tokenInput, neverExpires: true })
+    ).rejects.toMatchObject({ code: 'INVALID_TOKEN_EXPIRY' });
+  });
+
+  it('still lets an API caller mint an expiring ADMIN token and a non-expiring non-admin one', async () => {
+    const tx = {
+      user: { findUnique: vi.fn().mockResolvedValue({ status: 'ACTIVE' }) },
+      apiKey: {
+        create: vi.fn().mockResolvedValue({
+          id: 'key_1',
+          name: 'deploy',
+          prefix: 'ok_test_abcd',
+          scopes: ['incidents:read'],
+          createdAt: new Date(),
+          expiresAt: null,
+        }),
+      },
+    } as any;
+    vi.mocked(prisma.$transaction as any).mockImplementation(async (fn: any) => fn(tx));
+    vi.mocked(prisma.user.findUnique as any).mockResolvedValue(adminAccount);
+    await issueServiceAccountToken({ ...tokenInput, expiresInDays: 30 });
+    vi.mocked(prisma.user.findUnique as any).mockResolvedValue(account('ACTIVE'));
+    await issueServiceAccountToken({ ...tokenInput, neverExpires: true });
+    expect(tx.apiKey.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets the console mint a non-expiring ADMIN token', async () => {
+    const tx = {
+      user: { findUnique: vi.fn().mockResolvedValue({ status: 'ACTIVE' }) },
+      apiKey: {
+        create: vi.fn().mockResolvedValue({
+          id: 'key_1',
+          name: 'deploy',
+          prefix: 'ok_test_abcd',
+          scopes: ['incidents:read'],
+          createdAt: new Date(),
+          expiresAt: null,
+        }),
+      },
+    } as any;
+    vi.mocked(prisma.$transaction as any).mockImplementation(async (fn: any) => fn(tx));
+    vi.mocked(prisma.user.findUnique as any).mockResolvedValue(adminAccount);
+    await issueServiceAccountToken({ ...tokenInput, neverExpires: true, consoleSession: true });
+    expect(tx.apiKey.create).toHaveBeenCalledTimes(1);
+  });
+});

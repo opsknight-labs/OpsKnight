@@ -718,6 +718,7 @@ export async function createServiceAccountAction(
       description,
       teamIds: teamIds.length > 0 ? teamIds : undefined,
       actorId: user.id,
+      consoleSession: true,
     });
 
     revalidatePath('/settings/api-keys');
@@ -763,6 +764,7 @@ export async function issueServiceAccountTokenAction(
       expiresInDays: expiresInDays && expiresInDays > 0 ? expiresInDays : undefined,
       neverExpires,
       actorId: user.id,
+      consoleSession: true,
     });
 
     revalidatePath('/settings/api-keys');
