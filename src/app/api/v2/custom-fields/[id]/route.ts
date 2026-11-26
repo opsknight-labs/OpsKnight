@@ -116,12 +116,16 @@ export const DELETE = defineV2Route({
     const existing = await tx!.customField.findUnique({ where: { id: params.id } });
     if (!existing) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
     if (existing.revision !== expected) throw new AppError({ code: 'PRECONDITION_FAILED' });
-    const usageCount = await tx!.customFieldValue.count({ where: { customFieldId: existing.id } });
+    // A value cleared to null leaves an empty row behind; only stored values make a field "used".
+    const usageCount = await tx!.customFieldValue.count({
+      where: { customFieldId: existing.id, value: { not: null } },
+    });
     if (usageCount)
       throw new AppError({
         code: 'RESOURCE_CONFLICT',
         userMessage: 'Remove incident values before deleting this field.',
       });
+    await tx!.customFieldValue.deleteMany({ where: { customFieldId: existing.id } });
     await tx!.customField.delete({ where: { id: existing.id } });
     await logV2Audit({
       action: 'custom_field.deleted',
