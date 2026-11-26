@@ -104,7 +104,9 @@ export function describeAuditChanges(oldValue: unknown, newValue: unknown): stri
   const after = record(newValue);
   const changes: string[] = [];
   for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    // eslint-disable-next-line security/detect-object-injection -- reads a field of the audited record by its own key
     const from = before[key] ?? null;
+    // eslint-disable-next-line security/detect-object-injection -- reads a field of the audited record by its own key
     const to = after[key] ?? null;
     if (JSON.stringify(from) === JSON.stringify(to)) continue;
     const idLike = /(?:^id|Id|Ids|_id)$/.test(key);
@@ -133,7 +135,9 @@ export function auditSummary(row: AuditRowInput): string {
   }
   // The role a role change is about (recorded as `role`; `roleKey` is redacted by the audit writer).
   const role =
-    text(record(details.newValue).role) ?? text(record(details.oldValue).role) ?? text(details.role);
+    text(record(details.newValue).role) ??
+    text(record(details.oldValue).role) ??
+    text(details.role);
   const changes = describeAuditChanges(details.oldValue, details.newValue).filter(
     change => !change.startsWith('role ')
   );

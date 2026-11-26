@@ -54,7 +54,11 @@ const LABEL: Array<[CatchUpKind, string, string]> = [
 
 /** "4 alerts · 2 notes · 1 escalation" in a fixed, most-useful-first order. */
 export function countsLine(counts: CatchUpSummary['counts']): string {
-  return LABEL.filter(([kind]) => counts[kind])
-    .map(([kind, one, many]) => `${counts[kind]} ${counts[kind] === 1 ? one : many}`)
-    .join(' · ');
+  return (
+    // eslint-disable-next-line security/detect-object-injection -- kind is one of the fixed summary kinds
+    LABEL.filter(([kind]) => counts[kind])
+      // eslint-disable-next-line security/detect-object-injection -- kind is one of the fixed summary kinds
+      .map(([kind, one, many]) => `${counts[kind]} ${counts[kind] === 1 ? one : many}`)
+      .join(' · ')
+  );
 }

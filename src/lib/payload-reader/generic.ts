@@ -224,6 +224,7 @@ const EPOCH_MAX = Date.UTC(2100, 0, 1);
 /** ISO strings and epoch seconds / milliseconds in a plausible range → ISO. */
 export function asTime(value: string | number | boolean): string | null {
   if (typeof value === 'boolean') return null;
+  // eslint-disable-next-line security/detect-unsafe-regex -- anchored digits only, no ambiguous repetition
   if (typeof value === 'number' || /^\d{10}(\d{3})?(\.\d+)?$/.test(String(value))) {
     const n = Number(value);
     const ms = n < 1e11 ? n * 1000 : n;
@@ -379,10 +380,12 @@ export function readGeneric(data: unknown): Omit<ReadablePayload, 'format' | 'so
       continue;
     }
     if (
+      // eslint-disable-next-line security/detect-object-injection -- k is matched against a fixed lookup of known keys
       WHERE[k] &&
       (typeof leaf.value === 'string' || typeof leaf.value === 'number') &&
       s.trim()
     ) {
+      // eslint-disable-next-line security/detect-object-injection -- k is matched against a fixed lookup of known keys
       const label = WHERE[k];
       if (!seenWhere.has(label)) {
         seenWhere.add(label);

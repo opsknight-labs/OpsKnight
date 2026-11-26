@@ -8,5 +8,9 @@
       "@/*": ["./src/*"],
       "server-only": ["./scripts/perf/shims/server-only.js"]
     }
+  },
+  "include": ["next-env.d.ts", "src/types/**/*.d.ts"],
+  "ts-node": {
+    "files": true
   }
 }

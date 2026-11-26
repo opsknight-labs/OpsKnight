@@ -13,7 +13,7 @@
   "medianTokensPerCase": null,
   "modelMedianPromptTokens": 13931,
   "modelCacheReadShare": 0.514,
-  "investigationMedianPromptTokens": 5943,
+  "investigationMedianPromptTokens": 6836,
   "judge": {
     "minimumMeanScore": 3.5,
     "minimumPassRate": 0.75,
