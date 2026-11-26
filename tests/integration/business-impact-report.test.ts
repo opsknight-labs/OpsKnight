@@ -144,11 +144,13 @@ describe('business impact report', () => {
       days: 30,
       teamId: null,
       tier: null,
+      sort: 'impact',
     });
     expect(parseImpactReportParams(new URLSearchParams('days=90&tier=TIER_1&team=t1'))).toEqual({
       days: 90,
       teamId: 't1',
       tier: 'TIER_1',
+      sort: 'impact',
     });
   });
 });
