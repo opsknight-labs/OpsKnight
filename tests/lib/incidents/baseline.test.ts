@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { computeBaseline, runningLong, shortDuration } from '@/lib/incidents/baseline';
+import {
+  baselineLabel,
+  computeBaseline,
+  runningLong,
+  shortDuration,
+} from '@/lib/incidents/baseline';
 
 const t0 = new Date('2026-11-01T00:00:00Z');
 const after = (minutes: number) => new Date(t0.getTime() + minutes * 60_000);
@@ -30,7 +35,24 @@ describe('service baseline', () => {
 
   it('prints short durations', () => {
     expect(shortDuration(45 * 60_000)).toBe('45m');
+    expect(shortDuration(2_000)).toBe('2s');
+    expect(shortDuration(400)).toBe('1s');
+    expect(shortDuration(59_400)).toBe('59s');
+    expect(shortDuration(60_000)).toBe('1m');
     expect(shortDuration(3 * 3_600_000)).toBe('3h');
     expect(shortDuration(3 * 86_400_000)).toBe('3d');
+  });
+});
+
+describe('baselineLabel', () => {
+  it('keeps the multiplier and the usual time in the same unit for fast-resolving services', () => {
+    const created = new Date('2026-11-26T10:00:00Z');
+    const label = baselineLabel(
+      { samples: 12, resolveMs: 2_000, ackMs: null },
+      created,
+      null,
+      created.getTime() + 180_000
+    );
+    expect(label?.text).toBe('90× longer than usual (~2s)');
   });
 });
