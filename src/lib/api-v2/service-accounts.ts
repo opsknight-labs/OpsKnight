@@ -532,10 +532,13 @@ export async function revokeServiceAccountToken(
     });
   }
 
+  // Revoking twice is a no-op: keep the original revocation time and write no second audit row.
+  if (apiKey.revokedAt) return { success: true };
+
   await runV2AuditedMutation(
     tx =>
-      tx.apiKey.update({
-        where: { id: tokenId },
+      tx.apiKey.updateMany({
+        where: { id: tokenId, revokedAt: null },
         data: { revokedAt: new Date() },
       }),
     () => ({

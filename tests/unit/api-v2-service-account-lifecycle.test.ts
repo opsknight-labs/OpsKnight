@@ -9,6 +9,7 @@ import {
   createServiceAccount,
   issueServiceAccountToken,
   listServiceAccounts,
+  revokeServiceAccountToken,
   SERVICE_ACCOUNT_TOKEN_PREVIEW,
 } from '@/lib/api-v2/service-accounts';
 import { SERVICE_ACCOUNT_DOMAIN } from '@/lib/service-account-identity';
@@ -28,7 +29,10 @@ const account = (status: string) => ({
 });
 
 describe('service account token lifecycle', () => {
-  const tx = { user: { findUnique: vi.fn() }, apiKey: { create: vi.fn() } } as any;
+  const tx = {
+    user: { findUnique: vi.fn() },
+    apiKey: { create: vi.fn(), updateMany: vi.fn() },
+  } as any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -43,6 +47,29 @@ describe('service account token lifecycle', () => {
     expiresInDays: 30,
     actorId: 'admin_1',
   };
+
+  it('revokes a live token once, then treats a retried revoke as a no-op', async () => {
+    const key = { id: 'tok_1', name: 'deploy', prefix: 'ok_', tokenHash: 'h', revokedAt: null };
+    vi.mocked(prisma.apiKey.findFirst as any).mockResolvedValueOnce(key);
+    tx.apiKey.updateMany.mockResolvedValue({ count: 1 });
+    await expect(revokeServiceAccountToken('sa_1', 'tok_1', 'admin_1')).resolves.toEqual({
+      success: true,
+    });
+    expect(tx.apiKey.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'tok_1', revokedAt: null } })
+    );
+    expect(auditMocks.logAudit).toHaveBeenCalledTimes(1);
+
+    vi.mocked(prisma.apiKey.findFirst as any).mockResolvedValueOnce({
+      ...key,
+      revokedAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    await expect(revokeServiceAccountToken('sa_1', 'tok_1', 'admin_1')).resolves.toEqual({
+      success: true,
+    });
+    expect(tx.apiKey.updateMany).toHaveBeenCalledTimes(1);
+    expect(auditMocks.logAudit).toHaveBeenCalledTimes(1);
+  });
 
   it('refuses to issue a token for a disabled service account, generating no secret', async () => {
     vi.mocked(prisma.user.findUnique as any).mockResolvedValue(account('DISABLED'));
