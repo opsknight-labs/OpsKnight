@@ -10,6 +10,7 @@ import {
   getUserPermissions,
 } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
+import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import { INCIDENT_ROLE_KEYS } from '@/lib/incidents/roles';
 import { assertCanChangeIncidentRole } from '@/lib/incidents/role-access';
 import { assignIncidentRoleCommand } from '@/lib/incidents/roles-command';
@@ -340,6 +341,8 @@ export async function setIncidentDetailBusinessImpact(
 /** Business services the responder can see, for the "+ Impacted business service" picker. */
 export async function searchIncidentDetailBusinessServices(query: string) {
   const actor = await getCurrentAuthorizationActor();
+  // The picker only feeds setIncidentImpactCommand, which needs INCIDENT_MANAGE; do not list names to anyone who cannot use them.
+  if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_MANAGE }).allowed) return [];
   const { businessServiceReadWhere } = await import('@/lib/business-services/commands');
   const needle = z.string().max(120).parse(query).trim();
   return prisma.businessService.findMany({

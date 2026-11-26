@@ -83,9 +83,14 @@ export default function BulkEditBar({
   const [addTags, setAddTags] = useState('');
   const [removeTags, setRemoveTags] = useState('');
   const [slo, setSlo] = useState('');
+  const [clearSlo, setClearSlo] = useState(false);
   const [reviewed, setReviewed] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<{ dryRun: boolean; items: BulkItemResult[] } | null>(null);
+  const [results, setResults] = useState<{
+    dryRun: boolean;
+    items: BulkItemResult[];
+    key: string;
+  } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const changes = () => {
@@ -98,10 +103,14 @@ export default function BulkEditBar({
       ...(lifecycle !== KEEP ? { lifecycle: lifecycle as (typeof LIFECYCLES)[number] } : {}),
       ...(tagList(addTags).length ? { addTags: tagList(addTags) } : {}),
       ...(tagList(removeTags).length ? { removeTags: tagList(removeTags) } : {}),
-      ...(sloValue !== undefined ? { sloTarget: sloValue } : {}),
+      ...(clearSlo ? { sloTarget: null } : sloValue !== undefined ? { sloTarget: sloValue } : {}),
       ...(reviewed ? { markReviewed: true as const } : {}),
     };
   };
+
+  // A preview only describes the selection and changes it was run for; any edit makes it stale.
+  const currentKey = JSON.stringify([ids, changes()]);
+  const freshPreview = results?.dryRun === true && results.key === currentKey;
 
   const run = (dryRun: boolean) => {
     const next = changes();
@@ -116,7 +125,7 @@ export default function BulkEditBar({
         setError(result.error);
         return;
       }
-      setResults({ dryRun: result.dryRun, items: result.results });
+      setResults({ dryRun: result.dryRun, items: result.results, key: currentKey });
       if (!result.dryRun) {
         notify.success(
           `Updated ${result.summary.ok} business service${result.summary.ok === 1 ? '' : 's'}${result.summary.failed ? `, ${result.summary.failed} failed` : ''}`
@@ -170,11 +179,20 @@ export default function BulkEditBar({
           <Input
             id="bulk-slo"
             value={slo}
+            disabled={clearSlo}
             onChange={event => setSlo(event.target.value)}
             inputMode="decimal"
             placeholder="No change"
             className="h-9"
           />
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={clearSlo}
+              onChange={event => setClearSlo(event.target.checked)}
+            />
+            Clear SLO target
+          </label>
         </div>
         <div className="space-y-1">
           <label htmlFor="bulk-add-tags" className="text-xs font-semibold">
@@ -224,11 +242,17 @@ export default function BulkEditBar({
         >
           Preview
         </Button>
-        <Button type="button" size="sm" disabled={isPending} onClick={() => run(false)}>
+        <Button
+          type="button"
+          size="sm"
+          disabled={isPending || !freshPreview}
+          title={freshPreview ? undefined : 'Preview these changes first'}
+          onClick={() => run(false)}
+        >
           Apply to {ids.length}
         </Button>
       </div>
-      {results && (
+      {results && (!results.dryRun || results.key === currentKey) && (
         <div role="status" className="space-y-1 text-xs">
           <p className="font-medium">
             {results.dryRun ? 'Preview: ' : 'Result: '}

@@ -53,9 +53,12 @@ type Phase = (typeof PHASES)[number]['value'];
 function templateFor(phase: Phase, names: string[]) {
   const services =
     names.length > 2 ? `${names.slice(0, 2).join(', ')} and others` : names.join(' and ');
-  return PHASES.find(item => item.value === phase)!
-    .template.replace('{services}', services)
-    .replace('{verb}', names.length > 1 ? 'are' : 'is');
+  return (
+    PHASES.find(item => item.value === phase)!
+      // Function replacers: a service name with `$&` or `$1` must stay literal.
+      .template.replace('{services}', () => services)
+      .replace('{verb}', () => (names.length > 1 ? 'are' : 'is'))
+  );
 }
 
 /** Sends a templated business-impact update to followers and subscribed teams. Never pages. */
@@ -72,6 +75,16 @@ export default function NotifyStakeholdersButton({
   const [message, setMessage] = useState(() => templateFor('investigating', names));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Reseed on every open: the linked services may have changed since the last time, and an old error is not news.
+  const onOpenChange = (next: boolean) => {
+    if (next) {
+      setPhase('investigating');
+      setMessage(templateFor('investigating', names));
+      setError(null);
+    }
+    setOpen(next);
+  };
 
   const send = () =>
     startTransition(async () => {
@@ -91,7 +104,7 @@ export default function NotifyStakeholdersButton({
 
   if (!businessServices.length) return null;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
         <Button type="button" size="sm" variant="outline" className="h-6 gap-1 px-2 text-xs">
           <Megaphone className="h-3.5 w-3.5" aria-hidden />
@@ -113,6 +126,7 @@ export default function NotifyStakeholdersButton({
               value={phase}
               onValueChange={value => {
                 setPhase(value as Phase);
+                setError(null);
                 setMessage(templateFor(value as Phase, names));
               }}
             >
@@ -135,7 +149,10 @@ export default function NotifyStakeholdersButton({
               value={message}
               maxLength={2000}
               rows={4}
-              onChange={event => setMessage(event.target.value)}
+              onChange={event => {
+                setMessage(event.target.value);
+                setError(null);
+              }}
             />
           </div>
           {error && (
