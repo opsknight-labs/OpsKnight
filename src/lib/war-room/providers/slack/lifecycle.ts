@@ -36,7 +36,10 @@ export async function postSlackWarRoomUpdate(
     if (!botToken) return { success: false, error: 'No Slack bot token' };
     const result = await slackApiCall('chat.postMessage', botToken, {
       channel: room.providerChannelId,
-      text: message,
+      // Messages embed user-authored text (notes, names). `<` is the only way into Slack's
+      // <!channel>, <!subteam^ID> and <@user> control sequences, and none of these messages
+      // legitimately carry one, so neutralising it stops mention injection and keeps `>` quotes.
+      text: message.replace(/</g, '&lt;'),
       unfurl_links: false,
     });
     if (!result.ok)
@@ -60,9 +63,7 @@ export async function postSlackWarRoomUpdate(
  * IncidentWarRoom state — the neutral engine owns ARCHIVED/CLOSED transitions.
  * Returns ProviderResult-style shape for engine consumption.
  */
-export async function archiveExternalSlackRoom(
-  warRoomId: string
-): Promise<{
+export async function archiveExternalSlackRoom(warRoomId: string): Promise<{
   ok: boolean;
   code?: 'NOT_FOUND' | 'TRANSIENT' | 'AMBIGUOUS_SIDE_EFFECT' | 'RATE_LIMITED';
   message?: string;
