@@ -123,12 +123,24 @@ const audit = (actor: AuthorizationActor, action: string, entityId: string, deta
   });
 
 export async function listViews(actor: AuthorizationActor) {
-  const rows = await prisma.savedGraphView.findMany({
-    where: readableWhere(actor),
-    orderBy: [{ name: 'asc' }, { id: 'asc' }],
+  // Own views first, so shared ones can never push them past the cap; then re-sort by name.
+  const orderBy = [{ name: 'asc' as const }, { id: 'asc' as const }];
+  const own = await prisma.savedGraphView.findMany({
+    where: { ownerId: actor.id },
+    orderBy,
     take: MAX_VIEWS,
   });
-  return rows.map(dto);
+  const shared =
+    own.length < MAX_VIEWS
+      ? await prisma.savedGraphView.findMany({
+          where: { AND: [readableWhere(actor), { ownerId: { not: actor.id } }] },
+          orderBy,
+          take: MAX_VIEWS - own.length,
+        })
+      : [];
+  return [...own, ...shared]
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+    .map(dto);
 }
 
 async function findReadable(actor: AuthorizationActor, viewId: string): Promise<Row> {
