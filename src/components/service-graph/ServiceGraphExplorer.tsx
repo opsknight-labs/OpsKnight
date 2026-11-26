@@ -267,7 +267,7 @@ export default function ServiceGraphExplorer({
   });
   const [showCycles, setShowCycles] = useState(false);
   // Business services folded into one node each (their members hidden, links moved onto them).
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [legendOpen, setLegendOpen] = useState(false);
   const [details, setDetails] = useState<Record<string, GraphNodeDetails | null>>({});
   const [pending, setPending] = useState<Pending>(null);
@@ -778,7 +778,7 @@ export default function ServiceGraphExplorer({
                 icon={<Boxes className="h-3.5 w-3.5" aria-hidden="true" />}
                 active={collapsed.size > 0}
                 onClick={() =>
-                  setCollapsed(current => (current.size ? new Set() : new Set(collapsible)))
+                  setCollapsed(current => (current.size ? new Set<string>() : new Set(collapsible)))
                 }
               >
                 {grouped && collapsed.size === 0
