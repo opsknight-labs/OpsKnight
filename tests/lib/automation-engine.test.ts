@@ -11,7 +11,12 @@ import { evaluateOperator } from '@/lib/automation/evaluator/operators';
 import { normalizeValue } from '@/lib/automation/context/normalize';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { evaluateAutomation } from '@/lib/automation/evaluator';
-import { compilePath, readCompiledPath } from '@/lib/automation/context/extract';
+import {
+  compilePath,
+  extractContextWithProvenance,
+  readCompiledPath,
+} from '@/lib/automation/context/extract';
+import { builtinContext } from '@/lib/automation/context/builtins';
 import { discoverFields } from '@/lib/automation/discovery';
 import { jobSchema } from '@/lib/automation/jobs';
 import { checksum } from '@/lib/automation/cache';
@@ -57,6 +62,54 @@ describe('automation semantics', () => {
     const enumField = { ...field, type: 'ENUM' as const, allowedValues: ['é'.repeat(128)] };
     expect(normalizeValue('é'.repeat(128), enumField).state).toBe('RECOGNIZED');
     expect(() => normalizeValue('é'.repeat(129), enumField)).toThrow('EXTRACTION_LIMIT');
+  });
+
+  it('treats one oversized, object or credential-bearing value as that field missing, not a whole-evaluation failure', () => {
+    const { compiled } = compileAutomation({
+      schemaVersion: 1,
+      fields: [
+        ...['description', 'runbook_url', 'meta', 'environment'].map(key => ({
+          fieldId: key,
+          key,
+          label: key,
+          type: 'STRING' as const,
+          aliases: {},
+          mappings: [{ source: 'EVENT' as const, path: `payload.custom_details.${key}` }],
+        })),
+      ],
+      rules: [],
+    });
+    const event = {
+      payload: {
+        custom_details: {
+          description: 'x'.repeat(3000),
+          runbook_url: 'https://wiki.internal/rb?token=never-persist-me',
+          meta: { nested: true },
+          environment: 'staging',
+        },
+      },
+    };
+    const { context, normalization } = extractContextWithProvenance({
+      fields: compiled.fields,
+      providerPayload: event,
+      normalizedEvent: event,
+      integrationType: 'EVENTS_API',
+    });
+    expect(context.description).toEqual({ state: 'MISSING' });
+    expect(context.runbook_url).toEqual({ state: 'MISSING' });
+    expect(context.meta).toEqual({ state: 'MISSING' });
+    expect(context.environment).toEqual({ state: 'RECOGNIZED', value: 'staging' });
+    expect(JSON.stringify(normalization)).not.toContain('never-persist-me');
+    expect(normalization.find(n => n.fieldKey === 'description')?.raw).toBeNull();
+    expect(
+      builtinContext({
+        priority: null,
+        urgency: 'HIGH',
+        severity: 'error',
+        integrationType: 'EVENTS_API',
+        source: 'https://monitor.internal/?token=never-persist-me',
+      }).source
+    ).toEqual({ state: 'MISSING' });
   });
 
   it('blocks unsafe paths', () => {
