@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import type { NotificationCategory, NotificationChannel, NotificationStatus } from '@prisma/client';
 import { getCurrentUser } from '@/lib/rbac';
+import { CAPABILITIES, capabilitiesOf } from '@/lib/authorization';
 import {
   getNotificationOperations,
   OPERATIONS_CATEGORIES,
@@ -29,7 +30,12 @@ export async function GET(request: NextRequest) {
   } catch {
     return jsonError('Authentication required', 401);
   }
-  if (user.role !== 'ADMIN' && user.role !== 'AUDITOR') {
+  // Same rule as the page (anyOf admin.manage, audit.read), so a custom role granting audit.read works.
+  const capabilities = capabilitiesOf(user);
+  if (
+    !capabilities.includes(CAPABILITIES.ADMIN_MANAGE) &&
+    !capabilities.includes(CAPABILITIES.AUDIT_READ)
+  ) {
     return jsonError('Admin or Auditor access required', 403);
   }
 

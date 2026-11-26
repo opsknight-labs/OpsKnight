@@ -57,6 +57,18 @@ describe('notification operations authorization', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store');
   });
 
+  it('allows a user whose custom role grants audit.read', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({
+      ...responder,
+      role: 'USER',
+      capabilities: ['audit.read'],
+    } as never);
+    const response = await GET(
+      new NextRequest('https://example.com/api/admin/notifications/operations')
+    );
+    expect(response.status).toBe(200);
+  });
+
   it('denies the workspace console to ordinary responders', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(responder as never);
     const response = await GET(
