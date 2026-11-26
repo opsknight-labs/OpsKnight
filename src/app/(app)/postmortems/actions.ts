@@ -15,6 +15,7 @@ import {
   resolveStoredActionItems,
   type ActionItem,
 } from '@/lib/action-items';
+import { MAX_POSTMORTEM_ACTION_ITEMS } from '@/lib/postmortems/action-item-commands';
 import { logger } from '@/lib/logger';
 import { applyEvidenceToDraft } from '@/lib/intelligence/postmortems/evidence-draft';
 import {
@@ -133,7 +134,8 @@ const postmortemInputSchema = z.object({
         completedAt: z.union([z.string().max(64), z.date(), z.null()]).optional(),
       })
     )
-    .max(200)
+    // The API and MCP refuse any postmortem holding more than 100 items, so the editor must too.
+    .max(MAX_POSTMORTEM_ACTION_ITEMS, 'A postmortem can have at most 100 action items.')
     .optional(),
   lessons: text(10_000).optional(),
   status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),

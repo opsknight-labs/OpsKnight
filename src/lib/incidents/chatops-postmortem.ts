@@ -4,7 +4,10 @@ import { executeIdempotentOperation, type IdempotencyContext } from '@/lib/idemp
 import { getBaseUrl } from '@/lib/env-validation';
 import { authorizeChatOpsIncidentInTransaction } from './chatops-lifecycle';
 import { loadPostmortemEvents } from './event-filters';
-import { createDraftActionItemRows } from '@/lib/postmortems/action-item-commands';
+import {
+  createDraftActionItemRows,
+  MAX_POSTMORTEM_ACTION_ITEMS,
+} from '@/lib/postmortems/action-item-commands';
 import { AppError } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
@@ -75,6 +78,7 @@ export async function executeChatOpsPostmortemCommand(input: {
     ].sort((left, right) => left.timestamp.localeCompare(right.timestamp));
     const actionItems = notes
       .filter(note => /todo:|action item:|fix:|followup:/i.test(note.content))
+      .slice(0, MAX_POSTMORTEM_ACTION_ITEMS)
       .map(note => ({
         title: note.content.replace(/^(todo:|action item:|fix:|followup:)\s*/i, '').trim(),
         status: 'OPEN',

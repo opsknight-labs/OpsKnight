@@ -9,7 +9,10 @@
 import prisma from '@/lib/prisma';
 import { loadPostmortemEvents } from '@/lib/incidents/event-filters';
 import { logger } from '@/lib/logger';
-import { createDraftActionItemRows } from '@/lib/postmortems/action-item-commands';
+import {
+  createDraftActionItemRows,
+  MAX_POSTMORTEM_ACTION_ITEMS,
+} from '@/lib/postmortems/action-item-commands';
 import { findSlackWarRoomAuthority } from '@/lib/war-room/slack-compatibility';
 
 type WarRoomResult = {
@@ -282,6 +285,7 @@ export async function ensurePostmortemDraft(incidentId: string): Promise<string 
     ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const actionItemsFromNotes = notes
       .filter(n => /todo:|action item:|fix:|followup:/i.test(n.content))
+      .slice(0, MAX_POSTMORTEM_ACTION_ITEMS)
       .map(n => ({
         title: n.content.replace(/^(todo:|action item:|fix:|followup:)\s*/i, '').trim(),
         status: 'OPEN',

@@ -83,4 +83,21 @@ describe('upsertPostmortem creating a postmortem', () => {
     expect(result).toMatchObject({ success: true });
     expect(mocks.transaction).toHaveBeenCalledOnce();
   });
+
+  it('refuses more action items than the API can read back', async () => {
+    const item = {
+      id: 'a',
+      title: 't',
+      description: '',
+      status: 'OPEN' as const,
+      priority: 'LOW' as const,
+    };
+    await expect(
+      upsertPostmortem('inc-1', {
+        title: 'Outage',
+        actionItems: Array.from({ length: 101 }, (_, i) => ({ ...item, id: `a${i}` })),
+      })
+    ).rejects.toThrow('at most 100 action items');
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
 });

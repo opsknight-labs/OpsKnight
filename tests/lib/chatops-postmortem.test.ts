@@ -90,4 +90,27 @@ describe('executeChatOpsPostmortemCommand', () => {
       m.tx
     );
   });
+
+  it('keeps note-derived action items within the 100-item limit the API enforces', async () => {
+    m.tx.incident.findUnique.mockResolvedValue({
+      title: 'DB down',
+      status: 'RESOLVED',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      resolvedAt: new Date('2026-01-01T01:30:00Z'),
+      service: { name: 'Database' },
+    });
+    m.tx.incidentNote.findMany.mockResolvedValue(
+      Array.from({ length: 120 }, (_, i) => ({
+        id: `note-${i}`,
+        content: `todo: item ${i}`,
+        createdAt: new Date('2026-01-01T00:30:00Z'),
+        user: { name: 'Ada' },
+      }))
+    );
+
+    await executeChatOpsPostmortemCommand(input);
+
+    expect(m.tx.postmortem.create.mock.calls[0]![0].data.actionItems).toHaveLength(100);
+    expect(m.tx.actionItem.createMany.mock.calls[0]![0].data).toHaveLength(100);
+  });
 });
