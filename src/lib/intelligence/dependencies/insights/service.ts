@@ -16,6 +16,7 @@ import { getServiceGraphForActor, type ServiceGraphView } from '../graph-view';
 import { MAX_DEPENDENCIES } from '../service';
 import {
   articulationPoints,
+  countByDaysAgo,
   diffEdges,
   diffStatuses,
   fanOut,
@@ -287,6 +288,49 @@ export async function getGraphAt(actor: AuthorizationActor, at: Date, options: I
       'Membership and business-service nesting are shown as they are now; only dependency edges, incidents and impact marks are replayed.',
       'Services deleted since then are not shown.',
     ],
+  };
+}
+
+const TIMELINE_DAYS = 90;
+
+/**
+ * Incidents opened and dependency changes per day over the time-travel window, for the slider's
+ * tick marks. Counts only; incidents follow the viewer's read scope (stakeholders get counts, as
+ * on the live graph) and suggestion events count only for viewers who may see suggestions.
+ */
+export async function graphTimeline(actor: AuthorizationActor, options: InsightOptions = {}) {
+  const graph = await visibleGraph(actor, options);
+  const now = new Date();
+  const since = new Date(now.getTime() - TIMELINE_DAYS * 864e5);
+  const ids = graph.nodes.map(node => node.id);
+  let incidentScope: ReturnType<typeof incidentReadWhere>;
+  try {
+    incidentScope = incidentReadWhere(actor);
+  } catch {
+    incidentScope = {};
+  }
+  const [incidents, events] = await Promise.all([
+    prisma.incident.findMany({
+      where: { AND: [{ serviceId: { in: ids }, createdAt: { gte: since } }, incidentScope] },
+      select: { createdAt: true },
+      take: MAX_INCIDENTS,
+    }),
+    prisma.serviceDependencyEvent.findMany({
+      where: {
+        upstreamServiceId: { in: ids },
+        downstreamServiceId: { in: ids },
+        occurredAt: { gte: since },
+        ...(canSeeSuggestions(actor) ? {} : { state: { in: ['ACTIVE' as const, 'REMOVED' as const] } }),
+      },
+      select: { occurredAt: true },
+      take: MAX_EVENTS,
+    }),
+  ]);
+  return {
+    days: TIMELINE_DAYS,
+    incidents: countByDaysAgo(incidents.map(row => row.createdAt), now, TIMELINE_DAYS),
+    changes: countByDaysAgo(events.map(row => row.occurredAt), now, TIMELINE_DAYS),
+    truncated: incidents.length >= MAX_INCIDENTS || events.length >= MAX_EVENTS,
   };
 }
 

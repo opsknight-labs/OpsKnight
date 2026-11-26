@@ -7,6 +7,7 @@ import { requirePageAccess } from '@/lib/access/server';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { actorHasCapability } from '@/lib/authorization-policy';
 import { isEmbedEnabled } from '@/lib/intelligence/dependencies/insights/views';
+import { getAiPublicStatus } from '@/lib/intelligence/ai/settings';
 import { teamReadWhere } from '@/lib/authorization-filters';
 import {
   getIncidentScopeForActor,
@@ -65,13 +66,17 @@ export default async function ServiceGraphPage({
   const isAdmin = actor.role === 'ADMIN';
   const editableTeamIds = isAdmin ? null : [...actor.teamIds];
   const isInsightAdmin = actorHasCapability(actor, CAPABILITIES.ADMIN_MANAGE);
+  const seesSuggestions = actorHasCapability(actor, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ);
+  // Same gate as SquireMount: "Ask" shows only where the assistant is actually mounted.
+  const squire = seesSuggestions ? await getAiPublicStatus().catch(() => null) : null;
   const viewer = {
     id: actor.id,
     isAdmin: isInsightAdmin,
     canOrgViews: actorHasCapability(actor, CAPABILITIES.OPERATIONS_MANAGE),
-    seesSuggestions: actorHasCapability(actor, CAPABILITIES.INTELLIGENCE_SUGGESTIONS_READ),
+    seesSuggestions,
     embedEnabled: isInsightAdmin ? await isEmbedEnabled() : false,
     teams: teams.filter(team => actor.teamIds.includes(team.id)),
+    squireName: squire?.squireEnabled ? squire.squireName : null,
   };
   const canEdit =
     hasCapability(actor.role, CAPABILITIES.OPERATIONS_MANAGE) &&

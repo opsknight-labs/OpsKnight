@@ -150,3 +150,14 @@ export function articulationPoints(edges: readonly DependencyEdge[]): string[] {
   }
   return [...cuts].sort();
 }
+
+/** Counts per 24-hour bucket back from `now`: index 0 is the last 24 hours, `days - 1` the oldest. */
+export function countByDaysAgo(times: readonly Date[], now: Date, days: number): number[] {
+  const counts = new Array<number>(days).fill(0);
+  for (const time of times) {
+    const ago = Math.floor((now.getTime() - time.getTime()) / 864e5);
+    // eslint-disable-next-line security/detect-object-injection -- a bounded integer index
+    if (ago >= 0 && ago < days) counts[ago] += 1;
+  }
+  return counts;
+}

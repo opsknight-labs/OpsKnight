@@ -16,7 +16,10 @@ import {
 } from 'react';
 import {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
+  getSmoothStepPath,
   Handle,
   MarkerType,
   MiniMap,
@@ -27,6 +30,7 @@ import {
   useOnViewportChange,
   type Connection,
   type Edge,
+  type EdgeProps,
   type Node,
   type OnNodesChange,
   type NodeProps,
@@ -42,15 +46,19 @@ import {
   GROUP_PREFIX,
   UNGROUPED,
   gridLayout,
+  routePath,
   type LayoutRequest,
   type LayoutResult,
+  type Point,
 } from './layout';
 import {
   STATUS_HEX,
-  trafficStyle,
+  createReuseCache,
   detailLevel,
   type DetailLevel,
+  edgeAppearance,
   edgeImpactStatus,
+  edgeSummary,
   exportGraphSvg,
   oneHop,
   traverse,
@@ -60,6 +68,7 @@ import {
 import { Button } from '@/components/ui/shadcn/button';
 
 const SIZE = { bs: { width: 224, height: 68 }, svc: { width: 204, height: 64 } } as const;
+const ORIGIN = { x: 0, y: 0 };
 
 type ItemData = {
   item: GraphItem;
@@ -67,10 +76,28 @@ type ItemData = {
   match: boolean;
   pinned: boolean;
   level: DetailLevel;
+  /** Hops from the start of the highlighted impact; null outside it. */
+  depth: number | null;
 };
 type TeamData = { label: string };
 type ItemNode = Node<ItemData, 'bs' | 'svc'>;
 type TeamNode = Node<TeamData, 'team'>;
+type EdgeData = {
+  /** ELK's route; null draws an orthogonal step between the handles (cross-team or dragged). */
+  points: Point[] | null;
+  label: { text: string; className: string } | null;
+  dim: boolean;
+};
+type RoutedEdge = Edge<EdgeData, 'routed'>;
+
+const NEUTRAL_LABEL = 'border-border bg-card text-foreground';
+const LABEL_CLASS = {
+  neutral: NEUTRAL_LABEL,
+  elevated: toneClasses('elevated').soft,
+  critical: toneClasses('critical').soft,
+} as const;
+
+const TIER_LABEL = { TIER_0: 'Tier 0', TIER_1: 'Tier 1', TIER_2: 'Tier 2', TIER_3: 'Tier 3' } as const;
 
 function useLayout(request: LayoutRequest): LayoutResult | null {
   const [state, setState] = useState<{ request: LayoutRequest; result: LayoutResult } | null>(null);
@@ -101,36 +128,49 @@ function useLayout(request: LayoutRequest): LayoutResult | null {
   return state?.request === request ? state.result : null;
 }
 
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
-function subscribeReducedMotion(onChange: () => void) {
-  const query = window.matchMedia?.(REDUCED_MOTION);
-  query?.addEventListener('change', onChange);
-  return () => query?.removeEventListener('change', onChange);
-}
-const usePrefersReducedMotion = () =>
-  useSyncExternalStore(
-    subscribeReducedMotion,
-    () => window.matchMedia?.(REDUCED_MOTION).matches ?? false,
+function useMedia(media: string) {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const query = window.matchMedia?.(media);
+      query?.addEventListener('change', onChange);
+      return () => query?.removeEventListener('change', onChange);
+    },
+    [media]
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia?.(media).matches ?? false,
     () => false
   );
+}
 
-const handleClass = '!h-2.5 !w-2.5 !border-2 !border-background !bg-ink-400';
+// Handles stay mounted (edges attach to them) but are only visible and grabbable for editors.
+const handleClass = (connectable: boolean) =>
+  cn(
+    '!h-2.5 !w-2.5 !border-2 !border-background !bg-ink-400',
+    !connectable && '!pointer-events-none !opacity-0'
+  );
 
 const ItemCard = memo(function ItemCard({ data, selected }: NodeProps<ItemNode>) {
-  const { item, connectable, match, pinned, level } = data;
+  const { item, connectable, match, pinned, level, depth } = data;
   // Semantic zoom: colour tiles far out, names in the middle, the full card up close.
   const tone = toneClasses(GRAPH_STATUS_META[item.status]?.tone ?? 'neutral');
   const Icon = item.kind === 'bs' ? Boxes : Server;
   const ring = (selected || match) && 'ring-2 ring-ring ring-offset-1 ring-offset-background';
+  const tierZero = item.criticality === 'TIER_0';
+  const chip = 'shrink-0 rounded-sm border px-1 text-2xs font-semibold tabular-nums';
   return (
     <div
       className={cn(
         'h-full w-full text-left',
         level === 'dot'
-          ? cn('rounded-md', tone.solid, ring)
+          ? cn('sg-tile rounded-md', tone.solid, ring, tierZero && 'outline outline-2 outline-offset-2 outline-foreground')
           : cn(
-              'flex flex-col justify-center gap-1 border border-l-4 bg-card px-3 shadow-xs group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-1',
+              'sg-card flex flex-col justify-center gap-1 border border-l-4 bg-card px-3 shadow-xs group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-1',
               item.kind === 'bs' ? 'rounded-sm' : 'rounded-xl',
+              // Tier 0 business services carry a heavier frame so they read first.
+              tierZero && 'border-y-2 border-r-2 border-y-foreground/60 border-r-foreground/60 shadow-sm',
+              item.filteredOut && 'border-dashed',
               tone.borderLeft,
               ring
             )
@@ -141,12 +181,32 @@ const ItemCard = memo(function ItemCard({ data, selected }: NodeProps<ItemNode>)
         type="target"
         position={Position.Left}
         isConnectable={connectable}
-        className={handleClass}
+        className={handleClass(connectable)}
       />
       {level !== 'dot' && (
         <div className="flex min-w-0 items-center gap-1.5">
           <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="truncate text-sm font-medium text-foreground">{item.name}</span>
+          {item.criticality && (
+            <span
+              className={cn(
+                chip,
+                tierZero ? 'border-foreground bg-foreground text-background' : 'bg-muted text-muted-foreground'
+              )}
+            >
+              {TIER_LABEL[item.criticality]}
+            </span>
+          )}
+          {depth !== null && (
+            <span className={cn(chip, NEUTRAL_LABEL)} title="Hops from the selected service">
+              {depth === 0 ? 'start' : `${depth} hop${depth === 1 ? '' : 's'}`}
+            </span>
+          )}
+          {item.filteredOut && (
+            <span className={cn(chip, 'bg-muted text-muted-foreground')} title="Hidden by the filters; shown because the highlight runs through it">
+              filtered
+            </span>
+          )}
           {item.spof && (
             <span
               className={cn('shrink-0 rounded-sm border px-1 text-2xs font-semibold', toneClasses('critical').soft)}
@@ -169,6 +229,8 @@ const ItemCard = memo(function ItemCard({ data, selected }: NodeProps<ItemNode>)
             </span>
           )}
           <span className="min-w-0 truncate text-2xs text-muted-foreground">
+            {item.memberCount !== null &&
+              `${item.memberCount} service${item.memberCount === 1 ? '' : 's'} · `}
             {item.teamName ?? 'No team'}
           </span>
         </div>
@@ -177,7 +239,7 @@ const ItemCard = memo(function ItemCard({ data, selected }: NodeProps<ItemNode>)
         type="source"
         position={Position.Right}
         isConnectable={connectable}
-        className={handleClass}
+        className={handleClass(connectable)}
       />
     </div>
   );
@@ -193,10 +255,76 @@ function TeamBox({ data }: NodeProps<TeamNode>) {
   );
 }
 
+/** Draws ELK's orthogonal route when it has one, else a step path between the two handles. */
+const RoutedEdgeView = memo(function RoutedEdgeView({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  data,
+  markerEnd,
+  style,
+  interactionWidth,
+}: EdgeProps<RoutedEdge>) {
+  const points = data?.points;
+  const { path, x, y } = useMemo(() => {
+    if (points?.length) return routePath(points);
+    const [step, labelX, labelY] = getSmoothStepPath({
+      sourceX,
+      sourceY,
+      targetX,
+      targetY,
+      sourcePosition,
+      targetPosition,
+      borderRadius: 6,
+    });
+    return { path: step, x: labelX, y: labelY };
+  }, [points, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition]);
+  return (
+    <>
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} interactionWidth={interactionWidth} />
+      {data?.label && (
+        <EdgeLabelRenderer>
+          <span
+            aria-hidden="true"
+            className={cn(
+              'nodrag nopan pointer-events-none absolute rounded-sm border px-1 text-2xs font-semibold tabular-nums',
+              data.label.className,
+              data.dim && 'opacity-20'
+            )}
+            style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
+          >
+            {data.label.text}
+          </span>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+});
+
 const nodeTypes = { bs: ItemCard, svc: ItemCard, team: TeamBox };
+const edgeTypes = { routed: RoutedEdgeView };
+
+/**
+ * Muted, not faded: the status accent and colour go grey but text keeps a readable contrast
+ * (muted-foreground on card), so a de-emphasised node can still be read.
+ */
+const dimRules = (scope: string) =>
+  `${scope} .sg-card{border-color:hsl(var(--ui-border));box-shadow:none;background:hsl(var(--ui-muted))}` +
+  `${scope} .sg-card>*{filter:grayscale(1)}` +
+  `${scope} .sg-card,${scope} .sg-card *{color:hsl(var(--ui-muted-foreground))!important}` +
+  `${scope} .sg-tile{opacity:.25}`;
 
 /** What to emphasise: an impact subgraph or a path. Everything else dims. */
-export type Emphasis = { keys: ReadonlySet<string>; linkKeys: ReadonlySet<string> };
+export type Emphasis = {
+  keys: ReadonlySet<string>;
+  linkKeys: ReadonlySet<string>;
+  /** Hops from the start, drawn as labels on the cards. */
+  depth?: ReadonlyMap<string, number>;
+};
 
 export type ServiceGraphCanvasProps = {
   items: readonly GraphItem[];
@@ -294,8 +422,10 @@ export default function ServiceGraphCanvas({
   onExportReady,
 }: ServiceGraphCanvasProps) {
   const theme = useEffectiveTheme();
-  const reducedMotion = usePrefersReducedMotion();
+  const reducedMotion = useMedia('(prefers-reduced-motion: reduce)');
+  const compact = useMedia('(max-width: 639px)');
   const [hovered, setHovered] = useState<string | null>(null);
+  const [tip, setTip] = useState<{ key: string; x: number; y: number } | null>(null);
   const storageKey = `sg-pos:${layoutId}`;
   const [pinned, setPinned] = useState<Positions>(() => loadPositions(storageKey));
   const root = useRef<HTMLDivElement>(null);
@@ -335,6 +465,10 @@ export default function ServiceGraphCanvas({
     [items]
   );
   const itemByKey = useMemo(() => new Map(items.map(item => [item.key, item])), [items]);
+  // Node and edge objects are reused while their inputs are the same, so a selection, search,
+  // highlight or status poll re-renders only the cards that changed, not all 2,000.
+  const [nodeCache] = useState(() => createReuseCache<ItemNode>());
+  const [edgeCache] = useState(() => createReuseCache<RoutedEdge>());
   const nodes = useMemo<Array<ItemNode | TeamNode>>(() => {
     if (!layout) return [];
     const teams: TeamNode[] = layout.groups.map(group => ({
@@ -348,73 +482,68 @@ export default function ServiceGraphCanvas({
       focusable: false,
       zIndex: -1,
     }));
-    return [
-      ...teams,
-      ...items.map((item): ItemNode => ({
-        id: item.key,
-        type: item.kind,
-        position: pinned[item.key] ?? layout.positions[item.key] ?? { x: 0, y: 0 },
-        // `group` lets the card show a focus ring when the node wrapper has keyboard focus.
-        className: cn('group', emphasis && !emphasis.keys.has(item.key) && 'sg-dim'),
-        data: {
-          item,
-          connectable: canEdit && item.kind === 'svc',
-          match: !!matches?.has(item.key),
-          pinned: item.key in pinned,
-          level,
-        },
-        selected: item.key === selectedKey,
-        ariaLabel: `${item.kind === 'bs' ? 'Business service' : 'Service'} ${item.name}, ${GRAPH_STATUS_META[item.status]?.label ?? item.status}, ${item.openIncidents} open incidents. Arrow keys move along dependencies.`,
-        ...SIZE[item.kind],
-        connectable: canEdit && item.kind === 'svc',
-      })),
-    ];
-  }, [layout, items, selectedKey, canEdit, teamNames, pinned, emphasis, matches, level]);
+    const built = items.map(item => {
+      const position = pinned[item.key] ?? layout.positions[item.key] ?? ORIGIN;
+      const connectable = canEdit && item.kind === 'svc';
+      const match = !!matches?.has(item.key);
+      const isPinned = item.key in pinned;
+      const dim = !!emphasis && !emphasis.keys.has(item.key);
+      const depth = emphasis?.depth?.get(item.key) ?? null;
+      const selected = item.key === selectedKey;
+      return nodeCache.get(
+        item.key,
+        [item, position, connectable, match, isPinned, level, dim, depth, selected],
+        (): ItemNode => ({
+          id: item.key,
+          type: item.kind,
+          position,
+          // `group` lets the card show a focus ring when the node wrapper has keyboard focus.
+          className: cn('group', dim && 'sg-dim'),
+          data: { item, connectable, match, pinned: isPinned, level, depth },
+          selected,
+          ariaLabel: `${item.kind === 'bs' ? 'Business service' : 'Service'} ${item.name}${item.criticality ? `, ${TIER_LABEL[item.criticality]}` : ''}, ${GRAPH_STATUS_META[item.status]?.label ?? item.status}, ${item.openIncidents} open incidents${depth ? `, ${depth} hop${depth === 1 ? '' : 's'} away` : ''}${item.filteredOut ? ', hidden by filters' : ''}. Arrow keys move along dependencies.`,
+          ...SIZE[item.kind],
+          connectable,
+        })
+      );
+    });
+    nodeCache.sweep();
+    return [...teams, ...built];
+  }, [layout, items, selectedKey, canEdit, teamNames, pinned, emphasis, matches, level, nodeCache]);
 
-  const edges = useMemo<Edge[]>(
-    () =>
-      links.map(link => {
-        const lit = emphasis?.linkKeys.has(link.key) ?? false;
-        const impacted = lit ? edgeImpactStatus(link, itemByKey) : null;
-        // eslint-disable-next-line security/detect-object-injection -- key is a closed typed union / internal name, never request input
-        const color = impacted ? STATUS_HEX[impacted] : undefined;
-        const soft = link.dependencyType === 'SOFT';
-        const traffic = trafficStyle(link.traffic);
-        const diffColor = link.diff ? STATUS_HEX[link.diff === 'added' ? 'OPERATIONAL' : 'MAJOR_OUTAGE'] : undefined;
-        const trafficColor =
-          traffic?.tone === 'bad' ? STATUS_HEX.MAJOR_OUTAGE : traffic?.tone === 'warn' ? STATUS_HEX.DEGRADED : undefined;
-        const stroke = diffColor ?? color ?? trafficColor;
+  const edges = useMemo<RoutedEdge[]>(() => {
+    const built = links.map(link => {
+      const lit = emphasis?.linkKeys.has(link.key) ?? false;
+      const dim = !!emphasis && !lit;
+      const impacted = lit ? edgeImpactStatus(link, itemByKey) : null;
+      // A dragged end leaves ELK's route behind; draw a step to where the card is now.
+      const points =
+        link.source in pinned || link.target in pinned ? null : (layout?.routes[link.key] ?? null);
+      return edgeCache.get(link.key, [link, lit, dim, impacted, points], (): RoutedEdge => {
+        const look = edgeAppearance(link, lit, impacted);
+        const label = look.label && { text: look.label.text, className: LABEL_CLASS[look.label.tone] };
         return {
           id: link.key,
+          type: 'routed',
           source: link.source,
           target: link.target,
+          data: { points, label, dim },
           focusable: link.kind === 'dependency',
           // A wide invisible hit area, so a 1.5px line is not a precision task.
           interactionWidth: 24,
           ariaLabel:
             link.kind === 'dependency'
-              ? `${link.suggested ? 'Suggested' : soft ? 'Soft' : 'Hard'} dependency; activate to ${link.suggested ? 'review' : 'see details'}`
+              ? `${edgeSummary(link).join(', ')}; activate to ${link.suggested ? 'review' : 'see details'}`
               : undefined,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: stroke },
-          style: {
-            strokeWidth: lit ? 2.5 : link.diff ? 2.5 : link.kind === 'member' ? 1 : (traffic?.width ?? 1.5),
-            stroke,
-            strokeDasharray: link.diff === 'removed' ? '3 4' : link.suggested || link.diff === 'added'
-              ? '6 4'
-              : soft
-                ? '10 3 2 3'
-                : link.kind === 'member'
-                  ? '2 3'
-                  : undefined,
-          },
-          className: cn(
-            link.suggested && 'graph-edge-suggested',
-            emphasis && !lit && 'sg-dim-edge'
-          ),
+          markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: look.stroke },
+          style: { strokeWidth: look.width, stroke: look.stroke, strokeDasharray: look.dash },
+          className: cn(link.suggested && 'graph-edge-suggested', dim && 'sg-dim-edge'),
         };
-      }),
-    [links, emphasis, itemByKey]
-  );
+      });
+    });
+    edgeCache.sweep();
+    return built;
+  }, [links, emphasis, itemByKey, layout, pinned, edgeCache]);
 
   const byKey = useMemo(() => new Map(links.map(link => [link.key, link])), [links]);
   // Hover/selection highlight is a style rule, so nodes and edges keep their identity while the
@@ -426,7 +555,7 @@ export default function ServiceGraphCanvas({
       .filter(link => near.has(link.source) && near.has(link.target))
       .map(link => `:not([data-id="${link.key}"])`)
       .join('');
-    return `.sg-canvas .react-flow__node:not(.react-flow__node-team)${notNear}{opacity:.72;filter:grayscale(1)}.sg-canvas .react-flow__edge${notLit}{opacity:.2}`;
+    return `${dimRules(`.sg-canvas .react-flow__node:not(.react-flow__node-team)${notNear}`)}.sg-canvas .react-flow__edge${notLit}{opacity:.15}`;
   }, [near, links]);
 
   const onNodesChange = useCallback<OnNodesChange<ItemNode | TeamNode>>(changes => {
@@ -439,16 +568,23 @@ export default function ServiceGraphCanvas({
   useEffect(() => savePositions(storageKey, pinned), [storageKey, pinned]);
   const resetLayout = () => setPinned({});
 
-  const exportSvg = useCallback(
-    () =>
-      exportGraphSvg(
-        items,
-        links,
-        { ...(layout?.positions ?? {}), ...pinned },
-        item => SIZE[item.kind]
-      ),
-    [items, links, layout, pinned]
-  );
+  const exportSvg = useCallback(() => {
+    const routes = Object.fromEntries(
+      links.flatMap(link => {
+        const route = layout?.routes[link.key];
+        return route && !(link.source in pinned) && !(link.target in pinned)
+          ? [[link.key, route] as const]
+          : [];
+      })
+    );
+    return exportGraphSvg(
+      items,
+      links,
+      { ...(layout?.positions ?? {}), ...pinned },
+      item => SIZE[item.kind],
+      { theme, routes }
+    );
+  }, [items, links, layout, pinned, theme]);
   useEffect(() => {
     onExportReady?.(layout ? exportSvg : null);
     return () => onExportReady?.(null);
@@ -459,7 +595,7 @@ export default function ServiceGraphCanvas({
   return (
     <div
       ref={root}
-      className="sg-canvas h-full w-full"
+      className="sg-canvas relative h-full w-full"
       onKeyDown={event => {
         const direction = KEY_DIRECTION[event.key as keyof typeof KEY_DIRECTION] ?? null;
         const element = (event.target as HTMLElement).closest<HTMLElement>(
@@ -478,11 +614,12 @@ export default function ServiceGraphCanvas({
         );
       }}
     >
-      <style>{`.sg-canvas .react-flow__node,.sg-canvas .react-flow__edge{transition:opacity 150ms}@media (prefers-reduced-motion:reduce){.sg-canvas .react-flow__node,.sg-canvas .react-flow__edge{transition:none}}.sg-canvas .sg-dim{opacity:.72;filter:grayscale(1)}.sg-canvas .sg-dim-edge{opacity:.2}.sg-canvas .react-flow__node:focus-visible{outline:none}${highlight}`}</style>
+      <style>{`.sg-canvas .react-flow__node,.sg-canvas .react-flow__edge{transition:opacity 150ms}@media (prefers-reduced-motion:reduce){.sg-canvas .react-flow__node,.sg-canvas .react-flow__edge{transition:none}}${dimRules('.sg-canvas .sg-dim')}.sg-canvas .sg-dim-edge{opacity:.15}.sg-canvas .react-flow__node:focus-visible{outline:none}${highlight}`}</style>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         forceColorMode={theme}
         fitView
         fitViewOptions={{ padding: '12%', duration: reducedMotion ? 0 : 200 }}
@@ -519,6 +656,11 @@ export default function ServiceGraphCanvas({
           const link = byKey.get(edge.id);
           if (link?.kind === 'dependency') onLinkClick(link);
         }}
+        onEdgeMouseEnter={(event, edge) => {
+          const box = root.current?.getBoundingClientRect();
+          if (box) setTip({ key: edge.id, x: event.clientX - box.left, y: event.clientY - box.top });
+        }}
+        onEdgeMouseLeave={() => setTip(null)}
       >
         <Background gap={24} size={1} />
         <Controls showInteractive={false} />
@@ -536,7 +678,8 @@ export default function ServiceGraphCanvas({
             pannable
             zoomable
             ariaLabel="Graph overview"
-            className="!hidden sm:!block"
+            // Smaller on phones so it stays available without covering the graph.
+            style={compact ? { width: 112, height: 72, margin: 8 } : undefined}
             nodeColor={node =>
               node.type === 'team'
                 ? 'transparent'
@@ -545,6 +688,44 @@ export default function ServiceGraphCanvas({
           />
         )}
       </ReactFlow>
+      {tip && byKey.get(tip.key) && (
+        <EdgeTip
+          link={byKey.get(tip.key)!}
+          x={tip.x}
+          y={tip.y}
+          nameOf={key => itemByKey.get(key)?.name ?? 'a service you cannot see'}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Hover card for an edge: its ends, type, criticality and measured traffic. */
+function EdgeTip({
+  link,
+  x,
+  y,
+  nameOf,
+}: {
+  link: GraphLink;
+  x: number;
+  y: number;
+  nameOf: (key: string) => string;
+}) {
+  return (
+    <div
+      role="tooltip"
+      className="pointer-events-none absolute z-10 max-w-64 rounded-md border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md"
+      style={{ left: x + 12, top: y + 12 }}
+    >
+      <p className="truncate font-medium">
+        {nameOf(link.source)} → {nameOf(link.target)}
+      </p>
+      {edgeSummary(link).map(line => (
+        <p key={line} className="text-muted-foreground first-letter:uppercase">
+          {line}
+        </p>
+      ))}
     </div>
   );
 }

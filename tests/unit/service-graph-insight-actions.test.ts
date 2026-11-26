@@ -6,6 +6,7 @@ const m = vi.hoisted(() => ({
   shareView: vi.fn(),
   simulateFailure: vi.fn(),
   getGraphAt: vi.fn(),
+  graphTimeline: vi.fn(),
 }));
 vi.mock('@/lib/rbac', () => ({
   getCurrentAuthorizationActor: m.actor,
@@ -26,12 +27,14 @@ vi.mock('@/lib/intelligence/dependencies/insights/views', () => ({
 vi.mock('@/lib/intelligence/dependencies/insights/service', () => ({
   simulateFailure: m.simulateFailure,
   getGraphAt: m.getGraphAt,
+  graphTimeline: m.graphTimeline,
   diffGraph: vi.fn(),
   findSinglePointsOfFailure: vi.fn(),
 }));
 
 import {
   getGraphAtAction,
+  getGraphTimelineAction,
   setGraphEmbedEnabledAction,
   shareGraphViewAction,
   simulateFailureAction,
@@ -70,6 +73,15 @@ describe('graph insight actions: RBAC', () => {
     expect(await getGraphAtAction({ at: 'yesterday' })).toMatchObject({ ok: false });
     expect(m.simulateFailure).not.toHaveBeenCalled();
     expect(m.getGraphAt).not.toHaveBeenCalled();
+    expect(await getGraphTimelineAction({ hops: 9 })).toMatchObject({ ok: false });
+    expect(m.graphTimeline).not.toHaveBeenCalled();
+  });
+
+  it('passes the timeline scope through for an active user', async () => {
+    m.actor.mockResolvedValue(actor('STAKEHOLDER'));
+    m.graphTimeline.mockResolvedValue({ days: 90, incidents: [], changes: [], truncated: false });
+    expect(await getGraphTimelineAction({ focus: 'svc:a', hops: 2 })).toMatchObject({ ok: true });
+    expect(m.graphTimeline).toHaveBeenCalledWith(expect.anything(), { focus: 'svc:a', hops: 2 });
   });
 
   it('turns a data-layer failure into a message, not a throw', async () => {
