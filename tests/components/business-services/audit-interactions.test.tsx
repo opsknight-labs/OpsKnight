@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const refresh = vi.fn();
+const push = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh, push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ refresh, push, replace: vi.fn() }),
   usePathname: () => '/services/business/x',
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -301,7 +302,7 @@ describe('CatalogDirectory selection', () => {
     expect(screen.queryByRole('region', { name: 'Bulk edit' })).toBeNull();
   });
 
-  it('has no sort buttons: the directory is keyset-paged, a client sort only reorders one page', () => {
+  it('sorts on the server: a header click navigates to the sorted URL, keeping the filters', () => {
     render(
       <CatalogDirectory
         rows={[row('a'), row('b')]}
@@ -309,10 +310,29 @@ describe('CatalogDirectory selection', () => {
         filtered={false}
         clearHref="/services/business"
         canManage={false}
+        query={{ ...parseCatalogParams({ q: 'pay' }).query }}
       />
     );
     const table = screen.getByRole('table', { name: 'Business services' });
-    expect(within(table).queryAllByRole('button', { name: /sort/i })).toHaveLength(0);
+    fireEvent.click(within(table).getByRole('button', { name: /Criticality/ }));
+    expect(push).toHaveBeenCalledWith('/services/business?q=pay&sort=tier_asc');
+  });
+
+  it('keeps healthy rows quiet and hides the optional columns by default', () => {
+    render(
+      <CatalogDirectory
+        rows={[{ ...row('a'), since: new Date() }]}
+        pagination={pagination}
+        filtered={false}
+        clearHref="/services/business"
+        canManage={false}
+      />
+    );
+    const table = screen.getByRole('table', { name: 'Business services' });
+    expect(within(table).queryByText(/since/)).toBeNull();
+    expect(within(table).queryByRole('columnheader', { name: 'Followers' })).toBeNull();
+    expect(within(table).queryByRole('columnheader', { name: 'Hygiene' })).toBeNull();
+    expect(within(table).getByRole('columnheader', { name: /Error budget/ })).toBeInTheDocument();
   });
 });
 
@@ -330,10 +350,13 @@ describe('BulkEditBar', () => {
     render(bar());
     const apply = () => screen.getByRole('button', { name: 'Apply to 1' });
     expect(apply()).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /^Tags/ }));
     fireEvent.change(screen.getByLabelText('Add tags'), { target: { value: 'pci' } });
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     expect(await screen.findByText(/Preview: 1 ok/)).toBeInTheDocument();
     await waitFor(() => expect(apply()).toBeEnabled());
+    if (!screen.queryByLabelText('Add tags'))
+      fireEvent.click(screen.getByRole('button', { name: /^Tags/ }));
     fireEvent.change(screen.getByLabelText('Add tags'), { target: { value: 'pci, legacy' } });
     expect(screen.queryByText(/Preview: 1 ok/)).toBeNull();
     expect(apply()).toBeDisabled();
@@ -347,6 +370,7 @@ describe('BulkEditBar', () => {
       results: [{ id: 'a', ok: true }],
     });
     render(bar());
+    fireEvent.click(screen.getByRole('button', { name: /^SLO/ }));
     fireEvent.click(screen.getByLabelText('Clear SLO target'));
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     await waitFor(() =>

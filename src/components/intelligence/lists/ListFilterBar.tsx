@@ -48,6 +48,7 @@ export default function ListFilterBar({
   chips,
   search,
   defaults = {},
+  preserve = {},
 }: {
   basePath: string;
   label: string;
@@ -58,6 +59,8 @@ export default function ListFilterBar({
   search?: { value: string; placeholder: string; label: string };
   /** Values that are the default for a field and therefore left out of the URL. */
   defaults?: Readonly<Record<string, string>>;
+  /** URL params that are not filters but must survive a filter change, e.g. the sort. */
+  preserve?: Readonly<Record<string, string>>;
 }) {
   const router = useRouter();
   const form = useRef<HTMLFormElement>(null);
@@ -98,6 +101,9 @@ export default function ListFilterBar({
         navigate();
       }}
     >
+      {Object.entries(preserve).map(([name, value]) =>
+        value ? <input key={name} type="hidden" name={name} value={value} /> : null
+      )}
       {chips && (
         <input
           ref={chipInput}

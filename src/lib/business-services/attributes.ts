@@ -40,3 +40,43 @@ export function attributesToLines(value: unknown): string {
     .map(([key, entry]) => `${key} = ${String(entry)}`)
     .join('\n');
 }
+
+export type AttributeFilter = { key: string; value: string };
+
+const ATTRIBUTE_KEY = /^[a-z][a-z0-9_.-]{0,39}$/i;
+
+/** "key=value" (from a URL or query string) to a filter; null when the key is not a valid attribute key. */
+export function parseAttributeFilter(raw: string | null | undefined): AttributeFilter | null {
+  const text = raw?.trim() ?? '';
+  const at = text.indexOf('=');
+  if (at < 1) return null;
+  const key = text.slice(0, at).trim();
+  const value = text.slice(at + 1).trim();
+  if (!ATTRIBUTE_KEY.test(key) || !value || value.length > 200) return null;
+  return { key, value };
+}
+
+/** The JSON values a filter value can match: the text itself, and its boolean or number reading. */
+export function attributeFilterValues(value: string): Array<string | number | boolean> {
+  const values: Array<string | number | boolean> = [value];
+  if (value === 'true' || value === 'false') values.push(value === 'true');
+  else if (!isNaN(Number(value))) values.push(Number(value));
+  return values;
+}
+
+/** In-memory twin of the database filter, for counts. */
+export function attributeMatches(attributes: unknown, filter: AttributeFilter): boolean {
+  if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) return false;
+  const stored = new Map(Object.entries(attributes)).get(filter.key);
+  return attributeFilterValues(filter.value).some(candidate => candidate === stored);
+}
+
+/** Distinct "key=value" pairs across services, for a filter menu (at most `limit`, sorted). */
+export function attributeOptions(rows: ReadonlyArray<unknown>, limit = 100): string[] {
+  const pairs = new Set<string>();
+  for (const attributes of rows) {
+    if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) continue;
+    for (const [key, value] of Object.entries(attributes)) pairs.add(`${key}=${String(value)}`);
+  }
+  return [...pairs].sort((a, b) => a.localeCompare(b)).slice(0, limit);
+}

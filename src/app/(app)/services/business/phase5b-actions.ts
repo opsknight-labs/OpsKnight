@@ -178,6 +178,7 @@ export async function setHygieneEnabledAction(enabled: boolean): Promise<ActionR
       );
     });
     revalidatePath('/services/business');
+    revalidatePath('/settings/notifications');
     return { ok: true };
   } catch (error) {
     return failure(error);

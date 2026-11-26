@@ -12,7 +12,7 @@ import ActivityPanel from '@/components/business-service/ActivityPanel';
 import BusinessServiceForm from '@/components/service/BusinessServiceForm';
 import { previewSentence } from '@/components/service/BusinessServiceFormExtras';
 import { formValueFromTemplate } from '@/components/service/business-service-form-defaults';
-import { distribution } from '@/components/business-service/catalog-model';
+import { distribution, parseCatalogParams } from '@/components/business-service/catalog-model';
 import { diffAuditDetails } from '@/lib/business-services/audit-diff';
 import { countAgainstDraft } from '@/lib/business-services/impact-preview';
 
@@ -113,7 +113,7 @@ describe('catalog health distribution and saved views', () => {
     ['c', { status: 'OPERATIONAL' as const }],
   ]);
 
-  it('counts by status and by tier, and links every chip and cell to a filter', () => {
+  it('counts by status and by tier, and links each cell to a filter that keeps the search and team', () => {
     const data = distribution(rows, health);
     expect(data.byStatus.OPERATIONAL).toBe(2);
     expect(data.matrix.map(r => [r.tier, r.total])).toEqual([
@@ -123,16 +123,25 @@ describe('catalog health distribution and saved views', () => {
     render(
       <HealthDistribution
         data={data}
-        query={{ q: '', tier: '', status: 'MAJOR_OUTAGE', team: '', needs: '' }}
+        query={{ ...parseCatalogParams().query, q: 'pay', team: 't1', sort: 'tier_asc' }}
       />
     );
-    const chip = screen.getByRole('link', { name: /Major outage 1/ });
-    expect(chip).toHaveAttribute('href', '/services/business?status=MAJOR_OUTAGE');
-    expect(chip).toHaveAttribute('aria-current', 'true');
+    // The health chips live in the filter bar; the distribution has none of its own.
+    expect(screen.queryByRole('list', { name: 'Filter by health' })).toBeNull();
     expect(screen.getByRole('link', { name: '1 Tier 0, major outage' })).toHaveAttribute(
       'href',
-      '/services/business?tier=TIER_0&status=MAJOR_OUTAGE'
+      '/services/business?q=pay&tier=TIER_0&status=MAJOR_OUTAGE&team=t1&sort=tier_asc'
     );
+  });
+
+  it('folds the tier matrix away when nothing is impacted', () => {
+    const calm = distribution(rows, new Map([['a', { status: 'OPERATIONAL' as const }]]));
+    const { container } = render(
+      <HealthDistribution data={calm} query={parseCatalogParams().query} />
+    );
+    expect(container.querySelector('details')).not.toBeNull();
+    expect(container.querySelector('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('All 3 without impact')).toBeInTheDocument();
   });
 
   it('saves the current filters as a named view and removes it again', async () => {

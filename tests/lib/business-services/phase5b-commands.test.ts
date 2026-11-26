@@ -76,9 +76,7 @@ describe('role matrix: new commands are manager-only (negative tests)', () => {
       forbidden
     );
     await expect(deleteBusinessServiceTemplate('t1', context)).rejects.toMatchObject(forbidden);
-    await expect(deleteCustomerImpactReport('bs1', 'r1', context)).rejects.toMatchObject(
-      forbidden
-    );
+    await expect(deleteCustomerImpactReport('bs1', 'r1', context)).rejects.toMatchObject(forbidden);
     await expect(listBusinessServiceTemplates(actor(role))).rejects.toMatchObject(forbidden);
     await expect(
       createBusinessServiceFromTemplate('t1', { name: 'X' }, context)
@@ -110,7 +108,7 @@ describe('role matrix: new commands are manager-only (negative tests)', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('deleting a report only matches the caller\'s own report on a service they can manage', async () => {
+  it("deleting a report only matches the caller's own report on a service they can manage", async () => {
     const findFirst = vi.fn().mockResolvedValue(null);
     vi.mocked(prisma.$transaction).mockImplementationOnce((async (run: (tx: unknown) => unknown) =>
       run({ customerImpactReport: { findFirst, delete: vi.fn() } })) as never);
@@ -118,7 +116,11 @@ describe('role matrix: new commands are manager-only (negative tests)', () => {
       deleteCustomerImpactReport('bs1', 'r1', { actor: actor('RESPONDER') })
     ).rejects.toMatchObject({ code: 'RESOURCE_NOT_FOUND' });
     const where = findFirst.mock.calls[0][0].where;
-    expect(where).toMatchObject({ id: 'r1', businessServiceId: 'bs1', createdById: 'user-RESPONDER' });
+    expect(where).toMatchObject({
+      id: 'r1',
+      businessServiceId: 'bs1',
+      createdById: 'user-RESPONDER',
+    });
     expect(where.businessService).toBeDefined();
   });
 

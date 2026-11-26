@@ -14,6 +14,7 @@ import {
   serviceIdsOf,
 } from '@/lib/business-services/commands';
 import { canReadBusinessServiceFinancials } from '@/lib/business-services/financials';
+import { parseAttributeFilter } from '@/lib/business-services/attributes';
 import { readableIncidentIds, readableServiceIds } from '@/lib/business-services/stats';
 
 const csv = <T extends string>(values: readonly [T, ...T[]]) =>
@@ -45,6 +46,17 @@ const ListQuerySchema = PaginationQuerySchema.extend({
     .enum(['true', 'false'])
     .transform(value => value === 'true')
     .optional(),
+  /** Custom attribute filter, "key=value". */
+  attribute: z
+    .string()
+    .trim()
+    .max(241)
+    .transform((value, ctx) => {
+      const parsed = parseAttributeFilter(value);
+      if (!parsed) ctx.addIssue({ code: 'custom', message: 'Use key=value with a valid key.' });
+      return parsed ?? undefined;
+    })
+    .optional(),
   /** newest (default, unchanged order) or name. */
   sort: z.enum(['newest', 'name']).default('newest'),
 }).strict();
@@ -64,6 +76,7 @@ export const GET = defineV2Route({
           status: query.status,
           ownerTeamId: query.ownerTeamId,
           impactedOnly: query.impactedOnly,
+          attribute: query.attribute,
         },
         sort: query.sort,
         cursor: pagination.cursor,

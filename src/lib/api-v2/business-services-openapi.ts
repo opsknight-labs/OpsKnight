@@ -510,6 +510,12 @@ export const BUSINESS_SERVICE_OPERATIONS: {
       },
       ownerTeamId: { type: 'string' },
       impactedOnly: { type: 'string', enum: ['true', 'false'] },
+      attribute: {
+        type: 'string',
+        maxLength: 241,
+        description:
+          'Custom attribute filter as key=value, e.g. cost_center=ops. "true", "false" and numbers also match their typed values.',
+      },
       sort: { type: 'string', enum: ['newest', 'name'], default: 'newest' },
     },
   },

@@ -14,6 +14,7 @@ import {
   updateBusinessService,
 } from './commands';
 import { invalidateBusinessServiceHealth } from './health';
+import { CustomAttributesSchema } from './attributes';
 
 export const MAX_IMPORT_ROWS = 1000;
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -32,6 +33,8 @@ export type ImportRow = {
   members?: string[];
   /** Business services (names) this one depends on; replaces that set when present. */
   dependsOn?: string[];
+  /** Custom attributes to set; merged over the stored ones (CSV `attr.<key>` columns, YAML `attributes`). */
+  attributes?: Record<string, string | number | boolean>;
 };
 
 export type ImportIssue = { line: number; name?: string; message: string };
@@ -121,7 +124,38 @@ function rowFrom(
   if (members) row.members = members;
   const dependsOn = list('dependsOn' in record ? record.dependsOn : record.depends_on);
   if (dependsOn) row.dependsOn = dependsOn;
+  const attributes = attributesFrom(record);
+  if (attributes === null)
+    issues.push({ line, name, message: 'Attributes must be scalar values with valid keys.' });
+  else if (attributes) row.attributes = attributes;
   return row;
+}
+
+/** A CSV cell reads like the edit form: true/false and numbers become typed values. */
+const typed = (value: string): string | number | boolean =>
+  value === 'true'
+    ? true
+    : value === 'false'
+      ? false
+      : !isNaN(Number(value))
+        ? Number(value)
+        : value;
+
+/** YAML `attributes` mapping or CSV `attr.<key>` columns; null when present but invalid. */
+function attributesFrom(record: Record<string, unknown>) {
+  const entries: [string, unknown][] = Object.entries(record).flatMap(([column, value]) =>
+    column.startsWith('attr.')
+      ? [[column.slice(5), typeof value === 'string' ? typed(value.trim()) : value]]
+      : []
+  );
+  const mapping = record.attributes;
+  if (mapping !== undefined && mapping !== null) {
+    if (typeof mapping !== 'object' || Array.isArray(mapping)) return null;
+    entries.push(...Object.entries(mapping));
+  }
+  if (!entries.length) return undefined;
+  const parsed = CustomAttributesSchema.safeParse(Object.fromEntries(entries));
+  return parsed.success ? parsed.data : null;
 }
 
 function csvRows(input: string, issues: ImportIssue[]): ImportRow[] {
@@ -221,6 +255,8 @@ type Resolved = {
   existingId: string | null;
   ownerTeamId?: string | null;
   memberServiceIds?: string[];
+  /** Stored attributes with the file's merged over them. */
+  customAttributes?: Record<string, string | number | boolean>;
 };
 
 const lower = (value: string) => value.trim().toLowerCase();
@@ -270,6 +306,7 @@ async function resolveImport(rows: ImportRow[], parseIssues: ImportIssue[]) {
         description: true,
         criticality: true,
         ownerTeamId: true,
+        customAttributes: true,
         members: { select: { serviceId: true, service: { select: { name: true } } } },
       },
     }),
@@ -338,6 +375,20 @@ async function resolveImport(rows: ImportRow[], parseIssues: ImportIssue[]) {
         issues.push({ line: row.line, name: row.name, message: 'At most 200 members.' });
       entry.memberServiceIds = [...new Set(ids)];
     }
+    if (row.attributes) {
+      const stored = existing.find(item => item.id === entry.existingId)?.customAttributes;
+      const merged = CustomAttributesSchema.safeParse({
+        ...(stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {}),
+        ...row.attributes,
+      });
+      if (merged.success) entry.customAttributes = merged.data;
+      else
+        issues.push({
+          line: row.line,
+          name: row.name,
+          message: merged.error.issues[0]?.message ?? 'Invalid attributes.',
+        });
+    }
     return entry;
   });
 
@@ -380,7 +431,7 @@ async function resolveImport(rows: ImportRow[], parseIssues: ImportIssue[]) {
     });
 
   const changes: ImportChange[] = resolved.map(
-    ({ row, existingId, ownerTeamId, memberServiceIds }) => {
+    ({ row, existingId, ownerTeamId, memberServiceIds, customAttributes }) => {
       const current = existingId ? existing.find(item => item.id === existingId)! : null;
       const currentMembers = new Set(current?.members.map(member => member.serviceId) ?? []);
       const nameOf = new Map([
@@ -403,6 +454,11 @@ async function resolveImport(rows: ImportRow[], parseIssues: ImportIssue[]) {
       if (ownerTeamId !== undefined && ownerTeamId !== (current?.ownerTeamId ?? null))
         fields.push('ownerTeam');
       if (membersAdded.length || membersRemoved.length) fields.push('members');
+      if (
+        customAttributes &&
+        JSON.stringify(customAttributes) !== JSON.stringify(current?.customAttributes ?? {})
+      )
+        fields.push('customAttributes');
       if (row.dependsOn) {
         const before = supports
           .filter(edge => edge.parentId === existingId)
@@ -465,6 +521,7 @@ export async function importBusinessServices(
         ...(entry.ownerTeamId !== undefined ? { ownerTeamId: entry.ownerTeamId } : {}),
         ...(entry.memberServiceIds ? { memberServiceIds: entry.memberServiceIds } : {}),
         ...(row.criticality !== undefined ? { criticality: row.criticality } : {}),
+        ...(entry.customAttributes ? { customAttributes: entry.customAttributes } : {}),
       };
       const saved =
         entry.existingId === null

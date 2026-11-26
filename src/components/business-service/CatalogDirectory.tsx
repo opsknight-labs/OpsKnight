@@ -1,8 +1,9 @@
 'use client';
 /* eslint-disable security/detect-object-injection -- lookups are keyed by typed enum values (status, tier, urgency), never request input */
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { BusinessServiceTier } from '@prisma/client';
 import { Boxes, Plus } from 'lucide-react';
 import {
@@ -10,6 +11,7 @@ import {
   DirectoryHeader,
   DirectoryPrimaryCell,
   DirectoryTable,
+  useDirectoryColumns,
   useDirectoryView,
   type DirectoryColumn,
 } from '@/components/patterns/Directory';
@@ -19,8 +21,10 @@ import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
 import BusinessServiceFollowButton from '@/components/service/BusinessServiceFollowButton';
 import type { BsStatus } from '@/lib/business-services/contract';
 import { HYGIENE_LABELS, type HygieneReason } from '@/lib/business-services/hygiene';
+import { cn } from '@/lib/utils';
 import BulkEditBar from './BulkEditBar';
 import HealthBadge, { CRITICALITY_HINT, CRITICALITY_LABEL } from './HealthBadge';
+import { catalogHref, catalogSort, type CatalogQuery } from './catalog-model';
 
 export type CatalogRow = {
   id: string;
@@ -37,6 +41,8 @@ export type CatalogRow = {
   following: boolean;
   /** Ownership hygiene findings (stale review, inactive owner). */
   hygiene?: readonly HygieneReason[];
+  /** Error budget left over the SLO window; null without an SLO target, undefined when not loaded. */
+  budget?: { remainingPercent: number; burnState: 'OK' | 'AT_RISK' | 'BREACHED' } | null;
 };
 
 export type CatalogPagination = {
@@ -50,12 +56,39 @@ export type CatalogPagination = {
 const plural = (count: number, one: string, many = `${one}s`) =>
   `${count.toLocaleString()} ${count === 1 ? one : many}`;
 
+/** One line: the tier label, with what it means as the tooltip. */
 function Criticality({ tier }: { tier: BusinessServiceTier | null }) {
   if (!tier) return <span className="text-muted-foreground">Not set</span>;
   return (
-    <span className="whitespace-nowrap">
-      <span className="font-medium text-foreground">{CRITICALITY_LABEL[tier]}</span>
-      <span className="block text-xs text-muted-foreground">{CRITICALITY_HINT[tier]}</span>
+    <span className="whitespace-nowrap font-medium text-foreground" title={CRITICALITY_HINT[tier]}>
+      {CRITICALITY_LABEL[tier]}
+    </span>
+  );
+}
+
+/** Healthy rows stay quiet (soft pill, no "since"); impacted and maintenance rows get the solid pill. */
+function Health({ row }: { row: CatalogRow }) {
+  return row.status === 'OPERATIONAL' || row.status === 'UNKNOWN' ? (
+    <HealthBadge status={row.status} />
+  ) : (
+    <HealthBadge status={row.status} since={row.since} variant="solid" />
+  );
+}
+
+const BURN_TEXT = {
+  OK: 'text-foreground',
+  AT_RISK: 'text-status-elevated',
+  BREACHED: 'text-status-critical',
+} as const;
+
+function Budget({ budget }: { budget: CatalogRow['budget'] }) {
+  if (budget === undefined) return <span className="text-muted-foreground">—</span>;
+  if (budget === null) return <span className="text-muted-foreground">No SLO</span>;
+  return (
+    <span className={cn('whitespace-nowrap tabular-nums', BURN_TEXT[budget.burnState])}>
+      {budget.burnState === 'BREACHED'
+        ? 'Spent'
+        : `${Math.round(budget.remainingPercent).toLocaleString()}% left`}
     </span>
   );
 }
@@ -95,6 +128,7 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   {
     id: 'name',
     header: 'Business service',
+    sortKey: 'name',
     cell: row => (
       <DirectoryPrimaryCell
         href={href(row)}
@@ -107,12 +141,15 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   {
     id: 'health',
     header: 'Health',
-    cell: row => <HealthBadge status={row.status} since={row.since} variant="solid" />,
+    sortKey: 'health',
+    cell: row => <Health row={row} />,
     className: 'min-w-[11rem] font-normal',
   },
   {
     id: 'criticality',
     header: 'Criticality',
+    sortKey: 'tier',
+    hideable: true,
     cell: row => <Criticality tier={row.criticality} />,
     // Global `table td` is 600; DESIGN.md wants 400 for secondary cells.
     className: 'font-normal',
@@ -120,6 +157,8 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   {
     id: 'owner',
     header: 'Owner team',
+    sortKey: 'owner',
+    hideable: true,
     cell: row =>
       row.ownerTeam ? (
         <span className="truncate">{row.ownerTeam.name}</span>
@@ -129,14 +168,26 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
     className: 'font-normal',
   },
   {
+    id: 'budget',
+    header: 'Error budget',
+    label: 'Error budget (SLO)',
+    sortKey: 'budget',
+    hideable: true,
+    cell: row => <Budget budget={row.budget} />,
+    className: 'font-normal',
+  },
+  {
     id: 'members',
     header: 'Services',
+    hideable: true,
     cell: row => <Members row={row} />,
     className: 'text-right font-normal',
   },
   {
     id: 'incidents',
     header: 'Open incidents',
+    sortKey: 'incidents',
+    hideable: true,
     cell: row => (
       <span className={row.openIncidentCount ? 'font-medium tabular-nums' : 'tabular-nums'}>
         {row.openIncidentCount.toLocaleString()}
@@ -147,12 +198,14 @@ const COLUMNS: readonly DirectoryColumn<CatalogRow>[] = [
   {
     id: 'hygiene',
     header: 'Hygiene',
+    hideable: true,
     cell: row => <HygieneBadges reasons={row.hygiene} />,
     className: 'font-normal',
   },
   {
     id: 'followers',
     header: 'Followers',
+    hideable: true,
     cell: row => <span className="tabular-nums">{row.followerCount.toLocaleString()}</span>,
     className: 'text-right font-normal',
   },
@@ -174,7 +227,7 @@ function MobileRow({ row }: { row: CatalogRow }) {
           </span>
         )}
       </div>
-      <HealthBadge status={row.status} since={row.since} variant="solid" />
+      <Health row={row} />
       <p className="text-xs text-muted-foreground tabular-nums">
         {[
           plural(row.memberCount, 'service'),
@@ -205,7 +258,7 @@ function Card({ row }: { row: CatalogRow }) {
           <p className="line-clamp-2 text-xs text-muted-foreground">{row.description}</p>
         )}
       </div>
-      <HealthBadge status={row.status} since={row.since} variant="solid" />
+      <Health row={row} />
       <dl className="grid grid-cols-3 gap-2 text-xs">
         <div>
           <dt className="text-muted-foreground">Services</dt>
@@ -249,6 +302,8 @@ export default function CatalogDirectory({
   clearHref,
   canManage,
   teams = [],
+  query,
+  refresh,
 }: {
   rows: readonly CatalogRow[];
   pagination: CatalogPagination;
@@ -257,8 +312,14 @@ export default function CatalogDirectory({
   canManage: boolean;
   /** Owner-team choices for the bulk edit bar. */
   teams?: ReadonlyArray<{ id: string; name: string }>;
+  /** Current catalog query; when given, column headers sort on the server through the URL. */
+  query?: CatalogQuery;
+  /** "Updated … ago" and pause control, shown in the directory header. */
+  refresh?: ReactNode;
 }) {
+  const router = useRouter();
   const [view, setView] = useDirectoryView('business-services');
+  const columns = useDirectoryColumns('business-services', COLUMNS, ['hygiene', 'followers']);
   const [picked, setSelected] = useState<ReadonlySet<string>>(new Set());
   const pageIds = rows.map(row => row.id);
   // Only ids on the visible page count: a page/filter change or the cards view (no checkboxes) must not leave a bulk bar targeting hidden rows.
@@ -325,6 +386,9 @@ export default function CatalogDirectory({
             : undefined
         }
         view={rows.length ? { value: view, onChange: setView } : undefined}
+        columns={rows.length && view !== 'cards' ? columns : undefined}
+        density={rows.length > 0 && view !== 'cards'}
+        actions={refresh}
         selectAll={
           canManage && rows.length && view !== 'cards'
             ? {
@@ -359,6 +423,14 @@ export default function CatalogDirectory({
           rows={rows}
           getRowId={row => row.id}
           columns={COLUMNS}
+          hiddenColumns={columns.hidden}
+          {...(query
+            ? {
+                sort: catalogSort(query.sort),
+                onSortChange: (next: { key: string; direction: 'asc' | 'desc' }) =>
+                  router.push(catalogHref({ ...query, sort: `${next.key}_${next.direction}` })),
+              }
+            : {})}
           mobileRow={row => <MobileRow row={row} />}
           selection={
             canManage
