@@ -10,7 +10,9 @@ import {
   formatCursorPagination,
   parsePaginationParams,
 } from '@/lib/api-v2';
-import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { AUTHORIZATION_ACTIONS, actorHasCapability } from '@/lib/authorization-policy';
+import { CAPABILITIES } from '@/lib/authorization';
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
 import { withV2Observability } from '@/lib/api-v2/observability';
@@ -29,6 +31,8 @@ export const GET = withV2Observability(async function GET(
     const incident = await prisma.incident.findUnique({
       where: { id },
       include: {
+        automationTraces: { select: { incidentId: true }, take: 1 },
+        automationDecision: { select: { incidentId: true } },
         service: { select: { id: true, name: true, teamId: true } },
         watchers: { select: { userId: true } },
       },
@@ -77,8 +81,18 @@ export const GET = withV2Observability(async function GET(
     });
 
     const result = formatCursorPagination(events, limit);
+    // Same redaction as the incident page: automation-sourced events embed the raw alert payload.
+    const { events: data = result.data } = visibleIncidentSource(
+      {
+        automationSourceRestricted: incident.automationSourceRestricted,
+        automationDecision: incident.automationDecision,
+        automationTraces: incident.automationTraces,
+        events: result.data,
+      },
+      actorHasCapability(actor, CAPABILITIES.INCIDENT_SENSITIVE_READ)
+    );
 
-    return apiV2Success(result.data, {
+    return apiV2Success(data, {
       pagination: result.pagination,
       headers: rlHeaders,
     });
