@@ -127,10 +127,20 @@ describe('earlier-turn summary in AI conversations', () => {
     const [before, after] = model.requests.map(r => (r.body as unknown as Body).messages);
     // Same summary block, and every turn replayed before still opens the request the same way.
     expect(after[1]).toEqual(before[1]);
-    expect(after.slice(0, before.length - 1)).toEqual(before.slice(0, -1));
+    // The "what is on screen now" message sits just before the question and carries the current time, so
+    // it changes on every request by design; the cacheable prefix is everything before it.
+    const isScreenContext = (message: { content: unknown }) =>
+      typeof message.content === 'string' && message.content.includes('What is on screen now');
+    const stable = before.slice(0, -1).filter(message => !isScreenContext(message));
+    expect(before.slice(0, -1).length - stable.length).toBeLessThanOrEqual(1);
+    expect(after.slice(0, stable.length)).toEqual(stable);
     // The recorded answer has no completion record, so it is replayed as a placeholder, keeping the turn order.
-    expect(after.at(-3)?.content).toBe('Question number 8 about the checkout pool');
-    expect(after.at(-2)?.content).toMatch(/^\[Earlier answer not included/);
+    const replayed = after
+      .filter(message => !isScreenContext(message))
+      .map(message => message.content);
+    const asked = replayed.indexOf('Question number 8 about the checkout pool');
+    expect(asked).toBeGreaterThan(-1);
+    expect(replayed[asked + 1]).toMatch(/^\[Earlier answer not included/);
   });
 
   it('still answers in one model call when a person is limited to one request per minute', async () => {
