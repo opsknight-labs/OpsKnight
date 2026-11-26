@@ -77,7 +77,7 @@ export async function executeChatOpsPostmortemCommand(input: {
             summary: `Automated postmortem draft generated from Slack war-room #${input.channelName}`,
             impact: { service: incident.service.name, urgency: incident.urgency },
             rootCause: 'TBD — Generated from Slack War Room',
-            resolution: `Generated via ChatOps by ${input.actor.name}`,
+            resolution: 'Generated via ChatOps.',
             lessons: 'Timeline and notes captured from Slack war-room channel.',
             timeline: timeline as Prisma.InputJsonValue,
             actionItems: actionItems as Prisma.InputJsonValue,

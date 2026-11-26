@@ -51,6 +51,8 @@ function publicTimeline(value: unknown): PublicTimelineEvent[] | undefined {
     const description = typeof entry.description === 'string' ? entry.description : undefined;
     const type = entry.type;
     if (!timestamp || !title || !description) return [];
+    // Auto-drafts copy internal responder notes ("Note by <name>") into the timeline; keep them internal.
+    if (/^(draft-)?note-/.test(String(entry.id ?? '')) || /^Note by /.test(title)) return [];
     if (
       type !== 'DETECTION' &&
       type !== 'ESCALATION' &&
