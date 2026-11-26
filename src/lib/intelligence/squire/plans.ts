@@ -723,3 +723,85 @@ export async function buildRunbookStepsProposal(
     })),
   };
 }
+
+// ── Publish a runbook draft ───────────────────────────────────────────────────────────────────────────
+
+export const PROPOSE_RUNBOOK_PUBLISH_TOOL: AiToolDefinition = {
+  name: 'propose_runbook_publish',
+  description:
+    'Suggest publishing a runbook\'s unpublished draft ("publish it"), so responders can run it. Pass { runbookId }. Squire reads the draft itself; the user confirms a card. Use this instead of find_operations.',
+  kind: 'PROPOSE_WRITE',
+  inputSchema: {
+    type: 'object',
+    properties: { runbookId: { type: 'string', maxLength: 64 } },
+    required: ['runbookId'],
+    additionalProperties: false,
+  },
+};
+
+export const runbookPublishInput = z.object({ runbookId: z.string().min(1).max(64) }).strict();
+
+/** The "publish this draft" card, run through the catalog's publishRunbookDraft (same role check, sealed card, receipt). */
+export async function buildRunbookPublishProposal(
+  actor: AuthorizationActor,
+  rawInput: unknown,
+  now: Date = new Date()
+): Promise<(SquireProposal & { href?: string }) | { refusal: string }> {
+  const operation = squireOperation('publishRunbookDraft');
+  if (operation && !mayCall(actor, operation))
+    return {
+      refusal: `Publishing a runbook needs ${rolesAllowing(actor, operation)}. Ask someone with that role. Nothing was prepared.`,
+    };
+  const parsed = runbookPublishInput.safeParse(rawInput);
+  let readable: ReturnType<typeof runbookReadWhere> | null = null;
+  try {
+    readable = runbookReadWhere(actor);
+  } catch {
+    readable = null;
+  }
+  const runbook =
+    operation && parsed.success && readable
+      ? await prisma.runbook.findFirst({
+          where: { AND: [{ id: parsed.data.runbookId, archivedAt: null }, readable] },
+          select: {
+            id: true,
+            name: true,
+            draftVersion: { select: { id: true, version: true, draftRevision: true } },
+          },
+        })
+      : null;
+  if (!operation || !parsed.success || !runbook)
+    return { refusal: 'Only a runbook you can open can be published. Nothing was prepared.' };
+  const href = `/runbooks/${runbook.id}`;
+  const draft = runbook.draftVersion;
+  if (!draft)
+    return {
+      refusal: `“${runbook.name}” has no unpublished draft to publish (${href}). Nothing was prepared.`,
+    };
+  const card = await buildOperationProposal(
+    actor,
+    {
+      operationId: 'publishRunbookDraft',
+      args: {
+        path: { id: runbook.id, versionId: draft.id },
+        body: {},
+        ifMatch: `"${draft.draftRevision}"`,
+      },
+    },
+    now,
+    { target: null }
+  );
+  if (!card)
+    return {
+      refusal:
+        'Runbook changes are not available right now: an administrator may have turned off "Extended assistant actions". Nothing was prepared.',
+    };
+  return {
+    ...card,
+    title: `Publish “${runbook.name}”`.slice(0, 120),
+    detail: `Makes draft v${draft.version} the live version responders run. The previous published version stays in its history.`,
+    confirmLabel: 'Publish runbook',
+    href,
+    preview: [{ label: 'Version', value: `Draft v${draft.version} becomes the published version` }],
+  };
+}

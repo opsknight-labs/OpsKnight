@@ -111,11 +111,12 @@ describe('cache-friendly Squire turns', () => {
     const [before, after] = model.requests.map(request => request.body as unknown as Body);
     expect(after.tools?.length).toBeGreaterThan(0);
     expect(after.tools).toEqual(before.tools);
-    // Everything before the first turn's question opens the second turn's request unchanged.
-    const history = before.messages.slice(0, -1);
+    // Everything before the first turn's clock message and question opens the second turn's request unchanged.
+    const history = before.messages.slice(0, -2);
+    expect(before.messages.at(-2)?.content).toContain('Now: ');
     expect(after.messages.slice(0, history.length)).toEqual(history);
     expect(history.at(-1)?.content).toContain('Restarting the workers cleared it.');
-    expect(after.messages.at(-2)?.content).toContain('Nothing else changed.');
+    expect(after.messages.at(-3)?.content).toContain('Nothing else changed.');
   });
 
   it('keeps an interrupted earlier answer as a stand-in, without a notice on every later turn', async () => {

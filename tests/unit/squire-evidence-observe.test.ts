@@ -19,6 +19,25 @@ type Observed = {
 };
 
 describe('SquireEvidenceRegistry.observe', () => {
+  it.each(['listIncidents', 'listActionItems'])(
+    'trims a large generic read (%s) whose rows sit under data instead of failing verification',
+    async operationId => {
+      const items = Array.from({ length: 60 }, (_, i) => ({
+        id: `row-${i}`,
+        title: 'x'.repeat(200),
+      }));
+      const out = (await registry().observe(
+        'read_operation',
+        { operationId },
+        { data: { items, total: 60 } }
+      )) as { data: { data: { items: unknown[]; total: number } }; error?: string };
+      expect(out.error).toBeUndefined();
+      expect(out.data.data.items.length).toBeGreaterThan(0);
+      expect(out.data.data.items.length).toBeLessThan(60);
+      expect(out.data.data.total).toBe(60);
+    }
+  );
+
   it.each([
     'get_repo_activity',
     'get_azure_pipeline_runs',
