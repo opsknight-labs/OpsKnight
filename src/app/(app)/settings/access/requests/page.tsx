@@ -10,7 +10,7 @@ import {
   listDecidableAccessRequests,
   listRecentAccessRequestHistory,
 } from '@/lib/access/requests';
-import { roleLabel, type AppRole } from '@/lib/authorization';
+import { permanentRoleKeepsAccess, roleLabel, type AppRole } from '@/lib/authorization';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
@@ -259,6 +259,10 @@ export default async function AccessRequestsPage({
                       }
                       requestKind={request.kind}
                       roleManagedExternally={request.requester.roleSource !== 'MANUAL'}
+                      permanentWouldDemote={
+                        request.kind === 'ORG_ROLE' &&
+                        !permanentRoleKeepsAccess(request.requester.role, request.requestedRole)
+                      }
                     />
                   </div>
                 </li>

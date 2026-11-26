@@ -368,6 +368,26 @@ export function roleCovers(
   return getRoleCapabilities(requested).every(capability => held.has(capability));
 }
 
+const PERMANENT_UPGRADE_LADDER: readonly string[] = ['STAKEHOLDER', 'USER', 'RESPONDER', 'ADMIN'];
+
+/**
+ * Whether permanently replacing `current` with `requested` keeps everything the person can do.
+ * A permanent approval swaps the base role (there is no permanent additive grant), so a lateral
+ * move such as USER or RESPONDER to AUDITOR would silently strip their working permissions;
+ * those can only be granted time-boxed, where the grant is added on top of the base role.
+ * Responder's all-incident permissions supersede a User's scoped ones even though the sets differ,
+ * so a step up the operations ladder counts as safe alongside a strict permission superset.
+ */
+export function permanentRoleKeepsAccess(
+  current: string | null | undefined,
+  requested: string | null | undefined
+): boolean {
+  if (roleCovers(requested, current)) return true;
+  const from = PERMANENT_UPGRADE_LADDER.indexOf(current ?? '');
+  const to = PERMANENT_UPGRADE_LADDER.indexOf(requested ?? '');
+  return from >= 0 && to > from;
+}
+
 /** Effective permissions of a resolved user; falls back to the built-in role's permissions. */
 export function capabilitiesOf(user: {
   role: string;

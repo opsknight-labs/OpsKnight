@@ -106,6 +106,10 @@ Choose how long you need it (1 hour to 7 days, or permanently) and say why.
 - Granting the Admin role requires the approver to have signed in within the last 15 minutes.
 - If your role comes from your identity provider, you can still ask for temporary access; permanent
   changes are made in the identity provider.
+- A permanent role replaces your current one, so it is only offered when it keeps everything you can
+  do today (for example Responder or Admin from User). A lateral move, such as User or Responder to
+  Auditor, can only be granted for a limited time, on top of your current role; for a permanent
+  change an administrator edits your role directly.
 - You can ask to join any team by name, even if you are not in a team yet.
 - Approvers get a notification that opens the request directly. If you already received the access
   some other way, approving closes the request without changing anything (it never demotes you).

@@ -6,7 +6,7 @@ import type { AccessRequestStatus, Prisma, TeamRole } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
-import { roleCovers, roleLabel, type AppRole } from '@/lib/authorization';
+import { permanentRoleKeepsAccess, roleCovers, roleLabel, type AppRole } from '@/lib/authorization';
 import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
@@ -70,6 +70,10 @@ function teamRoleRank(role: string | null | undefined): number {
 
 function invalid(userMessage: string) {
   return new AppError({ code: 'VALIDATION_FAILED', userMessage });
+}
+
+function permanentRoleChangeMessage(current: string, requested: string) {
+  return `A permanent ${roleLabel(requested as AppRole)} role would replace the ${roleLabel(current as AppRole)} role and remove access it gives. Choose a time-limited grant, which is added on top of the current role, or ask an administrator to change the role directly.`;
 }
 
 /** Only same-origin relative paths are kept, so the approval link can never redirect off-site. */
@@ -164,6 +168,12 @@ export async function createAccessRequest(requesterId: string, input: AccessRequ
         throw invalid(
           `You already have everything the ${roleLabel(body.requestedRole)} role allows.`
         );
+      }
+      if (
+        body.durationMinutes === null &&
+        !permanentRoleKeepsAccess(requester.role, body.requestedRole)
+      ) {
+        throw invalid(permanentRoleChangeMessage(requester.role, body.requestedRole));
       }
     } else {
       const team = await tx.team.findUnique({
@@ -449,6 +459,9 @@ export async function decideAccessRequest(
           });
         }
         if (durationMinutes === null) {
+          if (!permanentRoleKeepsAccess(request.requester.role, requestedRole)) {
+            throw invalid(permanentRoleChangeMessage(request.requester.role, requestedRole));
+          }
           if (request.requester.roleSource !== 'MANUAL') {
             throw new AppError({
               code: 'ACCESS_FEATURE_DISABLED',
