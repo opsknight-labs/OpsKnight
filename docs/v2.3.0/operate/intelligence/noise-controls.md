@@ -139,7 +139,14 @@ a quarter of its main pool, 2 to 8 (3 with the default pool of 10), or `PREPAGIN
 connection is slow on first use. During a burst, or on a busy host, the 5 ms
 budget can be exhausted, in which case the event pages normally and
 `opsknight_prepaging_fail_open_total{reason="deadline"}` rises; watch that counter after switching a
-service to SHADOW. Local measurements (`plans/intelligence-engine/certification/perf/README.md`) meet
+service to SHADOW. The lookups themselves run in well under a millisecond in Postgres, so on a small or
+busy host the deadline is usually missed on the application side (event loop, pool hop). Content dedup,
+flapping and storm grouping then never act and record nothing. When this server abandoned a quarter or more
+of its lookups, the Noise controls page says so; set `PREPAGING_DEADLINE_MS` (a whole number from 1 to 50,
+default 5) on the application to give them more time. Suppression rules, maintenance windows and
+orchestration are decided from the in-memory snapshot and do not depend on it. That snapshot refreshes about
+every 30 seconds while any policy is SHADOW or ON, so a rule or window you save reaches every process within
+that time. Local measurements (`plans/intelligence-engine/certification/perf/README.md`) meet
 the ingestion latency contract for the controls alone but not yet with the intelligence lane busy in the
 same process or during a 10,000-event burst, so treat ON as opt-in per service and keep it to services
 where the noise justifies the cost.

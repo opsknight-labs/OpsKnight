@@ -38,9 +38,20 @@ export function setPrePagingDeadlineMs(ms: number | null): void {
   deadlineOverrideMs = ms === null ? null : Math.min(MAX_DEADLINE_MS, Math.max(1, Math.round(ms)));
 }
 
+/**
+ * `PREPAGING_DEADLINE_MS` (1-50): for hosts where the 5 ms default is missed even though the lookups run in
+ * well under a millisecond in Postgres (a busy event loop or a slow pool hop). Dedup, flapping and storm
+ * grouping fail open past the deadline, so on such a host they never act; this is the operator's lever.
+ */
+function envDeadlineMs(): number | null {
+  const raw = process.env.PREPAGING_DEADLINE_MS;
+  if (!raw || !/^\d{1,3}$/.test(raw.trim())) return null;
+  return Math.min(MAX_DEADLINE_MS, Math.max(1, Number(raw)));
+}
+
 /** The deadline the hook enforces in this process. */
 export function prePagingDeadlineMs(): number {
-  return deadlineOverrideMs ?? PREPAGING_LIMITS.deadlineMs;
+  return deadlineOverrideMs ?? envDeadlineMs() ?? PREPAGING_LIMITS.deadlineMs;
 }
 
 /** Server-side timeout for a client-side deadline: whole milliseconds, at least 1. */

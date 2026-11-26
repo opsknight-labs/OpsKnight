@@ -10,6 +10,7 @@ import {
   SuppressionRuleList,
 } from '@/components/settings/NoiseControlsForms';
 import HeartbeatPanel from '@/components/settings/noise-controls/HeartbeatPanel';
+import LookupDeadlineNotice from '@/components/settings/noise-controls/LookupDeadlineNotice';
 import MaintenanceWindowsPanel from '@/components/settings/noise-controls/MaintenanceWindowsPanel';
 import SuppressionRuleBuilder from '@/components/settings/noise-controls/SuppressionRuleBuilder';
 import EmptyState from '@/components/ui/EmptyState';
@@ -34,6 +35,7 @@ import {
   listSuppressionRules,
   suggestSuppressionRules,
 } from '@/lib/intelligence/noise-controls';
+import { currentLookupHealth } from '@/lib/intelligence/noise-controls/health';
 import { requirePageAccess } from '@/lib/access/server';
 
 export const dynamic = 'force-dynamic';
@@ -163,6 +165,8 @@ export default async function NoiseControlsPage({
       >
         Decide what happens to an alert before anyone is paged.
       </IntelligenceGroupHeader>
+
+      <LookupDeadlineNotice health={currentLookupHealth()} />
 
       {kpis && <KpiTiles kpis={kpis} />}
 
