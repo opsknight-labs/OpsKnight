@@ -12,6 +12,7 @@ import {
   impactReportCsv,
   parseImpactReportParams,
 } from '@/lib/business-services/impact-report';
+import { createCustomerImpactReport } from '@/lib/business-services/customer-reports';
 import {
   reconcileBusinessServiceImpacts,
   setIncidentImpactCommand,
@@ -220,5 +221,45 @@ describe('M3, L1 and BS-9 update validation', () => {
     const error = await createBusinessService({ name }, { actor }).catch(e => e);
     expect(error.code).toBe('RESOURCE_CONFLICT');
     expect(error.fields).toEqual([expect.objectContaining({ field: 'name' })]);
+  });
+});
+
+describe('M4 customer report idempotency', () => {
+  it('concurrent posts with one externalRef inside a caller transaction create one row', async () => {
+    const actor = actorFor(await createTestUser({ role: 'ADMIN' }), 'ADMIN');
+    const { bs } = await impactScenario();
+    const body = {
+      source: 'zendesk',
+      count: 5,
+      windowStart: new Date(Date.now() - 600_000),
+      windowEnd: new Date(Date.now() - 60_000),
+      externalRef: 'ticket-1',
+    };
+    // Same shape as the REST route: the caller owns the transaction.
+    const results = await Promise.all(
+      [1, 2, 3].map(() =>
+        db.$transaction(tx => createCustomerImpactReport(bs.id, body, { actor }, tx))
+      )
+    );
+    expect(results.filter(r => r.created)).toHaveLength(1);
+    expect(await db.customerImpactReport.count({ where: { businessServiceId: bs.id } })).toBe(1);
+  });
+
+  it('a different report under the same externalRef is a conflict, not a silent 200', async () => {
+    const actor = actorFor(await createTestUser({ role: 'ADMIN' }), 'ADMIN');
+    const { bs } = await impactScenario();
+    const body = {
+      source: 'zendesk',
+      count: 5,
+      windowStart: new Date(Date.now() - 600_000),
+      windowEnd: new Date(Date.now() - 60_000),
+      externalRef: 'ticket-2',
+    };
+    await createCustomerImpactReport(bs.id, body, { actor });
+    await expect(
+      createCustomerImpactReport(bs.id, { ...body, count: 99 }, { actor })
+    ).rejects.toMatchObject({ code: 'RESOURCE_CONFLICT' });
+    const retry = await createCustomerImpactReport(bs.id, body, { actor });
+    expect(retry.created).toBe(false);
   });
 });
