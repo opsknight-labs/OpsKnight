@@ -24,9 +24,43 @@ describe('AvatarPicker', () => {
       'aria-pressed',
       'true'
     );
-    for (const name of ['Team', 'Illustrated', 'Sketch', 'Orbs', 'Initials']) {
+    for (const name of [
+      'Squire',
+      'OpsKnight',
+      'Team',
+      'Illustrated',
+      'Sketch',
+      'Cartoon',
+      'Robots',
+      'Pixel',
+      'Emoji',
+      'Orbs',
+      'Initials',
+    ]) {
       expect(screen.getByRole('tab', { name })).toBeInTheDocument();
     }
+  });
+
+  it('offers the Squire and the OpsKnight knights', () => {
+    const onSelect = vi.fn().mockResolvedValue(true);
+    setup(onSelect);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Squire' }));
+    for (const name of ['Squire', 'Paladin', 'Midnight', 'Ember']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Paladin' }));
+    expect(onSelect).toHaveBeenCalledWith('/avatars/squire/paladin.svg');
+  });
+
+  it('offers the OpsKnight knights', () => {
+    const onSelect = vi.fn().mockResolvedValue(true);
+    setup(onSelect);
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'OpsKnight' }));
+    for (const name of ['Sentinel', 'Direwolf', 'Warden', 'Kingsguard']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Sentinel' }));
+    expect(onSelect).toHaveBeenCalledWith('/avatars/knight/sentinel.svg');
   });
 
   it('saves the pick and closes once it is saved', async () => {

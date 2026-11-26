@@ -49,7 +49,7 @@ export function AvatarPicker({
   const currentCategory =
     library.find(category =>
       category.presets.some(preset => isSameAvatar(preset.url, currentAvatarUrl))
-    )?.id ?? 'team';
+    )?.id ?? 'squire';
   const [category, setCategory] = useState<string | null>(null);
 
   const choose = async (url: string) => {
@@ -80,10 +80,16 @@ export function AvatarPicker({
       )}
 
       <Dialog open={open} onOpenChange={next => (pendingUrl ? undefined : setOpen(next))}>
-        <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto">
+        <DialogContent className="max-h-[88vh] max-w-5xl sm:max-w-5xl overflow-y-auto">
           <DialogHeader>
             <div className="flex items-start justify-between gap-3 pr-6">
-              <div className="min-w-0">
+              <Avatar className="hidden h-12 w-12 shrink-0 ring-2 ring-primary/30 ring-offset-2 ring-offset-background sm:block">
+                <AvatarImage src={currentAvatarUrl ?? undefined} alt="" className="object-cover" />
+                <AvatarFallback className="text-xs font-semibold">
+                  {userName.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
                 <DialogTitle>Choose your avatar</DialogTitle>
                 <DialogDescription>
                   Shown on incidents, on-call schedules and team pages.
@@ -108,18 +114,39 @@ export function AvatarPicker({
             </div>
           </DialogHeader>
 
-          <Tabs value={category ?? currentCategory} onValueChange={setCategory}>
-            <TabsList className="grid h-auto w-full grid-cols-5 gap-1">
+          <Tabs
+            value={category ?? currentCategory}
+            onValueChange={setCategory}
+            className="md:flex md:items-start md:gap-6"
+          >
+            <TabsList className="flex h-auto w-full flex-wrap gap-1 bg-transparent p-0 md:sticky md:top-0 md:w-48 md:shrink-0 md:flex-col md:flex-nowrap md:items-stretch md:border-r md:pr-4">
               {library.map(item => (
-                <TabsTrigger key={item.id} value={item.id} className="px-1 py-1.5 text-xs">
-                  {item.label}
+                <TabsTrigger
+                  key={item.id}
+                  value={item.id}
+                  className="min-w-[4.5rem] flex-1 gap-2 rounded-full border border-transparent px-3 py-1.5 text-xs data-[state=active]:border-primary/30 data-[state=active]:bg-primary/10 data-[state=active]:text-foreground data-[state=active]:shadow-none md:flex-none md:justify-start md:rounded-lg md:py-2 md:text-sm"
+                >
+                  <Avatar className="hidden h-6 w-6 md:block">
+                    <AvatarImage src={item.presets[0]?.url} alt="" className="object-cover" />
+                  </Avatar>
+                  <span className="truncate">{item.label}</span>
+                  <span
+                    aria-hidden
+                    className="hidden text-2xs tabular-nums text-muted-foreground md:ml-auto md:inline"
+                  >
+                    {item.presets.length}
+                  </span>
                 </TabsTrigger>
               ))}
             </TabsList>
             {library.map(item => (
-              <TabsContent key={item.id} value={item.id} className="mt-4 min-h-[22rem] space-y-3">
+              <TabsContent
+                key={item.id}
+                value={item.id}
+                className="mt-4 min-h-[24rem] min-w-0 flex-1 space-y-3 md:mt-0"
+              >
                 <p className="text-xs text-muted-foreground">{item.hint}</p>
-                <ul className="grid grid-cols-4 gap-x-3 gap-y-4 sm:grid-cols-5">
+                <ul className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
                   {item.presets.map(preset => {
                     const selected = isSameAvatar(preset.url, currentAvatarUrl);
                     const saving = pendingUrl === preset.url;
@@ -131,7 +158,7 @@ export function AvatarPicker({
                           disabled={Boolean(pendingUrl) && !saving}
                           aria-pressed={selected}
                           aria-label={`${preset.label}${selected ? ' (current)' : ''}`}
-                          className="group flex w-full flex-col items-center gap-1.5 rounded-lg p-1 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                          className="group flex w-full flex-col items-center gap-1.5 rounded-xl p-1.5 transition hover:bg-muted/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                         >
                           <span
                             className={cn(
@@ -141,7 +168,7 @@ export function AvatarPicker({
                                 : 'group-hover:ring-2 group-hover:ring-primary/40 group-hover:ring-offset-2 group-hover:ring-offset-background'
                             )}
                           >
-                            <Avatar className="h-14 w-14">
+                            <Avatar className="h-16 w-16 transition-transform group-hover:scale-105">
                               <AvatarImage src={preset.url} alt="" className="object-cover" />
                               <AvatarFallback className="bg-muted text-xs font-semibold">
                                 {preset.label.slice(0, 2)}
@@ -161,7 +188,7 @@ export function AvatarPicker({
                               </span>
                             )}
                           </span>
-                          <span className="max-w-full truncate text-2xs text-muted-foreground">
+                          <span className="max-w-full truncate text-xs text-muted-foreground group-hover:text-foreground">
                             {preset.label}
                           </span>
                         </button>

@@ -57,32 +57,57 @@ export function extractInitials(nameOrIdentifier: string | null | undefined): st
 }
 
 /**
- * Generates a modern, serious, professional default avatar URL.
- * Uses local in-process @dicebear/collection 'initials' in SVG format.
- * Ensures the seed is always the actual user initials (e.g. "SA" for "System Admin")
- * so the rendered SVG matches fallback initials everywhere across the app.
- *
- * Supports both 2-argument signature (nameOrIdentifier, colorSeed) and
- * 3-argument legacy signature (gender, nameOrIdentifier, colorSeed).
+ * Bundled avatars a person gets until they pick their own: the friendly, professional knights and Squires
+ * (no villains). Kept in step with public/avatars; tests check every file exists.
+ */
+export const AUTO_AVATAR_FILES = [
+  'knight/sentinel',
+  'knight/crusader',
+  'knight/paladin',
+  'knight/warden',
+  'knight/ranger',
+  'knight/vanguard',
+  'knight/bastion',
+  'knight/royal',
+  'knight/direwolf',
+  'knight/lion',
+  'knight/stag',
+  'knight/rose',
+  'knight/sun',
+  'knight/kingsguard',
+  'knight/valkyrie',
+  'knight/duchess',
+  'knight/huntress',
+  'knight/ice-queen',
+  'knight/shield-maiden',
+  'squire/squire',
+  'squire/cheer',
+  'squire/scout',
+  'squire/thinker',
+  'squire/victor',
+  'squire/lady-squire',
+  'squire/lady-aurora',
+] as const;
+
+/** Marks an avatar as assigned automatically, so an identity provider's photo may replace it and a pick may not. */
+const AUTO_MARKER = '?auto=1';
+
+/**
+ * The avatar a person gets before choosing one: a knight or Squire picked from a hash of `seed`, so the same
+ * person always gets the same one. Falls back to the first entry; never throws.
  */
 export const getDefaultAvatar = (
   arg1?: string | null,
   arg2?: string | null,
   arg3?: string | null
 ): string => {
-  let nameOrIdentifier = arg1;
-  let colorSeed = arg2;
-
-  if (arg3 !== undefined) {
-    nameOrIdentifier = arg2;
-    colorSeed = arg3;
-  }
-
-  const initials = extractInitials(nameOrIdentifier) || 'U';
-  const bgSeed = colorSeed || nameOrIdentifier || 'user';
-  const bg = getDeterministicColor(bgSeed);
-
-  return `/api/avatar?style=initials&seed=${encodeURIComponent(initials)}&backgroundColor=${bg}&radius=50`;
+  // Supports the 2-argument form (name, seed) and the legacy 3-argument form (gender, name, seed).
+  const nameOrIdentifier = arg3 !== undefined ? arg2 : arg1;
+  const seed = (arg3 !== undefined ? arg3 : arg2) || nameOrIdentifier || 'user';
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  const file = AUTO_AVATAR_FILES.at(hash % AUTO_AVATAR_FILES.length) ?? AUTO_AVATAR_FILES[0];
+  return `/avatars/${file}.svg${AUTO_MARKER}`;
 };
 
 /**
@@ -91,6 +116,7 @@ export const getDefaultAvatar = (
  */
 export const isDefaultAvatar = (url: string | null | undefined): boolean => {
   if (!url) return true;
+  if (url.startsWith('/avatars/') && url.endsWith(AUTO_MARKER)) return true;
 
   // Check if it's our proxy URL
   if (url.startsWith('/api/avatar')) {

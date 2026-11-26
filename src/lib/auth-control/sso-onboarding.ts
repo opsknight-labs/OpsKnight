@@ -1,3 +1,4 @@
+import { getDefaultAvatar } from '@/lib/avatar';
 import 'server-only';
 import { z } from 'zod/v3';
 import { ASSIGNABLE_ROLES } from '@/lib/authorization';
@@ -49,6 +50,7 @@ export async function inviteSsoUser(input: z.input<typeof invitationSchema>) {
         data: {
           name: values.name,
           email: values.email,
+          avatarUrl: getDefaultAvatar(values.name, values.email),
           role: values.role,
           roleSource: 'MANUAL',
           status: 'INVITED',

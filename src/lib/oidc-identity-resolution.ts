@@ -1,3 +1,4 @@
+import { getDefaultAvatar } from '@/lib/avatar';
 import { normalizeOidcBoundaryClaims } from '@/lib/oidc/claims';
 import type { Prisma } from '@prisma/client';
 import type { AssignableRole } from '@/lib/authorization';
@@ -482,6 +483,7 @@ export async function resolveOidcIdentityForSignIn(
         data: {
           email,
           name: input.displayName || email.split('@')[0],
+          avatarUrl: getDefaultAvatar(input.displayName || email.split('@')[0], email),
           role: input.initialRole ?? 'USER',
           roleSource: 'OIDC',
           status: 'ACTIVE',

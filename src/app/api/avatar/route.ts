@@ -1,21 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAvatar, type Style } from '@dicebear/core';
 import {
-  initials,
-  shapes,
-  personas,
-  identicon,
+  adventurer,
   avataaars,
+  bigEars,
+  bigSmile,
   bottts,
-  thumbs,
+  botttsNeutral,
+  croodles,
+  dylan,
+  funEmoji,
+  glass,
+  identicon,
+  initials,
   lorelei,
-  notionists,
-  openPeeps,
   micah,
   miniavs,
+  notionists,
+  openPeeps,
+  personas,
   pixelArt,
   rings,
-  glass,
+  shapes,
+  thumbs,
+  toonHead,
 } from '@dicebear/collection';
 import { logger } from '@/lib/logger';
 
@@ -38,6 +46,14 @@ const STYLE_ENGINES = new Map<string, Style<object>>(
     'pixel-art': pixelArt,
     rings,
     glass,
+    adventurer,
+    'big-ears': bigEars,
+    'big-smile': bigSmile,
+    'bottts-neutral': botttsNeutral,
+    croodles,
+    dylan,
+    'fun-emoji': funEmoji,
+    'toon-head': toonHead,
   })
 );
 

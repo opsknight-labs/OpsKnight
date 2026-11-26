@@ -43,11 +43,17 @@ Open **Settings → Profile**. The page contains **Profile & Identity**,
    and avatar. Email, role, account status, and OIDC-synchronized identity values
    may be controlled by an administrator or identity provider.
 
-   To change your avatar, select it (or **Choose Avatar Style**) and pick from five
-   groups: **Team** (mascots and ops agents), **Illustrated**, **Sketch**, **Orbs**, and
-   **Initials** (your own initials on a colour). The current avatar is ringed; the
-   dialog closes once the new one is saved and stays open if saving fails, so you can try
-   another. **Upload photo** accepts a PNG, JPEG, WebP, or GIF up to 2 MB.
+   To change your avatar, select it (or **Choose Avatar Style**) and pick from eleven
+   groups: **Squire** (the Squire bot in its moods and colours), **OpsKnight** (knights of
+   the watch), **Team** (mascots and ops agents), **Illustrated**, **Sketch**, **Cartoon**,
+   **Robots**, **Pixel**, **Emoji**, **Orbs**, and **Initials** (your own initials on a
+   colour). The current avatar is ringed; the dialog closes once the new one is saved and
+   stays open if saving fails, so you can try another. **Upload photo** accepts a PNG,
+   JPEG, WebP, or GIF up to 2 MB.
+
+   Until you choose one, OpsKnight gives you a knight or Squire avatar, the same one every
+   time. It appears in the picker with the other avatars, and a photo from your identity
+   provider can replace it. Picking an avatar yourself keeps it.
 
 2. Under **Notifications**, verify the phone number and enable only the personal
    channels you can receive: email, SMS, voice, push, or WhatsApp.

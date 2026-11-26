@@ -13,7 +13,7 @@ describe('avatar library', () => {
   it('has unique ids and urls, and enough to choose from', () => {
     expect(new Set(all.map(preset => preset.id)).size).toBe(all.length);
     expect(new Set(all.map(preset => preset.url)).size).toBe(all.length);
-    expect(all.length).toBeGreaterThanOrEqual(50);
+    expect(all.length).toBeGreaterThanOrEqual(100);
   });
 
   it('only offers urls the profile action accepts', () => {
@@ -24,7 +24,7 @@ describe('avatar library', () => {
 
   it('points every bundled avatar at a file that exists', () => {
     const files = all.filter(preset => preset.url.startsWith('/avatars/'));
-    expect(files.length).toBe(20);
+    expect(files.length).toBe(73);
     for (const preset of files) {
       // Test reads repo files by paths from our own constant library, never from input.
       // eslint-disable-next-line security/detect-non-literal-fs-filename
