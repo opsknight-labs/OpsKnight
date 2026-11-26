@@ -1021,10 +1021,6 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
   ],
   ['runServiceReviews', async () => (await import('@/app/api/v2/service-reviews/run/route')).POST],
   [
-    'previewServiceReview',
-    async () => (await import('@/app/api/v2/service-reviews/preview/route')).POST,
-  ],
-  [
     'importBusinessServices',
     async () => (await import('@/app/api/v2/business-services/import/route')).POST,
   ],

@@ -100,7 +100,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `service-objectives:evaluate` | Evaluate service level objectives | Services | Change | ✓ | ✓ | ✓ | ✓ |  | 0 | 0 | 0 | 1 |
 | `service-objectives:read` | View service level objectives | Services | View | ✓ | ✓ | ✓ | ✓ |  | 3 | 7 | 0 | 0 |
 | `service-objectives:write` | Change service level objectives (higher-risk changes wait for approval) | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 4 |
-| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 23 | 4 | 0 | 4 |
+| `services:read` | View services | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 23 | 4 | 0 | 3 |
 | `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  |  | 1 | 1 | 0 | 23 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |
 | `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  |  | 5 | 9 | 0 | 2 |
@@ -143,13 +143,13 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | schedules | 25 | 13 | 12 | 0 |
 | service-accounts | 6 | 0 | 0 | 6 |
 | service-objectives | 14 | 9 | 5 | 0 |
-| service-reviews | 3 | 1 | 2 | 0 |
+| service-reviews | 3 | 1 | 1 | 1 |
 | services | 45 | 21 | 21 | 3 |
 | settings | 12 | 5 | 5 | 2 |
 | status-pages | 33 | 15 | 11 | 7 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 393 | 179 | 131 | 83 |
+| **All** | 393 | 179 | 130 | 84 |
 
 <details>
 <summary>Operations by area</summary>
@@ -542,7 +542,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | Operation | How an assistant reaches it |
 | --- | --- |
 | `listServiceReviewRuns` | `read_operation` (sensitive reads on) |
-| `previewServiceReview` | `operation_prepare`, then approval |
+| `previewServiceReview` | not available: not exposed, reason recorded in the catalog (exclusion review pending) |
 | `runServiceReviews` | `operation_prepare`, then approval |
 
 ### services

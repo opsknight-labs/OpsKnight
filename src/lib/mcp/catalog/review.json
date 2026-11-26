@@ -4315,9 +4315,9 @@
     "actions": ["service_review.manage"]
   },
   "previewServiceReview": {
-    "status": "APPROVAL_REQUIRED",
+    "status": "UNSUPPORTED_WITH_REASON",
     "risk": "R2",
-    "reason": "Emails the requester a preview; reviewed because it sends email.",
+    "reason": "Not exposed: it sends email but needs only services:read, so a view-only connection could trigger it. Preview the digest in Settings or through REST.",
     "tool": null,
     "routeSha256": "2bc5ed87b94e9a747e6a95cf8f2be2fe4af6cd0f99b20a35efbd80f4d53073e8",
     "resourceFilter": "existing REST route authorization and scoped projection",
