@@ -4443,9 +4443,6 @@
           "quorumPartialPct",
           "quorumMajorPct",
           "dependencyHopDepth",
-          "customersTotal",
-          "revenuePerHourCents",
-          "currency",
           "customerReportThreshold",
           "customerReportWindowMinutes",
           "reviewIntervalDays",
@@ -4585,7 +4582,6 @@
                 }
               },
               "required": [
-                "costCents",
                 "incidentId",
                 "incidentTitle",
                 "urgency",
@@ -4608,9 +4604,6 @@
           "mttrMinutes",
           "weightedDowntimeMinutes",
           "weightedUptimePercent",
-          "currency",
-          "customersTotal",
-          "estimatedCostCents",
           "entries"
         ],
         "additionalProperties": false
