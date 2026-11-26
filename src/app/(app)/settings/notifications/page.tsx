@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import SystemNotificationSettings from '@/components/settings/SystemNotificationSettings';
 import WeeklyDigestToggle from '@/components/settings/WeeklyDigestToggle';
 import ServiceReviewAdminSection from '@/components/settings/ServiceReviewAdminSection';
+import ScorecardRubricSection from '@/components/settings/ScorecardRubricSection';
 import { hasConfiguredEmailProvider, isWeeklyDigestEnabled } from '@/lib/analytics/digest';
 import { getNotificationProviders } from '@/app/(app)/settings/system/actions';
 import {
@@ -341,6 +342,7 @@ export default async function NotificationProviderSettingsPage() {
         emailReady={await hasConfiguredEmailProvider()}
       />
       <ServiceReviewAdminSection />
+      <ScorecardRubricSection />
     </div>
   );
 }

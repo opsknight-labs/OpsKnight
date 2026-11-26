@@ -182,6 +182,22 @@ export const MCP_HANDLERS = new Map<string, () => Promise<Handler>>([
     async () => (await import('@/app/api/v2/business-services/[id]/graph/route')).GET,
   ],
   [
+    'getBusinessServiceScorecardRubric',
+    async () => (await import('@/app/api/v2/settings/business-service-scorecard/route')).GET,
+  ],
+  [
+    'getBusinessServiceScorecard',
+    async () => (await import('@/app/api/v2/business-services/[id]/scorecard/route')).GET,
+  ],
+  [
+    'listBusinessServiceChanges',
+    async () => (await import('@/app/api/v2/business-services/[id]/changes/route')).GET,
+  ],
+  [
+    'getBusinessServiceSlaReport',
+    async () => (await import('@/app/api/v2/business-services/[id]/sla-report/route')).GET,
+  ],
+  [
     'getDependencyGraphAt',
     async () => (await import('@/app/api/v2/dependency-graph/at/route')).GET,
   ],

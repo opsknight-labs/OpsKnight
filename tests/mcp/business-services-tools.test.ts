@@ -36,6 +36,32 @@ describe('business service MCP tools', () => {
     }
   });
 
+  it('classifies scorecard, changes and SLA report reads and dispatches them to REST', () => {
+    expect(MCP_OPERATION_MAP.get('listBusinessServiceChanges')).toMatchObject({
+      status: 'CURATED',
+      risk: 'R0',
+      tool: 'business_service_changes',
+      actions: ['service.read'],
+    });
+    for (const id of [
+      'getBusinessServiceScorecardRubric',
+      'getBusinessServiceScorecard',
+      'getBusinessServiceSlaReport',
+    ])
+      expect(MCP_OPERATION_MAP.get(id), id).toMatchObject({ status: 'DISCOVERABLE', risk: 'R0' });
+    for (const id of [
+      'getBusinessServiceScorecardRubric',
+      'getBusinessServiceScorecard',
+      'listBusinessServiceChanges',
+      'getBusinessServiceSlaReport',
+    ])
+      expect(MCP_HANDLERS.has(id), id).toBe(true);
+    // Organization configuration stays with administrators in Settings or REST.
+    expect(MCP_OPERATION_MAP.get('updateBusinessServiceScorecardRubric')?.status).toBe(
+      'UNSUPPORTED_WITH_REASON'
+    );
+  });
+
   it('keeps business-service writes behind human approval', () => {
     for (const id of [
       'createBusinessService',

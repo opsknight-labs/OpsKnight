@@ -67,4 +67,7 @@ export const MCP_SEARCH_KEYWORDS = new Map<string, readonly string[]>([
   ['unmarkIncidentBusinessServiceImpact', ['not affected', 'remove impact', 'false impact']],
   ['createBusinessServiceCustomerReport', ['support tickets', 'customer reports', 'complaints']],
   ['notifyIncidentStakeholders', ['stakeholders', 'tell leadership', 'business update']],
+  ['listBusinessServiceChanges', ['deploys', 'releases', 'rollout']],
+  ['getBusinessServiceSlaReport', ['monthly report', 'uptime report', 'attainment']],
+  ['getBusinessServiceScorecard', ['scorecard', 'maturity', 'level', 'readiness']],
 ]);

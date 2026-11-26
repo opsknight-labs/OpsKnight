@@ -4476,5 +4476,62 @@
     "resourceFilter": "existing REST route authorization and scoped projection",
     "routeSha256": "8cc4f881fe651c499fa6462810eff189fe03346970e3fcc19331210913adcf24",
     "contractSha256": "8d035e9584a261c712d70f2e138a7fe5632b42f6bcf732c3ca399490c6810f84"
+  },
+  "getBusinessServiceScorecardRubric": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Read-only scorecard rubric (rules, levels, scopes and deadlines) through the existing REST route authorization.",
+    "tool": null,
+    "routeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "contractSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "actions": ["service.read"]
+  },
+  "updateBusinessServiceScorecardRubric": {
+    "status": "UNSUPPORTED_WITH_REASON",
+    "risk": "R2",
+    "reason": "Not exposed yet: the scorecard rubric is organization configuration, changed by an administrator in Settings or REST.",
+    "tool": null,
+    "routeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "contractSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "actions": ["service_review.manage"]
+  },
+  "getBusinessServiceScorecard": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Read-only scorecard of one business service through the existing REST route authorization and scoped projection.",
+    "tool": null,
+    "routeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "contractSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "actions": ["service.read"]
+  },
+  "listBusinessServiceChanges": {
+    "status": "CURATED",
+    "risk": "R0",
+    "reason": "Read-only changes on the member services of one business service, limited to changes the caller may read.",
+    "tool": "business_service_changes",
+    "title": "Changes behind a business service",
+    "agentDescription": "Deploys, config, feature-flag and infrastructure changes on the member services of a business service in a window (default 30 days), newest first, with source, version and risk score. Use for 'what changed before Checkout broke'.",
+    "routeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "contractSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "actions": ["service.read"]
+  },
+  "getBusinessServiceSlaReport": {
+    "status": "DISCOVERABLE",
+    "risk": "R0",
+    "reason": "Read-only monthly SLA figures of one business service; cost fields only for financial readers, enforced by the REST route.",
+    "tool": null,
+    "routeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
+    "contractSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "actions": ["service.read"]
   }
 }

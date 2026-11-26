@@ -117,6 +117,11 @@ const decisions: readonly ApiCapability[] = [
       'updateBusinessServiceTemplate',
       'deleteBusinessServiceTemplate',
       'createBusinessServiceFromTemplate',
+      'getBusinessServiceScorecardRubric',
+      'updateBusinessServiceScorecardRubric',
+      'getBusinessServiceScorecard',
+      'listBusinessServiceChanges',
+      'getBusinessServiceSlaReport',
     ],
   },
   {
