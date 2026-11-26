@@ -169,6 +169,18 @@ export function prePagingLookupPoolSize(
 }
 
 /**
+ * The pre-paging lookup deadline from `PREPAGING_DEADLINE_MS`: a whole number of milliseconds, 1-50, or null
+ * when unset or not a whole number. Read here, beside the pool size, because the intelligence modules read
+ * no process environment. See docs/v2.3.0/operate/intelligence/noise-controls.md.
+ */
+export function prePagingDeadlineFromEnv(
+  configured: string | undefined = process.env.PREPAGING_DEADLINE_MS
+): number | null {
+  if (!configured || !/^\d{1,3}$/.test(configured.trim())) return null;
+  return Math.min(50, Math.max(1, Number(configured)));
+}
+
+/**
  * Set (to `1`) only in the environment of the child process that runs the intelligence lane for an
  * `integrated` process (see intelligence/jobs/lane-thread.ts). That process's Prisma client is the lane's
  * own pool. Internal: operators never set it.
