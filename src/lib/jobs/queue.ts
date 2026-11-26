@@ -958,6 +958,8 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         const stepIndexValue = payloadValue(job.payload, 'stepIndex');
         const stepIndex = typeof stepIndexValue === 'number' ? stepIndexValue : undefined;
         const result = await executeEscalation(incidentId, stepIndex, { generation });
+        const { refreshChatCardsAfterEscalation } = await import('../escalation/chat-card-refresh');
+        await refreshChatCardsAfterEscalation(incidentId, result);
         if (escalationJobIsSettled(result.outcome)) {
           await markJobCompleted(job.id, claimAttempt, job.claimToken);
           return true;

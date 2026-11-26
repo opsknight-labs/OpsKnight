@@ -1,5 +1,6 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 import { normalizeTrustedMicrosoftTeamsServiceUrl } from '@/lib/microsoft-teams/service-url';
 import { resolveMicrosoftTeamsUser } from '@/lib/microsoft-teams/identity';
 import {
@@ -23,6 +24,7 @@ import {
 } from './handler';
 import { loadSquireIdentity, withTeamsSquireHeader, type SquireIdentity } from './identity';
 import {
+  appLink,
   markdownToTeams,
   parseTeamsSquireAction,
   questionFromMention,
@@ -105,7 +107,40 @@ export async function enqueueTeamsSquireMention(
     return false;
   // With channel-message permissions the bot sees every message; answer only an explicit @mention.
   if (!mentionsBot(activity)) return false;
-  if (!(await isSquireChatOpsEnabled())) return false;
+  if (!(await isSquireChatOpsEnabled())) {
+    // Say so instead of silently dropping the mention (the asker would otherwise wait forever).
+    logger.info('[Squire] Teams mention ignored: Squire is turned off for chat', {
+      tenantId: verifiedTenantId,
+    });
+    // Not awaited: the activity must be acknowledged promptly; the reply is best-effort.
+    void (async () =>
+      replyToMicrosoftTeamsActivity({
+        tenantId: verifiedTenantId,
+        serviceUrl,
+        conversationId,
+        replyToId: activityId,
+        card: withTeamsSquireHeader(
+          renderTeamsAnswer(
+            {
+              name: 'Squire',
+              mode: 'basic',
+              text: '',
+              notices: [],
+              citations: [],
+              proposals: [],
+              error: SQUIRE_TURNED_OFF_FOR_CHAT,
+            },
+            { baseUrl: chatBaseUrl(), ownerUserId: '' }
+          ),
+          await loadSquireIdentity()
+        ),
+      }))().catch(error =>
+      logger.warn('[Squire] Could not tell the Teams user that Squire is off', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    );
+    return false;
+  }
   const payload: TeamsSquireMentionPayload = {
     __kind: 'SQUIRE_MENTION',
     tenantId: verifiedTenantId,
@@ -151,8 +186,38 @@ export async function findTeamsWarRoomIncident(tenantId: string, channelIds: rea
   return room?.incidentId ?? null;
 }
 
-const NOT_A_WAR_ROOM =
-  'I answer in OpsKnight incident war rooms. Open the incident in OpsKnight to ask about anything else.';
+/** The root message id of a channel thread (`19:…@thread.tacv2;messageid=123`). */
+export function teamsThreadRootId(conversationId: string | null | undefined): string | null {
+  const match = /;messageid=([^;]+)/i.exec(conversationId ?? '');
+  return match?.[1]?.trim() || null;
+}
+
+/**
+ * The incident a question is about: the channel's war room, or — in a normal notification
+ * channel — the incident whose card heads the thread the bot was mentioned in.
+ */
+export async function findTeamsIncidentForConversation(
+  tenantId: string,
+  channelIds: readonly string[],
+  conversationId: string | null | undefined
+): Promise<string | null> {
+  const warRoomIncident = await findTeamsWarRoomIncident(tenantId, channelIds);
+  if (warRoomIncident) return warRoomIncident;
+  const rootId = teamsThreadRootId(conversationId);
+  if (!tenantId || !rootId || channelIds.length === 0) return null;
+  const card = await prisma.microsoftTeamsIncidentMessage.findFirst({
+    where: { messageId: rootId, tenantId, channelId: { in: [...channelIds] } },
+    select: { incidentId: true },
+  });
+  return card?.incidentId ?? null;
+}
+
+const SQUIRE_TURNED_OFF_FOR_CHAT =
+  'Squire is turned off for chat in this OpsKnight workspace. An administrator can turn it on in Settings → Intelligence → AI.';
+
+function notAWarRoomMessage(baseUrl: string): string {
+  return `I answer in OpsKnight incident war rooms and in the thread of an incident card. To ask about anything else, open [OpsKnight](${baseUrl}/incidents).`;
+}
 
 async function resolveTeamsUser(input: {
   tenantId: string;
@@ -195,7 +260,11 @@ export async function answerTeamsSquireMention(
 ): Promise<TeamsSquireReply> {
   const baseUrl = chatBaseUrl();
   const identity = await loadSquireIdentity();
-  const incidentId = await findTeamsWarRoomIncident(payload.tenantId, payload.channelIds);
+  const incidentId = await findTeamsIncidentForConversation(
+    payload.tenantId,
+    payload.channelIds,
+    payload.conversationId
+  );
   if (!incidentId)
     return {
       card: withTeamsSquireHeader(
@@ -207,7 +276,7 @@ export async function answerTeamsSquireMention(
             notices: [],
             citations: [],
             proposals: [],
-            error: NOT_A_WAR_ROOM,
+            error: notAWarRoomMessage(baseUrl),
           },
           { baseUrl, ownerUserId: '' }
         ),
@@ -326,5 +395,7 @@ export async function handleTeamsSquireConfirm(input: {
       result.denied ? 'ActionDenied' : 'NotApplied',
       result.message
     );
-  return teamsActionSuccess(result.href ? `${result.message} ${result.href}` : result.message);
+  // Always an absolute link: a relative path is not clickable in Teams.
+  const href = result.href ? appLink(result.href, chatBaseUrl()) : null;
+  return teamsActionSuccess(href ? `${result.message} ${href}` : result.message);
 }

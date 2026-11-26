@@ -44,12 +44,85 @@ export function deriveMicrosoftTeamsCardState(incident: {
   return { eventType: 'triggered', disableActions: false };
 }
 
+/**
+ * How long an unconfirmed card create blocks the channel before OpsKnight re-posts a fresh card
+ * marked as a possible duplicate. Long enough for an operator to reconcile, short enough that a
+ * single Teams 5xx never silences a channel for the rest of the incident.
+ */
+export const TEAMS_AMBIGUOUS_REPOST_AFTER_MS = 10 * 60_000;
+
+/** Gateway errors come from the Teams front door before the activity is applied. */
+export function teamsCreateGatewayNotApplied(statusCode: number | null | undefined): boolean {
+  return statusCode === 502 || statusCode === 503 || statusCode === 504;
+}
+
+export function teamsAmbiguousCreateExpired(
+  ambiguousSince: Date | null | undefined,
+  now = new Date()
+): boolean {
+  return Boolean(
+    ambiguousSince && now.getTime() - ambiguousSince.getTime() >= TEAMS_AMBIGUOUS_REPOST_AFTER_MS
+  );
+}
+
+export type TeamsNotifyToggleDecision = 'deliver' | 'edit_only' | 'skip';
+
+/**
+ * Service notify toggles only stop NEW Teams posts (new cards and thread replies). An existing
+ * card is always edited in place so it never keeps showing a stale state.
+ */
+export function teamsNotifyToggleDecision(input: {
+  eventType: string;
+  hasExistingCard: boolean;
+  serviceNotifyOnTriggered?: boolean | null;
+  serviceNotifyOnAck?: boolean | null;
+  serviceNotifyOnResolved?: boolean | null;
+}): TeamsNotifyToggleDecision {
+  const enabled =
+    input.eventType === 'triggered' || input.eventType === 'escalated'
+      ? input.serviceNotifyOnTriggered !== false
+      : input.eventType === 'acknowledged'
+        ? input.serviceNotifyOnAck !== false
+        : input.eventType === 'resolved'
+          ? input.serviceNotifyOnResolved !== false
+          : true;
+  if (enabled) return 'deliver';
+  return input.hasExistingCard ? 'edit_only' : 'skip';
+}
+
+/** Plain-text thread reply for a state change on an existing card; null when none is due. */
+export function teamsThreadReplyText(input: {
+  eventType: string;
+  incident: {
+    status: string;
+    acknowledgedBy?: string | null;
+    resolvedBy?: string | null;
+    escalation?: { level: number; target?: string | null } | null;
+  };
+  resolutionNote?: string | null;
+}): string | null {
+  const { incident } = input;
+  if (input.eventType === 'acknowledged' && incident.status === 'ACKNOWLEDGED')
+    return incident.acknowledgedBy ? `Acknowledged by ${incident.acknowledgedBy}` : 'Acknowledged';
+  if (input.eventType === 'resolved' && incident.status === 'RESOLVED') {
+    const who = incident.resolvedBy ? `Resolved by ${incident.resolvedBy}` : 'Resolved';
+    const note = input.resolutionNote?.trim();
+    return note ? `${who}: ${note.slice(0, 1000)}` : who;
+  }
+  if (input.eventType === 'escalated' && incident.status === 'OPEN' && incident.escalation)
+    return `Escalated to level ${incident.escalation.level}${
+      incident.escalation.target ? ` · paging ${incident.escalation.target}` : ''
+    }`;
+  return null;
+}
+
 export type TeamsDeliveryEnqueueInput = {
   incidentId: string;
   destinationId: string;
   /** Automation actions have independent notification enablement. */
   origin?: 'SERVICE' | 'AUTOMATION';
-  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
+  /** `escalated` updates the card in place and replies in its thread (no new top-level post). */
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' | 'escalated';
   /** Monotonic incident updatedAt or version — part of the idempotency key. */
   incidentUpdatedAt: Date;
   escalationGeneration?: number;
@@ -65,7 +138,10 @@ export type TeamsDeliveryEnqueueInput = {
 };
 
 export function teamsDeliveryIdempotencyKey(input: TeamsDeliveryEnqueueInput): string {
-  const gen = input.eventType === 'triggered' ? `:g${input.escalationGeneration ?? 0}` : '';
+  const gen =
+    input.eventType === 'triggered' || input.eventType === 'escalated'
+      ? `:g${input.escalationGeneration ?? 0}`
+      : '';
   return `teams:delivery:${input.incidentId}:${input.destinationId}:${input.eventType}:${input.incidentUpdatedAt.toISOString()}${gen}`;
 }
 
@@ -617,8 +693,122 @@ export async function enqueueMicrosoftTeamsDeliveryInTransaction(
 }
 
 /** Processor for EXTERNAL_OPERATION with provider MICROSOFT_TEAMS. */
+/**
+ * Replies in the card's thread for a state change. Best-effort and single attempt: the card edit
+ * already committed, and a retried POST could duplicate the reply.
+ */
+async function postTeamsStateThreadReply(input: {
+  incidentId: string;
+  eventType: string;
+  incident: Parameters<typeof teamsThreadReplyText>[0]['incident'];
+  resolvedAt: Date | null;
+  tenantId: string;
+  teamId: string;
+  conversationId: string | null;
+  messageId: string | null;
+}): Promise<void> {
+  if (!input.conversationId || !input.messageId) return;
+  try {
+    let resolutionNote: string | null = null;
+    if (input.eventType === 'resolved' && input.resolvedAt) {
+      const note = await prisma.incidentNote.findFirst({
+        where: {
+          incidentId: input.incidentId,
+          content: { startsWith: 'Resolution: ' },
+          createdAt: { gte: new Date(input.resolvedAt.getTime() - 5_000) },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { content: true },
+      });
+      resolutionNote = note?.content.replace(/^Resolution: /, '') ?? null;
+    }
+    const text = teamsThreadReplyText({
+      eventType: input.eventType,
+      incident: input.incident,
+      resolutionNote,
+    });
+    if (!text) return;
+    const conversationId = input.conversationId.includes(';messageid=')
+      ? input.conversationId
+      : `${input.conversationId};messageid=${input.messageId}`;
+    const { replyInMicrosoftTeamsChannelThread } = await import('./client');
+    const result = await replyInMicrosoftTeamsChannelThread({
+      tenantId: input.tenantId,
+      teamId: input.teamId,
+      conversationId,
+      replyToId: input.messageId,
+      card: {
+        type: 'AdaptiveCard',
+        $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+        version: '1.5',
+        fallbackText: text,
+        // TextRun: names and notes are user text and must not render as markdown.
+        body: [{ type: 'RichTextBlock', inlines: [{ type: 'TextRun', text }] }],
+      },
+    });
+    if (!result.success)
+      logger.warn('[MicrosoftTeams] State thread reply failed', {
+        incidentId: input.incidentId,
+        eventType: input.eventType,
+        errorCode: result.errorCode,
+        statusCode: result.statusCode,
+      });
+  } catch (error) {
+    logger.warn('[MicrosoftTeams] State thread reply failed', {
+      incidentId: input.incidentId,
+      eventType: input.eventType,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function ambiguousRepostAt(now = Date.now()): Date {
+  // A little after the window so the ledger row is already past it when the job wakes.
+  return new Date(now + TEAMS_AMBIGUOUS_REPOST_AFTER_MS + 15_000);
+}
+
+/** Wakes an AMBIGUOUS create once its window has passed, so it can re-post (see the ledger gate). */
+async function scheduleAmbiguousRepost(tx: Prisma.TransactionClient, operationId: string) {
+  await tx.backgroundJob.create({
+    data: {
+      type: 'EXTERNAL_OPERATION',
+      status: 'PENDING',
+      scheduledAt: ambiguousRepostAt(),
+      maxAttempts: MAX_TEAMS_OPERATION_ATTEMPTS,
+      payload: { operationId },
+    },
+  });
+}
+
+/** AMBIGUOUS → PENDING once, when its scheduled re-post time has come. */
+async function reopenExpiredAmbiguousCreate(id: string): Promise<boolean> {
+  const op = await prisma.externalOperation.findUnique({
+    where: { id },
+    select: { status: true, resultPayload: true },
+  });
+  const result = op?.resultPayload as Record<string, unknown> | null | undefined;
+  const at = typeof result?.autoRepostAt === 'string' ? new Date(result.autoRepostAt) : null;
+  if (op?.status !== 'AMBIGUOUS' || !at || Number.isNaN(at.getTime()) || at > new Date())
+    return false;
+  const reopened = await prisma.externalOperation.updateMany({
+    where: { id, status: 'AMBIGUOUS' },
+    data: {
+      status: 'PENDING',
+      nextAttemptAt: new Date(),
+      resultPayload: {
+        ...result,
+        autoRepostAt: null,
+        autoRepostRequestedAt: new Date().toISOString(),
+      } as Prisma.InputJsonObject,
+    },
+  });
+  return reopened.count === 1;
+}
+
 export async function processMicrosoftTeamsOperation(id: string): Promise<unknown> {
-  const claim = await claimOperation(id);
+  let claim = await claimOperation(id);
+  if (!claim && (await reopenExpiredAmbiguousCreate(id).catch(() => false)))
+    claim = await claimOperation(id);
   if (!claim) {
     const complete = await prisma.externalOperation.findUnique({ where: { id } });
     if (complete?.status === 'COMPLETED') return complete.resultPayload ?? null;
@@ -878,9 +1068,14 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       )
         staleReason = 'Resolution generation was superseded';
       else if (!incident.resolvedAt) staleReason = 'Incident resolution was superseded';
+    } else if (eventType === 'escalated') {
+      if (incident.status !== 'OPEN' || incident.acknowledgedAt)
+        staleReason = `Escalation is no longer current — incident is ${incident.status}`;
     }
     // Per-event notify flag + service channel fencing — reread at delivery time, not just at enqueue.
     // `serviceNotifyOnTriggered/Ack/Resolved` may be flipped between enqueue and process.
+    // A disabled toggle only stops new posts; an existing card is still edited in place.
+    let toggleDecision: TeamsNotifyToggleDecision = 'deliver';
     if (!staleReason && payload?.origin !== 'AUTOMATION') {
       try {
         const svc = await prisma.service.findUnique({
@@ -897,12 +1092,26 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
             !(svc.serviceNotificationChannels as unknown as string[]).includes('MICROSOFT_TEAMS')
           ) {
             staleReason = 'Service Microsoft Teams notifications were disabled';
-          } else if (eventType === 'triggered' && svc.serviceNotifyOnTriggered === false) {
-            staleReason = 'Service Teams notifyOnTriggered was disabled after enqueue';
-          } else if (eventType === 'acknowledged' && svc.serviceNotifyOnAck === false) {
-            staleReason = 'Service Teams notifyOnAck was disabled after enqueue';
-          } else if (eventType === 'resolved' && svc.serviceNotifyOnResolved === false) {
-            staleReason = 'Service Teams notifyOnResolved was disabled after enqueue';
+          } else {
+            const ledgerRow = await prisma.microsoftTeamsIncidentMessage
+              .findUnique({
+                where: { incidentId_destinationId: { incidentId, destinationId } },
+                select: { messageId: true, createState: true },
+              })
+              .catch(() => null);
+            toggleDecision = teamsNotifyToggleDecision({
+              eventType,
+              hasExistingCard: Boolean(
+                ledgerRow?.messageId &&
+                !ledgerRow.messageId.startsWith('__reserved__:') &&
+                ledgerRow.createState === 'NONE'
+              ),
+              serviceNotifyOnTriggered: svc.serviceNotifyOnTriggered,
+              serviceNotifyOnAck: svc.serviceNotifyOnAck,
+              serviceNotifyOnResolved: svc.serviceNotifyOnResolved,
+            });
+            if (toggleDecision === 'skip')
+              staleReason = `Service Teams notifications for ${eventType} events are turned off`;
           }
         }
       } catch {
@@ -981,6 +1190,8 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     let createAttemptStarted = false;
     let cardCreateAmbiguous = false;
     let ambiguousCreateOwnerId: string | null = null;
+    let ambiguousRepost = false;
+    let ambiguousSince: Date | null = null;
     const acquireCardMutationLease = async () =>
       prisma.$transaction(async tx => {
         await acquireAdvisoryLock(tx, lockKey);
@@ -991,14 +1202,48 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
             conversationId: true,
             createState: true,
             createOperationId: true,
+            updatedAt: true,
           },
         });
         // Re-read inside the lock — `previous` may be stale due to a concurrent writer.
         if (inside) {
           previous = inside;
           if (inside.createState === 'AMBIGUOUS') {
+            // Bounded uncertainty: after the reconciliation window, post a fresh card marked as a
+            // possible duplicate instead of silencing the channel for the rest of the incident.
+            if (toggleDecision !== 'edit_only' && teamsAmbiguousCreateExpired(inside.updatedAt)) {
+              const taken = await tx.microsoftTeamsIncidentMessage.updateMany({
+                where: {
+                  incidentId,
+                  destinationId,
+                  createState: 'AMBIGUOUS',
+                  createOperationId: inside.createOperationId,
+                },
+                data: {
+                  messageId: ownReservation,
+                  createState: 'NONE',
+                  createOperationId: id,
+                  mutationLeaseToken,
+                  mutationLeaseExpiresAt: new Date(Date.now() + CARD_MUTATION_LEASE_MS),
+                },
+              });
+              if (taken.count === 1) {
+                logger.warn('[MicrosoftTeams] Unconfirmed card create expired — re-posting', {
+                  incidentId,
+                  destinationId,
+                  ambiguousOperationId: inside.createOperationId,
+                  operationId: id,
+                });
+                mutationLeaseHeld = true;
+                reservedByUs = true;
+                ambiguousRepost = true;
+                previous = { messageId: null, conversationId: null } as unknown as typeof previous;
+                return;
+              }
+            }
             cardCreateAmbiguous = true;
             ambiguousCreateOwnerId = inside.createOperationId;
+            ambiguousSince = inside.updatedAt ?? null;
             return;
           }
           if (inside.createState === 'CREATING') {
@@ -1319,6 +1564,35 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
 
     await acquireCardMutationLease();
     if (cardCreateAmbiguous) {
+      // A later lifecycle event waits for the re-post window instead of failing for good, so the
+      // channel converges on the current state once the unconfirmed create expires.
+      const blockedRetryAt =
+        ambiguousCreateOwnerId !== id && toggleDecision !== 'edit_only'
+          ? // Assigned inside the transaction callback, which TypeScript's narrowing can't see.
+            ambiguousRepostAt((ambiguousSince as Date | null)?.getTime() ?? Date.now())
+          : null;
+      if (blockedRetryAt) {
+        await prisma.$transaction(async tx => {
+          const updated = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'PENDING',
+              attempts: { decrement: 1 },
+              nextAttemptAt: blockedRetryAt,
+              lastError:
+                'Canonical Teams card has an unconfirmed create; retrying after the re-post window',
+              leaseToken: null,
+              leaseExpiresAt: null,
+              resultPayload: {
+                requiresManualReconciliation: false,
+                blockedByCreateOperationId: ambiguousCreateOwnerId,
+              } as Prisma.InputJsonObject,
+            },
+          });
+          if (updated.count === 1) await scheduleAmbiguousRepost(tx, id);
+        });
+        throw new Error('Canonical Teams card requires create reconciliation');
+      }
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
@@ -1361,6 +1635,17 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       assigneeName: currentIncident.assignee?.name ?? null,
       acknowledgedAt: currentIncident.acknowledgedAt,
       resolvedAt: currentIncident.resolvedAt,
+    });
+    // Actor names, roles and escalation are adornments: their loader never throws.
+    const { loadTeamsCardPeople } = await import('./card-actors');
+    const people = await loadTeamsCardPeople(currentIncident);
+    Object.assign(incidentInput, {
+      acknowledgedBy: people.acknowledgedBy,
+      resolvedBy: people.resolvedBy,
+      roles: people.roles,
+      escalation: people.escalation,
+      snoozedUntil: currentIncident.snoozedUntil ?? null,
+      ...(ambiguousRepost ? { repostNotice: true } : {}),
     });
     const cardState = deriveMicrosoftTeamsCardState(currentIncident);
     const markCreateAttemptStarted = async () => {
@@ -1435,6 +1720,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     let result: Awaited<ReturnType<typeof microsoftTeamsChatProvider.sendIncidentCard>>;
     let circuitOpened = false;
     let replacingCanonicalActivity = false;
+    let editedInPlace = false;
 
     const callWithBreaker = async <
       T extends { success: boolean; errorCode?: string; statusCode?: number; error?: string },
@@ -1551,7 +1837,43 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
           return null;
         } else {
           result = updateResult;
+          editedInPlace = updateResult.success;
         }
+      } else if (toggleDecision === 'edit_only') {
+        // The notify toggle is off and there is no card to edit (it raced away): post nothing.
+        const reason = `Service Teams notifications for ${eventType} events are turned off`;
+        if (reservedByUs)
+          await prisma.microsoftTeamsIncidentMessage
+            .deleteMany({ where: { incidentId, destinationId, messageId: ownReservation } })
+            .catch(() => undefined);
+        await prisma.$transaction(async tx => {
+          const updated = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'COMPLETED',
+              lastError: null,
+              resultPayload: { superseded: true, reason } as Prisma.InputJsonObject,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+          if (updated.count > 0)
+            await syncTeamsNotificationSkipped(operation.idempotencyKey, reason, tx);
+        });
+        await releaseTeamsConcurrency();
+        await releaseCardMutationLease();
+        return null;
+      } else if (ambiguousRepost) {
+        // Replaces an unconfirmed create: a new generation so any earlier copy's buttons go stale.
+        replacingCanonicalActivity = true;
+        result = await callWithBreaker(() =>
+          microsoftTeamsChatProvider.recoverIncidentCard({
+            destinationId,
+            incident: incidentInput,
+            eventType: cardState.eventType,
+            beforeCreateAttempt: markCreateAttemptStarted,
+          })
+        );
       } else {
         // Never retry a create whose outcome may be unknown. Graph message
         // search cannot reliably identify Bot-created activities and a false
@@ -1575,10 +1897,12 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
                   ...priorResult,
                   createAttempted: true,
                   requiresManualReconciliation: true,
+                  autoRepostAt: ambiguousRepostAt().toISOString(),
                 } as Prisma.InputJsonObject,
               },
             });
             if (updated.count === 0) return;
+            await scheduleAmbiguousRepost(tx, id);
             await syncTeamsNotificationAmbiguous(operation.idempotencyKey, ambigMsg, tx);
           });
           await releaseTeamsConcurrency();
@@ -1619,10 +1943,12 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               resultPayload: {
                 createAttempted: true,
                 requiresManualReconciliation: true,
+                autoRepostAt: ambiguousRepostAt().toISOString(),
               } as Prisma.InputJsonObject,
             },
           });
           if (updated.count === 0) return;
+          await scheduleAmbiguousRepost(tx, id);
           await syncTeamsNotificationAmbiguous(operation.idempotencyKey, result.error, tx);
         });
         throw new Error(result.error);
@@ -1632,7 +1958,12 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       const retryAfterMs = result.retryAfterMs;
       // A 5xx after a non-idempotent create cannot prove the side effect did
       // not occur. Preserve the reservation and require reconciliation.
-      if (createAttemptStarted && statusCode != null && statusCode >= 500) {
+      if (
+        createAttemptStarted &&
+        statusCode != null &&
+        statusCode >= 500 &&
+        !teamsCreateGatewayNotApplied(statusCode)
+      ) {
         await markCardCreateAmbiguous();
         const ambigMsg = `Teams create returned HTTP ${statusCode}; external outcome is uncertain: ${result.error.slice(0, 800)}`;
         await prisma.$transaction(async tx => {
@@ -1648,10 +1979,12 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
                 createAttempted: true,
                 requiresManualReconciliation: true,
                 providerStatus: statusCode,
+                autoRepostAt: ambiguousRepostAt().toISOString(),
               } as Prisma.InputJsonObject,
             },
           });
           if (updated.count === 0) return;
+          await scheduleAmbiguousRepost(tx, id);
           await syncTeamsNotificationAmbiguous(operation.idempotencyKey, ambigMsg, tx);
         });
         throw new Error(result.error);
@@ -1663,7 +1996,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       if (
         (!createAttemptStarted && reservedByUs) ||
         (createAttemptStarted &&
-          ((statusCode != null && statusCode < 500) ||
+          ((statusCode != null && (statusCode < 500 || teamsCreateGatewayNotApplied(statusCode))) ||
             result.errorCode === 'PRE_SEND_NETWORK_ERROR'))
       ) {
         if (reservedByUs) {
@@ -1951,6 +2284,18 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     }
     await releaseTeamsConcurrency();
     await releaseCardMutationLease();
+    if (editedInPlace && toggleDecision === 'deliver') {
+      await postTeamsStateThreadReply({
+        incidentId,
+        eventType,
+        incident: incidentInput,
+        resolvedAt: currentIncident.resolvedAt,
+        tenantId: destination.tenantId,
+        teamId: destination.teamId,
+        conversationId: previous?.conversationId ?? null,
+        messageId: previous?.messageId ?? null,
+      });
+    }
     logger.info('[MicrosoftTeams] Delivery completed', {
       incidentId,
       destinationId,

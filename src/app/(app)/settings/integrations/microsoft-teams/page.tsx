@@ -11,6 +11,8 @@ import { getBaseUrl } from '@/lib/env-validation';
 import { buildMicrosoftTeamsAppManifestJson } from '@/lib/microsoft-teams/app-manifest';
 import { getTeamsGrantedRscPermissions } from '@/lib/microsoft-teams/client';
 import { getMicrosoftTeamsHealth } from '@/lib/microsoft-teams/health';
+import { getMicrosoftTeamsHealthChecklist } from '@/lib/microsoft-teams/health-checklist';
+import { getTeamsSecretExpiryState } from '@/lib/microsoft-teams/secret-expiry';
 import { getWarRoomOperationalSnapshots } from '@/lib/war-room/operations/diagnostics';
 import { summarizeOperationalHealth } from '@/lib/war-room/operations/summary';
 import { requirePageAccess } from '@/lib/access/server';
@@ -34,6 +36,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         enabled: boolean;
         interactiveEnabled: boolean;
         warRoomsEnabled: boolean;
+        clientSecretExpiresAt?: Date | null;
         createdAt: Date;
         updatedAt: Date;
         updatedBy?: string | null;
@@ -100,11 +103,15 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   const rscState = isConnected ? await getTeamsGrantedRscPermissions().catch(() => null) : null;
   const rscUnknown = !rscState || rscState.unknown;
   const rscMissingCount = rscState?.missing.length ?? 0;
-  const health = isConnected
-    ? await getMicrosoftTeamsHealth({ tenantId: config?.tenantId ?? undefined, rscState }).catch(
-        () => null
-      )
-    : null;
+  const [health, healthChecklist] = isConnected
+    ? await Promise.all([
+        getMicrosoftTeamsHealth({ tenantId: config?.tenantId ?? undefined, rscState }).catch(
+          () => null
+        ),
+        getMicrosoftTeamsHealthChecklist({ rscState }).catch(() => null),
+      ])
+    : [null, null];
+  const secretExpiry = getTeamsSecretExpiryState(config?.clientSecretExpiresAt ?? null);
   const installationPermissions = [...(rscState?.installations ?? [])];
   for (const installation of health?.installations ?? []) {
     if (installationPermissions.some(state => state.teamId === installation.teamId)) continue;
@@ -202,10 +209,23 @@ export default async function MicrosoftTeamsIntegrationRoute() {
           },
           {
             label: 'Client Secret',
-            value: 'Encrypted at rest',
+            value:
+              secretExpiry.level === 'expired'
+                ? 'Expired'
+                : secretExpiry.level === 'urgent' || secretExpiry.level === 'soon'
+                  ? `Expires in ${secretExpiry.daysLeft}d`
+                  : 'Encrypted at rest',
             icon: <KeyRound className="h-4 w-4" />,
-            valueClassName: 'text-emerald-300 font-semibold text-sm sm:text-base',
-            subtext: 'Stored in database, never in .env',
+            valueClassName:
+              secretExpiry.level === 'expired'
+                ? 'text-red-300 font-semibold text-sm sm:text-base'
+                : secretExpiry.level === 'urgent' || secretExpiry.level === 'soon'
+                  ? 'text-amber-300 font-semibold text-sm sm:text-base'
+                  : 'text-emerald-300 font-semibold text-sm sm:text-base',
+            subtext:
+              secretExpiry.level === 'unknown'
+                ? 'Expiry date not recorded'
+                : 'Stored in database, never in .env',
           },
           {
             label: 'Destinations',
@@ -245,16 +265,23 @@ export default async function MicrosoftTeamsIntegrationRoute() {
 
       <MicrosoftTeamsIntegrationPage
         config={
-          config as unknown as {
-            id: string;
-            clientId: string;
-            tenantId?: string | null;
-            tenantMode: string;
-            enabled: boolean;
-            interactiveEnabled: boolean;
-            warRoomsEnabled: boolean;
-            defaultMeetingOrganizerUpn?: string | null;
-          } | null
+          // Explicit fields only: the row also holds the encrypted client secret, which must
+          // never be serialized to the browser.
+          config
+            ? {
+                id: config.id,
+                clientId: config.clientId,
+                tenantId: config.tenantId,
+                tenantMode: config.tenantMode,
+                enabled: config.enabled,
+                interactiveEnabled: config.interactiveEnabled,
+                warRoomsEnabled: config.warRoomsEnabled,
+                defaultMeetingOrganizerUpn:
+                  (config as { defaultMeetingOrganizerUpn?: string | null })
+                    .defaultMeetingOrganizerUpn ?? null,
+                clientSecretExpiresAt: config.clientSecretExpiresAt ?? null,
+              }
+            : null
         }
         destinations={destinations as unknown as MicrosoftTeamsDestinationRow[]}
         appManifestJson={manifestJson}
@@ -273,6 +300,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         warRoomCleanupPending={warRoomCleanupPending}
         rscState={rscState}
         warRoomDiagnosticsError={warRoomDiagnosticsError}
+        healthChecklist={healthChecklist}
       />
       <ServiceIntegrationsLink description="Each service can have its own Teams channel and war room. Set it on the service's Notifications tab." />
     </div>

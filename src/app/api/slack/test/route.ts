@@ -8,6 +8,17 @@ import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { integrationProviderError, jsonProviderError } from '@/lib/provider-errors';
+import { getBaseUrl } from '@/lib/env-validation';
+import { buildIncidentCard } from '@/lib/slack/incident-card';
+import { describeSlackPostError } from '@/lib/slack/health';
+
+function appBaseUrl(): string {
+  try {
+    return getBaseUrl().replace(/\/+$/, '');
+  } catch {
+    return 'http://localhost:3000';
+  }
+}
 
 const testSchema = z.object({
   serviceId: z.string().trim().min(1).max(191).optional(),
@@ -90,27 +101,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const testMessage = {
-      channel: channelId,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `🧪 *Test Notification from OpsKnight*\n\nThis is a test message to verify the Slack integration is working correctly.`,
-          },
-        },
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: `Sent by ${user.name || user.email} • ${new Date().toLocaleString()}`,
-            },
-          ],
-        },
-      ],
-    };
+    // The real channel card (A1's builder) with sample data, so admins see what responders get.
+    // Buttons are off: a sample has no incident for Acknowledge or Resolve to act on.
+    const sample = buildIncidentCard(
+      {
+        id: 'sample',
+        title: '[Test] Checkout API p95 latency above 2s',
+        description: 'Sample incident sent from OpsKnight Settings to check this channel.',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        priority: 'P2',
+        serviceName: 'Checkout API',
+        createdAt: new Date(),
+        assigneeName: user.name || user.email,
+      },
+      {
+        appUrl: appBaseUrl(),
+        interactive: false,
+        note: `Test notification sent by ${user.name || user.email}. Real incident cards include Acknowledge and Resolve buttons.`,
+      }
+    );
+    const testMessage = { channel: channelId, ...sample, unfurl_links: false };
 
     let response: Response;
     try {
@@ -146,7 +157,7 @@ export async function POST(request: NextRequest) {
         status: response.status,
       });
       return jsonProviderError(providerError, {
-        legacyError: providerCode || 'Failed to send test notification',
+        legacyError: describeSlackPostError(providerCode, channelName),
         provider: 'slack',
         providerCode,
       });

@@ -30,7 +30,7 @@ import {
  * Handles:
  *  - `invoke` (`adaptiveCard/action`) → capability-aware war-room ChatOps (Phase 4)
  *  - `conversationUpdate` → record/update MicrosoftTeamsInstallation when the bot is added to a team
- *  - `message` → no-op (ignore DMs)
+ *  - `message` → @mentions and personal chats: help/status answered inline, the rest queued for Squire
  */
 
 type TeamsActivity = {
@@ -40,7 +40,7 @@ type TeamsActivity = {
   serviceUrl?: string;
   from?: { id?: string; aadObjectId?: string; name?: string };
   recipient?: { id?: string };
-  conversation?: { id?: string; name?: string; isGroup?: boolean };
+  conversation?: { id?: string; name?: string; isGroup?: boolean; conversationType?: string };
   channelData?: {
     team?: { id?: string; name?: string; aadGroupId?: string };
     tenant?: { id?: string };
@@ -51,10 +51,131 @@ type TeamsActivity = {
   name?: string;
   value?: unknown;
   replyToId?: string;
+  text?: string;
+  entities?: Array<{ type?: string; mentioned?: { id?: string } } | null>;
 };
 
 function isTruthyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0;
+}
+
+const ACTIVITY_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Health checklist "last inbound activity": at most one write per tenant every 5 minutes. */
+async function touchTeamsInstallationActivity(tenantId: string): Promise<void> {
+  const now = new Date();
+  try {
+    await prisma.microsoftTeamsInstallation.updateMany({
+      where: {
+        tenantId,
+        enabled: true,
+        OR: [
+          { lastActivityAt: null },
+          { lastActivityAt: { lt: new Date(now.getTime() - ACTIVITY_TOUCH_INTERVAL_MS) } },
+        ],
+      },
+      data: { lastActivityAt: now },
+    });
+  } catch (error) {
+    logger.debug('[MicrosoftTeams] lastActivityAt update skipped', {
+      error: error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200),
+    });
+  }
+}
+
+/**
+ * A message addressed to the bot: an @mention in a channel or group chat, or any message in
+ * a personal chat. help/status are answered here; everything else goes to Squire. Never throws
+ * for a reply failure: Teams would redeliver and the user would see duplicates.
+ */
+async function handleTeamsBotMessage(activity: TeamsActivity, tenantId: string): Promise<void> {
+  const [{ mentionsBot, enqueueTeamsSquireMention, findTeamsWarRoomIncident }, commands] =
+    await Promise.all([
+      import('@/lib/chatops/squire/teams'),
+      import('@/lib/microsoft-teams/bot-commands'),
+    ]);
+  const conversation = commands.teamsConversationKind(activity.conversation);
+  const botId = activity.recipient?.id?.trim();
+  const addressed = conversation === 'personal' || mentionsBot(activity);
+  if (!addressed || !botId) return;
+  const { isSquireChatOpsEnabled, chatBaseUrl } = await import('@/lib/chatops/squire/switches');
+  const squireEnabled = await isSquireChatOpsEnabled();
+  const command = commands.parseTeamsBotCommand(activity.text);
+
+  if (command.kind === 'squire' && squireEnabled) {
+    // A personal chat is addressed to the bot by definition; Squire's queue expects a mention.
+    const forSquire =
+      conversation === 'personal' && !mentionsBot(activity)
+        ? {
+            ...activity,
+            entities: [...(activity.entities ?? []), { type: 'mention', mentioned: { id: botId } }],
+          }
+        : activity;
+    await enqueueTeamsSquireMention(forSquire, tenantId);
+    return;
+  }
+
+  let card: Record<string, unknown>;
+  if (command.kind === 'status') {
+    const channelIds = [
+      ...new Set(
+        [
+          activity.channelData?.channel?.id?.trim(),
+          activity.conversation?.id?.split(';')[0]?.trim(),
+        ].filter((value): value is string => Boolean(value))
+      ),
+    ];
+    const incidentId =
+      conversation === 'personal' ? null : await findTeamsWarRoomIncident(tenantId, channelIds);
+    const incident = incidentId
+      ? await prisma.incident.findUnique({
+          where: { id: incidentId },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            urgency: true,
+            service: { select: { name: true } },
+          },
+        })
+      : null;
+    card = commands.buildTeamsStatusCard(
+      incident ? { ...incident, serviceName: incident.service?.name ?? null } : null,
+      chatBaseUrl()
+    );
+  } else {
+    if (!squireEnabled && command.kind === 'squire') {
+      logger.info('[MicrosoftTeams] Bot message not answered: Squire in chat is off', {
+        conversation,
+      });
+    }
+    card = commands.buildTeamsHelpCard({ squireEnabled, conversation });
+  }
+
+  const serviceUrl = activity.serviceUrl?.trim();
+  const conversationId = activity.conversation?.id?.trim();
+  const replyToId = activity.id?.trim();
+  if (!serviceUrl || !conversationId || !replyToId) return;
+  try {
+    const { replyToMicrosoftTeamsActivity } = await import('@/lib/microsoft-teams/client');
+    const result = await replyToMicrosoftTeamsActivity({
+      tenantId,
+      serviceUrl,
+      conversationId,
+      replyToId,
+      card,
+    });
+    if (!result.success) {
+      logger.warn('[MicrosoftTeams] Bot reply failed', {
+        code: result.errorCode ?? null,
+        status: result.statusCode ?? null,
+      });
+    }
+  } catch (error) {
+    logger.warn('[MicrosoftTeams] Bot reply failed', {
+      error: error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200),
+    });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -111,6 +232,7 @@ export async function POST(request: NextRequest) {
           { error: allowlist.reason, code: allowlist.code },
           { status: 403 }
         );
+      await touchTeamsInstallationActivity(tenantId);
       // Squire suggestion cards: confirmed inline through the sealed proposal executor.
       const { isTeamsSquireInvoke } = await import('@/lib/chatops/squire/render');
       if (isTeamsSquireInvoke(activity.value)) {
@@ -129,6 +251,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(response, { status: 200 });
     }
     if (activityType === 'conversationUpdate') {
+      const conversationType = activity.conversation?.conversationType;
+      // Installs in a personal or group chat are not Team installations: never record them as
+      // one (their conversation id would masquerade as a teamId). The bot just answers there.
+      if (conversationType === 'personal' || conversationType === 'groupChat') {
+        return jsonOk({ ok: true });
+      }
       const tenantId = bodyTenantId;
       const teamId =
         activity.channelData?.team?.aadGroupId?.trim() ||
@@ -145,46 +273,49 @@ export async function POST(request: NextRequest) {
           verifiedIdentity?.appId === '__test__' && process.env.NODE_ENV !== 'production';
         if (!isTestTenant) {
           const configForAllowlist = await getMicrosoftTeamsConfig();
-          if (configForAllowlist) {
-            if (configForAllowlist.config.tenantMode === 'SINGLE') {
-              const cfgTid = configForAllowlist.config.tenantId?.trim() || '';
-              if (cfgTid && tenantId !== cfgTid) {
-                logger.warn(
-                  '[MicrosoftTeams] conversationUpdate rejected — SINGLE tenant mismatch',
-                  {
-                    tenantId: tenantId.slice(0, 8) + '…',
-                    cfgTid: cfgTid.slice(0, 8) + '…',
-                    teamId: teamId.slice(0, 12) + '…',
-                  }
-                );
-                try {
-                  await emitAuditEvent({
-                    action: 'microsoftTeams.installation.tenant_mismatch',
-                    source: 'INTEGRATION',
-                    target: { type: 'SYSTEM_CONFIG', id: tenantId },
-                    actor: { type: 'SYSTEM' },
-                    metadata: {
-                      provider: 'MICROSOFT_TEAMS',
-                      connectorAppId: verifiedIdentity?.appId ?? null,
-                      bodyTenantId,
-                      tenantId,
-                      teamId,
-                      activityType: 'conversationUpdate',
-                      activityId: activity.id ?? null,
-                    },
-                  });
-                } catch {}
-                return NextResponse.json(
-                  {
-                    error: 'Tenant not allowed for SINGLE-mode config',
-                    code: 'TENANT_NOT_ALLOWED',
-                  },
-                  { status: 403 }
-                );
+          // Fail closed: SINGLE mode needs a configured tenant that matches (an empty
+          // tenantId used to accept any tenant here); unconfigured means no installs.
+          const singleTenantCheck = !configForAllowlist
+            ? {
+                allowed: false as const,
+                reason: 'Microsoft Teams is not configured',
+                code: 'NOT_CONFIGURED',
               }
-            }
-            // MULTI: any verified tenant is allowed — installation is the allowlist proof, so do not require pre-existing row.
+            : configForAllowlist.config.tenantMode === 'SINGLE'
+              ? await enforceMicrosoftTeamsTenantAllowlist(tenantId, configForAllowlist.config)
+              : ({ allowed: true } as const);
+          if (!singleTenantCheck.allowed) {
+            const cfgTid = configForAllowlist?.config.tenantId?.trim() || '';
+            logger.warn('[MicrosoftTeams] conversationUpdate rejected by tenant policy', {
+              code: singleTenantCheck.code,
+              tenantId: tenantId.slice(0, 8) + '…',
+              cfgTid: cfgTid ? cfgTid.slice(0, 8) + '…' : '(empty)',
+              teamId: teamId.slice(0, 12) + '…',
+            });
+            try {
+              await emitAuditEvent({
+                action: 'microsoftTeams.installation.tenant_mismatch',
+                source: 'INTEGRATION',
+                target: { type: 'SYSTEM_CONFIG', id: tenantId },
+                actor: { type: 'SYSTEM' },
+                metadata: {
+                  provider: 'MICROSOFT_TEAMS',
+                  connectorAppId: verifiedIdentity?.appId ?? null,
+                  bodyTenantId,
+                  tenantId,
+                  teamId,
+                  code: singleTenantCheck.code,
+                  activityType: 'conversationUpdate',
+                  activityId: activity.id ?? null,
+                },
+              });
+            } catch {}
+            return NextResponse.json(
+              { error: singleTenantCheck.reason, code: singleTenantCheck.code },
+              { status: 403 }
+            );
           }
+          // MULTI: any verified tenant is allowed — installation is the allowlist proof, so do not require pre-existing row.
         }
 
         const botId = activity.recipient?.id?.trim();
@@ -220,6 +351,7 @@ export async function POST(request: NextRequest) {
               conversationId,
               botRecipientId,
               enabled: true,
+              lastActivityAt: new Date(),
             },
             update: {
               teamName: teamName ?? undefined,
@@ -228,6 +360,7 @@ export async function POST(request: NextRequest) {
               ...(conversationId ? { conversationId } : {}),
               ...(botRecipientId ? { botRecipientId } : {}),
               enabled: true,
+              lastActivityAt: new Date(),
             },
           } as unknown as never);
           logger.info('[MicrosoftTeams] Installation recorded', { tenantId, teamId });
@@ -303,17 +436,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (activityType === 'message') {
-      // In a channel the bot only receives messages that @mention it: queue those for Squire.
-      // The tenant must pass the same allowlist as card actions; anything else stays a no-op.
+      // Channels deliver only @mentions (or every message with RSC); personal and group chats
+      // arrive once the 1.4.0 package is installed. The tenant must pass the same allowlist as
+      // card actions; anything else, including unknown conversation types, stays a quiet no-op.
       const tenantId = bodyTenantId;
       const configured = tenantId ? await getMicrosoftTeamsConfig() : null;
       if (
-        configured &&
-        (await enforceMicrosoftTeamsTenantAllowlist(tenantId, configured.config)).allowed
+        !configured ||
+        !(await enforceMicrosoftTeamsTenantAllowlist(tenantId, configured.config)).allowed
       ) {
-        const { enqueueTeamsSquireMention } = await import('@/lib/chatops/squire/teams');
-        await enqueueTeamsSquireMention(activity, tenantId);
+        return jsonOk({ ok: true });
       }
+      await touchTeamsInstallationActivity(tenantId);
+      await handleTeamsBotMessage(activity, tenantId);
       return jsonOk({ ok: true });
     }
 

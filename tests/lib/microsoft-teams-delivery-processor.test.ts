@@ -7,6 +7,7 @@ const createIncidentCard = vi.fn();
 const updateIncidentCard = vi.fn();
 const recoverIncidentCard = vi.fn();
 const operationUpdates: Array<Record<string, unknown>> = [];
+const backgroundJobCreate = vi.fn(async (_args: unknown) => ({ id: 'job-1' }));
 let currentResultPayload: Record<string, unknown> | null = null;
 let ledgerUpdateCount = 0;
 let ownerOperation: {
@@ -104,8 +105,12 @@ const prismaMock = {
       },
       externalOperation: {
         findUnique: vi.fn(async () => ownerOperation),
-        updateMany: vi.fn(async () => ({ count: 1 })),
+        updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+          operationUpdates.push(data);
+          return { count: 1 };
+        }),
       },
+      backgroundJob: { create: backgroundJobCreate },
     })
   ),
 };
@@ -160,12 +165,35 @@ describe('processMicrosoftTeamsOperation create fence', () => {
     expect(sendIncidentCard).not.toHaveBeenCalled();
     expect(updateIncidentCard).not.toHaveBeenCalled();
     expect(recoverIncidentCard).not.toHaveBeenCalled();
+    // Waits for the bounded re-post window instead of failing for good.
     expect(operationUpdates).toContainEqual(
       expect.objectContaining({
-        status: 'FAILED',
+        status: 'PENDING',
         resultPayload: expect.objectContaining({ blockedByCreateOperationId: 'op-create' }),
       })
     );
+    expect(backgroundJobCreate).toHaveBeenCalledOnce();
+  });
+
+  it('re-posts a fresh card marked as a possible duplicate once the ambiguous window expired', async () => {
+    Object.assign(ledger, {
+      createState: 'AMBIGUOUS',
+      createOperationId: 'op-create',
+      updatedAt: new Date(Date.now() - 11 * 60_000),
+    });
+    ledgerUpdateCount = 1;
+    recoverIncidentCard.mockResolvedValueOnce({
+      success: false,
+      error: 'stop here',
+      errorCode: 'NOT_CONFIGURED',
+    });
+    const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
+    await processMicrosoftTeamsOperation('op-late').catch(() => undefined);
+    expect(updateIncidentCard).not.toHaveBeenCalled();
+    expect(recoverIncidentCard).toHaveBeenCalledWith(
+      expect.objectContaining({ incident: expect.objectContaining({ repostNotice: true }) })
+    );
+    delete (ledger as { updatedAt?: Date }).updatedAt;
   });
 
   it('defers behind a live CREATING owner without issuing a provider call', async () => {
@@ -238,7 +266,8 @@ describe('processMicrosoftTeamsOperation create fence', () => {
     );
 
     expect(createIncidentCard).not.toHaveBeenCalled();
-    expect(operationUpdates).toContainEqual(expect.objectContaining({ status: 'FAILED' }));
+    // The lost create becomes AMBIGUOUS; this later event waits for the re-post window.
+    expect(operationUpdates).toContainEqual(expect.objectContaining({ status: 'PENDING' }));
   });
 });
 

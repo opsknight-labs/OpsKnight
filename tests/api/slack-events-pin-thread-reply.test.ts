@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
 
 const db = vi.hoisted(() => {
   const tx = {
@@ -20,11 +19,14 @@ const retryFetch = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/prisma', () => ({ default: db }));
 vi.mock('@/lib/slack', () => ({ getSlackBotToken: vi.fn().mockResolvedValue('xoxb') }));
 vi.mock('@/lib/retry', () => ({ retryFetch }));
-vi.mock('@/lib/slack-signature', () => ({
-  verifySlackSignature: vi.fn().mockResolvedValue({ valid: true }),
-}));
+vi.mock('@/lib/chatops/intents', () => ({ enqueueChatOpsIntent: vi.fn() }));
 
-import { POST } from '@/app/api/slack/events/route';
+// The events route now queues pin reactions (Slack wants an ack within 3s); the queued worker
+// does the Slack reads and writes the note, so this drives the worker with the route's payload.
+import {
+  processSlackReactionPin,
+  slackReactionPinPayload,
+} from '@/lib/chatops/war-room-reactions';
 
 const json = (body: unknown) => ({ json: async () => body });
 
@@ -52,21 +54,17 @@ describe('Slack pin reaction on a thread reply', () => {
       return json({ ok: true, user: { name: 'alice', profile: {} } });
     });
 
-    await POST(
-      new NextRequest('http://localhost/api/slack/events', {
-        method: 'POST',
-        body: JSON.stringify({
-          type: 'event_callback',
-          team_id: 'T1',
-          event: {
-            type: 'reaction_added',
-            reaction: 'pushpin',
-            user: 'U1',
-            item: { channel: 'C1', ts: '150.0' },
-          },
-        }),
-      })
-    );
+    const payload = slackReactionPinPayload({
+      team_id: 'T1',
+      event: {
+        type: 'reaction_added',
+        reaction: 'pushpin',
+        user: 'U1',
+        item: { channel: 'C1', ts: '150.0' },
+      },
+    });
+    expect(payload).not.toBeNull();
+    await processSlackReactionPin(payload!);
 
     const content = db.tx.incidentNote.create.mock.calls[0][0].data.content as string;
     expect(content).toContain('the reply');

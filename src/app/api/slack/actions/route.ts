@@ -14,6 +14,7 @@ import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
 } from '@/lib/incidents/chatops-lifecycle';
+import { isOpsKnightIncidentCard } from '@/lib/slack/incident-card';
 
 /**
  * Resolve the Slack user who pressed a button to an OpsKnight account and a
@@ -81,10 +82,16 @@ async function resolveSlackActor(
 type SlackActionPayload = {
   type?: string;
   challenge?: string;
-  actions?: Array<{ value?: string; action_id?: string }>;
+  actions?: Array<{
+    value?: string;
+    action_id?: string;
+    action_ts?: string;
+    selected_option?: { value?: string };
+  }>;
   user?: { id?: string; name?: string; username?: string };
   response_url?: string;
-  container?: { channel_id?: string };
+  container?: { channel_id?: string; message_ts?: string };
+  message?: unknown;
   channel?: { id?: string };
   team?: { id?: string };
   enterprise?: { id?: string } | null;
@@ -105,6 +112,17 @@ function ephemeral(text: string) {
   return NextResponse.json({ response_type: 'ephemeral', text });
 }
 
+/** Escalation failures, told apart so a timeout is not reported as a missing permission. */
+function escalationFailureText(error: unknown): string {
+  const normalized = normalizeError(error);
+  if (normalized.status === 403) return '🚫 You do not have permission to escalate this incident.';
+  if (normalized.status === 404) return '⚠️ Incident not found.';
+  if (normalized.retryable || normalized.status >= 500) {
+    return '⚠️ Could not escalate right now. Try again in a moment.';
+  }
+  return `⚠️ ${chatOpsLifecycleErrorMessage(error)}`;
+}
+
 function lifecycleFailureResponse(error: unknown) {
   return NextResponse.json({
     response_type: 'ephemeral',
@@ -122,18 +140,24 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
     // Handle interactive button clicks
     if (payload.type === 'block_actions') {
       const action = payload.actions?.[0];
+      // Buttons carry `value`; the snooze menu carries `selected_option.value`.
+      const actionRawValue = action?.value ?? action?.selected_option?.value;
       // URL buttons (View Details) carry no value: nothing to do and nothing to reply.
-      if (!action?.value) return NextResponse.json(null);
+      if (!action || !actionRawValue) return NextResponse.json(null);
 
       // Squire suggestion buttons carry a sealed proposal, not an incident action.
       const squire = await import('@/lib/chatops/squire/slack');
       if (squire.isSlackSquireAction(action.action_id)) {
-        return NextResponse.json(await squire.handleSlackSquireButton(payload));
+        return NextResponse.json(
+          await squire.handleSlackSquireButton(
+            payload as Parameters<typeof squire.handleSlackSquireButton>[0]
+          )
+        );
       }
 
       let actionValue: Record<string, unknown>;
       try {
-        actionValue = JSON.parse(action.value);
+        actionValue = JSON.parse(actionRawValue);
       } catch {
         return ephemeral('⚠️ This button is no longer valid. Open the incident in OpsKnight.');
       }
@@ -194,6 +218,28 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         });
       }
 
+      // On an OpsKnight incident card the reply replaces the card with its fresh state and the
+      // clicker gets an ephemeral confirmation; anywhere else (war-room cards, older cards) the
+      // text reply below is posted as before.
+      const reply = async (text: string, fallback: () => NextResponse): Promise<NextResponse> => {
+        if (!isOpsKnightIncidentCard(payload.message)) return fallback();
+        try {
+          const { refreshedIncidentCardResponse } = await import('@/lib/slack/card-response');
+          const replaced = await refreshedIncidentCardResponse({
+            incidentId,
+            serviceId: incident.serviceId,
+            message: payload.message,
+            channelId: payload.channel?.id || payload.container?.channel_id,
+            slackUserId,
+            confirmation: text,
+          });
+          if (replaced) return NextResponse.json(replaced);
+        } catch (error) {
+          logger.warn('[Slack Actions] Card refresh failed', { incidentId, error });
+        }
+        return fallback();
+      };
+
       // `responseMessage` goes back to Slack and keeps the <@ID> mention. Every
       // action below writes its own timeline entry atomically with its domain
       // command, so this route never writes one itself.
@@ -220,9 +266,8 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         }
 
         if (!result.changed) {
-          return NextResponse.json({
-            text: `ℹ️ Incident is already ${result.status.toLowerCase()}`,
-          });
+          const text = `ℹ️ Incident is already ${result.status.toLowerCase()}`;
+          return reply(text, () => NextResponse.json({ text }));
         }
 
         responseMessage = `👀 Incident acknowledged by <@${slackUserId || 'responder'}>`;
@@ -247,9 +292,8 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         }
 
         if (!result.changed) {
-          return NextResponse.json({
-            text: 'ℹ️ Incident is already resolved',
-          });
+          const text = 'ℹ️ Incident is already resolved';
+          return reply(text, () => NextResponse.json({ text }));
         }
 
         responseMessage = `✅ Incident resolved by <@${slackUserId || 'responder'}>`;
@@ -322,7 +366,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       } else if (actionType === 'snooze' || actionType === 'snooze_incident') {
         const snoozeMinutes =
           actionValue.minutes === undefined ? 60 : Number.parseInt(String(actionValue.minutes), 10);
-        if (!Number.isInteger(snoozeMinutes) || snoozeMinutes <= 0) {
+        if (!Number.isInteger(snoozeMinutes) || snoozeMinutes <= 0 || snoozeMinutes > 10_080) {
           return NextResponse.json({
             response_type: 'ephemeral',
             text: '⚠️ Snooze duration must be a positive number of minutes.',
@@ -351,7 +395,8 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         }
 
         if (!result.changed) {
-          return NextResponse.json({ text: 'ℹ️ Incident snooze is already applied' });
+          const text = 'ℹ️ Incident snooze is already applied';
+          return reply(text, () => NextResponse.json({ text }));
         }
 
         responseMessage = `💤 Incident snoozed for ${snoozeMinutes}m by <@${slackUserId || 'responder'}>`;
@@ -374,18 +419,19 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             error,
           });
           rethrowIfTransient(error, payload);
-          return NextResponse.json({
-            response_type: 'ephemeral',
-            text: '🚫 You do not have permission to escalate this incident.',
-          });
+          return ephemeral(escalationFailureText(error));
         }
 
         if (!escalation.requested) {
-          return NextResponse.json({
-            response_type: 'ephemeral',
-            text: 'ℹ️ This incident is no longer open, so there is nothing to escalate.',
-          });
+          return ephemeral(
+            escalation.reason === 'INCIDENT_NOT_FOUND'
+              ? '⚠️ Incident not found.'
+              : 'ℹ️ This incident is no longer open, so there is nothing to escalate.'
+          );
         }
+
+        // The channel cards (Slack and Teams) are refreshed by requestIncidentEscalation itself
+        // (escalation/chat-card-refresh), the same as escalations from the web, API or the engine.
 
         // The escalation command already recorded the request in the timeline
         // and the audit log.
@@ -394,10 +440,12 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         return ephemeral('⚠️ This action is not supported.');
       }
 
-      return NextResponse.json({
-        text: responseMessage,
-        response_type: 'in_channel',
-      });
+      return reply(responseMessage, () =>
+        NextResponse.json({
+          text: responseMessage,
+          response_type: 'in_channel',
+        })
+      );
     }
 
     return NextResponse.json({ ok: true });
@@ -445,8 +493,17 @@ export async function POST(request: NextRequest) {
         : '';
   const slackUserId = typeof payload.user?.id === 'string' ? payload.user.id : '';
   if (!workspaceId) return NextResponse.json({ error: 'Missing Slack workspace' }, { status: 400 });
+  // `/incident declare` modal submit: validated inline (errors show on the form), then queued.
+  if (payload.type === 'view_submission' && payload.view?.callback_id === 'opsknight_incident_declare') {
+    const { acceptSlackDeclareSubmission } = await import('@/lib/chatops/slash-commands');
+    return acceptSlackDeclareSubmission(payload, signature);
+  }
   // URL buttons (View Details) only open a link; there is no effect to queue.
-  if (payload.type === 'block_actions' && !payload.actions?.[0]?.value) {
+  if (
+    payload.type === 'block_actions' &&
+    !payload.actions?.[0]?.value &&
+    !payload.actions?.[0]?.selected_option?.value
+  ) {
     return new Response(null, { status: 200 });
   }
 

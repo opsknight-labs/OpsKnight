@@ -50,6 +50,21 @@ export async function saveChatOpsConfig(
       autoCreateOnUrgency: formData.getAll('autoCreateOnUrgency'),
       autoCreateOnPriority: formData.getAll('autoCreateOnPriority'),
       archiveOnResolve: ['on', 'true'].includes(String(formData.get('archiveOnResolve') ?? '')),
+      // Older forms without these fields leave the stored values untouched.
+      ...(formData.has('slackWarRoomPrivate')
+        ? {
+            slackWarRoomPrivate: ['on', 'true'].includes(
+              String(formData.get('slackWarRoomPrivate') ?? '')
+            ),
+          }
+        : {}),
+      ...(formData.has('warRoomArchiveDelayHours')
+        ? {
+            warRoomArchiveDelayHours: String(formData.get('warRoomArchiveDelayHours') ?? '').trim()
+              ? Number(String(formData.get('warRoomArchiveDelayHours')).trim())
+              : null,
+          }
+        : {}),
       defaultVideoBridge: String(formData.get('defaultVideoBridge') ?? 'NONE'),
       customBridgeUrlTemplate: String(formData.get('customBridgeUrlTemplate') ?? '').trim(),
       defaultProviders,

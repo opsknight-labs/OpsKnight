@@ -41,6 +41,7 @@ import {
 } from './provider-admission';
 import { notificationRetryDelayMs, NOTIFICATION_RETRY_POLICY } from './notification-delivery';
 import { logger } from './logger';
+import type { SlackLiveCardRequest } from './slack/live-card';
 import {
   defaultNotificationPolicy,
   notificationAgingFloor,
@@ -118,7 +119,8 @@ export type CentralNotificationPayload =
         | 'INCIDENT_SMS'
         | 'INCIDENT_VOICE'
         | 'INCIDENT_PUSH'
-        | 'INCIDENT_WHATSAPP';
+        | 'INCIDENT_WHATSAPP'
+        | 'INCIDENT_SLACK';
       userId: string;
       incidentId: string;
       eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
@@ -176,6 +178,8 @@ export type CentralNotificationPayload =
       serviceId?: string;
       additionalMessage?: string;
       lifecyclePolicy?: LifecycleDeliveryPolicy;
+      /** Live-card delivery (edit in place + thread reply); absent on older queued rows. */
+      card?: SlackLiveCardRequest;
     }
   | {
       kind: 'SLACK_WEBHOOK';
@@ -242,7 +246,12 @@ type IncidentCentralPayload = Extract<
   CentralNotificationPayload,
   {
     kind:
-      'INCIDENT_EMAIL' | 'INCIDENT_SMS' | 'INCIDENT_VOICE' | 'INCIDENT_PUSH' | 'INCIDENT_WHATSAPP';
+      | 'INCIDENT_EMAIL'
+      | 'INCIDENT_SMS'
+      | 'INCIDENT_VOICE'
+      | 'INCIDENT_PUSH'
+      | 'INCIDENT_WHATSAPP'
+      | 'INCIDENT_SLACK';
   }
 >;
 
@@ -391,6 +400,7 @@ function channelForPayload(payload: CentralNotificationPayload): NotificationCha
   if (payload.kind === 'INCIDENT_VOICE') return 'VOICE';
   if (payload.kind === 'INCIDENT_PUSH') return 'PUSH';
   if (payload.kind === 'INCIDENT_WHATSAPP') return 'WHATSAPP';
+  if (payload.kind === 'INCIDENT_SLACK') return 'SLACK';
   if (payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK') return 'SLACK';
   if (payload.kind === 'MICROSOFT_TEAMS_CHANNEL') return 'MICROSOFT_TEAMS';
   if (payload.kind === 'CHAT_TEXT') return payload.provider;
@@ -414,6 +424,7 @@ function isCentralNotificationPayload(value: unknown): value is CentralNotificat
     case 'INCIDENT_VOICE':
     case 'INCIDENT_PUSH':
     case 'INCIDENT_WHATSAPP':
+    case 'INCIDENT_SLACK':
       return (
         hasText(value.userId) &&
         hasText(value.incidentId) &&
@@ -1231,6 +1242,17 @@ async function dispatchPayload(
         return { ...result, providerMessageId: result.messageSid };
       });
     }
+    case 'INCIDENT_SLACK': {
+      // Personal Slack DM page; one attempt per dispatch, the plane owns retries.
+      const { sendSlackIncidentDm } = await import('./slack/dm');
+      return executeProvider(CircuitBreakers.slack(), () =>
+        sendSlackIncidentDm({
+          userId: payload.userId,
+          incidentId: payload.incidentId,
+          eventType: payload.eventType,
+        })
+      );
+    }
     case 'EMAIL': {
       const { sendEmail } = await import('./email');
       let html = payload.html;
@@ -1426,7 +1448,7 @@ async function dispatchPayload(
           payload.includeInteractiveButtons ?? true,
           payload.serviceId,
           payload.additionalMessage,
-          { maxAttempts: 1 }
+          { maxAttempts: 1, card: payload.card }
         )
       );
     }
@@ -1696,7 +1718,7 @@ function isClientRejectionStatus(statusCode: number | undefined): boolean {
 }
 
 function isPermanentProviderError(message: string): boolean {
-  return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|authentication failed|invalid (?:api )?(?:key|credentials)|unauthorized|official Slack host|webhook URL is required|invalid or restricted Webhook URL|message_limit_exceeded/i.test(
+  return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|authentication failed|invalid (?:api )?(?:key|credentials)|unauthorized|official Slack host|webhook URL is required|invalid or restricted Webhook URL|message_limit_exceeded|^(?:channel_not_found|not_in_channel|is_archived|invalid_auth|not_authed|token_revoked|token_expired|account_inactive|missing_scope)$/i.test(
     message
   );
 }
@@ -1717,7 +1739,8 @@ async function incidentPayloadSuperseded(
     payload.kind !== 'INCIDENT_SMS' &&
     payload.kind !== 'INCIDENT_VOICE' &&
     payload.kind !== 'INCIDENT_PUSH' &&
-    payload.kind !== 'INCIDENT_WHATSAPP'
+    payload.kind !== 'INCIDENT_WHATSAPP' &&
+    payload.kind !== 'INCIDENT_SLACK'
   ) {
     return null;
   }

@@ -67,6 +67,8 @@ describe('Slack Channels API', () => {
       installedBy: 'user-1',
       scopes: ['chat:write'],
       enabled: true,
+      refreshToken: null,
+      tokenExpiresAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

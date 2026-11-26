@@ -9,6 +9,8 @@ import {
   projectSlackWarRoomToLegacyIncident,
 } from '../../slack-compatibility';
 import { slackApiCall } from './client';
+import { friendlySlackLabel } from './render';
+import { escapeSlack } from '@/lib/chatops/squire/render';
 
 export async function postSlackWarRoomUpdate(
   incidentId: string,
@@ -317,7 +319,7 @@ export async function updateSlackWarRoomTopic(
         : '';
     const commander = incident.roleAssignments[0]?.user.name;
     const commanderText = commander ? ` | 🎖️ IC ${commander}` : '';
-    const topic = `${statusIcon} ${incident.title} | ${displayStatus} | ${incident.urgency}${assigneeText}${commanderText} | ${dashboardUrl}`;
+    const topic = `${statusIcon} ${escapeSlack(incident.title)} | ${friendlySlackLabel(displayStatus)} | ${friendlySlackLabel(incident.urgency)} urgency${assigneeText}${commanderText} | ${dashboardUrl}`;
     const result = await slackApiCall('conversations.setTopic', botToken, {
       channel: room.providerChannelId,
       topic: topic.slice(0, 250),

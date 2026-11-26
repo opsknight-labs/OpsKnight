@@ -35,6 +35,9 @@ export async function saveMicrosoftTeamsConfig(
   const enabledValue = formData.get('enabled');
   const interactiveEnabledValue = formData.get('interactiveEnabled');
   const warRoomsEnabledValue = formData.get('warRoomsEnabled');
+  // Absent field (older form) leaves the stored expiry untouched; an empty value clears it.
+  const hasSecretExpiry = formData.has('clientSecretExpiresAt');
+  const secretExpiryRaw = ((formData.get('clientSecretExpiresAt') as string | null) ?? '').trim();
 
   // Strict validation — Zod is required by AGENTS.md §4 for every Server Action.
   const microsoftTeamsConfigSchema = z.object({
@@ -86,6 +89,20 @@ export async function saveMicrosoftTeamsConfig(
     return { error: parsed.error.issues[0]?.message ?? 'Invalid Teams configuration.' };
   }
   const { tenantId } = parsed.data;
+  const secretExpiry = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Secret expiry must be a date (YYYY-MM-DD).')
+    .refine(v => !Number.isNaN(Date.parse(`${v}T23:59:59Z`)), 'Secret expiry must be a valid date.')
+    .or(z.literal(''))
+    .safeParse(secretExpiryRaw);
+  if (!secretExpiry.success) {
+    return { error: secretExpiry.error.issues[0]?.message ?? 'Invalid secret expiry date.' };
+  }
+  // Entra shows the expiry as a date; treat it as the end of that day (UTC).
+  const clientSecretExpiresAt = secretExpiry.data
+    ? new Date(`${secretExpiry.data}T23:59:59Z`)
+    : null;
+  const secretExpiryUpdate = hasSecretExpiry ? { clientSecretExpiresAt } : {};
   const defaultMeetingOrganizerUpn = parsed.data.defaultMeetingOrganizerUpn
     ? parsed.data.defaultMeetingOrganizerUpn.trim()
     : null;
@@ -153,6 +170,7 @@ export async function saveMicrosoftTeamsConfig(
         interactiveEnabled,
         warRoomsEnabled,
         defaultMeetingOrganizerUpn,
+        ...secretExpiryUpdate,
         updatedBy: actorId,
       },
       update: {
@@ -164,6 +182,7 @@ export async function saveMicrosoftTeamsConfig(
         interactiveEnabled,
         warRoomsEnabled,
         defaultMeetingOrganizerUpn,
+        ...secretExpiryUpdate,
         updatedBy: actorId,
       },
     } as unknown as never);
@@ -212,6 +231,9 @@ export async function saveMicrosoftTeamsConfig(
       warRoomsEnabled,
       clientIdChanged,
       tenantChanged,
+      ...(hasSecretExpiry
+        ? { clientSecretExpiresAt: clientSecretExpiresAt?.toISOString().slice(0, 10) ?? null }
+        : {}),
     },
   });
 

@@ -17,7 +17,7 @@ import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Slack, ExternalLink, Copy, CheckCircle2, ArrowRight, ArrowLeft, Info } from 'lucide-react';
 import { notify as toast } from '@/lib/toast';
 import SlackManifestCard from '@/components/settings/SlackManifestCard';
-import { SLACK_BOT_SCOPES } from '@/lib/slack/app-manifest';
+import { SLACK_BOT_EVENTS, SLACK_BOT_SCOPES } from '@/lib/slack/app-manifest';
 
 type SetupStep = 1 | 2 | 3;
 
@@ -314,9 +314,12 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                 />
                 <p className="text-sm text-muted-foreground">
                   Then under &quot;Subscribe to bot events&quot; add{' '}
-                  <Badge variant="secondary" size="xs" className="font-mono">
-                    reaction_added
-                  </Badge>
+                  {SLACK_BOT_EVENTS.map(event => (
+                    <Badge key={event} variant="secondary" size="xs" className="mr-1 font-mono">
+                      {event}
+                    </Badge>
+                  ))}
+                  (the manifest adds these for you).
                 </p>
                 <Alert>
                   <Info className="h-4 w-4" />

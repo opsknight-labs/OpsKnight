@@ -1,7 +1,11 @@
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
 
-const NON_IDEMPOTENT_POST_METHODS = new Set(['conversations.create', 'chat.postMessage']);
+const NON_IDEMPOTENT_POST_METHODS = new Set([
+  'conversations.create',
+  'chat.postMessage',
+  'bookmarks.add',
+]);
 
 export type SlackApiResult = {
   ok: boolean;
@@ -9,6 +13,10 @@ export type SlackApiResult = {
   httpStatus?: number;
   transportFailure?: boolean;
   sideEffectAmbiguous?: boolean;
+  /** Slack refused the call with HTTP 429 / `ratelimited`: definitely not applied, retry later. */
+  rateLimited?: boolean;
+  /** From Retry-After when Slack rate-limited the call. */
+  retryAfterMs?: number;
   channel?: { id: string; name: string };
   channels?: Array<{ id: string; name: string }>;
   user?: { profile?: { email?: string } };
@@ -16,6 +24,67 @@ export type SlackApiResult = {
   message?: { ts?: string };
   response_metadata?: { next_cursor?: string };
 };
+
+const DEFAULT_RATE_LIMIT_RETRY_MS = 30_000;
+
+/** Retry-After (seconds or HTTP date) → ms, bounded to [1s, 15min]. */
+export function parseSlackRetryAfter(value: string | null | undefined): number {
+  if (!value) return DEFAULT_RATE_LIMIT_RETRY_MS;
+  const seconds = Number(value);
+  const ms = Number.isFinite(seconds) ? seconds * 1000 : new Date(value).getTime() - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return DEFAULT_RATE_LIMIT_RETRY_MS;
+  return Math.min(Math.max(ms, 1000), 15 * 60_000);
+}
+
+/**
+ * Classifies a non-2xx Slack response. 429 is a definite rejection (Slack applies nothing to a
+ * rate-limited call), so it is retryable and never side-effect-ambiguous. A 5xx on a create may
+ * have been applied, so it stays ambiguous and callers reconcile before re-posting.
+ */
+export function classifySlackHttpFailure(
+  method: string,
+  status: number,
+  bodyText: string,
+  retryAfterHeader: string | null
+): SlackApiResult {
+  const error = bodyText ? bodyText.slice(0, 500) : `HTTP ${status}`;
+  if (status === 429 || /"error"\s*:\s*"(ratelimited|rate_limited)"/.test(bodyText)) {
+    return {
+      ok: false,
+      error,
+      httpStatus: status,
+      transportFailure: true,
+      sideEffectAmbiguous: false,
+      rateLimited: true,
+      retryAfterMs: parseSlackRetryAfter(retryAfterHeader),
+    };
+  }
+  const is5xx = status >= 500 && status <= 599;
+  return {
+    ok: false,
+    error,
+    httpStatus: status,
+    transportFailure: is5xx,
+    sideEffectAmbiguous: is5xx && NON_IDEMPOTENT_POST_METHODS.has(method),
+  };
+}
+
+function rateLimitedJson(data: SlackApiResult, retryAfterHeader: string | null): SlackApiResult {
+  if (data && !data.ok && (data.error === 'ratelimited' || data.error === 'rate_limited')) {
+    return {
+      ...data,
+      rateLimited: true,
+      transportFailure: true,
+      sideEffectAmbiguous: false,
+      retryAfterMs: parseSlackRetryAfter(retryAfterHeader),
+    };
+  }
+  return data;
+}
+
+function headerOf(response: Response, name: string): string | null {
+  return response.headers?.get ? response.headers.get(name) : null;
+}
 
 export async function slackApiCall(
   method: string,
@@ -50,14 +119,7 @@ export async function slackApiCall(
           },
         }
       );
-      return (await response.json()) as {
-        ok: boolean;
-        error?: string;
-        channel?: { id: string; name: string };
-        channels?: Array<{ id: string; name: string }>;
-        user?: { profile?: { email?: string } };
-        response_metadata?: { next_cursor?: string };
-      };
+      return rateLimitedJson((await response.json()) as SlackApiResult, headerOf(response, 'Retry-After'));
     }
     // Non-idempotent creates: single attempt only — never blind-retry after a
     // POST that may have had a provider side effect. Callers must reconcile.
@@ -73,30 +135,36 @@ export async function slackApiCall(
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
-      const isRateLimited = response.status === 429;
-      const is5xx = response.status >= 500 && response.status <= 599;
-      const isTransportAmbiguous = isRateLimited || is5xx;
-      return {
-        ok: false,
-        error: text ? text.slice(0, 500) : `HTTP ${response.status}`,
-        httpStatus: response.status,
-        transportFailure: isTransportAmbiguous,
-        sideEffectAmbiguous: isTransportAmbiguous,
-      };
+      return classifySlackHttpFailure(method, response.status, text, headerOf(response, 'Retry-After'));
     }
-    return (await response.json()) as {
-      ok: boolean;
-      error?: string;
-      channel?: { id: string; name: string };
-      channels?: Array<{ id: string; name: string }>;
-      user?: { profile?: { email?: string } };
-      response_metadata?: { next_cursor?: string };
-    };
+    return rateLimitedJson((await response.json()) as SlackApiResult, headerOf(response, 'Retry-After'));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.warn('[ChatOps] Slack API call failed', { method, error: message });
+    const status = (error as { statusCode?: unknown } | null)?.statusCode;
+    if (status === 429 || /^HTTP 429:/.test(message)) {
+      // retryFetch already waited once; hand the rest of Retry-After to the job scheduler.
+      const waited = (error as { retryAfterMs?: unknown }).retryAfterMs;
+      return {
+        ok: false,
+        error: message,
+        httpStatus: 429,
+        transportFailure: true,
+        sideEffectAmbiguous: false,
+        rateLimited: true,
+        retryAfterMs:
+          typeof waited === 'number' && waited > 0
+            ? Math.min(waited, 15 * 60_000)
+            : DEFAULT_RATE_LIMIT_RETRY_MS,
+      };
+    }
     const isTimeoutish = /timeout|fetch|network|econnreset|etimedout/i.test(message);
-    return { ok: false, error: message, transportFailure: isTimeoutish, sideEffectAmbiguous: NON_IDEMPOTENT_POST_METHODS.has(method) && isTimeoutish };
+    return {
+      ok: false,
+      error: message,
+      transportFailure: isTimeoutish,
+      sideEffectAmbiguous: NON_IDEMPOTENT_POST_METHODS.has(method) && isTimeoutish,
+    };
   }
 }
 

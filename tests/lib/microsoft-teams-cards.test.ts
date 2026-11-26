@@ -39,7 +39,9 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
       return value;
     });
     expect(markdownBlocks.some(text => text.includes(phish))).toBe(false);
-    expect(plainRuns.filter(text => text === phish)).toHaveLength(2);
+    // Title run carries the [P1] prefix; the description run is the raw text.
+    expect(plainRuns).toContain(`[P1] ${phish}`);
+    expect(plainRuns.filter(text => text === phish)).toHaveLength(1);
   });
 
   it('renders AdaptiveCard v1.5 with emphasis header, facts, and single View action', () => {
@@ -52,10 +54,9 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
     // Phase 1 omits Action.Execute — Phase 2 introduces ack/resolve/assign verbs.
     expect(JSON.stringify(card)).not.toContain('Action.Execute');
     expect((card.actions as { title: string }[])[0].title).toContain('View Incident');
-    // FactSet carries incident state.
+    // The compact facts line carries service, urgency and priority as friendly labels.
     const bodyJson = JSON.stringify(card.body);
-    expect(bodyJson).toContain('FactSet');
-    expect(bodyJson).toContain('payments-api');
+    expect(bodyJson).toContain('payments-api · High urgency · P1 · Crisis');
   });
 
   it('encodes Triggered/Acknowledged/Resolved with distinct accent and badge', () => {
@@ -139,7 +140,7 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
     expect(withoutStr).not.toContain('"title":"Assignee"');
   });
 
-  it('shows acknowledged/resolved by line, otherwise UTC creation timestamp', () => {
+  it('shows acknowledged/resolved by line, otherwise a local-time start timestamp', () => {
     const ack = buildMicrosoftTeamsIncidentCard({
       incident: incident({ acknowledgedBy: 'Carol' }),
       eventType: 'acknowledged',
@@ -156,8 +157,10 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
       incident: incident(),
       eventType: 'triggered',
     });
-    expect(JSON.stringify(triggered.body)).toContain('Created');
-    expect(JSON.stringify(triggered.body)).toContain('UTC');
+    expect(JSON.stringify(triggered.body)).toContain(
+      'Started {{DATE(2026-09-12T00:00:00Z, SHORT)}} {{TIME(2026-09-12T00:00:00Z)}}'
+    );
+    expect(JSON.stringify(triggered.body)).not.toContain('UTC');
   });
 
   it('renders strict Phase 2 actions only when explicitly enabled and capability-allowed', () => {
@@ -229,8 +232,9 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
     );
     const json = JSON.stringify(card);
     expect(json).toContain('Join Teams Meeting');
-    expect(json).toContain('https://teams.microsoft.com/l/meetup-join/gen2-meeting');
-    expect(json).toContain('Video Bridge');
+    // The meeting link appears once: as the action button, not again in the body.
+    expect(json.split('https://teams.microsoft.com/l/meetup-join/gen2-meeting')).toHaveLength(2);
+    expect(json).not.toContain('Video Bridge');
     const joinAction = (card.actions as Array<{ title: string; url: string }>).find(
       a => a.title === 'Join Teams Meeting'
     );

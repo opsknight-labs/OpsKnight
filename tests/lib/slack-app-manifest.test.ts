@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSlackAppManifest,
   buildSlackAppManifestJson,
+  findMissingOptionalScopes,
   findMissingRequiredScopes,
   SLACK_BOT_SCOPES,
+  SLACK_OPTIONAL_BOT_SCOPES,
   SLACK_REQUIRED_BOT_SCOPES,
 } from '@/lib/slack/app-manifest';
 
@@ -61,10 +63,10 @@ describe('Slack app manifest', () => {
 
   it('advertises only slash subcommands that exist', () => {
     const hint = buildSlackAppManifest({ baseUrl: BASE }).features.slash_commands[0].usage_hint;
-    for (const real of ['ack', 'resolve', 'note', 'who', 'postmortem', 'help']) {
+    for (const real of ['ack', 'resolve', 'note', 'declare', 'list', 'oncall', 'who', 'help']) {
       expect(hint).toContain(real);
     }
-    for (const fake of ['reassign', 'create', 'list']) {
+    for (const fake of ['reassign', 'create']) {
       expect(hint).not.toContain(fake);
     }
   });
@@ -76,6 +78,19 @@ describe('Slack app manifest', () => {
     expect(SLACK_BOT_SCOPES).toContain('chat:write.customize');
     expect(m.oauth_config.scopes.bot).toContain('app_mentions:read');
     expect(m.settings.event_subscriptions.bot_events).toContain('app_mention');
+  });
+
+  it('keeps the newer capability scopes optional so old installs keep working', () => {
+    for (const scope of ['pins:write', 'bookmarks:write', 'im:write', 'chat:write.public']) {
+      expect([...SLACK_REQUIRED_BOT_SCOPES]).not.toContain(scope);
+      expect(SLACK_OPTIONAL_BOT_SCOPES as readonly string[]).toContain(scope);
+    }
+  });
+
+  it('enables the messages tab for DM paging and keeps the bot online', () => {
+    const m = buildSlackAppManifest({ baseUrl: BASE });
+    expect(m.features.app_home.messages_tab_enabled).toBe(true);
+    expect(m.features.bot_user.always_online).toBe(true);
   });
 
   it('serialises to valid, pasteable JSON', () => {
@@ -107,6 +122,13 @@ describe('Slack app manifest', () => {
         'channels:history',
         'reactions:read',
         'commands',
+      ]);
+    });
+
+    it('lists optional scopes separately from required ones', () => {
+      expect(findMissingOptionalScopes([...SLACK_BOT_SCOPES])).toEqual([]);
+      expect(findMissingOptionalScopes([...SLACK_REQUIRED_BOT_SCOPES])).toEqual([
+        ...SLACK_OPTIONAL_BOT_SCOPES,
       ]);
     });
 

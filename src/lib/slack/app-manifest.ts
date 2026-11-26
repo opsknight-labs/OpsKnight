@@ -30,6 +30,10 @@ export const SLACK_OPTIONAL_BOT_SCOPES = [
   'mpim:read',
   'app_mentions:read', // Receive @OpsKnight mentions so Squire can answer in incident channels
   'chat:write.customize', // Post Squire's messages under its own name and avatar
+  'chat:write.public', // Post to public channels without joining them first
+  'pins:write', // Pin the incident status card in war rooms
+  'bookmarks:write', // Bookmark the incident link in war-room channels
+  'im:write', // Open DMs to page on-call responders in Slack
 ] as const;
 
 /** Lets Squire's messages carry its own name and avatar instead of the app's. */
@@ -54,7 +58,7 @@ export const SLACK_BOT_EVENTS = [
 
 /** Subcommands the dispatcher actually implements — keeps the hint honest. */
 export const SLACK_COMMAND_USAGE_HINT =
-  'ack | resolve [summary] | note <message> | who | postmortem | ask <question> | investigate | help';
+  'declare | list [service] | oncall [service] | ack | resolve [summary] | note <text> | who | postmortem | ask <question> | investigate | help';
 
 export interface SlackManifestOptions {
   /** Public base URL, e.g. https://opsknight.example.com */
@@ -85,7 +89,13 @@ export function buildSlackAppManifest({
     features: {
       bot_user: {
         display_name: botDisplayName,
-        always_online: false,
+        always_online: true,
+      },
+      // Messages tab so responders can receive DM pages and reply to the bot.
+      app_home: {
+        home_tab_enabled: false,
+        messages_tab_enabled: true,
+        messages_tab_read_only_enabled: false,
       },
       slash_commands: [
         {
@@ -124,6 +134,14 @@ export function buildSlackAppManifest({
 /** Pretty-printed manifest, ready to paste into Slack. */
 export function buildSlackAppManifestJson(options: SlackManifestOptions): string {
   return JSON.stringify(buildSlackAppManifest(options), null, 2);
+}
+
+/** Optional scopes the workspace has not granted (features degrade without them). */
+export function findMissingOptionalScopes(
+  grantedScopes: string[] | undefined | null
+): Array<(typeof SLACK_OPTIONAL_BOT_SCOPES)[number]> {
+  const granted = new Set(grantedScopes ?? []);
+  return SLACK_OPTIONAL_BOT_SCOPES.filter(scope => !granted.has(scope));
 }
 
 /** Required scopes the workspace has not granted. */

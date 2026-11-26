@@ -34,7 +34,8 @@ async function sendCentralIncidentNotification(input: {
   priority?: string | null;
   urgency?: string | null;
 }): Promise<SendNotificationResult | null> {
-  if (!['EMAIL', 'SMS', 'VOICE', 'PUSH', 'WHATSAPP'].includes(input.channel)) return null;
+  // SLACK here is the personal Slack DM page; service channel posts use their own outbox effect.
+  if (!['EMAIL', 'SMS', 'VOICE', 'PUSH', 'WHATSAPP', 'SLACK'].includes(input.channel)) return null;
   // Voice is an actionable responder page, not a lifecycle broadcast channel.
   if (input.channel === 'VOICE' && input.eventType !== 'triggered') {
     return {
@@ -50,7 +51,7 @@ async function sendCentralIncidentNotification(input: {
     select: { email: true, phoneNumber: true },
   });
   const recipientAddress =
-    input.channel === 'EMAIL'
+    input.channel === 'EMAIL' || input.channel === 'SLACK'
       ? recipient?.email
       : input.channel === 'SMS' || input.channel === 'VOICE' || input.channel === 'WHATSAPP'
         ? recipient?.phoneNumber
@@ -70,7 +71,8 @@ async function sendCentralIncidentNotification(input: {
     | 'INCIDENT_SMS'
     | 'INCIDENT_VOICE'
     | 'INCIDENT_PUSH'
-    | 'INCIDENT_WHATSAPP';
+    | 'INCIDENT_WHATSAPP'
+    | 'INCIDENT_SLACK';
   const queued = await enqueueCentralNotification({
     category: 'INCIDENT',
     channel: input.channel,

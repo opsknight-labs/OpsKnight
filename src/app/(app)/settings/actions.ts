@@ -263,6 +263,14 @@ export async function updateNotificationPreferences(
       whatsappEnabled:
         formData.get('whatsappNotificationsEnabled') === 'on' ||
         formData.get('whatsappNotificationsEnabled') === 'true',
+      // Only forms that render the Slack DM switch send it; others keep the stored value.
+      ...(formData.has('slackNotificationsEnabled')
+        ? {
+            slackDmEnabled:
+              formData.get('slackNotificationsEnabled') === 'on' ||
+              formData.get('slackNotificationsEnabled') === 'true',
+          }
+        : {}),
       ...(hasPhoneField ? { phoneNumber: submittedPhone ?? null } : {}),
     });
 

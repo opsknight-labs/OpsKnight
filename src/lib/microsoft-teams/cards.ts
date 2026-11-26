@@ -33,6 +33,11 @@ export type MicrosoftTeamsIncidentCardInput = {
     resolvedAt?: Date | null;
     slaAckRemainingMs?: number | null;
     slaResolveRemainingMs?: number | null;
+    snoozedUntil?: Date | null;
+    /** Current escalation level (1-based) and who it is paging, when the policy has moved past level 1. */
+    escalation?: { level: number; target?: string | null } | null;
+    /** Set when this card replaces a create whose outcome Teams never confirmed. */
+    repostNotice?: boolean;
   };
   eventType: 'triggered' | 'acknowledged' | 'resolved';
 };
@@ -95,6 +100,9 @@ function warRoomPhaseForInput(
   return 'TRIGGERED';
 }
 
+const RESOLUTION_NOTE_MAX = 1000;
+export const RESOLUTION_NOTE_REGEX = '^(?:\\s*|\\s*\\S[\\s\\S]{8,998}\\S\\s*)$';
+
 function interactiveActions(
   input: MicrosoftTeamsIncidentCardInput,
   options?: MicrosoftTeamsCardOptions
@@ -102,13 +110,15 @@ function interactiveActions(
   const interactive = options?.interactive;
   if (!interactive || options?.disableActions) return [];
   const caps = interactive.capabilities;
-  // P1-2: shared channel card must fail-closed. No caps → no privileged controls, only View Incident + refresh.
+  // Shared channel card (no caps): only Acknowledge / Resolve (invoke re-checks identity + RBAC) + View + refresh.
   // P1-8: phase comes from central contract, not ad-hoc acknowledgedAt checks.
   const phase = warRoomPhaseForInput(input);
   if (phase === 'RESOLVED') return [];
 
   const allow = (key: keyof NonNullable<typeof caps>): boolean => {
-    if (!caps) return false;
+    // Shared (not personalised) card: Acknowledge and Resolve are safe to show to everyone because
+    // the invoke handler re-checks the clicker's identity and RBAC; everything else waits for refresh.
+    if (!caps) return key === 'canAcknowledge' || key === 'canResolve';
     switch (key) {
       case 'canAcknowledge':
         return caps.canAcknowledge === true;
@@ -197,7 +207,10 @@ function interactiveActions(
             placeholder: '10–1000 characters if provided',
             isMultiline: true,
             isRequired: false,
-            maxLength: 1000,
+            maxLength: RESOLUTION_NOTE_MAX,
+            // Same rule as the server (action-schema + lifecycle): blank, or 10–1000 characters once trimmed.
+            regex: RESOLUTION_NOTE_REGEX,
+            errorMessage: 'Leave it empty or write 10 to 1000 characters.',
           },
         ],
         actions: [
@@ -347,10 +360,29 @@ function statusAccent(eventType: MicrosoftTeamsIncidentCardInput['eventType']): 
   return '#e11d48';
 }
 
-function statusBadge(eventType: MicrosoftTeamsIncidentCardInput['eventType']): string {
-  if (eventType === 'resolved') return 'Resolved';
-  if (eventType === 'acknowledged') return 'Acknowledged';
-  return 'Triggered';
+type CardVisual = {
+  key: 'TRIGGERED' | 'ESCALATED' | 'ACKNOWLEDGED' | 'SNOOZED' | 'SUPPRESSED' | 'RESOLVED';
+  label: string;
+  /** Adaptive Card container style for the header band. */
+  style: 'attention' | 'warning' | 'good' | 'emphasis';
+  /** Adaptive Card text colour for the single status badge. */
+  color: 'Attention' | 'Warning' | 'Good' | 'Default';
+};
+
+/** One visual state per card: the header band and the badge always agree. */
+export function teamsIncidentCardVisual(input: MicrosoftTeamsIncidentCardInput): CardVisual {
+  const { incident, eventType } = input;
+  if (eventType === 'resolved' || incident.status === 'RESOLVED')
+    return { key: 'RESOLVED', label: 'Resolved', style: 'good', color: 'Good' };
+  if (incident.status === 'SNOOZED')
+    return { key: 'SNOOZED', label: 'Snoozed', style: 'warning', color: 'Warning' };
+  if (incident.status === 'SUPPRESSED')
+    return { key: 'SUPPRESSED', label: 'Suppressed', style: 'emphasis', color: 'Default' };
+  if (eventType === 'acknowledged' || incident.status === 'ACKNOWLEDGED')
+    return { key: 'ACKNOWLEDGED', label: 'Acknowledged', style: 'warning', color: 'Warning' };
+  if ((incident.escalation?.level ?? 1) > 1)
+    return { key: 'ESCALATED', label: 'Escalated', style: 'attention', color: 'Attention' };
+  return { key: 'TRIGGERED', label: 'Triggered', style: 'attention', color: 'Attention' };
 }
 
 function safeIncidentDescription(value: string | null | undefined, maxLen = 280): string | null {
@@ -376,72 +408,147 @@ function formatTeamsMeetingLabel(provider?: string | null): string {
   }
 }
 
+const URGENCY_LABELS: Record<string, string> = {
+  HIGH: 'High urgency',
+  MEDIUM: 'Medium urgency',
+  LOW: 'Low urgency',
+};
+
+/** "P1 · Crisis" for a known priority; unknown values pass through unchanged. */
+export function teamsPriorityLabel(priority: string | null | undefined): string | null {
+  if (!priority) return null;
+  return (INCIDENT_PRIORITIES as readonly string[]).includes(priority)
+    ? `${priority} · ${getIncidentPriorityDefinition(priority as (typeof INCIDENT_PRIORITIES)[number]).label}`
+    : priority;
+}
+
+export function teamsUrgencyLabel(urgency: string | null | undefined): string | null {
+  if (!urgency) return null;
+  // eslint-disable-next-line security/detect-object-injection -- read-only lookup in a fixed constant table
+  return URGENCY_LABELS[urgency] ?? urgency.charAt(0) + urgency.slice(1).toLowerCase();
+}
+
+/** Adaptive Card DATE/TIME functions need RFC 3339 without fractional seconds. */
+function cardInstant(date: Date | null | undefined): string | null {
+  if (!date || Number.isNaN(date.getTime())) return null;
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/** Rendered in the reader's own locale and time zone by Teams. */
+function localTime(date: Date | null | undefined): string | null {
+  const iso = cardInstant(date);
+  return iso ? `{{DATE(${iso}, SHORT)}} {{TIME(${iso})}}` : null;
+}
+
 /**
- * War-room incident card — capability-aware.
+ * Activity `summary` / card `fallbackText`: what Teams shows in the activity feed and push
+ * notifications. Plain text, never markdown.
+ */
+export function teamsIncidentActivitySummary(input: MicrosoftTeamsIncidentCardInput): string {
+  const visual = teamsIncidentCardVisual(input);
+  const prefix = input.incident.priority ? `[${input.incident.priority}] ` : '';
+  const title = safeIncidentDescription(input.incident.title, 120) ?? 'Incident';
+  return `${prefix}${visual.label}: ${title}`;
+}
+
+/** Plain-text line (TextRuns are never parsed as markdown, so alert text cannot inject links). */
+function plainLine(
+  text: string,
+  run: Record<string, unknown> = {},
+  block: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return { type: 'RichTextBlock', inlines: [{ type: 'TextRun', text, ...run }], ...block };
+}
+
+function slaLabel(remainingMs: number | null | undefined): string | null {
+  if (remainingMs == null || !Number.isFinite(remainingMs)) return null;
+  if (remainingMs <= 0) return 'SLA breached';
+  const mins = Math.ceil(remainingMs / 60_000);
+  if (mins < 60) return `SLA ${mins}m remaining`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem ? `SLA ${hrs}h ${rem}m remaining` : `SLA ${hrs}h remaining`;
+}
+
+/**
+ * Incident card for channel notifications and war rooms.
  *
- * Shared channel card (no capabilities): fail-closed → only incident info + View Incident + refresh.
- * Personalized refresh (with capabilities): capability-filtered controls per central CHATOPS_ACTIONS registry.
+ * Shared card (interactive, no capabilities): Acknowledge / Resolve (the invoke re-checks identity
+ * and RBAC) + View incident + a per-user refresh that adds the rest of the clicker's actions.
+ * Personalised refresh (with capabilities): capability-filtered controls per CHATOPS_ACTIONS.
  */
 export function buildMicrosoftTeamsIncidentCard(
   input: MicrosoftTeamsIncidentCardInput,
   options?: MicrosoftTeamsCardOptions
 ) {
   const { incident, eventType } = input;
-  const presentation = deriveTeamsIncidentPresentation(input);
+  const visual = teamsIncidentCardVisual(input);
   const safeUrl = safeTeamsUrl(incident.incidentUrl);
-
-  const description = safeIncidentDescription(incident.description);
-  const subtitle = `${incident.serviceName} · ${incident.urgency}${incident.priority ? ` · ${incident.priority}` : ''}`;
-
-  const facts: Array<{ title: string; value: string }> = [
-    { title: 'Status', value: incident.status },
-    { title: 'Service', value: incident.serviceName },
-    { title: 'Urgency', value: incident.urgency },
-  ];
-  if (incident.assigneeName) facts.push({ title: 'Assignee', value: incident.assigneeName });
-  for (const role of incident.roles ?? []) facts.push({ title: role.shortLabel, value: role.name });
-  if (incident.priority) facts.push({ title: 'Priority', value: incident.priority });
-
   const disableActions = Boolean(options?.disableActions);
   const chatOpsActions = interactiveActions(input, options);
-  function slaLabel(remainingMs: number | null | undefined): string | null {
-    if (remainingMs == null || !Number.isFinite(remainingMs)) return null;
-    if (remainingMs <= 0) return 'SLA breached';
-    const mins = Math.ceil(remainingMs / 60_000);
-    if (mins < 60) return `SLA ${mins}m remaining`;
-    const hrs = Math.floor(mins / 60);
-    const rem = mins % 60;
-    return rem ? `SLA ${hrs}h ${rem}m remaining` : `SLA ${hrs}h remaining`;
-  }
-  const slaRemaining =
-    eventType === 'acknowledged'
-      ? null
-      : eventType === 'resolved'
-        ? incident.slaResolveRemainingMs
-        : incident.slaAckRemainingMs;
-  const slaText = slaLabel(slaRemaining ?? null);
-  const disableActionsFoot =
-    disableActions && eventType === 'resolved' ? `Resolved — actions disabled` : null;
-  const actorFoot =
-    eventType === 'acknowledged' && incident.acknowledgedBy
+  const summary = teamsIncidentActivitySummary(input);
+
+  const title = safeIncidentDescription(incident.title, 200) ?? '';
+  const factsLine = [
+    incident.serviceName ? `Service: ${incident.serviceName}` : null,
+    teamsUrgencyLabel(incident.urgency),
+    teamsPriorityLabel(incident.priority),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const description = safeIncidentDescription(incident.description);
+
+  const people: Array<Record<string, unknown>> = [];
+  if (incident.assigneeName)
+    people.push(plainLine(`Assignee: ${incident.assigneeName}`, {}, { spacing: 'Small' }));
+  for (const role of incident.roles ?? [])
+    people.push(plainLine(`${role.shortLabel}: ${role.name}`, {}, { spacing: 'Small' }));
+
+  const actorLine =
+    visual.key === 'ACKNOWLEDGED' && incident.acknowledgedBy
       ? `Acknowledged by ${incident.acknowledgedBy}`
-      : eventType === 'resolved' && incident.resolvedBy
+      : visual.key === 'RESOLVED' && incident.resolvedBy
         ? `Resolved by ${incident.resolvedBy}`
         : null;
-  const timeFoot = `Created ${incident.createdAt.toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
-  const footParts = [disableActionsFoot ?? actorFoot ?? timeFoot, slaText].filter(
-    Boolean
-  ) as string[];
-  const foot = footParts.join(' · ');
+
+  const escalationLine =
+    visual.key === 'ESCALATED' && incident.escalation
+      ? `Escalated to level ${incident.escalation.level}${
+          incident.escalation.target ? ` · paging ${incident.escalation.target}` : ''
+        }`
+      : null;
+
+  const slaRemaining =
+    visual.key === 'RESOLVED'
+      ? null
+      : visual.key === 'ACKNOWLEDGED'
+        ? incident.slaResolveRemainingMs
+        : incident.slaAckRemainingMs;
+  const timeParts = [
+    visual.key === 'RESOLVED' && localTime(incident.resolvedAt)
+      ? `Resolved ${localTime(incident.resolvedAt)}`
+      : visual.key === 'ACKNOWLEDGED' && localTime(incident.acknowledgedAt)
+        ? `Acknowledged ${localTime(incident.acknowledgedAt)}`
+        : null,
+    visual.key === 'SNOOZED' && localTime(incident.snoozedUntil)
+      ? `Snoozed until ${localTime(incident.snoozedUntil)}`
+      : null,
+    localTime(incident.createdAt) ? `Started ${localTime(incident.createdAt)}` : null,
+    slaLabel(slaRemaining ?? null),
+  ].filter(Boolean) as string[];
+
+  const meetingUrl =
+    options?.meeting?.joinUrl && !disableActions ? safeTeamsUrl(options.meeting.joinUrl) : null;
 
   return {
     $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
     type: 'AdaptiveCard',
     version: '1.5',
+    fallbackText: summary,
     body: [
       {
         type: 'Container',
-        style: 'emphasis',
+        style: visual.style,
         bleed: true,
         items: [
           {
@@ -451,117 +558,93 @@ export function buildMicrosoftTeamsIncidentCard(
                 type: 'Column',
                 width: 'stretch',
                 items: [
-                  {
-                    type: 'TextBlock',
-                    text: `OpsKnight · ${presentation === 'OPEN' ? statusBadge(eventType) : presentation[0] + presentation.slice(1).toLowerCase()}`,
+                  plainLine(`${incident.priority ? `[${incident.priority}] ` : ''}${title}`, {
                     weight: 'Bolder',
-                    size: 'Medium',
-                    color: 'Attention',
-                    wrap: true,
-                  },
-                  // Alert-supplied text goes in a TextRun, which Teams renders as plain
-                  // text; a TextBlock would turn "[x](https://evil)" into a live link.
-                  {
-                    type: 'RichTextBlock',
-                    inlines: [
-                      {
-                        type: 'TextRun',
-                        text: safeIncidentDescription(incident.title, 200) ?? '',
-                        weight: 'Bolder',
-                        size: 'Large',
-                      },
-                    ],
-                  },
-                  {
-                    type: 'TextBlock',
-                    text: subtitle,
-                    isSubtle: true,
-                    size: 'Small',
-                    wrap: true,
-                    spacing: 'Small',
-                  },
+                    size: 'Large',
+                  }),
+                  ...(factsLine
+                    ? [
+                        plainLine(
+                          factsLine,
+                          { isSubtle: true, size: 'Small' },
+                          { spacing: 'Small' }
+                        ),
+                      ]
+                    : []),
                 ],
               },
               {
                 type: 'Column',
                 width: 'auto',
+                verticalContentAlignment: 'Top',
                 items: [
                   {
                     type: 'TextBlock',
-                    text: statusBadge(eventType),
+                    text: visual.label,
                     size: 'Small',
                     weight: 'Bolder',
-                    color:
-                      eventType === 'resolved'
-                        ? 'Good'
-                        : eventType === 'acknowledged'
-                          ? 'Warning'
-                          : 'Attention',
-                    wrap: true,
+                    color: visual.color,
+                    wrap: false,
                   },
                 ],
               },
             ],
           },
-          { type: 'TextBlock', text: ' ', spacing: 'None' },
         ],
       },
       {
         type: 'Container',
         items: [
-          { type: 'FactSet', facts },
+          ...(escalationLine
+            ? [plainLine(escalationLine, { weight: 'Bolder', color: 'Attention' })]
+            : []),
+          ...(actorLine ? [plainLine(actorLine, { weight: 'Bolder', color: visual.color })] : []),
           ...(description
             ? [
-                {
-                  type: 'RichTextBlock',
-                  inlines: [{ type: 'TextRun', text: description, isSubtle: true }],
-                  spacing: 'Medium',
-                } as const,
+                plainLine(
+                  description,
+                  {},
+                  { spacing: actorLine || escalationLine ? 'Small' : 'None' }
+                ),
               ]
             : []),
-          ...(options?.meeting?.joinUrl && !disableActions
+          ...people,
+          ...(incident.repostNotice
             ? [
                 {
-                  type: 'Container',
-                  style: 'accent',
+                  type: 'TextBlock',
+                  text: 'Re-posted after Teams did not confirm delivery. An earlier copy of this card may exist.',
+                  isSubtle: true,
+                  size: 'Small',
+                  color: 'Warning',
+                  wrap: true,
                   spacing: 'Medium',
-                  items: [
-                    {
-                      type: 'TextBlock',
-                      text: `📹 **Video Bridge**: [Join ${formatTeamsMeetingLabel(options.meeting.provider)} Meeting](${safeTeamsUrl(options.meeting.joinUrl)})`,
-                      wrap: true,
-                    },
-                  ],
-                } as const,
+                },
               ]
             : []),
-          {
-            type: 'TextBlock',
-            text: foot,
-            isSubtle: true,
-            size: 'Small',
-            wrap: true,
-            spacing: 'Medium',
-          },
-          {
-            type: 'TextBlock',
-            text: '[OpsKnight](https://opsknight.com) — Open-source incident response & on-call platform',
-            isSubtle: true,
-            size: 'Small',
-            wrap: true,
-            spacing: 'Small',
-          },
+          ...(timeParts.length
+            ? [
+                {
+                  type: 'TextBlock',
+                  text: timeParts.join(' · '),
+                  isSubtle: true,
+                  size: 'Small',
+                  wrap: true,
+                  spacing: 'Medium',
+                },
+              ]
+            : []),
         ],
       },
     ],
     actions: [
       ...chatOpsActions,
-      ...(options?.meeting?.joinUrl && !disableActions
+      ...(meetingUrl
         ? [
             {
               type: 'Action.OpenUrl' as const,
-              title: `Join ${formatTeamsMeetingLabel(options.meeting.provider)} Meeting`,
-              url: safeTeamsUrl(options.meeting.joinUrl),
+              title: `Join ${formatTeamsMeetingLabel(options?.meeting?.provider)} Meeting`,
+              url: meetingUrl,
               style: 'positive' as const,
             },
           ]
@@ -570,7 +653,7 @@ export function buildMicrosoftTeamsIncidentCard(
         type: 'Action.OpenUrl',
         title: 'View Incident ↗',
         url: safeUrl,
-        ...(options?.interactive ? { mode: 'secondary' } : {}),
+        ...(chatOpsActions.length ? { mode: 'secondary' } : {}),
       },
     ],
     ...(options?.interactive
@@ -595,6 +678,6 @@ export function buildMicrosoftTeamsIncidentCard(
           },
         }
       : {}),
-    _opsknightMeta: { accent: statusAccent(eventType), eventType },
+    _opsknightMeta: { accent: statusAccent(eventType), eventType, state: visual.key, summary },
   };
 }

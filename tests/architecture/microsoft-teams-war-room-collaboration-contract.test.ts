@@ -34,7 +34,7 @@ describe('Microsoft Teams war-room collaboration contract', () => {
 
   it('keeps the Teams app manifest version aligned with the collaboration capabilities', async () => {
     const { MICROSOFT_TEAMS_MANIFEST_VERSION } = await import('@/lib/microsoft-teams/app-manifest');
-    expect(MICROSOFT_TEAMS_MANIFEST_VERSION).toBe('1.3.0');
+    expect(MICROSOFT_TEAMS_MANIFEST_VERSION).toBe('1.4.0');
   });
 
   it('fences post-provider participant outcomes by desiredVersion and compensates races', () => {

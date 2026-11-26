@@ -191,6 +191,37 @@ function lifecycleNotificationEvent(
   if (lifecycle.status === 'RESOLVED') return 'resolved';
   return 'updated';
 }
+/** The real change behind an `updated` lifecycle notification, so Slack can say what happened. */
+export function lifecycleSlackSubEvent(
+  lifecycle: LifecycleSideEffectContext
+):
+  | 'reopened'
+  | 'unacknowledged'
+  | 'snoozed'
+  | 'unsnoozed'
+  | 'suppressed'
+  | 'unsuppressed'
+  | undefined {
+  switch (lifecycle.command) {
+    case 'REOPEN':
+      return 'reopened';
+    case 'UNACKNOWLEDGE':
+      return 'unacknowledged';
+    case 'SNOOZE':
+      return 'snoozed';
+    case 'UNSNOOZE':
+      return 'unsnoozed';
+    case 'SUPPRESS':
+      return 'suppressed';
+    case 'UNSUPPRESS':
+      return 'unsuppressed';
+    default:
+      // A reopen that lands in OPEN from RESOLVED is a reopen whatever command carried it.
+      return lifecycle.previousStatus === 'RESOLVED' && lifecycle.status === 'OPEN'
+        ? 'reopened'
+        : undefined;
+  }
+}
 function lifecycleStatusPageEvent(
   lifecycle: LifecycleSideEffectContext
 ): 'acknowledged' | 'resolved' | 'investigating' | 'snoozed' | 'suppressed' {
@@ -490,11 +521,15 @@ export async function processEventSideEffect(
       if (!(await sideEffectSnapshotStillCurrent(payload))) return;
       const { sendServiceNotifications } = await import('./service-notifications');
       const lifecycle = lifecycleContext(payload);
+      const notificationEvent = lifecycleNotificationEvent(lifecycle);
+      const subEvent =
+        notificationEvent === 'updated' ? lifecycleSlackSubEvent(lifecycle) : undefined;
       requireDelivery(
-        await sendServiceNotifications(payload.incidentId, lifecycleNotificationEvent(lifecycle), {
+        await sendServiceNotifications(payload.incidentId, notificationEvent, {
           eventAt: new Date(lifecycle.transitionAt),
           escalationGeneration: payload.escalationGeneration,
           expectedStatus: lifecycle.status,
+          ...(subEvent ? { subEvent } : {}),
         }),
         'lifecycle service notification'
       );
@@ -535,6 +570,18 @@ export async function processEventSideEffect(
           status: payload.incidentStatus,
         }),
         'incident assignment notification'
+      );
+      // Refresh the service channel's Slack card (edit + "Assigned to @x" reply). Idempotent by
+      // event key, so a retry of this effect does not double-post.
+      const { sendServiceNotifications } = await import('./service-notifications');
+      requireDelivery(
+        await sendServiceNotifications(payload.incidentId, 'updated', {
+          eventAt: new Date(payload.eventOrderAt),
+          expectedStatus: payload.incidentStatus,
+          subEvent: 'reassigned',
+          slackOnly: true,
+        }),
+        'incident assignment Slack card refresh'
       );
       return;
     }

@@ -24,6 +24,8 @@ import {
   HelpCircle,
 } from 'lucide-react';
 
+import { describeTeamsTestResult } from './teams-test-result';
+
 type ConfigData = {
   id?: string;
   clientId: string;
@@ -33,6 +35,7 @@ type ConfigData = {
   interactiveEnabled: boolean;
   warRoomsEnabled: boolean;
   defaultMeetingOrganizerUpn?: string | null;
+  clientSecretExpiresAt?: string | Date | null;
 } | null;
 
 type InstallationPermissionState = {
@@ -135,10 +138,15 @@ export default function MicrosoftTeamsSetupWizard({
         body: JSON.stringify({ destinationId }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) toast.success('Test Adaptive Card sent to Teams channel.');
-      else toast.error(data?.error || 'Teams test failed');
+      const result = describeTeamsTestResult(res.ok, data);
+      if (result.ok) toast.success(result.message);
+      else
+        toast.error(
+          result.message,
+          result.code ? { description: `Code: ${result.code}` } : undefined
+        );
     } catch {
-      toast.error('Teams test failed');
+      toast.error('OpsKnight could not be reached. Check your connection and try again.');
     } finally {
       setTestingDestinationId(null);
     }
@@ -408,6 +416,29 @@ export default function MicrosoftTeamsSetupWizard({
                   className="font-mono text-xs"
                   required={!config?.clientId}
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="mt-clientSecretExpiresAt" className="text-xs font-semibold">
+                  Client Secret Expires (Optional)
+                </Label>
+                <Input
+                  id="mt-clientSecretExpiresAt"
+                  name="clientSecretExpiresAt"
+                  type="date"
+                  defaultValue={
+                    config?.clientSecretExpiresAt
+                      ? new Date(config.clientSecretExpiresAt).toISOString().slice(0, 10)
+                      : ''
+                  }
+                  disabled={!isAdmin}
+                  aria-describedby="mt-clientSecretExpiresAt-help"
+                  className="text-xs"
+                />
+                <p id="mt-clientSecretExpiresAt-help" className="text-2xs text-muted-foreground">
+                  Copy the &ldquo;Expires&rdquo; date from Entra ID → Certificates &amp; secrets.
+                  OpsKnight warns you 30 and 7 days before it stops working.
+                </p>
               </div>
 
               <div className="space-y-1.5">

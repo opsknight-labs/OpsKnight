@@ -24,13 +24,14 @@ import { filterChannelsForQuietHours } from '../quiet-hours';
 import { getUserNotificationChannels } from '../user-notifications';
 import { PAGE_NOTIFICATION_TITLE } from '../notification-titles';
 
-/** Channels the durable control plane can carry. SLACK/WEBHOOK are service-level. */
+/** Channels the durable control plane can carry. SLACK is the opt-in personal DM; WEBHOOK is service-level. */
 const PERSONAL_CHANNELS: readonly NotificationDeliveryChannel[] = [
   'EMAIL',
   'SMS',
   'VOICE',
   'PUSH',
   'WHATSAPP',
+  'SLACK',
 ];
 
 export interface EscalationPageIntent {
@@ -113,7 +114,7 @@ function recipientAddressFor(
   channel: NotificationDeliveryChannel,
   recipient: { userId: string; email: string | null; phoneNumber: string | null }
 ): string | null {
-  if (channel === 'EMAIL') return recipient.email;
+  if (channel === 'EMAIL' || channel === 'SLACK') return recipient.email;
   if (channel === 'SMS' || channel === 'VOICE' || channel === 'WHATSAPP')
     return recipient.phoneNumber;
   if (channel === 'PUSH') return recipient.userId;

@@ -317,6 +317,9 @@ export async function projectMicrosoftTeamsWarRoomCard(
       : model.phase === 'ACKNOWLEDGED'
         ? ('acknowledged' as const)
         : ('triggered' as const);
+  // Actor names, role holders and escalation for the posted card; the loader never throws.
+  const { loadTeamsCardPeople } = await import('@/lib/microsoft-teams/card-actors');
+  const people = await loadTeamsCardPeople(incidentRecord);
   // incident shape expected by sendMicrosoftTeamsIncidentCard transport layer
   const incident = {
     id: incidentRecord.id,
@@ -331,13 +334,23 @@ export async function projectMicrosoftTeamsWarRoomCard(
     createdAt: incidentRecord.createdAt,
     acknowledgedAt: incidentRecord.acknowledgedAt,
     resolvedAt: incidentRecord.resolvedAt,
+    snoozedUntil: incidentRecord.snoozedUntil ?? null,
+    roles: model.incident.roles,
+    acknowledgedBy: people.acknowledgedBy,
+    resolvedBy: people.resolvedBy,
+    escalation: people.escalation,
   };
   const interactive = {
     destinationId: room.destinationId,
     messageGeneration: room.messageGeneration,
     warRoomId: room.id,
-    // Explicit fail-closed capabilities so the card builder does not fall back to allow-all.
-    capabilities: sharedCapFailClosed as unknown as never,
+    // Shared card: only Acknowledge / Resolve, which the invoke re-checks against the clicker's
+    // identity and RBAC. Every other control stays behind the per-user refresh.
+    capabilities: {
+      ...sharedCapFailClosed,
+      canAcknowledge: true,
+      canResolve: true,
+    } as unknown as never,
   };
   if (!room.commandMessageId) {
     // Use the durable pre-POST hook so only a real network attempt marks the
@@ -479,6 +492,26 @@ export async function projectMicrosoftTeamsWarRoomCard(
       meeting: meetingProjection,
       interactive,
     });
+    if (!updated.success && updated.errorCode === 'MESSAGE_NOT_FOUND') {
+      // The command card was deleted in Teams. Forget it under the lease and re-post on retry; the
+      // new generation makes any cached copy's buttons stale.
+      await prisma.incidentWarRoom.updateMany({
+        where: {
+          id: room.id,
+          projectionLeaseToken: token,
+          commandMessageId: room.commandMessageId,
+        },
+        data: {
+          commandMessageId: null,
+          commandConversationId: null,
+          commandCreateAttemptedAt: null,
+          messageGeneration: { increment: 1 },
+          projectionLeaseToken: null,
+          projectionLeaseExpiresAt: null,
+        },
+      });
+      throw new WarRoomRetryableError('Teams war-room card was deleted; re-posting it.', 1_000);
+    }
     if (!updated.success) {
       const retryable = isRetryableTeamsProjectionError(updated as never);
       addOperationalMetric('opsknight_war_room_projection_total', 1, {

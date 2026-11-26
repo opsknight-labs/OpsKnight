@@ -123,18 +123,13 @@ async function findLegacySlackIntent(
     select: { id: true, payloadDigest: true },
   })) as ExistingIntent | null;
   if (!existing) {
-    try {
-      existing = await (
-        prisma.chatOpsIntent.findUnique as unknown as (
-          args: unknown
-        ) => Promise<ExistingIntent | null>
-      )({
-        where: { kind_deliveryHash: { kind, deliveryHash: legacyHash } },
-        select: { id: true, payloadDigest: true },
-      });
-    } catch {
-      // A migrated client no longer exposes the legacy compound key.
-    }
+    // Rows written before the provider column carry the legacy hash. The old
+    // `kind_deliveryHash` unique key no longer exists, so findUnique on it made
+    // Prisma log a validation error on every call; a plain filter is equivalent.
+    existing = await prisma.chatOpsIntent.findFirst({
+      where: { kind, deliveryHash: legacyHash },
+      select: { id: true, payloadDigest: true },
+    });
   }
   return existing;
 }
@@ -494,6 +489,16 @@ export async function processChatOpsIntent(intentId: string): Promise<void> {
         response = (await processSquireMention(
           effectClaim.provider,
           payload
+        )) as unknown as Prisma.JsonValue;
+      } else if (payload.__kind === 'REACTION_PIN') {
+        const { processSlackReactionPin } = await import('@/lib/chatops/war-room-reactions');
+        response = await processSlackReactionPin(
+          payload as unknown as Parameters<typeof processSlackReactionPin>[0]
+        );
+      } else if (payload.__kind === 'DECLARE_SUBMISSION') {
+        const { handleSlackDeclareSubmission } = await import('@/lib/chatops/slash-commands');
+        response = (await handleSlackDeclareSubmission(
+          payload as unknown as Parameters<typeof handleSlackDeclareSubmission>[0]
         )) as unknown as Prisma.JsonValue;
       } else if (payload.__kind === 'SLASH_COMMAND') {
         const { handleSlashCommand } = await import('@/lib/chatops/slash-commands');

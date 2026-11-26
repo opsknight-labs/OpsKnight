@@ -1,7 +1,7 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { decrypt } from '@/lib/encryption';
+import { readSlackBotToken } from '@/app/api/slack/oauth/token-rotation';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getSlackBotToken } from '@/lib/slack';
 import { resolveOpsKnightUser, type SlackWorkspaceRef } from '@/lib/chatops/slash-commands';
@@ -161,6 +161,22 @@ async function readSlackThread(
 /** The channel's incident, bound to the signed workspace exactly as the /incident commands bind it. */
 export async function findSlackIncidentForChannel(workspaceId: string, channelId: string) {
   if (!workspaceId || !channelId) return null;
+  const select = { id: true, serviceId: true, title: true, visibility: true } as const;
+  // The war-room record is canonical for channels it created (the incident's legacy slackChannelId
+  // projection can lag or be missing), so a question asked in the room is always about its incident.
+  const room = await prisma.incidentWarRoom
+    .findFirst({
+      where: {
+        provider: 'SLACK',
+        providerTenantId: workspaceId,
+        providerChannelId: channelId,
+        state: { in: ['READY', 'CLOSING', 'AMBIGUOUS'] },
+      },
+      select: { incident: { select } },
+      orderBy: { createdAt: 'desc' },
+    })
+    .catch(() => null);
+  if (room?.incident) return room.incident;
   return prisma.incident.findFirst({
     where: {
       slackChannelId: channelId,
@@ -174,7 +190,7 @@ export async function findSlackIncidentForChannel(workspaceId: string, channelId
         },
       ],
     },
-    select: { id: true, serviceId: true, title: true, visibility: true },
+    select,
     orderBy: { createdAt: 'desc' },
   });
 }
@@ -194,12 +210,12 @@ export async function slackInstallationToken(
     ? await prisma.slackIntegration.findFirst({
         where: { workspaceId: teamId, enabled: true },
         orderBy: { updatedAt: 'desc' },
-        select: { botToken: true },
+        select: { id: true, botToken: true, refreshToken: true, tokenExpiresAt: true },
       })
     : null;
   if (installation?.botToken) {
     try {
-      return await decrypt(installation.botToken);
+      return await readSlackBotToken(installation);
     } catch {
       // Never fall back to another workspace's token for this one.
       logger.warn('[Squire] Could not read the Slack installation token');

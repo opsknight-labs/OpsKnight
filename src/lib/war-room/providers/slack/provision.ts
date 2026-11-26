@@ -9,12 +9,54 @@ import { adoptWarRoomChannel, claimWarRoomProvisioning } from '../../repository'
 import { evaluateWarRoomPolicy } from '../../policy';
 import { projectSlackWarRoomToLegacyIncident } from '../../slack-compatibility';
 import { WarRoomRetryableError } from '../../errors';
+import { escapeSlack } from '@/lib/chatops/squire/render';
+import { friendlySlackLabel } from './render';
 import {
   findExistingSlackChannel,
   findSlackWarRoomForTerminalCleanup,
   slackApiCall,
   slackWarRoomMarker,
 } from './client';
+
+/** The short welcome posted when a war room opens; all incident text is escaped. */
+export function buildSlackWarRoomWelcomeBlocks(input: {
+  title: string;
+  serviceName: string;
+  commanderName: string | null;
+  incidentUrl: string;
+}) {
+  const commander = input.commanderName
+    ? `*Commander:* ${escapeSlack(input.commanderName)}`
+    : '*Commander:* nobody yet. Press *Take command* on the status card below.';
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `This channel coordinates the response to <${input.incidentUrl}|${escapeSlack(input.title)}> on *${escapeSlack(input.serviceName)}*. The status card below shows the live state and actions.\n${commander}`,
+      },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: [
+          '`/incident ack` acknowledge · `/incident note <text>` add to the timeline',
+          '`/incident resolve [summary]` resolve · `/incident who` roles and on-call',
+        ].join('\n'),
+      },
+    },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: 'Mention @OpsKnight or type @Squire to ask Squire · `/incident help` for every command',
+        },
+      ],
+    },
+  ];
+}
 
 function getSlackChannelUrl(channelId: string, workspaceId?: string | null): string {
   return workspaceId
@@ -35,21 +77,32 @@ function slugify(name: string, maxLen = 40): string {
     .slice(0, maxLen);
 }
 
-function slackChannelName(
-  config: { channelPrefix?: string | null },
-  serviceName: string,
-  incidentId: string
-): string {
-  const serviceSlug = slugify(serviceName);
-  const idSuffix = incidentId.slice(-6);
-  const safePrefix =
-    (config.channelPrefix || 'incident')
+function safeChannelPrefix(prefix?: string | null): string {
+  return (
+    (prefix || 'inc')
       .toLowerCase()
       .replace(/^#+/, '')
       .replace(/[^a-z0-9_-]+/g, '-')
       .replace(/[-_]{2,}/g, '-')
-      .replace(/^[-_]+|[-_]+$/g, '') || 'incident';
-  return `${safePrefix}-${idSuffix}-${serviceSlug}`.slice(0, 80);
+      .replace(/^[-_]+|[-_]+$/g, '') || 'inc'
+  );
+}
+
+/**
+ * Readable name for a NEW war-room channel: `<prefix>-<short id>-<title slug>`, plus `-g<n>` for a
+ * second or later room of the same incident (archived channels keep their names in Slack). The
+ * short id keeps it unique across incidents; Slack's limit is 80 characters. Existing rooms keep
+ * the `plannedExternalName` they were created with.
+ */
+export function slackWarRoomChannelName(
+  config: { channelPrefix?: string | null },
+  incident: { id: string; title?: string | null },
+  generation = 1
+): string {
+  const head = `${safeChannelPrefix(config.channelPrefix).slice(0, 20)}-${incident.id.slice(-6).toLowerCase()}`;
+  const tail = generation > 1 ? `-g${generation}` : '';
+  const slug = slugify(incident.title ?? '', 80 - head.length - tail.length - 1).replace(/-+$/, '');
+  return `${head}${slug ? `-${slug}` : ''}${tail}`.slice(0, 80);
 }
 
 function classifySlackCreateResult(result: {
@@ -58,9 +111,12 @@ function classifySlackCreateResult(result: {
   httpStatus?: number;
   transportFailure?: boolean;
   sideEffectAmbiguous?: boolean;
+  rateLimited?: boolean;
 }): 'SUCCESS' | 'AMBIGUOUS' | 'RETRYABLE_NOT_AMBIGUOUS' | 'TERMINAL' | 'NAME_TAKEN' {
   if (result.ok) return 'SUCCESS';
   if (result.error === 'name_taken') return 'NAME_TAKEN';
+  // Rate limits are definite rejections: Slack created nothing, so retry after Retry-After.
+  if (result.rateLimited) return 'RETRYABLE_NOT_AMBIGUOUS';
   // Structured transport ambiguity wins over string parsing — this is the fix for
   // the "500 → 'Internal Server Error' parsed as terminal" bug on non-idempotent POSTs.
   if (result.sideEffectAmbiguous) return 'AMBIGUOUS';
@@ -68,9 +124,9 @@ function classifySlackCreateResult(result: {
   // for non-ambiguous transport retries only (read-path rate-limits, etc.).
   if (result.transportFailure) return 'AMBIGUOUS';
   const lower = (result.error ?? '').toLowerCase();
+  if (lower.includes('rate_limited') || lower.includes('ratelimited'))
+    return 'RETRYABLE_NOT_AMBIGUOUS';
   if (
-    lower.includes('rate_limited') ||
-    lower.includes('ratelimited') ||
     lower.includes('timeout') ||
     lower.includes('fetch') ||
     lower.includes('network') ||
@@ -322,13 +378,6 @@ async function findExistingChannel(
   return findExistingSlackChannel(botToken, channelName);
 }
 
-function deterministicCollisionSuffix(provisioningToken: string, generation: number): string {
-  // Deterministic per-generation suffix so a lost-response retry reuses the same alternate name
-  // instead of creating an orphaned duplicate channel. 4 chars from token hash + generation.
-  const h = provisioningToken.replace(/-/g, '').slice(-4);
-  return `${h}${String(generation % 10)}`.slice(0, 4).padStart(4, '0');
-}
-
 /** Worker entry point. Every retry reconciles this same generation before POST. */
 export async function provisionSlackWarRoom(
   warRoomId: string,
@@ -552,7 +601,7 @@ export async function provisionSlackWarRoom(
     return;
   }
 
-  const channelName = slackChannelName(config, incident.service.name, incident.id);
+  const channelName = slackWarRoomChannelName(config, incident, room.generation);
   const marker = slackWarRoomMarker(incident.id, room.generation);
 
   // 1) Reconcile BEFORE any POST — single tri-state lookup contract for all
@@ -824,10 +873,9 @@ export async function provisionSlackWarRoom(
   const currentPlanned =
     (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null;
   if (!currentPlanned) {
-    // First attempt for this generation: suffix comes from provisioningToken hash so it is
-    // unique per generation/incident and stable across retries. Stored before POST.
-    const suffix = deterministicCollisionSuffix(expectedProvisioningToken, room.generation);
-    const plannedName = `${channelName.slice(0, 74)}-${suffix}`;
+    // First attempt for this generation: the readable name (unique per incident and
+    // generation) is stored before POST so a lost-response retry reuses it.
+    const plannedName = channelName;
     await prisma.incidentWarRoom.updateMany({
       where: { id: room.id, provisioningToken: expectedProvisioningToken },
       data: { plannedExternalName: plannedName } as unknown as Record<string, unknown>,
@@ -872,12 +920,29 @@ export async function provisionSlackWarRoom(
   const effectiveChannelName = plannedForCreate;
   const createResult = await slackApiCall('conversations.create', botToken, {
     name: effectiveChannelName,
-    // Slack war-room channels are open to all responders in the organization
-    is_private: false,
+    // War-room setting only (needs groups:write); never derived from status-page visibility.
+    is_private: config.slackWarRoomPrivate === true,
   });
 
   if (!createResult.ok) {
     const cls = classifySlackCreateResult(createResult);
+    if (cls === 'RETRYABLE_NOT_AMBIGUOUS') {
+      // Nothing was created. Undo this attempt's create guard (unless an earlier attempt was
+      // already ambiguous) so the retry posts again instead of only reconciling.
+      const firstAttempt = room.state === 'PROVISIONING' && room.createAttemptedAt == null;
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: room.id, provisioningToken: expectedProvisioningToken },
+        data: {
+          lastErrorCode: 'SLACK_RATE_LIMITED',
+          lastError: 'Slack rate-limited channel creation; retrying after Retry-After.',
+          ...(firstAttempt ? { createAttemptedAt: null, createOperationId: null } : {}),
+        },
+      });
+      throw new WarRoomRetryableError(
+        'Slack rate-limited conversations.create',
+        createResult.retryAfterMs ?? 30_000
+      );
+    }
     if (cls === 'AMBIGUOUS') {
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, provisioningToken: expectedProvisioningToken },
@@ -968,13 +1033,13 @@ export async function provisionSlackWarRoom(
   // not by provisioning, to avoid dual owners and duplicate cards on retry.
   const appUrl = getBaseUrl();
   const dashboardUrl = `${appUrl}/incidents/${incident.id}`;
-  const rawTopic = `🚨 ${incident.title} | ${incident.urgency} | ${dashboardUrl}`;
-  const topicWithMarker = `${rawTopic} ${marker}`.slice(0, 250);
+  // The reconciliation marker lives only in the purpose (the marker scan reads topic OR purpose,
+  // so older channels with the marker in their topic are still found).
+  const topic = `🔴 ${escapeSlack(incident.title)} · ${friendlySlackLabel(incident.urgency)} urgency · ${dashboardUrl}`;
   await slackApiCall('conversations.setTopic', botToken, {
     channel: channelId,
-    topic: topicWithMarker,
+    topic: topic.slice(0, 250),
   }).catch(err => logger.warn('[ChatOps] Failed to set channel topic', { error: err }));
-  // Also persist marker in purpose so marker scan can find the channel even if topic is edited.
   await slackApiCall('conversations.setPurpose', botToken, {
     channel: channelId,
     purpose: marker,
@@ -982,51 +1047,23 @@ export async function provisionSlackWarRoom(
 
   const channelUrl = getSlackChannelUrl(channelId, slackWorkspaceId);
 
-  // Welcome message is separate from the canonical card (which is projected via WAR_ROOM_PROJECT).
-  const welcomeBlocks = [
-    {
-      type: 'header',
-      text: { type: 'plain_text', text: '👋 Welcome to your Incident War Room!', emoji: true },
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `This channel was automatically provisioned to coordinate resolution for *${incident.title}*.`,
-      },
-    },
-    { type: 'divider' },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: [
-          '*⚡ War Room Power Features:*',
-          '• 🔘 *1-Click Action Buttons*: Use *Acknowledge*, *Assign to Me*, or *Resolve* on the card above.',
-          '• 📌 *Emoji Reaction Sync*: React to ANY message with 📌 (`:pushpin:`) or 📝 (`:memo:`) to auto-save to the incident timeline!',
-          '• 📄 *Auto Postmortem*: Type `/incident postmortem` to generate a pre-filled Postmortem draft.',
-        ].join('\n'),
-      },
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: [
-          '*💬 Quick Slash Commands:*',
-          '`/incident ack` — Acknowledge incident',
-          '`/incident resolve [summary]` — Resolve incident with notes',
-          '`/incident note <message>` — Save a note to the timeline',
-          '`/incident who` — View current on-call responders',
-          '`/incident postmortem` — Create postmortem draft',
-        ].join('\n'),
-      },
-    },
-  ];
+  // Welcome message is separate from the canonical card (which is projected via WAR_ROOM_PROJECT
+  // after adoption, so it lands below this message).
+  const commander = await prisma.incidentRoleAssignment
+    .findFirst({
+      where: { incidentId: incident.id, roleKey: 'COMMANDER' },
+      select: { user: { select: { name: true } } },
+    })
+    .catch(() => null);
   await slackApiCall('chat.postMessage', botToken, {
     channel: channelId,
-    blocks: welcomeBlocks,
-    text: '👋 Welcome to your Incident War Room! Use 1-click buttons, 📌 emoji pins, or /incident slash commands.',
+    blocks: buildSlackWarRoomWelcomeBlocks({
+      title: incident.title,
+      serviceName: incident.service.name,
+      commanderName: commander?.user.name ?? null,
+      incidentUrl: dashboardUrl,
+    }),
+    text: `War room for ${escapeSlack(incident.title)}. The status card below has the live state and actions.`,
   }).catch(err => logger.warn('[ChatOps] Failed to post welcome card', { error: err }));
   // Off unless the war-room kickoff switch is on; best effort, never fails provisioning.
   const { postWarRoomKickoff } = await import('@/lib/chatops/war-room-kickoff');

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enqueueChatOpsIntent } from '@/lib/chatops/intents';
+import { openSlackDeclareModal, parseSlashCommandText } from '@/lib/chatops/slash-commands';
 import { logger } from '@/lib/logger';
 import { verifySlackSignature } from '@/lib/slack-signature';
 
@@ -34,6 +35,16 @@ export async function POST(request: NextRequest) {
     };
     if (!payload.team_id)
       return NextResponse.json({ error: 'Missing Slack workspace' }, { status: 400 });
+
+    // `/incident declare` opens a modal, which needs the trigger_id within three seconds, so it runs
+    // here instead of in the queued worker. The submission is queued by the actions route.
+    if (parseSlashCommandText(payload.text).subcommand === 'declare') {
+      const reply = await openSlackDeclareModal({
+        ...payload,
+        trigger_id: params.get('trigger_id') || '',
+      });
+      return reply ? NextResponse.json(reply) : new Response(null, { status: 200 });
+    }
 
     await enqueueChatOpsIntent({
       kind: 'SLASH_COMMAND',

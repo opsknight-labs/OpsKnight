@@ -20,6 +20,7 @@ import { chatOpsKindForTeamsVerb } from '@/lib/chatops/teams-action-map';
 import { buildMicrosoftTeamsIncidentCard } from './cards';
 import { parseMicrosoftTeamsAction, TEAMS_CHATOPS_VERBS } from './action-schema';
 import { INCIDENT_ROLE_SUMMARY_SELECT, summarizeIncidentRoles } from '@/lib/incidents/roles';
+import { loadTeamsCardPeople } from './card-actors';
 import { createMicrosoftTeamsIdentityChallenge, resolveMicrosoftTeamsUser } from './identity';
 import {
   teamsActionCard,
@@ -316,10 +317,17 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     if (!linked && !isRefresh) {
       const token = await createMicrosoftTeamsIdentityChallenge(identityInput);
       const url = `${getBaseUrl().replace(/\/+$/, '')}/settings/chatops/link?token=${encodeURIComponent(token)}`;
-      return teamsActionLoginRequest(
-        url,
-        `Link your OpsKnight account, then retry this action: ${url}`
-      );
+      return teamsActionLoginRequest(url, 'Link your OpsKnight account, then retry this action.', {
+        type: 'Action.Execute',
+        verb: TEAMS_CHATOPS_VERBS.REFRESH,
+        data: {
+          v: 2,
+          incidentId,
+          destinationId,
+          messageGeneration,
+          ...(warRoomId ? { warRoomId } : {}),
+        },
+      });
     }
 
     const signature = `${tenantId}:${activityId}`;
@@ -381,7 +389,20 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           ]);
         }
         const activeLink = linked;
-        if (semanticKind === 'REFRESH') {
+        /**
+         * The card as the clicker should see it now: re-read after any mutation and built by the
+         * same builder as the posted card, with this user's capabilities.
+         */
+        const cardForClicker = async () => {
+          const current =
+            (await prisma.incident.findUnique({
+              where: { id: incidentId },
+              include: {
+                service: { select: { name: true } },
+                assignee: { select: { name: true } },
+                roleAssignments: INCIDENT_ROLE_SUMMARY_SELECT,
+              },
+            })) ?? incident;
           const capabilities = activeLink
             ? await getIncidentChatOpsCapabilities({
                 incidentId,
@@ -400,13 +421,16 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 canTakeCommand: true,
               };
           const eventType =
-            incident.status === 'RESOLVED'
+            current.status === 'RESOLVED'
               ? 'resolved'
-              : incident.acknowledgedAt
+              : current.acknowledgedAt
                 ? 'acknowledged'
                 : 'triggered';
           const { getIncidentMeeting } = await import('@/lib/incident-collaboration/meeting-store');
-          const activeMeeting = await getIncidentMeeting(incident.id).catch(() => null);
+          const [activeMeeting, people] = await Promise.all([
+            getIncidentMeeting(current.id).catch(() => null),
+            loadTeamsCardPeople(current),
+          ]);
           const meetingProjection =
             activeMeeting?.state === 'READY' && activeMeeting.joinUrl
               ? {
@@ -417,28 +441,32 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                   tollNumber: activeMeeting.tollNumber,
                 }
               : null;
-          const card = buildMicrosoftTeamsIncidentCard(
+          return buildMicrosoftTeamsIncidentCard(
             {
               incident: {
-                id: incident.id,
-                title: incident.title,
-                description: incident.description,
-                status: incident.status,
-                urgency: incident.urgency,
-                priority: incident.priority,
-                serviceName: incident.service.name,
-                assigneeName: incident.assignee?.name ?? null,
-                roles: summarizeIncidentRoles(incident.roleAssignments),
-                incidentUrl: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${incident.id}`,
-                createdAt: incident.createdAt,
-                acknowledgedAt: incident.acknowledgedAt,
-                resolvedAt: incident.resolvedAt,
+                id: current.id,
+                title: current.title,
+                description: current.description,
+                status: current.status,
+                urgency: current.urgency,
+                priority: current.priority,
+                serviceName: current.service.name,
+                assigneeName: current.assignee?.name ?? null,
+                roles: summarizeIncidentRoles(current.roleAssignments),
+                incidentUrl: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${current.id}`,
+                createdAt: current.createdAt,
+                acknowledgedAt: current.acknowledgedAt,
+                resolvedAt: current.resolvedAt,
+                snoozedUntil: current.snoozedUntil ?? null,
+                acknowledgedBy: people.acknowledgedBy,
+                resolvedBy: people.resolvedBy,
+                escalation: people.escalation,
               },
               eventType,
             },
             {
               disableActions:
-                incident.status === 'RESOLVED' || Boolean(warRoom && warRoom.state !== 'READY'),
+                current.status === 'RESOLVED' || Boolean(warRoom && warRoom.state !== 'READY'),
               meeting: meetingProjection,
               interactive: {
                 destinationId,
@@ -449,6 +477,21 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
               },
             }
           );
+        };
+        /** A state change answers with the re-rendered card so the clicker sees it at once. */
+        const updatedCardOr = async (message: string): Promise<TeamsInvokeResponse> => {
+          try {
+            return teamsActionCard(await cardForClicker());
+          } catch (error) {
+            logger.warn('[MicrosoftTeams] Re-rendering the card after an action failed', {
+              incidentId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return teamsActionSuccess(message);
+          }
+        };
+        if (semanticKind === 'REFRESH') {
+          const card = await cardForClicker();
           addOperationalMetric('opsknight_chatops_refresh_total', 1, {
             provider: 'MICROSOFT_TEAMS',
             result: 'success',
@@ -466,7 +509,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 command: { kind: 'ACKNOWLEDGE', incidentId },
                 idempotency,
               });
-              result = teamsActionSuccess('Incident acknowledged.');
+              result = await updatedCardOr('Incident acknowledged.');
               break;
             case 'RESOLVE':
               await executeChatOpsCommand({
@@ -475,7 +518,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 command: { kind: 'RESOLVE', incidentId, resolutionNote: actionData.resolutionNote },
                 idempotency,
               });
-              result = teamsActionSuccess('Incident resolved.');
+              result = await updatedCardOr('Incident resolved.');
               break;
             case 'ASSIGN_SELF':
               await executeChatOpsCommand({
@@ -484,7 +527,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 command: { kind: 'ASSIGN', incidentId, targetUserId: activeLink.userId },
                 idempotency,
               });
-              result = teamsActionSuccess('Incident assigned to you.');
+              result = await updatedCardOr('Incident assigned to you.');
               break;
             case 'ADD_NOTE':
               await executeChatOpsCommand({
@@ -502,7 +545,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 command: { kind: 'SET_PRIORITY', incidentId, priority: actionData.priority! },
                 idempotency,
               });
-              result = teamsActionSuccess(`Priority changed to ${actionData.priority}.`);
+              result = await updatedCardOr(`Priority changed to ${actionData.priority}.`);
               break;
             case 'SNOOZE':
               await executeChatOpsCommand({
@@ -516,7 +559,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 },
                 idempotency,
               });
-              result = teamsActionSuccess(`Incident snoozed for ${actionData.minutes} minutes.`);
+              result = await updatedCardOr(`Incident snoozed for ${actionData.minutes} minutes.`);
               break;
             case 'ESCALATE':
               await executeChatOpsCommand({
@@ -525,7 +568,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 command: { kind: 'ESCALATE', incidentId },
                 idempotency,
               });
-              result = teamsActionSuccess('Escalation requested.');
+              result = await updatedCardOr('Escalation requested.');
               break;
             case 'JOIN_RESPONDER':
               await executeChatOpsCommand({
@@ -534,7 +577,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 command: { kind: 'JOIN_RESPONDER', incidentId },
                 idempotency,
               });
-              result = teamsActionSuccess('You joined as a responder.');
+              result = await updatedCardOr('You joined as a responder.');
               break;
             case 'TAKE_COMMAND': {
               const role = (await executeChatOpsCommand({
@@ -548,7 +591,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
                 },
                 idempotency,
               })) as { changed: boolean };
-              result = teamsActionSuccess(
+              result = await updatedCardOr(
                 role.changed
                   ? 'You are now the incident commander.'
                   : 'You are already the incident commander.'

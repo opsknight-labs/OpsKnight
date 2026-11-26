@@ -22,6 +22,8 @@ export const notificationPreferencesInput = z
     pushEnabled: z.boolean(),
     voiceEnabled: z.boolean(),
     whatsappEnabled: z.boolean(),
+    /** Personal Slack DM pages. Optional so older clients that never send it keep the stored value. */
+    slackDmEnabled: z.boolean().optional(),
     phoneNumber: z.string().trim().min(8).max(16).nullable().optional(),
     timeZone: z.string().trim().min(1).max(100).optional(),
   })
@@ -57,6 +59,7 @@ const select = {
   pushNotificationsEnabled: true,
   voiceNotificationsEnabled: true,
   whatsappNotificationsEnabled: true,
+  slackNotificationsEnabled: true,
 } satisfies Prisma.UserSelect;
 
 export type NotificationPreferenceView = Prisma.UserGetPayload<{ select: typeof select }>;
@@ -66,19 +69,23 @@ export type NotificationProviderAvailability = {
   push: boolean;
   voice: boolean;
   whatsapp: boolean;
+  slack?: boolean;
 };
 
 export async function prepareNotificationProviderAvailability(
   requested?: Partial<z.output<typeof notificationPreferencesInput>>
 ): Promise<NotificationProviderAvailability> {
-  const [email, sms, push, voice, whatsapp] = await Promise.all([
+  const [email, sms, push, voice, whatsapp, slack] = await Promise.all([
     requested?.emailEnabled ? getEmailConfig().then(value => value.enabled) : false,
     requested?.smsEnabled ? getSMSConfig().then(value => value.enabled) : false,
     requested?.pushEnabled ? getPushConfig().then(value => value.enabled) : false,
     requested?.voiceEnabled ? getVoiceConfig().then(value => value.enabled) : false,
     requested?.whatsappEnabled ? getWhatsAppConfig().then(value => value.enabled) : false,
+    requested?.slackDmEnabled
+      ? import('@/lib/slack/dm').then(module => module.isSlackDmAvailable())
+      : false,
   ]);
-  return { email, sms, push, voice, whatsapp };
+  return { email, sms, push, voice, whatsapp, slack };
 }
 
 export async function readNotificationPreferences(
@@ -129,6 +136,12 @@ export async function updateNotificationPreferences(
       throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: message });
     }
   }
+  if (input.slackDmEnabled && !available.slack)
+    throw new AppError({
+      code: 'RESOURCE_CONFLICT',
+      userMessage:
+        'Slack DM notifications cannot be enabled until an admin connects Slack with the im:write and users:read.email scopes.',
+    });
   const operation = async (tx: Prisma.TransactionClient) => {
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
     const current = await readNotificationPreferences(userId, tx);
@@ -148,6 +161,9 @@ export async function updateNotificationPreferences(
       pushNotificationsEnabled: input.pushEnabled,
       voiceNotificationsEnabled: input.voiceEnabled,
       whatsappNotificationsEnabled: input.whatsappEnabled,
+      ...(input.slackDmEnabled !== undefined
+        ? { slackNotificationsEnabled: input.slackDmEnabled }
+        : {}),
       ...(input.phoneNumber !== undefined ? { phoneNumber: effectivePhone } : {}),
       ...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {}),
     };
@@ -157,6 +173,8 @@ export async function updateNotificationPreferences(
       current.pushNotificationsEnabled !== input.pushEnabled ||
       current.voiceNotificationsEnabled !== input.voiceEnabled ||
       current.whatsappNotificationsEnabled !== input.whatsappEnabled ||
+      (input.slackDmEnabled !== undefined &&
+        current.slackNotificationsEnabled !== input.slackDmEnabled) ||
       (input.phoneNumber !== undefined && current.phoneNumber !== input.phoneNumber) ||
       (input.timeZone !== undefined && current.timeZone !== input.timeZone);
     if (!changed) return current;
@@ -174,6 +192,7 @@ export async function updateNotificationPreferences(
           pushNotificationsEnabled: current.pushNotificationsEnabled,
           voiceNotificationsEnabled: current.voiceNotificationsEnabled,
           whatsappNotificationsEnabled: current.whatsappNotificationsEnabled,
+          slackNotificationsEnabled: current.slackNotificationsEnabled,
           timeZone: current.timeZone,
           hasPhoneNumber: Boolean(current.phoneNumber),
         },
@@ -183,6 +202,7 @@ export async function updateNotificationPreferences(
           pushNotificationsEnabled: updated.pushNotificationsEnabled,
           voiceNotificationsEnabled: updated.voiceNotificationsEnabled,
           whatsappNotificationsEnabled: updated.whatsappNotificationsEnabled,
+          slackNotificationsEnabled: updated.slackNotificationsEnabled,
           timeZone: updated.timeZone,
           hasPhoneNumber: Boolean(updated.phoneNumber),
         },

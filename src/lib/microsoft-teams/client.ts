@@ -295,8 +295,10 @@ async function sendBotActivity(args: {
   // The returned `id` is the bot-scoped conversationId (distinct from channelId) and must be stored
   // for later PUT /v3/conversations/{conversationId}/activities/{activityId}.
   // Reference: ConversationParameters.bot + Bot Framework Connector REST API.
+  const summary = activitySummaryFromCard(card);
   const activityPayload = {
     type: 'message',
+    ...(summary ? { summary } : {}),
     attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: card }],
     channelData: { tenant: { id: args.tenantId } },
   };
@@ -438,6 +440,64 @@ async function sendBotActivity(args: {
   }
 }
 
+/** Parses Retry-After (delta seconds or HTTP date) into milliseconds. */
+export function parseTeamsRetryAfterMs(
+  raw: string | null | undefined,
+  now = Date.now()
+): number | undefined {
+  if (!raw) return undefined;
+  const seconds = Number(raw.trim());
+  if (Number.isFinite(seconds)) return seconds > 0 ? Math.ceil(seconds * 1000) : undefined;
+  const at = Date.parse(raw);
+  return Number.isFinite(at) && at > now ? at - now : undefined;
+}
+
+/** Classifies a non-2xx Bot Framework activity update (PUT) for the delivery state machine. */
+export function classifyTeamsActivityUpdateFailure(
+  status: number,
+  retryAfter: string | null | undefined,
+  text: string
+): Extract<TeamsDeliveryResult, { success: false }> {
+  if (status === 429)
+    return {
+      success: false,
+      error: 'Teams rate limited',
+      errorCode: 'RATE_LIMITED',
+      statusCode: 429,
+      retryAfterMs: parseTeamsRetryAfterMs(retryAfter),
+    };
+  // The activity is gone (deleted by a user or expired): the caller re-posts and re-ledgers it.
+  if (status === 404 || (status === 403 && /not.?found|does not exist/i.test(text)))
+    return {
+      success: false,
+      error: 'Teams message not found',
+      errorCode: 'MESSAGE_NOT_FOUND',
+      statusCode: 404,
+    };
+  // Bot removed or not allowed to edit: surface as AUTH_EXPIRED so the caller can re-probe.
+  if (status === 403)
+    return {
+      success: false,
+      error: text.slice(0, 600) || `HTTP ${status}`,
+      errorCode: 'AUTH_EXPIRED',
+      statusCode: status,
+    };
+  return {
+    success: false,
+    error: text.slice(0, 600) || `HTTP ${status}`,
+    errorCode: `http_${status}`,
+    statusCode: status,
+    ...(status >= 500 ? { retryAfterMs: parseTeamsRetryAfterMs(retryAfter) } : {}),
+  };
+}
+
+/** The card builder's notification text, sent as the activity `summary` (feed + push preview). */
+function activitySummaryFromCard(card: unknown): string | undefined {
+  const summary = (card as { _opsknightMeta?: { summary?: unknown } } | null)?._opsknightMeta
+    ?.summary;
+  return typeof summary === 'string' && summary.trim() ? summary.slice(0, 250) : undefined;
+}
+
 async function updateBotActivity(args: {
   teamId: string;
   channelId: string;
@@ -489,69 +549,36 @@ async function updateBotActivity(args: {
 
   // Bot Framework update: PUT {serviceUrl}/v3/conversations/{conversationId}/activities/{activityId}
   const endpoint = `${serviceUrl}/v3/conversations/${encodeURIComponent(conversationId)}/activities/${encodeURIComponent(args.messageId)}`;
+  const summary = activitySummaryFromCard(card);
   const body = {
     type: 'message',
     id: args.messageId,
+    ...(summary ? { summary } : {}),
     attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: card }],
     channelData: { tenant: { id: args.tenantId } },
   };
-  const res = await retryFetch(
-    endpoint,
-    {
+  // Plain fetch, single attempt: the caller's job owns retries, so a 429 must come back with its
+  // Retry-After (retryFetch would throw or sleep inside the request instead).
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(30_000),
-    },
-    { maxAttempts: 2, initialDelayMs: 800 }
-  );
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    const s = res.status;
-    if (s === 429) {
-      const raw = res.headers?.get?.('Retry-After');
-      const n = raw ? Number.parseInt(raw, 10) : NaN;
-      const retryAfterMs = Number.isFinite(n) && n > 0 ? n * 1000 : undefined;
-      return {
-        success: false,
-        error: 'Teams rate limited',
-        errorCode: 'RATE_LIMITED',
-        statusCode: 429,
-        retryAfterMs,
-      };
-    }
-    // Bot Connector returns 403 when the bot is removed or not allowed to edit; treat as MESSAGE_NOT_FOUND for recover path,
-    // except preserve PATCH_NOT_SUPPORTED compat for callers that expect DEGRADED on Graph.
-    if (s === 404)
-      return {
-        success: false,
-        error: 'Teams message not found',
-        errorCode: 'MESSAGE_NOT_FOUND',
-        statusCode: 404,
-      };
-    if (s === 403) {
-      // Distinguish between auth expiry and removal — surface as AUTH_EXPIRED so caller can re-probe.
-      if (/not.?found|does not exist/i.test(text)) {
-        return {
-          success: false,
-          error: text.slice(0, 600) || `HTTP ${s}`,
-          errorCode: 'MESSAGE_NOT_FOUND',
-          statusCode: 404,
-        };
-      }
-      return {
-        success: false,
-        error: text.slice(0, 600) || `HTTP ${s}`,
-        errorCode: 'AUTH_EXPIRED',
-        statusCode: s,
-      };
-    }
+    });
+  } catch (error) {
+    // An edit is idempotent, so a network failure or timeout is simply retryable.
     return {
       success: false,
-      error: text.slice(0, 600) || `HTTP ${s}`,
-      errorCode: `http_${s}`,
-      statusCode: s,
+      error: `Teams card update did not complete: ${error instanceof Error ? error.message : String(error)}`,
+      errorCode: 'NETWORK_ERROR',
+      statusCode: 503,
     };
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    return classifyTeamsActivityUpdateFailure(res.status, res.headers?.get?.('Retry-After'), text);
   }
   return { success: true, providerMessageId: args.messageId, conversationId };
 }
