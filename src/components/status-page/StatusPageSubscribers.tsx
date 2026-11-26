@@ -12,6 +12,8 @@ import {
   Download,
   AlertCircle,
   RefreshCw,
+  MessageSquare,
+  Smartphone,
 } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import { notify } from '@/lib/toast';
@@ -29,6 +31,17 @@ interface Subscriber {
     id: string;
     name: string;
   };
+}
+
+/** Non-email subscribers store a channel key in `email` (`sms:+E164`, `slack:<hash>`, `teams:<hash>`). */
+export function subscriberTarget(key: string): {
+  label: string;
+  channel: 'email' | 'sms' | 'chat';
+} {
+  if (key.startsWith('sms:')) return { label: `SMS ${key.slice(4)}`, channel: 'sms' };
+  if (key.startsWith('slack:')) return { label: 'Slack webhook', channel: 'chat' };
+  if (key.startsWith('teams:')) return { label: 'Microsoft Teams webhook', channel: 'chat' };
+  return { label: key, channel: 'email' };
 }
 
 interface SubscribersMetrics {
@@ -254,7 +267,8 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
         }}
         title="Unsubscribe this subscriber?"
         description={`${
-          data?.subscribers.find(sub => sub.id === singleCandidateId)?.email ?? 'This subscriber'
+          subscriberTarget(data?.subscribers.find(sub => sub.id === singleCandidateId)?.email ?? '')
+            .label || 'This subscriber'
         } stops receiving updates from this status page. They can subscribe again from the public page.`}
         confirmText="Unsubscribe"
         onConfirm={async () => {
@@ -493,7 +507,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
                           disabled={isUnsubscribed}
                           onChange={() => handleToggleRow(subscriber.id)}
                           className="rounded border-border text-primary focus:ring-primary h-4 w-4 transition-colors cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
-                          aria-label={`Select ${subscriber.email}`}
+                          aria-label={`Select ${subscriberTarget(subscriber.email).label}`}
                         />
                       </td>
 
@@ -501,10 +515,16 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
                       <td className="py-3 px-4 font-medium text-foreground">
                         <div className="flex items-center gap-2.5">
                           <div className="w-7 h-7 rounded-full bg-muted/60 flex items-center justify-center shrink-0 text-muted-foreground">
-                            <Mail className="w-3.5 h-3.5" />
+                            {subscriberTarget(subscriber.email).channel === 'sms' ? (
+                              <Smartphone className="w-3.5 h-3.5" aria-hidden="true" />
+                            ) : subscriberTarget(subscriber.email).channel === 'chat' ? (
+                              <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
+                            ) : (
+                              <Mail className="w-3.5 h-3.5" aria-hidden="true" />
+                            )}
                           </div>
                           <span className="truncate max-w-xs md:max-w-sm" title={subscriber.email}>
-                            {subscriber.email}
+                            {subscriberTarget(subscriber.email).label}
                           </span>
                         </div>
                       </td>
@@ -544,7 +564,7 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
                           <button
                             type="button"
                             onClick={() => setSingleCandidateId(subscriber.id)}
-                            aria-label={`Unsubscribe ${subscriber.email}`}
+                            aria-label={`Unsubscribe ${subscriberTarget(subscriber.email).label}`}
                             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <Trash2 className="h-3 w-3" aria-hidden="true" />
