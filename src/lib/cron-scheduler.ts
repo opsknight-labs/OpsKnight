@@ -592,6 +592,19 @@ async function runOnce() {
       });
     }
 
+    // Meeting bridges: fail provisions with no live worker and retry Teams cleanup debt. Without
+    // this a lost MEETING_PROVISION job leaves the meeting PROVISIONING forever.
+    try {
+      const { reconcileStalledMeetingProvisions, reconcileMeetingCleanupDebt } =
+        await import('./incident-collaboration/meeting-reconciliation');
+      await reconcileStalledMeetingProvisions();
+      await reconcileMeetingCleanupDebt();
+    } catch (error) {
+      logger.warn('[Cron] Meeting reconciliation sweep failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // Pre-paging noise controls: heartbeat misses raise incidents through normal ingestion, expired
     // suppression rules are retired and old decisions aged out. Bounded, and never a reason to fail the tick.
     let noiseControls: Awaited<

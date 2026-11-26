@@ -21,6 +21,8 @@ const tasks = vi.hoisted(() => ({
   processEndedMaintenanceWindows: vi.fn().mockResolvedValue({ windows: 0, released: 0 }),
   releaseStableFlappingHolds: vi.fn().mockResolvedValue(0),
   enqueueBusinessServiceImpactReconcile: vi.fn().mockResolvedValue(undefined),
+  reconcileStalledMeetingProvisions: vi.fn().mockResolvedValue(0),
+  reconcileMeetingCleanupDebt: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock('@/lib/ingestion/maintenance', () => ({
@@ -83,6 +85,10 @@ vi.mock('@/lib/war-room/terminal-cleanup', () => ({
   reconcileTerminalWarRoomDrift: vi
     .fn()
     .mockResolvedValue({ checked: 0, cleaned: 0, stillPending: 0, satisfied: 0 }),
+}));
+vi.mock('@/lib/incident-collaboration/meeting-reconciliation', () => ({
+  reconcileStalledMeetingProvisions: tasks.reconcileStalledMeetingProvisions,
+  reconcileMeetingCleanupDebt: tasks.reconcileMeetingCleanupDebt,
 }));
 vi.mock('@/lib/war-room/engine', () => ({
   repairOrphanedClosingWarRooms: vi.fn().mockResolvedValue({ checked: 0, repaired: 0 }),
@@ -224,6 +230,9 @@ describe('cron-scheduler lifecycle', () => {
     expect(tasks.reconcileIntegrationControlPlane).toHaveBeenCalledTimes(1);
     expect(tasks.reconcileStatusPageRouteOperations).toHaveBeenCalledTimes(1);
     expect(tasks.reconcileWarRoomHealth).toHaveBeenCalledTimes(1);
+    // Lost MEETING_PROVISION jobs and Teams cleanup debt are only recovered if the tick runs these.
+    expect(tasks.reconcileStalledMeetingProvisions).toHaveBeenCalledTimes(1);
+    expect(tasks.reconcileMeetingCleanupDebt).toHaveBeenCalledTimes(1);
   });
 
   it('fences a stale scheduler before it enters the next operation group', async () => {

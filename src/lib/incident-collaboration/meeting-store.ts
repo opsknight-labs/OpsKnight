@@ -858,6 +858,43 @@ export async function executeMeetingProvision(params: {
 }
 
 /**
+ * Terminal settlement for a MEETING_PROVISION job that ran out of attempts without
+ * executeMeetingProvision recording a failure itself (e.g. a DB error ahead of its try block).
+ * Fenced on the provisioning token, so a close, retry or newer generation is never overwritten.
+ */
+export async function settleMeetingProvisionFailure(
+  incidentId: string,
+  error: string,
+  options: { provisioningToken: string; generation: number; provider: IncidentMeetingProvider }
+): Promise<void> {
+  const result = await prisma.incidentMeeting.updateMany({
+    where: {
+      incidentId,
+      generation: options.generation,
+      state: 'PROVISIONING',
+      provisioningToken: options.provisioningToken,
+    },
+    data: {
+      state: 'FAILED',
+      health: 'UNAVAILABLE',
+      lastErrorCode: 'PROVISION_FAILED',
+      lastErrorMessage: error.slice(0, 300),
+      lastReconciledAt: new Date(),
+    },
+  });
+  if (result.count > 0) {
+    recordMeetingProvisionOutcome(options.provider, 'failed');
+    await emitMeetingAuditEvent({
+      action: 'MEETING_PROVISION_FAILED',
+      incidentId,
+      provider: options.provider,
+      generation: options.generation,
+      reason: error.slice(0, 300),
+    });
+  }
+}
+
+/**
  * Atomic settlement of a meeting to CLOSED state in DB and cache.
  * Distinguishes normal close (CLOSING -> CLOSED) from cleanup repair (CLOSED + debt -> CLOSED + clean).
  */
