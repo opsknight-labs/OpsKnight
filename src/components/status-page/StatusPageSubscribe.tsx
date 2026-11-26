@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { useT } from '@/lib/status-pages/i18n/context';
+import type { I18nKey } from '@/lib/status-pages/i18n/en';
 import StatusPageWebhookSubscribe from './StatusPageWebhookSubscribe';
 
 interface ServiceOption {
@@ -631,15 +632,10 @@ function ChannelSuccess({ title, message }: { title: string; message: string }) 
 }
 
 const CHAT_COPY = {
-  SLACK: {
-    label: 'Slack incoming-webhook URL',
-    placeholder: 'https://hooks.slack.com/services/…',
-    hint: 'We post a test message to the channel before activating it.',
-  },
+  SLACK: { label: 'subscribe.slackUrl', placeholder: 'https://hooks.slack.com/services/…' },
   MICROSOFT_TEAMS: {
-    label: 'Microsoft Teams webhook URL',
-    placeholder: 'https://….webhook.office.com/… or a Workflows URL',
-    hint: 'We post a test message to the channel before activating it.',
+    label: 'subscribe.teamsUrl',
+    placeholder: 'https://….webhook.office.com/…',
   },
 } as const;
 
@@ -657,6 +653,7 @@ function StatusPageChatSubscribe({
 }) {
   // eslint-disable-next-line security/detect-object-injection -- channel is a closed union
   const copy = CHAT_COPY[channel];
+  const t = useT();
   const scope = useServiceScope(services, initialSelectedId);
   const [url, setUrl] = useState('');
   const [pending, startTransition] = useTransition();
@@ -674,7 +671,7 @@ function StatusPageChatSubscribe({
         url: url.trim(),
         ...(scope.preferences() ? { preferences: scope.preferences() } : {}),
       });
-      if (!result.ok) return setError(result.error ?? 'Failed to subscribe');
+      if (!result.ok) return setError(result.error ?? t('subscribe.failed'));
       setDone({ already: Boolean(result.data.alreadySubscribed) });
     });
   };
@@ -682,12 +679,8 @@ function StatusPageChatSubscribe({
   if (done)
     return (
       <ChannelSuccess
-        title="Channel subscribed"
-        message={
-          done.already
-            ? 'This channel is already subscribed.'
-            : 'Check the channel for the test message. It has the unsubscribe link.'
-        }
+        title={t('subscribe.chatDone')}
+        message={done.already ? t('subscribe.chatAlready') : t('subscribe.chatCheck')}
       />
     );
 
@@ -700,7 +693,7 @@ function StatusPageChatSubscribe({
     >
       <ServiceScopePicker services={services} scope={scope} />
       <label className="status-subscribe__label" htmlFor={id}>
-        {copy.label}
+        {t(copy.label)}
       </label>
       <div className="status-subscribe__controls">
         <input
@@ -722,11 +715,11 @@ function StatusPageChatSubscribe({
           className="status-subscribe__button"
           disabled={pending || !url.trim()}
         >
-          {pending ? 'Subscribing…' : 'Subscribe'}
+          {pending ? t('subscribe.submitting') : t('subscribe.submit')}
         </button>
       </div>
       <p id={`${id}-hint`} className="status-subscribe__hint">
-        {copy.hint}
+        {t('subscribe.chatHint')}
       </p>
       {error && (
         <div className="status-subscribe__error" role="alert">
@@ -747,6 +740,7 @@ function StatusPageSmsSubscribe({
   services?: ServiceOption[];
   initialSelectedId?: string | null;
 }) {
+  const t = useT();
   const scope = useServiceScope(services, initialSelectedId);
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -768,15 +762,13 @@ function StatusPageSmsSubscribe({
               ...(scope.preferences() ? { preferences: scope.preferences() } : {}),
             })
           : await postJson(`${base}/verify`, { phone: phone.trim(), code: code.trim() });
-      if (!result.ok) return setError(result.error ?? 'Failed to subscribe');
+      if (!result.ok) return setError(result.error ?? t('subscribe.failed'));
       setStep(step === 'phone' ? 'code' : 'done');
     });
   };
 
   if (step === 'done')
-    return (
-      <ChannelSuccess title="Text updates on" message="Every message has a link to stop them." />
-    );
+    return <ChannelSuccess title={t('subscribe.smsDone')} message={t('subscribe.smsDoneHint')} />;
 
   return (
     <form
@@ -787,7 +779,7 @@ function StatusPageSmsSubscribe({
     >
       {step === 'phone' && <ServiceScopePicker services={services} scope={scope} />}
       <label className="status-subscribe__label" htmlFor={`${id}-${step}`}>
-        {step === 'phone' ? 'Mobile number' : 'Verification code'}
+        {step === 'phone' ? t('subscribe.phone') : t('subscribe.code')}
       </label>
       <div className="status-subscribe__controls">
         {step === 'phone' ? (
@@ -827,13 +819,17 @@ function StatusPageSmsSubscribe({
           className="status-subscribe__button"
           disabled={pending || (step === 'phone' ? !phone.trim() : code.length !== 6)}
         >
-          {pending ? 'Sending…' : step === 'phone' ? 'Send code' : 'Verify'}
+          {pending
+            ? t('subscribe.sending')
+            : step === 'phone'
+              ? t('subscribe.sendCode')
+              : t('subscribe.verify')}
         </button>
       </div>
       <p id={`${id}-hint`} className="status-subscribe__hint">
         {step === 'phone'
-          ? 'Include the country code. We text a 6-digit code to confirm the number.'
-          : `Enter the code we texted to ${phone.trim()}. It expires in 10 minutes.`}
+          ? t('subscribe.phoneHint')
+          : t('subscribe.codeHint', { phone: phone.trim() })}
       </p>
       {error && (
         <div className="status-subscribe__error" role="alert">
@@ -845,12 +841,12 @@ function StatusPageSmsSubscribe({
 }
 
 type TabId = 'EMAIL' | 'WEBHOOK' | 'SLACK' | 'MICROSOFT_TEAMS' | 'SMS';
-const TAB_LABEL: Record<Exclude<TabId, 'WEBHOOK'>, string> = {
-  EMAIL: 'Email',
-  SLACK: 'Slack',
-  MICROSOFT_TEAMS: 'Teams',
-  SMS: 'SMS',
-};
+const TAB_LABEL = {
+  EMAIL: 'subscribe.tabEmail',
+  SLACK: 'subscribe.tabSlack',
+  MICROSOFT_TEAMS: 'subscribe.tabTeams',
+  SMS: 'subscribe.tabSms',
+} as const satisfies Record<Exclude<TabId, 'WEBHOOK'>, I18nKey>;
 
 /** The channels this page offers (email by default), one tab each when there is more than one. */
 export default function StatusPageSubscribe(props: StatusPageSubscribeProps) {
@@ -871,7 +867,11 @@ export default function StatusPageSubscribe(props: StatusPageSubscribeProps) {
   return (
     <div>
       {tabs.length > 1 && (
-        <div className="status-subscribe__segment" role="tablist" aria-label="Subscription channel">
+        <div
+          className="status-subscribe__segment"
+          role="tablist"
+          aria-label={t('subscribe.channelTabs')}
+        >
           {tabs.map(id => (
             <button
               key={id}
@@ -882,7 +882,7 @@ export default function StatusPageSubscribe(props: StatusPageSubscribeProps) {
               onClick={() => setTab(id)}
             >
               {/* eslint-disable-next-line security/detect-object-injection -- id is a closed TabId */}
-              <span>{id === 'WEBHOOK' ? t('subscribe.webhook') : TAB_LABEL[id]}</span>
+              <span>{id === 'WEBHOOK' ? t('subscribe.webhook') : t(TAB_LABEL[id])}</span>
             </button>
           ))}
         </div>
