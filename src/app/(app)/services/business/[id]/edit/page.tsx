@@ -89,6 +89,7 @@ export default async function EditBusinessServicePage({
           ownerUserId: item.ownerUserId ?? '',
           escalationPolicyId: item.escalationPolicyId ?? '',
           contactChannel: item.contactChannel ?? '',
+          autoPublishStatusUpdates: item.autoPublishStatusUpdates,
           environment: item.environment ?? '',
           lifecycle: item.lifecycle,
           tagsText: item.tags.join(', '),

@@ -83,6 +83,8 @@ export type BusinessServiceFormValue = {
   customerReportThreshold?: string;
   customerReportWindowMinutes?: string;
   reviewIntervalDays?: string;
+  /** Publish status page updates for this business service without waiting for approval. */
+  autoPublishStatusUpdates?: boolean;
 };
 
 const NO_TEAM = '__none__';
@@ -134,6 +136,7 @@ const EMPTY: BusinessServiceFormValue = {
   customerReportThreshold: '',
   customerReportWindowMinutes: '',
   reviewIntervalDays: '',
+  autoPublishStatusUpdates: false,
 };
 const LIFECYCLES = ['ACTIVE', 'BETA', 'DEPRECATED', 'RETIRED'] as const;
 const ADVANCED_IDS = ['bs-quorum-partial', 'bs-quorum-major', 'bs-hops'];
@@ -419,6 +422,7 @@ export default function BusinessServiceForm({
       ownerUserId: value.ownerUserId || null,
       escalationPolicyId: value.escalationPolicyId || null,
       contactChannel: value.contactChannel.trim() || null,
+      autoPublishStatusUpdates: value.autoPublishStatusUpdates ?? false,
       environment: value.environment.trim() || null,
       lifecycle: value.lifecycle,
       tags: value.tagsText
@@ -957,6 +961,24 @@ export default function BusinessServiceForm({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+              <div className="space-y-0.5">
+                <label htmlFor="bs-auto-publish" className="text-sm font-semibold">
+                  Publish status page updates automatically
+                </label>
+                <p id="bs-auto-publish-hint" className="text-xs text-muted-foreground">
+                  When this business service becomes impacted or recovers, OpsKnight drafts an
+                  update on every status page that shows it. Turn this on to publish those updates
+                  without waiting for approval. Best kept for Tier 0 services.
+                </p>
+              </div>
+              <Switch
+                id="bs-auto-publish"
+                aria-describedby="bs-auto-publish-hint"
+                checked={value.autoPublishStatusUpdates ?? false}
+                onCheckedChange={next => set('autoPublishStatusUpdates', next)}
+              />
             </div>
             <details
               open={advancedOpen}

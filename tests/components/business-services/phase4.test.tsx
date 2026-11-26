@@ -285,11 +285,15 @@ describe('form', () => {
     fireEvent.change(tags, { target: { value: 'payments' } });
     fireEvent.keyDown(tags, { key: ',' });
     expect(screen.getByRole('button', { name: 'Remove tag pci' })).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Publish status page updates automatically' })
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Create business service' }));
     await waitFor(() => expect(create).toHaveBeenCalled());
     expect(create.mock.calls[0][0]).toMatchObject({
       links: [{ label: 'Runbook', url: 'https://wiki.example.com/rb' }],
       tags: ['pci', 'payments'],
+      autoPublishStatusUpdates: true,
     });
   });
 

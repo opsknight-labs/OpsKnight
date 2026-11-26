@@ -21,6 +21,7 @@ export default function DetailsPanel({
   links,
   attributes,
   contactChannel,
+  contactHref = null,
   lastReviewedAt,
   children,
 }: {
@@ -31,6 +32,8 @@ export default function DetailsPanel({
   /** Custom attributes as stored (a flat JSON object); anything else is ignored. */
   attributes: unknown;
   contactChannel: string | null;
+  /** Link to the Slack/Teams channel when the contact names one. */
+  contactHref?: string | null;
   lastReviewedAt: Date | null;
   children?: ReactNode;
 }) {
@@ -106,7 +109,21 @@ export default function DetailsPanel({
         {contactChannel && (
           <div>
             <dt className={term}>Contact</dt>
-            <dd className="break-words">{contactChannel}</dd>
+            <dd className="break-words">
+              {contactHref ? (
+                <a
+                  href={contactHref}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                >
+                  {contactChannel}
+                  <ExternalLink className="h-3 w-3" aria-hidden />
+                </a>
+              ) : (
+                contactChannel
+              )}
+            </dd>
           </div>
         )}
         <div>

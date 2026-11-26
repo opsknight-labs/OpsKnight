@@ -36,6 +36,7 @@ import {
 import { orUnavailable } from '@/lib/business-services/dashboards';
 import { FIRST_STEP_SELECT, onCallFor } from '@/lib/business-services/on-call';
 import { getErrorBudgets } from '@/lib/business-services/stats';
+import { contactChannelHref } from '@/lib/business-services/chat-channels';
 import { SectionCard, SectionSkeleton } from '@/components/analytics/SectionCard';
 import { KpiGridSkeleton } from '@/components/analytics/KpiCard';
 import { PageHeader } from '@/components/patterns';
@@ -751,6 +752,7 @@ export default async function BusinessServiceOverviewPage({
           links={links}
           attributes={item.customAttributes}
           contactChannel={item.contactChannel}
+          contactHref={contactChannelHref(item.contactChannel)}
           lastReviewedAt={item.lastReviewedAt}
         >
           <DependencyHealthSummary
