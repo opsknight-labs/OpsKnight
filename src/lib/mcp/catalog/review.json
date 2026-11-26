@@ -4034,22 +4034,22 @@
     "contractSha256": "374b7b104eb907adf8ca0b7c6045ab20ba1d0b96dee422168575b74e44c2a9c9"
   },
   "createBusinessService": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "reason": "Creates a business service, which sets who owns it, what it rolls up and how impact is paged; prepared, reviewed by a person, then committed through the existing REST command.",
     "tool": null,
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
     "routeSha256": "a768e0c05d5b3eb3ffec088a2a61bf3e6f487aec64de7838ab02594383b06fe2",
     "contractSha256": "fd8d30b3136827365d152e763a6b5e2aaed19218a880dbe2e7053ac2f3a7cd6a"
   },
   "updateBusinessService": {
-    "status": "UNSUPPORTED_WITH_REASON",
+    "status": "APPROVAL_REQUIRED",
     "risk": "R2",
-    "reason": "Not exposed yet: business-service and layout changes go through the web app or REST. Assistants read them with business_services_list.",
+    "reason": "Changes owner, members, tier or SLO of a business service, and with them what stakeholders are told; prepared, reviewed by a person, then committed through the existing REST command.",
     "tool": null,
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/mcp/business-services-tools.test.ts",
     "actions": ["service.create"],
     "resourceFilter": "existing REST route authorization and scoped projection",
     "routeSha256": "a420daf65090cbe486c3f5e679fb92f398590265e61c8fca145887bb9e2c9711",

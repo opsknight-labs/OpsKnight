@@ -36,23 +36,25 @@ describe('business service MCP tools', () => {
     }
   });
 
-  it('keeps marking business impact behind human approval', () => {
-    for (const id of ['markIncidentBusinessServiceImpact', 'unmarkIncidentBusinessServiceImpact']) {
+  it('keeps business-service writes behind human approval', () => {
+    for (const id of [
+      'createBusinessService',
+      'updateBusinessService',
+      'markIncidentBusinessServiceImpact',
+      'unmarkIncidentBusinessServiceImpact',
+      'createBusinessServiceCustomerReport',
+      'notifyIncidentStakeholders',
+    ]) {
       const operation = MCP_OPERATION_MAP.get(id)!;
-      expect(operation.status, id).toBe('APPROVAL_REQUIRED');
+      expect(operation, id).toMatchObject({ status: 'APPROVAL_REQUIRED', risk: 'R2', tool: null });
       expect(isMcpExecutable(operation), id).toBe(false);
       expect(MCP_HANDLERS.has(id), id).toBe(false);
       expect(MCP_APPROVAL_HANDLERS.has(id), id).toBe(true);
     }
   });
 
-  it('keeps configuration writes out of assistants for now', () => {
-    for (const id of [
-      'createBusinessService',
-      'updateBusinessService',
-      'deleteBusinessService',
-      'setStatusPageBusinessServices',
-    ]) {
+  it('keeps deletion and status-page layout out of assistants', () => {
+    for (const id of ['deleteBusinessService', 'setStatusPageBusinessServices']) {
       const operation = MCP_OPERATION_MAP.get(id)!;
       expect(operation.status, id).toBe('UNSUPPORTED_WITH_REASON');
       expect(isMcpExecutable(operation), id).toBe(false);
