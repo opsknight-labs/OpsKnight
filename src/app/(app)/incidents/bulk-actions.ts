@@ -15,6 +15,7 @@ import {
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
 import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
+import { isIncidentPriority } from '@/lib/incidents/priority';
 
 type BulkLifecycleStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 
@@ -197,6 +198,11 @@ export async function bulkUpdatePriority(incidentIds: string[], priority: string
     await assertResponderOrAbove();
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
+  }
+
+  // Escalation conditions match the exact P1-P5 strings; empty clears the priority ("Auto").
+  if (priority && !isIncidentPriority(priority)) {
+    return { success: false, error: 'Priority must be one of P1, P2, P3, P4 or P5' };
   }
 
   try {

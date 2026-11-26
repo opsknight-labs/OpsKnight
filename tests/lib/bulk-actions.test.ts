@@ -3,6 +3,7 @@ import {
   bulkAcknowledge,
   bulkResolve,
   bulkSnooze,
+  bulkUpdatePriority,
   bulkUpdateStatus,
   bulkUpdateUrgency,
 } from '@/app/(app)/incidents/bulk-actions';
@@ -256,6 +257,36 @@ describe('Bulk Actions', () => {
       });
       expect(executeIncidentLifecycleBatch).not.toHaveBeenCalled();
       expect(executeIncidentLifecycleTargetBatch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bulkUpdatePriority', () => {
+    it('writes only P1-P5 (or clears the priority with an empty value)', async () => {
+      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
+      vi.mocked(prisma.incidentEvent.createMany).mockResolvedValue({ count: 1 });
+
+      await expect(bulkUpdatePriority(['incident-1'], 'P2')).resolves.toMatchObject({
+        success: true,
+      });
+      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith({
+        where: { id: { in: ['incident-1'] } },
+        data: { priority: 'P2' },
+      });
+      await bulkUpdatePriority(['incident-1'], '');
+      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith({
+        where: { id: { in: ['incident-1'] } },
+        data: { priority: null },
+      });
+    });
+
+    it('rejects values that escalation conditions could never match', async () => {
+      vi.mocked(prisma.incident.updateMany).mockClear();
+      for (const bad of ['p1', 'P6', ' P1', 'x'.repeat(5000)]) {
+        await expect(bulkUpdatePriority(['incident-1'], bad)).resolves.toMatchObject({
+          success: false,
+        });
+      }
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
     });
   });
 });

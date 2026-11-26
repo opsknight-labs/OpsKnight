@@ -30,6 +30,7 @@ import {
 } from '@/lib/incidents/creation';
 import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
 import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
+import { isIncidentPriority } from '@/lib/incidents/priority';
 import { applyIncidentUrgencyChange } from '@/lib/incidents/urgency-command';
 import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { loadTemplateDefaultRoles } from '@/lib/incidents/roles-command';
@@ -74,8 +75,19 @@ export async function updateIncidentUrgency(id: string, urgency: string) {
   revalidatePath('/');
 }
 
-export async function updateIncidentPriority(id: string, priority: string | null) {
+export async function updateIncidentPriority(id: string, rawPriority: string | null) {
   await assertResponderOrAbove();
+  // Escalation conditions match the exact P1-P5 strings; empty clears the priority.
+  const priority = rawPriority || null;
+  if (priority !== null && !isIncidentPriority(priority)) {
+    throw new AppError({
+      code: 'INCIDENT_INVALID_ARGUMENT',
+      userMessage: 'Priority must be one of P1, P2, P3, P4 or P5.',
+      fields: [
+        { field: 'priority', code: 'invalid', message: 'Priority must be one of P1 to P5.' },
+      ],
+    });
+  }
 
   await prisma.$transaction(async tx => {
     await tx.incident.update({

@@ -31,7 +31,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 
-import { createIncident, createMobileIncident } from './actions';
+import { createIncident, createMobileIncident, updateIncidentPriority } from './actions';
 
 describe('incident creation action adapters', () => {
   beforeEach(() => {
@@ -125,5 +125,13 @@ describe('incident creation action adapters', () => {
       code: 'INCIDENT_INVALID_ARGUMENT',
     });
     expect(mocks.executeIncidentCreation).not.toHaveBeenCalled();
+  });
+
+  it('rejects a priority outside P1-P5 before touching the database', async () => {
+    for (const bad of ['p1', 'P0', 'x'.repeat(5000)]) {
+      await expect(updateIncidentPriority('inc-1', bad)).rejects.toMatchObject({
+        code: 'INCIDENT_INVALID_ARGUMENT',
+      });
+    }
   });
 });
