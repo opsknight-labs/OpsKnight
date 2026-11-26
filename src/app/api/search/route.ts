@@ -9,6 +9,7 @@ import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   incidentReadWhere,
+  postmortemReadWhere,
   runbookReadWhere,
   scheduleReadWhere,
   serviceReadWhere,
@@ -349,11 +350,8 @@ export async function GET(req: NextRequest) {
           return await prisma.postmortem.findMany({
             where: {
               AND: [
-                isPrivileged
-                  ? {}
-                  : {
-                      incident: incidentAccess,
-                    },
+                // Same rule as every other postmortem read: drafts only for draft readers.
+                postmortemReadWhere(actor),
                 {
                   OR: [
                     { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },

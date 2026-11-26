@@ -142,6 +142,32 @@ describe('global search RBAC', () => {
     });
   });
 
+  it.each([
+    ['AUDITOR', true],
+    ['USER', true],
+    ['RESPONDER', false],
+    ['ADMIN', false],
+  ])('%s postmortem search is restricted to published rows: %s', async (role, publishedOnly) => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'u-1',
+      role,
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+
+    await GET(new NextRequest('http://localhost/api/search?q=database'));
+
+    const query = mocks.findMany.mock.calls
+      .map(([args]) => args)
+      .find(args => JSON.stringify(args?.where).includes('rootCause'));
+    expect(query).toBeDefined();
+    expect(JSON.stringify(query.where.AND)).toEqual(
+      publishedOnly
+        ? expect.stringContaining('"status":"PUBLISHED"')
+        : expect.not.stringContaining('"status":"PUBLISHED"')
+    );
+  });
+
   it('returns limited, scoped schedule and runbook matches', async () => {
     mocks.userFindUnique.mockResolvedValue({
       id: 'admin-1',

@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import type { IncidentMetricFilter } from '@/lib/metrics/domain/filter';
 import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
 import {
+  actorHasCapability,
   AUTHORIZATION_ACTIONS,
   authorize,
   type AuthorizationActor,
@@ -134,8 +135,16 @@ export function actionItemReadWhere(actor: AuthorizationActor): Prisma.ActionIte
   return { incident: incidentReadWhere(actor) };
 }
 
+/**
+ * Postmortems readable through the incident the actor can read. Draft and archived rows are
+ * working material: only actors holding `postmortem.draft.read` see them, everyone else sees
+ * published postmortems only. Every list/get surface (pages, API v2, MCP, search) shares this rule.
+ */
 export function postmortemReadWhere(actor: AuthorizationActor): Prisma.PostmortemWhereInput {
-  return { incident: incidentReadWhere(actor) };
+  const incident = incidentReadWhere(actor);
+  return actorHasCapability(actor, CAPABILITIES.POSTMORTEM_DRAFT_READ)
+    ? { incident }
+    : { incident, status: 'PUBLISHED' };
 }
 
 export function dashboardUserReadWhere(actor: AuthorizationActor): Prisma.UserWhereInput {
