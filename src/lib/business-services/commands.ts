@@ -19,6 +19,9 @@ import { CustomAttributesSchema } from './attributes';
 import { BusinessServiceLinkSchema, parseBusinessServiceLinks } from './links';
 import { CurrencySchema, CustomersTotalSchema, RevenuePerHourCentsSchema } from './impact-cost';
 
+/** Highest priority an incident may have and still impact: P1..P9. */
+export const IMPACT_MAX_PRIORITY_PATTERN = /^P[1-9]$/i;
+
 const id = z.string().trim().min(1).max(100);
 
 export const BusinessServiceInputSchema = z
@@ -39,7 +42,7 @@ export const BusinessServiceInputSchema = z
     impactMaxPriority: z
       .string()
       .trim()
-      .regex(/^P[1-9]$/i)
+      .regex(IMPACT_MAX_PRIORITY_PATTERN)
       .transform(value => value.toUpperCase())
       .nullable()
       .optional(),
