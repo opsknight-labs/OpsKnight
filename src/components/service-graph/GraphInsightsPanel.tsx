@@ -37,7 +37,9 @@ type Timeline = { days: number; incidents: number[]; changes: number[] };
 const tabClass = (active: boolean) =>
   cn(
     'inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
-    active ? 'border-primary bg-primary/10 text-foreground' : 'bg-background text-ink-600 hover:text-foreground'
+    active
+      ? 'border-primary bg-primary/10 text-foreground'
+      : 'bg-background text-ink-600 hover:text-foreground'
   );
 
 type Props = {
@@ -89,19 +91,25 @@ export default function GraphInsightsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  const run = useCallback(async <T,>(job: () => Promise<{ ok: true; data: T } | { ok: false; message: string }>) => {
-    const mine = ++request.current;
-    setLoading(true);
-    setError(null);
-    const result = await job().catch(() => ({ ok: false as const, message: 'Unable to load. Try again.' }));
-    if (mine !== request.current) return null;
-    setLoading(false);
-    if (!result.ok) {
-      setError(result.message);
-      return null;
-    }
-    return result.data;
-  }, []);
+  const run = useCallback(
+    async <T,>(job: () => Promise<{ ok: true; data: T } | { ok: false; message: string }>) => {
+      const mine = ++request.current;
+      setLoading(true);
+      setError(null);
+      const result = await job().catch(() => ({
+        ok: false as const,
+        message: 'Unable to load. Try again.',
+      }));
+      if (mine !== request.current) return null;
+      setLoading(false);
+      if (!result.ok) {
+        setError(result.message);
+        return null;
+      }
+      return result.data;
+    },
+    []
+  );
 
   const loadDiff = useCallback(
     async (days: number) => {
@@ -194,16 +202,33 @@ export default function GraphInsightsPanel({
   return (
     <section aria-label="Graph insights" className="space-y-3 rounded-lg border bg-card p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" aria-pressed={tab === 'time'} className={tabClass(tab === 'time')} onClick={() => setTab(tab === 'time' ? null : 'time')}>
+        <button
+          type="button"
+          aria-pressed={tab === 'time'}
+          className={tabClass(tab === 'time')}
+          onClick={() => setTab(tab === 'time' ? null : 'time')}
+        >
           <History className="h-3.5 w-3.5" aria-hidden="true" /> Time travel
         </button>
-        <button type="button" aria-pressed={tab === 'changes'} className={tabClass(tab === 'changes')} onClick={() => setTab(tab === 'changes' ? null : 'changes')}>
+        <button
+          type="button"
+          aria-pressed={tab === 'changes'}
+          className={tabClass(tab === 'changes')}
+          onClick={() => setTab(tab === 'changes' ? null : 'changes')}
+        >
           <GitCompareArrows className="h-3.5 w-3.5" aria-hidden="true" /> Changes
         </button>
-        <button type="button" aria-pressed={tab === 'spof'} className={tabClass(tab === 'spof')} onClick={() => setTab(tab === 'spof' ? null : 'spof')}>
+        <button
+          type="button"
+          aria-pressed={tab === 'spof'}
+          className={tabClass(tab === 'spof')}
+          onClick={() => setTab(tab === 'spof' ? null : 'spof')}
+        >
           <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" /> Single points of failure
         </button>
-        {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Loading" />}
+        {loading && (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Loading" />
+        )}
       </div>
       {error && <InlineNotice tone="warning">{error}</InlineNotice>}
 
@@ -211,7 +236,9 @@ export default function GraphInsightsPanel({
         <div className="space-y-3">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <Label htmlFor="graph-time-input" className="text-xs">View the graph as of</Label>
+              <Label htmlFor="graph-time-input" className="text-xs">
+                View the graph as of
+              </Label>
               <Input
                 id="graph-time-input"
                 type="datetime-local"
@@ -275,10 +302,15 @@ export default function GraphInsightsPanel({
               {timeline && (
                 <span className="inline-flex items-center gap-2">
                   <span className="inline-flex items-center gap-1">
-                    <span className="h-1.5 w-0.5 rounded-full bg-status-critical" aria-hidden="true" /> incidents
+                    <span
+                      className="h-1.5 w-0.5 rounded-full bg-status-critical"
+                      aria-hidden="true"
+                    />{' '}
+                    incidents
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <span className="h-1.5 w-0.5 rounded-full bg-ink-500" aria-hidden="true" /> changes
+                    <span className="h-1.5 w-0.5 rounded-full bg-ink-500" aria-hidden="true" />{' '}
+                    changes
                   </span>
                 </span>
               )}
@@ -286,8 +318,8 @@ export default function GraphInsightsPanel({
             </div>
           </div>
           <p className="text-2xs text-muted-foreground">
-            Dependencies, incidents and statuses are replayed; membership, maintenance windows and deleted
-            services are not. Editing is off while you look at the past.
+            Dependencies, incidents and statuses are replayed; membership, maintenance windows and
+            deleted services are not. Editing is off while you look at the past.
           </p>
         </div>
       )}
@@ -296,7 +328,11 @@ export default function GraphInsightsPanel({
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">Since</span>
-            <div role="group" aria-label="Changes since" className="inline-flex rounded-md bg-muted p-0.5">
+            <div
+              role="group"
+              aria-label="Changes since"
+              className="inline-flex rounded-md bg-muted p-0.5"
+            >
               {SINCE_OPTIONS.map(option => (
                 <button
                   key={option.days}
@@ -304,7 +340,9 @@ export default function GraphInsightsPanel({
                   aria-pressed={sinceDays === option.days}
                   className={cn(
                     'h-7 rounded-sm px-2 text-xs font-medium',
-                    sinceDays === option.days ? 'bg-background text-foreground shadow-xs' : 'text-ink-600'
+                    sinceDays === option.days
+                      ? 'bg-background text-foreground shadow-xs'
+                      : 'text-ink-600'
                   )}
                   onClick={() => setSinceDays(option.days)}
                 >
@@ -314,25 +352,45 @@ export default function GraphInsightsPanel({
             </div>
             <span className="text-2xs text-muted-foreground">
               Lines marked <span className="font-semibold text-foreground">new</span> were added,{' '}
-              faint dashed lines marked <span className="font-semibold text-foreground">removed</span> were removed
+              faint dashed lines marked{' '}
+              <span className="font-semibold text-foreground">removed</span> were removed
             </span>
           </div>
           {diff && (
             <div className="space-y-3 text-sm">
-              {diff.truncated && <InlineNotice tone="info">Only part of a large graph was compared.</InlineNotice>}
+              {diff.truncated && (
+                <InlineNotice tone="info">Only part of a large graph was compared.</InlineNotice>
+              )}
               {seesSuggestions && diff.awaitingReview.count > 0 && (
                 <p>
                   <button type="button" className="font-medium underline" onClick={onShowSuggested}>
-                    {diff.awaitingReview.count} suggested {diff.awaitingReview.count === 1 ? 'dependency is' : 'dependencies are'} awaiting review
+                    {diff.awaitingReview.count} suggested{' '}
+                    {diff.awaitingReview.count === 1 ? 'dependency is' : 'dependencies are'}{' '}
+                    awaiting review
                   </button>
                 </p>
               )}
-              {total === 0 && <p className="text-muted-foreground">Nothing changed in this period.</p>}
+              {total === 0 && (
+                <p className="text-muted-foreground">Nothing changed in this period.</p>
+              )}
               <EdgeList title="Added" tone="text-foreground" rows={diff.addedDependencies} />
-              <EdgeList title="Removed" tone="text-muted-foreground" rows={diff.removedDependencies} />
-              {seesSuggestions && <EdgeList title="Newly suggested" tone="text-muted-foreground" rows={diff.newlySuggestedDependencies} />}
+              <EdgeList
+                title="Removed"
+                tone="text-muted-foreground"
+                rows={diff.removedDependencies}
+              />
+              {seesSuggestions && (
+                <EdgeList
+                  title="Newly suggested"
+                  tone="text-muted-foreground"
+                  rows={diff.newlySuggestedDependencies}
+                />
+              )}
               <StatusList title="Service status changes" rows={diff.serviceStatusChanges} />
-              <StatusList title="Business service status changes" rows={diff.businessServiceStatusChanges} />
+              <StatusList
+                title="Business service status changes"
+                rows={diff.businessServiceStatusChanges}
+              />
             </div>
           )}
         </div>
@@ -340,7 +398,9 @@ export default function GraphInsightsPanel({
 
       {tab === 'spof' && spof && (
         <div className="space-y-2 text-sm">
-          {spof.truncated && <InlineNotice tone="info">Only part of a large graph was analysed.</InlineNotice>}
+          {spof.truncated && (
+            <InlineNotice tone="info">Only part of a large graph was analysed.</InlineNotice>
+          )}
           {spof.singlePointsOfFailure.length === 0 ? (
             <p className="text-muted-foreground">
               No service with {spof.threshold}+ dependents lacks an owner team or on-call.
@@ -348,22 +408,32 @@ export default function GraphInsightsPanel({
           ) : (
             <>
               <p className="text-xs text-muted-foreground">
-                Services that {spof.threshold}+ others depend on and that have no owner team or no on-call.
-                They are badged on the graph.
+                Services that {spof.threshold}+ others depend on and that have no owner team or no
+                on-call. They are badged on the graph.
               </p>
               <ul className="divide-y rounded-md border">
                 {spof.singlePointsOfFailure.map(row => (
-                  <li key={row.serviceId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                  <li
+                    key={row.serviceId}
+                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                  >
                     <div className="min-w-0">
                       <p className="truncate font-medium">{row.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {row.fanOut} dependents · {row.businessServiceCount} business services
-                        {row.criticalBusinessServiceCount > 0 && ` (${row.criticalBusinessServiceCount} critical)`}
+                        {row.criticalBusinessServiceCount > 0 &&
+                          ` (${row.criticalBusinessServiceCount} critical)`}
                         {row.articulationPoint && ' · cut point'} ·{' '}
-                        {row.reasons.map(r => (r === 'NO_OWNER_TEAM' ? 'no owner team' : 'no on-call')).join(', ')}
+                        {row.reasons
+                          .map(r => (r === 'NO_OWNER_TEAM' ? 'no owner team' : 'no on-call'))
+                          .join(', ')}
                       </p>
                     </div>
-                    <Button size="sm" variant="outline" onClick={() => onSelectService(row.serviceId)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onSelectService(row.serviceId)}
+                    >
                       Show on graph
                     </Button>
                   </li>
@@ -378,7 +448,15 @@ export default function GraphInsightsPanel({
 }
 
 type EdgeRow = GraphDiff['addedDependencies'][number];
-function EdgeList({ title, tone, rows }: { title: string; tone: string; rows: readonly EdgeRow[] }) {
+function EdgeList({
+  title,
+  tone,
+  rows,
+}: {
+  title: string;
+  tone: string;
+  rows: readonly EdgeRow[];
+}) {
   if (rows.length === 0) return null;
   return (
     <section>
@@ -388,11 +466,14 @@ function EdgeList({ title, tone, rows }: { title: string; tone: string; rows: re
       <ul className="mt-1 space-y-0.5 text-xs">
         {rows.slice(0, 20).map(row => (
           <li key={`${row.upstreamServiceId}>${row.downstreamServiceId}`} className="truncate">
-            {row.downstreamName ?? 'a service you cannot see'} → {row.upstreamName ?? 'a service you cannot see'}
+            {row.downstreamName ?? 'a service you cannot see'} →{' '}
+            {row.upstreamName ?? 'a service you cannot see'}
           </li>
         ))}
       </ul>
-      {rows.length > 20 && <p className="text-2xs text-muted-foreground">and {rows.length - 20} more</p>}
+      {rows.length > 20 && (
+        <p className="text-2xs text-muted-foreground">and {rows.length - 20} more</p>
+      )}
     </section>
   );
 }

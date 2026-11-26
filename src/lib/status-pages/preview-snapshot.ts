@@ -122,8 +122,8 @@ export function buildPreviewSnapshot(input: {
   showMetrics?: boolean;
   showUptimeHistory?: boolean;
   showTeamInformation?: boolean;
-  regions?: any[];
-  maintenance?: any[];
+  regions?: PublicStatusPageSnapshot['regions'];
+  maintenance?: PublicStatusPageSnapshot['maintenance'];
   thresholds: { uptimeExcellent: number; uptimeGood: number };
   serviceLayout?: PublicServiceLayout;
   expandGroupsByDefault?: boolean;
@@ -162,7 +162,9 @@ export function buildPreviewSnapshot(input: {
         .sort((a, b) => byPosition(a.id, b.id))
         .map(service => {
           const impact = activeByService.get(service.id);
-          const rawStatus = (service as any).status;
+          // Callers may pass already-projected rows; read those fields when present.
+          const projected = service as Partial<PublicStatusService>;
+          const rawStatus = projected.status;
           const status = impact
             ? getWorstPublicStatus(impact.statuses)
             : rawStatus && rawStatus !== 'OPERATIONAL'
@@ -172,8 +174,8 @@ export function buildPreviewSnapshot(input: {
           const uptimePct =
             typeof input.uptime90?.[service.id] === 'number'
               ? input.uptime90[service.id]
-              : typeof (service as any).uptime?.days90?.percentage === 'number'
-                ? (service as any).uptime.days90.percentage
+              : typeof projected.uptime?.days90?.percentage === 'number'
+                ? projected.uptime.days90.percentage
                 : status === 'OPERATIONAL'
                   ? 100
                   : 98.5;
@@ -185,7 +187,7 @@ export function buildPreviewSnapshot(input: {
                 ? ('GOOD' as const)
                 : ('BELOW_TARGET' as const);
 
-          const serviceHistory = (service as any).history ?? {
+          const serviceHistory = projected.history ?? {
             rangeStart: rangeStart.toISOString(),
             rangeEnd: rangeEnd.toISOString(),
             coverage: 'COMPLETE' as const,
@@ -195,23 +197,23 @@ export function buildPreviewSnapshot(input: {
                     {
                       startAt: new Date(now.getTime() - 4 * 3600_000).toISOString(),
                       endAt: now.toISOString(),
-                      status: status as any,
+                      status,
                     },
                   ]
                 : [],
           };
 
-          const serviceUptime = (service as any).uptime ?? {
+          const serviceUptime = projected.uptime ?? {
             days30: {
               percentage: uptimePct,
-              incidentCount: impact?.count ?? (service as any).activeIncidentCount ?? 0,
+              incidentCount: impact?.count ?? projected.activeIncidentCount ?? 0,
               measuredDays: 30,
               complete: true,
               grade,
             },
             days90: {
               percentage: uptimePct,
-              incidentCount: impact?.count ?? (service as any).activeIncidentCount ?? 0,
+              incidentCount: impact?.count ?? projected.activeIncidentCount ?? 0,
               measuredDays: 90,
               complete: true,
               grade,
@@ -241,7 +243,7 @@ export function buildPreviewSnapshot(input: {
               ? { team: service.team ?? null }
               : {}),
             status,
-            activeIncidentCount: impact?.count ?? (service as any).activeIncidentCount ?? 0,
+            activeIncidentCount: impact?.count ?? projected.activeIncidentCount ?? 0,
             ...(showMetricsAllowed ? { uptime: serviceUptime } : {}),
             ...(showHistoryAllowed ? { history: serviceHistory } : {}),
           };

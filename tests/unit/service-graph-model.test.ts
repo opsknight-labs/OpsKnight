@@ -250,11 +250,29 @@ describe('exportGraphSvg', () => {
   it('follows the viewer theme and draws ELK routes', () => {
     const at = { 'svc:a': { x: 0, y: 0 }, 'svc:b': { x: 300, y: 0 } };
     const size = () => ({ width: 200, height: 60 });
-    const light = exportGraphSvg([item('svc:a'), item('svc:b')], [link('svc:a', 'svc:b')], at, size);
-    const dark = exportGraphSvg([item('svc:a'), item('svc:b')], [link('svc:a', 'svc:b')], at, size, {
-      theme: 'dark',
-      routes: { 'svc:a>svc:b': [{ x: 200, y: 30 }, { x: 250, y: 30 }, { x: 250, y: 40 }, { x: 300, y: 40 }] },
-    });
+    const light = exportGraphSvg(
+      [item('svc:a'), item('svc:b')],
+      [link('svc:a', 'svc:b')],
+      at,
+      size
+    );
+    const dark = exportGraphSvg(
+      [item('svc:a'), item('svc:b')],
+      [link('svc:a', 'svc:b')],
+      at,
+      size,
+      {
+        theme: 'dark',
+        routes: {
+          'svc:a>svc:b': [
+            { x: 200, y: 30 },
+            { x: 250, y: 30 },
+            { x: 250, y: 40 },
+            { x: 300, y: 40 },
+          ],
+        },
+      }
+    );
     expect(light).toContain('fill="#fafafa"');
     expect(dark).toContain('fill="#09090b"');
     expect(dark).not.toContain('fill="#ffffff"');
@@ -293,8 +311,16 @@ describe('collapseBusinessServices', () => {
 describe('revealEmphasis', () => {
   it('brings back hidden items an impact runs through, flagged as filtered out', () => {
     const full = { items, links };
-    const visible = filterGraph(full, { query: '', teamId: '', impactedOnly: false, statuses: ['OPERATIONAL'] });
-    const narrowed = { items: visible.items.filter(entry => entry.key !== 'svc:api'), links: visible.links.filter(l => l.source !== 'svc:api' && l.target !== 'svc:api') };
+    const visible = filterGraph(full, {
+      query: '',
+      teamId: '',
+      impactedOnly: false,
+      statuses: ['OPERATIONAL'],
+    });
+    const narrowed = {
+      items: visible.items.filter(entry => entry.key !== 'svc:api'),
+      links: visible.links.filter(l => l.source !== 'svc:api' && l.target !== 'svc:api'),
+    };
     // Impact is computed on the full links, so it reaches web through api even though api is hidden.
     const blast = impactSubgraph(full.links, 'svc:db', 'blast');
     expect(blast.keys.has('svc:web')).toBe(true);
@@ -311,7 +337,9 @@ describe('createReuseCache', () => {
     const cache = createReuseCache<{ key: string; selected: boolean }>();
     const keys = Array.from({ length: 2000 }, (_, i) => `svc:${i}`);
     const pass = (selected: string | null) => {
-      const out = keys.map(key => cache.get(key, [selected === key], () => ({ key, selected: selected === key })));
+      const out = keys.map(key =>
+        cache.get(key, [selected === key], () => ({ key, selected: selected === key }))
+      );
       cache.sweep();
       return out;
     };
@@ -363,16 +391,28 @@ describe('edgeSummary', () => {
           diff: 'added',
         })
       )
-    ).toEqual(['Soft dependency (3 combined)', '12.5/s requests · 5.10% errors', 'Added in this period']);
-    expect(edgeSummary(link('bs:a', 'bs:b', { kind: 'support' }))).toEqual(['Supporting business service']);
+    ).toEqual([
+      'Soft dependency (3 combined)',
+      '12.5/s requests · 5.10% errors',
+      'Added in this period',
+    ]);
+    expect(edgeSummary(link('bs:a', 'bs:b', { kind: 'support' }))).toEqual([
+      'Supporting business service',
+    ]);
   });
 });
 
 describe('edgeAppearance', () => {
   const statusHues = new Set(Object.values(STATUS_HEX));
-  const traffic = (errorRate: number) => ({ requestRate: 50, errorRate, windowStart: '2026-01-01T00:00:00Z' });
+  const traffic = (errorRate: number) => ({
+    requestRate: 50,
+    errorRate,
+    windowStart: '2026-01-01T00:00:00Z',
+  });
   it('keeps status hues for an impacted link on the highlighted path only', () => {
-    expect(edgeAppearance(link('svc:a', 'svc:b'), true, 'MAJOR_OUTAGE').stroke).toBe(STATUS_HEX.MAJOR_OUTAGE);
+    expect(edgeAppearance(link('svc:a', 'svc:b'), true, 'MAJOR_OUTAGE').stroke).toBe(
+      STATUS_HEX.MAJOR_OUTAGE
+    );
   });
   it('draws the diff in neutral ink with a label, never a status hue', () => {
     for (const diff of ['added', 'removed'] as const) {
@@ -386,7 +426,9 @@ describe('edgeAppearance', () => {
     const bad = edgeAppearance(link('svc:a', 'svc:b', { traffic: traffic(0.08) }), false, null);
     expect(bad.stroke).toBe(EDGE_STROKE.traffic);
     expect(bad.label).toEqual({ text: '8.00% err', tone: 'critical' });
-    expect(edgeAppearance(link('svc:a', 'svc:b', { traffic: traffic(0) }), false, null).label).toBeNull();
+    expect(
+      edgeAppearance(link('svc:a', 'svc:b', { traffic: traffic(0) }), false, null).label
+    ).toBeNull();
   });
   it('dashes support links and gives them weight', () => {
     const look = edgeAppearance(link('bs:a', 'bs:b', { kind: 'support' }), false, null);

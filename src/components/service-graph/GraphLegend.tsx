@@ -33,7 +33,8 @@ const chip = 'shrink-0 rounded-sm border px-1 text-2xs font-semibold';
 /** What the shapes, lines, labels and colours on the canvas mean. */
 export default function GraphLegend({ grouped, canEdit }: { grouped: boolean; canEdit: boolean }) {
   const item = 'inline-flex items-center gap-1.5';
-  const heading = 'col-span-full text-2xs font-semibold uppercase tracking-wide text-muted-foreground';
+  const heading =
+    'col-span-full text-2xs font-semibold uppercase tracking-wide text-muted-foreground';
   return (
     <section
       aria-label="Legend"
@@ -41,11 +42,17 @@ export default function GraphLegend({ grouped, canEdit }: { grouped: boolean; ca
     >
       <h3 className={heading}>Nodes</h3>
       <span className={item}>
-        <span className="h-3 w-5 rounded-sm border border-l-4 border-l-ink-400 bg-card" aria-hidden="true" />
+        <span
+          className="h-3 w-5 rounded-sm border border-l-4 border-l-ink-400 bg-card"
+          aria-hidden="true"
+        />
         Business service
       </span>
       <span className={item}>
-        <span className="h-3 w-5 rounded-md border border-l-4 border-l-ink-400 bg-card" aria-hidden="true" />
+        <span
+          className="h-3 w-5 rounded-md border border-l-4 border-l-ink-400 bg-card"
+          aria-hidden="true"
+        />
         Technical service
       </span>
       <span className={item}>
@@ -66,7 +73,10 @@ export default function GraphLegend({ grouped, canEdit }: { grouped: boolean; ca
       </span>
       {STATUSES.map(meta => (
         <span key={meta.label} className={item}>
-          <span className={cn('h-2.5 w-2.5 rounded-full', toneClasses(meta.tone).solid)} aria-hidden="true" />
+          <span
+            className={cn('h-2.5 w-2.5 rounded-full', toneClasses(meta.tone).solid)}
+            aria-hidden="true"
+          />
           {meta.label}
         </span>
       ))}
@@ -95,7 +105,8 @@ export default function GraphLegend({ grouped, canEdit }: { grouped: boolean; ca
         Error rate on that traffic
       </span>
       <span className={item}>
-        <Line color={STATUS_HEX.MAJOR_OUTAGE} width={2.5} /> Highlighted path into an impacted service
+        <Line color={STATUS_HEX.MAJOR_OUTAGE} width={2.5} /> Highlighted path into an impacted
+        service
       </span>
       <span className={item}>
         <Line color={EDGE_STROKE.added} width={2.5} />

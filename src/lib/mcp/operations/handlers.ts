@@ -1003,7 +1003,10 @@ export const MCP_APPROVAL_HANDLERS = new Map<string, () => Promise<Handler>>([
   ['updateService', async () => (await import('@/app/api/v2/services/[id]/route')).PATCH],
   ['updateTeam', async () => (await import('@/app/api/v2/teams/[id]/route')).PATCH],
   // Business services P4.
-  ['createBusinessService', async () => (await import('@/app/api/v2/business-services/route')).POST],
+  [
+    'createBusinessService',
+    async () => (await import('@/app/api/v2/business-services/route')).POST,
+  ],
   [
     'updateBusinessService',
     async () => (await import('@/app/api/v2/business-services/[id]/route')).PATCH,

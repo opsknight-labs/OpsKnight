@@ -97,7 +97,12 @@ const LABEL_CLASS = {
   critical: toneClasses('critical').soft,
 } as const;
 
-const TIER_LABEL = { TIER_0: 'Tier 0', TIER_1: 'Tier 1', TIER_2: 'Tier 2', TIER_3: 'Tier 3' } as const;
+const TIER_LABEL = {
+  TIER_0: 'Tier 0',
+  TIER_1: 'Tier 1',
+  TIER_2: 'Tier 2',
+  TIER_3: 'Tier 3',
+} as const;
 
 function useLayout(request: LayoutRequest): LayoutResult | null {
   const [state, setState] = useState<{ request: LayoutRequest; result: LayoutResult } | null>(null);
@@ -164,12 +169,18 @@ const ItemCard = memo(function ItemCard({ data, selected }: NodeProps<ItemNode>)
       className={cn(
         'h-full w-full text-left',
         level === 'dot'
-          ? cn('sg-tile rounded-md', tone.solid, ring, tierZero && 'outline outline-2 outline-offset-2 outline-foreground')
+          ? cn(
+              'sg-tile rounded-md',
+              tone.solid,
+              ring,
+              tierZero && 'outline outline-2 outline-offset-2 outline-foreground'
+            )
           : cn(
               'sg-card flex flex-col justify-center gap-1 border border-l-4 bg-card px-3 shadow-xs group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-1',
               item.kind === 'bs' ? 'rounded-sm' : 'rounded-xl',
               // Tier 0 business services carry a heavier frame so they read first.
-              tierZero && 'border-y-2 border-r-2 border-y-foreground/60 border-r-foreground/60 shadow-sm',
+              tierZero &&
+                'border-y-2 border-r-2 border-y-foreground/60 border-r-foreground/60 shadow-sm',
               item.filteredOut && 'border-dashed',
               tone.borderLeft,
               ring
@@ -191,7 +202,9 @@ const ItemCard = memo(function ItemCard({ data, selected }: NodeProps<ItemNode>)
             <span
               className={cn(
                 chip,
-                tierZero ? 'border-foreground bg-foreground text-background' : 'bg-muted text-muted-foreground'
+                tierZero
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'bg-muted text-muted-foreground'
               )}
             >
               {TIER_LABEL[item.criticality]}
@@ -203,13 +216,19 @@ const ItemCard = memo(function ItemCard({ data, selected }: NodeProps<ItemNode>)
             </span>
           )}
           {item.filteredOut && (
-            <span className={cn(chip, 'bg-muted text-muted-foreground')} title="Hidden by the filters; shown because the highlight runs through it">
+            <span
+              className={cn(chip, 'bg-muted text-muted-foreground')}
+              title="Hidden by the filters; shown because the highlight runs through it"
+            >
               filtered
             </span>
           )}
           {item.spof && (
             <span
-              className={cn('shrink-0 rounded-sm border px-1 text-2xs font-semibold', toneClasses('critical').soft)}
+              className={cn(
+                'shrink-0 rounded-sm border px-1 text-2xs font-semibold',
+                toneClasses('critical').soft
+              )}
               title="Single point of failure"
             >
               SPOF
@@ -285,7 +304,13 @@ const RoutedEdgeView = memo(function RoutedEdgeView({
   }, [points, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition]);
   return (
     <>
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} interactionWidth={interactionWidth} />
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={markerEnd}
+        style={style}
+        interactionWidth={interactionWidth}
+      />
       {data?.label && (
         <EdgeLabelRenderer>
           <span
@@ -521,7 +546,10 @@ export default function ServiceGraphCanvas({
         link.source in pinned || link.target in pinned ? null : (layout?.routes[link.key] ?? null);
       return edgeCache.get(link.key, [link, lit, dim, impacted, points], (): RoutedEdge => {
         const look = edgeAppearance(link, lit, impacted);
-        const label = look.label && { text: look.label.text, className: LABEL_CLASS[look.label.tone] };
+        const label = look.label && {
+          text: look.label.text,
+          className: LABEL_CLASS[look.label.tone],
+        };
         return {
           id: link.key,
           type: 'routed',
@@ -658,7 +686,8 @@ export default function ServiceGraphCanvas({
         }}
         onEdgeMouseEnter={(event, edge) => {
           const box = root.current?.getBoundingClientRect();
-          if (box) setTip({ key: edge.id, x: event.clientX - box.left, y: event.clientY - box.top });
+          if (box)
+            setTip({ key: edge.id, x: event.clientX - box.left, y: event.clientY - box.top });
         }}
         onEdgeMouseLeave={() => setTip(null)}
       >

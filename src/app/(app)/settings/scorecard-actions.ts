@@ -24,7 +24,9 @@ export async function saveScorecardRubricAction(text: string) {
       const issue = error.issues[0];
       return {
         success: false as const,
-        error: issue ? `${issue.path.join('.') || 'rubric'}: ${issue.message}` : 'Check the rubric.',
+        error: issue
+          ? `${issue.path.join('.') || 'rubric'}: ${issue.message}`
+          : 'Check the rubric.',
       };
     }
     if (error instanceof AppError) return { success: false as const, error: error.userMessage };

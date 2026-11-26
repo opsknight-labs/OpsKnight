@@ -73,7 +73,11 @@ import GraphDependencyDialog, { EMPTY_DRAFT, type DependencyDraft } from './Grap
 import { GRAPH_STATUS_META } from './GraphHealthBadge';
 import GraphLegend from './GraphLegend';
 import GraphListView from './GraphListView';
-import GraphSidePanel, { type ImpactSummary, type PanelRelation, type SquireAsk } from './GraphSidePanel';
+import GraphSidePanel, {
+  type ImpactSummary,
+  type PanelRelation,
+  type SquireAsk,
+} from './GraphSidePanel';
 import GraphSkeleton from './GraphSkeleton';
 import GraphInsightsPanel from './GraphInsightsPanel';
 import GraphViewsMenu, { type AppliedView } from './GraphViewsMenu';
@@ -283,7 +287,8 @@ export default function ServiceGraphExplorer({
   // Looking at the past never edits: the edges there are a replay, not rows.
   const canEdit = canEditPermission && !travel;
   const onTravel = useCallback(
-    (snapshot: GraphSnapshot | null, at: Date | null) => setTravel(snapshot && at ? { snapshot, at } : null),
+    (snapshot: GraphSnapshot | null, at: Date | null) =>
+      setTravel(snapshot && at ? { snapshot, at } : null),
     []
   );
   const exportSvg = useRef<(() => string) | null>(null);
@@ -479,7 +484,10 @@ export default function ServiceGraphExplorer({
     }
     return impact ? { keys: impact.keys, linkKeys: impact.linkKeys, depth: impact.depth } : null;
   }, [pathResult, showCycles, cycles, shown.links, impact]);
-  const onCanvas = useMemo(() => revealEmphasis(visible, shown, emphasis), [visible, shown, emphasis]);
+  const onCanvas = useMemo(
+    () => revealEmphasis(visible, shown, emphasis),
+    [visible, shown, emphasis]
+  );
   const impactSummary = useMemo<ImpactSummary | null>(() => {
     if (!impact) return null;
     const perHop: number[] = [];
@@ -627,7 +635,10 @@ export default function ServiceGraphExplorer({
       ),
     [serviceOptions, editableTeamIds]
   );
-  const spofIds = useMemo(() => new Set(spof?.singlePointsOfFailure.map(row => row.serviceId)), [spof]);
+  const spofIds = useMemo(
+    () => new Set(spof?.singlePointsOfFailure.map(row => row.serviceId)),
+    [spof]
+  );
   const canvasItems = useMemo(() => markSpof(onCanvas.items, spofIds), [onCanvas.items, spofIds]);
   const canvasLinks = useMemo(
     () => (diff ? overlayDiff(onCanvas.items, onCanvas.links, diff) : onCanvas.links),
@@ -991,7 +1002,8 @@ export default function ServiceGraphExplorer({
         <InlineNotice tone="info">
           <span className="flex flex-wrap items-center gap-2">
             <History className="h-4 w-4" aria-hidden="true" />
-            Viewing the graph as of <strong>{travel.at.toLocaleString()}</strong>. This is read-only.
+            Viewing the graph as of <strong>{travel.at.toLocaleString()}</strong>. This is
+            read-only.
             <Button size="sm" variant="outline" onClick={() => setTravel(null)}>
               Back to now
             </Button>
@@ -1183,7 +1195,8 @@ export default function ServiceGraphExplorer({
                     {formatRate(pendingDetails.traffic.requestRate)} requests,{' '}
                     {formatErrorRate(pendingDetails.traffic.errorRate)} errors
                     <span className="block text-xs text-muted-foreground">
-                      Window starting {new Date(pendingDetails.traffic.windowStart).toLocaleString()}
+                      Window starting{' '}
+                      {new Date(pendingDetails.traffic.windowStart).toLocaleString()}
                     </span>
                   </dd>
                 </>

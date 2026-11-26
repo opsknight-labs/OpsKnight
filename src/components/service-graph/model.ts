@@ -194,8 +194,21 @@ export function collapseBusinessServices(
         links.set(
           key,
           seen
-            ? { ...seen, merged: (seen.merged ?? 1) + 1, suggested: seen.suggested && link.suggested }
-            : { ...link, key, source, target, dependencyId: null, traffic: null, diff: undefined, merged: 1 }
+            ? {
+                ...seen,
+                merged: (seen.merged ?? 1) + 1,
+                suggested: seen.suggested && link.suggested,
+              }
+            : {
+                ...link,
+                key,
+                source,
+                target,
+                dependencyId: null,
+                traffic: null,
+                diff: undefined,
+                merged: 1,
+              }
         );
       }
   }
@@ -525,8 +538,22 @@ export const STATUS_HEX: Readonly<Record<BsStatus, string>> = {
 const escapeXml = (text: string) => text.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`);
 
 const SVG_THEME = {
-  light: { page: '#fafafa', card: '#ffffff', border: '#d4d4d8', text: '#18181b', muted: '#52525b', line: '#71717a' },
-  dark: { page: '#09090b', card: '#18181b', border: '#3f3f46', text: '#fafafa', muted: '#a1a1aa', line: '#a1a1aa' },
+  light: {
+    page: '#fafafa',
+    card: '#ffffff',
+    border: '#d4d4d8',
+    text: '#18181b',
+    muted: '#52525b',
+    line: '#71717a',
+  },
+  dark: {
+    page: '#09090b',
+    card: '#18181b',
+    border: '#3f3f46',
+    text: '#fafafa',
+    muted: '#a1a1aa',
+    line: '#a1a1aa',
+  },
 } as const;
 
 /** The laid-out graph as a standalone SVG (what is loaded, at the positions shown, in the viewer's theme). */
@@ -652,7 +679,11 @@ export function trafficStyle(
 }
 
 export const formatRate = (rate: number) =>
-  rate >= 100 ? `${Math.round(rate)}/s` : rate >= 1 ? `${rate.toFixed(1)}/s` : `${rate.toFixed(2)}/s`;
+  rate >= 100
+    ? `${Math.round(rate)}/s`
+    : rate >= 1
+      ? `${rate.toFixed(1)}/s`
+      : `${rate.toFixed(2)}/s`;
 export const formatErrorRate = (rate: number) => `${(rate * 100).toFixed(rate < 0.1 ? 2 : 1)}%`;
 
 /** What a link is, in words, for the edge tooltip and its accessible name. */
@@ -669,7 +700,8 @@ export function edgeSummary(link: GraphLink): string[] {
     lines.push(
       `${formatRate(link.traffic.requestRate)} requests · ${formatErrorRate(link.traffic.errorRate)} errors`
     );
-  if (link.diff) lines.push(link.diff === 'added' ? 'Added in this period' : 'Removed in this period');
+  if (link.diff)
+    lines.push(link.diff === 'added' ? 'Added in this period' : 'Removed in this period');
   return lines;
 }
 

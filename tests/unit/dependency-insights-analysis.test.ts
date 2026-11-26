@@ -37,7 +37,10 @@ describe('replayEdges', () => {
     expect(replayEdges(events, t(9)).has('db>api')).toBe(false);
   });
   it('ignores the future and tolerates unordered input', () => {
-    expect([...replayEdges([...events].reverse(), t(6)).keys()].sort()).toEqual(['cache>api', 'db>api']);
+    expect([...replayEdges([...events].reverse(), t(6)).keys()].sort()).toEqual([
+      'cache>api',
+      'db>api',
+    ]);
     expect(replayEdges(events, t(0)).size).toBe(0);
   });
   it('treats rejected edges as absent', () => {
@@ -46,8 +49,13 @@ describe('replayEdges', () => {
 });
 
 describe('diffEdges and diffStatuses', () => {
-  const events = [ev('db', 'api', 'ACTIVE', 1), ev('q', 'api', 'ACTIVE', 1), ev('q', 'api', 'REMOVED', 6),
-    ev('c', 'api', 'ACTIVE', 7), ev('x', 'api', 'SUGGESTED', 7, 'OBSERVED')];
+  const events = [
+    ev('db', 'api', 'ACTIVE', 1),
+    ev('q', 'api', 'ACTIVE', 1),
+    ev('q', 'api', 'REMOVED', 6),
+    ev('c', 'api', 'ACTIVE', 7),
+    ev('x', 'api', 'SUGGESTED', 7, 'OBSERVED'),
+  ];
   it('reports added, removed and newly suggested edges', () => {
     const diff = diffEdges(replayEdges(events, t(3)), replayEdges(events, t(9)));
     expect(diff.added.map(e => e.upstreamServiceId)).toEqual(['c']);
@@ -56,7 +64,17 @@ describe('diffEdges and diffStatuses', () => {
   });
   it('lists only services present in both with a changed status', () => {
     expect(
-      diffStatuses(new Map([['a', 'OK'], ['b', 'OK']]), new Map([['a', 'BAD'], ['b', 'OK'], ['c', 'BAD']]))
+      diffStatuses(
+        new Map([
+          ['a', 'OK'],
+          ['b', 'OK'],
+        ]),
+        new Map([
+          ['a', 'BAD'],
+          ['b', 'OK'],
+          ['c', 'BAD'],
+        ])
+      )
     ).toEqual([{ id: 'a', from: 'OK', to: 'BAD' }]);
   });
 });
@@ -95,7 +113,11 @@ describe('countByDaysAgo', () => {
     const now = new Date('2026-06-10T12:00:00Z');
     const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
     expect(
-      countByDaysAgo([hoursAgo(1), hoursAgo(23), hoursAgo(25), hoursAgo(71), hoursAgo(73), hoursAgo(-1)], now, 3)
+      countByDaysAgo(
+        [hoursAgo(1), hoursAgo(23), hoursAgo(25), hoursAgo(71), hoursAgo(73), hoursAgo(-1)],
+        now,
+        3
+      )
     ).toEqual([2, 1, 1]);
   });
 });

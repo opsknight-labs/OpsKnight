@@ -23,7 +23,8 @@ export interface ReplayedEdge {
   since: Date;
 }
 
-export const edgeKey = (edge: DependencyEdge) => `${edge.upstreamServiceId}>${edge.downstreamServiceId}`;
+export const edgeKey = (edge: DependencyEdge) =>
+  `${edge.upstreamServiceId}>${edge.downstreamServiceId}`;
 
 /** The edges that were ACTIVE or SUGGESTED at `at`: the latest event per pair at or before it. */
 export function replayEdges(events: readonly EdgeEvent[], at: Date): Map<string, ReplayedEdge> {

@@ -1003,6 +1003,8 @@ export const BUSINESS_SERVICE_OPERATIONS: {
     summary: 'Monthly SLA report of a business service',
     description:
       'Uptime, severity-weighted uptime against the SLO target (met or missed), downtime minutes and incidents for one UTC month (default: this month, to date). estimatedCostCents and currency only for Responders and Admins.',
-    query: { month: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$', description: 'YYYY-MM.' } },
+    query: {
+      month: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$', description: 'YYYY-MM.' },
+    },
   },
 ];

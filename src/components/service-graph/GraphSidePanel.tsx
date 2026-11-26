@@ -376,7 +376,10 @@ export default function GraphSidePanel({
                 size="sm"
                 variant="ghost"
                 onClick={() =>
-                  openSquire({ question: ask.question.slice(0, MAX_QUESTION), evidence: ask.evidence })
+                  openSquire({
+                    question: ask.question.slice(0, MAX_QUESTION),
+                    evidence: ask.evidence,
+                  })
                 }
               >
                 <MessageCircleQuestion className="h-4 w-4" aria-hidden="true" />

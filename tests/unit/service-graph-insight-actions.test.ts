@@ -40,18 +40,22 @@ import {
   simulateFailureAction,
 } from '@/app/(app)/services/graph/actions';
 
-const actor = (role: string, status = 'ACTIVE') => ({ id: 'u1', role, status, teamIds: [] }) as never;
+const actor = (role: string, status = 'ACTIVE') =>
+  ({ id: 'u1', role, status, teamIds: [] }) as never;
 
 beforeEach(() => vi.clearAllMocks());
 
 describe('graph insight actions: RBAC', () => {
-  it.each(['RESPONDER', 'AUDITOR', 'USER', 'STAKEHOLDER'])('%s cannot share a view or toggle embeds', async role => {
-    m.actor.mockResolvedValue(actor(role));
-    expect(await shareGraphViewAction({ id: 'v1' })).toMatchObject({ ok: false });
-    expect(await setGraphEmbedEnabledAction({ enabled: true })).toMatchObject({ ok: false });
-    expect(m.shareView).not.toHaveBeenCalled();
-    expect(m.setEmbedEnabled).not.toHaveBeenCalled();
-  });
+  it.each(['RESPONDER', 'AUDITOR', 'USER', 'STAKEHOLDER'])(
+    '%s cannot share a view or toggle embeds',
+    async role => {
+      m.actor.mockResolvedValue(actor(role));
+      expect(await shareGraphViewAction({ id: 'v1' })).toMatchObject({ ok: false });
+      expect(await setGraphEmbedEnabledAction({ enabled: true })).toMatchObject({ ok: false });
+      expect(m.shareView).not.toHaveBeenCalled();
+      expect(m.setEmbedEnabled).not.toHaveBeenCalled();
+    }
+  );
 
   it('lets an admin through', async () => {
     m.actor.mockResolvedValue(actor('ADMIN'));
@@ -69,7 +73,9 @@ describe('graph insight actions: RBAC', () => {
   it('rejects malformed input before touching the data layer', async () => {
     m.actor.mockResolvedValue(actor('ADMIN'));
     expect(await simulateFailureAction({ serviceIds: [] })).toMatchObject({ ok: false });
-    expect(await simulateFailureAction({ serviceIds: ['s1'], extra: 1 })).toMatchObject({ ok: false });
+    expect(await simulateFailureAction({ serviceIds: ['s1'], extra: 1 })).toMatchObject({
+      ok: false,
+    });
     expect(await getGraphAtAction({ at: 'yesterday' })).toMatchObject({ ok: false });
     expect(m.simulateFailure).not.toHaveBeenCalled();
     expect(m.getGraphAt).not.toHaveBeenCalled();

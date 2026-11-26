@@ -115,7 +115,12 @@ export const ENDPOINT_SAMPLES: Record<string, Record<string, unknown>> = {
   'PUT /settings/business-service-scorecard': {
     levels: [{ id: 'bronze', label: 'Bronze' }],
     rules: [
-      { id: 'owner', label: 'Has an owner', check: { type: 'field', field: 'owner' }, level: 'bronze' },
+      {
+        id: 'owner',
+        label: 'Has an owner',
+        check: { type: 'field', field: 'owner' },
+        level: 'bronze',
+      },
     ],
   },
   'POST /business-services/import': {
