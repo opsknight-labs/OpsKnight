@@ -225,25 +225,37 @@ export async function incidentImpactViews(incidentId: string) {
 }
 
 /** Every open incident plus every incident that still has an open impact row, in batches. */
-export async function reconcileBusinessServiceImpacts(now = new Date()) {
-  const [active, open] = await Promise.all([
-    prisma.incident.findMany({
+export async function reconcileBusinessServiceImpacts(now = new Date(), pageSize = 5000) {
+  // Keyset pages by incident id so no incident is skipped however many are open.
+  const ids = new Set<string>();
+  for (let after: string | undefined; ;) {
+    const page = await prisma.incident.findMany({
       where: { status: { in: activeIncidentStatuses() } },
-      orderBy: { createdAt: 'desc' },
-      take: 5000,
+      orderBy: { id: 'asc' },
+      take: pageSize,
+      ...(after ? { cursor: { id: after }, skip: 1 } : {}),
       select: { id: true },
-    }),
-    prisma.incidentBusinessServiceImpact.findMany({
-      where: { endedAt: null },
+    });
+    page.forEach(row => ids.add(row.id));
+    if (page.length < pageSize) break;
+    after = page[page.length - 1].id;
+  }
+  for (let after: string | undefined; ;) {
+    const page = await prisma.incidentBusinessServiceImpact.findMany({
+      where: { endedAt: null, ...(after ? { incidentId: { gt: after } } : {}) },
       distinct: ['incidentId'],
-      take: 5000,
+      orderBy: { incidentId: 'asc' },
+      take: pageSize,
       select: { incidentId: true },
-    }),
-  ]);
-  const ids = [...new Set([...active.map(row => row.id), ...open.map(row => row.incidentId)])];
-  const totals = { incidents: ids.length, created: 0, updated: 0 };
-  for (let index = 0; index < ids.length; index += SYNC_BATCH) {
-    const result = await syncIncidentImpacts(ids.slice(index, index + SYNC_BATCH), now);
+    });
+    page.forEach(row => ids.add(row.incidentId));
+    if (page.length < pageSize) break;
+    after = page[page.length - 1].incidentId;
+  }
+  const all = [...ids];
+  const totals = { incidents: all.length, created: 0, updated: 0 };
+  for (let index = 0; index < all.length; index += SYNC_BATCH) {
+    const result = await syncIncidentImpacts(all.slice(index, index + SYNC_BATCH), now);
     totals.created += result.created;
     totals.updated += result.updated;
   }

@@ -7,7 +7,11 @@ import {
   impactReportCsv,
   parseImpactReportParams,
 } from '@/lib/business-services/impact-report';
-import { setIncidentImpactCommand, syncIncidentImpacts } from '@/lib/business-services/impacts';
+import {
+  reconcileBusinessServiceImpacts,
+  setIncidentImpactCommand,
+  syncIncidentImpacts,
+} from '@/lib/business-services/impacts';
 import { setSupportingBusinessServices } from '@/lib/business-services/supporting';
 import { setupMcpReadDatabase } from '../helpers/mcp-read-scenarios';
 import {
@@ -154,5 +158,21 @@ describe('M1 sync versus unmark', () => {
       });
       expect(counted).toBe(0);
     }
+  });
+});
+
+describe('M8 reconcile paging', () => {
+  it('reconciles every open incident even when there are more than one page', async () => {
+    const { service, bs } = await impactScenario();
+    const incidents = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => createTestIncident(`Open ${i}`, service.id))
+    );
+    const totals = await reconcileBusinessServiceImpacts(new Date(), 2);
+    expect(totals.incidents).toBeGreaterThanOrEqual(5);
+    expect(
+      await db.incidentBusinessServiceImpact.count({
+        where: { businessServiceId: bs.id, incidentId: { in: incidents.map(i => i.id) } },
+      })
+    ).toBe(5);
   });
 });
