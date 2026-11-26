@@ -704,7 +704,9 @@ export function businessServiceDto(
   health?: BusinessServiceHealth | null,
   readableIncidents?: ReadonlySet<string>,
   /** Revenue, customer and currency figures; omitted unless the actor may read financials. */
-  financials = false
+  financials = false,
+  /** Technical services the reader may see; others are redacted. Omit for org-wide readers. */
+  readableServiceIds?: ReadonlySet<string>
 ) {
   return {
     id: row.id,
@@ -740,26 +742,43 @@ export function businessServiceDto(
     customerReportThreshold: row.customerReportThreshold,
     customerReportWindowMinutes: row.customerReportWindowMinutes,
     reviewIntervalDays: row.reviewIntervalDays,
-    members: row.members.map(({ service, critical }) => ({
-      id: service.id,
-      name: service.name,
-      status: service.status,
-      critical,
-    })),
+    members: row.members.map(({ service, critical }) =>
+      !readableServiceIds || readableServiceIds.has(service.id)
+        ? { id: service.id, name: service.name, status: service.status, critical }
+        : { id: service.id, name: 'Restricted service', status: 'UNKNOWN', critical }
+    ),
     dependsOn: row.supportedBy.map(({ child }) => child),
     followers: row.followers.map(({ user }) => ({ id: user.id, name: user.name })),
-    health: health ? healthDto(health, readableIncidents) : null,
+    health: health ? healthDto(health, readableIncidents, readableServiceIds) : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
 /** Incident ids in reasons the reader may not see (and who marked them) are left out. */
-export function healthDto(health: BusinessServiceHealth, readableIncidents?: ReadonlySet<string>) {
+export function healthDto(
+  health: BusinessServiceHealth,
+  readableIncidents?: ReadonlySet<string>,
+  readableServiceIds?: ReadonlySet<string>
+) {
   return {
     status: health.status,
     since: health.since,
-    reasons: health.reasons.map(reason => {
+    reasons: health.reasons.map(rawReason => {
+      // Technical services outside the reader's scope are not named.
+      let reason = rawReason;
+      if (readableServiceIds) {
+        if ('serviceId' in reason && !readableServiceIds.has(reason.serviceId)) {
+          const { serviceId: _hidden, ...rest } = reason;
+          void _hidden;
+          reason = rest as typeof reason;
+        }
+        if ('viaServiceId' in reason && !readableServiceIds.has(reason.viaServiceId)) {
+          const { viaServiceId: _hidden, ...rest } = reason;
+          void _hidden;
+          reason = rest as typeof reason;
+        }
+      }
       if (!('incidentId' in reason) || readableIncidents?.has(reason.incidentId)) return reason;
       const { incidentId: _incidentId, ...rest } = reason;
       void _incidentId;
@@ -771,6 +790,22 @@ export function healthDto(health: BusinessServiceHealth, readableIncidents?: Rea
     computedAt: health.computedAt,
     ...(health.unknownReason ? { unknownReason: health.unknownReason } : {}),
   };
+}
+
+/** Technical service ids named by business service members and health reasons. */
+export function serviceIdsOf(
+  rows: ReadonlyArray<{ members: ReadonlyArray<{ service: { id: string } }> }>,
+  healths: ReadonlyArray<BusinessServiceHealth | undefined>
+) {
+  return [
+    ...rows.flatMap(row => row.members.map(member => member.service.id)),
+    ...healths.flatMap(health =>
+      (health?.reasons ?? []).flatMap(reason => [
+        ...('serviceId' in reason ? [reason.serviceId] : []),
+        ...('viaServiceId' in reason ? [reason.viaServiceId] : []),
+      ])
+    ),
+  ];
 }
 
 /** Incident ids referenced by health reasons, to resolve which the reader may see. */

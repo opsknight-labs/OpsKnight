@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resetBusinessServiceHealthCacheForTests } from '@/lib/business-services/health';
+import { readableServiceIds } from '@/lib/business-services/stats';
 import {
+  serviceIdsOf,
   businessServiceDto,
   BUSINESS_SERVICE_SELECT,
   createBusinessService,
@@ -294,5 +296,31 @@ describe('M6 review cost uses weighted downtime', () => {
     const review = (await collectServiceReviews([bs.id], period, 'UTC')).get(bs.id)!;
     expect(review.downtimeMinutes).toBeCloseTo(60, 0);
     expect(review.estimatedCostCents).toBe(150_000);
+  });
+});
+
+describe('L3 out-of-scope members', () => {
+  it('redacts technical services the reader cannot see from members and reasons', async () => {
+    const mine = await createTestTeam('Mine');
+    const other = await createTestTeam('Other');
+    const visible = await createTestService('visible', mine.id);
+    const hidden = await createTestService('hidden', other.id);
+    const bs = await db.businessService.create({
+      data: {
+        name: `L3-${Math.random().toString(36).slice(2, 8)}`,
+        ownerTeamId: mine.id,
+        members: { create: [{ serviceId: visible.id }, { serviceId: hidden.id }] },
+      },
+    });
+    const user = await createTestUser({ role: 'USER' });
+    const actor = actorFor(user, 'USER', [mine.id]);
+    const row = await db.businessService.findUniqueOrThrow({
+      where: { id: bs.id },
+      select: BUSINESS_SERVICE_SELECT,
+    });
+    const allowed = await readableServiceIds(actor, serviceIdsOf([row], []));
+    const dto = businessServiceDto(row, null, undefined, false, allowed);
+    expect(dto.members.find(m => m.id === hidden.id)).toMatchObject({ name: 'Restricted service' });
+    expect(dto.members.find(m => m.id === visible.id)!.name).toBe(visible.name);
   });
 });

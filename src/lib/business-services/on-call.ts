@@ -30,7 +30,7 @@ export async function onCallFor(
 ): Promise<OnCall> {
   if (!step) return null;
   if (step.targetUser)
-    return { label: 'Escalation target', names: [step.targetUser.name || step.targetUser.email] };
+    return { label: 'Escalation target', names: [step.targetUser.name || 'Unnamed responder'] };
   if (step.targetTeam) return { label: 'Team', names: [step.targetTeam.name] };
   if (!step.targetScheduleId) return null;
   let where;
