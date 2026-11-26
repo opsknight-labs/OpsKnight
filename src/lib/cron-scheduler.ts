@@ -621,7 +621,13 @@ async function runOnce() {
         ? processCentralNotificationQueue({ trafficClasses: ['PUBLIC_INCIDENT', 'BULK'] })
         : Promise.resolve({ processed: 0, failed: 0, pending: 0, skipped: 0 }),
       processAutoUnsnoozeInternal(),
-      checkSLABreaches(),
+      // A failure here (a transient DB error while enqueueing one alert, say) must not skip the rest of the tick.
+      checkSLABreaches().catch(error => {
+        logger.error('[Cron] SLA breach check failed; continuing the tick', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return { warnings: [], checkedAt: new Date(), activeIncidentCount: 0, warningCount: 0 };
+      }),
       processShiftRotations(new Date()),
       processUpcomingShiftReminders(new Date(), 60),
     ]);

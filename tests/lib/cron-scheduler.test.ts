@@ -10,6 +10,7 @@ const tasks = vi.hoisted(() => ({
   processCentralNotificationQueue: vi.fn(),
   processAutoUnsnoozeInternal: vi.fn(),
   checkSLABreaches: vi.fn(),
+  materializeMaintenanceSchedules: vi.fn().mockResolvedValue({ created: 0, failed: 0 }),
   reconcileEscalations: vi.fn(),
   reconcileIntegrationControlPlane: vi.fn(),
   reconcileStatusPageSnapshots: vi.fn(),
@@ -55,7 +56,7 @@ vi.mock('@/lib/flapping', () => ({
   releaseStableFlappingHolds: tasks.releaseStableFlappingHolds,
 }));
 vi.mock('@/lib/service-maintenance/schedules', () => ({
-  materializeMaintenanceSchedules: vi.fn().mockResolvedValue({ created: 0, failed: 0 }),
+  materializeMaintenanceSchedules: tasks.materializeMaintenanceSchedules,
 }));
 vi.mock('@/lib/unsnooze', () => ({
   processAutoUnsnoozeInternal: tasks.processAutoUnsnoozeInternal,
@@ -233,6 +234,18 @@ describe('cron-scheduler lifecycle', () => {
     // Lost MEETING_PROVISION jobs and Teams cleanup debt are only recovered if the tick runs these.
     expect(tasks.reconcileStalledMeetingProvisions).toHaveBeenCalledTimes(1);
     expect(tasks.reconcileMeetingCleanupDebt).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps running the tick when the SLA breach check throws', async () => {
+    tasks.checkSLABreaches.mockRejectedValue(new Error('slack enqueue failed'));
+
+    startCronScheduler({ profile: 'maintenance' });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(tasks.checkSLABreaches).toHaveBeenCalledTimes(1);
+    // Steps after the secondary group (maintenance materialization) still ran.
+    expect(tasks.materializeMaintenanceSchedules).toHaveBeenCalledTimes(1);
+    expect(tasks.processShiftRotations).toHaveBeenCalledTimes(1);
   });
 
   it('fences a stale scheduler before it enters the next operation group', async () => {
