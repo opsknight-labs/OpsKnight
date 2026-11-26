@@ -11,6 +11,8 @@ import {
   getUserPermissions,
 } from '@/lib/rbac';
 import { postmortemReadWhere } from '@/lib/authorization-filters';
+import { postmortemEditWhere } from '@/lib/postmortems/authorization';
+import { logAudit } from '@/lib/audit';
 import { CAPABILITIES, hasCapability, capabilitiesOf } from '@/lib/authorization';
 import {
   getStoredActionItemId,
@@ -723,8 +725,9 @@ export async function togglePostmortemPublicStatus(
   postmortemId: string,
   isPublic: boolean
 ): Promise<{ success: boolean; error?: string; isPublic?: boolean }> {
+  let user;
   try {
-    await assertResponderOrAbove();
+    user = await assertResponderOrAbove();
   } catch (error) {
     return {
       success: false,
@@ -733,6 +736,21 @@ export async function togglePostmortemPublicStatus(
   }
 
   try {
+    // Same edit rule as upsert/API v2: admin, author, incident assignee or owning-team member.
+    const actor = await getCurrentAuthorizationActor();
+    const current = await prisma.postmortem.findFirst({
+      where: {
+        AND: [{ id: postmortemId }, postmortemReadWhere(actor), postmortemEditWhere(actor)],
+      },
+      select: { isPublic: true },
+    });
+    if (!current) {
+      return {
+        success: false,
+        error: 'Forbidden: You do not have permission to change this postmortem',
+      };
+    }
+
     const updated = await prisma.postmortem.update({
       where: { id: postmortemId },
       data: {
@@ -740,6 +758,16 @@ export async function togglePostmortemPublicStatus(
         updatedAt: new Date(),
       },
       select: { id: true, incidentId: true, isPublic: true },
+    });
+
+    await logAudit({
+      action: 'postmortem.visibility.changed',
+      entityType: 'INCIDENT',
+      entityId: updated.incidentId,
+      actorId: user.id,
+      details: { postmortemId: updated.id },
+      oldValue: { isPublic: current.isPublic },
+      newValue: { isPublic: updated.isPublic },
     });
 
     revalidatePath('/postmortems');
