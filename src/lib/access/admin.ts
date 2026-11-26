@@ -600,37 +600,61 @@ export async function decideAccessReviewItem(
   decision: 'KEEP' | 'REVOKE',
   note?: string
 ) {
-  const item = await prisma.accessReviewItem.findUnique({
-    where: { id: itemId },
-    include: { review: { select: { status: true } } },
-  });
-  if (!item || item.review.status !== 'OPEN') {
-    throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'This review is closed.' });
-  }
-  let selfCertification: string | null = null;
-  if (item.userId === reviewerId) {
-    // Four-eyes whenever possible; the evidence records exactly why self-certification happened.
-    const otherReviewer = await hasOtherReviewer(reviewerId);
-    if (!otherReviewer) {
-      selfCertification = 'Self-certified: no other reviewer available.';
-    } else if ((await getAccessControlSettings(true)).selfApprovalAllowed) {
-      selfCertification = 'Self-certified: allowed by the organization access policy.';
-    } else {
-      throw new AppError({
-        code: 'SEPARATION_OF_DUTIES',
-        userMessage: 'You cannot certify your own access. Another reviewer must decide this item.',
-      });
+  // Serializable, like completeAccessReview: a decision cannot land after the review completed
+  // (one of the two retries and sees the other), and every decision is audited with what it replaced.
+  await runSerializableTransaction(async tx => {
+    const item = await tx.accessReviewItem.findUnique({
+      where: { id: itemId },
+      include: { review: { select: { status: true } } },
+    });
+    if (!item || item.review.status !== 'OPEN') {
+      throw new AppError({ code: 'RESOURCE_CONFLICT', userMessage: 'This review is closed.' });
     }
-  }
-  const trimmed = note?.trim().slice(0, 450) || null;
-  await prisma.accessReviewItem.update({
-    where: { id: itemId },
-    data: {
-      decision,
-      reviewerId,
-      decidedAt: new Date(),
-      note: selfCertification ? [trimmed, selfCertification].filter(Boolean).join(' ') : trimmed,
-    },
+    let selfCertification: string | null = null;
+    if (item.userId === reviewerId) {
+      // Four-eyes whenever possible; the evidence records exactly why self-certification happened.
+      const otherReviewer = await hasOtherReviewer(reviewerId);
+      if (!otherReviewer) {
+        selfCertification = 'Self-certified: no other reviewer available.';
+      } else if ((await getAccessControlSettings(true)).selfApprovalAllowed) {
+        selfCertification = 'Self-certified: allowed by the organization access policy.';
+      } else {
+        throw new AppError({
+          code: 'SEPARATION_OF_DUTIES',
+          userMessage:
+            'You cannot certify your own access. Another reviewer must decide this item.',
+        });
+      }
+    }
+    const trimmed = note?.trim().slice(0, 450) || null;
+    await tx.accessReviewItem.update({
+      where: { id: itemId },
+      data: {
+        decision,
+        reviewerId,
+        decidedAt: new Date(),
+        note: selfCertification ? [trimmed, selfCertification].filter(Boolean).join(' ') : trimmed,
+      },
+    });
+    await logAudit(
+      {
+        action: 'access_review.item_decided',
+        entityType: 'ACCESS_REVIEW',
+        entityId: item.reviewId,
+        actorId: reviewerId,
+        details: {
+          itemId,
+          subjectUserId: item.userId,
+          subjectType: item.subjectType,
+          subjectLabel: item.subjectLabel,
+          decision,
+          previousDecision: item.decision,
+          previousReviewerId: item.reviewerId,
+          selfCertified: Boolean(selfCertification),
+        },
+      },
+      tx
+    );
   });
 }
 
