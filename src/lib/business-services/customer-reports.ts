@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod/v3';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
@@ -92,19 +92,39 @@ export async function createCustomerImpactReport(
       select: { id: true },
     });
     if (!visible) throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
+    const data = { ...input, businessServiceId, createdById: context.actor.id };
+    let report;
     if (input.externalRef) {
-      const existing = await tx.customerImpactReport.findUnique({
+      // ON CONFLICT DO NOTHING instead of catching P2002: a unique violation would abort the
+      // caller's transaction (REST passes one), so a concurrent duplicate must not raise.
+      const inserted = await tx.customerImpactReport.createMany({
+        data: [data],
+        skipDuplicates: true,
+      });
+      report = await tx.customerImpactReport.findUniqueOrThrow({
         where: {
           businessServiceId_externalRef: { businessServiceId, externalRef: input.externalRef },
         },
         select: SELECT,
       });
-      if (existing) return { report: existing, created: false as const };
+      if (!inserted.count) {
+        // A retry must repeat the same report; a different one under the same ref is a client bug.
+        if (
+          report.source !== input.source ||
+          report.count !== input.count ||
+          report.windowStart.getTime() !== input.windowStart.getTime() ||
+          report.windowEnd.getTime() !== input.windowEnd.getTime()
+        )
+          throw new AppError({
+            code: 'RESOURCE_CONFLICT',
+            userMessage: 'This externalRef was already used for a different report.',
+            fields: [{ field: 'externalRef', code: 'conflict', message: 'Already used' }],
+          });
+        return { report, created: false as const };
+      }
+    } else {
+      report = await tx.customerImpactReport.create({ data, select: SELECT });
     }
-    const report = await tx.customerImpactReport.create({
-      data: { ...input, businessServiceId, createdById: context.actor.id },
-      select: SELECT,
-    });
     await tx.realtimeChange.create({ data: {} });
     await emitAuditEvent(
       {
@@ -118,28 +138,9 @@ export async function createCustomerImpactReport(
     );
     return { report, created: true as const };
   };
-  try {
-    const result = await (client ? run(client) : prisma.$transaction(run));
-    if (result.created) invalidateBusinessServiceHealth();
-    return result;
-  } catch (error) {
-    // Two concurrent posts with one externalRef: the loser reads the winner's row.
-    if (
-      !client &&
-      input.externalRef &&
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    ) {
-      const report = await prisma.customerImpactReport.findUniqueOrThrow({
-        where: {
-          businessServiceId_externalRef: { businessServiceId, externalRef: input.externalRef },
-        },
-        select: SELECT,
-      });
-      return { report, created: false as const };
-    }
-    throw error;
-  }
+  const result = await (client ? run(client) : prisma.$transaction(run));
+  if (result.created) invalidateBusinessServiceHealth();
+  return result;
 }
 
 /** Newest first; readers need the business service in their read scope. */

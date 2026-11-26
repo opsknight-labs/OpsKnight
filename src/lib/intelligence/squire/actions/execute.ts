@@ -38,7 +38,7 @@ import { executeOperationProposal, openOperationProposal } from '../operations';
 import { executePlanProposal, offerRunbookFromFix, openPlanProposal } from '../plans';
 import { executeRememberProposal, openRememberProposal } from '../memory';
 import { isExtendedSquireAction, type ExtendedSquireActionName } from './catalog-extended';
-import { checkExtendedPreconditions, extendedActionsAvailable } from './extended';
+import { checkExtendedPreconditions, clockFor, extendedActionsAvailable } from './extended';
 import {
   readSquireActionOutcome,
   UNKNOWN_ACTION_MESSAGE,
@@ -475,7 +475,7 @@ async function runExtended(
       const { applyIncidentLifecycleCommand } = await import('@/lib/incidents/lifecycle');
       // The duration is measured from confirmation, not from when the card was offered.
       const snoozedUntil = new Date(Date.now() + minutes * 60_000);
-      const message = `Incident snoozed until ${snoozedUntil.toISOString().slice(11, 16)} UTC.`;
+      const message = `Incident snoozed until ${await clockFor(actor.id, snoozedUntil)}.`;
       await serializable(async tx => {
         await recheck(tx);
         await applyIncidentLifecycleCommand(tx, {

@@ -209,6 +209,7 @@ export async function getServiceGraphForActor(
           downstream: services,
           OR: [{ upstreamServiceId: { in: frontier } }, { downstreamServiceId: { in: frontier } }],
         },
+        orderBy: { id: 'asc' },
         take: MAX_DEPENDENCIES + 1,
         select: { upstreamServiceId: true, downstreamServiceId: true },
       });
@@ -223,10 +224,9 @@ export async function getServiceGraphForActor(
       frontier = next;
     }
     if (reach.size > MAX_FOCUS_NODES) truncated = true;
-    boundary = frontier;
     rows = await client.service.findMany({
       where: { AND: [{ id: { in: [...reach].slice(0, MAX_FOCUS_NODES) } }, services] },
-      orderBy: { name: 'asc' },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
       select: { id: true, name: true, teamId: true, team: { select: { name: true } } },
     });
     const ids = rows.map(row => row.id);
@@ -236,13 +236,37 @@ export async function getServiceGraphForActor(
         upstreamServiceId: { in: ids },
         downstreamServiceId: { in: ids },
       },
-      take: MAX_DEPENDENCIES,
+      orderBy: { id: 'asc' },
+      take: MAX_DEPENDENCIES + 1,
       select: edgeSelect,
     });
+    // Only frontier nodes with a readable neighbour that was not loaded are boundary nodes.
+    if (frontier.length) {
+      const loaded = new Set(ids);
+      const pending = frontier.filter(id => loaded.has(id));
+      const beyond = await client.serviceDependency.findMany({
+        where: {
+          status: { in: edgeStatuses },
+          upstream: services,
+          downstream: services,
+          OR: [
+            { upstreamServiceId: { in: pending }, downstreamServiceId: { notIn: ids } },
+            { downstreamServiceId: { in: pending }, upstreamServiceId: { notIn: ids } },
+          ],
+        },
+        orderBy: { id: 'asc' },
+        take: MAX_BOUNDARY,
+        select: { upstreamServiceId: true, downstreamServiceId: true },
+      });
+      const open = new Set(pending);
+      boundary = beyond.flatMap(edge =>
+        [edge.upstreamServiceId, edge.downstreamServiceId].filter(id => open.has(id))
+      );
+    }
   } else {
     const all = await client.service.findMany({
       where: services,
-      orderBy: { name: 'asc' },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
       take: MAX_NODES + 1,
       select: { id: true, name: true, teamId: true, team: { select: { name: true } } },
     });
@@ -261,6 +285,7 @@ export async function getServiceGraphForActor(
             { downstreamServiceId: { in: ids }, upstreamServiceId: { notIn: ids } },
           ],
         },
+        orderBy: { id: 'asc' },
         take: MAX_BOUNDARY,
         select: { upstreamServiceId: true, downstreamServiceId: true },
       });
@@ -274,13 +299,18 @@ export async function getServiceGraphForActor(
         upstreamServiceId: { in: ids },
         downstreamServiceId: { in: ids },
       },
-      take: MAX_DEPENDENCIES,
+      orderBy: { id: 'asc' },
+      take: MAX_DEPENDENCIES + 1,
       select: edgeSelect,
     });
   }
+  if (edges.length > MAX_DEPENDENCIES) {
+    edges = edges.slice(0, MAX_DEPENDENCIES);
+    truncated = true;
+  }
 
   const ids = rows.map(row => row.id);
-  const [open, maintenance, members] = await Promise.all([
+  const [open, maintenance, memberRows] = await Promise.all([
     client.incident.groupBy({
       by: ['serviceId', 'urgency'],
       where: {
@@ -291,10 +321,13 @@ export async function getServiceGraphForActor(
     findServicesInMaintenance(ids),
     client.businessServiceMember.findMany({
       where: { serviceId: { in: ids }, businessService: businessServices },
-      take: MAX_MEMBER_EDGES,
+      orderBy: [{ businessServiceId: 'asc' }, { serviceId: 'asc' }],
+      take: MAX_MEMBER_EDGES + 1,
       select: { businessServiceId: true, serviceId: true, critical: true },
     }),
   ]);
+  const membersTruncated = memberRows.length > MAX_MEMBER_EDGES;
+  const members = memberRows.slice(0, MAX_MEMBER_EDGES);
   const live = liveServiceStatuses(open, maintenance, edges);
   const idSet = new Set(ids);
 
@@ -328,7 +361,7 @@ export async function getServiceGraphForActor(
       traffic: traffic.get(`${edge.upstreamServiceId}>${edge.downstreamServiceId}`) ?? null,
     })),
     boundaryIds: [...new Set(boundary)].filter(id => idSet.has(id)),
-    truncated: truncated || business.truncated,
+    truncated: truncated || membersTruncated || business.truncated,
     businessServices: business.nodes,
     memberEdges: members.filter(member => visibleBusiness.has(member.businessServiceId)),
     supportEdges: business.supports,
@@ -454,7 +487,7 @@ async function loadBusinessLayer(
   if (onlyIds && onlyIds.size === 0) return { nodes: [], supports: [], truncated: false };
   const found = await client.businessService.findMany({
     where: onlyIds ? { AND: [{ id: { in: [...onlyIds] } }, businessServices] } : businessServices,
-    orderBy: { name: 'asc' },
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
     take: MAX_BUSINESS_SERVICES + 1,
     select: {
       id: true,
@@ -552,6 +585,7 @@ export async function getGraphStatusesForActor(
             upstreamServiceId: { in: readable },
             downstreamServiceId: { in: readable },
           },
+          orderBy: { id: 'asc' },
           take: MAX_DEPENDENCIES,
           select: { upstreamServiceId: true, downstreamServiceId: true, status: true },
         })

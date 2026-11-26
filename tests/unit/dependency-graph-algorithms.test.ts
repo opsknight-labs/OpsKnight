@@ -86,6 +86,27 @@ describe('derivedDependencyStatuses', () => {
     expect(result.get('web')?.status).toBe('PARTIAL_OUTAGE');
     expect(result.has('api')).toBe(false);
   });
+  it('caps services reached only through a SOFT edge at DEGRADED', () => {
+    const result = derivedDependencyStatuses(
+      [
+        { ...dep('api', 'db'), dependencyType: 'SOFT' as const },
+        { ...dep('web', 'api'), dependencyType: 'HARD' as const },
+        dep('batch', 'db'),
+      ],
+      new Map([['db', { incidentId: 'i1', urgency: 'HIGH' as const }]])
+    );
+    expect(result.get('api')?.status).toBe('DEGRADED');
+    expect(result.get('web')?.status).toBe('DEGRADED'); // only reachable through the soft edge
+    expect(result.get('batch')?.status).toBe('PARTIAL_OUTAGE');
+  });
+  it('does not stop at 200 dependents', () => {
+    const wide = Array.from({ length: 500 }, (_, i) => dep(`n${i}`, 'hub'));
+    const result = derivedDependencyStatuses(
+      wide,
+      new Map([['hub', { incidentId: 'i1', urgency: 'HIGH' as const }]])
+    );
+    expect(result.size).toBe(500);
+  });
 });
 
 describe('describeEvidence', () => {

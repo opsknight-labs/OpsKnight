@@ -14,13 +14,13 @@ import { serviceReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import type { BusinessServiceHealth, ImpactSource } from './contract';
 import { invalidateBusinessServiceHealth } from './health';
 import { wouldCreateSupportCycle } from './stats';
+import { reconcileBusinessServicePublication } from '@/lib/status-pages/business-publication';
 import { CustomAttributesSchema } from './attributes';
 import { BusinessServiceLinkSchema, parseBusinessServiceLinks } from './links';
-import {
-  CurrencySchema,
-  CustomersTotalSchema,
-  RevenuePerHourCentsSchema,
-} from './impact-cost';
+import { CurrencySchema, CustomersTotalSchema, RevenuePerHourCentsSchema } from './impact-cost';
+
+/** Highest priority an incident may have and still impact: P1..P9. */
+export const IMPACT_MAX_PRIORITY_PATTERN = /^P[1-9]$/i;
 
 const id = z.string().trim().min(1).max(100);
 
@@ -42,7 +42,7 @@ export const BusinessServiceInputSchema = z
     impactMaxPriority: z
       .string()
       .trim()
-      .regex(/^P[1-9]$/i)
+      .regex(IMPACT_MAX_PRIORITY_PATTERN)
       .transform(value => value.toUpperCase())
       .nullable()
       .optional(),
@@ -201,16 +201,25 @@ async function assertReferencesExist(
     ownerTeamId: string | null;
     ownerUserId: string | null;
     escalationPolicyId: string | null;
+    followerUserIds: readonly string[];
+    quorumPartialPct: number | null;
+    quorumMajorPct: number | null;
   }
 ) {
   const existing = new Set(current?.memberServiceIds ?? []);
+  // Only followers being added must be active: a follower deactivated later must not block edits.
+  const knownFollowers = new Set(current?.followerUserIds ?? []);
+  const addedFollowers = [...new Set(input.followerUserIds)].filter(
+    userId => !knownFollowers.has(userId)
+  );
   const added = input.memberServiceIds.filter(serviceId => !existing.has(serviceId));
   const dependsOn = input.dependsOnBusinessServiceIds ?? [];
-  if (
-    input.quorumPartialPct != null &&
-    input.quorumMajorPct != null &&
-    input.quorumPartialPct > input.quorumMajorPct
-  )
+  // Validate the merged values: a request that sets one threshold is checked against the stored other.
+  const partialPct =
+    input.quorumPartialPct !== undefined ? input.quorumPartialPct : current?.quorumPartialPct;
+  const majorPct =
+    input.quorumMajorPct !== undefined ? input.quorumMajorPct : current?.quorumMajorPct;
+  if (partialPct != null && majorPct != null && partialPct > majorPct)
     throw new AppError({
       code: 'VALIDATION_FAILED',
       userMessage: 'The partial quorum threshold cannot exceed the major one.',
@@ -222,8 +231,8 @@ async function assertReferencesExist(
     added.length
       ? tx.service.count({ where: { AND: [{ id: { in: added } }, serviceReadWhere(actor)] } })
       : 0,
-    input.followerUserIds.length
-      ? tx.user.count({ where: { id: { in: input.followerUserIds }, status: 'ACTIVE' } })
+    addedFollowers.length
+      ? tx.user.count({ where: { id: { in: addedFollowers }, status: 'ACTIVE' } })
       : 0,
     input.ownerTeamId
       ? tx.team.findFirst({
@@ -255,7 +264,7 @@ async function assertReferencesExist(
       code: 'RESOURCE_NOT_FOUND',
       userMessage: 'A member service was not found.',
     });
-  if (users !== new Set(input.followerUserIds).size)
+  if (users !== addedFollowers.length)
     throw new AppError({
       code: 'RESOURCE_NOT_FOUND',
       userMessage: 'A follower is not an active user.',
@@ -274,75 +283,6 @@ async function assertReferencesExist(
       code: 'VALIDATION_FAILED',
       userMessage: 'Non-critical services must also be members.',
     });
-}
-
-/**
- * Status pages show a business service through the technical services they publish, so every
- * page that maps the business service also maps its members (hidden members stay hidden).
- */
-async function syncStatusPageMembers(
-  tx: Prisma.TransactionClient,
-  businessServiceId: string,
-  removedServiceIds: readonly string[] = []
-) {
-  const [pages, members] = await Promise.all([
-    tx.statusPageBusinessService.findMany({
-      where: { businessServiceId },
-      select: { statusPageId: true },
-    }),
-    tx.businessServiceMember.findMany({
-      where: { businessServiceId },
-      select: { serviceId: true },
-    }),
-  ]);
-  if (!pages.length) return;
-  const pageIds = pages.map(page => page.statusPageId);
-  if (members.length) {
-    await tx.statusPageService.createMany({
-      data: pageIds.flatMap(statusPageId =>
-        members.map(member => ({
-          statusPageId,
-          serviceId: member.serviceId,
-          viaBusinessService: true,
-        }))
-      ),
-      // A service the admin already selected directly keeps its row and stays direct.
-      skipDuplicates: true,
-    });
-  }
-  if (!removedServiceIds.length) return;
-  // A dropped member leaves each page it was published on only through business services,
-  // unless another business service on that page still has it; direct selections stay.
-  const stillShown = await tx.statusPageBusinessService.findMany({
-    where: {
-      statusPageId: { in: pageIds },
-      businessServiceId: { not: businessServiceId },
-      businessService: { members: { some: { serviceId: { in: [...removedServiceIds] } } } },
-    },
-    select: {
-      statusPageId: true,
-      businessService: {
-        select: {
-          members: {
-            where: { serviceId: { in: [...removedServiceIds] } },
-            select: { serviceId: true },
-          },
-        },
-      },
-    },
-  });
-  const keep = new Set(
-    stillShown.flatMap(row =>
-      row.businessService.members.map(member => `${row.statusPageId}:${member.serviceId}`)
-    )
-  );
-  for (const statusPageId of pageIds) {
-    const remove = removedServiceIds.filter(serviceId => !keep.has(`${statusPageId}:${serviceId}`));
-    if (remove.length)
-      await tx.statusPageService.deleteMany({
-        where: { statusPageId, serviceId: { in: remove }, viaBusinessService: true },
-      });
-  }
 }
 
 async function replaceSupports(
@@ -378,8 +318,7 @@ async function replaceSupports(
 async function replaceChildren(
   tx: Prisma.TransactionClient,
   businessServiceId: string,
-  input: ParsedInput,
-  previousMemberIds: readonly string[] = []
+  input: ParsedInput
 ) {
   await tx.businessServiceMember.deleteMany({
     where: { businessServiceId, serviceId: { notIn: input.memberServiceIds } },
@@ -420,12 +359,7 @@ async function replaceChildren(
     data: input.followerUserIds.map(userId => ({ businessServiceId, userId })),
     skipDuplicates: true,
   });
-  const members = new Set(input.memberServiceIds);
-  await syncStatusPageMembers(
-    tx,
-    businessServiceId,
-    previousMemberIds.filter(serviceId => !members.has(serviceId))
-  );
+  await reconcileBusinessServicePublication(tx, businessServiceId);
 }
 
 /**
@@ -442,6 +376,13 @@ function conflict(error: unknown): never {
     throw new AppError({
       code: 'RESOURCE_CONFLICT',
       userMessage: 'A business service with this name already exists.',
+      fields: [
+        {
+          field: 'name',
+          code: 'duplicate',
+          message: 'A business service with this name already exists.',
+        },
+      ],
     });
   }
   throw error;
@@ -619,6 +560,9 @@ export async function updateBusinessService(
       ownerTeamId: current.ownerTeamId,
       ownerUserId: current.ownerUserId,
       escalationPolicyId: current.escalationPolicyId,
+      followerUserIds: current.followers.map(follower => follower.user.id),
+      quorumPartialPct: current.quorumPartialPct,
+      quorumMajorPct: current.quorumMajorPct,
     });
     if (input.dependsOnBusinessServiceIds?.includes(id))
       throw new AppError({
@@ -626,7 +570,7 @@ export async function updateBusinessService(
         userMessage: 'A business service cannot depend on itself.',
       });
     await tx.businessService.update({ where: { id }, data: columns(input) }).catch(conflict);
-    await replaceChildren(tx, id, input, currentMemberIds);
+    await replaceChildren(tx, id, input);
     const previousSupports = current.supportedBy.map(({ child }) => child.id).sort();
     const nextSupports = input.dependsOnBusinessServiceIds;
     await bumpRealtimeClock(tx);
@@ -675,7 +619,8 @@ export async function deleteBusinessService(
 ) {
   assertCanManageBusinessServices(context.actor, true);
   const run = async (tx: Prisma.TransactionClient) => {
-    // Pages showing it are marked dirty before the cascade removes their mapping rows.
+    // Unpublish its members from every page that maps it before the cascade drops the mapping.
+    await reconcileBusinessServicePublication(tx, id, { deleting: true });
     const removed = await tx.businessService.deleteMany({
       where: { AND: [{ id }, businessServiceWriteWhere(context.actor)] },
     });
@@ -757,7 +702,11 @@ type BusinessServiceRow = Prisma.BusinessServiceGetPayload<{
 export function businessServiceDto(
   row: BusinessServiceRow,
   health?: BusinessServiceHealth | null,
-  readableIncidents?: ReadonlySet<string>
+  readableIncidents?: ReadonlySet<string>,
+  /** Revenue, customer and currency figures; omitted unless the actor may read financials. */
+  financials = false,
+  /** Technical services the reader may see; others are redacted. Omit for org-wide readers. */
+  readableServiceIds?: ReadonlySet<string>
 ) {
   return {
     id: row.id,
@@ -783,32 +732,53 @@ export function businessServiceDto(
     quorumPartialPct: row.quorumPartialPct,
     quorumMajorPct: row.quorumMajorPct,
     dependencyHopDepth: row.dependencyHopDepth,
-    customersTotal: row.customersTotal,
-    revenuePerHourCents: row.revenuePerHourCents,
-    currency: row.currency,
+    ...(financials
+      ? {
+          customersTotal: row.customersTotal,
+          revenuePerHourCents: row.revenuePerHourCents,
+          currency: row.currency,
+        }
+      : {}),
     customerReportThreshold: row.customerReportThreshold,
     customerReportWindowMinutes: row.customerReportWindowMinutes,
     reviewIntervalDays: row.reviewIntervalDays,
-    members: row.members.map(({ service, critical }) => ({
-      id: service.id,
-      name: service.name,
-      status: service.status,
-      critical,
-    })),
+    members: row.members.map(({ service, critical }) =>
+      !readableServiceIds || readableServiceIds.has(service.id)
+        ? { id: service.id, name: service.name, status: service.status, critical }
+        : { id: service.id, name: 'Restricted service', status: 'UNKNOWN', critical }
+    ),
     dependsOn: row.supportedBy.map(({ child }) => child),
     followers: row.followers.map(({ user }) => ({ id: user.id, name: user.name })),
-    health: health ? healthDto(health, readableIncidents) : null,
+    health: health ? healthDto(health, readableIncidents, readableServiceIds) : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
 /** Incident ids in reasons the reader may not see (and who marked them) are left out. */
-export function healthDto(health: BusinessServiceHealth, readableIncidents?: ReadonlySet<string>) {
+export function healthDto(
+  health: BusinessServiceHealth,
+  readableIncidents?: ReadonlySet<string>,
+  readableServiceIds?: ReadonlySet<string>
+) {
   return {
     status: health.status,
     since: health.since,
-    reasons: health.reasons.map(reason => {
+    reasons: health.reasons.map(rawReason => {
+      // Technical services outside the reader's scope are not named.
+      let reason = rawReason;
+      if (readableServiceIds) {
+        if ('serviceId' in reason && !readableServiceIds.has(reason.serviceId)) {
+          const { serviceId: _hidden, ...rest } = reason;
+          void _hidden;
+          reason = rest as typeof reason;
+        }
+        if ('viaServiceId' in reason && !readableServiceIds.has(reason.viaServiceId)) {
+          const { viaServiceId: _hidden, ...rest } = reason;
+          void _hidden;
+          reason = rest as typeof reason;
+        }
+      }
       if (!('incidentId' in reason) || readableIncidents?.has(reason.incidentId)) return reason;
       const { incidentId: _incidentId, ...rest } = reason;
       void _incidentId;
@@ -820,6 +790,22 @@ export function healthDto(health: BusinessServiceHealth, readableIncidents?: Rea
     computedAt: health.computedAt,
     ...(health.unknownReason ? { unknownReason: health.unknownReason } : {}),
   };
+}
+
+/** Technical service ids named by business service members and health reasons. */
+export function serviceIdsOf(
+  rows: ReadonlyArray<{ members: ReadonlyArray<{ service: { id: string } }> }>,
+  healths: ReadonlyArray<BusinessServiceHealth | undefined>
+) {
+  return [
+    ...rows.flatMap(row => row.members.map(member => member.service.id)),
+    ...healths.flatMap(health =>
+      (health?.reasons ?? []).flatMap(reason => [
+        ...('serviceId' in reason ? [reason.serviceId] : []),
+        ...('viaServiceId' in reason ? [reason.viaServiceId] : []),
+      ])
+    ),
+  ];
 }
 
 /** Incident ids referenced by health reasons, to resolve which the reader may see. */

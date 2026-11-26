@@ -12,8 +12,11 @@ export async function withImpactCost(
   businessServiceId: string,
   stats: BusinessServiceStats,
   entries: readonly ImpactTimelineEntry[],
-  now = new Date()
+  now = new Date(),
+  /** Callers pass canReadBusinessServiceFinancials(actor); without it no cost data is returned. */
+  financials = false
 ) {
+  if (!financials) return { entries: entries.map(entry => ({ ...entry })) };
   const service = await prisma.businessService.findUnique({
     where: { id: businessServiceId },
     select: { revenuePerHourCents: true, currency: true, customersTotal: true },

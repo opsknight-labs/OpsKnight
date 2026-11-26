@@ -8,7 +8,7 @@ import {
   authorize,
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
-import { incidentReadWhere } from '@/lib/authorization-filters';
+import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import {
   buildCursorWhere,
   decodeCursor,
@@ -90,6 +90,21 @@ export async function readableIncidentIds(
     return new Set();
   const rows = await prisma.incident.findMany({
     where: { AND: [{ id: { in: [...new Set(ids)] } }, incidentReadWhere(actor)] },
+    select: { id: true },
+  });
+  return new Set(rows.map(row => row.id));
+}
+
+/** Technical services among `ids` the actor may see (null when they see all of them). */
+export async function readableServiceIds(
+  actor: AuthorizationActor,
+  ids: readonly string[]
+): Promise<Set<string> | undefined> {
+  const where = serviceReadWhere(actor);
+  if (Object.keys(where).length === 0) return undefined;
+  if (!ids.length) return new Set();
+  const rows = await prisma.service.findMany({
+    where: { AND: [{ id: { in: [...new Set(ids)] } }, where] },
     select: { id: true },
   });
   return new Set(rows.map(row => row.id));
@@ -223,6 +238,7 @@ export async function getBusinessServiceStats(
     weightedUptimePercent:
       slo.windowMs > 0 ? Math.max(0, (1 - slo.downtimeMs / slo.windowMs) * 100) : 100,
     weightedDowntimeMinutes: slo.downtimeMs / MINUTE,
+    weightedWindowMinutes: slo.windowMs / MINUTE,
     incidentCount: aggregate?.incidents ?? 0,
     mttaMinutes: minutes(aggregate?.mtta),
     mttrMinutes: minutes(aggregate?.mttr),

@@ -10,6 +10,12 @@ import { setHygieneEnabledAction } from '@/app/(app)/services/business/phase5b-a
 export default function HygieneToggle({ enabled }: { enabled: boolean }) {
   const router = useRouter();
   const [value, setValue] = useState(enabled);
+  // Follow the server value after router.refresh() or a change made elsewhere.
+  const [seen, setSeen] = useState(enabled);
+  if (seen !== enabled) {
+    setSeen(enabled);
+    setValue(enabled);
+  }
   const [isPending, startTransition] = useTransition();
   const change = (next: boolean) => {
     setValue(next);

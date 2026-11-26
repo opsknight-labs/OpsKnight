@@ -44,6 +44,15 @@ import {
 } from './basic/reads';
 import { incidentRef } from '../incident-ux/explain';
 import { productGuidance } from './basic/guidance';
+import { glossaryAnswer, STARTER, STARTER_PATTERN } from './basic/glossary';
+import {
+  connectAnswer,
+  integrationFor,
+  isTriageQuestion,
+  SLA_BREACH_QUESTION,
+  slaBreachAnswer,
+  triageAnswer,
+} from './basic/triage';
 import { docsTerms, searchProductDocs } from './docs';
 import { keywords, mergeBasicQuestion, parseBasicQuery } from './basic/query';
 import { buildCatchUp, catchUpEvidence, renderCatchUp } from './catch-up';
@@ -134,6 +143,15 @@ const minutes = (value: number) =>
       ? `${value} min before`
       : `${Math.round(value / 60)} h before`;
 
+/** One plain sentence of what to do first, and why, before the suggested checks. */
+function firstStep(incident: Pick<ReadableIncident, 'status'>): string {
+  if (incident.status === 'RESOLVED')
+    return 'This incident is already resolved, so there is nothing urgent: check its postmortem and follow-up work to stop it happening again.';
+  return incident.status === 'OPEN'
+    ? 'Do this first: acknowledge it so your team knows someone owns it (and escalation stops), then work through the checks below.'
+    : 'It is already acknowledged, so start with the checks below and add a note on what you find so the team can follow along.';
+}
+
 async function describeIncident(
   actor: AuthorizationActor,
   incident: ReadableIncident,
@@ -199,12 +217,14 @@ async function describeIncident(
       collect?.({ kind: 'runbook', id: data.runbookId, label: data.name, data })
     );
     if (!response || response.runbooks.length === 0)
-      return `I have no runbook recommendations for this incident.\n\n${await suggestedChecksFor(incident)}\n\nCheck similar resolved incidents for a previously recorded fix, or attach a reviewed runbook to this service.`;
+      return `${firstStep(incident)}\n\nI have no runbook recommendations for this incident.\n\n${await suggestedChecksFor(incident)}\n\nCheck similar resolved incidents for a previously recorded fix, or attach a reviewed runbook to this service.`;
     const lines = response.runbooks.map(
       r =>
         `• ${r.name} — ${r.eligible > 0 ? `succeeded ${r.succeeded} of ${r.eligible} runs here` : 'attached, not run yet'}\n  /runbooks/${r.runbookId}`
     );
     return [
+      firstStep(incident),
+      '',
       'Runbooks that fit this service (I can only suggest them; nothing is run for you):',
       ...lines,
       '',
@@ -1208,6 +1228,27 @@ export async function planBasicTurn(
     );
   if (intent === 'HELP') return result(HELP, 'HELP');
   if (intent === 'IDENTITY') return result(await identityAnswer(actor), 'IDENTITY');
+
+  // Newcomer questions: a definition, a starter, an integration guide, or the current picture of what is open.
+  if (!forcedIntent && !state?.pending && !page) {
+    const lower = normalizeMessage(raw);
+    const defined = glossaryAnswer(lower);
+    if (defined) return result(defined, 'GUIDANCE');
+    if (STARTER_PATTERN.test(lower)) return result(STARTER, 'GUIDANCE');
+    const integration = integrationFor(lower);
+    if (integration)
+      return result(await connectAnswer(integration.slug, integration.name), 'GUIDANCE');
+    if (!incident && SLA_BREACH_QUESTION.test(lower))
+      return result(
+        await slaBreachAnswer(actor, await timeZoneFor(actor.id), now, collect),
+        'SEARCH_INCIDENTS'
+      );
+    if (!incident && isTriageQuestion(lower))
+      return result(
+        await triageAnswer(actor, lower, await timeZoneFor(actor.id), collect),
+        'ACTIVE_INCIDENTS'
+      );
+  }
 
   // Requests basic mode cannot serve from data get a plain answer saying where they can be done.
   const fixed = forcedIntent ? null : fixedRequest(text, onIncident);

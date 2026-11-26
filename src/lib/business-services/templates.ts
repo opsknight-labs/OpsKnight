@@ -100,7 +100,9 @@ async function audit(
     {
       action,
       source: context.source ?? 'UI',
-      target: { type: 'BUSINESS_SERVICE', id },
+      // AuditEntityType has no template value (adding one needs a migration); the id is a template id,
+      // so it must not be filed under BUSINESS_SERVICE.
+      target: { type: 'SYSTEM_CONFIG', id },
       actor: { type: 'USER', id: context.actor.id },
       newValue: { kind: 'template', ...newValue },
     },

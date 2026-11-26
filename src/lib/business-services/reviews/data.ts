@@ -61,6 +61,7 @@ export async function collectServiceReviews(
                 targetPercent: target,
                 windowDays: period.days,
                 downtimeMinutes: stats.weightedDowntimeMinutes ?? stats.impactMinutes,
+                windowMinutes: stats.weightedWindowMinutes,
               });
         const priorBudget =
           target === null || !priorStats
@@ -69,6 +70,7 @@ export async function collectServiceReviews(
                 targetPercent: target,
                 windowDays: prior.days,
                 downtimeMinutes: priorStats.weightedDowntimeMinutes ?? priorStats.impactMinutes,
+                windowMinutes: priorStats.weightedWindowMinutes,
               });
         const revenue = revenueOf(row);
         out.set(row.id, {
@@ -76,14 +78,17 @@ export async function collectServiceReviews(
           name: row.name,
           criticality: typeof row.criticality === 'string' ? row.criticality : null,
           sloTarget: target,
-          attainmentPercent: target === null ? null : stats.weightedUptimePercent ?? null,
+          attainmentPercent: target === null ? null : (stats.weightedUptimePercent ?? null),
           budget,
           priorRemainingPercent: priorBudget?.remainingPercent ?? null,
           downtimeMinutes: stats.impactMinutes,
           incidentCount: stats.incidentCount,
           mttaMinutes: stats.mttaMinutes,
           mttrMinutes: stats.mttrMinutes,
-          estimatedCostCents: estimateCostCents(stats.impactMinutes, revenue.perHourCents),
+          estimatedCostCents: estimateCostCents(
+            stats.weightedDowntimeMinutes ?? stats.impactMinutes,
+            revenue.perHourCents
+          ),
           currency: revenue.currency,
           topCauses: causes.get(row.id) ?? [],
         });
@@ -102,14 +107,21 @@ async function topCauses(ids: string[], period: ReviewPeriod) {
       startedAt: { lt: period.to },
       OR: [{ endedAt: null }, { endedAt: { gt: period.from } }],
     },
+    orderBy: { startedAt: 'desc' },
     take: 5000,
     select: {
       businessServiceId: true,
+      incidentId: true,
       incident: { select: { title: true, postmortem: { select: { rootCause: true } } } },
     },
   });
   const counts = new Map<string, Map<string, number>>();
+  // A reopened incident has several intervals but counts once.
+  const seen = new Set<string>();
   for (const row of impacts) {
+    const pair = `${row.businessServiceId}:${row.incidentId}`;
+    if (seen.has(pair)) continue;
+    seen.add(pair);
     const label = (row.incident.postmortem?.rootCause?.split('\n')[0] || row.incident.title)
       .trim()
       .slice(0, 80);

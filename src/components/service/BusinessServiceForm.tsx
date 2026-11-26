@@ -300,6 +300,33 @@ const SERVER_FIELD_IDS: Record<string, string> = {
   memberServiceIds: 'bs-members',
 };
 
+/** Server keys with no inline message slot; their error goes in the form banner with this label. */
+const BANNER_FIELD_LABELS: Record<string, string> = {
+  ownerTeamId: 'Owner team',
+  ownerUserId: 'Owner',
+  escalationPolicyId: 'Escalation policy',
+  lifecycle: 'Lifecycle',
+  followerUserIds: 'Followers',
+  impactMaxPriority: 'Lowest priority',
+  tier: 'Criticality',
+  criticality: 'Criticality',
+};
+
+/** Splits server field errors into inline ones and a banner message; always yields something to show. */
+export function mapServerErrors(
+  fieldErrors: Record<string, string> | undefined,
+  fallback: string
+): { mapped: Record<string, string>; banner: string } {
+  const mapped: Record<string, string> = {};
+  const banner: string[] = [];
+  for (const [key, message] of Object.entries(fieldErrors ?? {})) {
+    const id = SERVER_FIELD_IDS[key];
+    if (id) mapped[id] = message;
+    else banner.push(`${BANNER_FIELD_LABELS[key] ?? key}: ${message}`);
+  }
+  return { mapped, banner: banner[0] ?? fallback };
+}
+
 /** The message under a field, linked to it with `aria-describedby` via `describedBy`. */
 function FieldError({ id }: { id: string }) {
   const message = useContext(FormErrorsContext).errors[id];
@@ -547,13 +574,9 @@ export default function BusinessServiceForm({
         ? await updateBusinessServiceAction(value.id, payload)
         : await createBusinessServiceAction(payload);
       if (!result.ok) {
-        const mapped: Record<string, string> = {};
-        for (const [key, message] of Object.entries(result.fieldErrors ?? {})) {
-          const id = SERVER_FIELD_IDS[key];
-          if (id) mapped[id] = message;
-        }
-        if (Object.keys(mapped).length) fail(mapped, result.error);
-        else setError(result.error);
+        const { mapped, banner } = mapServerErrors(result.fieldErrors, result.error);
+        if (Object.keys(mapped).length) fail(mapped, banner);
+        else setError(banner);
         return;
       }
       notify.success(value.id ? 'Business service saved' : 'Business service created');

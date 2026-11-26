@@ -92,7 +92,7 @@ describe('Squire operation catalog', () => {
     expect(proposal!.incidentId).toBeUndefined();
     expect(proposal!.href).toBe(`/services/${service.id}`);
     expect(proposal!.preview).toContainEqual({
-      label: 'name',
+      label: 'Name',
       value: `${service.name} → Checkout v2`,
     });
     // Nothing changed yet: a proposal is only a card.
@@ -107,6 +107,25 @@ describe('Squire operation catalog', () => {
 
     const replay = await executeSquireAction(admin, proposal!.token);
     expect(replay.ok).toBe(false);
+  });
+
+  it('offers a reopen card for a resolved incident, and reopens it only on confirmation', async () => {
+    const { admin, incident } = await world();
+    await db.incident.update({
+      where: { id: incident.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
+    // Models often leave out the empty body of a command; the card is still built.
+    const proposal = await buildOperationProposal(admin, {
+      operationId: 'reopenIncident',
+      args: { path: { id: incident.id } },
+    });
+    expect(proposal).not.toBeNull();
+    expect((await db.incident.findUnique({ where: { id: incident.id } }))!.status).toBe('RESOLVED');
+    expect(await executeSquireAction(admin, proposal!.token)).toMatchObject({ ok: true });
+    expect((await db.incident.findUnique({ where: { id: incident.id } }))!.status).not.toBe(
+      'RESOLVED'
+    );
   });
 
   it('applies a routine incident change (a tag) as the person', async () => {
@@ -179,7 +198,7 @@ describe('Squire operation catalog', () => {
       href: `/services/${service.id}`,
     });
     expect(undo.incidentId).toBeUndefined();
-    expect(undo.preview).toContainEqual({ label: 'name', value: `Checkout v2 → ${service.name}` });
+    expect(undo.preview).toContainEqual({ label: 'Name', value: `Checkout v2 → ${service.name}` });
     // The stored outcome keeps the undo card (an operation follow-up has no incident).
     expect(await readSquireActionOutcome(admin, proposal!.receiptId!)).toMatchObject({
       result: { followUp: { token: undo.token, confirmLabel: 'Undo' } },

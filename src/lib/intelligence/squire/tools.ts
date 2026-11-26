@@ -24,6 +24,7 @@ import {
   type AiToolDefinition,
 } from '../ai/port';
 import { maskVolatileText } from '../normalization/text';
+import { incidentRef } from '../incident-ux/explain';
 import { normalizeVector } from '../semantic/vector';
 import { searchIncidentVector } from '../semantic/search';
 import { resolveEffectivePolicy } from '../settings/service';
@@ -137,6 +138,18 @@ function words(query: string): string[] {
  * Tools that return people's names, notes or timelines are offered only when the request may carry Personal
  * data (`personal`), so a provider limited to Internal data never receives them.
  */
+const LIST_SELECT = {
+  id: true,
+  title: true,
+  status: true,
+  urgency: true,
+  createdAt: true,
+  resolvedAt: true,
+  updatedAt: true,
+  service: { select: { name: true } },
+  assignee: { select: { name: true } },
+} as const;
+
 export function buildSquireTools(
   actor: AuthorizationActor,
   options: {
@@ -301,7 +314,7 @@ export function buildSquireTools(
     ),
     readTool(
       'search_incidents',
-      'Find incidents the person can see. All filters optional: title words, status ("unresolved" = open or acknowledged), urgency, serviceId; without words it lists by filter. Returns the total and at most 10, most urgent then newest; pass offset 10, 20... for the next pages.',
+      'Find incidents the person can see. All filters optional: title words, status ("unresolved" = open or acknowledged), urgency, serviceId, unassigned (no person and no team assigned); without words it lists by filter. Returns `total` (the exact count for exactly these filters: state the count from it and say which filter it is for, never from the rows you see; for one service pass serviceId instead of sampling) and at most 10 rows, most urgent then newest (oldestFirst: true gives the oldest incidents first, for "the oldest open incident"), each with a ready `shortId` (copy it, never derive it) and assignee; pass offset 10, 20... for the next pages.',
       {
         type: 'object',
         properties: {
@@ -309,6 +322,8 @@ export function buildSquireTools(
           status: { type: 'string', enum: ['unresolved', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED'] },
           urgency: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
           serviceId: idSchema,
+          unassigned: { type: 'boolean' },
+          oldestFirst: { type: 'boolean' },
           offset: { type: 'integer', minimum: 0, maximum: 2000 },
         },
         additionalProperties: false,
@@ -321,13 +336,15 @@ export function buildSquireTools(
             status: z.enum(['unresolved', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED']).optional(),
             urgency: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
             serviceId: z.string().trim().min(1).max(64).optional(),
+            unassigned: z.boolean().optional(),
+            oldestFirst: z.boolean().optional(),
           })
           .strict()
           .safeParse(input);
         if (!parsed.success) return { error: 'Invalid input' };
         const readable = scoped(() => incidentReadWhere(actor));
         if (!readable) return NOT_FOUND;
-        const { status, urgency, serviceId } = parsed.data;
+        const { status, urgency, serviceId, unassigned } = parsed.data;
         const where = {
           AND: [
             ...words(parsed.data.query ?? '').map(term => ({
@@ -340,43 +357,47 @@ export function buildSquireTools(
                 : []),
             ...(urgency ? [{ urgency }] : []),
             ...(serviceId ? [{ serviceId }] : []),
+            ...(unassigned ? [{ assigneeId: null, teamId: null }] : []),
             readable,
           ],
         };
         const [total, rows] = await Promise.all([
           prisma.incident.count({ where }),
           // Most urgent first (HIGH, MEDIUM, LOW), then newest: the database enum cannot be sorted into that order.
-          pageByUrgency({
-            take: MAX_ROWS,
-            skip: parsed.data.offset,
-            count: tier => prisma.incident.count({ where: { AND: [where, { urgency: tier }] } }),
-            fetch: (tier, skip, take) =>
-              prisma.incident.findMany({
-                where: { AND: [where, { urgency: tier }] },
-                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-                skip,
-                take,
-                select: {
-                  id: true,
-                  title: true,
-                  status: true,
-                  urgency: true,
-                  createdAt: true,
-                  resolvedAt: true,
-                  updatedAt: true,
-                  service: { select: { name: true } },
-                },
+          // "The oldest" is by age alone, across urgencies.
+          parsed.data.oldestFirst
+            ? prisma.incident.findMany({
+                where,
+                orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+                skip: parsed.data.offset,
+                take: MAX_ROWS,
+                select: LIST_SELECT,
+              })
+            : pageByUrgency({
+                take: MAX_ROWS,
+                skip: parsed.data.offset,
+                count: tier =>
+                  prisma.incident.count({ where: { AND: [where, { urgency: tier }] } }),
+                fetch: (tier, skip, take) =>
+                  prisma.incident.findMany({
+                    where: { AND: [where, { urgency: tier }] },
+                    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+                    skip,
+                    take,
+                    select: LIST_SELECT,
+                  }),
               }),
-          }),
         ]);
         return {
           total,
           items: rows.map(row => ({
             id: row.id,
+            shortId: incidentRef(row.id),
             title: short(row.title, 160),
             status: row.status,
             urgency: row.urgency,
             service: row.service.name,
+            assignee: row.assignee?.name ?? null,
             createdAt: row.createdAt.toISOString(),
             resolvedAt: row.resolvedAt?.toISOString() ?? null,
             updatedAt: row.updatedAt.toISOString(),
@@ -413,6 +434,7 @@ export function buildSquireTools(
         if (!row) return NOT_FOUND;
         return {
           id: row.id,
+          shortId: incidentRef(row.id),
           title: short(row.title, 200),
           description: short(row.description, 800),
           status: row.status,
@@ -546,10 +568,15 @@ export function buildSquireTools(
     ),
     readTool(
       'get_recent_changes',
-      'List recorded changes (deploys, config changes, feature flags) in the last N hours (default 6, at most 72), optionally for one service id.',
+      'List recorded changes (deploys, config changes, feature flags) in the last N hours (default 6, at most 72), optionally for one service id. For an older moment (what changed before an incident started) pass `around` (ISO time, the incident start) and `windowHours` (at most 72): changes in the window before it.',
       {
         type: 'object',
-        properties: { serviceId: idSchema, hours: { type: 'integer', minimum: 1, maximum: 72 } },
+        properties: {
+          serviceId: idSchema,
+          hours: { type: 'integer', minimum: 1, maximum: 72 },
+          around: { type: 'string', maxLength: 40 },
+          windowHours: { type: 'integer', minimum: 1, maximum: 72 },
+        },
         additionalProperties: false,
       },
       async input => {
@@ -557,16 +584,22 @@ export function buildSquireTools(
           .object({
             serviceId: z.string().trim().min(1).max(64).optional(),
             hours: z.number().int().min(1).max(72).optional(),
+            around: z.iso.datetime().optional(),
+            windowHours: z.number().int().min(1).max(72).optional(),
           })
           .strict()
           .safeParse(input ?? {});
         if (!parsed.success) return { error: 'Invalid input' };
         const readable = scoped(() => serviceReadWhere(actor));
         if (!readable) return NOT_FOUND;
-        const since = new Date(Date.now() - (parsed.data.hours ?? 6) * 3_600_000);
+        const until = parsed.data.around ? new Date(parsed.data.around) : null;
+        const since = new Date(
+          (until?.getTime() ?? Date.now()) -
+            (parsed.data.windowHours ?? parsed.data.hours ?? 6) * 3_600_000
+        );
         const rows = await prisma.changeEvent.findMany({
           where: {
-            occurredAt: { gte: since },
+            occurredAt: { gte: since, ...(until ? { lte: until } : {}) },
             ...(parsed.data.serviceId
               ? { service: { AND: [{ id: parsed.data.serviceId }, readable] } }
               : Object.keys(readable).length

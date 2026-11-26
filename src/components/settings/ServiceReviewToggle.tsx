@@ -15,7 +15,12 @@ export default function ServiceReviewToggle({ enabled }: { enabled: boolean }) {
     setChecked(next);
     startTransition(async () => {
       try {
-        await setMyServiceReviews(next);
+        const result = await setMyServiceReviews(next);
+        if (!result.success) {
+          setChecked(!next);
+          toast.error(result.error);
+          return;
+        }
         toast.success(
           next ? 'Monthly service review turned on' : 'Monthly service review turned off'
         );

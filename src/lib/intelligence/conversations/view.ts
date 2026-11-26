@@ -131,13 +131,13 @@ export async function getConversationForActor(
         ) ?? false;
       // A completed answer is replayed even when it read nothing or its sources were unverified (labelled so,
       // see earlierAnswerLabel), so a follow-up such as "yes, do it" keeps its context. Interrupted answers,
-      // answers recorded under different access and answers whose sources have since changed are not.
+      // and answers recorded under different access are not. A changed source only shows a notice: the answer is
+      // replayed with its recorded-at label, and the model verifies current facts with tools.
       const replayable =
         message.role === 'user' ||
         Boolean(
           envelope?.authorizationHash === authorizationContextHash(actor) &&
-          envelope.completion === 'COMPLETED' &&
-          !stale
+          envelope.completion === 'COMPLETED'
         );
       const notice =
         message.role !== 'assistant'
@@ -145,7 +145,7 @@ export async function getConversationForActor(
           : accessChanged
             ? 'Your access changed after this answer was recorded. Ask for a fresh answer before continuing.'
             : stale
-              ? 'Sources changed after this answer was recorded. It is kept as history and will not be used for a new AI answer.'
+              ? 'Data has changed since this answer.'
               : !envelope?.verified
                 ? 'Sources for this older answer are unverified. A new AI answer treats it as unverified history.'
                 : undefined;

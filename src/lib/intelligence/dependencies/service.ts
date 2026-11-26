@@ -90,6 +90,32 @@ export async function loadActiveEdges(client: Prisma.TransactionClient | typeof 
   );
 }
 
+/** One writer at a time, so two concurrent edge activations cannot close a cycle between them. */
+async function lockDependencyEdges(tx: Prisma.TransactionClient) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('service-dependency-edges', 0))`;
+}
+
+/** Call under lockDependencyEdges: reads the active edges fresh and throws if the edge closes a cycle. */
+async function assertNoCycle(
+  tx: Prisma.TransactionClient,
+  upstreamServiceId: string,
+  downstreamServiceId: string
+) {
+  const cycle = wouldCreateCycle(await loadActiveEdges(tx), {
+    upstreamServiceId,
+    downstreamServiceId,
+  });
+  if (!cycle) return;
+  const names = new Map(
+    (
+      await tx.service.findMany({ where: { id: { in: cycle } }, select: { id: true, name: true } })
+    ).map(row => [row.id, row.name])
+  );
+  throw invalid(
+    `That dependency would create a cycle: ${cycle.map(id => names.get(id) ?? 'a service').join(' → ')}.`
+  );
+}
+
 /** Caller must authorize INTELLIGENCE_MANAGE. Declares (or re-activates) "downstream depends on upstream". */
 export async function declareDependency(input: unknown, actor: IntelligenceActor) {
   const { upstreamServiceId, downstreamServiceId, dependencyType, note, criticality } =
@@ -102,6 +128,7 @@ export async function declareDependency(input: unknown, actor: IntelligenceActor
   };
   const key = { upstreamServiceId_downstreamServiceId: { upstreamServiceId, downstreamServiceId } };
   return prisma.$transaction(async tx => {
+    await lockDependencyEdges(tx);
     const services = await tx.service.count({
       where: { id: { in: [upstreamServiceId, downstreamServiceId] } },
     });
@@ -110,25 +137,8 @@ export async function declareDependency(input: unknown, actor: IntelligenceActor
       where: key,
       select: { id: true, status: true },
     });
-    if (existing?.status !== 'ACTIVE') {
-      const cycle = wouldCreateCycle(await loadActiveEdges(tx), {
-        upstreamServiceId,
-        downstreamServiceId,
-      });
-      if (cycle) {
-        const names = new Map(
-          (
-            await tx.service.findMany({
-              where: { id: { in: cycle } },
-              select: { id: true, name: true },
-            })
-          ).map(row => [row.id, row.name])
-        );
-        throw invalid(
-          `That dependency would create a cycle: ${cycle.map(id => names.get(id) ?? 'a service').join(' → ')}.`
-        );
-      }
-    }
+    if (existing?.status !== 'ACTIVE')
+      await assertNoCycle(tx, upstreamServiceId, downstreamServiceId);
     // Rejected edges are a permanent human record, not topology; they never consume the cap.
     if (
       !existing &&
@@ -186,11 +196,14 @@ export async function reviewDependency(
   actor: IntelligenceActor
 ): Promise<'updated' | 'not_found'> {
   return prisma.$transaction(async tx => {
+    await lockDependencyEdges(tx);
     const row = await tx.serviceDependency.findUnique({
       where: { id },
       select: { status: true, origin: true, upstreamServiceId: true, downstreamServiceId: true },
     });
     if (!row || row.status !== 'SUGGESTED') return 'not_found';
+    if (decision === 'APPROVE')
+      await assertNoCycle(tx, row.upstreamServiceId, row.downstreamServiceId);
     await tx.serviceDependency.update({
       where: { id },
       data: { status: decision === 'APPROVE' ? 'ACTIVE' : 'REJECTED' },

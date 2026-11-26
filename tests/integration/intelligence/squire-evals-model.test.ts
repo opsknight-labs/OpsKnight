@@ -623,6 +623,9 @@ describe('Squire scripted-model evaluation', () => {
     if (expectation.untrustedContext)
       for (const proposal of result.proposals)
         expect(proposal.untrustedContext, why('untrusted flag')).toBe(true);
+    if (expectation.noUntrustedContext)
+      for (const proposal of result.proposals)
+        expect(proposal.untrustedContext, why('no untrusted flag')).toBeUndefined();
     for (const kind of expectation.citeKinds ?? [])
       expect(
         result.citations.map(c => c.kind),

@@ -85,8 +85,8 @@ describe('buildSystemPrompt', () => {
     expect(prompt.volatile).not.toMatch(/ignore all previous instructions/i);
   });
 
-  it('has no volatile part off an incident', () => {
-    expect(buildSystemPrompt('Squire', null).volatile).toBeUndefined();
+  it('has only the clock as its volatile part off an incident', () => {
+    expect(buildSystemPrompt('Squire', null).volatile).not.toContain('Recent timeline');
   });
 
   it("tells the model the person's time zone so it never states bare UTC clock times", () => {
@@ -98,5 +98,17 @@ describe('buildSystemPrompt', () => {
     expect(buildSystemPrompt('Squire', null, null, 'Not/AZone', now).system).toContain(
       'Timestamps are UTC'
     );
+  });
+});
+
+describe('the current time', () => {
+  it('goes in the per-turn message, never the cached prefix', () => {
+    const at = (iso: string) =>
+      buildSystemPrompt('Squire', null, null, 'Asia/Kolkata', new Date(iso));
+    const a = at('2026-11-25T10:00:00Z');
+    const b = at('2026-11-25T10:05:00Z');
+    expect(a.volatile).toContain('Now: 2026-11-25T10:00:00.000Z');
+    expect(a.volatile).toContain('Asia/Kolkata');
+    expect(a.system).toBe(b.system);
   });
 });

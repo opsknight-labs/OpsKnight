@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { startTransition, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { logger } from '@/lib/logger';
 import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 import { AlertCircle, RefreshCw } from 'lucide-react';
@@ -12,6 +13,7 @@ export default function BusinessServiceError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
   useEffect(() => {
     logger.error('[BusinessService] Render error', {
       message: error.message,
@@ -28,14 +30,18 @@ export default function BusinessServiceError({
           <AlertCircle className="h-6 w-6 text-rose-600 dark:text-rose-400" aria-hidden />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-ink-900">
-            This business service couldn&apos;t load
-          </h2>
+          <h2 className="text-lg font-semibold text-ink-900">This page couldn&apos;t load</h2>
           <p className="mt-1 text-sm text-ink-600">{getUserFacingErrorMessage(error)}</p>
         </div>
         <button
           type="button"
-          onClick={reset}
+          onClick={() =>
+            // Re-fetch the server data too: reset alone re-renders with the payload that failed.
+            startTransition(() => {
+              router.refresh();
+              reset();
+            })
+          }
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           <RefreshCw className="h-4 w-4" aria-hidden />

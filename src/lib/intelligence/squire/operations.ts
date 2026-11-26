@@ -458,6 +458,72 @@ export function changesOf(operation: Operation, args: OperationArgs): [string, s
 export const summaryOf = (operation: Operation) =>
   (operation.summary ?? camelWords(operation.operationId)).replace(/\.$/, '');
 
+/** Card titles for the incident state changes, in plain words (the catalog summary is a developer phrase). */
+const CARD_TITLES: Partial<Record<string, string>> = {
+  acknowledgeIncident: 'Acknowledge incident',
+  unacknowledgeIncident: 'Remove acknowledgement',
+  snoozeIncident: 'Snooze incident',
+  unsnoozeIncident: 'End snooze',
+  suppressIncident: 'Suppress incident',
+  unsuppressIncident: 'Stop suppressing incident',
+  resolveIncident: 'Resolve incident',
+  reopenIncident: 'Reopen incident',
+};
+
+/** Sentence case, no API words: "unacknowledge an incident" becomes "Remove acknowledgement" or "Unacknowledge an incident". */
+export const cardTitle = (operation: Operation) => {
+  const known = CARD_TITLES[operation.operationId];
+  if (known) return known;
+  // The catalog summary can end in API wording ("Create incident with idempotency").
+  const text = summaryOf(operation).replace(
+    / with (?:idempotency|domain validation|validation|etag).*$/i,
+    ''
+  );
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+/** Fields a person never needs to read on a card: concurrency and idempotency plumbing. */
+const HIDDEN_FIELDS = /^(?:expected\w*|if_?match|idempotency\w*|\w*revision|etag|version_?id)$/i;
+
+/** "resolutionNote" becomes "Resolution note"; a nested path keeps its last two parts. */
+export function fieldLabel(field: string): string {
+  const last = field
+    .replace(/\[\d+\]/g, '')
+    .split('.')
+    .slice(-2)
+    .map(part => camelWords(part).replace(/[_-]+/g, ' ').toLowerCase())
+    .join(' › ');
+  return last.charAt(0).toUpperCase() + last.slice(1);
+}
+
+const hiddenField = (field: string) => HIDDEN_FIELDS.test(field.split('.').at(-1) ?? field);
+
+/** An ISO time inside a value, shown in the person's zone instead of UTC. */
+async function inPersonZone(userId: string, value: string): Promise<string> {
+  if (!/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return value;
+  const row = await prisma.user
+    .findUnique({ where: { id: userId }, select: { timeZone: true } })
+    .catch(() => null);
+  const timeZone = row?.timeZone || 'UTC';
+  return value.replace(
+    // eslint-disable-next-line security/detect-unsafe-regex -- fixed ISO-8601 shape with bounded optional groups
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/g,
+    iso => {
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return iso;
+      try {
+        return new Intl.DateTimeFormat('en-GB', {
+          timeZone,
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(date);
+      } catch {
+        return iso;
+      }
+    }
+  );
+}
+
 /** The target of an update as the person sees it (its catalog read); null when there is none or it fails. */
 export async function readTarget(
   actor: AuthorizationActor,
@@ -591,7 +657,11 @@ async function undoFor(
         })
       : null;
   return proposal
-    ? { ...proposal, title: `Undo: ${summaryOf(operation)}`.slice(0, 120), confirmLabel: 'Undo' }
+    ? {
+        ...proposal,
+        title: `Undo: ${cardTitle(operation).toLowerCase()}`.slice(0, 120),
+        confirmLabel: 'Undo',
+      }
     : null;
 }
 
@@ -623,31 +693,42 @@ export async function buildOperationProposal(
       ? { ifMatch: read.etag }
       : {};
   const record = (target && typeof target === 'object' ? target : {}) as Record<string, unknown>;
-  let args: OperationArgs;
-  try {
-    args = validateOperationArgs(
+  const validate = (extra: Record<string, unknown>) =>
+    validateOperationArgs(
       operation.operationId,
-      { ...parsed.data.args, ...ifMatch, idempotencyKey: `squire-${id}` },
+      { ...parsed.data.args, ...extra, ...ifMatch, idempotencyKey: `squire-${id}` },
       isMcpApprovalGated(operation) ? 'approved' : 'generic'
     );
+  let args: OperationArgs;
+  try {
+    args = validate({});
   } catch {
-    return null;
+    // A command with nothing to say ("reopen", "escalate") needs an empty body: models often leave it out.
+    if (parsed.data.args && 'body' in parsed.data.args) return null;
+    try {
+      args = validate({ body: {} });
+    } catch {
+      return null;
+    }
   }
   const changes = changesOf(operation, args);
   const rows = reviewDiff(changes, target);
-  const preview = (
+  const shown = (
     rows.length
       ? rows
           .filter(row => row.status !== 'unchanged')
           .map(row => ({
-            label: row.field.slice(0, 64),
-            value: `${row.before ?? '—'} → ${row.after ?? '(removed)'}`.slice(0, 1_000),
+            field: row.field,
+            value: `${row.before ?? '—'} → ${row.after ?? '(removed)'}`,
           }))
-      : changes.map(([field, value]) => ({
-          label: field.slice(0, 64),
-          value: value.slice(0, 1_000),
-        }))
-  ).slice(0, 10);
+      : changes.map(([field, value]) => ({ field, value }))
+  ).filter(row => !hiddenField(row.field));
+  const preview = await Promise.all(
+    shown.slice(0, 10).map(async row => ({
+      label: fieldLabel(row.field).slice(0, 64),
+      value: (await inPersonZone(actor.id, row.value)).slice(0, 1_000),
+    }))
+  );
   const sealed: SealedOperation = {
     v: 1,
     kind: 'operation',
@@ -663,7 +744,7 @@ export async function buildOperationProposal(
     receiptId: id,
     action: 'run_operation' as SquireProposal['action'],
     kind: 'WRITE',
-    title: (operation.summary ?? camelWords(operation.operationId)).slice(0, 120),
+    title: cardTitle(operation).slice(0, 120),
     // In words, not the API route: what it changes, when the target's name is known.
     detail:
       `${typeof name === 'string' && name.trim() ? `On “${name.trim().slice(0, 120)}”. ` : ''}${

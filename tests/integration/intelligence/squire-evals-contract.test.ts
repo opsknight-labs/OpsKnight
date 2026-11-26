@@ -57,6 +57,15 @@ describe('Squire structural evaluation (no model)', () => {
     incidentId = incidents[0].id;
     // One incident with a distinct title, for questions that name an incident by its title.
     await createTestIncident('Checkout latency high', checkout.id, { teamId: team.id });
+    // Three days old with captured SLA targets, so it is past its acknowledge and resolve targets.
+    await createTestIncident('Refund queue stalled', checkout.id, {
+      teamId: team.id,
+      createdAt: new Date(Date.now() - 3 * 86_400_000),
+      slaAckTargetMs: 15 * 60_000,
+      slaResolveTargetMs: 4 * 3_600_000,
+      slaTargetSource: 'SERVICE',
+      slaTargetCapturedAt: new Date(Date.now() - 3 * 86_400_000),
+    });
     // Third-party text with an injected instruction; basic answers must never repeat it.
     await db.incidentEvent.create({
       data: {

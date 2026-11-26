@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const tx = vi.hoisted(() => ({
+  $executeRaw: vi.fn().mockResolvedValue(0),
   service: { count: vi.fn(), findMany: vi.fn() },
   serviceDependency: {
     findUnique: vi.fn(),

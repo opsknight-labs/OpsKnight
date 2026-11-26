@@ -111,8 +111,8 @@ export function countMatching(
 ): number {
   const needle = query.q.toLowerCase();
   return rows.filter(row => {
-    const status = health.get(row.id)?.status;
-    if (!status) return false;
+    // Missing health counts as UNKNOWN, the same as `distribution`.
+    const status = health.get(row.id)?.status ?? 'UNKNOWN';
     if (
       needle &&
       !row.name.toLowerCase().includes(needle) &&

@@ -25,6 +25,7 @@ async function evaluateOne(row: {
       targetPercent: row.sloTarget,
       windowDays,
       downtimeMinutes: stats.weightedDowntimeMinutes ?? stats.impactMinutes,
+      windowMinutes: stats.weightedWindowMinutes,
     })
   );
 }

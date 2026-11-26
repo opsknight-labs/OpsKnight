@@ -74,9 +74,14 @@ export function dailyImpactMinutes(
   });
 }
 
+const entryKey = (entry: ImpactTimelineEntry) =>
+  `${entry.incidentId ?? entry.source}:${entry.source}:${entry.startedAt.getTime()}`;
+// Fixed format and zone: toLocaleString differs between server and browser and breaks hydration.
+const stamp = (date: Date) => `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+
 /**
  * Impact strip over a window: one focusable bar per impact interval (colour and height by severity,
- * excluded ones grey), details for the focused or hovered one below the strip, a per-day trend and the
+ * excluded ones grey), details for the focused or clicked one below the strip, a per-day trend and the
  * most recent impacts as a list. `showIncidents` off (stakeholders) leaves out titles and links.
  */
 export default function ImpactTimeline({
@@ -101,7 +106,10 @@ export default function ImpactTimeline({
   const from = window.from.getTime();
   const span = Math.max(1, window.to.getTime() - from);
   const ordered = [...entries].sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
-  const [active, setActive] = useState<ImpactTimelineEntry | null>(null);
+  // Keyed, not by object identity: a refresh hands back new entry objects for the same impact.
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const active = activeKey === null ? null : (entries.find(e => entryKey(e) === activeKey) ?? null);
+  const setActive = (entry: ImpactTimelineEntry | null) => setActiveKey(entry && entryKey(entry));
   const [pending, startTransition] = useTransition();
   const counted = entries.filter(entry => !entry.excluded);
   const recent = [...entries]
@@ -121,7 +129,7 @@ export default function ImpactTimeline({
       status ? BS_STATUS_META[status].label : 'Impact',
       SOURCE_LABEL[entry.source],
       entry.excluded ? 'excluded from uptime' : null,
-      `started ${entry.startedAt.toLocaleString()}`,
+      `started ${stamp(entry.startedAt)}`,
       entry.endedAt ? `lasted ${minutesLabel(minutes)}` : 'ongoing',
     ]
       .filter(Boolean)
@@ -199,19 +207,18 @@ export default function ImpactTimeline({
           onKeyDown={event => event.key === 'Escape' && setActive(null)}
           className="relative h-8 overflow-hidden rounded-md border bg-muted/50"
         >
-          {ordered.map((entry, index) => {
+          {ordered.map(entry => {
             const start = Math.max(entry.startedAt.getTime(), from);
             const end = Math.min((entry.endedAt ?? now).getTime(), window.to.getTime());
             const status = statusOf(entry);
             return (
               <button
-                key={index}
+                key={entryKey(entry)}
                 type="button"
                 title={describe(entry)}
                 aria-label={describe(entry)}
-                aria-pressed={active === entry}
+                aria-pressed={activeKey === entryKey(entry)}
                 onFocus={() => setActive(entry)}
-                onMouseEnter={() => setActive(entry)}
                 onClick={() => setActive(entry)}
                 // A bar can be a sliver of the strip; the inset and min width keep it hit-able.
                 className={cn(
@@ -289,7 +296,7 @@ export default function ImpactTimeline({
 
       {recent.length > 0 && (
         <ol className="divide-y divide-border rounded-md border" aria-label="Recent impacts">
-          {recent.map((entry, index) => {
+          {recent.map(entry => {
             const minutes = ((entry.endedAt ?? now).getTime() - entry.startedAt.getTime()) / 60_000;
             const costCents =
               cost && !entry.excluded
@@ -297,7 +304,7 @@ export default function ImpactTimeline({
                 : null;
             return (
               <li
-                key={index}
+                key={entryKey(entry)}
                 className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm"
               >
                 {entry.urgency && <SeverityBadge urgency={entry.urgency} size="xs" />}

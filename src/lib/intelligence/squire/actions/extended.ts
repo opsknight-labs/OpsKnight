@@ -67,8 +67,24 @@ function minutesLabel(minutes: number): string {
   return `${minutes} minutes`;
 }
 
-function utcClock(date: Date): string {
-  return `${date.toISOString().slice(11, 16)} UTC`;
+/** A clock time in the person's own time zone (UTC when none is set), e.g. "20:17 GMT+5:30". */
+export async function clockFor(userId: string, date: Date): Promise<string> {
+  const row = await prisma.user
+    .findUnique({ where: { id: userId }, select: { timeZone: true } })
+    .catch(() => null);
+  const format = (timeZone: string) =>
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+      timeZoneName: 'short',
+    }).format(date);
+  try {
+    return format(row?.timeZone || 'UTC');
+  } catch {
+    return format('UTC');
+  }
 }
 
 const TARGET_LABEL: Record<string, string> = {
@@ -169,7 +185,7 @@ export async function describeExtended(
         detail: `Snooze ${subject} for ${minutesLabel(minutes)}. Notifications and escalation pause until then, and it reopens automatically.`,
         preview: [
           { label: 'For', value: minutesLabel(minutes) },
-          { label: 'Until about', value: utcClock(until) },
+          { label: 'Until about', value: await clockFor(actor.id, until) },
           ...(reason ? [{ label: 'Reason', value: short(reason, 200) }] : []),
         ],
         confirmLabel: 'Snooze',

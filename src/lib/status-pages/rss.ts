@@ -8,12 +8,8 @@ import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { createHash } from 'node:crypto';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { getStatusPageSnapshotByRoute } from '@/lib/status-pages/snapshot';
-import { projectPublicStatusEvents } from '@/lib/status-pages/event-projection';
-import {
-  etagMatches,
-  statusCacheControl,
-  statusEtag,
-} from '@/lib/status-pages/cache-policy';
+import { eventInGroupScope, projectPublicStatusEvents } from '@/lib/status-pages/event-projection';
+import { etagMatches, statusCacheControl, statusEtag } from '@/lib/status-pages/cache-policy';
 import { groupScope } from './public-access';
 import { getAppUrl } from '@/lib/app-config';
 import {
@@ -109,9 +105,9 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
       const groupId = new URL(req.url).searchParams.get('group');
       const scope = groupId ? groupScope(snapshot, groupId) : null;
       if (groupId && !scope) return new NextResponse('Group not found', { status: 404 });
+      const groupIds = new Set(scope?.scope.map(item => item.id));
       const events = projectPublicStatusEvents(snapshot).filter(
-        event =>
-          !scope || (event.affectedServices ?? []).some(service => scope.memberIds.has(service.id))
+        event => !scope || eventInGroupScope(event, { memberIds: scope.memberIds, groupIds })
       );
       const items = events
         .map(event => {
@@ -122,7 +118,13 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
         })
         .join('');
       const cacheControl = statusCacheControl(statusPage);
-      const etag = statusEtag([statusPage.id, snapshot.revision, projected.stale, 'rss', groupId ?? '']);
+      const etag = statusEtag([
+        statusPage.id,
+        snapshot.revision,
+        projected.stale,
+        'rss',
+        groupId ?? '',
+      ]);
       if (etagMatches(req.headers.get('if-none-match'), etag)) {
         return new NextResponse(null, {
           status: 304,

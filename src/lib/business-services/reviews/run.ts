@@ -11,6 +11,7 @@ import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { getAllConfiguredEmailProviders } from '@/lib/notification-providers';
 import { businessServiceReadWhere } from '../commands';
+import { canReadBusinessServiceFinancials } from '../financials';
 import { getReviewConfig } from './config';
 import { collectServiceReviews } from './data';
 import { buildDigest, claimKey, resolveRecipients, type ReviewService } from './digest';
@@ -86,6 +87,10 @@ async function visibleServiceIds(userId: string, ids: readonly string[]): Promis
   return rows.map(r => r.id);
 }
 
+/** Revenue-derived cost is shown only to readers who may see business service financials. */
+const withoutCosts = (rows: ReviewService[], financials: boolean) =>
+  financials ? rows : rows.map(row => ({ ...row, estimatedCostCents: null, currency: null }));
+
 async function emailProviderReady() {
   return (await getAllConfiguredEmailProviders()).length > 0;
 }
@@ -131,6 +136,8 @@ export async function runServiceReviews(opts: {
   /** Admin "run now": skips the schedule check, never the idempotency claim. */
   manual?: boolean;
   actorId?: string;
+  /** Cap on new deliveries per run; the rest continue on the next run. */
+  maxRecipients?: number;
 }): Promise<RunSummary> {
   const now = opts.now ?? new Date();
   const config = await getReviewConfig();
@@ -196,7 +203,10 @@ export async function runServiceReviews(opts: {
     try {
       const visible = new Set(await visibleServiceIds(userId, serviceIds));
       const rows = [...visible].map(id => data.get(id)).filter((r): r is ReviewService => !!r);
-      const digest = buildDigest(rows);
+      const recipient = await resolveUserActor(userId);
+      const digest = buildDigest(
+        withoutCosts(rows, !!recipient && canReadBusinessServiceFinancials(recipient))
+      );
       if (!digest) {
         await finish(period.key, kind, key, 'SKIPPED', 0);
         summary.skipped++;
@@ -234,8 +244,15 @@ export async function runServiceReviews(opts: {
   };
 
   const allIds = services.map(s => s.id);
-  for (const [userId, ids] of [...recipients].slice(0, MAX_RECIPIENTS_PER_RUN))
+  // Already-claimed recipients do not use up the cap, so a large org drains over successive runs
+  // instead of re-trying the same first batch forever.
+  let attempted = 0;
+  for (const [userId, ids] of recipients) {
+    if (attempted >= (opts.maxRecipients ?? MAX_RECIPIENTS_PER_RUN)) break;
+    const before = summary.alreadySent;
     await deliver('DIGEST', userId, ids);
+    if (summary.alreadySent === before) attempted++;
+  }
   for (const userId of config.summaryUserIds) await deliver('SUMMARY', userId, allIds);
 
   await emitAuditEvent({
@@ -281,7 +298,12 @@ export async function sendReviewPreview(userId: string, now = new Date()) {
   const period = reviewPeriod(now, config.timeZone);
   // The preview shows what the actor would see: every opted-in service they can read.
   const readable = await prisma.businessService.findMany({
-    where: { AND: [{ includeInReview: true }, businessServiceReadWhere(actor)] },
+    where: {
+      AND: [
+        { includeInReview: true, lifecycle: { not: 'RETIRED' } },
+        businessServiceReadWhere(actor),
+      ],
+    },
     select: { id: true },
     take: 1000,
   });
@@ -290,7 +312,9 @@ export async function sendReviewPreview(userId: string, now = new Date()) {
     period,
     config.timeZone
   );
-  const digest = buildDigest([...data.values()]);
+  const digest = buildDigest(
+    withoutCosts([...data.values()], canReadBusinessServiceFinancials(actor))
+  );
   if (!digest)
     return { sent: false as const, reason: 'nothing_to_report' as const, period: period.key };
   const base = getBaseUrl();

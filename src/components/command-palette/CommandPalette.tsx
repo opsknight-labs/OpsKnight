@@ -244,6 +244,26 @@ const ACTIONS: Entry[] = [
     }
   ),
   action(
+    'create-business-service',
+    'Create business service',
+    'Name something customers rely on',
+    Plus,
+    ['new business service', 'capability', 'add', 'create'],
+    {
+      href: '/services/business/new',
+    }
+  ),
+  action(
+    'business-service-setup',
+    'Guided business service setup',
+    'Build the catalog step by step',
+    Boxes,
+    ['setup', 'wizard', 'onboarding', 'business', 'catalog'],
+    {
+      href: '/services/business/setup',
+    }
+  ),
+  action(
     'create-team',
     'Create team',
     'Opens Teams to add one',

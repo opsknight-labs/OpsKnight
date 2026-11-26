@@ -6,6 +6,7 @@ import { SettingsRow } from '@/components/settings/layout/SettingsRow';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { Switch } from '@/components/ui/shadcn/switch';
 import {
   runServiceReviewsNow,
@@ -40,15 +41,32 @@ const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : 'Somet
 
 /** Admin switch, schedule, summary recipients, team opt-in and recent runs. Everything is off by default. */
 export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) {
-  const [form, setForm] = useState({ ...config, summaryEmails: config.summaryEmails.join(', ') });
+  // Day and hour stay strings while typing: Number('') is 0, which would save an empty box as a valid value.
+  const [form, setForm] = useState({
+    ...config,
+    dayOfMonth: String(config.dayOfMonth),
+    hour: String(config.hour),
+    summaryEmails: config.summaryEmails.join(', '),
+  });
   const [pending, startTransition] = useTransition();
-  const run = (work: () => Promise<void>) => startTransition(async () => {
+  const run = (work: () => Promise<void>) =>
+    startTransition(async () => {
       await work().catch(fail);
     });
 
   const save = () =>
     run(async () => {
-      await saveServiceReviewSettings({
+      if (form.dayOfMonth.trim() === '' || form.hour.trim() === '') {
+        toast.error('Enter a day of the month and an hour.');
+        return;
+      }
+      try {
+        new Intl.DateTimeFormat('en-US', { timeZone: form.timeZone });
+      } catch {
+        toast.error('Enter a valid IANA time zone, for example Europe/Berlin.');
+        return;
+      }
+      const saved = await saveServiceReviewSettings({
         enabled: form.enabled,
         freezeWarningEnabled: form.freezeWarningEnabled,
         dayOfMonth: Number(form.dayOfMonth),
@@ -59,6 +77,10 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
           .map(e => e.trim())
           .filter(Boolean),
       });
+      if (!saved.success) {
+        toast.error(saved.error);
+        return;
+      }
       toast.success('Service review settings saved');
     });
 
@@ -77,6 +99,10 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
             onClick={() =>
               run(async () => {
                 const r = await sendServiceReviewPreview();
+                if (!r.success) {
+                  toast.error(r.error);
+                  return;
+                }
                 toast.success(
                   r.sent ? 'Preview sent to your email' : 'Nothing to report in last month'
                 );
@@ -85,20 +111,26 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
           >
             Send preview to me
           </Button>
-          <Button
-            variant="outline"
-            disabled={pending || !config.enabled}
-            onClick={() =>
-              run(async () => {
+          <DeleteConfirmDialog
+            title="Send the service reviews now?"
+            description="This emails every included owner their review immediately, outside the schedule. Reviews already sent for the period are skipped."
+            confirmText="Send now"
+            onConfirm={async () => {
+              try {
                 const r = await runServiceReviewsNow();
                 toast.success(
                   `Sent ${r.sent}, already sent ${r.alreadySent}, skipped ${r.skipped}, failed ${r.failed}`
                 );
-              })
+              } catch (error) {
+                return { error: error instanceof Error ? error.message : 'Could not run reviews.' };
+              }
+            }}
+            trigger={
+              <Button variant="outline" disabled={pending || !config.enabled}>
+                Run now
+              </Button>
             }
-          >
-            Run now
-          </Button>
+          />
         </div>
       }
     >
@@ -133,7 +165,7 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
             className="w-20"
             aria-label="Day of month"
             value={form.dayOfMonth}
-            onChange={e => setForm(f => ({ ...f, dayOfMonth: Number(e.target.value) }))}
+            onChange={e => setForm(f => ({ ...f, dayOfMonth: e.target.value }))}
           />
           <Input
             type="number"
@@ -142,7 +174,7 @@ export default function ServiceReviewAdminPanel({ config, teams, runs }: Props) 
             className="w-20"
             aria-label="Hour"
             value={form.hour}
-            onChange={e => setForm(f => ({ ...f, hour: Number(e.target.value) }))}
+            onChange={e => setForm(f => ({ ...f, hour: e.target.value }))}
           />
           <Input
             className="w-56"

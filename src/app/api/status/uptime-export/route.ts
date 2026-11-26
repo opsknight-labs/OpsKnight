@@ -1,4 +1,5 @@
 import { isStatusPageIpAllowed } from '@/lib/status-pages/ip-allow-gate';
+import { concealedServiceIdsForPage } from '@/lib/status-pages/member-concealment';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
@@ -208,8 +209,10 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
     const scope = groupParam && snapshot ? groupScope(snapshot, groupParam) : null;
     if (groupParam && !scope) return new NextResponse('Group not found', { status: 404 });
 
+    // A group published without its members stays collapsed in the report too.
+    const concealed = await concealedServiceIdsForPage(prisma, statusPage);
     const reportServices = statusPage.services
-      .filter(sp => !scope || scope.memberIds.has(sp.service.id))
+      .filter(sp => !concealed.has(sp.service.id) && (!scope || scope.memberIds.has(sp.service.id)))
       .map(sp => {
         const uptime = Math.max(0, Math.min(100, uptimeMap[sp.service.id] ?? 100));
         const downtimeMinutes = Math.max(0, ((100 - uptime) / 100) * totalPeriodMinutes);
@@ -226,9 +229,9 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
 
     // Fetch public incidents for reporting period if incidents are enabled for public
     let reportIncidents: StatusPageReportIncident[] = [];
-    const incidentServiceIds = scope
-      ? serviceIds.filter(id => scope.memberIds.has(id))
-      : serviceIds;
+    const incidentServiceIds = serviceIds.filter(
+      id => !concealed.has(id) && (!scope || scope.memberIds.has(id))
+    );
     if (visibility.showIncidents && incidentServiceIds.length > 0) {
       const incidents = await prisma.incident.findMany({
         where: {

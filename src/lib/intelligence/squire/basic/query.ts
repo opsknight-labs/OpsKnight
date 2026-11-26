@@ -8,7 +8,7 @@ import {
 } from '@/lib/timezone';
 
 const STOP = new Set(
-  'did has had have need needs want wants your our within during postmortem postmortems follow-up follow-ups on-call oncall call tomorrow fire broken down happening triggered weekly monthly daily ongoing critical not no acked unacked completed enabled disabled configured since between period duration point-in-time inventory catalog contact help suggest recommended compare compared comparison versus vs per reporting report rate records record workbooks unacked noisiest blockers blocked portfolio across a an the me my mine i we us please show find search list tell about what which who how many much number count total incidents incident outages outage alerts alert services service health healthy status owner owns owning ownership team teams for of in on with and or from since during last past this week weeks month months days day hours hour today yesterday recent recently latest open opened active closed resolved acknowledged suppressed snoozed high medium low urgency priority assigned unassigned unresolved pending current now right are is was were been has have had to do does can could would you your check get all any there happened changed changes change deployments deployment deploy deploys releases release runbooks runbook available published catalog find fixes fix remediation playbooks playbook top most noisy noisiest noise impacted affected overview summary summarize summarise statistics stats analytics trend trends mttr average mean time resolution resolve acknowledge unacknowledged still than older ago notes note details information dependencies dependency upstream downstream escalation escalated policy routing next schedule schedules coverage responders responder working work queue workload action actions item items tasks task follow followup followups overdue completed complete done at it that these those more also else even by breakdown grouped group mtta acknowledgement'.split(
+  'did has had have need needs want wants now your our within during postmortem postmortems follow-up follow-ups on-call oncall call tomorrow fire broken down happening triggered weekly monthly daily ongoing critical not no acked unacked completed enabled disabled configured since between period duration point-in-time inventory catalog contact help suggest recommended compare compared comparison versus vs per reporting report rate records record workbooks unacked noisiest blockers blocked portfolio across a an the me my mine i we us please show find search list tell about what which who how many much number count total incidents incident outages outage alerts alert services service health healthy status owner owns owning ownership team teams for of in on with and or from since during last past this week weeks month months days day hours hour today yesterday recent recently latest open opened active closed resolved acknowledged suppressed snoozed high medium low urgency priority assigned unassigned unresolved pending current now right are is was were been has have had to do does can could would you your check get all any there happened changed changes change deployments deployment deploy deploys releases release runbooks runbook available published catalog find fixes fix remediation playbooks playbook top most noisy noisiest noise impacted affected overview summary summarize summarise statistics stats analytics trend trends mttr average mean time resolution resolve acknowledge unacknowledged still than older ago notes note details information dependencies dependency upstream downstream escalation escalated policy routing next schedule schedules coverage responders responder working work queue workload action actions item items tasks task follow followup followups overdue completed complete done at it that these those more also else even by breakdown grouped group mtta acknowledgement'.split(
     ' '
   )
 );
@@ -103,6 +103,16 @@ export function parseBasicQuery(message: string, now = new Date(), timezone = 'U
     unassigned: /\b(unassigned|no assignee|nobody assigned)\b/.test(text),
     escalated: /\bescalated\b/.test(text),
   };
+  // "Show high urgency incidents" means the ones needing attention, not every resolved one since the start.
+  if (
+    query.urgency &&
+    !query.active &&
+    !query.status &&
+    !/\b(all|every|ever|history|historic|old|older|past|previous|total|since|between|today|yesterday|week|month|year)\b/.test(
+      text
+    )
+  )
+    query.active = true;
   const rolling = text.match(/\b(?:last|past)\s+(\d{1,5})\s+(hours?|days?|weeks?|months?)\b/);
   const explicit = rolling ? null : parseExplicitWindow(text, now, tz, key);
   if (explicit && 'error' in explicit) query.error = explicit.error;

@@ -117,9 +117,10 @@ it('keeps a dated answer when its source changes, but excludes it from new AI co
   await db.incident.update({ where: { id: incident.id }, data: { title: 'New facts' } });
   const saved = await getConversationForActor(actor, id);
   expect(saved?.messages[1].content).toBe('Earlier facts');
-  expect(saved?.messages[1].replayable).toBe(false);
-  expect(saved?.messages[1].notice).toContain('Sources changed');
-  expect(saved?.messages[1].contextProof).toBeUndefined();
+  expect(saved?.messages[1].replayable).toBe(true);
+  expect(saved?.messages[1].notice).toBe('Data has changed since this answer.');
+  // Still replayed (recorded-at label), never silently dropped.
+  expect(saved?.messages[1].contextProof).toBeDefined();
 });
 
 it('removes inaccessible incident conversations from both listing and opening', async () => {

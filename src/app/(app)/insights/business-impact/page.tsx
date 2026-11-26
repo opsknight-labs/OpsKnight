@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Boxes, Download } from 'lucide-react';
+import ImpactBars, { hours } from '@/components/analytics/ImpactBars';
 import BusinessImpactFilters from '@/components/analytics/BusinessImpactFilters';
 import { KPI_CARD, KPI_GRID, KpiBody } from '@/components/analytics/KpiCard';
 import { SectionCard } from '@/components/analytics/SectionCard';
@@ -16,7 +17,6 @@ import {
   getBusinessImpactReport,
   impactReportSearch,
   parseImpactReportParams,
-  type ImpactReportRow,
 } from '@/lib/business-services/impact-report';
 import { formatMoney } from '@/lib/business-services/impact-cost';
 import prisma from '@/lib/prisma';
@@ -33,37 +33,6 @@ const num = 'px-3 py-2 text-right tabular-nums';
 const uptime = (value: number) =>
   value >= 100 ? '100%' : `${(Math.floor(value * 100) / 100).toFixed(2)}%`;
 const minutes = (value: number | null) => (value === null ? '—' : formatDuration(value * 60_000));
-const hours = (value: number) => (value === 0 ? '0 h' : `${(value / 60).toFixed(1)} h`);
-
-function ImpactBars({ rows }: { rows: ImpactReportRow[] }) {
-  const top = rows.filter(row => row.stats.impactMinutes > 0).slice(0, 10);
-  if (top.length === 0)
-    return <p className="text-sm text-muted-foreground">No business service was impacted.</p>;
-  const max = top[0].stats.impactMinutes;
-  return (
-    <ul className="space-y-2">
-      {top.map(row => (
-        <li
-          key={row.id}
-          className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_4.5rem] items-center gap-3 text-sm"
-        >
-          <span className="truncate" title={row.name}>
-            {row.name}
-          </span>
-          <span className="h-2.5 rounded-full bg-muted" aria-hidden="true">
-            <span
-              className="block h-full rounded-full bg-status-critical"
-              style={{ width: `${Math.max((row.stats.impactMinutes / max) * 100, 2)}%` }}
-            />
-          </span>
-          <span className="text-right text-xs tabular-nums text-muted-foreground">
-            {hours(row.stats.impactMinutes)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 /**
  * Business impact report: per business service uptime, incidents, MTTA/MTTR, impacted time and the
