@@ -12,6 +12,7 @@ import { publishStatusPageSnapshot } from '@/lib/status-pages/snapshot';
 import { getStatusResponse } from '@/app/api/status/handler';
 import { getStatusHistoryResponse } from '@/app/api/status/history/handler';
 import { getStatusRssResponse } from '@/lib/status-pages/rss';
+import { getUptimeExportResponse } from '@/app/api/status/uptime-export/route';
 
 vi.mock('@/lib/sla-server', () => ({ calculateMultiServiceUptime: vi.fn().mockResolvedValue({}) }));
 
@@ -24,6 +25,7 @@ describe('showMembers=false does not leak member services (P2)', () => {
     const slug = `hm-${Math.random().toString(36).slice(2, 8)}`;
     const page = await createTestStatusPage({
       enabled: true,
+      enableUptimeExports: true,
       slug,
       serviceLayout: 'BUSINESS_EXPANDABLE',
       showAffectedServices: true,
@@ -67,5 +69,18 @@ describe('showMembers=false does not leak member services (P2)', () => {
       await getStatusRssResponse(req(`/api/status/rss?slug=${slug}`), slug)
     ).text();
     expect(rss).not.toContain('Ledger Postgres Primary');
+  });
+
+  it('keeps the hidden member out of the uptime export', async () => {
+    const { slug, secret } = await fixture();
+    const response = await getUptimeExportResponse(
+      req(`/api/status/uptime-export?slug=${slug}&format=csv`),
+      slug
+    );
+    expect(response.status).toBe(200);
+    const csv = await response.text();
+    expect(csv).not.toContain('Ledger Postgres Primary');
+    expect(csv).not.toContain(secret.id);
+    expect(csv).toContain('Public Website');
   });
 });
