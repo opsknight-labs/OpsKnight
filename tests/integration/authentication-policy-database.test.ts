@@ -242,7 +242,7 @@ integration('authoritative authentication policy in PostgreSQL', () => {
     const intercept = vi.spyOn(bcrypt, 'hash').mockImplementation(((
       value: string,
       salt: string | number,
-      callback?: (error: Error | null, result: string) => void,
+      callback?: (error: Error | null, result?: string) => void,
       progress?: (percent: number) => void
     ) => {
       if (callback) return originalHash(value, salt, callback, progress);

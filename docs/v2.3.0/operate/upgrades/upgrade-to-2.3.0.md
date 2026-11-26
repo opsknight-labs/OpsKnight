@@ -52,6 +52,10 @@ A deployment that already says `verify-full` but never supplied a CA worked befo
 ### Sessions run in UTC
 Every connection sets `TimeZone=UTC`. Results are now identical on servers whose default time zone is
 not UTC (Prisma 5 could miss rows or shift raw-SQL writes by the offset). No action is needed.
+### Password hashes remain compatible
+bcryptjs 3 writes new local-password hashes with the `$2b$` prefix instead of `$2a$`.
+Existing password hashes remain valid; no password reset or database rewrite is required.
+The hashing cost stays at 12, and the password policy keeps its 72-byte UTF-8 limit.
 ### Failed connections are retried consistently
 Every connection failure now carries a code, and a first-connection failure during a database outage is
 classified retryable, like later outages. Escalation steps retry instead of failing permanently.

@@ -1,6 +1,9 @@
 /** Integration tests for password recovery (REAL DB). */
 import { describe, it, expect, beforeEach, vi, afterAll, beforeAll } from 'vitest';
 
+vi.unmock('@/lib/prisma');
+vi.unmock('../src/lib/prisma');
+
 const runIntegration = Boolean(process.env.VITEST_USE_REAL_DB);
 const describeIntegration =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -22,8 +25,6 @@ describeIntegration('Forgot Password Integration', () => {
   beforeAll(async () => {
     if (!runIntegration) return;
     process.env.ENCRYPTION_KEY = '0123456789abcdef'.repeat(4);
-    vi.unmock('@/lib/prisma');
-    vi.unmock('../src/lib/prisma');
     vi.resetModules();
     ({ initiatePasswordReset } = await import('@/lib/password-reset'));
     ({ processCentralNotificationQueue } = await import('@/lib/notification-control-plane'));
