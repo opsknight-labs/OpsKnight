@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { resetBusinessServiceHealthCacheForTests } from '@/lib/business-services/health';
-import { businessServiceDto, BUSINESS_SERVICE_SELECT } from '@/lib/business-services/commands';
+import {
+  businessServiceDto,
+  BUSINESS_SERVICE_SELECT,
+  createBusinessService,
+  updateBusinessService,
+} from '@/lib/business-services/commands';
 import {
   getBusinessImpactReport,
   impactReportCsv,
@@ -174,5 +179,46 @@ describe('M8 reconcile paging', () => {
         where: { businessServiceId: bs.id, incidentId: { in: incidents.map(i => i.id) } },
       })
     ).toBe(5);
+  });
+});
+
+describe('M3, L1 and BS-9 update validation', () => {
+  const adminActor = async () => actorFor(await createTestUser({ role: 'ADMIN' }), 'ADMIN');
+
+  it('M3: a follower deactivated later does not block unrelated edits', async () => {
+    const actor = await adminActor();
+    const follower = await createTestUser({ role: 'USER' });
+    const created = await createBusinessService(
+      { name: `Fol-${Math.random().toString(36).slice(2, 8)}`, followerUserIds: [follower.id] },
+      { actor }
+    );
+    await db.user.update({ where: { id: follower.id }, data: { status: 'DISABLED' } });
+    const updated = await updateBusinessService(created.id, { description: 'edited' }, { actor });
+    expect(updated.description).toBe('edited');
+    expect(updated.followers.map(f => f.user.id)).toEqual([follower.id]);
+    const other = await createTestUser({ role: 'USER', status: 'DISABLED' });
+    await expect(
+      updateBusinessService(created.id, { followerUserIds: [follower.id, other.id] }, { actor })
+    ).rejects.toMatchObject({ code: 'RESOURCE_NOT_FOUND' });
+  });
+
+  it('L1: quorum thresholds are validated against the stored value', async () => {
+    const actor = await adminActor();
+    const created = await createBusinessService(
+      { name: `Quo-${Math.random().toString(36).slice(2, 8)}`, quorumMajorPct: 50 },
+      { actor }
+    );
+    await expect(
+      updateBusinessService(created.id, { quorumPartialPct: 80 }, { actor })
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+
+  it('BS-9: a duplicate name names the name field', async () => {
+    const actor = await adminActor();
+    const name = `Dup-${Math.random().toString(36).slice(2, 8)}`;
+    await createBusinessService({ name }, { actor });
+    const error = await createBusinessService({ name }, { actor }).catch(e => e);
+    expect(error.code).toBe('RESOURCE_CONFLICT');
+    expect(error.fields).toEqual([expect.objectContaining({ field: 'name' })]);
   });
 });

@@ -198,16 +198,25 @@ async function assertReferencesExist(
     ownerTeamId: string | null;
     ownerUserId: string | null;
     escalationPolicyId: string | null;
+    followerUserIds: readonly string[];
+    quorumPartialPct: number | null;
+    quorumMajorPct: number | null;
   }
 ) {
   const existing = new Set(current?.memberServiceIds ?? []);
+  // Only followers being added must be active: a follower deactivated later must not block edits.
+  const knownFollowers = new Set(current?.followerUserIds ?? []);
+  const addedFollowers = [...new Set(input.followerUserIds)].filter(
+    userId => !knownFollowers.has(userId)
+  );
   const added = input.memberServiceIds.filter(serviceId => !existing.has(serviceId));
   const dependsOn = input.dependsOnBusinessServiceIds ?? [];
-  if (
-    input.quorumPartialPct != null &&
-    input.quorumMajorPct != null &&
-    input.quorumPartialPct > input.quorumMajorPct
-  )
+  // Validate the merged values: a request that sets one threshold is checked against the stored other.
+  const partialPct =
+    input.quorumPartialPct !== undefined ? input.quorumPartialPct : current?.quorumPartialPct;
+  const majorPct =
+    input.quorumMajorPct !== undefined ? input.quorumMajorPct : current?.quorumMajorPct;
+  if (partialPct != null && majorPct != null && partialPct > majorPct)
     throw new AppError({
       code: 'VALIDATION_FAILED',
       userMessage: 'The partial quorum threshold cannot exceed the major one.',
@@ -219,8 +228,8 @@ async function assertReferencesExist(
     added.length
       ? tx.service.count({ where: { AND: [{ id: { in: added } }, serviceReadWhere(actor)] } })
       : 0,
-    input.followerUserIds.length
-      ? tx.user.count({ where: { id: { in: input.followerUserIds }, status: 'ACTIVE' } })
+    addedFollowers.length
+      ? tx.user.count({ where: { id: { in: addedFollowers }, status: 'ACTIVE' } })
       : 0,
     input.ownerTeamId
       ? tx.team.findFirst({
@@ -252,7 +261,7 @@ async function assertReferencesExist(
       code: 'RESOURCE_NOT_FOUND',
       userMessage: 'A member service was not found.',
     });
-  if (users !== new Set(input.followerUserIds).size)
+  if (users !== addedFollowers.length)
     throw new AppError({
       code: 'RESOURCE_NOT_FOUND',
       userMessage: 'A follower is not an active user.',
@@ -364,6 +373,13 @@ function conflict(error: unknown): never {
     throw new AppError({
       code: 'RESOURCE_CONFLICT',
       userMessage: 'A business service with this name already exists.',
+      fields: [
+        {
+          field: 'name',
+          code: 'duplicate',
+          message: 'A business service with this name already exists.',
+        },
+      ],
     });
   }
   throw error;
@@ -541,6 +557,9 @@ export async function updateBusinessService(
       ownerTeamId: current.ownerTeamId,
       ownerUserId: current.ownerUserId,
       escalationPolicyId: current.escalationPolicyId,
+      followerUserIds: current.followers.map(follower => follower.user.id),
+      quorumPartialPct: current.quorumPartialPct,
+      quorumMajorPct: current.quorumMajorPct,
     });
     if (input.dependsOnBusinessServiceIds?.includes(id))
       throw new AppError({
