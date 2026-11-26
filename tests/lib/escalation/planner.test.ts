@@ -222,6 +222,50 @@ describe('a step that reaches nobody', () => {
   });
 });
 
+describe('a final step whose conditions do not match', () => {
+  const lastStep = {
+    stepIndex: 1,
+    stepCount: 2,
+    nextStepDelayMinutes: null,
+    applicable: false,
+  };
+
+  it('completes the execution when an earlier step already paged', () => {
+    const plan = planEscalationStep(planInput({ ...lastStep, earlierStepPaged: true }));
+
+    expect(plan.nextState).toEqual({
+      status: 'COMPLETED',
+      currentStep: null,
+      nextEscalationAt: null,
+    });
+    expect(plan.nextJob).toBeNull();
+    expect(plan.notificationRecipients).toEqual([]);
+    expect(plan.timelineEvents[0].message).toMatch(/Escalation completed/);
+  });
+
+  it('still fails when nothing ever paged', () => {
+    const plan = planEscalationStep(planInput({ ...lastStep, earlierStepPaged: false }));
+
+    expect(plan.nextState.status).toBe('FAILED');
+    expect(plan.timelineEvents[0].message).not.toMatch(/Escalation completed/);
+    expect(planEscalationStep(planInput(lastStep)).nextState.status).toBe('FAILED');
+  });
+
+  it('does not let an earlier page rescue an uncovered (not skipped) final step', () => {
+    const plan = planEscalationStep(
+      planInput({
+        stepIndex: 1,
+        stepCount: 2,
+        nextStepDelayMinutes: null,
+        earlierStepPaged: true,
+        resolution: { outcome: 'NO_ELIGIBLE_RESPONDERS', targetName: 'Nobody' },
+      })
+    );
+
+    expect(plan.nextState.status).toBe('FAILED');
+  });
+});
+
 describe('plan invariants', () => {
   const everyBranch: Array<Partial<EscalationPlanInput>> = [
     {},

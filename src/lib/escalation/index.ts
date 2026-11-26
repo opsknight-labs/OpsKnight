@@ -292,6 +292,17 @@ export async function executeEscalation(
       }
     }
 
+    // Only a skipped final step needs to know whether the policy already paged someone.
+    const earlierStepPaged =
+      !applicable && currentStepIndex === policySteps.length - 1 && prisma.escalationStepAttempt
+        ? Boolean(
+            await prisma.escalationStepAttempt.findFirst({
+              where: { incidentId, generation, outcome: 'NOTIFIED' },
+              select: { stepIndex: true },
+            })
+          )
+        : false;
+
     const plan: EscalationPlan = planEscalationStep({
       incidentId,
       generation,
@@ -308,6 +319,7 @@ export async function executeEscalation(
       nextStepDelayMinutes: policySteps.at(currentStepIndex + 1)?.delayMinutes ?? null,
       now,
       applicable,
+      earlierStepPaged,
     });
 
     const targetName = resolution.outcome === 'INVALID_TARGET' ? 'Unknown' : resolution.targetName;

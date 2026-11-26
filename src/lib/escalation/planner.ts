@@ -62,6 +62,8 @@ export interface EscalationPlanInput {
   now: Date;
   /** False when typed policy conditions do not match the incident context. */
   applicable?: boolean;
+  /** True when an earlier step of this generation already paged someone. */
+  earlierStepPaged?: boolean;
 }
 
 function stepLabel(stepIndex: number): string {
@@ -84,7 +86,13 @@ function targetDescription(
  */
 function planUnreachedStep(
   input: EscalationPlanInput,
-  detail: { message: string; terminalSuffix: string; outcome: EscalationOutcome }
+  detail: {
+    message: string;
+    terminalSuffix: string;
+    outcome: EscalationOutcome;
+    /** The policy still ran its course (an earlier step paged), so ending here is COMPLETED. */
+    completed?: boolean;
+  }
 ): EscalationPlan {
   const nextStepIndex = nextEscalationStepIndex(input.stepIndex, input.stepCount);
 
@@ -95,7 +103,7 @@ function planUnreachedStep(
       notificationRecipients: [],
       timelineEvents: [{ message: `${detail.message}${detail.terminalSuffix}` }],
       nextState: {
-        status: terminalEscalationStatus(false),
+        status: terminalEscalationStatus(detail.completed === true),
         currentStep: null,
         nextEscalationAt: null,
       },
@@ -122,10 +130,15 @@ function planUnreachedStep(
 /** Plans one escalation step. Every branch returns a complete plan. */
 export function planEscalationStep(input: EscalationPlanInput): EscalationPlan {
   if (input.applicable === false) {
+    // Conditions that do not match are not a failure: after an earlier page the policy is done.
+    const completed = input.earlierStepPaged === true;
     return planUnreachedStep(input, {
       outcome: 'NO_ELIGIBLE_RESPONDERS',
       message: `${stepLabel(input.stepIndex)} conditions did not match.`,
-      terminalSuffix: ' Escalation completed: no conditional steps remain.',
+      terminalSuffix: completed
+        ? ' Escalation completed: no conditional steps remain.'
+        : ' Escalation failed: no step reached a responder.',
+      completed,
     });
   }
   if (input.targetId === null) {
