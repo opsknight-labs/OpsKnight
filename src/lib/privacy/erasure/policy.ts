@@ -298,7 +298,7 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     blocking: false,
     manualReviewRequired: true,
     notes:
-      'actorEmail/actorName/targetEmail are denormalized PII snapshots that outlive actorId (which is already DB-level SetNull). Erasure scrubs these three columns in place; the audit row, action, and timestamps are preserved. The free-text `details` JSON payload and any external/application log copies (outside the AuditLog table) are not scrubbed — matches the "audit-and-application-logs" PARTIAL disposition.',
+      'actorEmail/actorName/targetEmail are denormalized PII snapshots that outlive actorId (which is already DB-level SetNull). Erasure scrubs these three columns in place, and clears entityId where it holds the subject email (failed sign-ins for an unrecognised account are keyed by the typed address); the audit row, action, and timestamps are preserved. The free-text `details` JSON payload and any external/application log copies (outside the AuditLog table) are not scrubbed — matches the "audit-and-application-logs" PARTIAL disposition.',
   },
 
   // --- Unsearchable residual surface: unconditional manual review ---

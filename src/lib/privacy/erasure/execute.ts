@@ -304,6 +304,12 @@ export async function executeErasure(
             where: { targetEmail: subjectEmail },
             data: { targetEmail: null },
           });
+          // Failed sign-ins for an unrecognised account are keyed by the typed email, so the
+          // address survives in entityId (and audit search) after the columns above are scrubbed.
+          await tx.auditLog.updateMany({
+            where: { entityId: { equals: subjectEmail, mode: 'insensitive' } },
+            data: { entityId: null },
+          });
         }
 
         // --- DELETE: rows whose FK to User is ON DELETE RESTRICT in the

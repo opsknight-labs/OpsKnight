@@ -403,6 +403,11 @@ describe('executeErasure', () => {
       where: { targetEmail: 'alice@example.com' },
       data: { targetEmail: null },
     });
+    // Email-keyed rows (failed sign-ins) must not keep the address in entityId either.
+    expect(mocks.tx.auditLog.updateMany).toHaveBeenCalledWith({
+      where: { entityId: { equals: 'alice@example.com', mode: 'insensitive' } },
+      data: { entityId: null },
+    });
     for (const call of mocks.tx.auditLog.updateMany.mock.calls) {
       const data = call[0].data as Record<string, unknown>;
       expect(data).not.toHaveProperty('action');
