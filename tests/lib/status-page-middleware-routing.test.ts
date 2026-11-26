@@ -166,6 +166,27 @@ describe('status page middleware serving routes', () => {
     expect(isAllowedStatusApi('/api/users', 'GET')).toBe(false);
   });
 
+  it('allows group JSON on custom domains and pins the slug to the resolved route', async () => {
+    const { isAllowedStatusApi } = await import('@/middleware');
+    expect(isAllowedStatusApi('/api/status/acme/groups/bs_1', 'GET', 'acme')).toBe(true);
+    expect(isAllowedStatusApi('/api/status/acme/groups/bs_1/extra', 'GET', 'acme')).toBe(false);
+    expect(isAllowedStatusApi('/api/status/acme/groups/bs_1', 'POST', 'acme')).toBe(false);
+    // Another page's slug is not reachable through this domain.
+    for (const path of [
+      '/api/status/other',
+      '/api/status/other/rss',
+      '/api/status/other/groups/bs_1',
+      '/api/status/other/badge',
+    ])
+      expect(isAllowedStatusApi(path, 'GET', 'acme')).toBe(false);
+    expect(isAllowedStatusApi('/api/status/other/subscribe', 'POST', 'acme')).toBe(false);
+    expect(isAllowedStatusApi('/api/status/acme/rss', 'GET', 'acme')).toBe(true);
+    expect(isAllowedStatusApi('/api/status/acme/subscribe', 'POST', 'acme')).toBe(true);
+    // Slug-less endpoints and an unpinned (default-page) domain behave as before.
+    expect(isAllowedStatusApi('/api/status/rss', 'GET', 'acme')).toBe(true);
+    expect(isAllowedStatusApi('/api/status/other', 'GET')).toBe(true);
+  });
+
   it('allows webhook subscribe POST only, and the new custom-domain surfaces', async () => {
     const { isAllowedStatusApi, isStatusDomainPath } = await import('@/middleware');
     expect(isAllowedStatusApi('/api/status/acme/subscribe/webhook', 'POST')).toBe(true);

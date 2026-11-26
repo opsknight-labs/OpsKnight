@@ -180,6 +180,7 @@ const STATUS_API_EXACT_POST = new Set([
 
 const STATUS_SLUG_API_REGEX =
   /^\/api\/status\/[a-z0-9_-]+(\/(history|rss|uptime-export|subscribe|subscribe\/webhook|badge))?$/;
+const STATUS_GROUP_API_REGEX = /^\/api\/status\/[a-z0-9_-]+\/groups\/[a-zA-Z0-9_-]+$/;
 
 const RESERVED_STATUS_API_SLUGS = new Set([
   'admin',
@@ -192,7 +193,21 @@ const RESERVED_STATUS_API_SLUGS = new Set([
   'subscriptions',
 ]);
 
-export function isAllowedStatusApi(pathname: string, method: string): boolean {
+export function isAllowedStatusApi(
+  pathname: string,
+  method: string,
+  /** The slug the host resolved to; a slugged API path must name this page and no other. */
+  pinnedSlug?: string | null
+): boolean {
+  if (
+    pinnedSlug &&
+    !STATUS_API_EXACT_GET.has(pathname) &&
+    !STATUS_API_EXACT_POST.has(pathname) &&
+    pathname.startsWith('/api/status/') &&
+    pathname.slice('/api/status/'.length).split('/')[0] !== pinnedSlug &&
+    (STATUS_SLUG_API_REGEX.test(pathname) || STATUS_GROUP_API_REGEX.test(pathname))
+  )
+    return false;
   if (method === 'GET' || method === 'HEAD') {
     if (STATUS_API_EXACT_GET.has(pathname)) return true;
     if (pathname.startsWith('/api/status-page/logo/')) return true;
@@ -200,7 +215,9 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
       const firstSegment = pathname.slice('/api/status/'.length).split('/')[0];
       if (firstSegment && RESERVED_STATUS_API_SLUGS.has(firstSegment)) return false;
     }
-    if (STATUS_SLUG_API_REGEX.test(pathname) && !/\/subscribe(\/webhook)?$/.test(pathname)) return true;
+    if (STATUS_GROUP_API_REGEX.test(pathname)) return true;
+    if (STATUS_SLUG_API_REGEX.test(pathname) && !/\/subscribe(\/webhook)?$/.test(pathname))
+      return true;
     return false;
   }
 
@@ -210,7 +227,8 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
       const firstSegment = pathname.slice('/api/status/'.length).split('/')[0];
       if (firstSegment && RESERVED_STATUS_API_SLUGS.has(firstSegment)) return false;
     }
-    if (STATUS_SLUG_API_REGEX.test(pathname) && /\/subscribe(\/webhook)?$/.test(pathname)) return true;
+    if (STATUS_SLUG_API_REGEX.test(pathname) && /\/subscribe(\/webhook)?$/.test(pathname))
+      return true;
     return false;
   }
 
@@ -854,7 +872,7 @@ export function handleStatusDomainRequest({
   }
 
   // 5. Allowed Status APIs
-  if (isAllowedStatusApi(pathname, req.method)) {
+  if (isAllowedStatusApi(pathname, req.method, statusRoute.slug)) {
     const apiResponse = NextResponse.next({ request: { headers: forwardedHeaders } });
     apiResponse.headers.set('x-request-id', requestId);
     Object.entries(securityHeaders).forEach(([key, value]) => apiResponse.headers.set(key, value));
