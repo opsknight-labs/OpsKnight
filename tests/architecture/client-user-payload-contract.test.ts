@@ -20,7 +20,6 @@ describe('client-bound user relations', () => {
 
 describe('user profile page', () => {
   it('does not send audit-log rows or raw details to the client', () => {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed repository paths in this test
     const source = readFileSync(
       path.join(process.cwd(), 'src/app/(app)/users/[id]/page.tsx'),
       'utf8'
