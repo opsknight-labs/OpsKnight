@@ -2,7 +2,7 @@
 # Workers and migrations keep direct PostgreSQL connections, as in deploy/compose.
 services:
   pgbouncer:
-    image: ${AUTOMATION_PGBOUNCER_IMAGE:-opsknight-pgbouncer:1.26.0}
+    image: ${AUTOMATION_PGBOUNCER_IMAGE:-opsknight-pgbouncer:1.26.1}
     environment:
       PGBOUNCER_DB_HOST: db
       PGBOUNCER_DB_NAME: automation_cert

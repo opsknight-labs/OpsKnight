@@ -14,7 +14,7 @@ spec:
       securityContext: { seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: pgbouncer
-          image: ghcr.io/icoretech/pgbouncer-docker@sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd
+          image: ghcr.io/icoretech/pgbouncer-docker@sha256:c6696e27b0af0b7897eb191bcb4edf295e790a9411cb1f67d3a2d0b7ac06e962
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false

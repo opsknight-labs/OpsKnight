@@ -581,8 +581,8 @@ jobs:
           export ENCRYPTION_KEYS="ci:$(openssl rand -hex 32)"
 
           docker pull postgres:15-alpine
-          docker build -t opsknight-pgbouncer:1.26.0 deploy/images/pgbouncer
-          export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
+          docker build -t opsknight-pgbouncer:1.26.1 deploy/images/pgbouncer
+          export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.1"
 
           cleanup() {
             docker compose \
@@ -660,7 +660,7 @@ jobs:
 
           export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
           export OPSKNIGHT_IMAGE="$IMAGE"
-          export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
+          export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.1"
           export OPSKNIGHT_PULL_POLICY="if_not_present"
           export APP_PORT=33001
           export NEXTAUTH_SECRET="$(openssl rand -base64 48)"
@@ -844,7 +844,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:latest
-            ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:1.26.0
+            ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:1.26.1
             ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:sha-${{ github.sha }}
           cache-from: type=gha,scope=opsknight-pgbouncer-main
           cache-to: type=gha,scope=opsknight-pgbouncer-main,mode=max
@@ -969,7 +969,7 @@ jobs:
           {
             echo 'tags<<EOF'
             if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/opsknight-pgbouncer:1.26.0"
+              echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/opsknight-pgbouncer:1.26.1"
               echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/opsknight-pgbouncer:latest"
             else
               echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/opsknight-pgbouncer:sha-${GITHUB_SHA}"

@@ -414,8 +414,8 @@ pgbouncer:
   replicas: 2
   image:
     repository: ghcr.io/icoretech/pgbouncer-docker
-    tag: '1.26.0'
-    digest: 'sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75'
+    tag: '1.26.1'
+    digest: 'sha256:c6696e27b0af0b7897eb191bcb4edf295e790a9411cb1f67d3a2d0b7ac06e962'
     pullPolicy: IfNotPresent
   port: 6432
   poolMode: transaction

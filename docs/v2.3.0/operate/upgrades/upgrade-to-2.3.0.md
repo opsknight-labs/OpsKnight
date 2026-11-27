@@ -34,6 +34,12 @@ general [upgrade runbook](./upgrade), and keep the [rollback runbook](./rollback
   image (scripts, CI, local development) needs Node.js 22.12 or newer within 22.x.
 - **Prisma is pinned exactly** (`prisma`, `@prisma/client`, `@prisma/adapter-pg`,
   `@prisma/driver-adapter-utils` at 7.3.0). Do not float these versions.
+- **PgBouncer 1.26.1** replaces 1.26.0 in the deployment defaults and the custom pooler image.
+  It fixes SCRAM impersonation and startup-packet denial-of-service issues described in the
+  [upstream changelog](https://www.pgbouncer.org/changelog.html). Deployments that override
+  `PGBOUNCER_IMAGE`, `OPSKNIGHT_PGBOUNCER_IMAGE`, or `pgbouncer.image` must update their override
+  to a verified patched image too. Recreate or roll out the pooler containers; restarting the
+  application alone does not update PgBouncer. Allow clients to reconnect during the rollout.
 ## Behaviour changes to prepare for
 ### Database TLS now verifies certificates
 Earlier releases treated `sslmode=verify-ca` and `sslmode=verify-full` like `prefer`: the certificate

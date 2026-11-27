@@ -1091,7 +1091,7 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `ghcr.io/opsknight-labs/opsknight-pgbouncer:1.26.0`
+- Static default: `ghcr.io/opsknight-labs/opsknight-pgbouncer:1.26.1`
 - Sources: `deploy/swarm/docker-stack.pgbouncer.yml`
 
 ## `OPSKNIGHT_PGBOUNCER_USERLIST_SECRET`
@@ -1553,7 +1553,7 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75`
+- Static default: `ghcr.io/icoretech/pgbouncer-docker:1.26.1@sha256:c6696e27b0af0b7897eb191bcb4edf295e790a9411cb1f67d3a2d0b7ac06e962`
 - Sources: `deploy/compose/docker-compose.pgbouncer.yml`
 
 ## `PGBOUNCER_MAX_CLIENT_CONN`
