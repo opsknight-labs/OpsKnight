@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   bulkAcknowledge,
+  bulkReassign,
   bulkResolve,
   bulkSnooze,
   bulkUnsnooze,
@@ -10,6 +11,7 @@ import {
 } from '@/app/(app)/incidents/bulk-actions';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
+import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { assertResponderOrAbove, getCurrentAuthorizationActor, getCurrentUser } from '@/lib/rbac';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import {
@@ -35,6 +37,7 @@ vi.mock('@/lib/prisma', () => {
       async (callback: (tx: { incident: typeof incident; incidentEvent: typeof incidentEvent }) => unknown) =>
         callback({ incident, incidentEvent })
     ),
+    user: { findFirst: vi.fn() },
     auditLog: { create: vi.fn() },
     systemSettings: { findUnique: vi.fn(), upsert: vi.fn() },
   };
@@ -49,6 +52,10 @@ vi.mock('@/lib/rbac', () => ({
 
 vi.mock('@/lib/authorization-filters', () => ({
   incidentReadWhere: vi.fn(),
+}));
+
+vi.mock('@/lib/incidents/assignment', () => ({
+  assignIncidentDomainCommand: vi.fn(),
 }));
 
 vi.mock('@/lib/incidents/lifecycle', () => ({
@@ -237,6 +244,49 @@ describe('Bulk Actions', () => {
 
       expect(result).toEqual({ success: false, error: 'Failed to resolve incidents' });
       expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bulkReassign', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-2', role: 'RESPONDER' } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    });
+
+    it('reassigns each open incident through the canonical assignment command', async () => {
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([{ id: 'open-1' }, { id: 'open-2' }] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+      const result = await bulkReassign(['open-1', 'open-2', 'done-1', 'open-1'], 'user-2');
+
+      expect(prisma.incident.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['open-1', 'open-2', 'done-1'] }, status: { not: 'RESOLVED' } },
+        select: { id: true },
+      });
+      expect(assignIncidentDomainCommand).toHaveBeenCalledTimes(2);
+      expect(assignIncidentDomainCommand).toHaveBeenCalledWith(
+        { incidentId: 'open-1', assigneeId: 'user-2', actor: { id: 'user-1', name: 'Test User' } },
+        expect.anything()
+      );
+      expect(result).toEqual({ success: true, count: 2 });
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses more incidents than one transaction should carry', async () => {
+      const ids = Array.from({ length: 101 }, (_, i) => `inc-${i}`);
+
+      await expect(bulkReassign(ids, 'user-2')).resolves.toMatchObject({ success: false });
+      expect(assignIncidentDomainCommand).not.toHaveBeenCalled();
+    });
+
+    it('says why the command refused and that nothing changed', async () => {
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([{ id: 'open-1' }] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      vi.mocked(assignIncidentDomainCommand).mockRejectedValue(
+        new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'User was not found.' })
+      );
+
+      await expect(bulkReassign(['open-1'], 'user-2')).resolves.toEqual({
+        success: false,
+        error: 'User was not found. No incidents were changed.',
+      });
     });
   });
 

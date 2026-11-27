@@ -8,7 +8,8 @@ import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 import { isAppError } from '@/lib/errors';
 import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
-import { requireOperationalUser } from '@/lib/users/operational-eligibility';
+import { runSerializableTransaction } from '@/lib/db-utils';
+import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { AuthorizationError, CAPABILITIES, isPageableRole } from '@/lib/authorization';
 import {
   executeIncidentLifecycleBatch,
@@ -16,9 +17,10 @@ import {
   type IncidentLifecycleCommand,
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
-import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
 import { isIncidentPriority } from '@/lib/incidents/priority';
 import { requireResolutionNote } from '@/lib/incidents/resolution-note';
+
+const MAX_BULK_REASSIGN = 100;
 
 type BulkLifecycleStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 
@@ -190,34 +192,33 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
       return { success: false, error: 'Stakeholders cannot be assigned to incidents.' };
     }
 
+    const uniqueIds = [...new Set(incidentIds)];
+    if (uniqueIds.length > MAX_BULK_REASSIGN) {
+      return {
+        success: false,
+        error: `Select at most ${MAX_BULK_REASSIGN} incidents to reassign at once.`,
+      };
+    }
+
     const user = await getCurrentUser();
-    await prisma.$transaction(
-      async tx => {
-        await requireOperationalUser(tx, assigneeId);
-        await tx.incident.updateMany({
-          where: { id: { in: incidentIds } },
-          data: { assigneeId, teamId: null },
-        });
-        await tx.incidentEvent.createMany({
-          data: incidentIds.map(incidentId => ({
-            incidentId,
-            message: `Bulk reassigned to ${assignee.name}${user ? ` by ${user.name}` : ''}`,
-          })),
-        });
-        await Promise.all(
-          incidentIds.map(incidentId =>
-            enqueueIncidentUpdateSideEffects(tx, incidentId, [
-              'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
-              'INCIDENT_UPDATE_WEBHOOK',
-            ])
-          )
+    // The same command as a single reassign: assignment event, notification, war room and
+    // retries on write conflicts. Resolved incidents are closed work, so they are left alone.
+    const reassigned = await runSerializableTransaction(async tx => {
+      const open = await tx.incident.findMany({
+        where: { id: { in: uniqueIds }, status: { not: 'RESOLVED' } },
+        select: { id: true },
+      });
+      for (const { id } of open) {
+        await assignIncidentDomainCommand(
+          { incidentId: id, assigneeId, actor: { id: user.id, name: user.name ?? undefined } },
+          tx
         );
-      },
-      { isolationLevel: 'Serializable' }
-    );
+      }
+      return open.length;
+    });
 
     revalidatePath('/incidents');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: reassigned };
   } catch (error) {
     logger.error('Bulk reassign failed', {
       component: 'bulk-actions',
@@ -225,7 +226,7 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
       incidentIds,
       assigneeId,
     });
-    return { success: false, error: 'Failed to reassign incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to reassign incidents') };
   }
 }
 
