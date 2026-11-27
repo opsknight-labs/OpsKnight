@@ -45,6 +45,7 @@ let timer: NodeJS.Timeout | null = null;
 let activeRun: Promise<void> | null = null;
 let initialized = false;
 let lastJobCleanup = 0;
+let lastSessionCleanup = 0;
 let schedulerProfile: SchedulerProfile = 'full';
 let activeLeaseEpoch: number | null = null;
 
@@ -742,6 +743,23 @@ async function runOnce() {
       if (process.env.OPSKNIGHT_PROCESS_ROLE !== 'scheduler') await observeAuthenticationReplica();
     });
     const tokenCleanup = await maintenanceStep('User token cleanup', cleanupUserTokens);
+    // Session registry rows (UserDevice session:*) pile up one per sign-in. Hourly, a bounded number
+    // of batches; cleanupExpiredSessions keeps every tombstone whose token could still be valid.
+    const sessionCleanup =
+      Date.now() - lastSessionCleanup > 60 * 60 * 1000
+        ? await maintenanceStep('Session registry cleanup', async () => {
+            const { cleanupExpiredSessions, SESSION_CLEANUP_BATCH } =
+              await import('./session-registry');
+            let deleted = 0;
+            for (let batch = 0; batch < 10; batch++) {
+              const removed = await cleanupExpiredSessions();
+              deleted += removed;
+              if (removed < SESSION_CLEANUP_BATCH) break;
+            }
+            lastSessionCleanup = Date.now();
+            return deleted;
+          })
+        : null;
     const rateLimitCleanup = await maintenanceStep('Rate limit cleanup', cleanupExpiredRateLimits);
     // MCP maintenance failure must not block incident-response maintenance; it logs and counts
     // its own failures.
@@ -794,6 +812,7 @@ async function runOnce() {
     }
     logger.info('[Cron] Maintenance tasks processed', {
       tokenCleanup,
+      sessionCleanup,
       rateLimitCleanup,
       notificationCapacityCleanup,
       privacyExportArtifactsExpired,

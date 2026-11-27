@@ -29,6 +29,7 @@ const tasks = vi.hoisted(() => ({
   processEndedAccessGrants: vi.fn().mockResolvedValue({ reverted: 0 }),
   expireStaleAccessRequests: vi.fn().mockResolvedValue({ expired: 0 }),
   maybeStartScheduledAccessReview: vi.fn().mockResolvedValue(null),
+  cleanupExpiredSessions: vi.fn(),
 }));
 
 vi.mock('@/lib/ingestion/maintenance', () => ({
@@ -69,6 +70,10 @@ vi.mock('@/lib/unsnooze', () => ({
 vi.mock('@/lib/user-tokens', () => ({ cleanupUserTokens: tasks.cleanupUserTokens }));
 vi.mock('@/lib/auth-control/security-events', () => ({
   processAuthenticationAlerts: tasks.processAuthenticationAlerts,
+}));
+vi.mock('@/lib/session-registry', () => ({
+  cleanupExpiredSessions: tasks.cleanupExpiredSessions,
+  SESSION_CLEANUP_BATCH: 1000,
 }));
 vi.mock('@/lib/access/grants', () => ({
   processEndedAccessGrants: tasks.processEndedAccessGrants,
@@ -178,6 +183,7 @@ describe('cron-scheduler lifecycle', () => {
     tasks.processShiftRotations.mockResolvedValue({});
     tasks.processUpcomingShiftReminders.mockResolvedValue(0);
     tasks.cleanupUserTokens.mockResolvedValue(0);
+    tasks.cleanupExpiredSessions.mockResolvedValue(0);
     tasks.processAuthenticationAlerts.mockResolvedValue(undefined);
     tasks.schedulerQueryRaw.mockImplementation((strings: TemplateStringsArray) => {
       const sql = strings.join(' ');
@@ -281,6 +287,25 @@ describe('cron-scheduler lifecycle', () => {
     // The access steps are isolated from each other too.
     expect(tasks.expireStaleAccessRequests).toHaveBeenCalledTimes(1);
     expect(tasks.maybeStartScheduledAccessReview).toHaveBeenCalledTimes(1);
+  });
+
+  it('prunes the session registry in bounded batches, at most once an hour', async () => {
+    // A day later than any other test in this file, so the hourly gate is open.
+    vi.setSystemTime(new Date('2026-09-26T00:30:00.000Z'));
+    tasks.cleanupExpiredSessions.mockResolvedValueOnce(1000).mockResolvedValueOnce(12);
+
+    startCronScheduler({ profile: 'maintenance' });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // A full batch means more may be waiting; a short one ends the run.
+    expect(tasks.cleanupExpiredSessions).toHaveBeenCalledTimes(2);
+
+    await stopCronScheduler();
+    startCronScheduler({ profile: 'maintenance' });
+    await vi.advanceTimersByTimeAsync(0);
+    // The second tick ran (it checked SLA breaches again) but did not prune again.
+    expect(tasks.checkSLABreaches).toHaveBeenCalledTimes(2);
+    expect(tasks.cleanupExpiredSessions).toHaveBeenCalledTimes(2);
   });
 
   it('fences a stale scheduler before it enters the next operation group', async () => {
