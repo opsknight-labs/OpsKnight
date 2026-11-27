@@ -44,9 +44,11 @@ Correct permanent credential/endpoint/routing failures before any new attempt.
    **Retry All Failed** on **Settings → Notifications → Operations** (shown for administrators
    when the **Failed** status filter is selected) first asks "Retry all failed notifications?" and names how many it will requeue, because
    recipients may receive them straight away. Afterwards the list reloads and
-   reports how many could not be requeued (for example a row that has expired or
-   is no longer eligible answers `409`); the rest are requeued and the failed
-   ones stay `FAILED`.
+   reports how many could not be requeued and why (for example a row that has
+   expired or is no longer eligible answers `409`); the rest are requeued and the
+   failed ones stay `FAILED`. It sends at most five requests at a time. A row whose
+   message content was removed after the retention period cannot be retried, and
+   **Requeue** says so instead of doing nothing.
 4. Avoid creating a new manual notification that bypasses stable identity.
 5. Observe the next attempt and provider feedback.
 

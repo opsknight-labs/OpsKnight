@@ -74,6 +74,8 @@ const CHANNELS = [
   'WEBHOOK',
   'WHATSAPP',
 ] as const;
+/** Requests in flight at once during "Retry all failed". */
+const BULK_RETRY_CONCURRENCY = 5;
 const STATUSES = ['PENDING', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED', 'UNKNOWN'] as const;
 const CATEGORIES = [
   'INCIDENT',
@@ -319,22 +321,34 @@ export default function NotificationOperations({
     setError('');
     try {
       // fetch resolves on 4xx/5xx (an expired row answers 409), so read each response.
-      const outcomes = await Promise.all(
-        failedRows.map(r =>
-          fetch(`/api/admin/notifications/operations/${r.id}/retry`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-          })
-            .then(response => response.ok)
-            .catch(() => false)
-        )
-      );
-      const failedCount = outcomes.filter(ok => !ok).length;
+      // A few at a time: hundreds of exhausted rows must not become hundreds of concurrent requests.
+      const outcomes: Array<string | null> = [];
+      for (let i = 0; i < failedRows.length; i += BULK_RETRY_CONCURRENCY) {
+        outcomes.push(
+          ...(await Promise.all(
+            failedRows.slice(i, i + BULK_RETRY_CONCURRENCY).map(r =>
+              fetch(`/api/admin/notifications/operations/${r.id}/retry`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+              })
+                .then(async response =>
+                  response.ok
+                    ? null
+                    : (((await response.json().catch(() => null)) as { error?: string } | null)
+                        ?.error ?? 'Unable to requeue notification')
+                )
+                .catch(() => 'Unable to requeue notification')
+            )
+          ))
+        );
+      }
+      const refusals = outcomes.filter((reason): reason is string => reason !== null);
+      const failedCount = refusals.length;
       // fetchOperations clears the error banner, so report only after the reload.
       await fetchOperations();
       if (failedCount > 0) {
         setError(
-          `${failedCount} of ${outcomes.length} retries could not be requeued (for example expired or no longer eligible). The rest were requeued.`
+          `${failedCount} of ${outcomes.length} retries could not be requeued. ${refusals[0]} The rest were requeued.`
         );
       } else {
         toast.success(`Requeued ${outcomes.length} failed notifications.`);

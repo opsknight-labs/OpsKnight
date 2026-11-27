@@ -3635,6 +3635,22 @@ export async function requeueCentralNotification(
     });
 }
 
+/** Why a failed or unknown row cannot be requeued when its message content is gone, or null. */
+export async function notificationRetryBlockedReason(
+  notificationId: string
+): Promise<string | null> {
+  const row = await prisma.notification.findUnique({
+    where: { id: notificationId },
+    select: { channel: true, payloadEncrypted: true, expiresAt: true },
+  });
+  // Teams rows are requeued from their external operation, not from a stored payload.
+  if (!row || row.channel === 'MICROSOFT_TEAMS') return null;
+  const expired = row.expiresAt !== null && row.expiresAt <= new Date();
+  return row.payloadEncrypted === null || expired
+    ? 'This notification can no longer be retried: its message content was removed after the retention period.'
+    : null;
+}
+
 export async function cancelCentralNotification(
   notificationId: string,
   reason: string

@@ -13,6 +13,7 @@ import {
   processCentralNotificationQueue,
   reconcileUnknownNotifications,
   resolveNotificationExpiry,
+  notificationRetryBlockedReason,
   requeueCentralNotification,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
@@ -434,6 +435,34 @@ describe('central notification control plane', () => {
       .mocked(prisma.notification.updateMany)
       .mock.calls.find(([args]) => (args?.data as { status?: string })?.status === 'FAILED');
     expect(failedCall?.[0]?.where).toMatchObject({ status: { in: ['PENDING', 'UNKNOWN'] } });
+  });
+
+  it('explains a refused retry only when the message content is gone', async () => {
+    const find = vi.mocked(prisma.notification.findUnique);
+    find.mockResolvedValueOnce({
+      channel: 'EMAIL',
+      payloadEncrypted: null,
+      expiresAt: null,
+    } as never);
+    expect(await notificationRetryBlockedReason('n1')).toMatch(/message content was removed/);
+    find.mockResolvedValueOnce({
+      channel: 'EMAIL',
+      payloadEncrypted: 'x',
+      expiresAt: new Date(Date.now() - 1000),
+    } as never);
+    expect(await notificationRetryBlockedReason('n2')).toMatch(/message content was removed/);
+    find.mockResolvedValueOnce({
+      channel: 'EMAIL',
+      payloadEncrypted: 'x',
+      expiresAt: null,
+    } as never);
+    expect(await notificationRetryBlockedReason('n3')).toBeNull();
+    find.mockResolvedValueOnce({
+      channel: 'MICROSOFT_TEAMS',
+      payloadEncrypted: null,
+      expiresAt: null,
+    } as never);
+    expect(await notificationRetryBlockedReason('n4')).toBeNull();
   });
 
   it('signs queued integration webhooks with the current secret and revokes on type change', async () => {

@@ -4,7 +4,10 @@ import { GET } from '@/app/api/admin/notifications/operations/route';
 import { POST } from '@/app/api/admin/notifications/operations/[id]/retry/route';
 import { getCurrentUser } from '@/lib/rbac';
 import { getNotificationOperations } from '@/lib/notification-operations';
-import { requeueCentralNotification } from '@/lib/notification-control-plane';
+import {
+  notificationRetryBlockedReason,
+  requeueCentralNotification,
+} from '@/lib/notification-control-plane';
 
 vi.mock('@/lib/rbac', () => ({ getCurrentUser: vi.fn() }));
 vi.mock('@/lib/notification-operations', () => ({
@@ -24,6 +27,7 @@ vi.mock('@/lib/notification-operations', () => ({
 }));
 vi.mock('@/lib/notification-control-plane', () => ({
   requeueCentralNotification: vi.fn(),
+  notificationRetryBlockedReason: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/lib/audit', () => ({ emitAuditEvent: vi.fn() }));
 vi.mock('@/lib/logger', () => ({
@@ -119,6 +123,21 @@ describe('notification operations authorization', () => {
     );
     expect(response.status).toBe(200);
     expect(requeueCentralNotification).toHaveBeenCalledWith('notification_abc');
+  });
+
+  it('says so when a retry is refused because the message content was purged', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(admin as never);
+    vi.mocked(requeueCentralNotification).mockResolvedValue(false);
+    vi.mocked(notificationRetryBlockedReason).mockResolvedValue('Its message content was removed.');
+    const response = await POST(
+      new NextRequest(
+        'https://example.com/api/admin/notifications/operations/notification_abc/retry',
+        { method: 'POST', headers: { origin: 'https://example.com' } }
+      ),
+      { params: Promise.resolve({ id: 'notification_abc' }) }
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'Its message content was removed.' });
   });
 
   it('allows retrying historical backfilled notif_eo_ IDs for Teams operations', async () => {

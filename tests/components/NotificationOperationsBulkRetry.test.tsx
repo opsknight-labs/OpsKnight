@@ -33,7 +33,11 @@ describe('NotificationOperations bulk retry', () => {
         // The first row is still eligible, the second has expired.
         return url.includes('notification_a')
           ? { ok: true, json: async () => ({ requeued: true }) }
-          : { ok: false, status: 409, json: async () => ({ error: 'not eligible' }) };
+          : {
+              ok: false,
+              status: 409,
+              json: async () => ({ error: 'Its message content was removed.' }),
+            };
       }
       return {
         ok: true,
@@ -60,6 +64,36 @@ describe('NotificationOperations bulk retry', () => {
 
     await waitFor(() => expect(retryCalls()).toHaveLength(2));
     expect(await screen.findByText(/1 of 2 retries could not be requeued/)).toBeDefined();
+    expect(screen.getByText(/Its message content was removed\./)).toBeDefined();
+  });
+
+  it('never has more than five retries in flight at once', async () => {
+    const rows = Array.from({ length: 12 }, (_, i) => row(`notification_${i}`));
+    let inFlight = 0;
+    let peak = 0;
+    fetchMock.mockImplementation(async (_url: string, init?: { method?: string }) => {
+      if (init?.method === 'POST') {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return { ok: true, json: async () => ({ requeued: true }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          notifications: rows,
+          stats: { byStatus: {}, byCategory: {} },
+          pagination: { nextCursor: null, hasMore: false },
+        }),
+      };
+    });
+    render(<NotificationOperations canRetry initialStatus="FAILED" />);
+    fireEvent.click(await screen.findByRole('button', { name: /retry all failed/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry all' }));
+
+    await waitFor(() => expect(retryCalls()).toHaveLength(12));
+    expect(peak).toBeLessThanOrEqual(5);
   });
 
   it('does not retry anything when the confirmation is cancelled', async () => {
