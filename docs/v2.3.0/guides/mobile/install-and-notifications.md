@@ -82,6 +82,20 @@ with the app backgrounded, and tapping it opens the correct incident rather
 than only the mobile home page. Repeat on every device; subscriptions are not
 automatically copied between devices.
 
+Tapping a push notification focuses a window that is already on the mobile
+shell (`/m`); otherwise it opens a new window, so it never navigates a desktop
+tab that may hold unsaved work.
+
+## Sign out and shared devices
+
+Signing out, from the web or the mobile app, removes this browser's Web Push
+subscription on the server and in the browser, so the signed-out account stops
+receiving pages there. A push notification is also tied to the account it was
+sent to: if another account is signed in on that browser, **Acknowledge** from
+the notification is refused (`403`, "This notification was sent to a different
+account. Open the incident to act on it.") instead of acknowledging as the
+wrong person.
+
 ## Remove or undo
 
 Select **Disable** before removing the installed app, then remove the site/app
