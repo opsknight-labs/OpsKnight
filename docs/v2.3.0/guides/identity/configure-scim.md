@@ -462,8 +462,12 @@ removal can revoke only adopted or newly created directory grants.
 ## Large-group responses
 
 Group collections default to 10 resources and at most 100 requested resources.
-Full-member pages have a shared budget of 10,000 member entries; `itemsPerPage`
-may therefore be less than `count`. Continue with `startIndex + itemsPerPage`.
+Full-member pages have a shared budget of 10,000 member entries. When you do not send
+`count`, a page that goes over the budget is cut short, so `itemsPerPage` may be less
+than the default of 10: continue with `startIndex + itemsPerPage`. When you send
+`count`, a page is never cut short (a client that steps by `count` would skip the groups
+left out): a page whose groups exceed the budget together returns SCIM 413, and you
+request a smaller `count` or add `excludedAttributes=members`.
 Every returned group includes its entire membership; membership is never silently
 truncated. Request `excludedAttributes=members` to enumerate metadata for up to
 100 groups without loading member collections. Individual full representations

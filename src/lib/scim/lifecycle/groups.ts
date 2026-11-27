@@ -73,7 +73,8 @@ export async function groups(request: NextRequest, id?: string) {
       );
     }
     const { startIndex, count } = pagination(request.nextUrl.searchParams);
-    const pageSize = request.nextUrl.searchParams.has('count') ? count : Math.min(count, 10);
+    const countRequested = request.nextUrl.searchParams.has('count');
+    const pageSize = countRequested ? count : Math.min(count, 10);
     let filter;
     try {
       filter = parseScimGroupFilter(request.nextUrl.searchParams.get('filter'));
@@ -108,6 +109,14 @@ export async function groups(request: NextRequest, id?: string) {
               throw new ScimFailure(
                 413,
                 'Group exceeds the member response budget. Use excludedAttributes=members and review its provider assignments.',
+                'tooLarge'
+              );
+            // A client that asked for `count` groups may step to startIndex + count, so a short page
+            // would make it skip the groups cut off here. Only a page the client did not size is cut.
+            if (countRequested)
+              throw new ScimFailure(
+                413,
+                `These ${candidates.length} groups exceed the ${GROUP_MEMBER_RESPONSE_BUDGET}-member response budget together. Request a smaller count or use excludedAttributes=members.`,
                 'tooLarge'
               );
             break;
