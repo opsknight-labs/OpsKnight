@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   assertCanModifyService: vi.fn(),
   serviceUpdate: vi.fn(),
   serviceFindUnique: vi.fn(),
+  serviceUpdateMany: vi.fn(),
   storeSlackWebhookUrl: vi.fn(),
   slackDestinationUpdateMany: vi.fn(),
   logAudit: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@/lib/prisma', () => ({
     service: {
       update: mocks.serviceUpdate,
       findUnique: mocks.serviceFindUnique,
+      updateMany: mocks.serviceUpdateMany,
     },
     slackDestination: {
       updateMany: mocks.slackDestinationUpdateMany,
@@ -51,6 +53,7 @@ describe('updateServiceNotificationSettings', () => {
     vi.clearAllMocks();
     mocks.assertCanModifyService.mockResolvedValue({ id: 'user-1' });
     mocks.serviceUpdate.mockResolvedValue({});
+    mocks.serviceUpdateMany.mockResolvedValue({ count: 1 });
     mocks.serviceFindUnique.mockResolvedValue({ serviceNotificationChannels: [] });
     mocks.storeSlackWebhookUrl.mockImplementation(async (url: string) => `v3:k1:${url.length}`);
   });
@@ -188,6 +191,53 @@ describe('updateServiceNotificationSettings', () => {
         '/services/svc-1?tab=notifications&error=slack-webhook-encryption'
       );
       expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('revision fence', () => {
+    const formWithRevision = (revision?: string) => {
+      const formData = new FormData();
+      formData.set('serviceNotificationChannelsJson', JSON.stringify(['WEBHOOK']));
+      if (revision !== undefined) formData.set('expectedRevision', revision);
+      return formData;
+    };
+
+    it('saves only if the service is still at the revision the form was loaded with', async () => {
+      await updateServiceNotificationSettings('svc-1', formWithRevision('7'));
+
+      expect(mocks.serviceUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'svc-1', revision: 7 } })
+      );
+      expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+      expect(mocks.redirect).toHaveBeenCalledWith('/services/svc-1?tab=notifications&saved=1');
+      expect(mocks.logAudit).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses a stale form: nothing is written, audited or disabled', async () => {
+      mocks.serviceUpdateMany.mockResolvedValue({ count: 0 });
+
+      await updateServiceNotificationSettings('svc-1', formWithRevision('7'));
+
+      expect(mocks.redirect).toHaveBeenCalledTimes(1);
+      expect(mocks.redirect).toHaveBeenCalledWith(
+        '/services/svc-1?tab=notifications&error=stale-settings'
+      );
+      expect(mocks.slackDestinationUpdateMany).not.toHaveBeenCalled();
+      expect(mocks.logAudit).not.toHaveBeenCalled();
+    });
+
+    it('keeps the last-write-wins save for a form that sends no revision', async () => {
+      await updateServiceNotificationSettings('svc-1', formWithRevision());
+
+      expect(mocks.serviceUpdate).toHaveBeenCalledTimes(1);
+      expect(mocks.serviceUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('ignores a malformed revision instead of trusting it', async () => {
+      await updateServiceNotificationSettings('svc-1', formWithRevision('7; DROP'));
+
+      expect(mocks.serviceUpdateMany).not.toHaveBeenCalled();
+      expect(mocks.serviceUpdate).toHaveBeenCalledTimes(1);
     });
   });
 });

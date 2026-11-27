@@ -1124,6 +1124,12 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const notificationsContent = (
     <div className="space-y-3.5">
       {isSaved && <ServiceSettingsFlashToast serviceId={id} />}
+      {errorCode === 'stale-settings' && (
+        <InlineNotice tone="warning" title="Notification settings changed">
+          Someone else changed these settings; reload. The form below now shows the current settings
+          and nothing you submitted was saved, so make your change again.
+        </InlineNotice>
+      )}
       {errorCode === 'unsupported-channel' && (
         <InlineNotice tone="error" title="Channel not supported">
           {SERVICE_CHANNEL_UNSUPPORTED_MESSAGE} Nothing was saved.
@@ -1143,8 +1149,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
       {canManageService ? (
         <ServiceNotificationSettings
-          key={id}
+          // A new revision (after a save, or a refused stale save) remounts the form with fresh values.
+          key={`${id}:${service.revision}`}
           serviceId={id}
+          revision={service.revision}
           serviceNotificationChannels={service.serviceNotificationChannels || []}
           slackChannel={service.slackChannel || null}
           slackWebhookConfigured={Boolean(service.slackWebhookUrl?.trim())}

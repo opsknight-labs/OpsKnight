@@ -245,6 +245,15 @@ before this change keep working; the scheduler encrypts them in the background
 (up to 1,000 services an hour), and the encryption key must be configured for new
 saves to succeed.
 
+Linking or unlinking a Slack or Teams channel takes effect at once, but the
+other settings (events, channels, webhook) only apply when you press **Save**.
+Each form carries the service revision it was loaded with. If anyone changed the
+service in the meantime, Save is refused with "Someone else changed these
+settings; reload", nothing is written, and the form reloads with the current
+values so you can make your change again. Your own link and unlink actions update
+the revision, so they never block your Save. Over the API, send the `ETag` from
+`GET /api/v2/services/{id}/notification-settings` as `If-Match` on the `PATCH`.
+
 Disabling Slack as a service notification channel disables enabled Slack
 destinations for that service. Saving a channel name is not proof of delivery.
 For each selected event, perform a controlled incident transition and inspect

@@ -139,9 +139,15 @@ export async function GET(request: NextRequest) {
       where: { serviceId: serviceId.trim(), enabled: true },
       orderBy: { createdAt: 'asc' },
     } as never);
+    // The settings form fences its Save on this: link and unlink bump it, so the form re-reads it here.
+    const service = await prisma.service.findUnique({
+      where: { id: serviceId.trim() },
+      select: { revision: true },
+    });
     return jsonOk({
       destinations,
       destination: destinations[0] ?? null,
+      serviceRevision: service?.revision ?? null,
     });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);

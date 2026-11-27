@@ -263,18 +263,30 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
     }
   }
 
-  await prisma.service.update({
-    where: { id: serviceId },
-    data: {
-      serviceNotificationChannels: channels,
-      serviceNotifyOnTriggered: formData.get('serviceNotifyOnTriggered') === 'true',
-      serviceNotifyOnAck: formData.get('serviceNotifyOnAck') === 'true',
-      serviceNotifyOnResolved: formData.get('serviceNotifyOnResolved') === 'true',
-      serviceNotifyOnSlaBreach: formData.get('serviceNotifyOnSlaBreach') === 'true',
-      ...(slackChannel === undefined ? {} : { slackChannel }),
-      ...(storedSlackWebhookUrl === undefined ? {} : { slackWebhookUrl: storedSlackWebhookUrl }),
-    },
-  });
+  const data = {
+    serviceNotificationChannels: channels,
+    serviceNotifyOnTriggered: formData.get('serviceNotifyOnTriggered') === 'true',
+    serviceNotifyOnAck: formData.get('serviceNotifyOnAck') === 'true',
+    serviceNotifyOnResolved: formData.get('serviceNotifyOnResolved') === 'true',
+    serviceNotifyOnSlaBreach: formData.get('serviceNotifyOnSlaBreach') === 'true',
+    ...(slackChannel === undefined ? {} : { slackChannel }),
+    ...(storedSlackWebhookUrl === undefined ? {} : { slackWebhookUrl: storedSlackWebhookUrl }),
+  };
+  // The form carries the service revision it was loaded with (and refreshes after each immediate
+  // link/unlink). A save from a stale form is refused instead of overwriting a newer change. A form
+  // without one (an older frontend during a rolling deploy) keeps the previous last-write-wins save.
+  const submittedRevision = String(formData.get('expectedRevision') ?? '');
+  if (/^\d{1,10}$/.test(submittedRevision)) {
+    const saved = await prisma.service.updateMany({
+      where: { id: serviceId, revision: Number(submittedRevision) },
+      data,
+    });
+    if (saved.count !== 1) {
+      return redirect(`/services/${serviceId}?tab=notifications&error=stale-settings`);
+    }
+  } else {
+    await prisma.service.update({ where: { id: serviceId }, data });
+  }
 
   if (!isSlackEnabled) {
     await prisma.slackDestination.updateMany({

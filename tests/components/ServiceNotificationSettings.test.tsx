@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import ServiceNotificationSettings from '@/components/service/ServiceNotificationSettings';
 
 vi.mock('next/navigation', () => ({
@@ -21,6 +21,7 @@ const slackIntegration = {
 
 const base = {
   serviceId: 'svc-1',
+  revision: 7,
   serviceNotificationChannels: ['SLACK'],
   slackChannel: null,
   slackWebhookConfigured: false,
@@ -69,5 +70,30 @@ describe('ServiceNotificationSettings', () => {
       'input[name="serviceNotificationChannelsJson"]'
     );
     expect(JSON.parse(submitted!.value)).toEqual(['SLACK']);
+  });
+
+  it('submits the revision it was loaded with', () => {
+    const { container } = render(<ServiceNotificationSettings {...base} />);
+    const hidden = container.querySelector<HTMLInputElement>('input[name="expectedRevision"]');
+    expect(hidden?.value).toBe('7');
+  });
+
+  it('adopts the new revision after an immediate link or unlink, so its own change is not a conflict', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ data: { destinations: [], destination: null, serviceRevision: 9 } })
+          )
+      )
+    );
+    const { container } = render(<ServiceNotificationSettings {...base} />);
+
+    await waitFor(() =>
+      expect(
+        container.querySelector<HTMLInputElement>('input[name="expectedRevision"]')?.value
+      ).toBe('9')
+    );
   });
 });

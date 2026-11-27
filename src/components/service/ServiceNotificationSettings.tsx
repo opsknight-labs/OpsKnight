@@ -47,6 +47,8 @@ import {
 
 type ServiceNotificationSettingsProps = {
   serviceId: string;
+  /** Service revision the form was loaded with; Save is refused if the service changed since. */
+  revision: number;
   serviceNotificationChannels: string[];
   slackChannel: string | null;
   /** The stored Slack webhook is a secret: the page only says whether one is configured. */
@@ -73,6 +75,7 @@ type ServiceNotificationSettingsProps = {
 
 export default function ServiceNotificationSettings({
   serviceId,
+  revision: initialRevision,
   serviceNotificationChannels,
   slackChannel,
   slackWebhookConfigured,
@@ -85,6 +88,14 @@ export default function ServiceNotificationSettings({
   children,
 }: ServiceNotificationSettingsProps) {
   const saveNotificationSettings = updateServiceNotificationSettings.bind(null, serviceId);
+  // Link and unlink write immediately and bump the service revision; each follow-up read reports the
+  // new one so this form's own changes never make its Save look stale.
+  const [revision, setRevision] = useState(initialRevision);
+  const adoptRevision = useCallback((response: unknown) => {
+    const next = (response as { data?: { serviceRevision?: unknown } } | null)?.data
+      ?.serviceRevision;
+    if (typeof next === 'number') setRevision(next);
+  }, []);
   // Legacy EMAIL/SMS/PUSH/WHATSAPP values never deliver; they are left out of the form and dropped on save.
   const ignoredStoredChannels = unsupportedServiceChannels(serviceNotificationChannels || []);
   const [channels, setChannels] = useState<string[]>(
@@ -158,13 +169,14 @@ export default function ServiceNotificationSettings({
     fetch(`/api/slack/destinations?serviceId=${encodeURIComponent(serviceId)}`)
       .then(r => r.json())
       .then(d => {
+        adoptRevision(d);
         const dests = (d?.data?.destinations ?? d?.destinations ?? []) as typeof existingSlackDests;
         if (Array.isArray(dests)) {
           setExistingSlackDests(dests);
         }
       })
       .catch(() => undefined);
-  }, [serviceId]);
+  }, [serviceId, adoptRevision]);
 
   useEffect(() => {
     if (channels.includes('SLACK') || slackIntegration) {
@@ -253,6 +265,7 @@ export default function ServiceNotificationSettings({
     fetch(`/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`)
       .then(r => r.json())
       .then(d => {
+        adoptRevision(d);
         const dests = (d?.data?.destinations ??
           d?.destinations ??
           (d?.data?.destination
@@ -284,7 +297,7 @@ export default function ServiceNotificationSettings({
       })
       .catch(err => setTeamsError(err instanceof Error ? err.message : String(err)))
       .finally(() => setTeamsLoading(false));
-  }, [channels, serviceId]);
+  }, [channels, serviceId, adoptRevision]);
 
   useEffect(() => {
     if (!selectedTeamId) {
@@ -548,6 +561,7 @@ export default function ServiceNotificationSettings({
         }}
         className="space-y-3.5"
       >
+        <input type="hidden" name="expectedRevision" value={revision} />
         {/* Submit an explicit snapshot so an empty selection cannot be confused with a missing field. */}
         <input
           type="hidden"
@@ -1279,6 +1293,7 @@ export default function ServiceNotificationSettings({
                                     `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`
                                   );
                                   const getData = await getRes.json().catch(() => ({}));
+                                  adoptRevision(getData);
                                   const nextDests = (getData?.data?.destinations ??
                                     getData?.destinations ??
                                     []) as typeof existingTeamsDests;
@@ -1459,6 +1474,7 @@ export default function ServiceNotificationSettings({
                               `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`
                             );
                             const getData = await getRes.json().catch(() => ({}));
+                            adoptRevision(getData);
                             const nextDests = (getData?.data?.destinations ??
                               getData?.destinations ??
                               []) as typeof existingTeamsDests;
