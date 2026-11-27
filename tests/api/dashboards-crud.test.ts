@@ -87,6 +87,37 @@ describe('Dashboards API CRUD Contract', () => {
       expect(mocks.prisma.dashboard.delete).not.toHaveBeenCalled();
     });
 
+    it('lets a read-only role (report.read without report.manage) read but never write', async () => {
+      mocks.assertCapability.mockImplementation(async (capability: string) => {
+        if (capability === 'report.manage') throw new Error('forbidden');
+        return { id: mockUser.id };
+      });
+      mocks.prisma.dashboard.findMany.mockResolvedValue([]);
+      const params = { params: Promise.resolve({ id: 'd-1' }) };
+      const post = new NextRequest('http://localhost/api/dashboards', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'x', visibility: 'PUBLIC' }),
+      });
+      const put = new NextRequest('http://localhost/api/dashboards/d-1', {
+        method: 'PUT',
+        body: JSON.stringify({ visibility: 'PUBLIC' }),
+      });
+
+      expect((await getDashboards()).status).toBe(200);
+      const writes = [
+        (await createDashboard(post)).status,
+        (await updateDashboard(put, params)).status,
+        (await deleteDashboard(put, params)).status,
+      ];
+
+      expect(writes.every(status => status >= 400 && status !== 401)).toBe(true);
+      expect(mocks.assertCapability).toHaveBeenCalledWith('report.read');
+      expect(mocks.assertCapability).toHaveBeenCalledWith('report.manage');
+      expect(mocks.prisma.dashboard.create).not.toHaveBeenCalled();
+      expect(mocks.prisma.dashboard.update).not.toHaveBeenCalled();
+      expect(mocks.prisma.dashboard.delete).not.toHaveBeenCalled();
+    });
+
     it('answers 429 once the per-user limit is exhausted', async () => {
       mocks.checkRateLimit.mockResolvedValue({ allowed: false, remaining: 0, resetAt: Date.now() + 5000 });
 

@@ -26,6 +26,8 @@ interface DashboardShareModalProps {
     serviceId?: string;
   };
   onVisibilityChange?: (visibility: 'PRIVATE' | 'TEAM' | 'PUBLIC') => void;
+  /** report.manage: only managers may change who can open the dashboard; everyone can copy the link. */
+  canManage?: boolean;
 }
 
 export default function DashboardShareModal({
@@ -37,6 +39,7 @@ export default function DashboardShareModal({
   currentVisibility = 'PRIVATE',
   currentFilters,
   onVisibilityChange,
+  canManage = true,
 }: DashboardShareModalProps) {
   const [copied, setCopied] = useState(false);
   const [selectedVisibility, setSelectedVisibility] = useState<'PRIVATE' | 'TEAM' | 'PUBLIC'>(
@@ -171,7 +174,7 @@ export default function DashboardShareModal({
           </div>
 
           {/* Visibility Controls for Saved Dashboards */}
-          {!isTemplate && dashboardId && (
+          {canManage && !isTemplate && dashboardId && (
             <div className="space-y-2 pt-2 border-t border-border">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                 <span>Access Permissions</span>

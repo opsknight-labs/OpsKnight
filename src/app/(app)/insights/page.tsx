@@ -36,6 +36,7 @@ import { getDefaultAnalyticsViewQuery, listAnalyticsViews } from '@/lib/analytic
 import { getAuthOptions } from '@/lib/auth';
 import { opsHelpersOn } from '@/lib/intelligence/helpers/on-demand';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { actorHasCapability } from '@/lib/authorization-policy';
 import {
   dashboardUserReadWhere,
   serviceReadWhere,
@@ -152,7 +153,11 @@ export default async function AnalyticsPage({
         users={users.map(u => ({ id: u.id, name: u.name || u.email }))}
         priorities={PRIORITIES}
         actions={
-          <AnalyticsViews views={views} teams={teams.filter(t => actor.teamIds.includes(t.id))} />
+          <AnalyticsViews
+            views={views}
+            teams={teams.filter(t => actor.teamIds.includes(t.id))}
+            canManage={actorHasCapability(actor, CAPABILITIES.REPORT_MANAGE)}
+          />
         }
       />
       <Suspense key={`fresh-${key}`} fallback={<div className="h-11 sm:h-5" aria-hidden />}>

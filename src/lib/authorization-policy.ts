@@ -738,8 +738,8 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
   [
     AUTHORIZATION_ACTIONS.REPORT_MANAGE,
     {
-      global: CAPABILITIES.REPORT_READ,
-      scoped: CAPABILITIES.REPORT_READ,
+      global: CAPABILITIES.REPORT_MANAGE,
+      scoped: CAPABILITIES.REPORT_MANAGE,
       apiScope: API_SCOPES.REPORTS_WRITE,
     },
   ],

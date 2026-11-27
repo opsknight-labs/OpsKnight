@@ -63,6 +63,7 @@ resource scope remain authoritative.
 - `privacy.read`
 - `privacy.requests.manage`
 - `report.export`
+- `report.manage`
 - `report.read`
 - `retention.holds.manage`
 - `retention.manage`

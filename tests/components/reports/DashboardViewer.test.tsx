@@ -93,6 +93,7 @@ describe('DashboardViewer Component', () => {
     currentUserId: 'user-1',
     isTemplate: false,
     dashboardId: 'dash-123',
+    canManage: true,
   };
 
   beforeEach(() => {
@@ -334,5 +335,28 @@ describe('DashboardViewer Component', () => {
     );
     expect(screenHeader).not.toBeNull();
     expect(screenHeader?.className).toContain('print:hidden');
+  });
+
+  describe('without report.manage', () => {
+    it('hides edit and delete in the dashboard settings menu', async () => {
+      render(<DashboardViewer {...defaultProps} canManage={false} />);
+
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Dashboard settings' }), {
+        button: 0,
+      });
+
+      // Read actions stay; every write action is gone.
+      expect(await screen.findByText(/Export as PDF/i)).toBeDefined();
+      expect(screen.queryByText(/Edit Dashboard/i)).toBeNull();
+      expect(screen.queryByText(/Delete Dashboard/i)).toBeNull();
+    });
+
+    it('does not offer to clone a template', () => {
+      const { rerender } = render(<DashboardViewer {...defaultProps} isTemplate canManage />);
+      expect(screen.getByRole('button', { name: /Clone Dashboard/i })).toBeDefined();
+
+      rerender(<DashboardViewer {...defaultProps} isTemplate canManage={false} />);
+      expect(screen.queryByRole('button', { name: /Clone Dashboard/i })).toBeNull();
+    });
   });
 });

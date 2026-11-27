@@ -82,6 +82,8 @@ type DashboardViewerProps = {
   isTemplate: boolean;
   dashboardId?: string;
   layout?: { columns?: number; rowHeight?: number };
+  /** report.manage: without it the dashboard is read-only (no clone, edit, share settings or delete). */
+  canManage: boolean;
 };
 
 const TIME_WINDOWS = [
@@ -109,6 +111,7 @@ export default function DashboardViewer({
   isTemplate,
   dashboardId,
   layout,
+  canManage,
 }: DashboardViewerProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -776,7 +779,7 @@ export default function DashboardViewer({
         ]}
         actions={
           <>
-            {isTemplate && (
+            {isTemplate && canManage && (
               <Button
                 variant="secondary"
                 className="gap-2 font-semibold"
@@ -885,10 +888,12 @@ export default function DashboardViewer({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setIsEditing(!isEditing)}>
-                  <LayoutDashboard className="h-4 w-4 mr-2" />
-                  {isEditing ? 'Exit Edit Mode' : 'Edit Dashboard'}
-                </DropdownMenuItem>
+                {canManage && (
+                  <DropdownMenuItem onClick={() => setIsEditing(!isEditing)}>
+                    <LayoutDashboard className="h-4 w-4 mr-2" />
+                    {isEditing ? 'Exit Edit Mode' : 'Edit Dashboard'}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={toggleKioskMode}>
                   <Tv className="h-4 w-4 mr-2" />
                   {isKioskMode ? 'Exit Presentation Mode' : 'Presentation Mode (F)'}
@@ -902,7 +907,7 @@ export default function DashboardViewer({
                   <Share2 className="h-4 w-4 mr-2" />
                   Share Dashboard
                 </DropdownMenuItem>
-                {!isTemplate && dashboardId && (
+                {canManage && !isTemplate && dashboardId && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -1229,6 +1234,7 @@ export default function DashboardViewer({
         currentVisibility={currentVisibility}
         currentFilters={currentFilters}
         onVisibilityChange={setCurrentVisibility}
+        canManage={canManage}
       />
 
       {/* Widget Configuration Modal */}

@@ -82,7 +82,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `postmortems:read` | View postmortems | Incidents | View | ✓ | ✓ | ✓ | ✓ |  | 7 | 0 | 0 | 2 |
 | `postmortems:write` | Change postmortems (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  |  |  | 0 | 0 | 0 | 8 |
 | `reports:read` | View reports and analytics | Reports and audit | View | ✓ | ✓ | ✓ | ✓ |  | 3 | 6 | 0 | 2 |
-| `reports:write` | Change reports and analytics (higher-risk changes wait for approval) | Reports and audit | Change | ✓ | ✓ | ✓ | ✓ |  | 0 | 0 | 0 | 8 |
+| `reports:write` | Change reports and analytics (higher-risk changes wait for approval) | Reports and audit | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 0 | 8 |
 | `response-policy:read` | View the response policy | Settings | View | ✓ |  |  |  |  | 3 | 1 | 0 | 0 |
 | `response-policy:write` | Change the response policy (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 4 |
 | `runbook-rules:activate` | Turn runbook trigger rules on or off | Runbooks | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 2 |

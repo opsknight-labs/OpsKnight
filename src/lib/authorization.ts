@@ -41,6 +41,8 @@ export const CAPABILITIES = {
   AUDIT_EXPORT: 'audit.export',
   POSTMORTEM_DRAFT_READ: 'postmortem.draft.read',
   REPORT_READ: 'report.read',
+  /** Create, edit, publish, share, schedule and delete reports, saved views and dashboards. */
+  REPORT_MANAGE: 'report.manage',
   REPORT_EXPORT: 'report.export',
   USER_READ_ALL: 'user.read.all',
   USER_NOTIFICATION_PREFERENCES: 'user.notification_preferences',
@@ -234,6 +236,7 @@ const RESPONDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.SCHEDULE_READ_ALL,
   CAPABILITIES.POSTMORTEM_DRAFT_READ,
   CAPABILITIES.REPORT_READ,
+  CAPABILITIES.REPORT_MANAGE,
   CAPABILITIES.REPORT_EXPORT,
   CAPABILITIES.USER_READ_ALL,
   CAPABILITIES.POLICY_READ_ALL,
@@ -255,6 +258,7 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.SCHEDULE_READ_ALL,
   CAPABILITIES.AUDIT_READ,
   CAPABILITIES.AUDIT_EXPORT,
+  // Auditors read and export reports but never create, change or delete them.
   CAPABILITIES.REPORT_READ,
   CAPABILITIES.REPORT_EXPORT,
   CAPABILITIES.USER_READ_ALL,
@@ -295,6 +299,7 @@ const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.METRICS_READ_SCOPED,
   CAPABILITIES.SCHEDULE_READ_SCOPED,
   CAPABILITIES.REPORT_READ,
+  CAPABILITIES.REPORT_MANAGE,
 ]);
 
 // Business-impact audience: the status dashboard (open to everyone signed in), business services

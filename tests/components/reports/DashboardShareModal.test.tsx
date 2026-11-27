@@ -39,6 +39,16 @@ describe('DashboardShareModal Component', () => {
     expect(input.value).toContain('serviceId=svc-payments');
   });
 
+  it('lets only report managers change who can open the dashboard', () => {
+    const { rerender } = render(<DashboardShareModal {...defaultProps} />);
+    expect(screen.getByText('Access Permissions')).toBeDefined();
+
+    rerender(<DashboardShareModal {...defaultProps} canManage={false} />);
+    expect(screen.queryByText('Access Permissions')).toBeNull();
+    // The link itself is still shareable.
+    expect(screen.getByRole('button', { name: /copy/i })).toBeDefined();
+  });
+
   it('copies share link and shows copied confirmation', async () => {
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, {

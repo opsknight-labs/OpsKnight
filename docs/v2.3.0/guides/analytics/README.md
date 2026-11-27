@@ -48,6 +48,7 @@ A section that fails shows its own error with a retry; the rest of the page keep
 ## Permissions
 
 - **View** needs the `report.read` capability (`REPORT_READ`).
+- **Saved views** (save, rename, set as default, weekly email, delete) need `report.manage` (`REPORT_MANAGE`). Without it, the Views menu only opens existing views, and the Auditor role has no `report.manage`.
 - **Export CSV** needs `report.export` (`REPORT_EXPORT`); the button is hidden without it and the
   export endpoint returns 403.
 - Everything is scoped to the incidents you may read: users who are not administrators see
