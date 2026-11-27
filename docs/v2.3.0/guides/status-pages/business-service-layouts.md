@@ -22,6 +22,10 @@ verification:
     - src/lib/status-pages/business-service-overrides.ts
     - src/lib/status-pages/snapshot.ts
     - src/components/status-page/StatusPageAnnouncementManager.tsx
+    - docs/v2.3.0/assets/status-page-business-groups.png
+    - docs/v2.3.0/assets/status-page-business-expanded.png
+    - docs/v2.3.0/assets/status-page-business-mobile.png
+    - docs/v2.3.0/assets/status-page-business-settings.png
 ---
 
 # Status page layouts
@@ -40,10 +44,14 @@ has business services; otherwise it starts on **Technical services**. Saving the
 keeps that choice. Pages that already list services keep their layout.
 
 Every row shows its service count, for example "3 services", or how many are affected, for example
-"1 of 3 services affected". On the expandable layout the name and count together are the toggle,
-marked with ›. A row with active incidents shows a chip such as "1 active incident" that jumps to
+"1 of 3 services affected". On the expandable layout a full-width **Show services** bar under the history opens the row, and
+flips to **Hide services**. A row with active incidents shows a chip such as "1 active incident" that jumps to
 the incidents section. Technical services that are in no business service on the page appear under
 **Other services**.
+
+While an incident is active, the incidents section stays above the services. A page with only
+resolved incidents lists them below the services, so a quiet history does not push the services off
+the first screen.
 
 With the expandable layout, **Expand groups by default (affected groups always open)** opens every
 row when the page loads. Off (the default), only affected rows start open.
@@ -72,6 +80,24 @@ this includes incidents on any of its services and incidents that name the busin
    republishes, like any change that shows less.
 
 Changing only the layout never publishes a service that is not already on the page.
+
+![Status page settings: the Business services, expandable layout and the business services on the page](/docs/v2.3.0/assets/status-page-business-settings.png)
+
+## What visitors see
+
+Each business service is one card with its worst status, merged 90-day history and uptime. A group
+with an affected service opens by itself, as **Alert Ingestion** does here:
+
+![A business service group open on the public status page, one of its three services in a major outage](/docs/v2.3.0/assets/status-page-business-groups.png)
+
+A group with nothing wrong stays closed. The **Show services** bar under its history opens it and
+turns into **Hide services**:
+
+![An operational group opened from the Show services bar](/docs/v2.3.0/assets/status-page-business-expanded.png)
+
+On a phone the cards stack and the **Subscribe to updates** button stays pinned to the bottom:
+
+![The business services section on a 375 px wide screen](/docs/v2.3.0/assets/status-page-business-mobile.png)
 
 ## Rename, hide and order business services
 
@@ -133,7 +159,7 @@ services. People who pick nothing still get every update.
 ## Themes, mobile and accessibility
 
 The layouts use the page's theme colours, so every built-in theme and custom CSS keep working, in
-light and dark. Expandable rows are buttons that announce whether they are open, work with the
+light and dark. The Show/Hide services bar is a button that announces whether the row is open, work with the
 keyboard and have 44px touch targets on phones.
 
 ## API
