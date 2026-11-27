@@ -474,9 +474,11 @@ export default function NotificationOperationsPage({
         </DetailTabContent>
 
         {/* ── Delivery Log ─────────────────────────────────────────────────── */}
+        {/* Kept mounted so the Overview cards get their counts without opening this tab. */}
         <DetailTabContent
           value="delivery"
-          className="focus-visible:outline-hidden data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:slide-in-from-bottom-1 data-[state=active]:duration-200"
+          forceMount
+          className="focus-visible:outline-hidden data-[state=inactive]:hidden data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:slide-in-from-bottom-1 data-[state=active]:duration-200"
         >
           <NotificationOperations
             canRetry={canManage}

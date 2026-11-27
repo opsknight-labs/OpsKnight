@@ -35,7 +35,9 @@ identifier when escalating.
 1. Open **Settings → Notifications → Operations**. It is open to administrators
    and to anyone with the `audit.read` permission (the Auditor role or a custom
    role that includes it); the delivery log behind the page follows the same
-   rule. Only administrators can retry.
+   rule. Only administrators can retry. The status cards on the **Overview** tab
+   show the last 7 days of counts as soon as the page opens; clicking a card
+   opens the **Delivery Log** with that status.
 2. Filter by incident, channel, status, recipient, or provider.
 3. Open the operation and record its notification ID and logical event time.
 4. Read attempts oldest to newest. Distinguish provider acceptance from a later
