@@ -44,13 +44,8 @@ export async function acquireScimAdmission(tokenHash: string, clientIp?: string)
   const now = Date.now();
   const priority = (verified.get(tokenHash) ?? 0) > now;
   if (!priority) {
-    if (now - windowStart >= 60000) {
-      windowStart = now;
-      attempts = 0;
-    }
-    if (attempts >= 1200)
-      throw new ScimFailure(429, 'SCIM authentication is busy. Retry in one minute.');
     if (clientIp && clientIp !== '0.0.0.0' && clientIp !== 'unknown') {
+      // Each source address has its own budget, so one noisy address cannot use up the others'.
       const key = createHmac('sha256', secret).update(clientIp).digest('hex');
       const entry = networks.get(key);
       if (entry && entry.until > now) {
@@ -61,8 +56,16 @@ export async function acquireScimAdmission(tokenHash: string, clientIp?: string)
         if (networks.size >= 4096) networks.delete(networks.keys().next().value!);
         networks.set(key, { count: 1, until: now + 60000 });
       }
+    } else {
+      // Only requests with no usable source address share one budget.
+      if (now - windowStart >= 60000) {
+        windowStart = now;
+        attempts = 0;
+      }
+      if (attempts >= 1200)
+        throw new ScimFailure(429, 'SCIM authentication is busy. Retry in one minute.');
+      attempts++;
     }
-    attempts++;
   }
   const release = await (priority ? verifiedLane : unknownLane).acquire();
   return {

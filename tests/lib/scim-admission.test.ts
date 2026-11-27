@@ -47,4 +47,15 @@ describe('SCIM pre-database admission', () => {
     vi.advanceTimersByTime(60000);
     (await acquireScimAdmission('new')).release();
   });
+  it('keeps a flood from other addresses from starving an idle directory behind its own address', async () => {
+    const { acquireScimAdmission } = await import('@/lib/scim/security/admission');
+    // 1,200 random-token attempts spread over ten addresses used to exhaust the one shared budget.
+    for (let address = 1; address <= 10; address++)
+      for (let i = 0; i < 120; i++)
+        (await acquireScimAdmission(`flood-${address}-${i}`, `192.0.2.${address}`)).release();
+
+    (await acquireScimAdmission('idle-idp-token', '198.51.100.7')).release();
+    // The flooding addresses themselves are still limited.
+    await expect(acquireScimAdmission('more', '192.0.2.1')).rejects.toThrow('network admission');
+  });
 });

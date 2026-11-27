@@ -436,7 +436,11 @@ to approximately one minute, while validity/revocation is checked each request.
 `SCIM_CONNECTOR_REQUESTS_PER_MINUTE` defaults to 600 and is bounded to 1–1200.
 Pre-authentication admission is process-local and bounded to 4096 pseudonymous
 keys; repeated unknown tokens are negatively cached for at most five seconds.
-It does not cache successful credential authorization. Network-wide abuse control
+Tokens OpsKnight has not verified recently are limited to 120 attempts per minute
+for each source address, so a flood of random tokens from one address cannot
+cause `429` for a directory connecting from another. Only requests with no usable
+source address share a single limit of 1200 attempts per minute. It does not
+cache successful credential authorization. Network-wide abuse control
 remains an ingress deployment responsibility.
 
 ## Upgrading legacy membership ownership
