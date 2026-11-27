@@ -585,8 +585,32 @@ export async function evaluatePrePagingControls(
   const base = { mode: policy.mode, policyRevision: policy.revision, policyVersionId };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let staged: ReturnType<typeof decideStatic> | null = null;
+  // The lookups (dedup, flapping, storm) may fail open; the operator's own orchestration rules were
+  // already decided in memory and must still apply, or an urgency raise would be lost with them.
+  const failOpenKeepingTransform = (reason: PrePagingFailOpenReason) => {
+    const failed = failOpen(reason, policy.mode, startedAt, policy.revision, policyVersionId);
+    const transform = staged?.transform;
+    return transform
+      ? result(
+          base,
+          {
+            action: 'TRANSFORM',
+            control: 'ORCHESTRATION',
+            reason: `Transformed by orchestration rules (lookups failed open: ${reason})`,
+            sourceId: null,
+            sourceName: null,
+            targetIncidentId: null,
+            transform,
+            evidence: { transform, failOpen: reason },
+          },
+          startedAt
+        )
+      : failed;
+  };
   try {
     const stage = decideStatic(input, policy, snapshot, now);
+    staged = stage;
     let decision = stage.decision;
     if (!decision) {
       const deadlineMs = options.deadlineMs ?? PREPAGING_LIMITS.deadlineMs;
@@ -602,8 +626,7 @@ export async function evaluatePrePagingControls(
           decideWithLookups(input, policy, snapshot, lookups, now, stage.transform),
           deadline,
         ]);
-        if (outcome === 'deadline')
-          return failOpen('deadline', policy.mode, startedAt, policy.revision, policyVersionId);
+        if (outcome === 'deadline') return failOpenKeepingTransform('deadline');
         decision = outcome;
       } else {
         decision = stage.transform
@@ -637,7 +660,7 @@ export async function evaluatePrePagingControls(
       });
     return final;
   } catch {
-    return failOpen('error', policy.mode, startedAt, policy.revision, policyVersionId);
+    return failOpenKeepingTransform('error');
   } finally {
     if (timer) clearTimeout(timer);
     observeOperationalHistogram(
