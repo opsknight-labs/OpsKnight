@@ -31,7 +31,7 @@ Open **Settings → Status Pages**. If no page exists, select **Create Status Pa
 2. Map services, set their order, and enable **Show on page** only for customer-relevant services.
 3. Configure branding, organization/contact details, allowed incident fields, and privacy mode.
 4. Choose public access or **Require authentication**. Test restricted access in a signed-out browser.
-5. Configure the default route and optional subdomain/custom domain only after DNS/TLS planning.
+5. Configure the default route and optional subdomain/custom domain only after DNS/TLS planning. A subdomain is a name under your own installation's host (the host of the configured app URL), so `acme` on an installation at `ops.example.com` is served at `acme.ops.example.com`; the page list, the page header and the preview show that address.
 6. Preview the live snapshot, then enable/publish the page.
 
 Each settings section (General, Appearance, Content, Services, Privacy, Advanced) has its own **Save** button, and a save publishes only the settings that section edits. An unsaved change in another section, such as a colour you tweaked in Appearance, stays unsaved and does not go live when you save Content.

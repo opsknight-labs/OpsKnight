@@ -32,7 +32,11 @@ vi.mock('@/contexts/TimezoneContext', () => ({
 
 // Mock sub-components
 vi.mock('@/components/status-page/StatusPageLivePreview', () => ({
-  default: () => <div data-testid="live-preview">Live Preview</div>,
+  default: ({ previewDomain }: { previewDomain?: string }) => (
+    <div data-testid="live-preview" data-preview-domain={previewDomain}>
+      Live Preview
+    </div>
+  ),
 }));
 
 vi.mock('@/components/status-page/StatusPageHeader', () => ({
@@ -118,6 +122,33 @@ describe('StatusPageConfig Component', () => {
 
     expect(screen.getByTestId('live-preview')).toBeDefined();
     expect(screen.getByText(/Hide Preview/i)).toBeDefined();
+  });
+
+  it('previews the page address under the installation host, not opsknight.com', () => {
+    const previewDomainOf = (props: Partial<React.ComponentProps<typeof StatusPageConfig>>) => {
+      const view = render(
+        <StatusPageConfig
+          statusPage={mockStatusPage}
+          allServices={mockAllServices}
+          appHost="ops.acme.test:8443"
+          {...props}
+        />
+      );
+      fireEvent.click(screen.getByText(/Show Preview/i));
+      const domain = screen.getByTestId('live-preview').getAttribute('data-preview-domain');
+      view.unmount();
+      return domain;
+    };
+
+    expect(previewDomainOf({})).toBe('test.ops.acme.test:8443');
+    expect(
+      previewDomainOf({ statusPage: { ...mockStatusPage, subdomain: null, slug: 'main' } })
+    ).toBe('status-main.ops.acme.test:8443');
+    expect(
+      previewDomainOf({
+        statusPage: { ...mockStatusPage, subdomain: null, customDomain: 'status.acme.test' },
+      })
+    ).toBe('status.acme.test');
   });
 
   it('shows success message after successful save', async () => {
