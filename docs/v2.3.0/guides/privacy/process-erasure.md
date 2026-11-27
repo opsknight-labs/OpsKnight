@@ -31,7 +31,7 @@ Open **Settings → Privacy Requests**, select the erasure request, and open **E
 
 ## What OpsKnight does
 
-Execution rechecks verification and `PROCESSING` state inside the operation, claims the request against concurrent execution, applies the policy, records results, and retains the Privacy Request row as fulfilment evidence. A blocker moves the operation/request into auditable failed or blocked state rather than silently deleting partial data.
+Execution rechecks verification and `PROCESSING` state inside the operation, claims the request against concurrent execution, applies the policy, records results, and retains the Privacy Request row as fulfilment evidence. The subject's own audit entries are kept and pseudonymised: the IP address is cleared and their email, name, phone number and known IP addresses are replaced with `[erased]` in each entry's details. The preview's audit count is the number of entries this covers. A blocker moves the operation/request into auditable failed or blocked state rather than silently deleting partial data.
 
 ## Verify the erasure
 

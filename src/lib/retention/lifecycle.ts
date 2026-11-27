@@ -229,3 +229,21 @@ export async function previewDataCleanupWithHolds(
   const result = await performDataCleanup(true, policyOverride);
   return result as CleanupResultWithHolds;
 }
+
+/**
+ * Audit rows that belong to nobody under a USER legal hold: rows the held person performed
+ * (actorId) or that describe them (entity USER). Nulls are kept explicitly because a bare
+ * NOT/notIn drops NULL rows in SQL.
+ */
+export function auditRowsOutsideHeldUsers(
+  heldUserIds: readonly string[]
+): Prisma.AuditLogWhereInput {
+  if (heldUserIds.length === 0) return {};
+  const held = [...heldUserIds];
+  return {
+    AND: [
+      { OR: [{ actorId: null }, { actorId: { notIn: held } }] },
+      { OR: [{ entityType: { not: 'USER' } }, { entityId: null }, { entityId: { notIn: held } }] },
+    ],
+  };
+}

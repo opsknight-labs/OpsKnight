@@ -4,6 +4,7 @@ import { logger } from './logger';
 import { getRetentionPolicy, type RetentionPolicy } from './retention-policy';
 import { cleanupOldRollups } from './metric-rollup';
 import {
+  auditRowsOutsideHeldUsers,
   filterHeldIncidents,
   filterHeldPrivacyRequests,
   filterHeldUsers,
@@ -13,29 +14,13 @@ import {
 } from './retention/lifecycle';
 import { acquireRetentionResourceLock } from './retention/resource-lock';
 
+export { auditRowsOutsideHeldUsers };
+
 export const CLEANUP_MUTEX_KEY = 'mutex:data-cleanup';
 export const CLEANUP_MUTEX_LEASE_MS = 15 * 60 * 1000; // 15 minutes
 // The audit trail outlives short log retention so one admin cannot erase it (and the record
 // of the policy change) by setting logRetentionDays to a day.
 export const AUDIT_LOG_MIN_RETENTION_DAYS = 365;
-
-/**
- * Audit rows that belong to nobody under a USER legal hold: rows the held person performed
- * (actorId) or that describe them (entity USER). Nulls are kept explicitly because a bare
- * NOT/notIn drops NULL rows in SQL.
- */
-export function auditRowsOutsideHeldUsers(
-  heldUserIds: readonly string[]
-): Prisma.AuditLogWhereInput {
-  if (heldUserIds.length === 0) return {};
-  const held = [...heldUserIds];
-  return {
-    AND: [
-      { OR: [{ actorId: null }, { actorId: { notIn: held } }] },
-      { OR: [{ entityType: { not: 'USER' } }, { entityId: null }, { entityId: { notIn: held } }] },
-    ],
-  };
-}
 
 /**
  * Acquires the distributed cleanup mutex lease on RateLimit.

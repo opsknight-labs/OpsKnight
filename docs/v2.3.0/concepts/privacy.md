@@ -7,7 +7,7 @@ audience: [administrator, operator]
 verification:
   level: source
   verified_at: 2026-09-27
-  evidence: [src/lib/privacy/requests.ts, src/lib/retention-policy.ts]
+  evidence: [src/lib/privacy/requests.ts, src/lib/retention-policy.ts, src/lib/privacy/erasure/audit-pseudonymise.ts]
 ---
 
 # Privacy requests and retention
@@ -32,6 +32,17 @@ sign-ins and other sign-in attempts) carry no user and are not covered by the
 hold. Encryption-key retirement, database backups, third-party
 systems, and exported artifacts each have their own lifecycle and must be
 included in the deployment's privacy procedure.
+
+Erasure keeps the audit trail but pseudonymises the person's own entries: the
+ones they performed, the ones keyed by their email address (failed sign-ins), and
+the ones about their account. Each keeps its action, entity type and timestamp;
+the IP address is cleared, and their email, name, phone number and the IP
+addresses seen on those entries are replaced with `[erased]` wherever they appear
+in the entry's details. Entries that a hold on another user protects are left as
+they are, and a hold on the person blocks the erasure. Entries that only mention
+the person inside someone else's free text, values written in a different form
+(a misspelt name, a reformatted phone number), and logs outside the database
+cannot be attributed and are covered by the manual-review step.
 
 Preserve request transitions, operator decisions, export generation, erasure
 results, and hold changes as audit evidence. Avoid copying subject data into

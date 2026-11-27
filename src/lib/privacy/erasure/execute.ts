@@ -12,6 +12,7 @@ import { buildSubjectErasurePlan } from './plan';
 import { verifySubjectErasure } from './verify';
 import { discoverErasureBlockersTx, type ErasureDomainCounts } from './discover';
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
+import { pseudonymiseSubjectAuditRows } from './audit-pseudonymise';
 
 export interface ErasureActor {
   id: string;
@@ -209,7 +210,7 @@ export async function executeErasure(
   try {
     const subjectRow = await prisma.user.findUnique({
       where: { id: subjectId },
-      select: { email: true },
+      select: { email: true, name: true, phoneNumber: true },
     });
 
     let domainCounts: ErasureDomainCounts;
@@ -227,6 +228,12 @@ export async function executeErasure(
       }
 
       const subjectEmail = subjectRow.email?.toLowerCase() ?? null;
+      const subjectIdentity = {
+        id: subjectId,
+        email: subjectEmail,
+        name: subjectRow.name,
+        phoneNumber: subjectRow.phoneNumber,
+      };
       domainCounts = plan.domains.reduce<ErasureDomainCounts>((acc, domain) => {
         acc[domain.id] = domain.count;
         return acc;
@@ -287,6 +294,11 @@ export async function executeErasure(
             details: { blockingConditions: freshBlockers },
           });
         }
+
+        // --- ANONYMIZE: pseudonymise the subject's own audit rows (IP cleared, their identifiers
+        // replaced inside `details`) while the identifier columns below still find them. Rows a
+        // legal hold on another user protects are left as they are.
+        await pseudonymiseSubjectAuditRows(tx, subjectIdentity);
 
         // --- ANONYMIZE: scrub the immutable audit-log PII snapshot in place.
         // actorId itself is left alone here; it is SetNull automatically when

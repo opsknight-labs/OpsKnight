@@ -34,7 +34,11 @@ const mocks = vi.hoisted(() => {
       updateMany: txPrivacyErasureUpdateMany,
       update: txPrivacyErasureUpdate,
     },
-    auditLog: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    auditLog: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([] as unknown[]),
+    },
+    $executeRaw: vi.fn().mockResolvedValue(0),
     teamMember: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       findMany: txTeamMemberFindMany,
@@ -246,6 +250,9 @@ describe('executeErasure', () => {
     // Only the deleteMany/updateMany leaves are reset here; count/findMany
     // leaves for the in-tx revalidation are controlled above.
     mocks.tx.auditLog.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.auditLog.findMany.mockResolvedValue([] as never);
+    mocks.tx.$executeRaw.mockResolvedValue(0 as never);
+    delete (mocks.tx as Record<string, unknown>).dataRetentionHold;
     mocks.tx.teamMember.deleteMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.incidentWatcher.deleteMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.onCallShift.deleteMany.mockResolvedValue({ count: 0 } as never);
@@ -414,6 +421,68 @@ describe('executeErasure', () => {
       expect(data).not.toHaveProperty('entityType');
       expect(data).not.toHaveProperty('createdAt');
     }
+  });
+
+  it("pseudonymises the subject's own audit rows (IP cleared, identifiers erased from details) before the identifier columns are nulled", async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.userFindUnique.mockResolvedValue({
+      email: 'Alice@Example.com',
+      name: 'Alice Smith',
+      phoneNumber: '+15550100',
+    });
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+    mocks.tx.auditLog.findMany.mockImplementation((async (args: {
+      where: { id?: unknown };
+      select: Record<string, boolean>;
+    }) => {
+      if (args.where.id) {
+        return [
+          { id: 'audit-1', details: { note: 'Alice Smith from 198.51.100.4', n: 1 } },
+          { id: 'audit-2', details: { note: 'unrelated' } },
+        ];
+      }
+      if (args.select.ip) return [{ ip: '198.51.100.4' }];
+      return [{ id: 'audit-1' }, { id: 'audit-2' }];
+    }) as never);
+    mocks.tx.auditLog.updateMany.mockResolvedValue({ count: 2 } as never);
+
+    await executeErasure(REQUEST_ID, ACTOR);
+
+    expect(mocks.tx.$executeRaw).toHaveBeenCalledTimes(1);
+    const [, ids, docs] = mocks.tx.$executeRaw.mock.calls[0] as unknown as [unknown, string[], string[]];
+    expect(ids).toEqual(['audit-1']);
+    expect(docs.map(doc => JSON.parse(doc))).toEqual([{ note: '[erased] from [erased]', n: 1 }]);
+
+    const calls = mocks.tx.auditLog.updateMany.mock.calls.map(call => call[0]);
+    const clearIp = calls.findIndex(call => 'ip' in call.data);
+    const clearEmail = calls.findIndex(call => 'actorEmail' in call.data);
+    expect(calls.at(clearIp)?.data).toEqual({ ip: null });
+    // The rows are found through actorEmail/targetEmail/entityId, so the IP goes first.
+    expect(clearIp).toBeGreaterThanOrEqual(0);
+    expect(clearIp).toBeLessThan(clearEmail);
+    expect(mocks.tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.tx.auditLog.updateMany.mock.invocationCallOrder.at(clearEmail) ?? 0
+    );
+  });
+
+  it('touches no audit row when the subject is under a legal hold', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    (mocks.tx as Record<string, unknown>).dataRetentionHold = {
+      findMany: vi.fn().mockResolvedValue([{ id: 'hold-1' }]),
+    };
+
+    await expect(executeErasure(REQUEST_ID, ACTOR)).rejects.toMatchObject({
+      code: 'PRIVACY_ERASURE_BLOCKED',
+    });
+
+    expect(mocks.tx.auditLog.findMany).not.toHaveBeenCalled();
+    expect(mocks.tx.auditLog.updateMany).not.toHaveBeenCalled();
+    expect(mocks.tx.$executeRaw).not.toHaveBeenCalled();
+    expect(mocks.tx.user.deleteMany).not.toHaveBeenCalled();
   });
 
   it('deletes the User row and transitions the request to COMPLETED on success', async () => {
