@@ -21,6 +21,8 @@ import {
   findTeamDeletionBlocker,
 } from '@/lib/teams/administration';
 
+const TEAM_ALREADY_DELETED = 'This team no longer exists. It may already have been deleted.';
+
 type TeamFormState = {
   error?: string | null;
   success?: boolean;
@@ -168,40 +170,42 @@ export async function deleteTeam(teamId: string) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
+  if (!team) return { error: TEAM_ALREADY_DELETED };
   const blocker = await findTeamDeletionBlocker(teamId);
   if (blocker) return { error: blocker };
-  await prisma.$transaction([
-    prisma.teamMember.deleteMany({
-      where: { teamId },
-    }),
-    prisma.service.updateMany({
-      where: { teamId },
-      data: { teamId: null },
-    }),
-    prisma.incident.updateMany({
-      where: { teamId },
-      data: { teamId: null },
-    }),
-    prisma.escalationRule.updateMany({
-      where: { targetTeamId: teamId },
-      data: { targetTeamId: null },
-    }),
-    prisma.dashboard.updateMany({
-      where: { teamId },
-      data: { teamId: null },
-    }),
-    prisma.team.delete({
-      where: { id: teamId },
-    }),
-  ]);
-
   const actorId = currentUser.id;
-  await logAudit({
-    action: 'team.deleted',
-    entityType: 'TEAM',
-    entityId: teamId,
-    actorId,
-  });
+  try {
+    // The audit row commits with the delete: a failed audit rolls the delete back, and a
+    // committed delete always has its audit row.
+    await prisma.$transaction(async tx => {
+      await tx.teamMember.deleteMany({ where: { teamId } });
+      await tx.service.updateMany({ where: { teamId }, data: { teamId: null } });
+      await tx.incident.updateMany({ where: { teamId }, data: { teamId: null } });
+      await tx.escalationRule.updateMany({
+        where: { targetTeamId: teamId },
+        data: { targetTeamId: null },
+      });
+      await tx.dashboard.updateMany({ where: { teamId }, data: { teamId: null } });
+      await tx.team.delete({ where: { id: teamId } });
+      await logAudit(
+        {
+          action: 'team.deleted',
+          entityType: 'TEAM',
+          entityId: teamId,
+          actorId,
+          details: { name: team.name },
+        },
+        tx
+      );
+    });
+  } catch (error) {
+    // A second delete from another tab loses the race for the row.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return { error: TEAM_ALREADY_DELETED };
+    }
+    throw error;
+  }
 
   revalidatePath('/teams');
   revalidatePath('/services');
