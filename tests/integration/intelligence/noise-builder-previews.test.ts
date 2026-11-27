@@ -103,7 +103,7 @@ async function seed(now: Date) {
   for (const [i, alert] of alerts.entries()) {
     const incident = await createTestIncident(`Alert ${i}`, alert.serviceId, {
       createdAt: alert.at,
-      urgency: 'HIGH',
+      urgency: alert.severity === 'critical' ? 'HIGH' : 'MEDIUM',
     });
     await db.alert.create({
       data: {
@@ -244,8 +244,10 @@ describe('previewMaintenanceWindow', () => {
     );
     expect(preview.shiftedWeeks).toBe(0);
     // Only Checkout belongs to the team; 23 of every 24 hours are covered, so most of its 5 incidents.
-    expect(preview.outcome.downgraded).toBeGreaterThanOrEqual(4);
-    expect(preview.outcome.downgraded).toBeLessThanOrEqual(5);
+    // Its critical incidents are never downgraded by a window that does not cover critical.
+    expect(preview.outcome.guardedCritical).toBeGreaterThanOrEqual(1);
+    expect(preview.outcome.downgraded + preview.outcome.guardedCritical).toBeGreaterThanOrEqual(4);
+    expect(preview.outcome.downgraded + preview.outcome.guardedCritical).toBeLessThanOrEqual(5);
     expect(preview.outcome.examples.every(example => example.serviceId !== undefined)).toBe(true);
   });
 

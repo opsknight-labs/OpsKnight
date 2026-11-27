@@ -126,6 +126,13 @@ export function ReplaySummary({
             }.`}
       </p>
       {note && <p className="text-xs text-muted-foreground">{note}</p>}
+      {outcome.guardedCritical > 0 && (
+        <p className="text-xs text-muted-foreground" role="note">
+          {outcome.guardedCritical} critical or HIGH-urgency incident
+          {outcome.guardedCritical === 1 ? '' : 's'} matched but would still page, because this control
+          does not cover critical alerts.
+        </p>
+      )}
       {highUrgencyNote(outcome) && (
         <p className="text-xs text-muted-foreground">{highUrgencyNote(outcome)}</p>
       )}
@@ -161,6 +168,37 @@ export function ReplaySummary({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** The opt-in that lets a window, rule or orchestration rule hide critical and HIGH-urgency alerts. */
+export function CoversCriticalField({
+  id,
+  checked,
+  onChange,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="space-y-1 sm:col-span-2">
+      <label htmlFor={id} className="flex items-start gap-2 text-sm">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={event => onChange(event.target.checked)}
+          className="mt-1"
+          aria-describedby={`${id}-help`}
+        />
+        <span>Also hide critical and HIGH-urgency alerts</span>
+      </label>
+      <p id={`${id}-help`} className="text-xs text-muted-foreground">
+        Off by default: a critical alert always pages. Turn this on only when nobody should be paged for
+        anything this matches, even a real outage.
+      </p>
     </div>
   );
 }

@@ -407,6 +407,27 @@ async function applyEvent(
           dedupKey: dedup_key,
         };
       }
+      // A resolve for an alert noise controls dropped closes that dropped episode. Buffering it would let
+      // the next trigger for the key open already RESOLVED and page nobody.
+      const latestUnlinked = await tx.alert.findFirst({
+        where: { dedupKey: { in: candidateDedupKeys }, serviceId, incidentId: null },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        select: { id: true, status: true },
+      });
+      if (
+        latestUnlinked?.status === 'TRIGGERED' &&
+        (await tx.prePagingDecision.findFirst({
+          where: { alertId: latestUnlinked.id, action: 'DROP', applied: true },
+          select: { id: true },
+        }))
+      ) {
+        logger.info('event.resolve_for_dropped_alert', { dedupKey: dedup_key, serviceId });
+        return {
+          action: 'ignored',
+          reason: 'Resolve for an alert dropped by noise controls',
+          dedupKey: dedup_key,
+        };
+      }
       const alert = await persistAlert();
       logger.info('event.resolve_buffered_for_out_of_order', {
         dedupKey: dedup_key,
@@ -453,7 +474,24 @@ async function applyEvent(
         // A flapping hold has no timer of its own: the next trigger after the
         // signal stabilises releases it, so a flapped-then-steady alert still pages.
         let releasedFlappingHold = false;
-        if (existingIncident.status === 'SUPPRESSED') {
+        // A worse alert on a suppressed incident must page: a critical re-fire is never kept quiet by
+        // the control that hid the first, milder alert.
+        if (
+          existingIncident.status === 'SUPPRESSED' &&
+          urgencyRaised &&
+          effectiveUrgency === 'HIGH'
+        ) {
+          releasedFlappingHold = (
+            await applyIncidentLifecycleCommand(tx, {
+              incidentId: existingIncident.id,
+              command: 'UNSUPPRESS',
+              source: 'EVENT',
+              expectedStatus: 'SUPPRESSED',
+              eventMessage: `Alert from ${normalizedSource} re-fired at ${effectiveUrgency} urgency; incident released for paging.`,
+            })
+          ).changed;
+        }
+        if (existingIncident.status === 'SUPPRESSED' && !releasedFlappingHold) {
           const flappingHold = await tx.incidentSlaPause.findFirst({
             where: {
               incidentId: existingIncident.id,

@@ -28,6 +28,7 @@ import {
   FieldError,
   fieldClass,
   fromLocalInput,
+  CoversCriticalField,
   initialActionState,
   labelClass,
   ReplaySummary,
@@ -51,6 +52,7 @@ export interface WindowDraft {
   labelValue: string;
   effect: Effect;
   downgradeUrgency: 'LOW' | 'MEDIUM';
+  coversCritical: boolean;
   startsAt: string;
   endsAt: string;
   preset: RecurrencePreset;
@@ -74,6 +76,7 @@ export function emptyWindowDraft(): WindowDraft {
     labelValue: '',
     effect: 'SUPPRESS',
     downgradeUrgency: 'LOW',
+    coversCritical: false,
     startsAt: '',
     endsAt: '',
     preset: 'none',
@@ -100,6 +103,7 @@ export function draftFromWindow(
     labelValue: window.labelValue ?? '',
     effect: window.effect,
     downgradeUrgency: window.downgradeUrgency === 'MEDIUM' ? 'MEDIUM' : 'LOW',
+    coversCritical: window.coversCritical,
     startsAt: toLocalInput(window.startsAt),
     endsAt: toLocalInput(window.endsAt),
     preset,
@@ -151,6 +155,7 @@ export function windowInputFromDraft(
       recurrence,
       effect: draft.effect,
       ...(draft.effect === 'DOWNGRADE' ? { downgradeUrgency: draft.downgradeUrgency } : {}),
+      coversCritical: draft.coversCritical,
     },
     errors,
   };
@@ -426,6 +431,11 @@ export function MaintenanceWindowBuilder({
             </select>
           </div>
         )}
+        <CoversCriticalField
+          id={`${id}-cc`}
+          checked={draft.coversCritical}
+          onChange={checked => set('coversCritical', checked)}
+        />
       </div>
 
       <fieldset className="grid gap-3 sm:grid-cols-4">

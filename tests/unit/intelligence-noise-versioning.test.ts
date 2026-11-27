@@ -173,6 +173,7 @@ describe('decisions reference the evaluated version (hot path unchanged)', () =>
           name: dropDebug.name,
           conditions: dropDebug.conditions.map(compileMatcher),
           actions: dropDebug.actions,
+          coversCritical: false,
         },
       ],
     };

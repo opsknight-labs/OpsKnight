@@ -48,9 +48,16 @@ and every decision is recorded and reversible. Highest urgency is never held.
 - **Reversible.** Every decision is listed under _Recent decisions_. Reversing an applied decision
   re-ingests the alert through the normal event path so it pages ("un-group and page"); reversing a shadow
   decision marks it wrong and counts against readiness.
-- **HIGH urgency.** Maintenance windows, suppression rules and orchestration apply to every urgency
-  (they are explicit operator intent). Content dedup, flapping and storm grouping leave HIGH alone unless
-  the policy opts in, and a storm hold is never applied to HIGH.
+- **Critical and HIGH urgency always page.** A critical alert (severity `critical`, or HIGH urgency after
+  orchestration has run) is never suppressed, dropped or downgraded by a maintenance window, suppression
+  rule or orchestration `DROP`/`SUPPRESS` unless that control has **Also hide critical and HIGH-urgency
+  alerts** ticked (`coversCritical`). Controls created before this setting existed do not cover critical.
+  A replay shows how many critical incidents a control matched but left paging. Content dedup, flapping
+  and storm grouping leave HIGH alone unless the policy opts in, and a storm hold is never applied to HIGH.
+- **Released when the reason ends.** A suppressed incident pages again when its window ends, its rule is
+  disabled, deleted or edited so it no longer matches, or its orchestration rule is disabled or removed (or
+  its policy is switched off), as long as the alert is still firing. A repeat of a suppressed alert at
+  HIGH urgency pages at once.
 
 ## Controls
 

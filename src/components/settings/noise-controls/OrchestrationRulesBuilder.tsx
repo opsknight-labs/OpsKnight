@@ -47,6 +47,7 @@ export interface RuleDraft {
   id: string;
   name: string;
   enabled: boolean;
+  coversCritical: boolean;
   conditions: MatcherDraft[];
   actions: ActionDraft[];
 }
@@ -75,6 +76,7 @@ export function ruleDraft(rule: OrchestrationRule, uid: string): RuleDraft {
     id: rule.id,
     name: rule.name,
     enabled: rule.enabled,
+    coversCritical: rule.coversCritical,
     conditions: rule.conditions.map(draftFromMatcher),
     actions: rule.actions.map(actionDraft),
   };
@@ -106,6 +108,7 @@ export function rulesFromDrafts(drafts: readonly RuleDraft[]): Array<Record<stri
       id: draft.id,
       name: draft.name.trim(),
       enabled: draft.enabled,
+      coversCritical: draft.coversCritical,
       conditions:
         matchers ??
         draft.conditions.map(condition => ({
@@ -305,6 +308,7 @@ export default function OrchestrationRulesBuilder({
         id: slugifyRuleId(`rule ${current.length + 1}`, taken),
         name: '',
         enabled: true,
+        coversCritical: false,
         conditions: [emptyMatcher()],
         actions: [{ type: 'SUPPRESS', value: '', key: '' }],
       },
@@ -434,6 +438,19 @@ export default function OrchestrationRulesBuilder({
                       className="h-4 w-4"
                     />
                     Enabled
+                  </label>
+                  <label
+                    className="flex min-h-11 items-center gap-2 text-sm sm:min-h-9"
+                    title="Off by default: a critical alert always pages. Turn on only when a drop or suppress should hide critical alerts too."
+                  >
+                    <input
+                      type="checkbox"
+                      checked={rule.coversCritical}
+                      disabled={!canManage}
+                      onChange={event => update(index, { coversCritical: event.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    Also hide critical
                   </label>
                   <div className="flex items-center gap-1">
                     <Button

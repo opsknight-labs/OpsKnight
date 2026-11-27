@@ -127,6 +127,8 @@ export const orchestrationRuleSchema = z
       .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/, 'Rule ids use lowercase letters, digits, "-" and "_"'),
     name: shortText,
     enabled: z.boolean().default(true),
+    /** DROP and SUPPRESS skip critical and HIGH-urgency alerts unless this is set. */
+    coversCritical: z.boolean().default(false),
     /** Every condition must match (AND); use several rules for OR. */
     conditions: z.array(matcherSchema).min(1).max(PREPAGING_LIMITS.maxConditions),
     actions: z.array(orchestrationActionSchema).min(1).max(PREPAGING_LIMITS.maxActions),
@@ -275,6 +277,8 @@ export const maintenanceWindowInputSchema = z
     recurrence: z.string().trim().max(512).nullable().optional(),
     effect: z.enum(['SUPPRESS', 'DOWNGRADE']).default('SUPPRESS'),
     downgradeUrgency: urgency.optional(),
+    /** Critical and HIGH-urgency alerts page through the window unless this is set. */
+    coversCritical: z.boolean().default(false),
     statusPageAnnouncementId: id.optional(),
   })
   .strict()
@@ -313,6 +317,8 @@ export const suppressionRuleInputSchema = z
     matchers: z.array(matcherSchema).min(1).max(PREPAGING_LIMITS.maxMatchers),
     effect: z.enum(['SUPPRESS', 'DOWNGRADE']).default('SUPPRESS'),
     downgradeUrgency: urgency.optional(),
+    /** Critical and HIGH-urgency alerts page despite the rule unless this is set. */
+    coversCritical: z.boolean().default(false),
     expiresAt: isoDate.nullable().optional(),
     ownerId: id.nullable().optional(),
     origin: z.enum(['MANUAL', 'SUGGESTED']).default('MANUAL'),

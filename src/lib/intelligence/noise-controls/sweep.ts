@@ -10,7 +10,7 @@ import {
   type ClaimedWorkItem,
   type WorkKind,
 } from '../jobs/work-queue';
-import { PREPAGING_LIMITS } from './contract';
+import { noiseControlDefinitionSchema, PREPAGING_LIMITS } from './contract';
 import { isWindowActiveAt } from './recurrence';
 import { compileSuppressionRule } from './cache';
 import { matchesAll } from './matchers';
@@ -127,9 +127,38 @@ async function endedReason(
         ])
       )
     : new Map();
+  // An orchestration SUPPRESS lasts only while an ON policy (the alert's service or the global one) still
+  // holds the rule with a SUPPRESS action; a disabled or deleted rule, or a policy switched off, releases it.
+  const orchRows = eligible.filter(row => row.control === 'ORCHESTRATION' && row.sourceId);
+  const activeOrchestration = new Set<string>();
+  if (orchRows.length) {
+    const policies = await prisma.noiseControlPolicy.findMany({
+      where: {
+        mode: 'ON',
+        OR: [
+          { serviceId: null },
+          { serviceId: { in: [...new Set(orchRows.map(row => row.alertServiceId ?? ''))] } },
+        ],
+      },
+      select: { serviceId: true, definition: true },
+    });
+    for (const policy of policies) {
+      const parsed = noiseControlDefinitionSchema.safeParse(policy.definition);
+      if (!parsed.success) continue;
+      for (const rule of parsed.data.orchestration.rules)
+        if (rule.enabled && rule.actions.some(action => action.type === 'SUPPRESS'))
+          activeOrchestration.add(`${policy.serviceId ?? ''}:${rule.id}`);
+    }
+  }
   const ended = new Map<string, string>();
   for (const row of eligible) {
-    if (row.control === 'MAINTENANCE') {
+    if (row.control === 'ORCHESTRATION') {
+      const held =
+        row.sourceId !== null &&
+        (activeOrchestration.has(`:${row.sourceId}`) ||
+          activeOrchestration.has(`${row.alertServiceId ?? ''}:${row.sourceId}`));
+      if (!held) ended.set(row.id, 'its orchestration rule ended');
+    } else if (row.control === 'MAINTENANCE') {
       const window = row.sourceId ? windows.get(row.sourceId) : undefined;
       if (
         !window ||

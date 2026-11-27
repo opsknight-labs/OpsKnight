@@ -193,6 +193,7 @@ export async function previewMaintenanceWindow(
     recurrence: parsed.recurrence ?? null,
     effect: parsed.effect,
     downgradeUrgency: parsed.effect === 'DOWNGRADE' ? (parsed.downgradeUrgency ?? null) : null,
+    coversCritical: parsed.coversCritical,
     endedAt: null,
   };
   const serviceTeams = new Map<string, string | null>();
@@ -234,6 +235,7 @@ export async function previewSuppressionRule(
     matchers: parsed.matchers,
     effect: parsed.effect,
     downgradeUrgency: parsed.effect === 'DOWNGRADE' ? (parsed.downgradeUrgency ?? null) : null,
+    coversCritical: parsed.coversCritical,
     // Replay the past as if the rule had been live; its expiry only matters from now on.
     expiresAt: null,
   });

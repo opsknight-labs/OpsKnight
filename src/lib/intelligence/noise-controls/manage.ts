@@ -353,6 +353,7 @@ export interface MaintenanceWindowView {
   recurrence: string | null;
   effect: 'SUPPRESS' | 'DOWNGRADE';
   downgradeUrgency: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+  coversCritical: boolean;
   enabled: boolean;
   endedAt: Date | null;
   /** Active right now (an operator-ended window is never active). */
@@ -403,6 +404,7 @@ export async function listMaintenanceWindows(
       recurrence: row.recurrence,
       effect: row.effect,
       downgradeUrgency: row.downgradeUrgency,
+      coversCritical: row.coversCritical,
       enabled: row.enabled,
       endedAt: row.endedAt,
       active: next !== null && next.startsAt <= now.getTime() && next.endsAt >= now.getTime(),
@@ -440,6 +442,7 @@ export async function createMaintenanceWindow(input: unknown, actor: Intelligenc
         recurrence: parsed.recurrence ?? null,
         effect: parsed.effect,
         downgradeUrgency: parsed.effect === 'DOWNGRADE' ? parsed.downgradeUrgency! : null,
+        coversCritical: parsed.coversCritical,
         statusPageAnnouncementId: parsed.statusPageAnnouncementId ?? null,
         createdById: actor.actorId,
       },
@@ -531,6 +534,7 @@ export async function listSuppressionRules(client: Client = prisma) {
     matchers: (Array.isArray(row.matchers) ? row.matchers : []) as Matcher[],
     effect: row.effect,
     downgradeUrgency: row.downgradeUrgency,
+    coversCritical: row.coversCritical,
     expiresAt: row.expiresAt,
     ownerId: row.ownerId,
     enabled: row.enabled,
@@ -551,6 +555,7 @@ export async function createSuppressionRule(input: unknown, actor: IntelligenceA
         matchers: parsed.matchers as unknown as Prisma.InputJsonValue,
         effect: parsed.effect,
         downgradeUrgency: parsed.effect === 'DOWNGRADE' ? parsed.downgradeUrgency! : null,
+        coversCritical: parsed.coversCritical,
         expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null,
         ownerId: parsed.ownerId ?? actor.actorId,
         origin: parsed.origin,

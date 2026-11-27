@@ -92,6 +92,7 @@ export function compilePolicy(row: {
         name: rule.name,
         conditions: rule.conditions.map(compileMatcher),
         actions: rule.actions,
+        coversCritical: rule.coversCritical,
       })),
   };
 }
@@ -103,6 +104,7 @@ export function compileSuppressionRule(row: {
   matchers: unknown;
   effect: 'SUPPRESS' | 'DOWNGRADE';
   downgradeUrgency: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+  coversCritical: boolean;
   expiresAt: Date | null;
 }): CompiledSuppressionRule | null {
   try {
@@ -113,6 +115,7 @@ export function compileSuppressionRule(row: {
       matchers: parseMatchers(row.matchers).map(compileMatcher),
       effect: row.effect,
       downgradeUrgency: row.downgradeUrgency,
+      coversCritical: row.coversCritical,
       expiresAt: row.expiresAt,
     };
   } catch {
@@ -160,10 +163,12 @@ export async function loadPrePagingSnapshot(
         startsAt: { lte: horizon },
         OR: [{ recurrence: { not: null } }, { endsAt: { gte: new Date(now.getTime() - 60_000) } }],
       },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: 2_000,
     }),
     client.suppressionRule.findMany({
       where: { enabled: true, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: 2_000,
     }),
   ]);
@@ -224,6 +229,7 @@ export async function loadPrePagingSnapshot(
       recurrence: row.recurrence,
       effect: row.effect,
       downgradeUrgency: row.downgradeUrgency,
+      coversCritical: row.coversCritical,
       endedAt: row.endedAt,
     })),
     rules: rules

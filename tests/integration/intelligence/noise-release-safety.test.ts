@@ -77,11 +77,13 @@ function incidentOf(result: Awaited<ReturnType<typeof processEvent>>) {
   return result.incident;
 }
 
+/** Pending paging work for the incident: a new incident queues a notification effect, a released one an escalation. */
 async function pagingJobs(incidentId: string) {
   return db.backgroundJob.findMany({
     where: {
-      AND: [
-        { payload: { path: ['incidentId'], equals: incidentId } },
+      payload: { path: ['incidentId'], equals: incidentId },
+      OR: [
+        { type: 'ESCALATION', status: 'PENDING' },
         { payload: { path: ['effect'], equals: 'TRIGGER_ESCALATION_NOTIFICATIONS' } },
       ],
     },
@@ -153,6 +155,51 @@ describe('critical alerts are not hidden by static controls (N1)', () => {
     await policy(service.id);
     const result = await send(service.id, { severity: 'warning' });
     expect(result.action).toBe('suppressed');
+  });
+});
+
+describe('the critical guard can be opted out of, per control', () => {
+  it('suppresses a critical alert in a window that covers critical', async () => {
+    const service = await createTestService('Checkout');
+    await activeWindow(service.id, { coversCritical: true });
+    await policy(service.id);
+    const result = await send(service.id, { severity: 'critical' });
+    expect(result.action).toBe('suppressed');
+  });
+
+  it('suppresses a critical alert matching a rule that covers critical', async () => {
+    const service = await createTestService('Checkout');
+    await db.suppressionRule.create({
+      data: { name: 'Everything', matchers: matchAll, effect: 'SUPPRESS', coversCritical: true },
+    });
+    await policy(service.id);
+    expect((await send(service.id, { severity: 'critical' })).action).toBe('suppressed');
+  });
+
+  it('drops a critical alert matching an orchestration DROP that covers critical', async () => {
+    const service = await createTestService('Checkout');
+    await policy(service.id, {
+      orchestration: {
+        rules: [
+          {
+            id: 'drop-prom',
+            name: 'Drop prometheus',
+            coversCritical: true,
+            conditions: matchAll,
+            actions: [{ type: 'DROP' }],
+          },
+        ],
+      },
+    });
+    expect((await send(service.id, { severity: 'critical' })).action).toBe('dropped');
+  });
+
+  it('does not downgrade a critical alert in a downgrade window', async () => {
+    const service = await createTestService('Checkout');
+    await activeWindow(service.id, { effect: 'DOWNGRADE', downgradeUrgency: 'LOW' });
+    await policy(service.id);
+    const incident = incidentOf(await send(service.id, { severity: 'critical' }));
+    expect(incident.urgency).toBe('HIGH');
   });
 });
 
