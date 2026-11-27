@@ -66,7 +66,8 @@ export default function OverrideList({
           notify.error(result);
           return;
         }
-        notify.success('Override deleted successfully.');
+        // An override that is already running is ended, not deleted (its past coverage stays in history).
+        notify.success(status === 'ACTIVE' ? 'Override ended successfully.' : 'Override deleted successfully.');
         router.refresh();
       } catch (error) {
         notify.error(error);
