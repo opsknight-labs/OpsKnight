@@ -1072,6 +1072,23 @@ export async function provisionSlackWarRoom(
   // Off unless the war-room kickoff switch is on; best effort, never fails provisioning.
   const { postWarRoomKickoff } = await import('@/lib/chatops/war-room-kickoff');
   await postWarRoomKickoff({ incidentId: incident.id, channelId, botToken, baseUrl: appUrl });
+  // Slack Connect guests (off unless emails are configured and the optional scope was granted).
+  const externalEmails = (config as { slackWarRoomExternalEmails?: string[] })
+    .slackWarRoomExternalEmails;
+  if (externalEmails?.length) {
+    try {
+      const { getSlackBotScopes } = await import('@/lib/slack');
+      const { inviteWarRoomExternalGuests } = await import('./connect-invites');
+      await inviteWarRoomExternalGuests({
+        botToken,
+        channelId,
+        emails: externalEmails,
+        scopes: await getSlackBotScopes(incident.serviceId),
+      });
+    } catch (error) {
+      logger.warn('[ChatOps] Slack Connect invites skipped', { error: String(error) });
+    }
+  }
 
   const adoption = await runSerializableTransaction(tx =>
     adoptWarRoomChannel(tx, {

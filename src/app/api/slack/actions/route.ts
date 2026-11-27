@@ -194,7 +194,13 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         incident.slackWorkspaceId ||
         incident.service.slackIntegration?.workspaceId ||
         incident.service.slackWorkspaceId;
-      if (!workspaceId || !incidentWorkspaceId || workspaceId !== incidentWorkspaceId) {
+      const { slackWorkspaceMatches } = await import('@/lib/slack/workspace-match');
+      const sameWorkspace = await slackWorkspaceMatches({
+        teamId: workspaceId,
+        enterpriseId: typeof payload.enterprise?.id === 'string' ? payload.enterprise.id : null,
+        incidentWorkspaceId,
+      });
+      if (!workspaceId || !sameWorkspace) {
         logger.warn('[Slack Actions] Rejected action from a different Slack workspace', {
           incidentId,
           workspaceId,

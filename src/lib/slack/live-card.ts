@@ -408,5 +408,9 @@ async function postAndRecord(
       lastEventKey: request.eventKey,
     },
   });
+  // Channel nudges (off unless configured); never blocks or fails the card delivery.
+  await import('./nudges')
+    .then(({ armSlackNudges }) => armSlackNudges(input.incidentId))
+    .catch(error => logger.warn('[Slack] Could not arm nudges', { error: String(error) }));
   return { success: true, ts: posted.data.ts, channel: posted.data.channel };
 }

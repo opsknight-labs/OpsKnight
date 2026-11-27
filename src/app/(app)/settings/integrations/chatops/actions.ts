@@ -65,6 +65,22 @@ export async function saveChatOpsConfig(
               : null,
           }
         : {}),
+      ...Object.fromEntries(
+        ['slackUnackedNudgeMinutes', 'slackNoUpdateNudgeMinutes']
+          .filter(key => formData.has(key))
+          .map(key => {
+            const raw = String(formData.get(key) ?? '').trim();
+            // Empty or 0 turns the nudge off.
+            return [key, raw && Number(raw) !== 0 ? Number(raw) : null];
+          })
+      ),
+      ...(formData.has('slackWarRoomExternalEmails')
+        ? {
+            slackWarRoomExternalEmails: String(formData.get('slackWarRoomExternalEmails') ?? '')
+              .split(/[\s,;]+/)
+              .filter(Boolean),
+          }
+        : {}),
       defaultVideoBridge: String(formData.get('defaultVideoBridge') ?? 'NONE'),
       customBridgeUrlTemplate: String(formData.get('customBridgeUrlTemplate') ?? '').trim(),
       defaultProviders,
