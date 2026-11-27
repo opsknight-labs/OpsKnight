@@ -100,6 +100,13 @@ incidents leave the feed.
    on unowned rows), or open the incident. Move between rows with `j` and `k`.
 6. Select **View all incidents** to open the same filters on the Incidents page.
 
+If part of the live data cannot be read (for example during a database
+brown-out), that part says **unavailable** instead of showing zeros or an empty
+list: **Resolved · 24h** and the other 24-hour figures, **On call now**,
+**Recent activity**, and **SLA at Risk** when there is no snapshot at all. A
+card never shows "No active on-call shifts" or "Everything is within SLA" for
+data it could not read.
+
 The footer shows connection health (**Live**, **Stale**, **Offline**, or
 **Session expired**) and when data was last synchronized. After a reconnect,
 a filter change, or a missed update, the panel re-reads the authoritative list

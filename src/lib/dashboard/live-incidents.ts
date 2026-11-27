@@ -926,8 +926,14 @@ export async function resolveLiveDashboardSnapshot(
       counters: countersExact ? 'exact' : 'window',
       filtered: filteredExact ? 'exact' : 'window',
       sla: truncated ? 'window' : 'exact',
-      trend: trend?.truncated ? 'capped' : 'exact',
+      trend: !trend ? 'unavailable' : trend.truncated ? 'capped' : 'exact',
     },
+    unavailable: [
+      ...(activity ? [] : ['activity' as const]),
+      ...(onCall ? [] : ['onCall' as const]),
+      ...(schedules ? [] : ['schedules' as const]),
+      ...(trend ? [] : ['trend' as const]),
+    ],
     asOf: new Date().toISOString(),
     // The generation this snapshot actually reflects (never newer than the viewer's knowledge).
     generation: reflected ?? generation,

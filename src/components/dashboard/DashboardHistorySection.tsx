@@ -41,6 +41,7 @@ import CompactTeamLoad from '@/components/dashboard/compact/CompactTeamLoad';
 import {
   HISTORY_RANGES,
   formatIncidentAge,
+  isLiveSectionUnavailable,
   type HistoryQuery,
   type LiveActivityItem,
 } from '@/lib/dashboard/live-incidents-shared';
@@ -441,7 +442,18 @@ function ActivityTimeline() {
           ))}
         </div>
       </div>
-      {visible.length === 0 ? (
+      {isLiveSectionUnavailable(snapshot, 'activity') ? (
+        <div
+          className="flex h-full min-h-[140px] flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-muted/30 p-4 text-center"
+          role="status"
+          aria-label="Activity unavailable"
+        >
+          <div className="text-sm font-medium text-foreground">Activity unavailable</div>
+          <p className="text-xs text-muted-foreground">
+            Recent activity could not be read. It will return on the next refresh.
+          </p>
+        </div>
+      ) : visible.length === 0 ? (
         <div
           className="flex h-full min-h-[140px] flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-muted/30 p-4 text-center"
           role="status"
