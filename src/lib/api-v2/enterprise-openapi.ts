@@ -1272,6 +1272,26 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
         )
       ),
       inputKeys: object({ added: array(string()), removed: array(string()) }, ['added', 'removed']),
+      defaults: object(
+        {
+          before: object(
+            {
+              timeoutSeconds: { type: ['integer', 'null'] },
+              maxRetries: { type: ['integer', 'null'] },
+            },
+            ['timeoutSeconds', 'maxRetries']
+          ),
+          after: object(
+            {
+              timeoutSeconds: { type: ['integer', 'null'] },
+              maxRetries: { type: ['integer', 'null'] },
+            },
+            ['timeoutSeconds', 'maxRetries']
+          ),
+          changed: { type: 'boolean' },
+        },
+        ['before', 'after', 'changed']
+      ),
       inputChanges: array(
         object(
           {
@@ -1348,6 +1368,7 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       'base',
       'next',
       'steps',
+      'defaults',
       'inputKeys',
       'inputChanges',
       'inputDetails',

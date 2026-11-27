@@ -137,6 +137,7 @@ export default async function VersionComparePage({
   const diffSteps: StepDiffItem[] = impact.steps.map(step => ({
     key: step.key,
     change: step.change as StepChange,
+    moved: step.moved,
     before: describeStep(step.before, step.before?.riskClass),
     after: describeStep(step.after, step.risk),
   }));
@@ -329,6 +330,24 @@ export default async function VersionComparePage({
           After · v{impact.next.version}
         </span>
       </div>
+
+      {impact.defaults.changed && (
+        <p
+          role="status"
+          className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-foreground"
+        >
+          Run defaults changed. Timeout:{' '}
+          <span className="font-mono">{impact.defaults.before.timeoutSeconds ?? 'not set'}</span>
+          {' → '}
+          <span className="font-mono">
+            {impact.defaults.after.timeoutSeconds ?? 'not set'}
+          </span>{' '}
+          seconds. Retries:{' '}
+          <span className="font-mono">{impact.defaults.before.maxRetries ?? 'not set'}</span>
+          {' → '}
+          <span className="font-mono">{impact.defaults.after.maxRetries ?? 'not set'}</span>.
+        </p>
+      )}
 
       {/* Step Differences Main Component */}
       <VersionStepDiff

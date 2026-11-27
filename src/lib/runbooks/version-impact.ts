@@ -16,27 +16,41 @@ export async function getVersionImpact(
   const next = versions.find(version => version.id === nextVersionId);
   if (!base) throw new RunbookVersionNotFoundError(baseVersionId);
   if (!next) throw new RunbookVersionNotFoundError(nextVersionId);
-  const before = new Map(
-    flattenSteps(parseRunbookDefinition(base.definition, base.inputs)).map(step => [step.key, step])
-  );
-  const after = new Map(
-    flattenSteps(parseRunbookDefinition(next.definition, next.inputs)).map(step => [step.key, step])
-  );
+  const baseDefinition = parseRunbookDefinition(base.definition, base.inputs);
+  const nextDefinition = parseRunbookDefinition(next.definition, next.inputs);
+  const before = new Map(flattenSteps(baseDefinition).map(step => [step.key, step]));
+  const after = new Map(flattenSteps(nextDefinition).map(step => [step.key, step]));
   const keys = new Set([...before.keys(), ...after.keys()]);
-  const steps = [...keys].map(key => ({
-    key,
-    before: before.get(key) ?? null,
-    after: after.get(key) ?? null,
-    change: !before.has(key)
-      ? 'ADDED'
-      : !after.has(key)
-        ? 'REMOVED'
-        : JSON.stringify(sortJsonValue(before.get(key))) !==
-            JSON.stringify(sortJsonValue(after.get(key)))
-          ? 'CHANGED'
-          : 'UNCHANGED',
-    risk: after.get(key) ? minimumRiskForStep(after.get(key)!) : null,
-  }));
+  // Position among the steps both versions have, so an added or removed step does not count as a move.
+  const shared = (own: Map<string, unknown>, other: Map<string, unknown>) =>
+    [...own.keys()].filter(key => other.has(key));
+  const beforeOrder = shared(before, after);
+  const afterOrder = shared(after, before);
+  const steps = [...keys].map(key => {
+    const moved =
+      before.has(key) && after.has(key) && beforeOrder.indexOf(key) !== afterOrder.indexOf(key);
+    return {
+      key,
+      before: before.get(key) ?? null,
+      after: after.get(key) ?? null,
+      moved,
+      change: !before.has(key)
+        ? 'ADDED'
+        : !after.has(key)
+          ? 'REMOVED'
+          : moved ||
+              JSON.stringify(sortJsonValue(before.get(key))) !==
+                JSON.stringify(sortJsonValue(after.get(key)))
+            ? 'CHANGED'
+            : 'UNCHANGED',
+      risk: after.get(key) ? minimumRiskForStep(after.get(key)!) : null,
+    };
+  });
+  const runDefaults = (definition: typeof baseDefinition) => ({
+    timeoutSeconds: definition.defaultTimeoutSeconds ?? null,
+    maxRetries: definition.defaultMaxRetries ?? null,
+  });
+  const defaults = { before: runDefaults(baseDefinition), after: runDefaults(nextDefinition) };
   const inputChanges = next.inputs.flatMap(input => {
     const previous = base.inputs.find(candidate => candidate.key === input.key);
     if (!previous) return [];
@@ -75,6 +89,10 @@ export async function getVersionImpact(
     base: { version: base.version, checksum: base.checksum },
     next: { version: next.version, checksum: next.checksum },
     steps,
+    defaults: {
+      ...defaults,
+      changed: JSON.stringify(defaults.before) !== JSON.stringify(defaults.after),
+    },
     inputChanges,
     inputKeys: {
       added: next.inputs

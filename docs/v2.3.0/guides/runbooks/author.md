@@ -395,6 +395,10 @@ rule's pin:
 
 - Review added/removed/changed actions, derived risk, masked configuration,
   prechecks, verification, and input changes side by side.
+- A step that only moved to a different position shows as **Changed** with a
+  note that its order changed, and a changed default timeout or retry count
+  for the whole runbook is called out above the steps. The API diff returns the
+  run defaults as `defaults`.
 - **Changed Inputs** lists an input that kept its key but changed its type,
   became required (or stopped being required), or changed its default value or
   options. A newly required input breaks rules that do not pass it, so check

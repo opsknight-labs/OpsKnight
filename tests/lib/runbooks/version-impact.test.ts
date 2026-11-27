@@ -122,3 +122,52 @@ describe('getVersionImpact input changes', () => {
     expect((await getVersionImpact('rb', 'base', 'next')).inputChanges).toEqual([]);
   });
 });
+
+describe('getVersionImpact step order and run defaults', () => {
+  it('flags swapped steps as changed even though each step is identical', async () => {
+    load(version('base', 1, ['diagnose', 'restart']), version('next', 2, ['restart', 'diagnose']));
+
+    const impact = await getVersionImpact('rb', 'base', 'next');
+
+    expect(impact.steps.map(step => [step.key, step.change, step.moved])).toEqual([
+      ['diagnose', 'CHANGED', true],
+      ['restart', 'CHANGED', true],
+    ]);
+  });
+
+  it('does not call an unmoved step moved because a step was added before it', async () => {
+    load(version('base', 1, ['a', 'b']), version('next', 2, ['new', 'a', 'b']));
+
+    const impact = await getVersionImpact('rb', 'base', 'next');
+
+    expect(impact.steps.map(step => [step.key, step.change, step.moved])).toEqual([
+      ['a', 'UNCHANGED', false],
+      ['b', 'UNCHANGED', false],
+      ['new', 'ADDED', false],
+    ]);
+  });
+
+  it('reports a changed run timeout or retry default', async () => {
+    load(
+      version('base', 1, ['a'], [], 'PUBLISHED', { defaultTimeoutSeconds: 60 }),
+      version('next', 2, ['a'], [], 'PUBLISHED', {
+        defaultTimeoutSeconds: 600,
+        defaultMaxRetries: 2,
+      })
+    );
+
+    const impact = await getVersionImpact('rb', 'base', 'next');
+
+    expect(impact.defaults).toEqual({
+      before: { timeoutSeconds: 60, maxRetries: null },
+      after: { timeoutSeconds: 600, maxRetries: 2 },
+      changed: true,
+    });
+  });
+
+  it('reports no default change when both versions use the same defaults', async () => {
+    load(version('base', 1, ['a']), version('next', 2, ['a']));
+
+    expect((await getVersionImpact('rb', 'base', 'next')).defaults.changed).toBe(false);
+  });
+});
