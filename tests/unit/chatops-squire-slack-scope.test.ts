@@ -107,3 +107,38 @@ describe('Squire turned off for chat', () => {
     expect(SQUIRE_CHAT_OFF_NOTICE).toContain('Settings → Intelligence → AI');
   });
 });
+
+describe('Squire in a direct message', () => {
+  const dm = (extra: Record<string, unknown> = {}) => ({
+    team_id: 'T1',
+    event_id: 'Ev2',
+    event: {
+      type: 'message',
+      channel_type: 'im',
+      user: 'U1',
+      text: 'whats up, who is on call?',
+      channel: 'D1',
+      ts: '1.1',
+      ...extra,
+    },
+  });
+
+  it('answers a plain direct message without an @ or an incident', async () => {
+    h.enabled.mockResolvedValue(true);
+    expect(await enqueueSlackSquireMention(dm())).toBe(true);
+    expect(enqueueChatOpsIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: 'D1',
+        payload: expect.objectContaining({ text: 'whats up, who is on call?' }),
+      })
+    );
+  });
+
+  it('ignores edits, bot posts and empty messages', async () => {
+    h.enabled.mockResolvedValue(true);
+    expect(await enqueueSlackSquireMention(dm({ subtype: 'message_changed' }))).toBe(false);
+    expect(await enqueueSlackSquireMention(dm({ bot_id: 'B1' }))).toBe(false);
+    expect(await enqueueSlackSquireMention(dm({ text: '  ' }))).toBe(false);
+    expect(enqueueChatOpsIntent).not.toHaveBeenCalled();
+  });
+});

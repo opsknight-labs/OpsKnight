@@ -97,6 +97,7 @@ Three more scopes are requested with the rest but are never reported as a gap, b
 | `usergroups:read` | Lists Slack user groups when you map an on-call schedule to one. |
 | `usergroups:write` | Keeps a user group equal to who is on call (see [on-call user groups](./on-call-user-groups)). |
 | `conversations.connect:write` | Invites external people to a war room with Slack Connect. |
+| `im:history` | Lets Squire read and answer direct messages sent to the OpsKnight app. |
 
 Each feature says where it is configured when its scope is missing, and works as before without it.
 
