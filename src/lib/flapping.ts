@@ -4,6 +4,7 @@ import { logger } from './logger';
 import { runReadCommittedTransaction } from './db-utils';
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 import { lockEventDedupKeys } from './incidents/event-identity';
+import { withSavepoint } from './db-savepoint';
 
 export interface FlappingConfig {
   /** Sliding window in seconds to count state transitions (default: 180s = 3 min) */
@@ -30,7 +31,7 @@ export async function checkAlertFlapping(
   dedupKey: string,
   serviceId: string,
   config: FlappingConfig = DEFAULT_CONFIG,
-  db: Pick<Prisma.TransactionClient, '$queryRaw'> = prisma
+  db: Pick<Prisma.TransactionClient, '$queryRaw' | '$executeRawUnsafe'> = prisma
 ): Promise<{ isFlapping: boolean; transitionCount: number }> {
   try {
     const windowStart = new Date(Date.now() - config.windowSeconds * 1000);
@@ -42,7 +43,10 @@ export async function checkAlertFlapping(
     // an inner limit: seek the indexed key/date range first, then filter the
     // service before taking its twenty rows. Other services never consume that
     // limit, and the caller's transaction/identity lock remains authoritative.
-    const recentAlerts = await db.$queryRaw<Array<{ status: string; createdAt: Date }>>`
+    // Optional read: under a savepoint, so a statement timeout here cannot abort the caller's
+    // transaction while the catch below falls back to "not flapping".
+    const recentAlerts = await withSavepoint(db, 'opsknight_flapping_check', () =>
+      db.$queryRaw<Array<{ status: string; createdAt: Date }>>`
       SELECT recent.status, recent."createdAt"
       FROM (
         SELECT status, "createdAt", "serviceId"
@@ -54,7 +58,8 @@ export async function checkAlertFlapping(
       WHERE recent."serviceId" = ${serviceId}
       ORDER BY recent."createdAt" DESC
       LIMIT 20
-    `;
+    `
+    );
 
     if (recentAlerts.length < config.stateChangeThreshold) {
       return { isFlapping: false, transitionCount: recentAlerts.length };

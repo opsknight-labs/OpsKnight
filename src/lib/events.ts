@@ -45,6 +45,7 @@ import {
 } from './event-outbox';
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 import { checkAlertFlapping } from './flapping';
+import { withSavepoint } from './db-savepoint';
 import { readPublishedIncidentPolicies } from './incident-policies/published';
 import { resolveNewIncidentSlaContract } from './incident-sla/contract';
 import { resolveIncidentClassification } from './incidents/classification';
@@ -1135,7 +1136,10 @@ async function applyEvent(
         }
         if (!inMemoryRouting && service.escalationPolicyId) {
           try {
-            const snapshot = await captureResponderSnapshot(tx, service.escalationPolicyId);
+            // Optional: a failed snapshot read rolls back to the savepoint instead of aborting this transaction.
+            const snapshot = await withSavepoint(tx, 'opsknight_responder_snapshot', () =>
+              captureResponderSnapshot(tx, service.escalationPolicyId!)
+            );
             if (snapshot) {
               inMemoryRouting = {
                 type: 'DEFAULT_POLICY',
