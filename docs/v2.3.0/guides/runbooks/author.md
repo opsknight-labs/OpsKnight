@@ -388,6 +388,14 @@ the message names the existing draft (its version and id), so an API or MCP
 client never edits or publishes a draft built from the wrong base. Edit or
 publish the existing draft first, then clone again.
 
+## Run statistics on the runbook page
+
+**Total Runs** counts every recorded run. **Succeeded**, **Failed / Timeout**
+and **Success Rate** count only the newest 30 runs, and the tile says so (for
+example "Last 30 of 350 runs"). The rate is succeeded over finished runs; a
+runbook with no runs shows **No runs**, and one whose sampled runs are all still
+in flight shows **No finished runs**, never 100%.
+
 ## Compare publication impact
 
 Open **Compare versions and rule impact** before publishing or changing a

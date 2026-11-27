@@ -61,7 +61,11 @@ import {
   SubmitButton,
 } from '@/components/runbooks/RunbookControls';
 import { EmptyHint, Pill, SectionCard } from '@/components/runbooks/ui/primitives';
-import { RunbookOverview, computeSuccessRate } from '@/components/runbooks/detail/RunbookOverview';
+import {
+  RunbookOverview,
+  computeSuccessRate,
+  describeSuccessRate,
+} from '@/components/runbooks/detail/RunbookOverview';
 import { RunbookHealthSection } from '@/components/runbooks/detail/RunbookHealthSection';
 import { VersionTimeline } from '@/components/runbooks/detail/VersionTimeline';
 import { RunbookDetailsSheet } from '@/components/runbooks/detail/RunbookDetailsSheet';
@@ -421,10 +425,7 @@ export default async function RunbookDetailPage({
     ) : null;
 
   const successMetric = computeSuccessRate(runbook.executions.map(execution => execution.status));
-  const successRateDisplay =
-    successMetric.completed > 0
-      ? `${Math.round((successMetric.succeeded / successMetric.completed) * 100)}%`
-      : '100%';
+  const successRate = describeSuccessRate(successMetric, runbook._count.executions);
 
   const dangerZoneCard = hasManageCapability ? (
     <div className="rounded-2xl border border-destructive/25 bg-card/60 dark:bg-card/30 backdrop-blur-xs overflow-hidden shadow-2xs">
@@ -714,8 +715,8 @@ export default async function RunbookDetailPage({
           },
           {
             label: 'Success Rate',
-            value: successRateDisplay,
-            subtext: 'Across recorded runs',
+            value: successRate.value,
+            subtext: successRate.window,
             icon: <Activity className="h-4 w-4" />,
           },
         ]}
@@ -931,12 +932,21 @@ export default async function RunbookDetailPage({
                     </p>
                     <div className="mt-1.5 flex items-baseline gap-2">
                       <span className="text-2xl font-bold tracking-tight text-foreground">
-                        {successRateDisplay}
+                        {successRate.value}
                       </span>
-                      <span className="text-xs text-muted-foreground font-mono">overall</span>
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {successRate.window.toLowerCase()}
+                      </span>
                     </div>
                   </div>
                 </div>
+
+                {runbook._count.executions > runbook.executions.length && (
+                  <p className="text-xs text-muted-foreground">
+                    Succeeded, failed and the success rate count the{' '}
+                    {successRate.window.toLowerCase()}; Total Runs counts every recorded run.
+                  </p>
+                )}
 
                 {/* Recent Executions List Card */}
                 <SectionCard
