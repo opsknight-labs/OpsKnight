@@ -393,15 +393,19 @@ export async function users(request: NextRequest, id?: string) {
   }).catch(async error => {
     // The refusal rolled the transaction back, so its record is written on its own.
     if (error instanceof ScimAdministratorEmailRefused)
-      await prisma.scimEvent.create({
-        data: {
-          connectorId: principal.connectorId,
-          action: 'user.update_refused',
-          resourceId: id,
-          requestId: scimRequestId(),
-          details: { credentialId: principal.credentialId, reason: 'administrator_email_change' },
-        },
-      });
+      try {
+        await prisma.scimEvent.create({
+          data: {
+            connectorId: principal.connectorId,
+            action: 'user.update_refused',
+            resourceId: id,
+            requestId: scimRequestId(),
+            details: { credentialId: principal.credentialId, reason: 'administrator_email_change' },
+          },
+        });
+      } catch {
+        // The refusal stands even if its record cannot be written: a 503 would make the directory retry the refused change.
+      }
     throw error;
   });
   invalidateSessionSecurityProjection(id);

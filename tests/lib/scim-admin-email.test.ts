@@ -108,6 +108,21 @@ describe('SCIM userName change', () => {
     });
   });
 
+  it('still answers 400 when the refusal record cannot be written', async () => {
+    m.tx.scimIdentity.findFirst.mockResolvedValue({
+      id: 'identity-1',
+      externalId: 'ext-1',
+      user: user('ADMIN'),
+    });
+    m.refusedEvent.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(users(patch('attacker@evil.example'), 'user-1')).rejects.toMatchObject({
+      status: 400,
+      scimType: 'mutability',
+    });
+    expect(m.updateUserSecurityState).not.toHaveBeenCalled();
+  });
+
   it('still changes the email of an ordinary user', async () => {
     m.tx.scimIdentity.findFirst.mockResolvedValue({
       id: 'identity-1',

@@ -265,7 +265,9 @@ privilege changes and unsupported PATCH paths fail with SCIM errors.
 SCIM cannot change the email of an administrator account, because that address is
 the sign-in name and where a password reset is sent. A PATCH or PUT that would
 move it is refused with HTTP 400 `mutability`, nothing in the request is applied,
-and a `user.update_refused` event is recorded in the SCIM activity log. Sending
+and a `user.update_refused` event is recorded in the SCIM activity log. If that
+event cannot be written the answer is still the same 400, so the directory does not
+retry the refused change. Sending
 the administrator's current email again (in any letter case) is not a change.
 Change an administrator's email in OpsKnight.
 
