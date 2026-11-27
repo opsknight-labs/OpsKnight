@@ -200,5 +200,6 @@ for (const run of runs) {
   if (run.withExclusions && attacksPassed.some(item => !KNOWN_UNBLOCKED.has(item.name)))
     failed = true;
 }
+// eslint-disable-next-line security/detect-non-literal-fs-filename -- the output path comes from the person running the replay
 if (out) writeFileSync(out, JSON.stringify(runs, null, 2));
 process.exit(failed ? 1 : 0);

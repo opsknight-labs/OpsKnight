@@ -80,7 +80,7 @@ describe('alert conservation under random noise-control configurations', () => {
     const dropOn = services.map(() => next() < 0.5);
 
     for (const [index, service] of services.entries()) {
-      if (windowOn[index])
+      if (windowOn.at(index))
         await db.noiseMaintenanceWindow.create({
           data: {
             name: `Patching ${index}`,
@@ -100,7 +100,7 @@ describe('alert conservation under random noise-control configurations', () => {
           definition: {
             schemaVersion: 1,
             orchestration: {
-              rules: dropOn[index]
+              rules: dropOn.at(index)
                 ? [
                     {
                       id: 'drop-info',
@@ -131,7 +131,7 @@ describe('alert conservation under random noise-control configurations', () => {
     const failures: string[] = [];
     for (let step = 0; step < STEPS; step += 1) {
       const index = Math.floor(next() * services.length);
-      const service = services[index]!;
+      const service = services.at(index)!;
       const key = pick(KEYS);
       const slot = `${service.id}:${key}`;
       const send = (action: EventPayload['event_action'], severity: (typeof SEVERITIES)[number]) =>
