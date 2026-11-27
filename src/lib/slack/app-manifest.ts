@@ -28,7 +28,7 @@ export const SLACK_OPTIONAL_BOT_SCOPES = [
   'groups:history', // Pin sync inside private channels
   'im:read',
   'mpim:read',
-  'app_mentions:read', // Receive @OpsKnight mentions so Squire can answer in incident channels
+  'app_mentions:read', // Receive @OpsKnight mentions so Squire can answer in channels
   'chat:write.customize', // Post Squire's messages under its own name and avatar
   'chat:write.public', // Post to public channels without joining them first
   'pins:write', // Pin the incident status card in war rooms

@@ -238,7 +238,7 @@ export function buildSlackHealthReport(input: SlackHealthInput): SlackHealthRepo
             : 'ok',
           detail: scopes.missingOptional.some(item => item.scope === 'app_mentions:read')
             ? 'Squire in chat is on, but app_mentions:read is missing, so mentions never arrive.'
-            : 'Squire answers @OpsKnight mentions in incident channels.',
+            : 'Squire answers @OpsKnight mentions in any channel it is in, with the incident as context in war rooms.',
         }
       : {
           id: 'squire_chat',

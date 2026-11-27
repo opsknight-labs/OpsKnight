@@ -10,8 +10,12 @@ reader:
   task: Link and verify a Slack responder identity.
 verification:
   level: source
-  verified_at: 2026-09-28
-  evidence: [src/app/api/settings/chatops/identities/route.ts, src/lib/chatops/intents.ts]
+  verified_at: 2026-11-27
+  evidence:
+    - src/app/api/settings/chatops/identities/route.ts
+    - src/lib/chatops/intents.ts
+    - src/lib/slack/dm.ts
+    - src/components/settings/NotificationPreferencesForm.tsx
 ---
 
 # Link Slack responder identities
@@ -59,3 +63,7 @@ Administrators should remove stale mappings when a Slack account or OpsKnight us
 
 - [Acknowledge and resolve](./acknowledge-resolve)
 - [Use commands](./commands)
+
+## Optional: Slack direct-message paging
+
+A responder can also be paged by Slack direct message, with **Acknowledge** and **Resolve** buttons. It is off for everyone until each person opts in at **Settings → Profile & Preferences → Notifications → Slack DM**. It needs the `im:write` scope on the Slack app (see [permissions and scopes](./permissions-and-scopes)), and the OpsKnight account email must match the Slack account email so OpsKnight can find you. The switch stays disabled, with the reason, until the app has the scope.

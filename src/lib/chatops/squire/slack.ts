@@ -41,9 +41,10 @@ import {
 } from './render';
 
 /**
- * Slack transport for Squire: `@squire <question>` mentions in incident channels, `/incident ask
- * <question>`, and the Confirm / Dismiss buttons on its suggestions. Requests arrive signed and are queued
- * through the durable ChatOps intent pipeline before Slack is acknowledged; this module runs in the worker.
+ * Slack transport for Squire: `@OpsKnight <question>` mentions in any channel (and plain `@squire` in incident
+ * channels), `/incident ask <question>`, and the Confirm / Dismiss buttons on its suggestions. Requests arrive
+ * signed and are queued through the durable ChatOps intent pipeline before Slack is acknowledged; this module
+ * runs in the worker.
  */
 
 /** The queued payload of an `app_mention` event. */
