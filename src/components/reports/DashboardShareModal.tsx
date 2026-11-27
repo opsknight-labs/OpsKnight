@@ -17,6 +17,8 @@ interface DashboardShareModalProps {
   isOpen: boolean;
   onClose: () => void;
   dashboardId?: string;
+  /** The template being previewed (no saved dashboard yet): recipients must open the same one. */
+  templateId?: string;
   dashboardName: string;
   isTemplate?: boolean;
   currentVisibility?: 'PRIVATE' | 'TEAM' | 'PUBLIC';
@@ -34,6 +36,7 @@ export default function DashboardShareModal({
   isOpen,
   onClose,
   dashboardId,
+  templateId,
   dashboardName,
   isTemplate = false,
   currentVisibility = 'PRIVATE',
@@ -59,6 +62,9 @@ export default function DashboardShareModal({
     }
     if (currentFilters.serviceId) {
       params.set('serviceId', currentFilters.serviceId);
+    }
+    if (templateId && !dashboardId) {
+      params.set('template', templateId);
     }
 
     const basePath = dashboardId

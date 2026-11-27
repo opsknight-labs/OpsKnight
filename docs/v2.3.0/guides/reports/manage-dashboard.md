@@ -71,7 +71,9 @@ For a template preview, **Done** exits editing but does not persist a new dashbo
 
 Select **Share** or open the gear menu and choose **Share Dashboard**. The dialog
 builds a link to the current dashboard and includes non-default time-window,
-team, and service filters. Select **Copy** and test the URL as a user with the
+team, and service filters. When you share a template preview (not yet cloned into
+a saved dashboard), the link also names that template, so recipients open the
+same template rather than the default Executive Summary. Select **Copy** and test the URL as a user with the
 intended access level.
 
 For a saved dashboard, its owner can choose:

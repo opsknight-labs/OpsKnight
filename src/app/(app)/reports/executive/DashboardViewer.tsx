@@ -1240,6 +1240,7 @@ export default function DashboardViewer({
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         dashboardId={dashboardId}
+        templateId={currentTemplateId}
         dashboardName={dashboardTitle}
         isTemplate={isTemplate}
         currentVisibility={currentVisibility}
