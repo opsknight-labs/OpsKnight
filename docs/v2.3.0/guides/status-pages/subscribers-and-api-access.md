@@ -62,6 +62,10 @@ each subscriber's channel, for example an SMS number or "Slack webhook".
 
 Subscriptions require verification and support unsubscribe. Page tokens and webhooks are scoped to the status-page surface; they do not replace application API keys. Announcements may be scheduled and associated with services.
 
+A subscriber who picked services or business services receives only incidents on those picks; a subscriber with no picks receives the whole page. Deleting a service (in the console or through API v2) or a business service therefore revokes, in the same transaction, every subscriber whose only pick it was. Their subscription becomes `UNSUBSCRIBED` and queued messages are skipped, so they are not widened to every incident on the page. Bounced, complained and suppressed subscribers keep that state, subscribers with other picks keep those, and the audit entry for a deleted service records `unsubscribedSubscribers`, the number revoked.
+
+The verification link confirms only a pending subscription (or one that is already active). A subscriber suppressed after a complaint or repeated bounces stays suppressed when the original email's link is opened again.
+
 ## Verify the setup
 
 Subscribe a controlled address, complete verification, publish a test announcement/update, and confirm delivery/unsubscribe. Call the intended status API with the new token and confirm an invalid/revoked token is rejected.
