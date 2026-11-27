@@ -317,10 +317,14 @@ async function draftClonedFrom(
     where: { action: 'runbook.version.cloned', entityType: 'RUNBOOK_VERSION', entityId: draftId },
     select: { details: true },
   });
-  return cloned.some(
-    entry =>
-      (entry.details as { sourceVersionId?: string } | null)?.sourceVersionId === sourceVersionId
-  );
+  // The audit helper stores the legacy `details` under `metadata`; older rows kept it at the top level.
+  return cloned.some(entry => {
+    const details = entry.details as {
+      sourceVersionId?: string;
+      metadata?: { sourceVersionId?: string };
+    } | null;
+    return (details?.metadata?.sourceVersionId ?? details?.sourceVersionId) === sourceVersionId;
+  });
 }
 
 /** Clones any immutable version into the next numbered editable draft. */

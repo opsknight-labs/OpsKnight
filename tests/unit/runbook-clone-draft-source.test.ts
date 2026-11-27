@@ -41,7 +41,9 @@ describe('cloning a version while the runbook already has a draft', () => {
   });
 
   it('returns the draft when the same source made it, so a repeated request is safe', async () => {
-    tx.auditLog.findMany.mockResolvedValue([{ details: { sourceVersionId: 'v5', version: 6 } }]);
+    tx.auditLog.findMany.mockResolvedValue([
+      { details: { metadata: { sourceVersionId: 'v5', version: 6 } } },
+    ]);
 
     await expect(clone('v5')).resolves.toBe(draft);
 
