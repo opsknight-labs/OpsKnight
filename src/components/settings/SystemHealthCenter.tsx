@@ -187,7 +187,10 @@ export default function SystemHealthCenter({ initialReport }: Props) {
   );
   const refreshInFlight = useRef(false);
 
-  const handleRefresh = useCallback(() => {
+  const lastOverall = useRef(initialReport.overall);
+  const countdownRef = useRef(30);
+
+  const handleRefresh = useCallback((live = false) => {
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
     startTransition(async () => {
@@ -196,8 +199,14 @@ export default function SystemHealthCenter({ initialReport }: Props) {
         setReport(freshReport);
         setLastRefreshedAt(new Date(freshReport.generatedAt));
         setRefreshError(null);
+        countdownRef.current = 30;
         setCountdown(30);
-        toast.success('System diagnostics refreshed');
+        // A live refresh only speaks up when the overall status actually changed.
+        if (!live) toast.success('System diagnostics refreshed');
+        else if (freshReport.overall !== lastOverall.current) {
+          toast.info(`System status is now ${freshReport.overall}`);
+        }
+        lastOverall.current = freshReport.overall;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to refresh diagnostics';
         setRefreshError(message);
@@ -219,6 +228,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
         setReport(freshReport);
         setLastRefreshedAt(new Date(freshReport.generatedAt));
         setRefreshError(null);
+        lastOverall.current = freshReport.overall;
         setInspectingCheck(previous => (previous?.id === checkId ? updatedCheck : previous));
         toast.success(`"${updatedCheck.label}" re-tested`);
       }
@@ -232,6 +242,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
 
   const handleAutoRefreshChange = useCallback((enabled: boolean) => {
     setAutoRefresh(enabled);
+    countdownRef.current = 30;
     if (!enabled) {
       setCountdown(30);
     }
@@ -242,13 +253,13 @@ export default function SystemHealthCenter({ initialReport }: Props) {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
       if (document.visibilityState !== 'visible' || !navigator.onLine) return;
-      setCountdown(prev => {
-        if (prev <= 1) {
-          handleRefresh();
-          return 30;
-        }
-        return prev - 1;
-      });
+      // Refresh from the tick itself: a state updater runs in the render phase, which may not start one.
+      countdownRef.current -= 1;
+      if (countdownRef.current <= 0) {
+        countdownRef.current = 30;
+        handleRefresh(true);
+      }
+      setCountdown(countdownRef.current);
     }, 1000);
     return () => clearInterval(interval);
   }, [autoRefresh, handleRefresh]);
@@ -445,7 +456,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
             <Button
               variant="secondary"
               size="sm"
-              onClick={handleRefresh}
+              onClick={() => handleRefresh()}
               disabled={isPending}
               className="text-xs font-semibold h-8 gap-1.5 shadow-xs"
             >

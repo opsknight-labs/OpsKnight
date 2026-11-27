@@ -174,3 +174,24 @@ describe('database capacity query', () => {
     expect(sql).toContain("backend_type = 'client backend'");
   });
 });
+
+describe('release check', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetAdminHealthCacheForTests();
+  });
+
+  it('asks GitHub once across forced refreshes, including after a failed lookup', async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error('offline');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    resetAdminHealthCacheForTests();
+
+    await collectAdminHealth({ force: true });
+    await collectAdminHealth({ force: true });
+    await collectAdminHealth({ force: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

@@ -237,7 +237,22 @@ function safeErrorKind(error: unknown): string {
     : 'Database error (see restricted server logs)';
 }
 
+/** Release lookups are cached so live refresh never hits GitHub (60/h/IP) or waits out a dead network. */
+const RELEASE_CACHE_TTL_MS = 6 * HOUR;
+const RELEASE_FAILURE_TTL_MS = 15 * MINUTE;
+let releaseCache: { value: string | null; expiresAt: number } | null = null;
+
 async function latestRelease(): Promise<string | null> {
+  if (releaseCache && releaseCache.expiresAt > Date.now()) return releaseCache.value;
+  const value = await fetchLatestRelease();
+  releaseCache = {
+    value,
+    expiresAt: Date.now() + (value ? RELEASE_CACHE_TTL_MS : RELEASE_FAILURE_TTL_MS),
+  };
+  return value;
+}
+
+async function fetchLatestRelease(): Promise<string | null> {
   try {
     const response = await fetch(
       'https://api.github.com/repos/opsknight-labs/OpsKnight/releases/latest',
@@ -1484,6 +1499,7 @@ export async function collectAdminHealth(options?: {
 }
 
 export function resetAdminHealthCacheForTests(): void {
+  releaseCache = null;
   cachedHealthReport = null;
   healthCollectionInFlight = null;
 }

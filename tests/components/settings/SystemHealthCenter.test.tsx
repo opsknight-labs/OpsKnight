@@ -1,7 +1,8 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import SystemHealthCenter from '@/components/settings/SystemHealthCenter';
 import type { AdminHealthReport } from '@/lib/admin-health';
+import { notify } from '@/lib/toast';
 
 vi.mock('@/app/(app)/settings/system/actions', () => ({
   refreshAdminHealthAction: vi.fn(),
@@ -12,6 +13,7 @@ vi.mock('@/lib/toast', () => ({
   notify: {
     success: vi.fn(),
     error: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -360,6 +362,34 @@ describe('SystemHealthCenter', () => {
 
     expect(screen.getByLabelText('Refresh countdown')).toBeInTheDocument();
     expect(screen.getByText('30s')).toBeInTheDocument();
+  });
+
+  describe('live refresh', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    async function liveTick(overall: AdminHealthReport['overall']) {
+      const { refreshAdminHealthAction } = await import('@/app/(app)/settings/system/actions');
+      vi.mocked(refreshAdminHealthAction).mockResolvedValue({ report: { ...mockReport, overall } });
+      render(<SystemHealthCenter initialReport={mockReport} />);
+      fireEvent.click(screen.getByRole('switch', { name: /toggle live 30s refresh/i }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(refreshAdminHealthAction).toHaveBeenCalledTimes(1);
+    }
+
+    it('stays quiet when the status did not change', async () => {
+      await liveTick(mockReport.overall);
+      expect(notify.success).not.toHaveBeenCalled();
+      expect(notify.info).not.toHaveBeenCalled();
+    });
+
+    it('announces only an actual status change', async () => {
+      await liveTick('unhealthy');
+      expect(notify.success).not.toHaveBeenCalled();
+      expect(notify.info).toHaveBeenCalledWith('System status is now unhealthy');
+    });
   });
 
   it('re-tests a single health check when clicking its Re-test button', async () => {
