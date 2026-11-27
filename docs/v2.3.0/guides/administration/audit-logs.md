@@ -80,6 +80,8 @@ A missing row does not prove the action never occurred. Confirm the entity/actio
 
 Audit data can contain user and resource identifiers plus operational metadata. Restrict access, store CSV exports in an approved evidence location, and apply the organization's retention and legal-hold policy. Never paste credentials into investigation notes or enrich audit records with secrets.
 
+Entry details are redacted for credentials only, so you can still see who and what changed. Values under keys that name a password, token, secret, API/private/signing key, authorization header, cookie, signature, connection string, webhook URL or phone number are replaced with `[REDACTED]`, and Bearer, Basic and API-key patterns in text are redacted too. Email addresses, names and session IDs stay readable, for example the email of a deleted service account or the session that was revoked. System Logs apply a broader filter that also hides email addresses and session identifiers, so the same value can be readable here and hidden there.
+
 ## Troubleshooting
 
 - **No results after filtering:** clear filters, then add one exact entity/action/actor criterion at a time.

@@ -53,6 +53,8 @@ Test direct-origin access as well as the public hostname. If clients can bypass 
 
 Exercise failed login, expired session, wrong tenant, disabled user, and insufficient-role paths before sign-off.
 
+Password sign-in counts failed attempts per email and client address. Five failures lock that pair out for 1 minute, then 5, 15 and 60 minutes on repeated lockouts; a successful sign-in clears the count, and a record with no attempts for an hour is dropped. The counters live in each web replica's memory, so a restart clears them and replicas count separately. Each replica tracks at most 10,000 pairs. When the store is full it first drops records older than the one-hour window, then the oldest pairs that are not locked out, so a spray of random emails cannot grow memory without limit or push out a locked-out pair. Only when every tracked pair is locked out does it drop the oldest one to stay within the bound.
+
 ## Protect application encryption keys
 
 `ENCRYPTION_KEY` accepts one 64-character hexadecimal key. `ENCRYPTION_KEYS` accepts a bounded keyring in `id:64-hex-key` entries separated by commas. Key identifiers may contain letters, digits, `.`, `_`, and `-` and must be unique. Do not add whitespace.
