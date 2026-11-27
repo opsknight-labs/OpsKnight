@@ -352,6 +352,19 @@ creation. Errors use SCIM bodies; `401` includes a bearer challenge, `403` denot
 missing scope, `409` denotes identity/security conflicts, and `429`/`503` include
 `Retry-After`. Internal database errors and bearer secrets are never returned.
 
+A `POST /Groups` without an `externalId` is refused with `409` (`scimType: uniqueness`,
+`A group with this displayName already exists.`) when the connector already has a
+group of that name that also has no `externalId`. The unique index covers only groups
+that have an `externalId`, so without this check an identity provider retrying the
+request (for example after a proxy timeout) would create a second group. On `409`,
+look the group up by `displayName` instead of creating it again. Groups that carry an
+`externalId` behave as before.
+
+An unexpected failure while handling a SCIM request answers a generic `503` and the
+cause is written to the server log at error level with the `X-Request-ID` of the
+response. An unexpected failure in a SCIM administration action in the console is logged the same way, without a request ID.
+Expected failures (validation, conflicts, `4xx` errors) are not logged this way.
+
 ## Diagnostics and reconciliation
 
 Activity is durable and written in the same transaction as lifecycle mutations.
