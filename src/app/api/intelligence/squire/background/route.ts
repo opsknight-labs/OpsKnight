@@ -7,6 +7,7 @@ import {
 import { startBackgroundTurns } from '@/lib/intelligence/conversations/background-run';
 import { conversationActor, NO_STORE } from '@/lib/intelligence/conversations/http';
 import { denySquire, readSquireRequest } from '@/lib/intelligence/squire/request';
+import { warnAndContinue } from '@/lib/intelligence/conversations/warn';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const queued = await enqueueBackgroundTurn(read.actor.id, read.data);
     // Started here, in this process; the jobs runner never runs answers.
-    void startBackgroundTurns().catch(() => undefined);
+    void startBackgroundTurns().catch(warnAndContinue('Could not start queued background answers'));
     return jsonOk(queued, 202, NO_STORE);
   } catch (error) {
     if (error instanceof BackgroundTurnRefused) return denySquire(error.status, error.message);
@@ -34,6 +35,6 @@ export async function GET(request: Request) {
   const actor = await conversationActor(request);
   if (actor instanceof Response) return actor;
   // Someone is watching: pick up anything a restart left queued, without waiting for the jobs runner.
-  void startBackgroundTurns().catch(() => undefined);
+  void startBackgroundTurns().catch(warnAndContinue('Could not start queued background answers'));
   return jsonOk({ turns: await listBackgroundTurns(actor.id) }, 200, NO_STORE);
 }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   assertCanModifyService: vi.fn(),
   serviceUpdate: vi.fn(),
+  userFindMany: vi.fn(),
   setServiceWarRoomPolicy: vi.fn(),
   logAudit: vi.fn(),
   revalidatePath: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('@/lib/prisma', () => ({
     service: {
       update: mocks.serviceUpdate,
     },
+    user: { findMany: mocks.userFindMany },
   },
 }));
 
@@ -38,7 +40,11 @@ vi.mock('next/navigation', () => ({
   redirect: mocks.redirect,
 }));
 
-import { updateServiceChatOpsSettings } from '@/app/(app)/services/actions';
+import {
+  searchWarRoomAutoAddPeople,
+  updateServiceChatOpsSettings,
+  updateServiceWarRoomAutoAdd,
+} from '@/app/(app)/services/actions';
 
 describe('updateServiceChatOpsSettings', () => {
   beforeEach(() => {
@@ -207,5 +213,81 @@ describe('updateServiceChatOpsSettings', () => {
       'user-1',
       undefined
     );
+  });
+});
+
+describe('updateServiceWarRoomAutoAdd', () => {
+  const form = (team: string, ids: string[]) => {
+    const data = new FormData();
+    data.set('serviceId', 'svc-1');
+    data.set('warRoomAutoAddTeam', team);
+    ids.forEach(id => data.append('userIds', id));
+    return data;
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.assertCanModifyService.mockResolvedValue({ id: 'user-1' });
+    mocks.serviceUpdate.mockResolvedValue({});
+  });
+
+  it('saves the team option and only the active people chosen', async () => {
+    mocks.userFindMany.mockResolvedValue([{ id: 'a' }]);
+    const result = await updateServiceWarRoomAutoAdd(undefined, form('MANAGERS', ['a', 'gone']));
+    expect(result).toEqual({ success: true, error: null });
+    expect(mocks.userFindMany.mock.calls[0][0].where.status).toBe('ACTIVE');
+    expect(mocks.serviceUpdate).toHaveBeenCalledWith({
+      where: { id: 'svc-1' },
+      data: { warRoomAutoAddTeam: 'MANAGERS', warRoomAutoAddUserIds: ['a'] },
+    });
+  });
+
+  it('rejects an unknown team option and more than 25 people without saving', async () => {
+    expect((await updateServiceWarRoomAutoAdd(undefined, form('EVERYONE', []))).error).toMatch(
+      /Invalid/
+    );
+    const many = Array.from({ length: 26 }, (_, i) => `u${i}`);
+    expect((await updateServiceWarRoomAutoAdd(undefined, form('NONE', many))).error).toMatch(
+      /at most 25/
+    );
+    expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('is refused when the user cannot modify the service', async () => {
+    mocks.assertCanModifyService.mockRejectedValue(new Error('Forbidden'));
+    const result = await updateServiceWarRoomAutoAdd(undefined, form('ALL', []));
+    expect(result.error).toBe('Forbidden');
+    expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('rejects oversized ids and files in the payload', async () => {
+    const tooLong = form('NONE', ['x'.repeat(65)]);
+    expect((await updateServiceWarRoomAutoAdd(undefined, tooLong)).error).toBeTruthy();
+    const file = form('NONE', []);
+    file.append('userIds', new Blob(['x']), 'a.txt');
+    expect((await updateServiceWarRoomAutoAdd(undefined, file)).error).toBeTruthy();
+    expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('searchWarRoomAutoAddPeople', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.assertCanModifyService.mockResolvedValue({ id: 'user-1' });
+  });
+
+  it('searches active users by name or email, bounded, for editors only', async () => {
+    mocks.userFindMany.mockResolvedValue([{ id: 'a', name: 'Ana', email: 'a@x.io' }]);
+    expect(await searchWarRoomAutoAddPeople('svc-1', ' an ')).toHaveLength(1);
+    const args = mocks.userFindMany.mock.calls[0][0];
+    expect(args.take).toBe(30);
+    expect(args.where.status).toBe('ACTIVE');
+    expect(args.where.OR).toHaveLength(2);
+    mocks.assertCanModifyService.mockRejectedValue(new Error('Forbidden'));
+    await expect(searchWarRoomAutoAddPeople('svc-1', 'x')).rejects.toThrow('Forbidden');
+  });
+
+  it('returns nothing for an invalid query', async () => {
+    expect(await searchWarRoomAutoAddPeople('svc-1', 'x'.repeat(101))).toEqual([]);
+    expect(mocks.userFindMany).not.toHaveBeenCalled();
   });
 });

@@ -85,6 +85,7 @@ The archive settings are read when a room closes, so a change applies to existin
 All of these are off by default and are set under **Settings → Integrations → ChatOps**.
 
 - **Invite the on-call responder** adds whoever is on call now for the schedules in the service's escalation policy (ten people at most) to new war rooms. It is applied when the room's participants are synchronized; a handover in the middle of an incident is not followed automatically.
+- **Always add people to a service's war rooms** is set per service, in the service's settings under **Always add to the war room**. Choose nobody, the owning team's owners and admins, or everyone on the team, and add up to 25 named people, who do not have to belong to the team (a manager from another department, for instance). They join every new war room for that service alongside the assignee, role holders and on-call responders. Only active users with an email that matches their Slack account are added.
 - **Slack Connect invitations** take a comma-separated list of up to 20 external email addresses and invite each of them to every new Slack war room. It needs a paid Slack plan and the `conversations.connect:write` scope, and it is skipped, without failing room creation, when either is missing.
 - **Capture the conversation** (under **Settings → Intelligence**, off by default) saves war-room messages to the incident. Bot messages and very short messages are skipped, editing a captured message updates it, and deleting it removes it.
 

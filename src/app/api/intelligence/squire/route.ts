@@ -16,6 +16,7 @@ import {
 import { startBackgroundTurns } from '@/lib/intelligence/conversations/background-run';
 import { readIncidentForActor } from '@/lib/intelligence/squire/deterministic';
 import { logger } from '@/lib/logger';
+import { warnAndContinue } from '@/lib/intelligence/conversations/warn';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
   if (read instanceof Response) return read;
   const { actor, data: body } = read;
   // Any use of the assistant also picks up queued background answers left behind by a restart.
-  void startBackgroundTurns().catch(() => undefined);
+  void startBackgroundTurns().catch(warnAndContinue('Could not start queued background answers'));
 
   const startedAt = new Date();
   const controller = new AbortController();
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest) {
               : conversationId && turn.completed && !turn.failed
                 ? undefined
                 : 'NO_ANSWER',
-          }).catch(() => undefined);
+          }).catch(warnAndContinue('Could not record the end of an answer'));
           runningBackgroundTurns.delete(id);
         }
         ended();

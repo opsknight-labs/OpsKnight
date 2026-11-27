@@ -110,7 +110,11 @@ describe('earlier-turn summary in AI conversations', () => {
     const verbatim = chat.messages.slice(2, -1).map(message => message.content);
     expect(verbatim.length).toBeLessThanOrEqual(SQUIRE_LIMITS.historyMax);
     expect(verbatim.join('\n')).not.toContain('Question number 1 ');
-    expect(chat.messages.at(-1)).toMatchObject({ role: 'user', content: 'What did we decide?' });
+    // The on-screen data and the person's own words travel as one user turn, the person's words last.
+    expect(chat.messages.at(-1)?.role).toBe('user');
+    expect(chat.messages.at(-1)?.content).toMatch(
+      /The person's message[^\n]*\nWhat did we decide\?$/
+    );
   });
 
   it('keeps the summary and the replayed prefix byte-identical across the next exchange', async () => {

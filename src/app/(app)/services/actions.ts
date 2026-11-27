@@ -1,5 +1,6 @@
 'use server';
 
+import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { updateServiceWithAutomationPolicyGuard } from '@/lib/automation/service-policy';
 import type { Prisma } from '@prisma/client';
@@ -403,6 +404,90 @@ export async function updateServiceChatOpsSettings(
       error: error instanceof Error ? error.message : 'Failed to update ChatOps settings.',
     };
   }
+}
+
+const MAX_AUTO_ADD_PEOPLE = 25;
+const autoAddIdSchema = z.string().trim().min(1).max(64);
+const warRoomAutoAddSchema = z
+  .object({
+    serviceId: autoAddIdSchema,
+    team: z.enum(['NONE', 'MANAGERS', 'ALL']),
+    userIds: z
+      .array(autoAddIdSchema)
+      .max(MAX_AUTO_ADD_PEOPLE, `Choose at most ${MAX_AUTO_ADD_PEOPLE} people.`),
+  })
+  .strict();
+const peopleSearchSchema = z
+  .object({ serviceId: autoAddIdSchema, query: z.string().trim().max(100) })
+  .strict();
+
+/** Who a service always adds to its war rooms: owning-team members (all or managers) plus named people. */
+export async function updateServiceWarRoomAutoAdd(
+  _prevState: { success?: boolean; error?: string | null } | undefined,
+  formData: FormData
+): Promise<{ success?: boolean; error?: string | null }> {
+  try {
+    const parsed = warRoomAutoAddSchema.safeParse({
+      serviceId: formData.get('serviceId'),
+      team: formData.get('warRoomAutoAddTeam') ?? 'NONE',
+      userIds: [...new Set(formData.getAll('userIds'))],
+    });
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid war room people settings.' };
+    }
+    const { serviceId, team, userIds: requested } = parsed.data;
+    const currentUser = await assertCanModifyService(serviceId);
+    const active = requested.length
+      ? await prisma.user.findMany({
+          where: { id: { in: requested }, status: 'ACTIVE' },
+          select: { id: true },
+        })
+      : [];
+    const userIds = active.map(user => user.id);
+    await prisma.service.update({
+      where: { id: serviceId },
+      data: { warRoomAutoAddTeam: team, warRoomAutoAddUserIds: userIds },
+    });
+    await logAudit({
+      action: 'service.chatops.updated',
+      entityType: 'SERVICE',
+      entityId: serviceId,
+      actorId: currentUser.id,
+      details: { warRoomAutoAddTeam: team, warRoomAutoAddCount: userIds.length },
+    });
+    revalidatePath(`/services/${serviceId}/settings`);
+    revalidatePath(`/services/${serviceId}`);
+    return { success: true, error: null };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to save.' };
+  }
+}
+
+/** Server-side people search for the picker (so the whole directory is reachable); editors only. */
+export async function searchWarRoomAutoAddPeople(
+  serviceId: string,
+  query: string
+): Promise<Array<{ id: string; name: string | null; email: string }>> {
+  const parsed = peopleSearchSchema.safeParse({ serviceId, query });
+  if (!parsed.success) return [];
+  await assertCanModifyService(parsed.data.serviceId);
+  const needle = parsed.data.query;
+  return prisma.user.findMany({
+    where: {
+      status: 'ACTIVE',
+      ...(needle
+        ? {
+            OR: [
+              { name: { contains: needle, mode: 'insensitive' } },
+              { email: { contains: needle, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: 'asc' },
+    take: 30,
+  });
 }
 
 export async function saveJiraServiceMapping(
