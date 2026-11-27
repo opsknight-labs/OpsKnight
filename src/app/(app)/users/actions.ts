@@ -36,7 +36,7 @@ import {
   notificationPreferencesInput,
   prepareNotificationProviderAvailability,
 } from '@/lib/notifications/preferences';
-import { AppError } from '@/lib/errors';
+import { AppError, isAppError } from '@/lib/errors';
 
 export async function assertUserIsNotSoleOwner(userId: string) {
   const ownedMemberships = await prisma.teamMember.findMany({
@@ -229,6 +229,14 @@ export async function addUser(
   }
 }
 
+/**
+ * Rule violations (a last-admin race, a JIT admin denial) carry a message written for the person;
+ * anything else gets the fallback, so the form shows feedback and no internals leak.
+ */
+function actionFailure(error: unknown, fallback: string) {
+  return { error: isAppError(error) && error.exposure === 'public' ? error.userMessage : fallback };
+}
+
 export async function updateUserRole(userId: string, formData: FormData) {
   let currentUser: { id: string; baseRole: string } | null = null;
   try {
@@ -259,7 +267,11 @@ export async function updateUserRole(userId: string, formData: FormData) {
     }
   }
 
-  await administerUser(userId, { operation: 'set-role', role }, { id: currentUser.id });
+  try {
+    await administerUser(userId, { operation: 'set-role', role }, { id: currentUser.id });
+  } catch (error) {
+    return actionFailure(error, 'Failed to change the role.');
+  }
 
   revalidatePath('/users');
   revalidatePath('/audit');
@@ -280,12 +292,16 @@ export async function addUserToTeam(userId: string, formData: FormData) {
           : 'Unauthorized. Admin or team owner access required.',
     };
   }
-  await setTeamMembership(
-    teamId,
-    userId,
-    teamMemberInput.parse({ role: formData.get('role') || 'MEMBER' }),
-    { id: currentUser.id }
-  );
+  try {
+    await setTeamMembership(
+      teamId,
+      userId,
+      teamMemberInput.parse({ role: formData.get('role') || 'MEMBER' }),
+      { id: currentUser.id }
+    );
+  } catch (error) {
+    return actionFailure(error, 'Failed to add the user to the team.');
+  }
 
   revalidatePath('/users');
   revalidatePath('/teams');
@@ -293,8 +309,12 @@ export async function addUserToTeam(userId: string, formData: FormData) {
 }
 
 export async function removeUserFromTeam(memberId: string) {
-  const currentUser = await assertAdmin();
-  await removeTeamMembership(memberId, currentUser);
+  try {
+    const currentUser = await assertAdmin();
+    await removeTeamMembership(memberId, currentUser);
+  } catch (error) {
+    return actionFailure(error, 'Failed to remove the user from the team.');
+  }
 
   revalidatePath('/users');
   revalidatePath('/teams');
@@ -313,7 +333,11 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  await administerUser(userId, { operation: 'deactivate' }, { id: currentUser.id });
+  try {
+    await administerUser(userId, { operation: 'deactivate' }, { id: currentUser.id });
+  } catch (error) {
+    return actionFailure(error, 'Failed to deactivate the user.');
+  }
 
   revalidatePath('/users');
   revalidatePath('/audit');
