@@ -39,7 +39,7 @@ The filters are encoded in the URL. Switching between a saved dashboard and a te
 - **Gauges** show rates or compliance percentages. Read them with their denominator; a percentage over very few incidents is not a stable trend.
 - **Trend charts** use buckets inside the selected time window. Incident count, MTTA/MTTR, and SLA compliance are different series and should not be treated as interchangeable.
 - **Distribution charts** group incidents by urgency or status.
-- **Incident Heatmap** is a calendar-style incident-volume view, not an hourly latency heatmap.
+- **Incident Heatmap** is a calendar-style incident-volume view, not an hourly latency heatmap. Each day is a calendar day in your profile time zone, so an incident created in your evening is counted on that evening's date.
 - **Tables** rank or break down services, assignees, on-call load, SLA results, and other scoped entities.
 - **On-call load** shows each person's hours on call in the window and the incidents that started while they were on call for a schedule in that incident's service's escalation policy. A person on call for a different schedule is not credited with the incident, and a service whose policy has no schedule step credits no one.
 - **Smart Insights** summarizes notable patterns from the same authorized metrics.

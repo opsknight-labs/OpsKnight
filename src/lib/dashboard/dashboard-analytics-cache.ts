@@ -26,6 +26,8 @@ export type DashboardAnalyticsFilters = {
   assigneeId?: string | null;
   urgency?: 'HIGH' | 'MEDIUM' | 'LOW';
   status?: 'ACTIVE' | IncidentStatus;
+  /** The viewer's IANA zone: heatmap and trend days are that zone's calendar days. */
+  userTimeZone?: string;
 };
 
 export type DashboardAnalyticsSnapshot = {
@@ -105,6 +107,7 @@ function normalizedKey(actor: AuthorizationActor, filters: DashboardAnalyticsFil
     assigneeId: filters.assigneeId,
     urgency: filters.urgency,
     status: filters.status,
+    userTimeZone: filters.userTimeZone,
   };
   return JSON.stringify({ scope, schedules, filters: normalizedFilters });
 }
@@ -139,6 +142,7 @@ async function calculate(
         assigneeId: filters.assigneeId,
         urgency: filters.urgency,
         status: filters.status,
+        userTimeZone: filters.userTimeZone,
         includeIncidents: false,
         includeActiveIncidents: false,
         incidentLimit: 0,

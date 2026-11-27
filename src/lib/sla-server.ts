@@ -955,6 +955,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   const heatmapStartRequested = new Date(now);
   heatmapStartRequested.setDate(now.getDate() - 365);
   const { start: heatmapStart } = await getQueryDateBounds(heatmapStartRequested, now, 'incident');
+  // Days are the viewer's calendar days, like the trend buckets (the zone is allow-listed above).
+  const heatmapTz = Prisma.raw(`'${userTimeZone.replace(/'/g, "''")}'`);
 
   // Previous-period window — same duration as the current window, ending
   // exactly where the current one starts. Filters live in
@@ -1174,13 +1176,14 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     prisma
       .$queryRaw<Array<{ date: string; count: bigint }>>(
         Prisma.sql`
-      SELECT DATE("createdAt") as date, COUNT(*) as count
+      SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${heatmapTz}, 'YYYY-MM-DD') as date,
+        COUNT(*) as count
       FROM "Incident"
       WHERE "createdAt" >= ${heatmapStart}
         AND "createdAt" <= ${now}
         ${fullIncidentFilterSql}
-      GROUP BY DATE("createdAt")
-      ORDER BY date
+      GROUP BY 1
+      ORDER BY 1
     `
       )
       .catch(err => {

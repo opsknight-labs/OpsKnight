@@ -753,10 +753,10 @@ describe('calculateSLAMetrics composed PostgreSQL queries', () => {
       expect(query.sql).not.toMatch(/^\s*\?\s*$/m);
     }
 
-    const heatmapQuery = queries.find(query => query.sql.includes('SELECT DATE("createdAt")'));
+    const heatmapQuery = queries.find(query => query.sql.includes(') as date'));
     const aggregateQuery = queries.find(query => query.sql.includes('total_incidents'));
     const eventQuery = queries.find(query => query.sql.includes('escalation_count'));
-    const trendBucketQuery = queries.find(query => query.sql.includes('to_char('));
+    const trendBucketQuery = queries.find(query => query.sql.includes('AS bucket'));
 
     for (const query of [heatmapQuery, aggregateQuery, eventQuery, trendBucketQuery]) {
       expect(query).toBeDefined();
@@ -767,6 +767,24 @@ describe('calculateSLAMetrics composed PostgreSQL queries', () => {
       expect(query.values).toContainEqual(['service-a', 'service-b']);
       expect(query.values).toContainEqual(['team-a', 'team-b']);
     }
+  });
+
+  it("buckets the heatmap by the viewer's time zone, like the trend", async () => {
+    setupBaseMocks({
+      activeIncidents: [],
+      recentIncidents: [],
+      previousIncidents: [],
+      heatmapIncidents: [],
+      escalationEvents: [],
+    });
+    prismaMock.$queryRaw.mockReset().mockResolvedValue([]);
+
+    await calculateSLAMetrics({ windowDays: 1, userTimeZone: 'America/Los_Angeles' });
+
+    const queries = prismaMock.$queryRaw.mock.calls.map(([query]) => query as CapturedSqlQuery);
+    const heatmapQuery = queries.find(query => query.sql.includes(') as date'));
+    expect(heatmapQuery?.sql).toContain("AT TIME ZONE 'America/Los_Angeles'");
+    expect(heatmapQuery?.sql).not.toContain('DATE("createdAt")');
   });
 
   it('marks comparison data unavailable when optional raw queries fail', async () => {
