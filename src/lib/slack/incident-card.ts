@@ -62,6 +62,8 @@ export type SlackCardIncident = {
   assigneeName?: string | null;
   /** Slack user ID of the assignee when their email maps to a workspace member. */
   assigneeSlackId?: string | null;
+  /** Provisioned meeting bridge (READY only); the button is shown for https join URLs. */
+  meeting?: { provider: string; joinUrl: string } | null;
 };
 
 export type SlackCardMessage = {
@@ -198,6 +200,33 @@ function confirm(title: string, text: string, ok: string, style?: 'danger') {
     deny: { type: 'plain_text', text: 'Cancel' },
     ...(style ? { style } : {}),
   };
+}
+
+const MEETING_LABEL = new Map([
+  ['MICROSOFT_TEAMS', 'Teams'],
+  ['ZOOM', 'Zoom'],
+  ['GOOGLE_MEET', 'Google Meet'],
+  ['JITSI', 'Jitsi'],
+]);
+
+/** URL button for the meeting bridge; empty when absent, resolved or not https. */
+export function bridgeActionElements(
+  incident: SlackCardIncident,
+  state: SlackCardState
+): SlackBlock[] {
+  const joinUrl = incident.meeting?.joinUrl;
+  if (!joinUrl || state === 'resolved' || !/^https:\/\//i.test(joinUrl) || joinUrl.length > 3000) {
+    return [];
+  }
+  const label = MEETING_LABEL.get(incident.meeting!.provider) ?? 'Video';
+  return [
+    {
+      type: 'button',
+      text: { type: 'plain_text', text: `Join ${label}`, emoji: true },
+      action_id: 'join_bridge',
+      url: joinUrl,
+    },
+  ];
 }
 
 /** Buttons that still apply in this state; resolved cards keep only the link. */
@@ -355,7 +384,10 @@ export function buildIncidentCard(
     type: 'actions',
     block_id: SLACK_INCIDENT_ACTIONS_BLOCK_ID,
     elements: options.interactive
-      ? cardActionElements(incident.id, state, incidentUrl)
+      ? [
+          ...cardActionElements(incident.id, state, incidentUrl),
+          ...bridgeActionElements(incident, state),
+        ].slice(0, 25)
       : [
           {
             type: 'button',

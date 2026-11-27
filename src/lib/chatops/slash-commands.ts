@@ -506,6 +506,10 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     'roles',
     'page',
     'assign',
+    // Runbooks and action items
+    'runbook',
+    'action',
+    'actions',
   ]);
   const actor =
     mutatingCommands.has(subcommand) && botToken
@@ -870,6 +874,33 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         incidentId: incident.id,
         question: `investigate ${args}`,
       });
+    }
+
+    // SlackOps E hooks: runbook preview/run, action items.
+    case 'runbook':
+    case 'action':
+    case 'actions': {
+      try {
+        if (subcommand === 'runbook') {
+          const { handleRunbookCommand } = await import('@/lib/chatops/slash/runbook-command');
+          return await handleRunbookCommand(incident, actor!);
+        }
+        const actions = await import('@/lib/chatops/slash/action-command');
+        if (subcommand === 'actions')
+          return await actions.handleActionsListCommand({ incident, actor: actor! });
+        return await actions.handleActionCommand({
+          incident,
+          actor: actor!,
+          args,
+          channelName: payload.channel_name,
+          resolveOwner: slackId => resolveOpsKnightUser(slackId, botToken!, workspace),
+          ...(idempotency ? { idempotency } : {}),
+        });
+      } catch (error) {
+        logger.warn('[ChatOps] Slash command failed', { subcommand, error });
+        rethrowIfTransient(error, payload);
+        return { response_type: 'ephemeral', text: `⚠️ ${chatOpsLifecycleErrorMessage(error)}` };
+      }
     }
 
     default:
