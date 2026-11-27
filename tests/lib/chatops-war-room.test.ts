@@ -742,8 +742,9 @@ describe('ChatOps War-Room Engine', () => {
   describe('slackApiCall', () => {
     it('should return an error result rather than throwing when Slack rate limits', async () => {
       // chat.postMessage is non-idempotent — provider client uses direct fetch (single attempt),
-      // not retryFetch. HTTP 429 must surface as { ok:false } without throwing so callers
-      // can branch on result.ok (and classify AMBIGUOUS vs retryable).
+      // not retryFetch. HTTP 429 must surface as { ok:false } without throwing. A 429 is a definite
+      // "not applied" (Slack rejects rate-limited calls before acting), so it is retryable with
+      // Retry-After and is NOT side-effect-ambiguous (it used to be, which wedged the status card).
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
@@ -760,6 +761,9 @@ describe('ChatOps War-Room Engine', () => {
 
       expect(result.ok).toBe(false);
       expect(result.error).toContain('429');
+      expect(result.rateLimited).toBe(true);
+      expect(result.sideEffectAmbiguous).toBe(false);
+      expect(result.retryAfterMs).toBeGreaterThan(0);
       vi.unstubAllGlobals();
     });
   });

@@ -6,7 +6,7 @@ import { getBaseUrl } from '@/lib/env-validation';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { WarRoomRetryableError } from '../../errors';
 import { buildWarRoomProjection } from '../../projection-model';
-import { renderSlackWarRoomProjection } from './render';
+import { renderSlackWarRoomProjection, type SlackWarRoomMentions } from './render';
 import { slackApiCall } from './client';
 import { INCIDENT_ROLE_SUMMARY_SELECT, summarizeIncidentRoles } from '@/lib/incidents/roles';
 
@@ -27,6 +27,58 @@ function isRetryableSlackProjectionError(error?: string): boolean {
     lower.includes('econnreset') ||
     lower.includes('etimedout')
   );
+}
+
+/** Slack ids for the assignee and commander, from this room's synced participants (no extra Slack calls). */
+async function resolveSlackCardMentions(
+  warRoomId: string,
+  people: { assigneeId: string | null; commanderId: string | null }
+): Promise<SlackWarRoomMentions> {
+  const userIds = [people.assigneeId, people.commanderId].filter((id): id is string => Boolean(id));
+  if (userIds.length === 0) return {};
+  const rows = await prisma.warRoomParticipant
+    .findMany({
+      where: { warRoomId, userId: { in: userIds }, providerUserId: { not: null } },
+      select: { userId: true, providerUserId: true },
+    })
+    .catch(() => []);
+  const byUser = new Map(rows.map(row => [row.userId, row.providerUserId]));
+  return {
+    assignee: people.assigneeId ? (byUser.get(people.assigneeId) ?? null) : null,
+    commander: people.commanderId ? (byUser.get(people.commanderId) ?? null) : null,
+  };
+}
+
+/**
+ * Pins the status card and bookmarks the incident, once, right after the card is created. Both
+ * scopes are optional: installs without `pins:write` / `bookmarks:write` skip quietly.
+ */
+async function pinAndBookmarkSlackCard(
+  serviceId: string,
+  channelId: string,
+  ts: string,
+  incidentUrl: string
+): Promise<void> {
+  try {
+    const { getSlackBotScopes, getSlackBotToken } = await import('@/lib/slack');
+    const scopes = await getSlackBotScopes(serviceId);
+    if (!scopes.includes('pins:write') && !scopes.includes('bookmarks:write')) return;
+    const botToken = await getSlackBotToken(serviceId);
+    if (!botToken) return;
+    if (scopes.includes('pins:write')) {
+      await slackApiCall('pins.add', botToken, { channel: channelId, timestamp: ts });
+    }
+    if (scopes.includes('bookmarks:write')) {
+      await slackApiCall('bookmarks.add', botToken, {
+        channel_id: channelId,
+        title: 'Incident in OpsKnight',
+        type: 'link',
+        link: incidentUrl,
+      });
+    }
+  } catch {
+    // Cosmetic: never fail the projection over a pin or bookmark.
+  }
 }
 
 export async function settleSlackWarRoomProjectionFailure(
@@ -214,7 +266,9 @@ export async function projectSlackWarRoomCard(
     include: {
       service: { select: { name: true } },
       assignee: { select: { name: true } },
-      roleAssignments: INCIDENT_ROLE_SUMMARY_SELECT,
+      roleAssignments: {
+        select: { ...INCIDENT_ROLE_SUMMARY_SELECT.select, userId: true },
+      },
     },
   });
   if (!incidentRecord) {
@@ -279,7 +333,14 @@ export async function projectSlackWarRoomCard(
     },
     { meeting: meetingProjection }
   );
-  const rendered = renderSlackWarRoomProjection(model);
+  const rendered = renderSlackWarRoomProjection(
+    model,
+    await resolveSlackCardMentions(room.id, {
+      assigneeId: incidentRecord.assigneeId,
+      commanderId:
+        incidentRecord.roleAssignments.find(role => role.roleKey === 'COMMANDER')?.userId ?? null,
+    })
+  );
 
   // Slack surfaces commandMessageId as the message ts of the canonical card.
   // commandConversationId stores the channel id (redundant with providerChannelId
@@ -311,7 +372,10 @@ export async function projectSlackWarRoomCard(
     if (!created.ok) {
       const retryable = isRetryableSlackProjectionError(created.error);
       const lowerErr = (created.error ?? '').toLowerCase();
+      // A 429 is a definite "not applied" (Slack rejected it before posting), so it
+      // clears the fence and retries after Retry-After instead of wedging the card.
       const definitePrePostFailure =
+        created.rateLimited === true ||
         lowerErr.includes('not_authed') ||
         lowerErr.includes('invalid_auth') ||
         lowerErr.includes('missing_scope') ||
@@ -325,9 +389,11 @@ export async function projectSlackWarRoomCard(
         where: { id: room.id, projectionLeaseToken: token },
         data: {
           health: 'DEGRADED',
-          lastErrorCode: definitePrePostFailure
-            ? (created.error?.toUpperCase() ?? 'CARD_CREATE_FAILED')
-            : 'AMBIGUOUS_CARD_CREATE',
+          lastErrorCode: created.rateLimited
+            ? 'RATE_LIMITED'
+            : definitePrePostFailure
+              ? (created.error?.toUpperCase() ?? 'CARD_CREATE_FAILED')
+              : 'AMBIGUOUS_CARD_CREATE',
           lastError: created.error ?? 'Slack card create failed',
         },
       });
@@ -341,7 +407,10 @@ export async function projectSlackWarRoomCard(
             projectionLeaseExpiresAt: null,
           },
         });
-        throw new WarRoomRetryableError(created.error ?? 'Slack card create failed');
+        throw new WarRoomRetryableError(
+          created.error ?? 'Slack card create failed',
+          created.retryAfterMs
+        );
       }
       if (retryable) {
         // Ambiguous — keep commandCreateAttemptedAt so next worker never blind-rePOSTs.
@@ -376,6 +445,12 @@ export async function projectSlackWarRoomCard(
           lastErrorCode: null,
         },
       });
+      await pinAndBookmarkSlackCard(
+        incidentRecord.serviceId,
+        room.providerChannelId,
+        ts,
+        model.incident.url
+      );
     } else {
       // Slack returned ok:true without ts — ambiguous outcome (card may or may not exist).
       // Must NOT mark HEALTHY: next projection requires commandCreateAttemptedAt==null to POST,
@@ -420,7 +495,10 @@ export async function projectSlackWarRoomCard(
           where: { id: room.id, projectionLeaseToken: token },
           data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null },
         });
-        throw new WarRoomRetryableError(updated.error ?? 'Slack card update failed');
+        throw new WarRoomRetryableError(
+          updated.error ?? 'Slack card update failed',
+          updated.retryAfterMs
+        );
       }
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, projectionLeaseToken: token },

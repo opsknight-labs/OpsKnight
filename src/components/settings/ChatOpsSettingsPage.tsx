@@ -36,6 +36,9 @@ type ChatOpsConfigView = {
   autoCreateOnUrgency: string[];
   autoCreateOnPriority: string[];
   archiveOnResolve: boolean;
+  /** Optional: rows and callers from before private war rooms / delayed archive. */
+  slackWarRoomPrivate?: boolean;
+  warRoomArchiveDelayHours?: number | null;
   defaultVideoBridge: string;
   customBridgeUrlTemplate: string | null;
   updatedAt: Date;
@@ -196,6 +199,10 @@ export default function ChatOpsSettingsPage({
     config ? config.autoCreateOnPriority : ['P1', 'P2']
   );
   const [archiveOnResolve, setArchiveOnResolve] = useState(config?.archiveOnResolve ?? true);
+  const [slackPrivate, setSlackPrivate] = useState(config?.slackWarRoomPrivate ?? false);
+  const [archiveDelay, setArchiveDelay] = useState(
+    config?.warRoomArchiveDelayHours != null ? String(config.warRoomArchiveDelayHours) : ''
+  );
   const [selectedBridge, setSelectedBridge] = useState<string>(
     config?.defaultVideoBridge ?? 'JITSI'
   );
@@ -210,6 +217,10 @@ export default function ChatOpsSettingsPage({
     setSelectedUrgencies(config?.autoCreateOnUrgency || ['HIGH']);
     setSelectedPriorities(config?.autoCreateOnPriority || ['P1', 'P2']);
     setArchiveOnResolve(config?.archiveOnResolve ?? true);
+    setSlackPrivate(config?.slackWarRoomPrivate ?? false);
+    setArchiveDelay(
+      config?.warRoomArchiveDelayHours != null ? String(config.warRoomArchiveDelayHours) : ''
+    );
     setSelectedBridge(config?.defaultVideoBridge || 'JITSI');
     setCustomUrl(config?.customBridgeUrlTemplate || '');
   }
@@ -239,6 +250,9 @@ export default function ChatOpsSettingsPage({
       !urgenciesMatch ||
       !prioritiesMatch ||
       archiveOnResolve !== config.archiveOnResolve ||
+      slackPrivate !== (config.slackWarRoomPrivate ?? false) ||
+      archiveDelay !==
+        (config.warRoomArchiveDelayHours != null ? String(config.warRoomArchiveDelayHours) : '') ||
       selectedBridge !== config.defaultVideoBridge ||
       customUrl !== (config.customBridgeUrlTemplate || '')
     );
@@ -251,6 +265,8 @@ export default function ChatOpsSettingsPage({
     selectedUrgencies,
     selectedPriorities,
     archiveOnResolve,
+    slackPrivate,
+    archiveDelay,
     selectedBridge,
     customUrl,
   ]);
@@ -700,6 +716,59 @@ export default function ChatOpsSettingsPage({
               disabled={!isAdmin}
             />
             <input type="hidden" name="archiveOnResolve" value={archiveOnResolve ? 'on' : 'off'} />
+          </div>
+          {archiveOnResolve && (
+            <div className="space-y-1.5">
+              <Label htmlFor="warRoomArchiveDelayHours" className="text-xs font-semibold">
+                Archive delay (hours)
+              </Label>
+              <Input
+                id="warRoomArchiveDelayHours"
+                name="warRoomArchiveDelayHours"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={720}
+                step={1}
+                placeholder="Archive on resolve"
+                value={archiveDelay}
+                onChange={event => setArchiveDelay(event.target.value)}
+                disabled={!isAdmin}
+                aria-describedby="warRoomArchiveDelayHours-help"
+                className="h-9 max-w-40 text-xs"
+              />
+              <p id="warRoomArchiveDelayHours-help" className="text-2xs text-muted-foreground">
+                Keep the Slack channel open for follow-up after resolution (1 to 720). Leave empty
+                to archive as soon as the incident resolves.
+              </p>
+            </div>
+          )}
+          {/* Disabled inputs are not submitted, so the stored delay survives turning archive off. */}
+          {!archiveOnResolve && (
+            <input type="hidden" name="warRoomArchiveDelayHours" value={archiveDelay} />
+          )}
+          <div className="flex items-center justify-between gap-4 pt-2">
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="slackWarRoomPrivate"
+                className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5"
+              >
+                <SlackLogo className="h-3.5 w-3.5" />
+                Private Slack war rooms
+              </Label>
+              <p id="slackWarRoomPrivate-help" className="text-2xs text-muted-foreground">
+                Create new Slack war rooms as private channels that only invited responders can see.
+                Needs the groups:write scope. Separate from status-page incident visibility.
+              </p>
+            </div>
+            <Switch
+              id="slackWarRoomPrivate"
+              aria-describedby="slackWarRoomPrivate-help"
+              checked={slackPrivate}
+              onCheckedChange={setSlackPrivate}
+              disabled={!isAdmin}
+            />
+            <input type="hidden" name="slackWarRoomPrivate" value={slackPrivate ? 'on' : 'off'} />
           </div>
           <div className="grid sm:grid-cols-2 gap-2 text-2xs text-muted-foreground bg-muted/20 p-3 rounded-lg border">
             <div>

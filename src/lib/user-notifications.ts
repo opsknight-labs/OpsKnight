@@ -137,6 +137,8 @@ type NotificationPreferenceUser = {
   voiceNotificationsEnabled: boolean;
   pushNotificationsEnabled: boolean;
   whatsappNotificationsEnabled: boolean;
+  /** Optional so callers holding a pre-migration user shape keep working (treated as off). */
+  slackNotificationsEnabled?: boolean;
   phoneNumber: string | null;
   email: string;
 };
@@ -156,6 +158,7 @@ export async function getUserNotificationChannels(
         voiceNotificationsEnabled: true,
         pushNotificationsEnabled: true,
         whatsappNotificationsEnabled: true,
+        slackNotificationsEnabled: true,
         phoneNumber: true,
         email: true,
       },
@@ -164,13 +167,15 @@ export async function getUserNotificationChannels(
   if (!user || (user.status !== undefined && user.status !== 'ACTIVE')) return [];
 
   const channels: NotificationChannel[] = [];
-  const [pushAvailable, smsAvailable, voiceAvailable, emailAvailable, whatsappConfig] =
+  const [pushAvailable, smsAvailable, voiceAvailable, emailAvailable, whatsappConfig, slackAvailable] =
     await Promise.all([
       isChannelAvailable('PUSH'),
       isChannelAvailable('SMS'),
       isChannelAvailable('VOICE'),
       isChannelAvailable('EMAIL'),
       import('./notification-providers').then(module => module.getWhatsAppConfig()),
+      // Skip the Slack lookup entirely for the (default) users who never opted in.
+      user.slackNotificationsEnabled ? isChannelAvailable('SLACK') : Promise.resolve(false),
     ]);
 
   const endpointCandidates: Array<{ channel: NotificationChannel; address: string }> = [];
@@ -190,6 +195,8 @@ export async function getUserNotificationChannels(
   }
   if (user.emailNotificationsEnabled && user.email && emailAvailable)
     endpointCandidates.push({ channel: 'EMAIL', address: user.email });
+  if (user.slackNotificationsEnabled && user.email && slackAvailable)
+    endpointCandidates.push({ channel: 'SLACK', address: user.email });
 
   const endpointHealth = await Promise.all(
     endpointCandidates.map(async candidate => ({

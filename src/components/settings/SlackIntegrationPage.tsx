@@ -35,11 +35,17 @@ import {
   type ChannelFilter,
 } from '@/components/settings/slack';
 import GuidedSlackSetup from '@/components/settings/GuidedSlackSetup';
+import { SlackHealthPanel, SlackScopeHealthNotice } from '@/components/settings/slack/SlackHealthPanel';
 import SlackSigningSecretCard from '@/components/settings/SlackSigningSecretCard';
 import SlackManifestCard from '@/components/settings/SlackManifestCard';
 import { toneClasses } from '@/components/patterns';
 import { cn } from '@/lib/utils';
-import { SLACK_REQUIRED_BOT_SCOPES, SLACK_OPTIONAL_BOT_SCOPES } from '@/lib/slack/app-manifest';
+import {
+  SLACK_REQUIRED_BOT_SCOPES,
+  SLACK_OPTIONAL_BOT_SCOPES,
+  SLACK_BOT_EVENTS,
+} from '@/lib/slack/app-manifest';
+import { computeSlackScopeHealth } from '@/lib/slack/health';
 
 interface SlackIntegration {
   id: string;
@@ -99,6 +105,8 @@ export default function SlackIntegrationPage({
   const [testingChannelId, setTestingChannelId] = useState<string | null>(null);
   const [leavingChannelId, setLeavingChannelId] = useState<string | null>(null);
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
+  const [testSent, setTestSent] = useState(false);
+  const [healthRefreshKey, setHealthRefreshKey] = useState(0);
   const [testResult, setTestResult] = useState<{
     channelId: string;
     success: boolean;
@@ -121,11 +129,7 @@ export default function SlackIntegrationPage({
 
   const requiredScopes = useMemo(() => [...SLACK_REQUIRED_BOT_SCOPES], []);
   const optionalScopes = useMemo(() => [...SLACK_OPTIONAL_BOT_SCOPES], []);
-  const scopeSet = useMemo(() => new Set(integration?.scopes ?? []), [integration]);
-  const missingRequiredScopes = useMemo(
-    () => requiredScopes.filter(scope => !scopeSet.has(scope)),
-    [requiredScopes, scopeSet]
-  );
+  const scopeHealth = useMemo(() => computeSlackScopeHealth(integration?.scopes), [integration]);
 
   // Check if Slack was just connected (from URL param)
   useEffect(() => {
@@ -348,6 +352,8 @@ export default function SlackIntegrationPage({
       };
       setTestResult(result);
       if (res.ok) {
+        setTestSent(true);
+        setHealthRefreshKey(key => key + 1);
         toast.success('Test notification sent', { description: `Check #${channel.name} in Slack` });
       } else {
         toast.error('Test failed', {
@@ -363,7 +369,8 @@ export default function SlackIntegrationPage({
       toast.error('Test failed', { description: 'Network error' });
     } finally {
       setTestingChannelId(null);
-      setTimeout(() => setTestResult(null), 3000);
+      // Failures carry the fix to make, so leave them up long enough to read.
+      setTimeout(() => setTestResult(null), 10000);
     }
   };
 
@@ -444,7 +451,7 @@ export default function SlackIntegrationPage({
       {
         name: 'Event Subscriptions URL',
         url: `${baseUrl}/api/slack/events`,
-        desc: 'Subscribes bot to reaction_added (📌 pin-to-incident notes)',
+        desc: `Bot events: ${SLACK_BOT_EVENTS.join(', ')}`,
       },
       {
         name: 'Interactivity Request URL',
@@ -485,35 +492,16 @@ export default function SlackIntegrationPage({
             onReplaceWorkspace={handleReplaceWorkspaceClick}
           />
 
-          {/* Missing Scopes Alert */}
-          {missingRequiredScopes.length > 0 && (
-            <div
-              className={cn(
-                'rounded-lg border p-4 sm:p-5 text-xs space-y-3',
-                toneClasses('critical').soft
-              )}
-              role="alert"
-            >
-              <div className="flex items-center gap-2 font-semibold">
-                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>Missing Slack scopes: {missingRequiredScopes.join(', ')}</span>
-              </div>
-              <p className="leading-relaxed">
-                Slack only grants scopes that your app manifest requests. If you recently updated
-                OpsKnight, apply the App Manifest below to your Slack app in the Slack API console,
-                then reconnect the workspace to grant the new scopes.
-              </p>
-              {isAdmin && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  asChild
-                  className="h-8 text-xs font-semibold"
-                >
-                  <a href="/api/slack/oauth">Reconnect to refresh scopes</a>
-                </Button>
-              )}
-            </div>
+          {/* Missing scopes / manifest out of date */}
+          <SlackScopeHealthNotice
+            scopes={integration.scopes}
+            baseUrl={baseUrl}
+            isAdmin={isAdmin}
+            onReconnect={handleOAuthRedirect}
+          />
+
+          {isAdmin && (
+            <SlackHealthPanel baseUrl={baseUrl} testSent={testSent} refreshKey={healthRefreshKey} />
           )}
 
           {/* Card 2: Channel Discovery & Notifications */}
@@ -540,7 +528,8 @@ export default function SlackIntegrationPage({
                   lastSyncTime={lastChannelsSync}
                   onRefresh={() => void loadChannels()}
                   onBulkConnect={() => void handleBulkConnect()}
-                  scopeHealthy={missingRequiredScopes.length === 0}
+                  scopeHealthy={scopeHealth.healthy}
+                  requiredScopesMissing={scopeHealth.missingRequired.length > 0}
                 />
 
                 {channelsError && channels.length === 0 ? (

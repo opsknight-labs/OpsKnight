@@ -21,6 +21,14 @@ import { notify as toast } from '@/lib/toast';
 import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import MicrosoftTeamsSetupWizard from './MicrosoftTeamsSetupWizard';
 import WarRoomOperationsSection from './WarRoomOperationsSection';
+import {
+  TeamsAppUpdateGuide,
+  TeamsHealthChecklist,
+  TeamsSecretExpiryBanner,
+  TeamsTestResultMessage,
+} from './TeamsHealthChecklist';
+import { describeTeamsTestResult, type TeamsTestResult } from './teams-test-result';
+import type { TeamsHealthChecklist as HealthChecklistData } from '@/lib/microsoft-teams/health-checklist';
 import type {
   WarRoomOperationalSnapshot,
   IntegrationHealthSummary,
@@ -92,6 +100,7 @@ export type MicrosoftTeamsIntegrationPageProps = {
     interactiveEnabled: boolean;
     warRoomsEnabled: boolean;
     defaultMeetingOrganizerUpn?: string | null;
+    clientSecretExpiresAt?: string | Date | null;
   } | null;
   destinations: DestinationRow[];
   appManifestJson: string;
@@ -111,7 +120,19 @@ export type MicrosoftTeamsIntegrationPageProps = {
     error?: string | null;
   } | null;
   warRoomDiagnosticsError?: string | null;
+  healthChecklist?: HealthChecklistData | null;
 };
+
+const READINESS_LABEL: Record<string, string> = {
+  HEALTHY: 'Healthy',
+  DEGRADED: 'Degraded',
+  UNKNOWN: 'Not verified',
+  UNAVAILABLE: 'Not connected',
+  DRIFTED: 'Drifted',
+};
+const readinessLabel = (value: string) =>
+  // eslint-disable-next-line security/detect-object-injection -- read-only lookup in a fixed constant table
+  Object.hasOwn(READINESS_LABEL, value) ? READINESS_LABEL[value] : value;
 
 export default function MicrosoftTeamsIntegrationPage({
   config,
@@ -129,12 +150,14 @@ export default function MicrosoftTeamsIntegrationPage({
   warRoomCleanupPending = 0,
   rscState,
   warRoomDiagnosticsError,
+  healthChecklist = null,
 }: MicrosoftTeamsIntegrationPageProps) {
   const router = useRouter();
   const [testing, setTesting] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [destinationSearch, setDestinationSearch] = useState('');
+  const [testResults, setTestResults] = useState<Record<string, TeamsTestResult>>({});
 
   const isConfigured = Boolean(config?.clientId && config?.enabled);
   const isInstalled = installationCount > 0;
@@ -149,10 +172,16 @@ export default function MicrosoftTeamsIntegrationPage({
         body: JSON.stringify({ destinationId }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) toast.success('Test Adaptive Card sent to Teams channel.');
-      else toast.error(data?.error || 'Teams test failed');
+      const result = describeTeamsTestResult(res.ok, data);
+      setTestResults(prev => ({ ...prev, [destinationId]: result }));
+      if (result.ok) toast.success(result.message);
+      else toast.error(result.message);
     } catch {
-      toast.error('Teams test failed');
+      const result = describeTeamsTestResult(false, {
+        error: 'OpsKnight could not be reached. Check your connection and try again.',
+      });
+      setTestResults(prev => ({ ...prev, [destinationId]: result }));
+      toast.error(result.message);
     } finally {
       setTesting(null);
     }
@@ -280,7 +309,7 @@ export default function MicrosoftTeamsIntegrationPage({
                 : 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
           }`}
         >
-          {integrationReadiness}
+          {readinessLabel(integrationReadiness)}
         </Badge>
       ),
     },
@@ -288,6 +317,8 @@ export default function MicrosoftTeamsIntegrationPage({
 
   return (
     <div className="space-y-6">
+      <TeamsSecretExpiryBanner expiresAt={config?.clientSecretExpiresAt} />
+      <TeamsAppUpdateGuide checklist={healthChecklist} />
       {/* Top Level Summary Card */}
       <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -334,9 +365,11 @@ export default function MicrosoftTeamsIntegrationPage({
           <div className="flex flex-wrap items-center gap-2">
             {isConfigured && (
               <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-                <a href="/api/microsoft-teams/package">
-                  <Download className="h-3.5 w-3.5 mr-1" />
-                  Download App Package
+                <a href="/api/microsoft-teams/package" download>
+                  <Download className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+                  {healthChecklist?.appUpdateAvailable
+                    ? 'Download updated app package'
+                    : 'Download App Package'}
                 </a>
               </Button>
             )}
@@ -456,7 +489,7 @@ export default function MicrosoftTeamsIntegrationPage({
                 {filteredDestinations.map(d => (
                   <div
                     key={d.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border p-3.5 bg-muted/20 hover:bg-muted/30 transition-colors"
+                    className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 rounded-lg border p-3.5 bg-muted/20 hover:bg-muted/30 transition-colors"
                   >
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2">
@@ -482,7 +515,7 @@ export default function MicrosoftTeamsIntegrationPage({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                       <Button
                         size="sm"
                         variant="outline"
@@ -507,9 +540,16 @@ export default function MicrosoftTeamsIntegrationPage({
                         className="h-8 text-xs"
                         onClick={() => onTest(d.id)}
                         disabled={testing === d.id}
+                        aria-busy={testing === d.id}
+                        aria-label={`Send test card to ${d.channelName ?? d.channelId}`}
                       >
-                        {testing === d.id ? 'Sending…' : 'Send Test'}
+                        {testing === d.id ? 'Sending…' : 'Send test card'}
                       </Button>
+                    </div>
+                    <div role="status" aria-live="polite" className="sm:basis-full empty:hidden">
+                      {testResults[d.id] ? (
+                        <TeamsTestResultMessage result={testResults[d.id]} />
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -556,6 +596,7 @@ export default function MicrosoftTeamsIntegrationPage({
 
         {/* SUB-PAGE 4: Health & Permissions */}
         <DetailTabContent value="health" className="space-y-4">
+          {isConfigured ? <TeamsHealthChecklist checklist={healthChecklist} /> : null}
           {/* Integration Health Card */}
           <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex items-center justify-between gap-3">
@@ -574,7 +615,7 @@ export default function MicrosoftTeamsIntegrationPage({
                         : 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
                   }`}
                 >
-                  {integrationReadiness}
+                  {readinessLabel(integrationReadiness)}
                 </Badge>
                 <span className="text-2xs text-muted-foreground font-medium">Fleet:</span>
                 <Badge
@@ -587,7 +628,7 @@ export default function MicrosoftTeamsIntegrationPage({
                         : 'border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-300 dark:bg-amber-500/10'
                   }`}
                 >
-                  {operationalFleetHealth}
+                  {readinessLabel(operationalFleetHealth)}
                 </Badge>
               </div>
             </div>
@@ -646,7 +687,7 @@ export default function MicrosoftTeamsIntegrationPage({
             {health?.lastErrorAt && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
                 <div className="font-semibold">
-                  Last Provider Error: {health.lastErrorCode ?? 'UNKNOWN'}
+                  Last delivery error{health.lastErrorCode ? ` (${health.lastErrorCode})` : ''}
                 </div>
                 <div className="text-muted-foreground wrap-break-word">
                   {health.lastErrorMessage ?? 'No details available.'}

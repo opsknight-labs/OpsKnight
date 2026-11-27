@@ -129,7 +129,11 @@ describe('Microsoft Teams invoke adapter', () => {
       activity: activity(),
       verifiedTenantId: 'tenant-1',
     });
-    expect(response).toMatchObject({ statusCode: 200, value: 'Incident acknowledged.' });
+    // The clicker gets the re-rendered card, not a text toast.
+    expect(response).toMatchObject({
+      statusCode: 200,
+      type: 'application/vnd.microsoft.card.adaptive',
+    });
     expect(executeChatOpsCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: 'MICROSOFT_TEAMS',
@@ -200,11 +204,22 @@ describe('Microsoft Teams invoke adapter', () => {
       activity: activity(),
       verifiedTenantId: 'tenant-1',
     });
+    // A card with a "Link your account" button, not a bare URL toast.
     expect(response).toMatchObject({
       statusCode: 200,
-      type: 'application/vnd.microsoft.activity.message',
+      type: 'application/vnd.microsoft.card.adaptive',
     });
-    expect(JSON.stringify(response)).toContain('/settings/chatops/link?token=challenge-token');
+    const actions = (
+      response.value as {
+        actions: Array<{ type: string; title: string; url?: string; verb?: string }>;
+      }
+    ).actions;
+    expect(actions[0]).toMatchObject({ type: 'Action.OpenUrl', title: 'Link your account' });
+    expect(actions[0].url).toContain('/settings/chatops/link?token=challenge-token');
+    expect(actions[1]).toMatchObject({
+      type: 'Action.Execute',
+      verb: 'opsknight.incident.refresh',
+    });
     expect(executeChatOpsCommand).not.toHaveBeenCalled();
   });
 
@@ -346,7 +361,11 @@ describe('Microsoft Teams invoke adapter', () => {
       activity: teamsActivity,
       verifiedTenantId: 'tenant-1',
     });
-    expect(response).toMatchObject({ statusCode: 200, value: 'Incident acknowledged.' });
+    // The clicker gets the re-rendered card, not a text toast.
+    expect(response).toMatchObject({
+      statusCode: 200,
+      type: 'application/vnd.microsoft.card.adaptive',
+    });
   });
 
   it('allows War Room card interaction when triggered from war room channel', async () => {
@@ -409,7 +428,11 @@ describe('Microsoft Teams invoke adapter', () => {
       activity: warRoomActivity,
       verifiedTenantId: 'tenant-1',
     });
-    expect(response).toMatchObject({ statusCode: 200, value: 'Incident acknowledged.' });
+    // The clicker gets the re-rendered card, not a text toast.
+    expect(response).toMatchObject({
+      statusCode: 200,
+      type: 'application/vnd.microsoft.card.adaptive',
+    });
   });
 
   it.each(['CLOSING', 'CLOSED', 'ARCHIVED'] as const)(

@@ -15,11 +15,13 @@ export function getProviderDeepLinkUrl(
     tenantId?: string | null;
   }
 ): string | null {
-  const { channelUrl, channelId } = options;
+  const { channelUrl, channelId, tenantId } = options;
 
   if (provider === 'SLACK') {
-    if (channelId) {
-      return `slack://channel?id=${encodeURIComponent(channelId)}`;
+    // Slack's app scheme needs both the workspace and the channel: without `team` the desktop app
+    // opens but cannot find the channel. With no workspace known, the web redirect is the safe link.
+    if (channelId && tenantId) {
+      return `slack://channel?team=${encodeURIComponent(tenantId)}&id=${encodeURIComponent(channelId)}`;
     }
     return channelUrl || null;
   }

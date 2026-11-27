@@ -193,9 +193,16 @@ describe('incident collaboration presentation mapping', () => {
 });
 
 describe('incident collaboration deep links', () => {
-  it('formats Slack deep link protocol when channelId is present', () => {
-    const link = getProviderDeepLinkUrl('SLACK', { channelId: 'C12345' });
-    expect(link).toBe('slack://channel?id=C12345');
+  it('formats the Slack app link with both workspace and channel', () => {
+    const link = getProviderDeepLinkUrl('SLACK', { channelId: 'C12345', tenantId: 'T0ABC' });
+    expect(link).toBe('slack://channel?team=T0ABC&id=C12345');
+  });
+
+  it('falls back to the web link when the Slack workspace is unknown', () => {
+    // Without `team` the desktop app opens but cannot find the channel.
+    const web = 'https://slack.com/app_redirect?channel=C12345&team=T0ABC';
+    expect(getProviderDeepLinkUrl('SLACK', { channelId: 'C12345', channelUrl: web })).toBe(web);
+    expect(getProviderDeepLinkUrl('SLACK', { channelId: 'C12345' })).toBeNull();
   });
 
   it('formats Microsoft Teams deep link protocol for desktop app', () => {

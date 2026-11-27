@@ -186,24 +186,38 @@ export function WarRoomProviderCard({
       <div className="pt-2 flex items-center justify-between gap-2 border-t border-zinc-100 dark:border-zinc-800/60">
         <div>
           {room.actions.canOpen && room.channelUrl ? (
-            <Button
-              asChild
-              size="sm"
-              className="h-8 text-xs font-medium gap-1.5 px-3 rounded-lg shadow-2xs group/btn"
-            >
-              <a
-                href={room.deepLinkUrl || room.channelUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`Open ${room.channelName || meta.displayName} in ${meta.displayName}`}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Button
+                asChild
+                size="sm"
+                className="h-8 text-xs font-medium gap-1.5 px-3 rounded-lg shadow-2xs group/btn"
               >
-                <span>{meta.openActionLabel}</span>
-                <ExternalLink
-                  className="h-3 w-3 group-hover/btn:translate-x-0.5 transition-transform"
-                  aria-hidden="true"
-                />
-              </a>
-            </Button>
+                <a
+                  href={room.deepLinkUrl || room.channelUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Open ${room.channelName || meta.displayName} in ${meta.displayName}`}
+                >
+                  <span>{meta.openActionLabel}</span>
+                  <ExternalLink
+                    className="h-3 w-3 group-hover/btn:translate-x-0.5 transition-transform"
+                    aria-hidden="true"
+                  />
+                </a>
+              </Button>
+              {/* The button opens the desktop app; this works without the app installed. */}
+              {room.deepLinkUrl && room.deepLinkUrl !== room.channelUrl ? (
+                <a
+                  href={room.channelUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline dark:text-zinc-400 dark:hover:text-zinc-200"
+                  aria-label={`Open ${room.channelName || meta.displayName} in your browser`}
+                >
+                  Open in browser
+                </a>
+              ) : null}
+            </div>
           ) : isTransitioning ? (
             <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 font-medium py-1 px-1">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />

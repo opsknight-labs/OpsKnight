@@ -545,6 +545,8 @@ model User {
   voiceNotificationsEnabled    Boolean    @default(false)
   pushNotificationsEnabled     Boolean    @default(false)
   whatsappNotificationsEnabled Boolean    @default(false)
+  /// Opt-in personal Slack DM pages (needs the workspace's im:write scope).
+  slackNotificationsEnabled    Boolean                @default(false)
   phoneNumber                  String?
   quietHoursEnabled            Boolean    @default(false)
   quietHoursStartMinutes       Int        @default(1080)
@@ -1132,6 +1134,10 @@ model SlackIntegration {
   signingSecret String?
   installedBy   String?
   scopes        String[]
+  /// Encrypted refresh token, only when the Slack app has token rotation on.
+  refreshToken  String?
+  /// When the rotating bot token expires; null for non-rotating (long-lived) tokens.
+  tokenExpiresAt DateTime?
   enabled       Boolean            @default(true)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
@@ -1180,6 +1186,8 @@ model MicrosoftTeamsConfig {
   warRoomsEnabled              Boolean                  @default(false)
   defaultWarRoomMembershipType WarRoomMembershipType    @default(STANDARD)
   defaultMeetingOrganizerUpn   String?
+  /// Admin-recorded expiry of the Entra client secret; drives the settings warning banner.
+  clientSecretExpiresAt        DateTime?
   createdAt                    DateTime                 @default(now())
   updatedAt                    DateTime                 @updatedAt
   updatedBy                    String?
@@ -1197,6 +1205,8 @@ model MicrosoftTeamsInstallation {
   serviceUrl     String?
   conversationId String?
   botRecipientId String?
+  /// Last authenticated inbound activity from this tenant (throttled write); health checklist only.
+  lastActivityAt DateTime?
   installedBy    String?
   enabled        Boolean                     @default(true)
   createdAt      DateTime                    @default(now())
@@ -1585,6 +1595,7 @@ model Incident {
   squireProactiveNotes                SquireProactiveNote[]
   externalIssueLinks                  ExternalIssueLink[]
   pinnedMessages                      SlackPinnedMessage[]
+  slackIncidentMessages               SlackIncidentMessage[]
   microsoftTeamsMessages              MicrosoftTeamsIncidentMessage[]
   warRooms                            IncidentWarRoom[]
   meetings                            IncidentMeeting[]
@@ -3756,6 +3767,27 @@ model SlackPinnedMessage {
   @@index([workspaceId, channelId])
 }
 
+/// The one live incident card OpsKnight posted in a service Slack channel. Later events edit it in
+/// place (chat.update) and reply in its thread. `ts` is null while one sender holds the create claim.
+model SlackIncidentMessage {
+  id            String   @id @default(cuid())
+  incidentId    String
+  /// Delivery target as configured on the service (channel ID or #name); the dedup key.
+  channel       String
+  /// Slack conversation ID returned by chat.postMessage (chat.update needs the ID, not a name).
+  channelId     String?
+  ts            String?
+  workspaceId   String?
+  lastEventType String?
+  /// Event key of the last thread reply, so a retried delivery does not reply twice.
+  lastEventKey  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  incident      Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, channel])
+}
+
 model ChatOpsConfig {
   id                      String   @id @default("default")
   revision                Int      @default(dbgenerated("1"))
@@ -3766,6 +3798,10 @@ model ChatOpsConfig {
   archiveOnResolve        Boolean  @default(true)
   defaultVideoBridge      String   @default("JITSI")
   customBridgeUrlTemplate String?
+  /// New Slack war-room channels are private (needs groups:write). Never tied to status-page visibility.
+  slackWarRoomPrivate     Boolean  @default(false)
+  /// Hours to wait after resolve before archiving the war room; null archives at once (today's behaviour).
+  warRoomArchiveDelayHours Int?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 

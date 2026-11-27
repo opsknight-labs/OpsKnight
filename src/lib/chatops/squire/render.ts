@@ -100,20 +100,38 @@ export function markdownToSlack(markdown: string, baseUrl: string): string {
       let out = '';
       let last = 0;
       for (const match of line.matchAll(LINK)) {
-        out += inlineSlack(line.slice(last, match.index), last === 0);
+        out += inlineSlack(line.slice(last, match.index), last === 0, baseUrl);
         const url = appLink(match[2], baseUrl);
         const label = escapeSlack(match[1]).replace(/\|/g, '/');
         out += url ? `<${url}|${label}>` : label;
         last = match.index! + match[0].length;
       }
-      out += inlineSlack(line.slice(last), last === 0);
+      out += inlineSlack(line.slice(last), last === 0, baseUrl);
       return out;
     })
     .join('\n');
 }
 
-function inlineSlack(text: string, lineStart: boolean): string {
-  const escaped = escapeSlack(text);
+/**
+ * A bare in-app path in answer text ("/incidents/abc"), which chat clients cannot open. Only known app
+ * sections match, so slash commands such as "/incident ack" are left alone.
+ */
+// Linear: every repeated segment starts with a literal "/", so there is no ambiguous backtracking.
+const BARE_APP_PATH =
+  // eslint-disable-next-line security/detect-unsafe-regex
+  /(^|\s)(\/(?:incidents|services|teams|schedules|runbooks|postmortems|alerts|escalation-policies|status-pages|policies|users|changes|settings|analytics|business-services)(?:\/[A-Za-z0-9_~%-]+)*\/?(?:\?[A-Za-z0-9_~%=-]*)?)(?=$|[\s).,;:!?])/g;
+
+/** Bare in-app paths made absolute (base URL + path), so every link in a chat answer opens. */
+export function absolutizeAppPaths(text: string, baseUrl: string, slack = true): string {
+  return text.replace(BARE_APP_PATH, (whole, lead: string, path: string) => {
+    const url = appLink(path, baseUrl);
+    if (!url) return whole;
+    return `${lead}${slack ? `<${url}>` : url}`;
+  });
+}
+
+function inlineSlack(text: string, lineStart: boolean, baseUrl?: string): string {
+  const escaped = baseUrl ? absolutizeAppPaths(escapeSlack(text), baseUrl) : escapeSlack(text);
   const structured = lineStart
     ? escaped.replace(/^#{1,6}\s+(.+)$/, '*$1*').replace(/^(\s*)[-*]\s+/, '$1• ')
     : escaped;
@@ -124,12 +142,17 @@ function inlineSlack(text: string, lineStart: boolean): string {
 export function markdownToTeams(markdown: string, baseUrl: string): string {
   return markdown
     .replace(/\r\n?/g, '\n')
+    .replace(/\u0000/g, '')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(LINK, (_whole, label: string, href: string) => {
       const url = appLink(href, baseUrl);
-      return url ? `[${label}](${url})` : label;
-    });
+      // Marked so the bare-path pass below never rewrites inside a finished link.
+      return url ? `\u0000[${label}](${url})\u0000` : label;
+    })
+    .split('\u0000')
+    .map((part, index) => (index % 2 === 0 ? absolutizeAppPaths(part, baseUrl, false) : part))
+    .join('');
 }
 
 /** Escaped mrkdwn cut to Slack's limit, never leaving half a `<link|label>` behind. */

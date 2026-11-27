@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   handleSlashCommand,
   parseRoleCommandArgs,
+  parseSlackDeclareSubmission,
+  parseSlashCommandText,
+  SLACK_INCIDENT_COMMAND_USAGE_HINT,
   type SlashCommandPayload,
 } from '@/lib/chatops/slash-commands';
 import prisma from '@/lib/prisma';
@@ -19,6 +22,13 @@ vi.mock('@/lib/prisma', () => ({
     $transaction: vi.fn(),
     incident: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
+    },
+    service: {
+      findFirst: vi.fn(),
+    },
+    slackIntegration: {
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     incidentNote: {
       create: vi.fn(),
@@ -67,6 +77,21 @@ vi.mock('@/lib/incidents/chatops-lifecycle', () => ({
     error instanceof Error ? error.message : 'Unable to update incident.'
   ),
 }));
+
+vi.mock('@/lib/authorization-actors', () => ({
+  resolveUserActor: vi.fn().mockResolvedValue({ id: 'usr-alice', status: 'ACTIVE' }),
+}));
+
+vi.mock('@/lib/authorization-filters', () => ({
+  serviceReadWhere: vi.fn().mockReturnValue({}),
+  incidentReadWhere: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock('@/lib/env-validation', () => ({
+  getBaseUrl: () => 'https://ops.example.com/',
+}));
+
+vi.mock('@/lib/chatops/intents', () => ({ enqueueChatOpsIntent: vi.fn() }));
 
 vi.mock('@/lib/user-notifications', () => ({
   sendIncidentNotifications: vi.fn().mockResolvedValue({ success: true }),
@@ -323,5 +348,130 @@ describe('ChatOps Slash Command Dispatcher', () => {
     const result = await handleSlashCommand({ ...basePayload, text: 'foobar' });
     expect(result.response_type).toBe('ephemeral');
     expect(result.text).toContain('Unknown command: `foobar`');
+  });
+
+  describe('commands that work in any channel', () => {
+    it('parses the subcommand and keeps raw args', () => {
+      expect(parseSlashCommandText('  OnCall   Payments API ')).toEqual({
+        subcommand: 'oncall',
+        args: 'Payments API',
+      });
+      expect(parseSlashCommandText('')).toEqual({ subcommand: 'help', args: '' });
+      expect(SLACK_INCIDENT_COMMAND_USAGE_HINT).toContain('declare');
+    });
+
+    it('lists every command in help, including declare, list and oncall', async () => {
+      const result = await handleSlashCommand({ ...basePayload, text: 'help' });
+      const text = JSON.stringify(result.blocks);
+      for (const command of [
+        'declare',
+        'list',
+        'oncall',
+        'ack',
+        'resolve',
+        'note',
+        'who',
+        'postmortem',
+        'ask',
+      ])
+        expect(text).toContain(`/incident ${command}`);
+    });
+
+    it('answers /incident oncall <service> outside a war room', async () => {
+      vi.mocked(prisma.incident.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.service.findFirst).mockResolvedValue({
+        id: 'srv-1',
+        name: 'Pay<ments>',
+        escalationPolicyId: 'pol-1',
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      vi.mocked(prisma.escalationPolicy.findUnique).mockResolvedValue({
+        id: 'pol-1',
+        steps: [{ delayMinutes: 0, targetUser: { name: 'Bob <!here>' }, targetTeam: null }],
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const result = await handleSlashCommand({ ...basePayload, text: 'oncall payments' });
+      expect(result.text).toContain('On-Call for Pay&lt;ments&gt;');
+      expect(result.text).toContain('Bob &lt;!here&gt;');
+      expect(result.text).not.toContain('No incident is linked');
+    });
+
+    it('lists my open incidents outside a war room with absolute links', async () => {
+      vi.mocked(prisma.incident.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([
+        {
+          id: 'inc-1',
+          title: 'DB <down>',
+          status: 'OPEN',
+          urgency: 'HIGH',
+          service: { name: 'Pay' },
+        },
+      ] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const result = await handleSlashCommand({ ...basePayload, text: 'list' });
+      expect(result.text).toContain('assigned to you');
+      expect(result.text).toContain('<https://ops.example.com/incidents/inc-1|DB &lt;down&gt;>');
+      expect(vi.mocked(prisma.incident.findMany).mock.calls[0][0]).toMatchObject({
+        where: { AND: expect.arrayContaining([{ assigneeId: 'usr-alice' }]) },
+      });
+    });
+  });
+
+  it('re-throws a transient failure in the durable worker so the intent is retried', async () => {
+    vi.mocked(prisma.incident.findFirst).mockResolvedValue({
+      id: 'inc-104',
+      title: 'Payments API Failure',
+      status: 'OPEN',
+      service: { id: 'srv-1', name: 'Payments' },
+    } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    vi.mocked(executeChatOpsLifecycleCommand).mockRejectedValue(new Error('db timeout'));
+    await expect(
+      handleSlashCommand({ ...basePayload, text: 'ack', __opsknightIntentId: 'intent-1' })
+    ).rejects.toThrow('db timeout');
+  });
+
+  it('escapes the incident title in slash replies', async () => {
+    vi.mocked(prisma.incident.findFirst).mockResolvedValue({
+      id: 'inc-104',
+      title: '<!channel> payments',
+      status: 'OPEN',
+      service: { id: 'srv-1', name: 'Payments' },
+    } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const result = await handleSlashCommand({ ...basePayload, text: 'ack' });
+    expect(result.text).toContain('&lt;!channel&gt; payments');
+    expect(result.text).not.toContain('<!channel>');
+  });
+
+  describe('/incident declare submission', () => {
+    const view = (values: Record<string, unknown>) => ({
+      state: {
+        values: {
+          declare_title: { value: { value: values.title } },
+          declare_service: {
+            value: { selected_option: values.service ? { value: values.service } : null },
+          },
+          declare_urgency: { value: { selected_option: { value: values.urgency ?? 'HIGH' } } },
+          declare_description: { value: { value: values.description ?? null } },
+        },
+      },
+    });
+
+    it('accepts a complete form', () => {
+      expect(
+        parseSlackDeclareSubmission(
+          view({ title: ' Checkout down ', service: 'srv-1', urgency: 'LOW' })
+        )
+      ).toEqual({
+        ok: true,
+        value: { title: 'Checkout down', serviceId: 'srv-1', urgency: 'LOW' },
+      });
+    });
+
+    it('returns field errors keyed by block id', () => {
+      const result = parseSlackDeclareSubmission(view({ title: 'x', urgency: 'URGENT' }));
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(Object.keys(result.errors).sort()).toEqual(
+          ['declare_service', 'declare_title', 'declare_urgency'].sort()
+        );
+      }
+    });
   });
 });

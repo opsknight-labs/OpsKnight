@@ -9,6 +9,17 @@ import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { encrypt, decrypt } from '@/lib/encryption';
 import { getAppUrl } from '@/lib/app-url';
+import { slackRotationFields } from '../token-rotation';
+
+/** The installation's workspace: the team, or for an Enterprise Grid org install the enterprise. */
+function slackInstallTarget(tokenData: {
+  team?: { id?: unknown; name?: unknown } | null;
+  enterprise?: { id?: unknown; name?: unknown } | null;
+}): { id: string; name: string | null } | null {
+  const target = tokenData.team?.id ? tokenData.team : tokenData.enterprise;
+  if (!target || typeof target.id !== 'string' || !target.id) return null;
+  return { id: target.id, name: typeof target.name === 'string' ? target.name : null };
+}
 
 const getFullUrl = (path: string, baseUrl: string) => {
   return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
@@ -97,7 +108,8 @@ export async function GET(request: NextRequest) {
     // Verify state
     const storedState = request.cookies.get('slack_oauth_state')?.value;
     if (!storedState || storedState !== state) {
-      logger.warn('[Slack] Invalid OAuth state', { state, storedState });
+      // Never log the state values themselves: they are the CSRF secret of an in-flight install.
+      logger.warn('[Slack] Invalid OAuth state', { hasStoredState: Boolean(storedState) });
       return NextResponse.redirect(
         getFullUrl(`${errorTarget}?error=slack_oauth_invalid_state`, appUrl)
       );
@@ -154,10 +166,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get workspace info
-    const teamInfo = tokenData.team;
+    // Get workspace info. An Enterprise Grid org-wide install has `team: null` and names the org in
+    // `enterprise`; the org then stands in as the installation's workspace.
+    const teamInfo = slackInstallTarget(tokenData);
+    if (!teamInfo || typeof tokenData.access_token !== 'string') {
+      logger.error('[Slack] Token exchange returned no workspace or bot token');
+      return NextResponse.redirect(
+        getFullUrl(`${errorTarget}?error=slack_oauth_token_error`, appUrl)
+      );
+    }
     const botToken = tokenData.access_token;
-    const scopes = (tokenData.scope || '').split(',');
+    const scopes = String(tokenData.scope || '')
+      .split(',')
+      .map(scope => scope.trim())
+      .filter(Boolean);
+    // Token rotation (opt-in in the Slack app): keep the refresh token so reads refresh before expiry.
+    const rotation = slackRotationFields(tokenData);
 
     // Encrypt tokens before storing
     const encryptedBotToken = await encrypt(botToken);
@@ -176,6 +200,9 @@ export async function GET(request: NextRequest) {
       installedBy: user.id,
       scopes,
       enabled: true,
+      // Cleared on a reinstall without rotation, so a stale refresh token is never used.
+      refreshToken: rotation ? await encrypt(rotation.refreshToken) : null,
+      tokenExpiresAt: rotation?.tokenExpiresAt ?? null,
     };
 
     let integration;

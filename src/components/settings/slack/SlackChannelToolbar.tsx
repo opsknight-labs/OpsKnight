@@ -29,7 +29,10 @@ interface SlackChannelToolbarProps {
   lastSyncTime?: Date | null;
   onRefresh: () => void;
   onBulkConnect: () => void;
+  /** True only when every manifest scope is granted. */
   scopeHealthy: boolean;
+  /** A required scope is missing (critical); otherwise only optional feature scopes are. */
+  requiredScopesMissing?: boolean;
 }
 
 export function SlackChannelToolbar({
@@ -44,6 +47,7 @@ export function SlackChannelToolbar({
   onRefresh,
   onBulkConnect,
   scopeHealthy,
+  requiredScopesMissing = !scopeHealthy,
 }: SlackChannelToolbarProps) {
   return (
     <div className="space-y-4">
@@ -55,10 +59,18 @@ export function SlackChannelToolbar({
             <span>{summary.total} channels in workspace</span>
             <span className="text-xs">•</span>
             <Badge
-              variant={scopeHealthy ? 'default' : 'destructive'}
-              className={cn('text-xs', scopeHealthy && toneClasses('ok').filled)}
+              variant={scopeHealthy || !requiredScopesMissing ? 'default' : 'destructive'}
+              className={cn(
+                'text-xs',
+                scopeHealthy && toneClasses('ok').filled,
+                !scopeHealthy && !requiredScopesMissing && toneClasses('elevated').filled
+              )}
             >
-              {scopeHealthy ? 'Scopes healthy' : 'Scopes missing'}
+              {scopeHealthy
+                ? 'Scopes healthy'
+                : requiredScopesMissing
+                  ? 'Scopes missing'
+                  : 'Feature scopes missing'}
             </Badge>
           </div>
         </div>

@@ -163,6 +163,8 @@ export async function requestIncidentEscalation(input: {
     generation: planned.generation,
     immediate: true,
   });
+  const { refreshChatCardsAfterEscalation } = await import('./chat-card-refresh');
+  await refreshChatCardsAfterEscalation(input.incidentId, execution);
   if (planned.recordId) {
     await prisma.backgroundJob.updateMany({
       where: { id: planned.recordId },

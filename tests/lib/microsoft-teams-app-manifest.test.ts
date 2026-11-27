@@ -161,8 +161,25 @@ describe('Microsoft Teams app manifest', () => {
     expect(m.description.short.length).toBeGreaterThan(10);
     expect(m.developer.websiteUrl).toBe('https://opsknight.com');
     expect(m.manifestVersion).toBe('1.16');
-    expect(m.bots[0].scopes).toEqual(['team']);
-    expect(m.bots[0].isNotificationOnly).toBe(true);
+    // Intentional (1.4.0): conversational bot so @mentions and DMs reach Squire.
+    expect(m.bots[0].scopes).toEqual(['team', 'groupChat', 'personal']);
+    expect(m.bots[0].isNotificationOnly).toBe(false);
+    expect(m.version).toBe('1.4.0');
+    const commands = m.bots[0].commandLists[0];
+    expect(commands.scopes).toEqual(['team', 'groupChat', 'personal']);
+    expect(commands.commands.map(c => c.title)).toEqual([
+      'ask',
+      'investigate',
+      'ack',
+      'resolve',
+      'status',
+      'help',
+    ]);
+    for (const c of commands.commands) {
+      // Teams manifest limits: title <= 32 chars, description <= 128 chars.
+      expect(c.title.length).toBeLessThanOrEqual(32);
+      expect(c.description.length).toBeLessThanOrEqual(128);
+    }
     expect(m.bots[0].botId).toBe(BOT_ID);
     expect(m.webApplicationInfo.id).toBe(BOT_ID);
     expect(m.id).toBe(BOT_ID);

@@ -6,7 +6,8 @@ import { ServiceIntegrationsLink } from '@/components/settings/integrations/Serv
 import { IntegrationStatusBadge } from '@/components/settings/integrations/IntegrationStatus';
 import { SlackLogo } from '@/components/common/BrandLogos';
 import { ShieldCheck, Hash, Lock, AlertTriangle } from 'lucide-react';
-import { SLACK_REQUIRED_BOT_SCOPES } from '@/lib/slack/app-manifest';
+import { SLACK_BOT_SCOPES } from '@/lib/slack/app-manifest';
+import { computeSlackScopeHealth } from '@/lib/slack/health';
 import SlackIntegrationPage from '@/components/settings/SlackIntegrationPage';
 import { getAppUrl } from '@/lib/app-url';
 import { requirePageAccess } from '@/lib/access/server';
@@ -75,8 +76,8 @@ export default async function GlobalSlackIntegrationPage(props: {
     !!oauthConfig?.signingSecret || !!process.env.SLACK_SIGNING_SECRET;
 
   const isConnected = Boolean(globalIntegration?.enabled);
-  const scopeSet = new Set(globalIntegration?.scopes ?? []);
-  const missingRequiredScopes = SLACK_REQUIRED_BOT_SCOPES.filter(s => !scopeSet.has(s));
+  const scopeHealth = computeSlackScopeHealth(globalIntegration?.scopes);
+  const missingScopeCount = scopeHealth.missingRequired.length + scopeHealth.missingOptional.length;
 
   const appUrl = await getAppUrl();
 
@@ -113,16 +114,21 @@ export default async function GlobalSlackIntegrationPage(props: {
           {
             label: 'Bot Permissions',
             value: globalIntegration
-              ? missingRequiredScopes.length === 0
-                ? 'All 13 Granted'
-                : `${missingRequiredScopes.length} Missing`
+              ? missingScopeCount === 0
+                ? `All ${SLACK_BOT_SCOPES.length} Granted`
+                : `${missingScopeCount} Missing`
               : 'OAuth required',
             icon: <ShieldCheck className="h-4 w-4" />,
             valueClassName:
-              globalIntegration && missingRequiredScopes.length === 0
+              globalIntegration && missingScopeCount === 0
                 ? 'text-emerald-300 font-semibold text-sm sm:text-base'
                 : 'text-amber-300 font-semibold text-sm sm:text-base',
-            subtext: 'Bot token scopes',
+            subtext:
+              scopeHealth.missingRequired.length > 0
+                ? 'Required scopes missing'
+                : missingScopeCount > 0
+                  ? 'Feature scopes missing'
+                  : 'Bot token scopes',
           },
           {
             label: 'Channel Routing',

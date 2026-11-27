@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { z } from 'zod/v4';
 import prisma from '@/lib/prisma';
-import { decrypt } from '@/lib/encryption';
+import { readSlackBotToken } from '@/app/api/slack/oauth/token-rotation';
 import { logger } from '@/lib/logger';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { getSlackBotToken } from '@/lib/slack';
@@ -668,13 +668,13 @@ async function slackTarget(
     prisma.slackIntegration.findFirst({
       where: { workspaceId: room.providerTenantId, enabled: true },
       orderBy: { updatedAt: 'desc' },
-      select: { id: true, botToken: true },
+      select: { id: true, botToken: true, refreshToken: true, tokenExpiresAt: true },
     }),
   ]);
   if (!config?.enabled || !integration) return null;
   // The war room's own installation: with several workspaces, the service's token may be another one's.
   const token = integration.botToken
-    ? await decrypt(integration.botToken).catch(() => null)
+    ? await readSlackBotToken(integration).catch(() => null)
     : await getSlackBotToken(serviceId);
   if (!token) return null;
   const canCustomize = await slackCanCustomizeSender(serviceId);

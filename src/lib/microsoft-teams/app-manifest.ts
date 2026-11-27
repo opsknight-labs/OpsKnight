@@ -17,7 +17,21 @@
 export const MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS = [
   'ChannelSettings.Read.Group', // List teams / channels for destination picker (Graph)
 ] as const;
-export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.3.0';
+// 1.4.0: conversational bot (personal + groupChat scopes, command list) so @OpsKnight reaches Squire.
+export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.4.0';
+
+/** Bot scopes. Older packages only declared `team`; the server tolerates every scope. */
+export const MICROSOFT_TEAMS_BOT_SCOPES = ['team', 'groupChat', 'personal'] as const;
+
+/** Commands suggested when users type @OpsKnight. Handled by the messages route. */
+export const MICROSOFT_TEAMS_BOT_COMMANDS = [
+  { title: 'ask', description: 'Ask Squire a question about an incident or your services' },
+  { title: 'investigate', description: 'Have Squire investigate the incident for this channel' },
+  { title: 'ack', description: 'Acknowledge the incident for this channel' },
+  { title: 'resolve', description: 'Resolve the incident for this channel' },
+  { title: 'status', description: 'Show the current incident status' },
+  { title: 'help', description: 'List what OpsKnight can do here' },
+] as const;
 
 export const MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS = ['TeamSettings.Read.Group'] as const;
 export const MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS = [
@@ -162,7 +176,10 @@ export type MicrosoftTeamsAppManifest = {
   bots: Array<{
     botId: string;
     scopes: string[];
-    commandLists: unknown[];
+    commandLists: Array<{
+      scopes: string[];
+      commands: Array<{ title: string; description: string }>;
+    }>;
     isNotificationOnly: boolean;
   }>;
   validDomains: string[];
@@ -235,9 +252,14 @@ export function buildMicrosoftTeamsAppManifest({
     bots: [
       {
         botId,
-        scopes: ['team'],
-        commandLists: [],
-        isNotificationOnly: true,
+        scopes: [...MICROSOFT_TEAMS_BOT_SCOPES],
+        commandLists: [
+          {
+            scopes: [...MICROSOFT_TEAMS_BOT_SCOPES],
+            commands: MICROSOFT_TEAMS_BOT_COMMANDS.map(c => ({ ...c })),
+          },
+        ],
+        isNotificationOnly: false,
       },
     ],
     validDomains: sanitizeValidDomains([host, ...(extraValidDomains || [])]),

@@ -4,8 +4,41 @@ import { incidentNotificationPriority } from './notification-priority';
 import { logger } from './logger';
 import { enqueueCentralNotification } from './notification-control-plane';
 import { getBaseUrl } from './env-validation';
+import type { SlackCardEvent } from './slack/incident-card';
+import type { SlackLiveCardRequest } from './slack/live-card';
 
 export type ServiceNotificationEventType = 'triggered' | 'acknowledged' | 'resolved' | 'updated';
+
+/** `updated` sub-events whose Slack thread reply follows the service's "notify on triggered" toggle. */
+const RETRIGGER_EVENTS = new Set<SlackCardEvent>([
+  'reopened',
+  'escalated',
+  'unsnoozed',
+  'unacknowledged',
+]);
+
+/** Presentation-only status for the queued Slack payload; the card itself re-reads the incident. */
+function slackPayloadEvent(status: string): 'triggered' | 'acknowledged' | 'resolved' {
+  return status === 'ACKNOWLEDGED'
+    ? 'acknowledged'
+    : status === 'RESOLVED'
+      ? 'resolved'
+      : 'triggered';
+}
+
+/** True when some service channel already holds a live card for this incident (edit-only work exists). */
+async function hasLiveSlackCard(incidentId: string): Promise<boolean> {
+  const store = (
+    prisma as unknown as {
+      slackIncidentMessage?: { findFirst: (a: unknown) => Promise<{ id: string } | null> };
+    }
+  ).slackIncidentMessage;
+  if (!store) return false;
+  return !!(await store.findFirst({
+    where: { incidentId, ts: { not: null } },
+    select: { id: true },
+  }));
+}
 
 function serviceDeliveryKey(
   incident: {
@@ -44,7 +77,15 @@ async function persistIntent(
 export async function sendServiceNotifications(
   incidentId: string,
   eventType: ServiceNotificationEventType,
-  options: { eventAt?: Date; escalationGeneration?: number; expectedStatus?: string } = {}
+  options: {
+    eventAt?: Date;
+    escalationGeneration?: number;
+    expectedStatus?: string;
+    /** What an `updated` event actually was (reopened, snoozed, reassigned...), for the Slack card. */
+    subEvent?: SlackCardEvent;
+    /** Refresh only the Slack channel cards (no Teams, webhook or Slack-webhook delivery). */
+    slackOnly?: boolean;
+  } = {}
 ): Promise<{ success: boolean; errors?: string[] }> {
   try {
     const incident = await prisma.incident.findUnique({
@@ -89,12 +130,27 @@ export async function sendServiceNotifications(
     }
 
     const service = incident.service;
-    if (
-      (eventType === 'triggered' && !(service.serviceNotifyOnTriggered ?? true)) ||
-      (eventType === 'acknowledged' && !(service.serviceNotifyOnAck ?? true)) ||
-      (eventType === 'resolved' && !(service.serviceNotifyOnResolved ?? true))
-    )
-      return { success: true };
+    const notifyEnabled =
+      eventType === 'triggered'
+        ? (service.serviceNotifyOnTriggered ?? true)
+        : eventType === 'acknowledged'
+          ? (service.serviceNotifyOnAck ?? true)
+          : eventType === 'resolved'
+            ? (service.serviceNotifyOnResolved ?? true)
+            : true;
+    const slackEvent: SlackCardEvent =
+      eventType === 'updated' ? (options.subEvent ?? 'updated') : eventType;
+    const slackReply =
+      notifyEnabled &&
+      (!RETRIGGER_EVENTS.has(slackEvent) || (service.serviceNotifyOnTriggered ?? true));
+    // An `updated` event, or one whose notifications are off, only edits a card that already exists:
+    // the edit notifies nobody, and it keeps the card from showing a stale state forever.
+    const slackEditOnly = eventType === 'updated' || !notifyEnabled;
+    let liveCardLookup: Promise<boolean> | undefined;
+    const liveCardExists = () => (liveCardLookup ??= hasLiveSlackCard(incident.id));
+    // With notifications off, only silent edits of existing cards run: the Slack card below (guarded by
+    // `slackEditable`) and Teams, whose delivery re-checks the toggle and only edits a card it already posted.
+    const slackOnly = options.slackOnly || !notifyEnabled;
     const deliveryPolicy = incidentNotificationPriority({
       eventType,
       priority: incident.priority,
@@ -198,12 +254,21 @@ export async function sendServiceNotifications(
       }
 
       const slackWebhookUrl = service.slackWebhookUrl?.trim();
-      if (activeChannels.length > 0 && eventType !== 'updated') {
+      const slackEditable = !slackEditOnly || (await liveCardExists());
+      if (activeChannels.length > 0 && slackEditable) {
         await Promise.all(
           activeChannels.map(async target => {
             const channelAddress = target.address;
             if (!channelAddress) return;
-            const channelDeliveryKey = `${deliveryKey}:${target.id}`;
+            const channelDeliveryKey = `${deliveryKey}:${target.id}${
+              eventType === 'updated' && options.subEvent ? `:${options.subEvent}` : ''
+            }${notifyEnabled ? '' : ':edit'}`;
+            const card: SlackLiveCardRequest = {
+              event: slackEvent,
+              eventKey: channelDeliveryKey,
+              reply: slackReply,
+              ...(slackEditOnly ? { editOnly: true } : {}),
+            };
             const result = await persistIntent(async () => {
               await enqueueCentralNotification(
                 {
@@ -213,7 +278,7 @@ export async function sendServiceNotifications(
                   recipientId: service.id,
                   recipientAddress: channelAddress,
                   incidentId,
-                  templateKey: `service-slack-${eventType}`,
+                  templateKey: `service-slack-${notifyEnabled ? eventType : 'card-edit'}`,
                   sourceType: 'SERVICE_INCIDENT',
                   sourceId: incidentSourceId,
                   ...rollUp,
@@ -224,11 +289,16 @@ export async function sendServiceNotifications(
                     kind: 'SLACK_CHANNEL',
                     channel: channelAddress,
                     incident: incidentPresentation,
-                    eventType,
+                    eventType:
+                      eventType === 'updated' ? slackPayloadEvent(incident.status) : eventType,
                     includeInteractiveButtons: true,
                     serviceId: incident.serviceId,
+                    card,
                     lifecyclePolicy: {
                       ...lifecyclePolicy,
+                      // A silent edit must survive the "updated is superseded by resolution" rule
+                      // and the notify toggle, both of which apply to lifecycle event types only.
+                      ...(notifyEnabled ? {} : { eventType: 'card_edit' }),
                       targetKind: 'SERVICE_SLACK_CHANNEL',
                       targetId: target.id,
                       targetAddress: channelAddress,
@@ -246,7 +316,7 @@ export async function sendServiceNotifications(
         );
       }
 
-      if (slackWebhookUrl && eventType !== 'updated') {
+      if (slackWebhookUrl && eventType !== 'updated' && !slackOnly) {
         const result = await persistIntent(async () => {
           await enqueueCentralNotification(
             {
@@ -285,6 +355,9 @@ export async function sendServiceNotifications(
       }
     }
 
+    if (options.slackOnly)
+      return { success: errors.length === 0, errors: errors.length ? errors : undefined };
+
     if (serviceChannels.includes('MICROSOFT_TEAMS' as never)) {
       const teamsDestinations = await (
         prisma as unknown as {
@@ -301,7 +374,9 @@ export async function sendServiceNotifications(
         // (ExternalOperation @@unique([provider,idempotencyKey]) + advisory lock + AMBIGUOUS semantics).
         // Central Notification intent is superseded for Teams — this fence prevents duplicate cards
         // when multiple replicas race the same incidentVersion.
-        const teamsEventType = eventType;
+        // Escalations edit the Teams card in place and reply in its thread (B1).
+        const teamsEventType =
+          eventType === 'updated' && options.subEvent === 'escalated' ? 'escalated' : eventType;
         const incidentUpdatedAtForTeams =
           options.eventAt ??
           (teamsEventType === 'triggered'
@@ -331,6 +406,10 @@ export async function sendServiceNotifications(
         );
       }
     }
+
+    // Webhooks have no card to edit: with this event's notifications off they get nothing, as before.
+    if (slackOnly)
+      return { success: errors.length === 0, errors: errors.length ? errors : undefined };
 
     if (serviceChannels.includes('WEBHOOK')) {
       const results = await Promise.all(

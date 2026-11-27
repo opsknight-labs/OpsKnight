@@ -27,6 +27,10 @@ export const chatOpsConfigSchema = z
     autoCreateOnUrgency: z.array(z.enum(['HIGH', 'MEDIUM', 'LOW'])).max(3),
     autoCreateOnPriority: z.array(z.enum(['P1', 'P2', 'P3', 'P4', 'P5'])).max(5),
     archiveOnResolve: z.boolean(),
+    /** Optional so API clients that predate these settings leave them unchanged. */
+    slackWarRoomPrivate: z.boolean().optional(),
+    /** Hours after resolve before archiving; null archives on resolve. */
+    warRoomArchiveDelayHours: z.number().int().min(1).max(720).nullable().optional(),
     defaultVideoBridge: z.enum(['MICROSOFT_TEAMS', 'JITSI', 'ZOOM', 'GOOGLE_MEET', 'NONE']),
     customBridgeUrlTemplate: z.string().trim().max(2048),
     defaultProviders: z
@@ -80,6 +84,8 @@ export async function getChatOpsConfiguration(db: Prisma.TransactionClient = pri
     autoCreateOnUrgency: config?.autoCreateOnUrgency ?? ['HIGH'],
     autoCreateOnPriority: config?.autoCreateOnPriority ?? ['P1', 'P2'],
     archiveOnResolve: config?.archiveOnResolve ?? true,
+    slackWarRoomPrivate: config?.slackWarRoomPrivate ?? false,
+    warRoomArchiveDelayHours: config?.warRoomArchiveDelayHours ?? null,
     defaultVideoBridge: config?.defaultVideoBridge ?? policy.defaultMeetingProvider,
     customBridgeUrlTemplate: config?.customBridgeUrlTemplate ?? '',
     defaultProviders: policy.defaultProviders,
@@ -108,6 +114,12 @@ export async function saveChatOpsConfiguration(
     autoCreateOnUrgency: input.autoCreateOnUrgency,
     autoCreateOnPriority: input.autoCreateOnPriority,
     archiveOnResolve: input.archiveOnResolve,
+    ...(input.slackWarRoomPrivate !== undefined
+      ? { slackWarRoomPrivate: input.slackWarRoomPrivate }
+      : {}),
+    ...(input.warRoomArchiveDelayHours !== undefined
+      ? { warRoomArchiveDelayHours: input.warRoomArchiveDelayHours }
+      : {}),
     defaultVideoBridge: input.defaultVideoBridge,
     customBridgeUrlTemplate: input.customBridgeUrlTemplate || null,
   };

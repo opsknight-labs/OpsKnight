@@ -1,4 +1,6 @@
 import prisma from '@/lib/prisma';
+import { getSlackBotScopes } from '@/lib/slack';
+import { slackDmEligibility } from '@/lib/slack/health';
 import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import ProfileForm from '@/components/settings/ProfileForm';
@@ -71,6 +73,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
           voiceNotificationsEnabled: true,
           pushNotificationsEnabled: true,
           whatsappNotificationsEnabled: true,
+          slackNotificationsEnabled: true,
           analyticsDigest: { select: { optedOut: true } },
           squireSettings: { select: { headsUpEnabled: true, headsUpLeadMinutes: true } },
           phoneNumber: true,
@@ -163,7 +166,10 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
     (user?.voiceNotificationsEnabled ?? false) && !!user?.phoneNumber,
     (user?.whatsappNotificationsEnabled ?? false) && !!user?.phoneNumber,
     user?.pushNotificationsEnabled ?? false,
+    user?.slackNotificationsEnabled ?? false,
   ].filter(Boolean).length;
+  const slackDmCheck = slackDmEligibility(await getSlackBotScopes().catch(() => []));
+  const slackDm = { available: slackDmCheck.eligible, reason: slackDmCheck.reason };
 
   return (
     <div className="space-y-6">
@@ -252,6 +258,8 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
               pushEnabled={user?.pushNotificationsEnabled ?? false}
               whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
               phoneNumber={user?.phoneNumber ?? null}
+              slackEnabled={user?.slackNotificationsEnabled ?? false}
+              slackDm={slackDm}
             />
             {user?.id && <NoiseSettings viewer={{ id: user.id }} />}
             <WeeklyDigestToggle

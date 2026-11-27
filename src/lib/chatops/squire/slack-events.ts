@@ -3,7 +3,12 @@ import { enqueueChatOpsIntent } from '@/lib/chatops/intents';
 import { logger } from '@/lib/logger';
 import { isSquireChatOpsEnabled } from './handler';
 import { loadSquireIdentity } from './identity';
-import { findSlackIncidentForChannel, type SlackSquireMentionPayload } from './slack';
+import { checkRateLimit } from '@/lib/rate-limit';
+import {
+  findSlackIncidentForChannel,
+  slackInstallationToken,
+  type SlackSquireMentionPayload,
+} from './slack';
 
 type SlackEventEnvelope = {
   team_id?: unknown;
@@ -62,10 +67,43 @@ export function squireAddressedText(
   return prefix.test(text) ? text.replace(prefix, ' ').trim() : null;
 }
 
+export const SQUIRE_CHAT_OFF_NOTICE =
+  'Squire is turned off for chat; an admin can enable it in Settings → Intelligence → AI';
+
+/**
+ * One private "Squire is off" reply to the asker (at most once per person per ten minutes), sent within
+ * the events request, so it is a single bounded call and failures are ignored.
+ */
+async function tellSquireIsOff(payload: SlackSquireMentionPayload): Promise<void> {
+  try {
+    const once = await checkRateLimit(
+      `squire:chatops:slack-off:${payload.team_id}:${payload.user_id}`,
+      1,
+      10 * 60_000
+    );
+    if (!once.allowed) return;
+    const token = await slackInstallationToken(payload.team_id);
+    if (!token) return;
+    await fetch('https://slack.com/api/chat.postEphemeral', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        channel: payload.channel_id,
+        user: payload.user_id,
+        ...(payload.thread_ts ? { thread_ts: payload.thread_ts } : {}),
+        text: SQUIRE_CHAT_OFF_NOTICE,
+      }),
+      signal: AbortSignal.timeout(2_000),
+    });
+  } catch {
+    // Best effort: the mention is already logged.
+  }
+}
+
 /**
  * Route side of `@squire`: validate the signed `app_mention` event (or a channel message that starts with
  * "@Squire") and queue it. Bots (including this one) are ignored, and nothing is queued while Squire is off
- * for chat, so a disabled feature costs no work. Slack redelivers an event with the same `event_id`; that id
+ * for chat; the asker gets one private notice saying so instead of silence. Slack redelivers an event with the same `event_id`; that id
  * is the de-duplication key.
  */
 export async function enqueueSlackSquireMention(envelope: SlackEventEnvelope): Promise<boolean> {
@@ -103,7 +141,13 @@ export async function enqueueSlackSquireMention(envelope: SlackEventEnvelope): P
   const eventId = str(envelope.event_id, 128);
   if (!payload.team_id || !payload.channel_id || !payload.user_id || !payload.ts || !eventId)
     return false;
-  if (!(await isSquireChatOpsEnabled())) return false;
+  if (!(await isSquireChatOpsEnabled())) {
+    logger.info('[Squire] Slack mention ignored: Squire is turned off for chat', {
+      teamId: payload.team_id,
+    });
+    await tellSquireIsOff(payload);
+    return false;
+  }
   try {
     await enqueueChatOpsIntent({
       provider: 'SLACK',

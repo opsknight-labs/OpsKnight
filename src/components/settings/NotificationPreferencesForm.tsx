@@ -20,6 +20,9 @@ type Props = {
   pushEnabled: boolean;
   whatsappEnabled: boolean;
   phoneNumber: string | null;
+  /** Personal Slack DM pages. Omit to hide the row (forms that predate DM paging). */
+  slackEnabled?: boolean;
+  slackDm?: { available: boolean; reason: string | null };
 };
 
 export default function NotificationPreferencesForm({
@@ -29,6 +32,8 @@ export default function NotificationPreferencesForm({
   pushEnabled,
   whatsappEnabled,
   phoneNumber: initialPhoneNumber,
+  slackEnabled = false,
+  slackDm,
 }: Props) {
   const router = useRouter();
 
@@ -37,6 +42,7 @@ export default function NotificationPreferencesForm({
   const [voiceChecked, setVoiceChecked] = useState(voiceEnabled);
   const [pushChecked, setPushChecked] = useState(pushEnabled);
   const [whatsappChecked, setWhatsappChecked] = useState(whatsappEnabled);
+  const [slackChecked, setSlackChecked] = useState(slackEnabled);
   const [phone, setPhone] = useState(initialPhoneNumber || '');
   const [testingChannel, setTestingChannel] = useState<string | null>(null);
 
@@ -47,6 +53,7 @@ export default function NotificationPreferencesForm({
       voice: boolean;
       push: boolean;
       whatsapp: boolean;
+      slack: boolean;
       phoneNumber: string;
     }) => {
       const formData = new FormData();
@@ -55,6 +62,7 @@ export default function NotificationPreferencesForm({
       formData.append('voiceNotificationsEnabled', data.voice ? 'on' : 'off');
       formData.append('pushNotificationsEnabled', data.push ? 'on' : 'off');
       formData.append('whatsappNotificationsEnabled', data.whatsapp ? 'on' : 'off');
+      if (slackDm) formData.append('slackNotificationsEnabled', data.slack ? 'on' : 'off');
       formData.append('phoneNumber', data.phoneNumber.trim());
       formData.append('phoneNumberWhatsApp', data.phoneNumber.trim());
 
@@ -70,7 +78,7 @@ export default function NotificationPreferencesForm({
         error: result.error || 'Failed to save notification preferences',
       };
     },
-    [router]
+    [router, slackDm]
   );
 
   const currentSettings = {
@@ -79,6 +87,7 @@ export default function NotificationPreferencesForm({
     voice: voiceChecked,
     push: pushChecked,
     whatsapp: whatsappChecked,
+    slack: slackChecked,
     phoneNumber: phone,
   };
 
@@ -302,6 +311,27 @@ export default function NotificationPreferencesForm({
         </SettingsRow>
 
         {whatsappChecked && !smsChecked && !voiceChecked && phoneRow}
+
+        {slackDm && (
+          <SettingsRow
+            label="Slack DM"
+            htmlFor="notify-slack-dm"
+            description={
+              slackDm.available
+                ? 'Get pages as a Slack direct message with Acknowledge and Resolve buttons. Your OpsKnight email must match your Slack email.'
+                : (slackDm.reason ?? 'Slack DM paging is not available.')
+            }
+          >
+            <Switch
+              id="notify-slack-dm"
+              aria-describedby={settingsRowDescribedBy('notify-slack-dm', { description: true })}
+              checked={slackChecked}
+              // Turning it off is always allowed; turning it on needs the workspace scope.
+              disabled={!slackDm.available && !slackChecked}
+              onCheckedChange={setSlackChecked}
+            />
+          </SettingsRow>
+        )}
       </div>
     </SettingsSection>
   );

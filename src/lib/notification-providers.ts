@@ -100,7 +100,7 @@ export interface EmailConfig {
   secure?: boolean;
 }
 
-export type NotificationChannelType = 'EMAIL' | 'SMS' | 'VOICE' | 'PUSH' | 'WHATSAPP';
+export type NotificationChannelType = 'EMAIL' | 'SMS' | 'VOICE' | 'PUSH' | 'WHATSAPP' | 'SLACK';
 
 export interface VoiceConfig {
   enabled: boolean;
@@ -361,6 +361,9 @@ export async function isChannelAvailable(channel: NotificationChannelType): Prom
     case 'WHATSAPP':
       // WhatsApp has independent enabled state stored in Twilio config
       return (await getWhatsAppConfig()).enabled;
+    case 'SLACK':
+      // Personal Slack DM: available once Slack is connected with im:write and users:read.email.
+      return (await import('./slack/dm')).isSlackDmAvailable();
     default:
       return false;
   }

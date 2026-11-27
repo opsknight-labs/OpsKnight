@@ -11,9 +11,10 @@ import {
   createChannel,
   findWarRoomChannel,
   getChannelById,
-  warRoomChannelName,
+  microsoftTeamsGraphRequest,
   warRoomMarker,
 } from '@/lib/microsoft-teams/graph/channels';
+import { logger } from '@/lib/logger';
 import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilities';
 import { findTeamMember } from '@/lib/microsoft-teams/graph/members';
 
@@ -609,7 +610,17 @@ export async function provisionMicrosoftTeamsWarRoom(
 ): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({
     where: { id: warRoomId },
-    include: { incident: { select: { id: true, title: true, status: true } } },
+    include: {
+      incident: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          service: { select: { name: true } },
+        },
+      },
+    },
   });
 
   const reconciliationOnly = opts?.reconciliationOnly === true;
@@ -1033,11 +1044,38 @@ export async function provisionMicrosoftTeamsWarRoom(
   });
   if (renewed.count !== 1) return;
 
+  // Teams caps a team at ~1000 channels, archived and deleted ones included. Refuse a new room
+  // before the cap (a clear error the settings UI can show) and warn as it gets close.
+  const capacity = await teamsChannelCapacity(room.providerTenantId, room.providerContainerId);
+  if (capacity.level === 'FULL') {
+    logger.error('[MicrosoftTeams] Team is at its channel limit — war room not created', {
+      warRoomId: room.id,
+      teamId: room.providerContainerId,
+      channelCount: capacity.count,
+    });
+    await markFailed(
+      room.id,
+      expectedProvisioningToken,
+      TEAMS_CHANNEL_LIMIT_REACHED,
+      `This team has about ${capacity.count} channels, close to the Microsoft Teams limit of ${TEAMS_TEAM_CHANNEL_LIMIT} (archived and deleted channels count). Delete old war-room channels or point war rooms at another team.`
+    );
+    return;
+  }
+
   const created = await createChannel({
     tenantId: room.providerTenantId,
     teamId: room.providerContainerId,
-    displayName: warRoomChannelName(room.incident.id, room.generation, room.incident.title),
-    description: marker,
+    displayName: readableWarRoomChannelName({
+      incidentId: room.incident.id,
+      generation: room.generation,
+      title: room.incident.title,
+      priority: room.incident.priority,
+    }),
+    description: readableWarRoomChannelDescription({
+      title: room.incident.title,
+      serviceName: room.incident.service?.name ?? null,
+      marker,
+    }),
     membershipType: room.membershipType,
     ...(room.membershipType === 'PRIVATE' ? { ownerObjectId: privateOwnerObjectId! } : {}),
   });
@@ -1060,6 +1098,32 @@ export async function provisionMicrosoftTeamsWarRoom(
     return;
   }
   const adoption = await adoptProviderChannel(room, expectedProvisioningToken, created.value);
+  if (capacity.level === 'NEAR' && adoption === 'READY') {
+    logger.warn('[MicrosoftTeams] Team is approaching its channel limit', {
+      warRoomId: room.id,
+      teamId: room.providerContainerId,
+      channelCount: capacity.count,
+    });
+    // Kept in metadata, not lastErrorCode: the projection clears lastErrorCode on its first success.
+    const currentMetadata =
+      room.metadata && typeof room.metadata === 'object' && !Array.isArray(room.metadata)
+        ? (room.metadata as Prisma.JsonObject)
+        : {};
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: room.id, state: 'READY' },
+      data: {
+        metadata: {
+          ...currentMetadata,
+          channelCapacity: {
+            code: TEAMS_CHANNEL_LIMIT_NEAR,
+            channelCount: capacity.count + 1,
+            limit: TEAMS_TEAM_CHANNEL_LIMIT,
+            checkedAt: new Date().toISOString(),
+          },
+        },
+      },
+    });
+  }
   if (adoption === 'CLOSING') {
     await ensureTeamsTerminalCloseHandoff(room.id, room.incident.id);
   } else if (adoption === 'READY') {
@@ -1220,4 +1284,96 @@ async function validateWarRoomProvisioningAuthority(room: {
         'Microsoft Teams private war rooms require verified member-management consent for this Team.',
     };
   return { allowed: true };
+}
+
+/** Microsoft Teams allows ~1000 channels per team, including archived and deleted ones. */
+export const TEAMS_TEAM_CHANNEL_LIMIT = 1000;
+export const TEAMS_CHANNEL_LIMIT_NEAR = 'TEAMS_CHANNEL_LIMIT_NEAR';
+export const TEAMS_CHANNEL_LIMIT_REACHED = 'TEAMS_CHANNEL_LIMIT_REACHED';
+const TEAMS_CHANNEL_WARN_AT = 900;
+const TEAMS_CHANNEL_REFUSE_AT = 990;
+
+export function teamsChannelCapacityLevel(count: number): 'OK' | 'NEAR' | 'FULL' {
+  if (count >= TEAMS_CHANNEL_REFUSE_AT) return 'FULL';
+  if (count >= TEAMS_CHANNEL_WARN_AT) return 'NEAR';
+  return 'OK';
+}
+
+/**
+ * Best estimate of the team's channel count: the larger of what Graph lists now and the war rooms
+ * OpsKnight has created there (Graph cannot list deleted channels, which still count). Never
+ * throws; an unreadable count is treated as OK so a Graph blip cannot block war rooms.
+ */
+async function teamsChannelCapacity(
+  tenantId: string,
+  teamId: string
+): Promise<{ level: 'OK' | 'NEAR' | 'FULL'; count: number }> {
+  let listed = 0;
+  try {
+    let next: string | null = `/teams/${encodeURIComponent(teamId)}/channels?$select=id`;
+    for (let page = 0; next && page < 20; page += 1) {
+      const result = await microsoftTeamsGraphRequest(tenantId, next, { method: 'GET' }, 'READ');
+      if (!result.ok) break;
+      const body = (await result.value.json().catch(() => null)) as {
+        value?: unknown[];
+        '@odata.nextLink'?: string;
+      } | null;
+      if (!Array.isArray(body?.value)) break;
+      listed += body.value.length;
+      next = typeof body['@odata.nextLink'] === 'string' ? body['@odata.nextLink'] : null;
+    }
+  } catch {}
+  let tracked = 0;
+  try {
+    tracked = await prisma.incidentWarRoom.count({
+      where: {
+        provider: 'MICROSOFT_TEAMS',
+        providerTenantId: tenantId,
+        providerContainerId: teamId,
+        providerChannelId: { not: null },
+      },
+    });
+  } catch {}
+  const count = Math.max(listed, tracked);
+  return { level: teamsChannelCapacityLevel(count), count };
+}
+
+// Teams rejects these characters in channel names and a leading "_" / "." or trailing ".".
+const TEAMS_CHANNEL_NAME_FORBIDDEN = /[~#%&*{}+/\\:<>?|'"]/g;
+const TEAMS_CHANNEL_NAME_MAX = 50;
+
+/**
+ * "P1 Database latency spike · 1a2b3c4d" — readable in the channel list. The short incident id
+ * keeps names unique; a later generation adds "r2", "r3"…
+ */
+export function readableWarRoomChannelName(input: {
+  incidentId: string;
+  generation: number;
+  title: string;
+  priority?: string | null;
+}): string {
+  const suffix = ` · ${input.incidentId.slice(-8).toLowerCase()}${
+    input.generation > 1 ? ` r${input.generation}` : ''
+  }`;
+  const prefix = input.priority ? `${input.priority} ` : '';
+  const title =
+    input.title.replace(TEAMS_CHANNEL_NAME_FORBIDDEN, ' ').replace(/\s+/g, ' ').trim() ||
+    'Incident';
+  const room = TEAMS_CHANNEL_NAME_MAX - suffix.length - prefix.length;
+  const cut = title.length > room ? `${title.slice(0, room - 1).trimEnd()}…` : title;
+  return `${prefix}${cut}${suffix}`.replace(/^[_.\s]+/, '').replace(/\.+$/, '');
+}
+
+/** Human description with the reconciliation marker kept at the end (matched by substring). */
+export function readableWarRoomChannelDescription(input: {
+  title: string;
+  serviceName?: string | null;
+  marker: string;
+}): string {
+  const lead = `OpsKnight war room for "${input.title.replace(/\s+/g, ' ').trim()}"${
+    input.serviceName ? ` (${input.serviceName})` : ''
+  }.`;
+  // Graph caps descriptions at 1024 characters; the marker must always survive.
+  const room = 1024 - input.marker.length - 1;
+  return `${lead.length > room ? `${lead.slice(0, room - 1)}…` : lead} ${input.marker}`;
 }

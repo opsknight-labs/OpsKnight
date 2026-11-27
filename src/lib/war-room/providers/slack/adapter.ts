@@ -194,6 +194,20 @@ async function handleIncidentEvent(
       // MICROSOFT_TEAMS rooms and vice versa. Global all-provider close is
       // still available via closeIncidentWarRoomsNeutral(incidentId) for
       // outbox-level code, but delivery handlers must be isolated.
+      const archiveDelay = await slackArchiveDelay(event.incidentId);
+      if (archiveDelay === 'SKIP') {
+        result = { success: true };
+        break;
+      }
+      if (archiveDelay > 0) {
+        // Delayed archive: release this delivery and let the queue run it again when due.
+        const { WarRoomRetryableError } = await import('../../errors');
+        throw new WarRoomRetryableError(
+          'War-room archive is delayed by policy.',
+          archiveDelay,
+          true
+        );
+      }
       const { closeProviderWarRoomsNeutral } = await import('../../engine');
       await closeProviderWarRoomsNeutral(event.incidentId, 'SLACK');
       result = { success: true };
@@ -399,6 +413,31 @@ async function handleIncidentEvent(
  * Registration point for the Slack migration. It fails closed until Slack's
  * legacy incident-column authority has been backfilled into IncidentWarRoom.
  */
+
+const MAX_ARCHIVE_DELAY_HOURS = 24 * 30;
+
+/**
+ * `warRoomArchiveDelayHours` (ChatOpsConfig): ms left before the resolved incident's war room may
+ * be archived, 0 to archive now (null/0 setting = today's behaviour), or SKIP when the incident is
+ * no longer resolved (it was reopened while the archive waited).
+ */
+export async function slackArchiveDelay(incidentId: string): Promise<number | 'SKIP'> {
+  const prisma = (await import('@/lib/prisma')).default;
+  const config = await prisma.chatOpsConfig
+    .findUnique({ where: { id: 'default' }, select: { warRoomArchiveDelayHours: true } })
+    .catch(() => null);
+  const hours = Math.min(config?.warRoomArchiveDelayHours ?? 0, MAX_ARCHIVE_DELAY_HOURS);
+  if (!(hours > 0)) return 0;
+  const incident = await prisma.incident.findUnique({
+    where: { id: incidentId },
+    select: { status: true, resolvedAt: true },
+  });
+  if (!incident) return 0;
+  if (incident.status !== 'RESOLVED') return 'SKIP';
+  const dueAt = (incident.resolvedAt ?? new Date()).getTime() + hours * 3_600_000;
+  return Math.max(0, dueAt - Date.now());
+}
+
 export const slackWarRoomAdapter: WarRoomProviderAdapter = {
   provider: 'SLACK',
   usesChatOpsPolicy: true,

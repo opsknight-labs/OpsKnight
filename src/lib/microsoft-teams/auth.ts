@@ -28,7 +28,9 @@ export async function getMicrosoftTeamsConfig(): Promise<{
     const clientSecret = await decrypt(config.clientSecret);
     return { config, clientSecret };
   } catch (error) {
-    logger.error('[MicrosoftTeams] Failed to decrypt clientSecret', { error: (error as Error).message });
+    logger.error('[MicrosoftTeams] Failed to decrypt clientSecret', {
+      error: (error as Error).message,
+    });
     return null;
   }
 }
@@ -51,23 +53,70 @@ export type VerifiedTeamsIdentity = {
 };
 
 let botJwksCache: { jwks: Record<string, unknown>; fetchedAt: number } | null = null;
+let botJwksInflight: Promise<Record<string, unknown>> | null = null;
+let botJwksLastForcedRefreshAt = 0;
 const BOT_OPENID_URL = 'https://login.botframework.com/v1/.well-known/openidconfiguration';
 const BOT_JWKS_TTL_MS = 60 * 60 * 1000;
+/** A bad signature may force a refetch at most this often (forged tokens must not hammer Microsoft). */
+export const BOT_JWKS_FORCED_REFRESH_MIN_INTERVAL_MS = 5 * 60 * 1000;
+const BOT_JWKS_FETCH_TIMEOUT_MS = 5_000;
+/** Bot Framework recommends tolerating clock skew of up to 5 minutes. */
+export const BOT_JWT_CLOCK_TOLERANCE_SECONDS = 300;
 
-async function fetchBotJwks(forceRefresh = false): Promise<Record<string, unknown>> {
-  const now = Date.now();
-  if (!forceRefresh && botJwksCache && now - botJwksCache.fetchedAt < BOT_JWKS_TTL_MS) {
-    return botJwksCache.jwks;
-  }
-  const oidRes = await fetch(BOT_OPENID_URL, { cache: 'no-store' as RequestCache });
+async function loadBotJwks(): Promise<Record<string, unknown>> {
+  const init = {
+    cache: 'no-store' as RequestCache,
+    signal: AbortSignal.timeout(BOT_JWKS_FETCH_TIMEOUT_MS),
+  };
+  const oidRes = await fetch(BOT_OPENID_URL, init);
   if (!oidRes.ok) throw new Error(`Bot Framework OpenID discovery failed: ${oidRes.status}`);
   const oid = (await oidRes.json()) as { jwks_uri?: string };
   const jwksUri = oid.jwks_uri || 'https://login.botframework.com/v1/.well-known/keys';
-  const jwksRes = await fetch(jwksUri, { cache: 'no-store' as RequestCache });
+  const jwksRes = await fetch(jwksUri, {
+    cache: 'no-store' as RequestCache,
+    signal: AbortSignal.timeout(BOT_JWKS_FETCH_TIMEOUT_MS),
+  });
   if (!jwksRes.ok) throw new Error(`Bot Framework JWKS fetch failed: ${jwksRes.status}`);
   const jwks = (await jwksRes.json()) as Record<string, unknown>;
-  botJwksCache = { jwks, fetchedAt: now };
+  botJwksCache = { jwks, fetchedAt: Date.now() };
   return jwks;
+}
+
+/**
+ * Cached Bot Framework JWKS. Concurrent callers share one in-flight fetch.
+ * `forceRefresh` (unknown kid / bad signature) is throttled to once per
+ * BOT_JWKS_FORCED_REFRESH_MIN_INTERVAL_MS; a throttled call returns the cache.
+ * On a failed refetch a previously cached key set is served rather than failing every request.
+ */
+async function fetchBotJwks(forceRefresh = false): Promise<Record<string, unknown>> {
+  const now = Date.now();
+  if (botJwksCache) {
+    const fresh = now - botJwksCache.fetchedAt < BOT_JWKS_TTL_MS;
+    if (!forceRefresh && fresh) return botJwksCache.jwks;
+    if (
+      forceRefresh &&
+      now - botJwksLastForcedRefreshAt < BOT_JWKS_FORCED_REFRESH_MIN_INTERVAL_MS
+    ) {
+      return botJwksCache.jwks;
+    }
+  }
+  if (forceRefresh) botJwksLastForcedRefreshAt = now;
+  if (!botJwksInflight) {
+    botJwksInflight = loadBotJwks().finally(() => {
+      botJwksInflight = null;
+    });
+  }
+  try {
+    return await botJwksInflight;
+  } catch (error) {
+    if (botJwksCache) {
+      logger.warn('[MicrosoftTeams] Bot JWKS refresh failed; using cached keys', {
+        error: (error as Error).message.slice(0, 200),
+      });
+      return botJwksCache.jwks;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -82,11 +131,11 @@ const PROD_BOT_ISSUER = 'https://api.botframework.com';
 function isBotSigningKeyEndorsed(
   jwks: Record<string, unknown>,
   signingKeyId: string,
-  channelId: string,
+  channelId: string
 ): boolean {
   if (!signingKeyId || !channelId) return false;
   const keys = Array.isArray((jwks as { keys?: unknown[] }).keys)
-    ? ((jwks as { keys: Array<{ kid?: unknown; endorsements?: unknown }> }).keys)
+    ? (jwks as { keys: Array<{ kid?: unknown; endorsements?: unknown }> }).keys
     : [];
   const signingKey = keys.find(key => key.kid === signingKeyId);
   const endorsements = Array.isArray(signingKey?.endorsements)
@@ -98,7 +147,7 @@ function isBotSigningKeyEndorsed(
 export function __isBotSigningKeyEndorsedForTests(
   jwks: Record<string, unknown>,
   signingKeyId: string,
-  channelId: string,
+  channelId: string
 ): boolean {
   return isBotSigningKeyEndorsed(jwks, signingKeyId, channelId);
 }
@@ -112,7 +161,8 @@ function isAllowedBotIssuer(iss: string): boolean {
   if (process.env.NODE_ENV === 'production') return false;
   const guid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
   if (new RegExp(`^https:\\/\\/sts\\.windows\\.net\\/${guid}\\/?$`).test(iss)) return true;
-  if (new RegExp(`^https:\\/\\/login\\.microsoftonline\\.com\\/${guid}\\/v2\\.0\\/?$`).test(iss)) return true;
+  if (new RegExp(`^https:\\/\\/login\\.microsoftonline\\.com\\/${guid}\\/v2\\.0\\/?$`).test(iss))
+    return true;
   return false;
 }
 
@@ -122,7 +172,8 @@ export function __isAllowedBotIssuerForTests(iss: string): boolean {
   if (iss === PROD_BOT_ISSUER) return true;
   const guid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
   if (new RegExp(`^https:\\/\\/sts\\.windows\\.net\\/${guid}\\/?$`).test(iss)) return true;
-  if (new RegExp(`^https:\\/\\/login\\.microsoftonline\\.com\\/${guid}\\/v2\\.0\\/?$`).test(iss)) return true;
+  if (new RegExp(`^https:\\/\\/login\\.microsoftonline\\.com\\/${guid}\\/v2\\.0\\/?$`).test(iss))
+    return true;
   return false;
 }
 
@@ -141,13 +192,17 @@ async function verifyBotFrameworkToken(
         issuer: undefined,
         audience: undefined,
         algorithms: ['RS256', 'RS384', 'RS512'],
+        clockTolerance: BOT_JWT_CLOCK_TOLERANCE_SECONDS,
       });
       const claims = result.payload as Record<string, unknown>;
-      const signingKeyId = typeof result.protectedHeader.kid === 'string' ? result.protectedHeader.kid : '';
+      const signingKeyId =
+        typeof result.protectedHeader.kid === 'string' ? result.protectedHeader.kid : '';
       const rawAud = claims.aud;
-      const aud = typeof rawAud === 'string' ? rawAud : Array.isArray(rawAud) ? String(rawAud[0] ?? '') : '';
+      const aud =
+        typeof rawAud === 'string' ? rawAud : Array.isArray(rawAud) ? String(rawAud[0] ?? '') : '';
       const iss = typeof claims.iss === 'string' ? claims.iss : '';
-      const serviceUrl = typeof claims.serviceurl === 'string' ? (claims.serviceurl as string) : null;
+      const serviceUrl =
+        typeof claims.serviceurl === 'string' ? (claims.serviceurl as string) : null;
 
       if (aud !== expectedAppId) {
         logger.warn('[MicrosoftTeams] Bot JWT aud mismatch', {
@@ -230,8 +285,12 @@ async function verifyBotFrameworkToken(
       const msg = e instanceof Error ? e.message : String(e);
       const isUnknownKid = /kid|JWK|signature|no applicable/i.test(msg);
       if (isUnknownKid && attempt === 0) {
-        jwks = await fetchBotJwks(true);
-        continue;
+        const refreshed = await fetchBotJwks(true);
+        // Throttled (same key set): retrying would fail identically.
+        if (refreshed !== jwks) {
+          jwks = refreshed;
+          continue;
+        }
       }
       logger.warn('[MicrosoftTeams] Bot JWT verification failed', { error: msg.slice(0, 300) });
       return null;
@@ -245,11 +304,15 @@ export async function assertMicrosoftTeamsActivityAuth(
   options?: { expectedServiceUrl?: string | null; expectedChannelId?: string | null }
 ): Promise<VerifiedTeamsIdentity | null> {
   // Test harness bypass — only in non-production
-  if (process.env.NODE_ENV !== 'production' && request.headers.get('x-opsknight-teams-test') === '1') {
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    request.headers.get('x-opsknight-teams-test') === '1'
+  ) {
     return { serviceUrl: null, appId: '__test__' };
   }
 
-  const authHeader = request.headers.get('authorization') || request.headers.get('Authorization') || '';
+  const authHeader =
+    request.headers.get('authorization') || request.headers.get('Authorization') || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   if (!token) return null;
 
@@ -267,16 +330,21 @@ export async function assertMicrosoftTeamsActivityAuth(
  */
 export async function enforceMicrosoftTeamsTenantAllowlist(
   verifiedTenantId: string,
-  config: { tenantId: string | null; tenantMode: string },
+  config: { tenantId: string | null; tenantMode: string }
 ): Promise<{ allowed: true } | { allowed: false; reason: string; code: string }> {
   if (!verifiedTenantId || verifiedTenantId === '__test__') {
     return { allowed: false, reason: 'Tenant is not verified', code: 'TENANT_REQUIRED' };
   }
   if (config.tenantMode === 'SINGLE') {
     const cfgTid = config.tenantId?.trim();
-    if (!cfgTid) return { allowed: false, reason: 'SINGLE tenant not configured', code: 'TENANT_REQUIRED' };
+    if (!cfgTid)
+      return { allowed: false, reason: 'SINGLE tenant not configured', code: 'TENANT_REQUIRED' };
     if (verifiedTenantId !== cfgTid) {
-      return { allowed: false, reason: 'Tenant not allowed for SINGLE-mode config', code: 'TENANT_NOT_ALLOWED' };
+      return {
+        allowed: false,
+        reason: 'Tenant not allowed for SINGLE-mode config',
+        code: 'TENANT_NOT_ALLOWED',
+      };
     }
     return { allowed: true };
   }
@@ -288,7 +356,11 @@ export async function enforceMicrosoftTeamsTenantAllowlist(
     where: { tenantId: verifiedTenantId, enabled: true },
   } as never);
   if (count === 0) {
-    return { allowed: false, reason: 'Teams app not installed for tenant', code: 'APP_NOT_INSTALLED' };
+    return {
+      allowed: false,
+      reason: 'Teams app not installed for tenant',
+      code: 'APP_NOT_INSTALLED',
+    };
   }
   return { allowed: true };
 }
@@ -296,6 +368,12 @@ export async function enforceMicrosoftTeamsTenantAllowlist(
 // Test-only helpers
 export function __clearBotJwksCacheForTests(): void {
   botJwksCache = null;
+  botJwksInflight = null;
+  botJwksLastForcedRefreshAt = 0;
+}
+
+export function __fetchBotJwksForTests(forceRefresh = false): Promise<Record<string, unknown>> {
+  return fetchBotJwks(forceRefresh);
 }
 
 export async function decryptMicrosoftTeamsSecret(value: string): Promise<string> {

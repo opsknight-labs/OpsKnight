@@ -44,6 +44,10 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   'app_mentions:read': 'Receive @OpsKnight mentions so Squire can answer in incident channels',
   'chat:write.customize':
     'Post Squire messages under the Squire name and avatar (without it they post as OpsKnight with a Squire header)',
+  'chat:write.public': 'Post to public channels without inviting the bot first',
+  'pins:write': 'Pin the incident status card in war rooms',
+  'bookmarks:write': 'Bookmark the incident in war-room channels',
+  'im:write': 'Page responders with a Slack direct message',
 };
 
 function getScopeDescription(scope: string): string {
@@ -65,6 +69,8 @@ export function SlackScopeList({
   const missingRequired = requiredScopes.filter(scope => !scopeSet.has(scope));
   const allScopes = [...requiredScopes, ...optionalScopes];
   const isHealthy = missingRequired.length === 0;
+  const missingOptional = optionalScopes.filter(scope => !scopeSet.has(scope));
+  const grantedCount = allScopes.filter(scope => scopeSet.has(scope)).length;
 
   return (
     <div className="rounded-lg border bg-card shadow-xs overflow-hidden">
@@ -91,7 +97,7 @@ export function SlackScopeList({
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground text-sm">Scope Checklist</span>
                   <span className="text-xs text-muted-foreground hidden sm:inline">
-                    ({presentScopes.length} of {allScopes.length} scopes active)
+                    ({grantedCount} of {allScopes.length} scopes granted)
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -107,8 +113,10 @@ export function SlackScopeList({
               >
                 {isHealthy ? (
                   <>
-                    <CheckCircle2 className="h-3 w-3" />
-                    All required scopes present
+                    <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                    {missingOptional.length === 0
+                      ? 'All scopes granted'
+                      : `Required present, ${missingOptional.length} optional missing`}
                   </>
                 ) : (
                   <>
@@ -177,7 +185,7 @@ export function SlackScopeList({
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 pt-3 border-t text-xs text-muted-foreground">
             <p>Scope changes take effect after reinstalling or reconnecting Slack.</p>
-            {missingRequired.length > 0 && isAdmin && onReconnect && (
+            {(missingRequired.length > 0 || missingOptional.length > 0) && isAdmin && onReconnect && (
               <Button
                 variant="outline"
                 size="sm"
