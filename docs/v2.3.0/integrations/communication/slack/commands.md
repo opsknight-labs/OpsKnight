@@ -43,6 +43,7 @@ Three commands work in **any** channel; the rest work in an incident war room:
 | `/incident resolve [summary]` | Resolves the incident, optionally with a summary. |
 | `/incident note <text>` | Adds a note to the timeline. |
 | `/incident who` | Roles and on-call chain for the incident. |
+| `/incident role <commander\|ops-lead\|comms-lead\|scribe> @person\|me\|clear` | Assigns or clears an incident role. |
 | `/incident postmortem` | Starts a postmortem. |
 | `/incident help` | Lists the commands. |
 
@@ -74,7 +75,12 @@ OpsKnight checks that you may declare incidents on that service, using your link
 
 ## How a command answers
 
-A fast command shows only its answer, as a private message. Commands that can take many seconds (`ask`, `investigate`, `postmortem`) first show a short "Working on it…" note so you know the request arrived.
+A fast command shows only its answer, with no "Processing" note. Who sees the answer depends on the command:
+
+- **Private to you:** the read-only commands (`who`, `list`, `oncall`, `help`), `ask` and `investigate`, and any error or refusal.
+- **Posted in the channel:** commands that change the incident (`ack`, `resolve`, `note`, `role`, and `postmortem`) announce the result to everyone in the channel, including a resolution summary or the text of a note. Keep that in mind before putting sensitive details in them.
+
+Commands that can take many seconds (`ask`, `investigate`, `postmortem`) first show a short "Working on it…" note so you know the request arrived.
 
 ## What OpsKnight does
 

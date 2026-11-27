@@ -72,7 +72,7 @@ Under **Settings → Integrations → ChatOps**:
 - **Private Slack war rooms** creates new Slack rooms as private channels that only invited responders can see. It needs the `groups:write` scope and is separate from status-page incident visibility. It is off by default.
 - **Close Collaboration on Resolution** archives the room when the incident resolves. The optional **Archive delay (hours)** (1 to 720) keeps the room open for follow-up first; leave it empty to archive as soon as the incident resolves. The delay applies to Slack rooms; Teams rooms still archive as soon as the incident resolves.
 
-Existing rooms keep their names, topics, and archive behaviour.
+The archive settings are read when a room closes, so a change applies to existing rooms that resolve later, and changing the delay re-times an archive that is already waiting. **Private Slack war rooms** applies only to rooms created afterwards. Existing rooms keep their names and topics.
 
 ## Verify it worked
 
