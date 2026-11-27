@@ -677,6 +677,55 @@ describe('central notification control plane', () => {
     expect(prisma.notificationDeliveryAttempt.create).not.toHaveBeenCalled();
   });
 
+  describe('classifies a failed send by what it proves about delivery', () => {
+    async function deliverWithError(error: string) {
+      const due = new Date(Date.now() - 60_000);
+      vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+        id: 'notification_classified',
+        status: 'PENDING',
+        category: 'SECURITY',
+        attempts: 1,
+        maxAttempts: 5,
+        nextAttemptAt: due,
+        scheduledAt: due,
+        lastAttemptAt: null,
+        expiresAt: null,
+        payloadEncrypted: `encrypted:${JSON.stringify(input.payload)}`,
+      } as never);
+      vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+      mocks.sendEmail.mockResolvedValue({ success: false, error });
+      await deliverCentralNotification('notification_classified');
+    }
+
+    it('fails an unknown email provider permanently instead of parking it as UNKNOWN', async () => {
+      await deliverWithError('Unknown email provider');
+
+      expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'FAILED', attempts: 5 }),
+        })
+      );
+    });
+
+    it('retries a network that was unreachable, because nothing was sent', async () => {
+      await deliverWithError('connect failed: Network is unreachable');
+
+      expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'FAILED', attempts: 2 }),
+        })
+      );
+    });
+
+    it('still treats a timeout as ambiguous and never retries it', async () => {
+      await deliverWithError('read ETIMEDOUT');
+
+      expect(prisma.notification.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) })
+      );
+    });
+  });
+
   it.each([false, true])(
     'scrubs expired security payloads even when receipt selection fails=%s',
     async replayFails => {

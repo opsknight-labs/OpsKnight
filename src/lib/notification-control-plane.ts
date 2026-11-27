@@ -1646,22 +1646,23 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
 function isAmbiguousDeliveryError(errorText: string): boolean {
   if (!errorText) return false;
   const normalized = errorText.toLowerCase();
-  return (
-    normalized.includes('ambiguous') ||
-    normalized.includes('unconfirmed') ||
-    normalized.includes('unknown') ||
-    normalized.includes('etimedout') ||
-    normalized.includes('timeout') ||
-    normalized.includes('timed out') ||
-    normalized.includes('esockettimedout') ||
-    normalized.includes('econnreset') ||
-    normalized.includes('socket hang up') ||
-    normalized.includes('epipe') ||
-    normalized.includes('und_err_socket') ||
-    normalized.includes('und_err_connect_timeout') ||
-    (normalized.includes('network') && !normalized.includes('enotfound')) ||
-    (normalized.includes('connection') && !normalized.includes('econnrefused'))
-  );
+  // Whole tokens only, so "unknown" or "connection" inside another word does not count.
+  if (
+    /\b(?:ambiguous|unconfirmed|unknown|etimedout|timeout|timed out|esockettimedout|econnreset|socket hang up|epipe|und_err_socket|und_err_connect_timeout)\b/.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+  // The connection was never made, so nothing was sent and a retry cannot duplicate it.
+  if (
+    /\b(?:enotfound|econnrefused|enetunreach|ehostunreach|eai_again)\b|network is unreachable|no route to host/.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+  return /\b(?:network|connection)\b/.test(normalized);
 }
 
 function isSafeEmailFailoverCondition(result: DeliveryResult): boolean {
@@ -1718,7 +1719,7 @@ function isClientRejectionStatus(statusCode: number | undefined): boolean {
 }
 
 function isPermanentProviderError(message: string): boolean {
-  return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|authentication failed|invalid (?:api )?(?:key|credentials)|unauthorized|official Slack host|webhook URL is required|invalid or restricted Webhook URL|message_limit_exceeded|^(?:channel_not_found|not_in_channel|is_archived|invalid_auth|not_authed|token_revoked|token_expired|account_inactive|missing_scope)$/i.test(
+  return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown (?:email |SMS )?provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|authentication failed|invalid (?:api )?(?:key|credentials)|unauthorized|official Slack host|webhook URL is required|invalid or restricted Webhook URL|message_limit_exceeded|^(?:channel_not_found|not_in_channel|is_archived|invalid_auth|not_authed|token_revoked|token_expired|account_inactive|missing_scope)$/i.test(
     message
   );
 }
@@ -2979,18 +2980,20 @@ async function deliverCentralNotificationOwned(
       'CALLBACK';
     const isAmbiguous =
       circuitTimeout ||
-      // A provider HTTP 5xx can occur after accepting a message. Without a
-      // provider receipt, retrying it (even on the same provider) risks a duplicate.
-      // This applies to email AND any callback-capable provider (Voice, SMS, WhatsApp on Twilio).
-      ((isEmail || isCallbackCapable) &&
-        typeof result.statusCode === 'number' &&
-        result.statusCode >= 500) ||
-      result.errorCode === 'UNKNOWN' ||
-      result.errorCode === 'ETIMEDOUT' ||
-      result.errorCode === 'ECONNRESET' ||
-      // A 4xx is a definitive refusal; its text (e.g. SMTP "550 User unknown") is not ambiguity.
-      (!isClientRejectionStatus(result.statusCode) &&
-        isAmbiguousDeliveryError(`${errorMessage} ${result.errorCode || ''}`));
+      // A permanent failure (nothing was sent) is never ambiguous, whatever else its text says.
+      (!isPermanentProviderError(errorMessage) &&
+        // A provider HTTP 5xx can occur after accepting a message. Without a
+        // provider receipt, retrying it (even on the same provider) risks a duplicate.
+        // This applies to email AND any callback-capable provider (Voice, SMS, WhatsApp on Twilio).
+        (((isEmail || isCallbackCapable) &&
+          typeof result.statusCode === 'number' &&
+          result.statusCode >= 500) ||
+          result.errorCode === 'UNKNOWN' ||
+          result.errorCode === 'ETIMEDOUT' ||
+          result.errorCode === 'ECONNRESET' ||
+          // A 4xx is a definitive refusal; its text (e.g. SMTP "550 User unknown") is not ambiguity.
+          (!isClientRejectionStatus(result.statusCode) &&
+            isAmbiguousDeliveryError(`${errorMessage} ${result.errorCode || ''}`))));
 
     if (isAmbiguous) {
       const reconciliationDeadline = new Date(Date.now() + UNKNOWN_RECONCILIATION_DELAY_MS);
