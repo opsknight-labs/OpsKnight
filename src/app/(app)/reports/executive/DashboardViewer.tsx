@@ -120,6 +120,9 @@ export default function DashboardViewer({
   const [isWidgetLibraryOpen, setIsWidgetLibraryOpen] = useState(false);
   const [dashboardTitle, setDashboardTitle] = useState(dashboardName);
   const [dashboardDesc, setDashboardDesc] = useState(dashboardDescription);
+  // What was last saved; the props only change when the server re-renders, not after a save.
+  const [savedTitle, setSavedTitle] = useState(dashboardName);
+  const [savedDesc, setSavedDesc] = useState(dashboardDescription);
   const [savedBaseline, setSavedBaseline] = useState(widgets);
   const [localWidgets, setLocalWidgets] = useState(widgets);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -158,6 +161,8 @@ export default function DashboardViewer({
       setLocalWidgets(widgets);
       setDashboardTitle(dashboardName);
       setDashboardDesc(dashboardDescription);
+      setSavedTitle(dashboardName);
+      setSavedDesc(dashboardDescription);
     }
     const vis = savedDashboards.find(d => d.id === dashboardId)?.visibility;
     if (vis === 'PRIVATE' || vis === 'TEAM' || vis === 'PUBLIC') {
@@ -345,8 +350,8 @@ export default function DashboardViewer({
 
   const isDirty =
     JSON.stringify(localWidgets) !== JSON.stringify(savedBaseline) ||
-    dashboardTitle !== dashboardName ||
-    dashboardDesc !== dashboardDescription;
+    dashboardTitle !== savedTitle ||
+    dashboardDesc !== savedDesc;
 
   useEffect(() => {
     preserveEditsRef.current = isEditing;
@@ -499,9 +504,15 @@ export default function DashboardViewer({
       }));
       setSavedBaseline(updatedWidgets);
       setLocalWidgets(updatedWidgets);
-      if (data.dashboard?.name) setDashboardTitle(data.dashboard.name);
-      if (data.dashboard?.description !== undefined)
-        setDashboardDesc(data.dashboard.description || '');
+      const nextTitle = data.dashboard?.name || dashboardTitle;
+      const nextDesc =
+        data.dashboard?.description !== undefined
+          ? data.dashboard.description || ''
+          : dashboardDesc;
+      setDashboardTitle(nextTitle);
+      setSavedTitle(nextTitle);
+      setDashboardDesc(nextDesc);
+      setSavedDesc(nextDesc);
       setIsEditing(false);
       notify.success('Dashboard saved successfully');
     } catch (error) {
@@ -1144,8 +1155,8 @@ export default function DashboardViewer({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setDashboardTitle(dashboardName);
-                  setDashboardDesc(dashboardDescription);
+                  setDashboardTitle(savedTitle);
+                  setDashboardDesc(savedDesc);
                   setLocalWidgets(savedBaseline);
                   setIsEditing(false);
                 }}

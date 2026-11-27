@@ -196,6 +196,42 @@ describe('DashboardViewer Component', () => {
     });
   });
 
+  it('treats a saved rename as the new baseline: no unsaved changes, and Cancel keeps it', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        dashboard: {
+          id: 'dash-123',
+          widgets: mockWidgets,
+          name: 'Renamed Operations',
+          description: 'High level reliability overview',
+        },
+      }),
+    });
+    render(<DashboardViewer {...defaultProps} />);
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Dashboard settings' }), {
+      button: 0,
+    });
+    fireEvent.click(await screen.findByText(/Edit Dashboard/i));
+    fireEvent.change(screen.getByPlaceholderText('Dashboard title'), {
+      target: { value: 'Renamed Operations' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(screen.queryByText(/Editing mode/i)).toBeNull());
+
+    // The props still carry the old name until the server re-renders; edit again.
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Dashboard settings' }), {
+      button: 0,
+    });
+    fireEvent.click(await screen.findByText(/Edit Dashboard/i));
+
+    expect(screen.queryByText('Unsaved changes')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(screen.getByText('Renamed Operations')).toBeDefined();
+  });
+
   it('restores saved baseline and title when Cancel is clicked in edit mode', async () => {
     render(<DashboardViewer {...defaultProps} />);
 

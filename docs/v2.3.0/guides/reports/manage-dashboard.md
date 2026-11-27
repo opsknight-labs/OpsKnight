@@ -63,7 +63,7 @@ default** beside the title when you want the registered widget name again.
 
 Drag a widget by its handle and drop it at the desired position. OpsKnight recalculates the grid order while retaining each widget's width and height. Keyboard dragging is supported by the grid interaction layer.
 
-Select **Save Changes** only after reviewing the complete layout. A successful save displays confirmation and updates the saved baseline; reload the page and verify the order and definitions survived. **Cancel** restores the last saved title, description, widgets, and layout and exits edit mode.
+Select **Save Changes** only after reviewing the complete layout. A successful save displays confirmation and updates the saved baseline; reload the page and verify the order and definitions survived. **Cancel** restores the last saved title, description, widgets, and layout and exits edit mode. This includes a rename you just saved: editing again straight after a save starts with no **Unsaved changes**, and **Cancel** keeps the new name.
 
 For a template preview, **Done** exits editing but does not persist a new dashboard. Select **Clone Dashboard** first when you need a saved, editable copy.
 
