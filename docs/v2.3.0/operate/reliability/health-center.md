@@ -53,6 +53,12 @@ database state, an external dependency, or only the replica serving the page.
 - **Unknown**: the collector had no data or could not read it. Unknown is not
   healthy; inspect the check details and cited dependency.
 
+## Read the 24-hour trend
+
+The ribbon at the top has one bar for each of the last 24 clock hours (UTC hour
+boundaries; the last bar is the hour in progress). Hover a bar to see the hour it
+starts, shown in your browser's time zone with the zone named.
+
 ## What the checks measure
 
 - **Database** tests connectivity. **Database capacity** inspects connection

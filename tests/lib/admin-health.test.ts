@@ -298,8 +298,25 @@ describe('generate24HourHistory', () => {
     expect(samples).toHaveLength(24);
     expect(samples.every(s => s.status === 'healthy')).toBe(true);
     expect(samples.every(s => s.scorePercent === 100)).toBe(true);
-    const expectedHour = `${now.getHours().toString().padStart(2, '0')}:00`;
-    expect(samples[23].hourLabel).toBe(expectedHour);
+    expect(samples[23].hourLabel).toBe('12:00 UTC');
+  });
+
+  it('uses fixed clock-hour buckets instead of rolling windows ending at now', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.backgroundJob.findMany).mockResolvedValueOnce([
+      { id: 'job-a', createdAt: new Date('2026-09-05T13:20:00.000Z') },
+      { id: 'job-b', createdAt: new Date('2026-09-05T14:05:00.000Z') },
+    ] as unknown as never);
+    const now = new Date('2026-09-05T14:37:00.000Z');
+
+    const samples = await generate24HourHistory(mockBaseChecks, 'healthy', now);
+
+    // The 13:20 failure belongs to the 13:00 bucket, not to a "14:00" bar covering 13:37-14:37.
+    expect(samples[22].timestamp).toBe('2026-09-05T13:00:00.000Z');
+    expect(samples[22].hourLabel).toBe('13:00 UTC');
+    expect(samples[22].status).toBe('degraded');
+    expect(samples[23].timestamp).toBe('2026-09-05T14:00:00.000Z');
+    expect(samples[0].timestamp).toBe('2026-09-04T15:00:00.000Z');
   });
 
   it('reflects live advisory degradation in current hour without painting all 24 prior hours red', async () => {

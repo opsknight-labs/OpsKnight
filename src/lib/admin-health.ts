@@ -344,7 +344,9 @@ export async function generate24HourHistory(
   overall: HealthLevel,
   now: Date
 ): Promise<HealthHistorySample[]> {
-  const since = new Date(now.getTime() - 24 * HOUR);
+  // Fixed clock-hour buckets (UTC); the viewer's time zone is applied in the browser from `timestamp`.
+  const currentHourStart = Math.floor(now.getTime() / HOUR) * HOUR;
+  const since = new Date(currentHourStart - 23 * HOUR);
   type FailedJob = { id: string; createdAt: Date };
   type FailedDelivery = { id: string; createdAt: Date };
   type FailedNotification = { id: string; startedAt: Date };
@@ -380,10 +382,9 @@ export async function generate24HourHistory(
 
   const samples: HealthHistorySample[] = [];
   for (let i = 23; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * HOUR);
-    const windowStart = new Date(d.getTime() - HOUR);
-    const windowEnd = d;
-    const hourLabel = `${d.getHours().toString().padStart(2, '0')}:00`;
+    const windowStart = new Date(currentHourStart - i * HOUR);
+    const windowEnd = new Date(windowStart.getTime() + HOUR);
+    const hourLabel = `${windowStart.getUTCHours().toString().padStart(2, '0')}:00 UTC`;
     const hourlyFailedJobs = failedJobs.filter(
       job => job.createdAt >= windowStart && job.createdAt < windowEnd
     );
@@ -422,7 +423,13 @@ export async function generate24HourHistory(
     } else {
       reason = 'No durable job or delivery failures recorded';
     }
-    samples.push({ timestamp: d.toISOString(), hourLabel, status, scorePercent, reason });
+    samples.push({
+      timestamp: windowStart.toISOString(),
+      hourLabel,
+      status,
+      scorePercent,
+      reason,
+    });
   }
   return samples;
 }

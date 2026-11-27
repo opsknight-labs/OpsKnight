@@ -670,6 +670,17 @@ function OperationalBrief({ checks }: { checks: AdminHealthCheck[] }) {
   );
 }
 
+/** Hour-bucket start in the viewer's time zone, with the zone shown. */
+export function formatHistoryHour(timestamp: string, timeZone?: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZoneName: 'short',
+    timeZone,
+  }).format(new Date(timestamp));
+}
+
 /**
  * 24-Hour Diagnostic History Ribbon (Service Health Trend)
  */
@@ -680,6 +691,7 @@ function HealthHistoryRibbon({
   history?: HealthHistorySample[];
   overall: HealthLevel;
 }) {
+  const isClient = useIsClient();
   if (!history || history.length === 0) return null;
 
   const totalScore = history.reduce((sum, s) => sum + s.scorePercent, 0);
@@ -777,7 +789,7 @@ function HealthHistoryRibbon({
               >
                 <div className="rounded-md border border-border bg-popover px-2.5 py-1 text-2xs font-mono font-medium text-popover-foreground shadow-md whitespace-nowrap">
                   <div className="flex items-center gap-1.5">
-                    <span>{sample.hourLabel}</span>
+                    <span>{isClient ? formatHistoryHour(sample.timestamp) : sample.hourLabel}</span>
                     <span className="text-muted-foreground">•</span>
                     <span
                       className={

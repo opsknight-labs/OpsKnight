@@ -1,6 +1,6 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import SystemHealthCenter from '@/components/settings/SystemHealthCenter';
+import SystemHealthCenter, { formatHistoryHour } from '@/components/settings/SystemHealthCenter';
 import type { AdminHealthReport } from '@/lib/admin-health';
 import { notify } from '@/lib/toast';
 
@@ -190,6 +190,15 @@ const mockReport: AdminHealthReport = {
     },
   ],
 };
+
+describe('formatHistoryHour', () => {
+  it('shows the bucket start in the viewer time zone with the zone named', () => {
+    const label = formatHistoryHour('2026-09-05T14:00:00.000Z', 'Asia/Kolkata');
+    expect(label).toContain('19:30');
+    expect(label).toMatch(/GMT\+5:30|IST/);
+    expect(formatHistoryHour('2026-09-05T14:00:00.000Z', 'UTC')).toContain('14:00');
+  });
+});
 
 describe('SystemHealthCenter', () => {
   beforeEach(() => {
