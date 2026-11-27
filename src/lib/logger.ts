@@ -146,10 +146,11 @@ const SENSITIVE_KEYS = [
   /\bdsn\b/i,
 ];
 
-const SECRET_PATTERNS = [
-  // Labels are separated by a literal dot the label class excludes, so the repetition is linear.
-  // eslint-disable-next-line security/detect-unsafe-regex
-  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/g, // Email (strictly disjoint domain labels)
+// Labels are separated by a literal dot the label class excludes, so the repetition is linear.
+// eslint-disable-next-line security/detect-unsafe-regex
+const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/g; // strictly disjoint domain labels
+
+const CREDENTIAL_PATTERNS = [
   /Bearer\s+[A-Za-z0-9\-_.]+/gi, // Bearer tokens
   /Basic\s+[A-Za-z0-9+/=]{16,}/gi, // Basic Auth tokens
   /\bok_[A-Za-z0-9_-]{20,}\b/g, // OpsKnight API Keys
@@ -157,13 +158,47 @@ const SECRET_PATTERNS = [
   /AKIA[0-9A-Z]{16}/g, // AWS Access Keys
   /(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s?#]+\?[^\s#]*(?:token|secret|key|sig|signature|api_key|password|pwd)=)[^&\s]+/gi, // URL query tokens (bounded by ? and #)
 ];
+const SECRET_PATTERNS = [EMAIL_PATTERN, ...CREDENTIAL_PATTERNS];
+
+// What a redaction pass removes. Logs hide personal data as well as credentials; audit records
+// must keep who and what changed readable (emails, session ids), so they hide credentials only.
+type RedactionProfile = { keys: RegExp[]; patterns: RegExp[] };
+const LOG_PROFILE: RedactionProfile = { keys: SENSITIVE_KEYS, patterns: SECRET_PATTERNS };
+const AUDIT_PROFILE: RedactionProfile = {
+  keys: [
+    /pass(word|wd|phrase|code)/i,
+    /^pass$/i,
+    /token/i,
+    /secret/i,
+    /(api|private|secret|access|signing|encryption|master|license|client|ssh)[_-]?key/i,
+    /^key$/i,
+    /authorization/i,
+    /^auth$/i,
+    /^auth_?header$/i,
+    /credential/i,
+    /signature/i,
+    /phone/i,
+    /mobile/i,
+    /^tel(ephone)?$/i,
+    /cookie/i,
+    /jwt/i,
+    /bearer/i,
+    /ssn/i,
+    /credit_?card|cvv|cvc/i,
+    /webhook_?url/i,
+    /database_?url/i,
+    /connection_?string/i,
+    /\bdsn\b/i,
+  ],
+  patterns: CREDENTIAL_PATTERNS,
+};
 
 // Connection URI credential patterns (e.g. postgresql://user:secret@host:port/db)
 // Supports internal hostnames without domain suffixes (e.g. db, localhost, pg-internal)
 const URI_USER_PASSWORD_PATTERN = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^:\s/@]+):([^@\s/]+)@/g;
 const URI_PASSWORD_ONLY_PATTERN = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/):([^@\s/]+)@/g;
 
-export function sanitizeString(val: string): string {
+export function sanitizeString(val: string, profile: RedactionProfile = LOG_PROFILE): string {
   if (typeof val !== 'string' || val.length === 0) return val;
   // Bound string length to prevent ReDoS on huge uncontrolled inputs
   const input = val.length > 50000 ? val.slice(0, 50000) : val;
@@ -171,13 +206,17 @@ export function sanitizeString(val: string): string {
   // Redact credentials in connection URIs
   result = result.replace(URI_USER_PASSWORD_PATTERN, '$1$2:[REDACTED]@');
   result = result.replace(URI_PASSWORD_ONLY_PATTERN, '$1:[REDACTED]@');
-  for (const pattern of SECRET_PATTERNS) {
+  for (const pattern of profile.patterns) {
     result = result.replace(pattern, '[REDACTED]');
   }
   return result;
 }
 
-export function sanitizeContext(context: unknown, seen = new WeakSet<object>()): unknown {
+export function sanitizeContext(
+  context: unknown,
+  seen = new WeakSet<object>(),
+  profile: RedactionProfile = LOG_PROFILE
+): unknown {
   // JSON.stringify throws on bigint values. Logging must never turn a valid
   // application operation (database ids, advisory lock keys, counters) into
   // an application failure.
@@ -186,7 +225,7 @@ export function sanitizeContext(context: unknown, seen = new WeakSet<object>()):
   }
   if (!context || typeof context !== 'object') {
     if (typeof context === 'string') {
-      return sanitizeString(context);
+      return sanitizeString(context, profile);
     }
     return context;
   }
@@ -194,8 +233,8 @@ export function sanitizeContext(context: unknown, seen = new WeakSet<object>()):
   if (context instanceof Error) {
     return {
       name: context.name,
-      message: sanitizeString(context.message),
-      stack: context.stack ? sanitizeString(context.stack) : undefined,
+      message: sanitizeString(context.message, profile),
+      stack: context.stack ? sanitizeString(context.stack, profile) : undefined,
     };
   }
 
@@ -206,28 +245,37 @@ export function sanitizeContext(context: unknown, seen = new WeakSet<object>()):
   }
   seen.add(context);
   try {
-    return sanitizeObject(context, seen);
+    return sanitizeObject(context, seen, profile);
   } finally {
     seen.delete(context);
   }
 }
 
-function sanitizeObject(context: object, seen: WeakSet<object>): unknown {
+/** Redacts credentials only, so audit records keep emails and session ids readable. */
+export function sanitizeAuditContext(context: unknown): unknown {
+  return sanitizeContext(context, new WeakSet<object>(), AUDIT_PROFILE);
+}
+
+function sanitizeObject(
+  context: object,
+  seen: WeakSet<object>,
+  profile: RedactionProfile
+): unknown {
   if (Array.isArray(context)) {
-    return context.map(item => sanitizeContext(item, seen));
+    return context.map(item => sanitizeContext(item, seen, profile));
   }
 
   return Object.fromEntries(
     Object.entries(context as Record<string, unknown>).map(([key, value]) => {
       let sanitizedValue: unknown;
-      if (SENSITIVE_KEYS.some(regex => regex.test(key))) {
+      if (profile.keys.some(regex => regex.test(key))) {
         sanitizedValue = '[REDACTED]';
       } else if (typeof value === 'bigint') {
         sanitizedValue = value.toString();
       } else if (typeof value === 'object' && value !== null) {
-        sanitizedValue = sanitizeContext(value, seen);
+        sanitizedValue = sanitizeContext(value, seen, profile);
       } else if (typeof value === 'string') {
-        sanitizedValue = sanitizeString(value);
+        sanitizedValue = sanitizeString(value, profile);
       } else {
         sanitizedValue = value;
       }
