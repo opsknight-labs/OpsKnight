@@ -51,9 +51,9 @@
 
 .animate-shimmer {
     background: linear-gradient(90deg,
-            hsl(var(--muted)) 0%,
-            hsl(var(--muted-foreground) / 0.1) 50%,
-            hsl(var(--muted)) 100%);
+            hsl(var(--ui-muted)) 0%,
+            hsl(var(--ui-muted-foreground) / 0.1) 50%,
+            hsl(var(--ui-muted)) 100%);
     background-size: 200% 100%;
     animation: shimmer 1.5s ease-in-out infinite;
 }

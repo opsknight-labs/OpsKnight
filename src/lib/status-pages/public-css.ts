@@ -3081,32 +3081,35 @@ ${R} .status-subscribe-block { padding-block: 1.5rem 0; }
 
 /* Business-service layouts. Only --status-* and --primary tokens, so every theme inherits them. */
 ${R} .status-v3-business__toggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.45rem;
-  min-block-size: 2rem;
-  margin: -0.25rem -0.35rem;
-  padding: 0.25rem 0.35rem;
-  border: 0;
+  justify-content: space-between;
+  gap: 0.5rem;
+  inline-size: 100%;
+  min-block-size: 2.5rem;
+  margin-block-start: 0.6rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--status-panel-border);
   border-radius: 4px;
-  background: transparent;
-  color: inherit;
+  background: var(--status-panel-muted-bg);
+  color: var(--status-text-muted);
   font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
   text-align: start;
   cursor: pointer;
 }
-${R} .status-v3-business__toggle:hover { background: var(--status-panel-muted-bg); }
+${R} .status-v3-business__toggle:hover { color: var(--status-text-strong); border-color: var(--status-text-subtle); }
 ${R} .status-v3-business__toggle:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 ${R} .status-v3-business__chevron {
   flex-shrink: 0;
-  color: var(--status-text-subtle);
   transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 ${R} .status-v3-business__toggle[aria-expanded="true"] .status-v3-business__chevron {
-  transform: rotate(90deg);
+  transform: rotate(180deg);
 }
 ${R} .status-v3-business__tally {
   display: inline-flex;
@@ -3144,7 +3147,7 @@ ${R} .status-v3-business[data-status="maintenance"] .status-v3-business__tally--
 ${R} .status-v3-business__members {
   display: grid;
   gap: 0.45rem;
-  margin-block-start: 0.2rem;
+  margin-block-start: 0.6rem;
   padding-inline-start: 0.85rem;
   border-inline-start: 1px solid var(--status-panel-border);
 }

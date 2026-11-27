@@ -36,6 +36,23 @@ describe('SLAIndicator & IncidentSLABadges', () => {
     expect(screen.queryByText(/overdue/)).toBeNull();
   });
 
+  it('does not call an incident resolved before acknowledgement "overdue"', () => {
+    const state = projectIncidentSlaState(
+      {
+        ...base,
+        status: 'RESOLVED' as const,
+        resolvedAt: new Date('2025-01-01T00:09:00.000Z'),
+      },
+      { now: new Date('2025-01-01T01:00:00.000Z') }
+    );
+    const { unmount } = render(<IncidentSLABadges sla={state} />);
+    expect(screen.getByText('· Resolved without acknowledgement')).toBeDefined();
+    expect(screen.queryByText(/overdue/)).toBeNull();
+    unmount();
+    render(<IncidentSLABadges sla={state} compact />);
+    expect(screen.getByText('· Not acked')).toBeDefined();
+  });
+
   it('renders detailed card grid view when showDetails is true', () => {
     const state = projectIncidentSlaState(base, { now: new Date('2025-01-01T00:05:00.000Z') });
     render(<SLAIndicator sla={state} showDetails />);

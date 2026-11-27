@@ -467,6 +467,37 @@ describe('StatusPageV3', () => {
     expect(dialog.textContent).not.toContain('Other service');
   });
 
+  describe('incident placement', () => {
+    const incident = (status: 'OPEN' | 'RESOLVED') => ({
+      id: `inc-${status}`,
+      title: `${status} incident`,
+      status,
+      createdAt: '2026-09-09T10:00:00.000Z',
+      resolvedAt: status === 'RESOLVED' ? '2026-09-09T11:00:00.000Z' : null,
+      service: { id: 'svc-1', name: 'Checkout API' },
+    });
+    const incidentsBeforeServices = (incidents: ReturnType<typeof incident>[]) => {
+      render(
+        <StatusPageV3
+          snapshot={snapshotOf([service()], {
+            incidents: incidents as unknown as PublicStatusPageSnapshot['incidents'],
+          })}
+        />
+      );
+      const section = document.getElementById('incidents') as Element;
+      const services = screen.getByRole('heading', { name: 'Services' });
+      return Boolean(section.compareDocumentPosition(services) & Node.DOCUMENT_POSITION_FOLLOWING);
+    };
+
+    it('keeps an active incident above the service bars', () => {
+      expect(incidentsBeforeServices([incident('OPEN')])).toBe(true);
+    });
+
+    it('lists resolved-only incidents below the service bars', () => {
+      expect(incidentsBeforeServices([incident('RESOLVED')])).toBe(false);
+    });
+  });
+
   it('renders page chrome in the page locale', () => {
     render(
       <StatusPageV3

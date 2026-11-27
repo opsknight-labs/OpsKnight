@@ -179,44 +179,9 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
     >
       <div className="status-v3-service__head">
         <div className="status-v3-service__lead">
-          {canExpand ? (
-            // The whole "Name  N services ›" line is the disclosure, so clicking the count expands.
-            <button
-              type="button"
-              className="status-v3-business__toggle"
-              aria-expanded={open}
-              aria-controls={panelId}
-              onClick={onToggle}
-            >
-              <BusinessIcon />
-              <span className="status-v3-service__name">{item.name}</span>
-              {tally}
-              <svg
-                className="status-v3-business__chevron"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <polyline points="9 6 15 12 9 18" />
-              </svg>
-              <span className="sr-only">
-                , {open ? t('business.hide') : t('business.show')}
-                {childCount > 0 ? `, ${t('business.nested', { count: childCount })}` : ''}
-              </span>
-            </button>
-          ) : (
-            <>
-              <BusinessIcon />
-              <span className="status-v3-service__name">{item.name}</span>
-              {tally}
-            </>
-          )}
+          <BusinessIcon />
+          <span className="status-v3-service__name">{item.name}</span>
+          {tally}
           {item.activeIncidentCount > 0 &&
             (display.incidentsHref ? (
               <a
@@ -288,6 +253,36 @@ export const BusinessServiceRowV3 = memo(function BusinessServiceRowV3({
         />
       )}
 
+      {canExpand && (
+        // A full-width bar under the history, so the disclosure reads as a control, not a tiny chevron.
+        <button
+          type="button"
+          className="status-v3-business__toggle"
+          aria-expanded={open}
+          aria-controls={panelId}
+          // Starts with the visible label (label-in-name) and adds which group it opens.
+          aria-label={`${open ? t('business.hideServices') : t('business.showServices')}, ${item.name}${childCount > 0 ? `, ${t('business.nested', { count: childCount })}` : ''}`}
+          onClick={onToggle}
+        >
+          <span className="status-v3-business__toggle-label">
+            {open ? t('business.hideServices') : t('business.showServices')}
+          </span>
+          <svg
+            className="status-v3-business__chevron"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      )}
       {canExpand && (
         <div
           id={panelId}

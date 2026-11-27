@@ -82,6 +82,17 @@ describe('StatusPageAnnouncementManager Component', () => {
     expect(screen.getByText('API Latency Investigation')).toBeDefined();
   });
 
+  it('names the business services of a scoped notice instead of calling it global', () => {
+    announcements = [
+      { ...mockAnnouncements[1], affectedBusinessServiceIds: ['bs-1'] },
+      mockAnnouncements[0],
+    ];
+    renderManager({ businessServices: [{ id: 'bs-1', name: 'Checkout' }] });
+    expect(screen.getByText('Checkout')).toBeDefined();
+    // The other notice names its technical service, so nothing on the page is global.
+    expect(screen.queryByText('All Services (Global)')).toBeNull();
+  });
+
   it('supports toggling between Exact Time and All Day / Date Only in composer modal', () => {
     renderManager();
 
