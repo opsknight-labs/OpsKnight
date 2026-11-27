@@ -2910,7 +2910,7 @@
     "risk": "R2",
     "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
-    "routeSha256": "180693a88a010655a74fb07caf2ef0c22b05f34f9abc76f12907c518e832d01b",
+    "routeSha256": "347414c20799c637be9a03fd7877d8765f474ca74c29bbfd402ddbe76d7eb567",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
     "contractSha256": "dc5297549b1c342ff13756e72db4b160d5c301ecfe4ede1275c5436ac24d2928",

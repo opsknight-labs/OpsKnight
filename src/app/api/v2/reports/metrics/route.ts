@@ -25,19 +25,18 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
     const daysRaw = Number(searchParams.get('days') || '30');
     const days = Number.isSafeInteger(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 90) : 30;
 
-    const sinceDate = new Date(Date.now() - days * 86_400_000);
-
     // 1. Calculate certified SLA and operational metrics with canonical actor scoping
     const sla = await calculateActorSLAMetrics(actor, {
       windowDays: days,
       serviceId: serviceId || undefined,
     });
 
-    // 2. Compute priority breakdown respecting actor incident read access
+    // 2. Compute priority breakdown respecting actor incident read access, over the same window the
+    // summary used so the two always describe the same incidents.
     const priorityWhere: Prisma.IncidentWhereInput = {
       AND: [
         incidentReadWhere(actor),
-        { createdAt: { gte: sinceDate } },
+        { createdAt: { gte: sla.effectiveStart, lte: sla.effectiveEnd } },
         ...(serviceId ? [{ serviceId }] : []),
       ],
     };
@@ -50,9 +49,8 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
 
     const priorityCounts: Record<string, number> = {};
     for (const group of byPriority) {
-      if (group.priority) {
-        priorityCounts[group.priority] = group._count.id;
-      }
+      // Incidents without a priority are counted too, so the buckets add up to the total.
+      priorityCounts[group.priority ?? 'UNSET'] = group._count.id;
     }
 
     const resolvedCount =
@@ -60,7 +58,7 @@ export const GET = withV2Observability(async function GET(req: NextRequest) {
 
     const metrics = {
       windowDays: days,
-      since: sinceDate.toISOString(),
+      since: sla.effectiveStart.toISOString(),
       serviceId: serviceId ?? null,
       summary: {
         totalIncidents: sla.totalIncidents,

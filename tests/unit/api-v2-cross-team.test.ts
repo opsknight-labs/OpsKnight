@@ -24,6 +24,8 @@ vi.mock('@/lib/rate-limit', () => ({
 vi.mock('@/lib/actor-metrics', () => ({
   calculateActorSLAMetrics: vi.fn().mockResolvedValue({
     windowDays: 30,
+    effectiveStart: new Date('2026-01-01T00:00:00.000Z'),
+    effectiveEnd: new Date('2026-01-31T00:00:00.000Z'),
     totalIncidents: 12,
     resolvedIncidents: 10,
     mttd: 4.5,
@@ -224,6 +226,45 @@ describe('API v2 Cross-Team Isolation & Domain Parity', () => {
               expect.anything(),
             ]),
           }),
+        })
+      );
+    });
+  });
+
+  describe('GET /api/v2/reports/metrics window and priority buckets', () => {
+    it('counts priorities over the summary window and keeps incidents without a priority', async () => {
+      currentMockActor = {
+        id: 'usr_alpha',
+        role: 'RESPONDER',
+        status: 'ACTIVE',
+        teamIds: ['team_alpha'],
+        apiKey: { id: 'key_alpha', scopes: ['reports:read', 'incidents:read'] },
+      };
+      currentMockApiKey = { id: 'key_alpha', scopes: ['reports:read', 'incidents:read'] };
+      ((prisma.incident as any).groupBy as any).mockResolvedValueOnce([
+        { priority: 'P1', _count: { id: 3 } },
+        { priority: null, _count: { id: 2 } },
+      ]);
+
+      const res = await getMetricsRoute(
+        new NextRequest('http://localhost:3000/api/v2/reports/metrics?days=30')
+      );
+      const body = await res.json();
+
+      expect(body.data.incidentsByPriority).toEqual({ P1: 3, UNSET: 2 });
+      expect(body.data.since).toBe('2026-01-01T00:00:00.000Z');
+      expect((prisma.incident as any).groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: expect.arrayContaining([
+              {
+                createdAt: {
+                  gte: new Date('2026-01-01T00:00:00.000Z'),
+                  lte: new Date('2026-01-31T00:00:00.000Z'),
+                },
+              },
+            ]),
+          },
         })
       );
     });
