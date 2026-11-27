@@ -113,7 +113,11 @@ avoided, downgrades and holds, the false-group rate (reversed over applied group
 state. Metrics: `opsknight_prepaging_decisions_total{control,action,mode}`,
 `opsknight_prepaging_fail_open_total{reason}`, `opsknight_prepaging_lookups_total{route,outcome}`
 (evaluations that read the database, on the lookup pool or the savepoint fallback, and how many failed
-open), `opsknight_prepaging_evaluation_seconds`, `opsknight_heartbeat_monitors_missing`, `opsknight_heartbeat_pings_total{outcome}`.
+open), `opsknight_prepaging_evaluation_seconds`,
+`opsknight_prepaging_snapshot_age_seconds` and `opsknight_prepaging_snapshot_refresh_failures_total` (the
+policy snapshot reloads every 30 seconds and a refresh that does not answer in 15 seconds is abandoned; the
+`OpsKnightNoiseControlsSnapshotStale` alert fires when a process has served a snapshot over five minutes
+old), `opsknight_heartbeat_monitors_missing`, `opsknight_heartbeat_pings_total{outcome}`.
 
 ## What ON does to an alert
 

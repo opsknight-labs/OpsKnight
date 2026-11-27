@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { processEvent, type EventPayload } from '@/lib/events';
 import { INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
@@ -7,6 +7,8 @@ import {
   resetPrePagingSnapshot,
   setPrePagingDeadlineMs,
 } from '@/lib/intelligence/noise-controls';
+import { setPrePagingSnapshotLoader, refreshPrePagingSnapshot, peekPrePagingSnapshot } from '@/lib/intelligence/noise-controls/cache';
+import { runtimeOperationalMetrics } from '@/lib/metrics/operational/registry';
 import { disconnectNoiseLookupClient } from '@/lib/intelligence/noise-controls/lookup-client';
 import { createLaneState, runIntelligenceCycle } from '@/lib/intelligence/jobs/runner';
 import {
@@ -353,5 +355,42 @@ describe('suppressed incidents are released even with Intelligence switched off 
     const after = await db.incident.findUniqueOrThrow({ where: { id: incident.id } });
     expect(after.status).toBe('OPEN');
     expect(await pagingJobs(incident.id)).toHaveLength(1);
+  });
+});
+
+describe('a hung snapshot refresh cannot freeze the policy (N12)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    setPrePagingSnapshotLoader(null);
+  });
+
+  it('abandons a refresh that never answers, counts it, and lets the next one load', async () => {
+    const service = await createTestService('Checkout');
+    await policy(service.id);
+    const before = peekPrePagingSnapshot();
+    expect(before).not.toBeNull();
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    setPrePagingSnapshotLoader(() => new Promise(() => {})); // the database read hangs
+    const hung = refreshPrePagingSnapshot();
+    await vi.advanceTimersByTimeAsync(16_000);
+    expect(await hung).toBe(before); // the old snapshot stays in use
+    const failures = runtimeOperationalMetrics().get('opsknight_prepaging_snapshot_refresh_failures_total');
+    expect(failures?.[0]?.value).toBeGreaterThanOrEqual(1);
+
+    // The database answers again: the next refresh is not blocked by the abandoned one.
+    vi.useRealTimers();
+    setPrePagingSnapshotLoader(null);
+    await db.noiseMaintenanceWindow.create({
+      data: {
+        name: 'Later',
+        scope: 'ALL',
+        startsAt: new Date(Date.now() - 1_000),
+        endsAt: new Date(Date.now() + 3_600_000),
+        effect: 'SUPPRESS',
+      },
+    });
+    const fresh = await refreshPrePagingSnapshot();
+    expect(fresh?.windows).toHaveLength(1);
   });
 });

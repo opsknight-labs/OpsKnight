@@ -2,6 +2,7 @@ import 'server-only';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { addOperationalMetric, setOperationalGauge } from '@/lib/metrics/operational/registry';
 import { loadActiveEdges } from '../dependencies/service';
 import { topologyScope } from '../dependencies/graph';
 import {
@@ -289,20 +290,51 @@ function scheduleRefresh(snapshot: PrePagingSnapshot | null): void {
   keepFresh.unref?.();
 }
 
-/** Single-flight refresh. Failures keep the previous snapshot and are logged at debug level. */
+/** A refresh that has not answered by now is abandoned so the next one can start. */
+const REFRESH_TIMEOUT_MS = 15_000;
+let loadSnapshot: () => Promise<PrePagingSnapshot> = () => loadPrePagingSnapshot();
+/** Tests only: replace the database load (null restores it). */
+export function setPrePagingSnapshotLoader(loader: (() => Promise<PrePagingSnapshot>) | null): void {
+  loadSnapshot = loader ?? (() => loadPrePagingSnapshot());
+}
+
+function withRefreshTimeout<T>(work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Snapshot refresh timed out after ${REFRESH_TIMEOUT_MS} ms`)),
+      REFRESH_TIMEOUT_MS
+    );
+    timer.unref?.();
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Single-flight refresh. A failure keeps the previous snapshot, which then keeps applying rules and windows
+ * an operator may already have removed, so it is counted, its age is exported, and a stale snapshot is
+ * logged as a warning rather than at debug level.
+ */
 export function refreshPrePagingSnapshot(): Promise<PrePagingSnapshot | null> {
   if (loading) return loading;
-  loading = loadPrePagingSnapshot()
+  loading = withRefreshTimeout(loadSnapshot())
     .then(snapshot => {
       current = snapshot;
+      setOperationalGauge('opsknight_prepaging_snapshot_age_seconds', 0);
       if (needsLookups(snapshot)) void warmNoiseLookupClient(warmLookupStatement);
       scheduleRefresh(snapshot);
       return snapshot;
     })
     .catch(error => {
-      logger.debug(
+      addOperationalMetric('opsknight_prepaging_snapshot_refresh_failures_total', 1);
+      const ageMs = current ? Date.now() - current.loadedAt : 0;
+      setOperationalGauge('opsknight_prepaging_snapshot_age_seconds', ageMs / 1000);
+      const log = ageMs > 3 * PREPAGING_LIMITS.cacheRefreshMs ? logger.warn : logger.debug;
+      log.call(
+        logger,
         '[Intelligence] Pre-paging snapshot refresh failed; previous snapshot stays in use',
         {
+          ageSeconds: Math.round(ageMs / 1000),
           error: error instanceof Error ? error.message : String(error),
         }
       );
