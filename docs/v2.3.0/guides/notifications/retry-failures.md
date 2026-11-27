@@ -41,8 +41,8 @@ Correct permanent credential/endpoint/routing failures before any new attempt.
 1. Inspect existing automatic retry schedule/count.
 2. Remove the underlying transient/capacity/configuration problem.
 3. Use supported retry/requeue only if current state still warrants delivery.
-   **Retry all failed** on **Settings → Notifications → Operations** first asks
-   "Retry all failed notifications?" and names how many it will requeue, because
+   **Retry All Failed** on **Settings → Notifications → Operations** (shown for administrators
+   when the **Failed** status filter is selected) first asks "Retry all failed notifications?" and names how many it will requeue, because
    recipients may receive them straight away. Afterwards the list reloads and
    reports how many could not be requeued (for example a row that has expired or
    is no longer eligible answers `409`); the rest are requeued and the failed
