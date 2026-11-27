@@ -1,5 +1,5 @@
 import type { WarRoomProjectionModel } from '../../projection-model';
-import { slackContractForKind } from '@/lib/chatops/slack-action-map';
+import { moreActionsOverflow, slackContractForKind } from '@/lib/chatops/slack-action-map';
 import { escapeSlack } from '@/lib/chatops/squire/render';
 
 function isSlackSupported(action: string): boolean {
@@ -173,6 +173,7 @@ export function renderSlackWarRoomProjection(
               }),
             ]
           : []),
+        moreActionsOverflow(incident.id),
         // URL buttons carry no value; the actions route acknowledges them without effect.
         {
           type: 'button',

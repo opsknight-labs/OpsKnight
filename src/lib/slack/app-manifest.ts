@@ -58,7 +58,7 @@ export const SLACK_BOT_EVENTS = [
 
 /** Subcommands the dispatcher actually implements — keeps the hint honest. */
 export const SLACK_COMMAND_USAGE_HINT =
-  'declare | list [service] | oncall [service] | ack | resolve [summary] | note <text> | who | postmortem | ask <question> | investigate | help';
+  'declare | list [service] | oncall [service] | ack | resolve [summary] | note <text> | who | role <role> @person | page @person|team:<name>|schedule:<name> | assign @person|me | postmortem | ask <question> | investigate | help';
 
 export interface SlackManifestOptions {
   /** Public base URL, e.g. https://opsknight.example.com */

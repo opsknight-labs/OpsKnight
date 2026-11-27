@@ -14,6 +14,7 @@ import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
 } from '@/lib/incidents/chatops-lifecycle';
+import { SLACK_MORE_ACTIONS_ACTION_ID } from '@/lib/chatops/slack-action-map';
 import { isOpsKnightIncidentCard } from '@/lib/slack/incident-card';
 
 /**
@@ -507,6 +508,21 @@ export async function POST(request: NextRequest) {
   ) {
     const { acceptSlackDeclareSubmission } = await import('@/lib/chatops/slash-commands');
     return acceptSlackDeclareSubmission(payload, signature);
+  }
+  // Both modals of the card's More actions menu: validated inline, then queued.
+  if (payload.type === 'view_submission') {
+    const { incidentModalActionForCallback, acceptIncidentModalSubmission } =
+      await import('@/lib/chatops/slack-incident-modals');
+    const modalAction = incidentModalActionForCallback(payload.view?.callback_id);
+    if (modalAction) return acceptIncidentModalSubmission(modalAction, payload, signature);
+  }
+  // The More actions menu opens a modal right away: trigger_id expires in three seconds.
+  if (
+    payload.type === 'block_actions' &&
+    payload.actions?.[0]?.action_id === SLACK_MORE_ACTIONS_ACTION_ID
+  ) {
+    const { openIncidentActionModal } = await import('@/lib/chatops/slack-incident-modals');
+    return openIncidentActionModal(payload);
   }
   // URL buttons (View Details) only open a link; there is no effect to queue.
   if (

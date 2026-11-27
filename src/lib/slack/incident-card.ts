@@ -7,6 +7,7 @@
  * incoming webhooks and response_url replacements.
  */
 import { escapeSlack } from '@/lib/chatops/squire/render';
+import { moreActionsOverflow } from '@/lib/chatops/slack-action-map';
 
 /** Marks a message as an OpsKnight incident card, so a button click can safely replace it. */
 export const SLACK_INCIDENT_CARD_BLOCK_ID = 'opsknight_incident_card';
@@ -256,6 +257,7 @@ export function cardActionElements(
   }
   if (state !== 'resolved') {
     elements.push(button('Assign to me', 'assign_me_incident', incidentId, 'assign_me'));
+    elements.push(moreActionsOverflow(incidentId));
   }
   elements.push({
     type: 'button',

@@ -63,7 +63,19 @@ describe('Slack app manifest', () => {
 
   it('advertises only slash subcommands that exist', () => {
     const hint = buildSlackAppManifest({ baseUrl: BASE }).features.slash_commands[0].usage_hint;
-    for (const real of ['ack', 'resolve', 'note', 'declare', 'list', 'oncall', 'who', 'help']) {
+    for (const real of [
+      'ack',
+      'resolve',
+      'note',
+      'declare',
+      'list',
+      'oncall',
+      'who',
+      'role',
+      'page',
+      'assign',
+      'help',
+    ]) {
       expect(hint).toContain(real);
     }
     for (const fake of ['reassign', 'create']) {
