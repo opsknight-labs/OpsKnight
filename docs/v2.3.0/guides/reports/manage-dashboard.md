@@ -51,7 +51,7 @@ you can:
 
 - replace its displayed title;
 - choose a width from one to four columns;
-- choose compact, standard, or expanded row height;
+- choose compact, standard, or expanded row height (after a width or height change the widgets re-flow row by row, so none overlap or run past the last column);
 - display a chart as line, bar, or pie; and
 - set an optional SLA target for gauges and rate widgets.
 

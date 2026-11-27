@@ -43,6 +43,7 @@ import {
 import { cn } from '@/lib/utils';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import type { SerializedSLAMetrics } from '@/lib/sla';
+import { flowLayout, sortByPosition } from '@/lib/reports/grid-layout';
 import type { DashboardTemplate } from '@/lib/reports/dashboard-templates';
 import type { WidgetDefinition } from '@/lib/reports/widget-registry';
 import WidgetLibrary from '@/components/reports/WidgetLibrary';
@@ -347,9 +348,15 @@ export default function DashboardViewer({
   };
 
   const handleSaveWidgetConfig = (updatedWidget: ConfigurableWidget) => {
-    setLocalWidgets(prev =>
-      prev.map(w => (w.id === updatedWidget.id ? (updatedWidget as Widget) : w))
-    );
+    setLocalWidgets(prev => {
+      const next = prev.map(w => (w.id === updatedWidget.id ? (updatedWidget as Widget) : w));
+      const before = prev.find(w => w.id === updatedWidget.id)?.position;
+      const resized =
+        before !== undefined &&
+        (before.w !== updatedWidget.position.w || before.h !== updatedWidget.position.h);
+      // A wider widget at x=3 would start past the last column; re-flow the rows like a drag does.
+      return resized ? flowLayout(sortByPosition(next), layout?.columns ?? 4) : next;
+    });
     notify.success('Widget settings updated. Click "Save Changes" to persist.');
   };
 
