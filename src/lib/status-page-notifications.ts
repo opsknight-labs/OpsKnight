@@ -258,7 +258,8 @@ export async function notifyStatusPageSubscribers(
         }
         const eligible = subscriptions;
         const unsubscribeTokens = await issueUnsubscribeTokensBatch(
-          eligible.map(subscription => subscription.id)
+          eligible.map(subscription => subscription.id),
+          `${page.id}:${incidentId}:${effectiveDeliveryKey}`
         );
         let pageSent = 0;
         let pageFailed = 0;
@@ -693,7 +694,8 @@ export async function notifyStatusPageSubscribersAnnouncement(
       const unsubscribeTokens =
         eligibleSubscriptions.length > 0
           ? await issueUnsubscribeTokensBatch(
-              eligibleSubscriptions.map(subscription => subscription.id)
+              eligibleSubscriptions.map(subscription => subscription.id),
+              `announcement:${announcement.id}:${notificationGeneration}`
             )
           : new Map<string, string>();
       let pageSent = 0;
