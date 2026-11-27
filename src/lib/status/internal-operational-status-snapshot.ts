@@ -68,6 +68,13 @@ type CacheEntry = Omit<InternalOperationalStatusSnapshot, 'freshness'> & {
 const FRESH_TTL_MS = 20_000;
 const STALE_TTL_MS = 5 * 60_000;
 const MAX_ENTRIES = 300;
+export class InternalOperationalStatusBusyError extends Error {
+  constructor() {
+    super('Operational status is temporarily busy');
+    this.name = 'InternalOperationalStatusBusyError';
+  }
+}
+
 const MAX_CONCURRENT_CALCULATIONS = 4;
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<CacheEntry>>();
@@ -337,7 +344,7 @@ export async function getInternalOperationalStatusSnapshot(
   if (policy === READ_MODEL_POLICY.REQUIRE_FRESH) {
     invalidateAuthorizationBoundary(key);
     const refresh = startCalculation(key, actor);
-    if (!refresh) throw new Error('Operational status is temporarily busy');
+    if (!refresh) throw new InternalOperationalStatusBusyError();
     return project(await refresh, 'fresh');
   }
 
@@ -352,7 +359,7 @@ export async function getInternalOperationalStatusSnapshot(
     if (!generationTrusted) {
       invalidateAuthorizationBoundary(key);
       const refresh = startCalculation(key, actor);
-      if (!refresh) throw new Error('Operational status is temporarily busy');
+      if (!refresh) throw new InternalOperationalStatusBusyError();
       return project(await refresh, 'fresh');
     }
 
@@ -366,7 +373,7 @@ export async function getInternalOperationalStatusSnapshot(
   }
 
   const request = startCalculation(key, actor);
-  if (!request) throw new Error('Operational status is temporarily busy');
+  if (!request) throw new InternalOperationalStatusBusyError();
   return project(await request, 'fresh');
 }
 
