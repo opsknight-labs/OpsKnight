@@ -191,8 +191,13 @@ and refuses to demote or disable the last active administrator. An
 administrator cannot change their own role; another active administrator must
 perform that change.
 
+Granting the Admin role needs a sign-in within the last 15 minutes. Anyone using
+temporary admin access needs the same recent sign-in for every role change.
+Otherwise the Users page asks you to sign in again and nothing changes.
+
 For multiple users, select rows and use the bulk role action. Bulk demotion also
 checks that at least one active administrator remains and refuses self-demotion.
+The bulk action has the same recent sign-in rule.
 
 ## Allow an existing account to link OIDC
 

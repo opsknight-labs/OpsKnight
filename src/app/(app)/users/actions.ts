@@ -21,6 +21,7 @@ import {
   getCurrentUser,
 } from '@/lib/rbac';
 import { isAssignableRole } from '@/lib/authorization';
+import { assertRecentAuthentication } from '@/lib/access/step-up';
 import type { Prisma, Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
 import { assertCanBecomeStakeholder } from '@/lib/users/stakeholder-role-guard';
@@ -237,6 +238,13 @@ function actionFailure(error: unknown, fallback: string) {
   return { error: isAppError(error) && error.exposure === 'public' ? error.userMessage : fallback };
 }
 
+/** A role change made with temporary admin access, or one that grants ADMIN, needs a fresh sign-in. */
+async function assertRoleChangeStepUp(actor: { baseRole: string }, role: unknown) {
+  if (role === 'ADMIN' || actor.baseRole !== 'ADMIN') {
+    await assertRecentAuthentication(undefined, 'changing a role');
+  }
+}
+
 export async function updateUserRole(userId: string, formData: FormData) {
   let currentUser: { id: string; baseRole: string } | null = null;
   try {
@@ -253,6 +261,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
   }
   try {
     await assertPermanentAdminForAdminTargets(currentUser, [userId], role);
+    await assertRoleChangeStepUp(currentUser, role);
     await assertCanBecomeStakeholder([userId], role);
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unauthorized.' };
@@ -509,6 +518,7 @@ export async function bulkUpdateUsers(
       userIds,
       action === 'setRole' ? formData.get('role') : null
     );
+    if (action === 'setRole') await assertRoleChangeStepUp(admin, formData.get('role'));
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unauthorized.' };
   }

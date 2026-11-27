@@ -6,6 +6,7 @@ const m = vi.hoisted(() => ({
   removeTeamMembership: vi.fn(),
   assertAdmin: vi.fn(),
   assertTeamManager: vi.fn(),
+  assertRecentAuthentication: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -20,6 +21,7 @@ vi.mock('@/lib/rbac', () => ({
   assertPermanentAdminForAdminTargets: vi.fn(),
   getCurrentUser: vi.fn(),
 }));
+vi.mock('@/lib/access/step-up', () => ({ assertRecentAuthentication: m.assertRecentAuthentication }));
 vi.mock('@/lib/users/administration', () => ({ administerUser: m.administerUser }));
 vi.mock('@/lib/teams/administration', () => ({
   setTeamMembership: m.setTeamMembership,
@@ -39,6 +41,7 @@ vi.mock('@/lib/notifications/preferences', () => ({}));
 import { AppError } from '@/lib/errors';
 import {
   addUserToTeam,
+  bulkUpdateUsers,
   deactivateUser,
   removeUserFromTeam,
   updateUserRole,
@@ -93,5 +96,34 @@ describe('user administration actions report failures instead of throwing', () =
     await expect(removeUserFromTeam('member-1')).resolves.toEqual({
       error: 'Failed to remove the user from the team.',
     });
+  });
+
+  it('asks an assigned admin for a recent sign-in only when the change grants ADMIN', async () => {
+    m.administerUser.mockResolvedValue({});
+
+    await updateUserRole('user-2', form({ role: 'RESPONDER' }));
+    expect(m.assertRecentAuthentication).not.toHaveBeenCalled();
+
+    await updateUserRole('user-2', form({ role: 'ADMIN' }));
+    expect(m.assertRecentAuthentication).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks a temporary admin for a recent sign-in on any role change, one by one or in bulk', async () => {
+    m.assertAdmin.mockResolvedValue({ id: 'temp-1', baseRole: 'RESPONDER' });
+    m.assertRecentAuthentication.mockRejectedValue(
+      new AppError({
+        code: 'STEP_UP_REQUIRED',
+        userMessage: 'For your security, sign in again before changing a role.',
+      })
+    );
+
+    await expect(updateUserRole('user-2', form({ role: 'RESPONDER' }))).resolves.toEqual({
+      error: 'For your security, sign in again before changing a role.',
+    });
+    expect(m.administerUser).not.toHaveBeenCalled();
+
+    await expect(
+      bulkUpdateUsers({}, form({ bulkAction: 'setRole', role: 'RESPONDER', userIds: 'user-2' }))
+    ).resolves.toEqual({ error: 'For your security, sign in again before changing a role.' });
   });
 });
