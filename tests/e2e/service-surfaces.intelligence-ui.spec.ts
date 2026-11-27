@@ -267,7 +267,7 @@ test.describe.serial('intelligence on the service, service list and team pages',
     await expect(page.locator(TAB)).toHaveCount(0);
     await page.getByRole('tab', { name: 'Intelligence' }).click();
     await expect(page).toHaveURL(/tab=intelligence/);
-    const tab = page.locator(TAB);
+    const tab = page.locator(TAB).filter({ visible: true });
     await expect(tab).toBeVisible();
 
     const dependencies = tab.getByRole('region', { name: 'Dependencies', exact: true });
@@ -351,7 +351,7 @@ test.describe.serial('intelligence on the service, service list and team pages',
         url.pathname === `/services/${ids.checkout}` &&
         url.searchParams.get('tab') === 'intelligence'
     );
-    await expect(page.locator(TAB)).toBeVisible();
+    await expect(page.locator(TAB).filter({ visible: true })).toBeVisible();
     await page.context().close();
   });
 
@@ -360,7 +360,7 @@ test.describe.serial('intelligence on the service, service list and team pages',
   }) => {
     const page = await signIn(browser, responderEmail);
     await page.goto(`/services/${ids.checkout}?tab=intelligence`);
-    const tab = page.locator(TAB);
+    const tab = page.locator(TAB).filter({ visible: true });
     await expect(tab.getByRole('region', { name: 'SLO burn', exact: true })).toBeVisible();
     await expect(tab.getByRole('link', { name: /Create suppression rule/ })).toHaveCount(0);
     await expect(tab.getByRole('button', { name: /Approve suggested dependency/ })).toHaveCount(0);
@@ -384,7 +384,7 @@ test.describe.serial('intelligence on the service, service list and team pages',
     const page = await signIn(browser, adminEmail);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/services/${ids.checkout}?tab=intelligence`);
-    const tab = page.locator(TAB);
+    const tab = page.locator(TAB).filter({ visible: true });
     await expect(tab.getByRole('region', { name: 'Dependencies', exact: true })).toBeVisible();
     await expect(tab.getByTestId('service-dependency-graph')).toBeHidden();
     await expect(tab.getByRole('list', { name: 'Dependencies' })).toBeVisible();
@@ -402,7 +402,7 @@ test.describe.serial('intelligence on the service, service list and team pages',
   }) => {
     const page = await signIn(browser, adminEmail);
     await page.goto(`/teams/${ids.team}`);
-    const tile = page.getByTestId('team-noise-load');
+    const tile = page.getByTestId('team-noise-load').filter({ visible: true });
     await expect(tile).toBeVisible();
     await expect(tile.getByText('Incidents created')).toBeVisible();
     await expect(tile.getByText('Pages avoided')).toBeVisible();

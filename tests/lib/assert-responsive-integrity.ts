@@ -78,6 +78,7 @@ export async function checkResponsiveIntegrity(
       }
 
       const isVisible = (el: Element): boolean => {
+        if (el.closest('[inert]')) return false;
         let cur: Element | null = el;
         while (cur && cur !== document.documentElement) {
           const style = window.getComputedStyle(cur);
@@ -89,6 +90,39 @@ export async function checkResponsiveIntegrity(
         }
         const rect = el.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0;
+      };
+
+      const hasVisibleText = (el: Element): boolean => {
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let node: Node | null;
+        while ((node = walker.nextNode())) {
+          if (node.textContent?.trim() && node.parentElement && isVisible(node.parentElement))
+            return true;
+        }
+        return false;
+      };
+
+      // Dense incident controls deliberately extend their hit area with ::after.
+      // Verify that the browser actually routes taps across that area to this
+      // control, rather than accepting declared dimensions that may be clipped.
+      const hasExpandedTouchTarget = (el: Element, rect: DOMRect): boolean => {
+        const after = window.getComputedStyle(el, '::after');
+        if (
+          after.content === 'none' ||
+          after.content === 'normal' ||
+          after.pointerEvents === 'none'
+        )
+          return false;
+        // Browsers can retain `max(100%, 44px)` in computed pseudo dimensions.
+        // Hit testing establishes the effective area even for unresolved CSS math.
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        return [-1, 1].every(dx =>
+          [-1, 1].every(dy => {
+            const hit = document.elementFromPoint(centerX + dx * 21, centerY + dy * 21);
+            return hit !== null && (hit === el || el.contains(hit));
+          })
+        );
       };
 
       const allElements = Array.from(document.body.querySelectorAll('*'));
@@ -179,7 +213,8 @@ export async function checkResponsiveIntegrity(
         if (style.whiteSpace === 'nowrap' && !isAllowedScroller) {
           if (
             el.scrollWidth > el.clientWidth + opts.tolerance &&
-            style.textOverflow !== 'ellipsis'
+            style.textOverflow !== 'ellipsis' &&
+            hasVisibleText(el)
           ) {
             violations.push({
               type: 'NOWRAP_OVERFLOW_NO_ELLIPSIS',
@@ -209,9 +244,20 @@ export async function checkResponsiveIntegrity(
 
           if ((isButton || isInput || isChromeNavLink) && !isExcluded && !isInert) {
             // Check computed or bounding dimensions
-            if (rect.height < 44 - opts.tolerance || rect.width < 44 - opts.tolerance) {
+            if (
+              (rect.height < 44 - opts.tolerance || rect.width < 44 - opts.tolerance) &&
+              !hasExpandedTouchTarget(el, rect)
+            ) {
               // Only report if it's within viewport bounds
-              if (rect.top >= 0 && rect.bottom <= viewportHeight + 100) {
+              if (
+                rect.top >= 0 &&
+                rect.top < viewportHeight &&
+                rect.bottom <= viewportHeight + 100 &&
+                rect.right > 0 &&
+                rect.left < viewportWidth &&
+                getClippedRect(el).height > 0 &&
+                getClippedRect(el).width > 0
+              ) {
                 violations.push({
                   type: 'TOUCH_TARGET_BELOW_44PX',
                   selector: getPath(el),

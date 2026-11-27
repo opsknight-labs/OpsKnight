@@ -196,7 +196,7 @@ test.describe.serial('AIOps overview', () => {
     await expect(page).toHaveURL(/\/intelligence$/);
     await expect(page.getByRole('heading', { level: 1, name: 'AIOps overview' })).toBeVisible();
     const windows = page.getByRole('navigation', { name: 'Time window' });
-    await expect(windows.locator('a[aria-current="page"]')).toHaveText(/7d/);
+    await expect(windows.locator('a[aria-current="page"]')).toHaveText(/7 days/);
 
     for (const name of ['Noise', 'Speed', 'Outcomes', 'Alert quality', 'Changes', 'Lane health'])
       await expect(page.getByRole('region', { name, exact: true })).toBeVisible();
@@ -230,16 +230,16 @@ test.describe.serial('AIOps overview', () => {
     await expect(page.getByRole('table')).toBeVisible();
 
     await expectAccessible(page);
-    await windows.getByRole('link', { name: /24h/ }).click();
+    await windows.getByRole('link', { name: /24 hours/ }).click();
     await expect(page).toHaveURL(/window=24h/);
-    await expect(windows.locator('a[aria-current="page"]')).toHaveText(/24h/);
+    await expect(windows.locator('a[aria-current="page"]')).toHaveText(/24 hours/);
     await expect(page.getByRole('region', { name: 'Noise', exact: true })).toBeVisible();
 
     // Keyboard: the window links are reachable with Tab and show a visible focus ring.
-    await windows.getByRole('link', { name: /7d/ }).focus();
+    await windows.getByRole('link', { name: /7 days/ }).focus();
     await page.keyboard.press('Tab');
     const focused = page.locator(':focus');
-    await expect(focused).toHaveText(/30d/);
+    await expect(focused).toHaveText(/30 days/);
     expect(await focused.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
 
     await page.screenshot({ path: testInfo.outputPath('overview-desktop.png'), fullPage: true });
@@ -275,7 +275,7 @@ test.describe.serial('AIOps overview', () => {
     await noHorizontalOverflow(page);
     const target = await page
       .getByRole('navigation', { name: 'Time window' })
-      .getByRole('link', { name: /7d/ })
+      .getByRole('link', { name: /7 days/ })
       .boundingBox();
     expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);
     await expectAccessible(page);
@@ -458,7 +458,7 @@ test.describe.serial('AIOps overview', () => {
     await expect(noise.getByText('Pages avoided')).toBeVisible();
     await page
       .getByRole('navigation', { name: 'Time window' })
-      .getByRole('link', { name: /24h/ })
+      .getByRole('link', { name: /24 hours/ })
       .click();
     await expect(page).toHaveURL(/\/m\/intelligence\?window=24h/);
     await expect(noise).toBeVisible();

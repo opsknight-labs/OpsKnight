@@ -455,7 +455,7 @@ test.describe.serial('intelligence responder workflows', () => {
       strip.getByRole('link', { name: 'Likely cause: checkout v42 rollout' })
     ).toBeVisible();
     await strip.getByRole('link', { name: '1 similar', exact: true }).click();
-    const inspector = page.getByRole('dialog', { name: 'Insights' });
+    const inspector = page.getByRole('dialog', { name: 'Investigation' });
     await expect(inspector).toBeVisible();
     await expect(page).toHaveURL(/[?&]insights=similar/);
     const similar = inspector.getByRole('region', { name: 'Similar past incidents' });
@@ -514,7 +514,7 @@ test.describe.serial('intelligence responder workflows', () => {
 
     // Keyboard: I opens and closes the inspector; it is not modal, so the page behind stays usable.
     await page.locator('body').press('i');
-    const inspector = page.getByRole('dialog', { name: 'Insights' });
+    const inspector = page.getByRole('dialog', { name: 'Investigation' });
     await expect(inspector).toBeVisible();
     await expect(inspector).toHaveAttribute('data-layout', 'side-panel');
     await expect(inspector.getByRole('region', { name: 'Similar past incidents' })).toBeVisible();
@@ -538,7 +538,7 @@ test.describe.serial('intelligence responder workflows', () => {
     await page.goto(`/incidents/${incidentId}?insights=why`);
     await expect(
       page
-        .getByRole('dialog', { name: 'Insights' })
+        .getByRole('dialog', { name: 'Investigation' })
         .getByRole('region', { name: 'Possible causes' })
     ).toBeVisible();
     await expectAccessible(page, '[data-testid="insights-inspector"]');
@@ -560,7 +560,7 @@ test.describe.serial('intelligence responder workflows', () => {
   test('the assistant answers about one insight in basic mode', async ({ page }) => {
     await page.goto(`/incidents/${incidentId}?insights=similar`);
     await assistantReady(page);
-    const inspector = page.getByRole('dialog', { name: 'Insights' });
+    const inspector = page.getByRole('dialog', { name: 'Investigation' });
     const similar = inspector.getByRole('region', { name: 'Similar past incidents' });
     // The standalone Ask Squire card is gone; every item asks about itself instead.
     await similar.getByRole('button', { name: /^Ask Pip about .*last month/ }).click();
@@ -898,7 +898,7 @@ test.describe.serial('intelligence responder workflows', () => {
     const chip = strip.getByRole('link', { name: '1 similar', exact: true });
     expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await chip.click();
-    const sheet = page.getByRole('dialog', { name: 'Insights' });
+    const sheet = page.getByRole('dialog', { name: 'Investigation' });
     await expect(sheet).toHaveAttribute('data-layout', 'bottom-sheet');
     await expect(sheet.getByRole('region', { name: 'Similar past incidents' })).toBeVisible();
     const sheetBox = (await sheet.boundingBox())!;
@@ -917,7 +917,7 @@ test.describe.serial('intelligence responder workflows', () => {
     expect(mobileBox.y + mobileBox.height).toBeLessThanOrEqual(844);
     await expect(page.getByTestId('mobile-intelligence')).toHaveCount(0);
     await mobileStrip.getByRole('link', { name: '1 similar', exact: true }).click();
-    const mobileSheet = page.getByRole('dialog', { name: 'Insights' });
+    const mobileSheet = page.getByRole('dialog', { name: 'Investigation' });
     await expect(mobileSheet).toHaveAttribute('data-layout', 'bottom-sheet');
     await expect(
       mobileSheet
@@ -971,7 +971,7 @@ test.describe.serial('intelligence responder workflows', () => {
       // links made before the switch-off, so a wrong automatic grouping can be undone. Waiting on the
       // inspector itself (not on a tab that may not have hydrated yet) keeps this step deterministic.
       await page.goto(`/incidents/${incidentId}?insights=related`);
-      const inspector = page.getByRole('dialog', { name: 'Insights' });
+      const inspector = page.getByRole('dialog', { name: 'Investigation' });
       await expect(inspector.getByTestId('insights-off-hint')).toContainText(
         'Intelligence is off for this service'
       );
@@ -1271,10 +1271,10 @@ test.describe.serial('intelligence responder workflows', () => {
     expect((await dot.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     // Opening the inspector does not repeat it.
     await page.locator('body').press('i');
-    await expect(page.getByRole('dialog', { name: 'Insights' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Investigation' })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Recommendation freshness' })).toHaveCount(1);
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog', { name: 'Insights' })).toBeHidden();
+    await expect(page.getByRole('dialog', { name: 'Investigation' })).toBeHidden();
     await dot.click();
     await expect(dot).toHaveAttribute('aria-expanded', 'true');
     const requested = page.waitForResponse(

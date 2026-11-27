@@ -3,6 +3,7 @@ import { readFileSync as fsRead } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { declaredRouteActions } from '../../scripts/mcp/route-policy';
 import { MCP_CATALOG, isMcpExecutable } from '@/lib/mcp/catalog';
+import { MCP_HANDLERS } from '@/lib/mcp/operations/handlers';
 
 // Canonical checked-in REST route files only, derived from the catalog's own paths.
 // eslint-disable-next-line security/detect-non-literal-fs-filename -- catalog route paths only
@@ -28,6 +29,9 @@ describe('MCP catalog route drift', () => {
       const actions = declaredRouteActions(source, operation.method.toUpperCase());
       expect(actions, `${operationId}: ${REVIEW}`).toEqual(operation.actions);
       if (isMcpExecutable(operation)) expect(actions.length, operationId).toBeGreaterThan(0);
+      expect(MCP_HANDLERS.has(operationId), `${operationId}: handler disposition`).toBe(
+        isMcpExecutable(operation)
+      );
     }
   );
 });

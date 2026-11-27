@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import {
   assertResponsiveIntegrity,
   assertSingleLineLabels,
+  checkResponsiveIntegrity,
 } from '../lib/assert-responsive-integrity';
 import { VIEWPORT_MATRIX } from '../lib/responsive-viewport-matrix';
 import { createPrismaClient } from '../../src/lib/db/create-client';
@@ -121,6 +122,44 @@ test.describe('mobile responsive visual integrity matrix', () => {
     await prisma.incident.deleteMany({ where: { id: 'mobile-matrix-incident-fixture' } });
     await prisma.service.deleteMany({ where: { name: 'Matrix Service' } });
     await prisma.$disconnect();
+  });
+
+  test('auditor distinguishes real small targets from inert drawers and expanded hit areas', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setContent(`
+      <style>
+        body { margin: 0; }
+        button { position: absolute; width: 32px; height: 32px; padding: 0; }
+        #expanded { left: 50px; top: 50px; }
+        #expanded::after, #clipped::after {
+          content: ''; position: absolute; left: 50%; top: 50%;
+          width: 44px; height: 44px; transform: translate(-50%, -50%);
+        }
+        #small { left: 150px; top: 50px; }
+        #clip { position: absolute; left: 220px; top: 50px; width: 32px; height: 32px; overflow: hidden; }
+        #clipped { left: 0; top: 0; }
+        #closed { position: fixed; left: -300px; top: 50px; }
+        #closed button { position: static; }
+        #icon { left: 50px; top: 150px; white-space: nowrap; overflow: hidden; }
+        .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+        #icon svg { width: 37px; height: 20px; }
+      </style>
+      <aside id="closed" inert><button>Hidden</button></aside>
+      <button id="expanded" aria-label="Expanded"></button>
+      <button id="small" aria-label="Too small"></button>
+      <div id="clip"><button id="clipped" aria-label="Clipped"></button></div>
+      <button id="icon"><svg></svg><span class="sr-only">Icon description</span></button>
+    `);
+    const violations = await checkResponsiveIntegrity(page);
+    expect(
+      violations
+        .filter(item => item.type === 'TOUCH_TARGET_BELOW_44PX')
+        .map(item => item.selector)
+        .sort()
+    ).toEqual(['#clipped', '#icon', '#small']);
+    expect(violations.filter(item => item.type === 'NOWRAP_OVERFLOW_NO_ELLIPSIS')).toEqual([]);
   });
 
   // Login page checked across 320, 375, 390, 430 and landscape

@@ -439,7 +439,16 @@ describe('receipt-less creates and requeues without a revision precondition', ()
         )
       );
       const committed = settled.filter(result => result.status === 'fulfilled');
-      expect(committed.length).toBeGreaterThan(0);
+      expect(
+        committed.length,
+        JSON.stringify(
+          settled.map(result =>
+            result.status === 'rejected'
+              ? { status: result.status, error: String(result.reason) }
+              : { status: result.status, value: result.value }
+          )
+        )
+      ).toBeGreaterThan(0);
       for (const result of committed) expect(result.value).toMatchObject({ status: 'COMMITTED' });
       expect(await applied(f, s)).toEqual({ effects: 1, audits: 1 });
       expect(await approvalStatus(approval.approvalId)).toBe('COMMITTED');
