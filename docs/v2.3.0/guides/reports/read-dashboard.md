@@ -41,6 +41,7 @@ The filters are encoded in the URL. Switching between a saved dashboard and a te
 - **Distribution charts** group incidents by urgency or status.
 - **Incident Heatmap** is a calendar-style incident-volume view, not an hourly latency heatmap.
 - **Tables** rank or break down services, assignees, on-call load, SLA results, and other scoped entities.
+- **On-call load** shows each person's hours on call in the window and the incidents that started while they were on call for a schedule in that incident's service's escalation policy. A person on call for a different schedule is not credited with the incident, and a service whose policy has no schedule step credits no one.
 - **Smart Insights** summarizes notable patterns from the same authorized metrics.
 
 Use the [metrics reference](../../reference/metrics) for the precise population, unit, labels, and aggregation caveats behind a metric.

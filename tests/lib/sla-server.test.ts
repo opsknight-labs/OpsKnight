@@ -42,6 +42,9 @@ vi.mock('@/lib/prisma', () => ({
     sLADefinition: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    escalationRule: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     $executeRaw: vi.fn().mockResolvedValue(0),
     $queryRaw: vi.fn().mockResolvedValue([]),
   },

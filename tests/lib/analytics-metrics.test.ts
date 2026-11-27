@@ -46,22 +46,25 @@ describe('analytics-metrics utilities', () => {
     expect(ages[1].avgMs).toBe(21600000);
   });
 
-  it('builds on-call load totals', () => {
+  it('credits an incident only to people on call for its service schedules', () => {
     const shifts = [
       {
         userId: 'u1',
+        scheduleId: 'payments-schedule',
         start: new Date('2025-01-01T00:00:00Z'),
-        end: new Date('2025-01-01T06:00:00Z'),
+        end: new Date('2025-01-01T12:00:00Z'),
       },
       {
         userId: 'u2',
-        start: new Date('2025-01-01T06:00:00Z'),
+        scheduleId: 'search-schedule',
+        start: new Date('2025-01-01T00:00:00Z'),
         end: new Date('2025-01-01T12:00:00Z'),
       },
     ];
     const incidents = [
-      { createdAt: new Date('2025-01-01T01:00:00Z') },
-      { createdAt: new Date('2025-01-01T07:00:00Z') },
+      { createdAt: new Date('2025-01-01T01:00:00Z'), serviceId: 'payments' },
+      { createdAt: new Date('2025-01-01T07:00:00Z'), serviceId: 'payments' },
+      { createdAt: new Date('2025-01-01T08:00:00Z'), serviceId: 'unscheduled' },
     ];
     const userNameMap = new Map<string, string>([
       ['u1', 'User One'],
@@ -72,10 +75,16 @@ describe('analytics-metrics utilities', () => {
       incidents,
       new Date('2025-01-01T00:00:00Z'),
       new Date('2025-01-01T12:00:00Z'),
-      userNameMap
+      userNameMap,
+      new Map([['payments', new Set(['payments-schedule'])]])
     );
-    expect(load).toHaveLength(2);
-    expect(load[0].incidentCount + load[1].incidentCount).toBe(2);
+
+    expect(load.map(entry => [entry.id, entry.incidentCount])).toEqual([
+      ['u1', 2],
+      ['u2', 0],
+    ]);
+    // Hours on call are unchanged: both people still covered 12 hours.
+    expect(load.map(entry => entry.hoursMs)).toEqual([12 * 3_600_000, 12 * 3_600_000]);
   });
 
   it('builds service SLA compliance table', () => {

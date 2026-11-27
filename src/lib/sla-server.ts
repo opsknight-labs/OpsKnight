@@ -1124,7 +1124,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       shifts.map(s => ({ start: s.start, end: s.end, userId: s.userId }))
     ),
     getWindowOnCallShifts(finalStart, finalEnd, filters.scheduleScope).then(shifts =>
-      shifts.map(s => ({ start: s.start, end: s.end, userId: s.userId }))
+      shifts.map(s => ({ start: s.start, end: s.end, userId: s.userId, scheduleId: s.scheduleId }))
     ),
     prisma.onCallOverride.count({
       where: {
@@ -1193,9 +1193,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       _count: { _all: true },
     }),
     // On-Call Widget (Resolved dynamically from active schedule layers)
-    getActiveOnCallShifts(now, { where: filters.scheduleScope }).then(shifts =>
-      shifts.slice(0, 5)
-    ),
+    getActiveOnCallShifts(now, { where: filters.scheduleScope }).then(shifts => shifts.slice(0, 5)),
     // resolved24h must honor the same filters as the rest of the metrics —
     // otherwise team/urgency/visibility-scoped queries surface a count
     // from an unrelated population, contradicting the dashboard above it.
@@ -2348,12 +2346,39 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     count: e._count._all,
   }));
 
+  // An incident is credited only to the schedules its service escalates to.
+  const incidentServiceIds = Array.from(new Set(recentIncidents.map(i => i.serviceId)));
+  const scheduleSteps = incidentServiceIds.length
+    ? await prisma.escalationRule.findMany({
+        where: {
+          targetScheduleId: { not: null },
+          policy: { services: { some: { id: { in: incidentServiceIds } } } },
+        },
+        select: {
+          targetScheduleId: true,
+          policy: {
+            select: {
+              services: { where: { id: { in: incidentServiceIds } }, select: { id: true } },
+            },
+          },
+        },
+      })
+    : [];
+  const serviceSchedules = new Map<string, Set<string>>();
+  for (const step of scheduleSteps) {
+    for (const service of step.policy.services) {
+      const schedules = serviceSchedules.get(service.id) ?? new Set<string>();
+      schedules.add(step.targetScheduleId as string);
+      serviceSchedules.set(service.id, schedules);
+    }
+  }
   const onCallLoad = buildOnCallLoad(
     windowShifts,
     recentIncidents,
     finalStart,
     finalEnd,
-    userNameMap
+    userNameMap,
+    serviceSchedules
   );
   const onCallUsersCount = onCallUserIds.length;
 
