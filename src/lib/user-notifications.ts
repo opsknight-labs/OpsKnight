@@ -129,6 +129,9 @@ function summarizeChannelAttempts(attempts: ChannelAttempt[]): {
   return { success: true, outcome: 'SKIPPED', channelsUsed: [] };
 }
 
+/** Recipients delivered to at once during a lifecycle fan-out. */
+const RECIPIENT_CONCURRENCY = 5;
+
 /** Return every user-enabled and currently available external channel. */
 type NotificationPreferenceUser = {
   status?: string;
@@ -143,9 +146,24 @@ type NotificationPreferenceUser = {
   email: string;
 };
 
+/** Provider availability is the same for every recipient, so a fan-out reads it once. */
+async function loadChannelAvailability(includeSlack: boolean) {
+  const [push, sms, voice, email, whatsappConfig, slack] = await Promise.all([
+    isChannelAvailable('PUSH'),
+    isChannelAvailable('SMS'),
+    isChannelAvailable('VOICE'),
+    isChannelAvailable('EMAIL'),
+    import('./notification-providers').then(module => module.getWhatsAppConfig()),
+    // Skip the Slack lookup entirely for the (default) users who never opted in.
+    includeSlack ? isChannelAvailable('SLACK') : Promise.resolve(false),
+  ]);
+  return { push, sms, voice, email, whatsappConfig, slack };
+}
+
 export async function getUserNotificationChannels(
   userId: string,
-  knownActiveUser?: NotificationPreferenceUser
+  knownActiveUser?: NotificationPreferenceUser,
+  availability?: Awaited<ReturnType<typeof loadChannelAvailability>>
 ): Promise<NotificationChannel[]> {
   const user =
     knownActiveUser ??
@@ -167,16 +185,14 @@ export async function getUserNotificationChannels(
   if (!user || (user.status !== undefined && user.status !== 'ACTIVE')) return [];
 
   const channels: NotificationChannel[] = [];
-  const [pushAvailable, smsAvailable, voiceAvailable, emailAvailable, whatsappConfig, slackAvailable] =
-    await Promise.all([
-      isChannelAvailable('PUSH'),
-      isChannelAvailable('SMS'),
-      isChannelAvailable('VOICE'),
-      isChannelAvailable('EMAIL'),
-      import('./notification-providers').then(module => module.getWhatsAppConfig()),
-      // Skip the Slack lookup entirely for the (default) users who never opted in.
-      user.slackNotificationsEnabled ? isChannelAvailable('SLACK') : Promise.resolve(false),
-    ]);
+  const {
+    push: pushAvailable,
+    sms: smsAvailable,
+    voice: voiceAvailable,
+    email: emailAvailable,
+    whatsappConfig,
+    slack: slackAvailable,
+  } = availability ?? (await loadChannelAvailability(Boolean(user.slackNotificationsEnabled)));
 
   const endpointCandidates: Array<{ channel: NotificationChannel; address: string }> = [];
   if (user.pushNotificationsEnabled && pushAvailable)
@@ -529,9 +545,8 @@ export async function sendIncidentNotifications(
     if (intent === 'INCIDENT_UPDATED' && eventType !== 'updated') {
       // Best effort: stakeholder updates must never fail or delay responder notifications.
       try {
-        const { notifyBusinessServiceFollowers } = await import(
-          '@/lib/business-services/follower-notifications'
-        );
+        const { notifyBusinessServiceFollowers } =
+          await import('@/lib/business-services/follower-notifications');
         await notifyBusinessServiceFollowers({
           incident: incidentRecord,
           eventType,
@@ -597,48 +612,55 @@ export async function sendIncidentNotifications(
     });
 
     const userMap = new Map(users.map(user => [user.id, user]));
+    // Lifecycle recipients never opt into Slack DMs here (the select above omits that flag).
+    const availability = await loadChannelAvailability(false);
 
-    const recipientResults = await Promise.all(
-      externalRecipients.map(async userId => {
-        const user = userMap.get(userId);
-        if (!user) {
-          return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
-        }
+    const deliverToRecipient = async (userId: string) => {
+      const user = userMap.get(userId);
+      if (!user) {
+        return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
+      }
 
-        // Resolve preferences, provider availability, recipient configuration,
-        // and persistent endpoint health through the same policy used by direct
-        // and escalation pages. Lifecycle fan-out must not bypass invalid,
-        // bounced, or opted-out endpoints.
-        const channels = await getUserNotificationChannels(userId, user);
-        if (channels.length === 0) {
-          return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
-        }
+      // Resolve preferences, provider availability, recipient configuration,
+      // and persistent endpoint health through the same policy used by direct
+      // and escalation pages. Lifecycle fan-out must not bypass invalid,
+      // bounced, or opted-out endpoints.
+      const channels = await getUserNotificationChannels(userId, user, availability);
+      if (channels.length === 0) {
+        return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
+      }
 
-        const quietHoursResult = filterChannelsForQuietHours(
-          channels,
-          incidentRecord.urgency,
-          user
-        );
-        if (quietHoursResult.channels.length === 0 && quietHoursResult.blockedChannels.size > 0) {
-          return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
-        }
+      const quietHoursResult = filterChannelsForQuietHours(channels, incidentRecord.urgency, user);
+      if (quietHoursResult.channels.length === 0 && quietHoursResult.blockedChannels.size > 0) {
+        return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
+      }
 
-        const attempts = await Promise.all(
-          quietHoursResult.channels.map(async channel => {
-            const result = await sendNotification(
-              incidentId,
-              userId,
-              channel,
-              eventMessage,
-              notificationIncident,
-              eventType
-            );
-            return { channel, ...result } satisfies ChannelAttempt;
-          })
-        );
-        return { userId, ...summarizeChannelAttempts(attempts) };
-      })
-    );
+      const attempts = await Promise.all(
+        quietHoursResult.channels.map(async channel => {
+          const result = await sendNotification(
+            incidentId,
+            userId,
+            channel,
+            eventMessage,
+            notificationIncident,
+            eventType
+          );
+          return { channel, ...result } satisfies ChannelAttempt;
+        })
+      );
+      return { userId, ...summarizeChannelAttempts(attempts) };
+    };
+
+    // A few recipients at a time: hundreds of watchers must not open hundreds of concurrent
+    // database and provider flows.
+    const recipientResults: Awaited<ReturnType<typeof deliverToRecipient>>[] = [];
+    for (let i = 0; i < externalRecipients.length; i += RECIPIENT_CONCURRENCY) {
+      recipientResults.push(
+        ...(await Promise.all(
+          externalRecipients.slice(i, i + RECIPIENT_CONCURRENCY).map(deliverToRecipient)
+        ))
+      );
+    }
 
     const errors = recipientResults.flatMap(
       result => result.errors?.map(error => `User ${result.userId}: ${error}`) ?? []

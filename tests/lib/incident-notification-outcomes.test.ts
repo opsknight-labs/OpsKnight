@@ -166,6 +166,39 @@ describe('incident notification fan-out', () => {
       outcome: 'QUEUED',
     });
   });
+  it('delivers to a large team a few recipients at a time and reads provider availability once', async () => {
+    const members = Array.from({ length: 12 }, (_, i) => `member-${i}`);
+    mocks.incidentFindUnique.mockResolvedValue({
+      ...incident,
+      status: 'RESOLVED',
+      assigneeId: null,
+      acknowledgedAt: new Date('2026-08-30T11:59:00.000Z'),
+      resolvedAt: now,
+      team: { members: members.map(userId => ({ userId, receiveTeamNotifications: true })) },
+    });
+    mocks.userFindMany.mockResolvedValue(
+      members.map(id => ({ ...recipient, id, pushNotificationsEnabled: true }))
+    );
+    let inFlight = 0;
+    let peak = 0;
+    mocks.sendNotification.mockImplementation(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return { success: true, outcome: 'DELIVERED', notificationId: 'intent' };
+    });
+
+    await expect(sendIncidentNotifications('inc-1', 'resolved')).resolves.toMatchObject({
+      success: true,
+      outcome: 'DELIVERED',
+    });
+
+    expect(mocks.sendNotification).toHaveBeenCalledTimes(12);
+    expect(peak).toBeLessThanOrEqual(5);
+    // PUSH, SMS, VOICE and EMAIL once for the whole fan-out, not once per recipient.
+    expect(mocks.isChannelAvailable).toHaveBeenCalledTimes(4);
+  });
   it('includes the assigned team in resolve closure delivery', async () => {
     mocks.incidentFindUnique.mockResolvedValue({
       ...incident,
