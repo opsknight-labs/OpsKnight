@@ -8,6 +8,7 @@ import { runSerializableTransaction } from '@/lib/db-utils';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
 import { assertAdminOrResponder, assertAdmin, assertTeamManager } from '@/lib/rbac';
+import { CAPABILITIES, capabilitiesOf } from '@/lib/authorization';
 import { logger } from '@/lib/logger';
 import { assertTeamNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
@@ -32,7 +33,7 @@ export async function createTeam(
   _prevState: TeamFormState,
   formData: FormData
 ): Promise<TeamFormState> {
-  let currentUser: { id: string } | null = null;
+  let currentUser: Awaited<ReturnType<typeof assertAdminOrResponder>>;
   try {
     currentUser = await assertAdminOrResponder();
   } catch (error) {
@@ -66,6 +67,11 @@ export async function createTeam(
       data: {
         name: normalizedName,
         description: description || null,
+        // Only organisation admins can manage a team they are not on, so anyone else who creates
+        // one owns it. Otherwise nobody could ever add a member to it.
+        ...(capabilitiesOf(currentUser).includes(CAPABILITIES.ADMIN_MANAGE)
+          ? {}
+          : { members: { create: { userId: currentUser.id, role: 'OWNER' as const } } }),
       },
     });
   } catch (error) {

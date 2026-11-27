@@ -82,6 +82,28 @@ describe('createTeam', () => {
       expect.objectContaining({ action: 'team.created' })
     );
   });
+
+  it('makes a Responder who creates a team its owner so they can manage it', async () => {
+    mocks.assertAdminOrResponder.mockResolvedValue({ id: 'user-1', role: 'RESPONDER' });
+    mocks.teamCreate.mockResolvedValue({ id: 'team-1', name: 'Payments' });
+
+    await createTeam({}, form('Payments'));
+
+    expect(mocks.teamCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        members: { create: { userId: 'user-1', role: 'OWNER' } },
+      }),
+    });
+  });
+
+  it('does not put an organisation admin on the team they create', async () => {
+    mocks.assertAdminOrResponder.mockResolvedValue({ id: 'admin-1', role: 'ADMIN' });
+    mocks.teamCreate.mockResolvedValue({ id: 'team-1', name: 'Payments' });
+
+    await createTeam({}, form('Payments'));
+
+    expect(mocks.teamCreate.mock.calls[0]![0].data).not.toHaveProperty('members');
+  });
 });
 
 describe('updateTeam', () => {
