@@ -39,7 +39,7 @@ Sign in as an `ADMIN`. Decide the field owner, data classification, permanent ke
 3. Enter a display **Name** of 1–200 characters.
 4. Enter a unique **Key** of 1–100 letters, digits, or underscores. Spaces, hyphens, and punctuation are rejected.
 5. Choose one of the seven types: `TEXT`, `NUMBER`, `DATE`, `SELECT`, `BOOLEAN`, `URL`, or `EMAIL`.
-6. For `SELECT`, add the allowed options in the order responders should see them.
+6. For `SELECT`, enter one allowed option per line, in the order responders should see them. An option can contain commas (for example `Tier 1, Gold`); editing the field in the console keeps it as one option.
 7. Optionally set **Required**, a **Default value**, and **Show in incident list**.
 8. Save, create a synthetic incident, and test both a valid and invalid value.
 
@@ -62,6 +62,8 @@ The create-definition endpoint accepts a default as text. Test that the default 
 ## Edit a definition
 
 From **Settings → Custom Fields**, edit the name, required flag, default, select options, incident-list visibility, or order. Existing stored values are not rewritten when a default or option list changes. Before removing a select option, search retained incidents and integrations for that value.
+
+An assistant connected through MCP can read an incident's custom-field values (`getIncidentCustomField` and `listIncidentCustomFields`) only while an administrator has turned on sensitive reads for MCP. Both are reviewed sensitive reads, with redaction and audit; without the opt-in, neither returns values.
 
 ## Incident-list and status-page visibility
 
