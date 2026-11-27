@@ -56,14 +56,11 @@ export const SLACK_MORE_ACTIONS_ACTION_ID = 'incident_more_actions';
 export type SlackModalAction = 'add_responder' | 'reassign';
 export const SLACK_MODAL_ACTIONS: readonly SlackModalAction[] = ['add_responder', 'reassign'];
 /** Overflow options handled by the update module (src/lib/slack/update-actions.ts). */
-const SLACK_UPDATE_ACTIONS = ['update_details', 'status_update'] as const;
+type SlackUpdateAction = 'update_details' | 'status_update';
 
 /** Overflow element for an open incident (counts as one element of the actions block). */
 export function moreActionsOverflow(incidentId: string) {
-  const option = (
-    text: string,
-    action: SlackModalAction | (typeof SLACK_UPDATE_ACTIONS)[number]
-  ) => ({
+  const option = (text: string, action: SlackModalAction | SlackUpdateAction) => ({
     text: { type: 'plain_text', text },
     value: JSON.stringify({ action, incidentId }),
   });
