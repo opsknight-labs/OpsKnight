@@ -6,6 +6,7 @@ import { errorFromResponse } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Label } from '@/components/ui/shadcn/label';
 import {
   Select,
@@ -206,6 +207,13 @@ function displayError(error: unknown, fallback: string): string {
   return friendly.description || friendly.title;
 }
 
+// One option per line: an option such as "Tier 1, Gold" may itself contain commas.
+const optionsFromText = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .map(option => option.trim())
+    .filter(Boolean);
+
 export default function CustomFieldsConfig({
   customFields: initialFields,
 }: CustomFieldsConfigProps) {
@@ -244,7 +252,10 @@ export default function CustomFieldsConfig({
         type: template.type,
         required: template.required,
         defaultValue: template.defaultValue,
-        options: template.options,
+        options: template.options
+          .split(',')
+          .map(option => option.trim())
+          .join('\n'),
         showInList: template.showInList,
       });
     } else {
@@ -270,7 +281,7 @@ export default function CustomFieldsConfig({
       type: field.type,
       required: field.required,
       defaultValue: field.defaultValue || '',
-      options: Array.isArray(field.options) ? field.options.join(', ') : '',
+      options: Array.isArray(field.options) ? field.options.join('\n') : '',
       showInList: field.showInList,
     });
     setDialogOpen(true);
@@ -289,12 +300,7 @@ export default function CustomFieldsConfig({
     startTransition(async () => {
       try {
         const options =
-          formData.type === 'SELECT' && formData.options
-            ? formData.options
-                .split(',')
-                .map(o => o.trim())
-                .filter(Boolean)
-            : null;
+          formData.type === 'SELECT' && formData.options ? optionsFromText(formData.options) : null;
 
         if (editingField) {
           // Edit existing custom field (PATCH)
@@ -376,10 +382,7 @@ export default function CustomFieldsConfig({
     });
   }, [initialFields, searchQuery, typeFilter, viewFilter]);
 
-  const parsedOptions = formData.options
-    .split(',')
-    .map(o => o.trim())
-    .filter(Boolean);
+  const parsedOptions = optionsFromText(formData.options);
 
   const activeTemplateKeys = new Set(initialFields.map(f => f.key));
 
@@ -791,15 +794,16 @@ export default function CustomFieldsConfig({
             {formData.type === 'SELECT' && (
               <div className="space-y-2 rounded-xl border border-border/80 bg-muted/20 p-3.5">
                 <Label htmlFor="modal-options" className="text-xs font-semibold">
-                  Dropdown Options (Comma-separated) *
+                  Dropdown Options (one per line) *
                 </Label>
-                <Input
+                <Textarea
                   id="modal-options"
                   value={formData.options}
                   onChange={e => setFormData({ ...formData, options: e.target.value })}
                   required
-                  placeholder="Tier 1 - Mission Critical, Tier 2 - Standard, Tier 3 - Internal"
-                  className="h-9 text-xs bg-background"
+                  rows={4}
+                  placeholder={'Tier 1 - Mission Critical\nTier 2 - Standard\nTier 3 - Internal'}
+                  className="text-xs bg-background"
                 />
                 {parsedOptions.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1.5">

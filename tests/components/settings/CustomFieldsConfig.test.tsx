@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CustomFieldsConfig, { type CustomField } from '@/components/CustomFieldsConfig';
 
 // Mock Next.js navigation
@@ -117,6 +117,24 @@ describe('CustomFieldsConfig Component', () => {
     expect(screen.getByText('Edit Field: Customer Tier')).toBeDefined();
     const keyInput = screen.getByDisplayValue('customer_tier') as HTMLInputElement;
     expect(keyInput.disabled).toBe(true);
+  });
+
+  it('keeps an option that contains a comma when the field is edited', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const field: CustomField = {
+      ...mockFields[0],
+      options: ['Tier 1, Gold', 'Tier 2'],
+    };
+    render(<CustomFieldsConfig customFields={[field]} />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /edit/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /update custom field/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.options).toEqual(['Tier 1, Gold', 'Tier 2']);
+    vi.unstubAllGlobals();
   });
 
   it('renders empty state when no fields exist and offers create action', () => {
