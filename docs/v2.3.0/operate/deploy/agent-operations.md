@@ -61,6 +61,10 @@ Do not share an identity volume between running replicas. A token is single-use.
 
 Keep bootstrap Secrets while deployment manifests reference them. Once enrolled, the Agent uses its persisted identity and does not read the consumed token again. Removing a still-referenced Kubernetes/Swarm Secret can prevent redeployment. A native environment token can be removed after enrollment; always keep the pinned execution public key.
 
+## Request checks and limits
+
+The server rejects an Agent request before it reads the body when headers are missing, the Agent's clock is stale, or the Agent is unknown, revoked or not enrolled. Only then is the size-capped body read and its signature, which covers the body, verified. Each Agent may send 1,200 requests a minute from one client address; above that the server answers `429` with `Retry-After`. The unauthenticated enrollment endpoint allows 20 requests a minute per client address. A real Agent sends far fewer. If the shared rate-limit counters (PostgreSQL) cannot be read, the request is refused with a retryable `503` and `Retry-After: 5`, not `429`, because no quota was exceeded; the Agent retries with backoff.
+
 ## Local policy
 
 `BASH` steps require Bash on the native Agent's `PATH`; install it before enabling
