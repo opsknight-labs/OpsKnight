@@ -152,11 +152,38 @@ describe('client log ingestion', () => {
           : { allowed: true, resetAt: Date.now() + 60_000 }
       );
 
-    it('counts every accepted request against one shared 600-per-minute quota as well as the address quota', async () => {
+    it('counts every accepted request against one shared 400-per-minute quota as well as the address quota', async () => {
       expect((await post()).status).toBe(200);
 
+      expect(checkRateLimit).toHaveBeenCalledTimes(2);
       expect(checkRateLimit).toHaveBeenNthCalledWith(1, expect.stringMatching(/^api:logs:ingest:/), 30, 60_000);
-      expect(checkRateLimit).toHaveBeenNthCalledWith(2, 'api:logs:ingest-global', 600, 60_000);
+      expect(checkRateLimit).toHaveBeenNthCalledWith(2, 'api:logs:ingest-global', 400, 60_000);
+    });
+
+    it('keeps a share for requests with the same Origin when the shared quota is exhausted', async () => {
+      overGlobalQuota();
+
+      expect((await post({ origin: 'http://localhost' })).status).toBe(200);
+      expect(checkRateLimit).toHaveBeenNthCalledWith(
+        2,
+        'api:logs:ingest-global:same-origin',
+        200,
+        60_000
+      );
+      expect(checkRateLimit).toHaveBeenCalledTimes(2);
+      // The same flood without an Origin is still stopped by the shared quota.
+      expect((await post()).status).toBe(429);
+    });
+
+    it('falls back to the shared quota once the reserved share is used up, then answers 429', async () => {
+      checkRateLimit.mockImplementation(async (key: string) =>
+        key.startsWith('api:logs:ingest-global')
+          ? { allowed: false, resetAt: Date.now() + 30_000 }
+          : { allowed: true, resetAt: Date.now() + 60_000 }
+      );
+
+      expect((await post({ origin: 'http://localhost' })).status).toBe(429);
+      expect(checkRateLimit).toHaveBeenNthCalledWith(3, 'api:logs:ingest-global', 400, 60_000);
     });
 
     it('answers 429 with Retry-After over the global quota, counts it in a metric and logs nothing', async () => {

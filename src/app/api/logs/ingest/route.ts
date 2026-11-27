@@ -14,7 +14,11 @@ import { z } from 'zod/v3';
 const MAX_BODY_SIZE = 50 * 1024; // 50KB
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 30; // 30 logs per minute per IP
-const GLOBAL_RATE_LIMIT_MAX = 600; // across every address, so many IPs cannot add up to a flood
+const GLOBAL_RATE_LIMIT_MAX = 400; // across every address, so many IPs cannot add up to a flood
+// Set aside, on top of the shared 400, for requests that carry this site's own Origin: a flood from
+// tools that send none cannot use it up, so the app's own browsers keep logging. Origin is only a hint
+// (a script can send any value), which is why the per-address limit stays.
+const SAME_ORIGIN_RESERVED_MAX = 200;
 const UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
 const ClientLogSchema = z.object({
   level: z.enum(['error', 'warn', 'debug', 'info']).optional(),
@@ -80,12 +84,21 @@ export async function POST(req: NextRequest) {
     );
     if (!rate.allowed) return tooManyRequests(rate, 'ip');
 
-    // One shared quota behind the per-address one: a flood from many addresses stops here.
-    const globalRate = await checkRateLimit(
-      'api:logs:ingest-global',
-      GLOBAL_RATE_LIMIT_MAX,
-      RATE_LIMIT_WINDOW_MS
-    );
+    // One shared quota behind the per-address one: a flood from many addresses stops here. A request
+    // with this site's Origin (any other was refused above) draws on its reserved share first.
+    let globalRate = req.headers.has('origin')
+      ? await checkRateLimit(
+          'api:logs:ingest-global:same-origin',
+          SAME_ORIGIN_RESERVED_MAX,
+          RATE_LIMIT_WINDOW_MS
+        )
+      : null;
+    if (!globalRate?.allowed)
+      globalRate = await checkRateLimit(
+        'api:logs:ingest-global',
+        GLOBAL_RATE_LIMIT_MAX,
+        RATE_LIMIT_WINDOW_MS
+      );
     if (!globalRate.allowed) return tooManyRequests(globalRate, 'global_quota');
 
     let body: unknown;

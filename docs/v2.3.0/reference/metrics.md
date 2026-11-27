@@ -47,7 +47,7 @@ Every emitted family includes `# HELP` and `# TYPE`. Labels are deliberately bou
 | `opsknight_http_requests_total` | counter | `method`, `route`, `status_class` | counter | Completed requests on normalized routes. Use a rate grouped by status class. |
 | `opsknight_http_request_duration_seconds` | histogram | `method`, `route` | counter | Request latency. Aggregate buckets across instances before calculating quantiles. |
 | `opsknight_http_requests_in_flight` | gauge | `route` | instance | Requests currently executing on one instance. |
-| `opsknight_log_ingest_rejections_total` | counter | `reason` | counter | Browser log entries refused by the unauthenticated `/api/logs/ingest` route. `reason` is `global_quota` (over the 600 per minute shared limit), `cross_site` or `origin_mismatch` (a browser request from another origin, answered `403`). A rise points at a flood or a misconfigured public URL, not at an application error. |
+| `opsknight_log_ingest_rejections_total` | counter | `reason` | counter | Browser log entries refused by the unauthenticated `/api/logs/ingest` route. `reason` is `global_quota` (over the 600 per minute shared limit, of which 200 are kept for requests with this application's own `Origin`), `cross_site` or `origin_mismatch` (a browser request from another origin, answered `403`). A rise points at a flood or a misconfigured public URL, not at an application error. |
 | `opsknight_metrics_collection_errors` | gauge | — | instance | Number of collectors that failed in the current cached snapshot; alert when greater than zero. |
 | `opsknight_metrics_cache_hits_total` | counter | — | counter | Metrics snapshot cache hits. |
 | `opsknight_metrics_cache_misses_total` | counter | — | counter | Metrics snapshot cache misses. |
