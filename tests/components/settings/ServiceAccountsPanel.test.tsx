@@ -1,7 +1,7 @@
 /* eslint-disable security/detect-non-literal-regexp -- pattern is built from fixed internal strings, never user input */
 import { issuableScopesForRole } from '@/lib/api-scope-registry';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ServiceAccountsPanel, { type ServiceAccountItem } from '@/components/settings/ServiceAccountsPanel';
 import {
   issueServiceAccountTokenAction,
@@ -195,6 +195,29 @@ describe('ServiceAccountsPanel Component', () => {
     expect(screen.getByText('ok_live_gh1...')).toBeDefined();
     expect(screen.getByText('Deploy Key')).toBeDefined();
     expect(screen.getByText('ok_live_dp2...')).toBeDefined();
+  });
+
+  it('shows when each issued token was last used, or Never', () => {
+    render(
+      <ServiceAccountsPanel
+        serviceAccounts={mockAccounts}
+        availableTeams={mockTeams}
+        isAdmin={true}
+      />
+    );
+    fireEvent.click(screen.getByText('View Tokens (2)'));
+
+    const column = screen
+      .getAllByRole('columnheader')
+      .map(header => header.textContent)
+      .indexOf('Last used');
+    expect(column).toBeGreaterThan(-1);
+    const lastUsed = (name: string) => {
+      const row = screen.getAllByRole('row').find(item => item.textContent?.includes(name));
+      return within(row!).getAllByRole('cell').at(column)?.textContent;
+    };
+    expect(lastUsed('GitHub Actions Main Token')).toBe('2026-10-12T14:00:00Z');
+    expect(lastUsed('Deploy Key')).toBe('Never');
   });
 
   it('opens create service account dialog when clicking New Service Account', () => {

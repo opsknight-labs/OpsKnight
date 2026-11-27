@@ -79,6 +79,21 @@ describe('ApiKeysPanel Component', () => {
     expect(within(screen.getByRole('table')).getByText('Expired')).toBeDefined();
   });
 
+  it('shows when each key was last used, or Never', () => {
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} />);
+
+    const headers = screen.getAllByRole('columnheader').map(header => header.textContent);
+    const column = headers.indexOf('Last used');
+    expect(column).toBeGreaterThan(-1);
+    const lastUsed = (name: string) => {
+      const row = screen.getAllByRole('row').find(item => item.textContent?.includes(name));
+      return within(row!).getAllByRole('cell')[column].textContent;
+    };
+    expect(lastUsed('Datadog Ingestion')).toBe('Sep 1, 2026');
+    expect(lastUsed('Old Testing Key')).toBe('Jan 15, 2026');
+    expect(lastUsed('GitHub CI Pipeline')).toBe('Never');
+  });
+
   it('uses the friendly machine owner label without exposing its internal email', () => {
     render(<ApiKeysPanel keys={[{ ...mockKeys[0], ownerLabel: 'Production Deployment', ownerEmail: 'sa_1792166039840_4eaf8d76@serviceaccount.opsknight.local' }]} canCreateWriteKeys={true} />);
     expect(screen.getByText('Production Deployment')).toBeDefined();

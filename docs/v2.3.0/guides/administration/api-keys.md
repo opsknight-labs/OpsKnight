@@ -38,6 +38,10 @@ The secret is displayed once. Store it in a secret manager; OpsKnight retains a
 keyed hash, the visible prefix, owner, scopes, expiration, and last used time.
 Send the secret as `Authorization: Bearer <key>` or `X-API-Key` where documented.
 
+The key list has a **Last used** column (date and time, or `Never`), and so does each
+service account's token list. The time is refreshed at most once every five minutes, so
+wait a few minutes after a test request before you read it.
+
 ## What OpsKnight does
 
 OpsKnight stores a keyed hash rather than a retrievable secret, plus prefix, owner, scopes, expiration, and last-used evidence. Owner deactivation or permission changes can reduce/stop key authority.

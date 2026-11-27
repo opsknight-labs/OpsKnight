@@ -344,6 +344,7 @@ export default function ApiKeysPanel({
                     <TableHead className="font-semibold text-xs py-3">Scopes</TableHead>
                     <TableHead className="font-semibold text-xs py-3">Status</TableHead>
                     <TableHead className="font-semibold text-xs py-3">Created</TableHead>
+                    <TableHead className="font-semibold text-xs py-3">Last used</TableHead>
                     <TableHead className="font-semibold text-xs py-3">Expires</TableHead>
                     <TableHead className="font-semibold text-xs py-3 text-right">Actions</TableHead>
                   </TableRow>
@@ -420,6 +421,10 @@ export default function ApiKeysPanel({
 
                         <TableCell className="text-xs text-muted-foreground py-3.5">
                           {key.createdAt}
+                        </TableCell>
+
+                        <TableCell className="text-xs text-muted-foreground py-3.5">
+                          {key.lastUsedAt || 'Never'}
                         </TableCell>
 
                         <TableCell className="text-xs text-muted-foreground py-3.5">
