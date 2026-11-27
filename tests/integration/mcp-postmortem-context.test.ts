@@ -138,6 +138,11 @@ describe('MCP postmortem evidence workflow', () => {
       'MCP_RESOURCE_UNAVAILABLE'
     );
     await db.incidentWatcher.create({ data: { incidentId: f.incident.id, userId: f.user.id } });
+    // Watching makes the incident readable, but a DRAFT postmortem still needs postmortem.draft.read.
+    await expect(getMcpPostmortemContext(f.ctx(), { id: f.postmortem.id })).rejects.toThrow(
+      'MCP_RESOURCE_UNAVAILABLE'
+    );
+    await db.postmortem.update({ where: { id: f.postmortem.id }, data: { status: 'PUBLISHED' } });
     expect(
       (await getMcpPostmortemContext(f.ctx(), { id: f.postmortem.id })).postmortem.data
     ).toMatchObject({ data: { id: f.postmortem.id } });
