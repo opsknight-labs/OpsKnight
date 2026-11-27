@@ -222,6 +222,22 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         });
       }
 
+      // SlackOps E: runbook preview / confirm buttons (ephemeral, never replace the card).
+      const runbookFlow = await import('@/lib/slack/runbook-flow');
+      if (runbookFlow.isRunbookAction(actionType)) {
+        return NextResponse.json(
+          await runbookFlow.handleRunbookButton({
+            actionType,
+            value: actionValue,
+            incidentId,
+            actor: { id: actorUser.id, name: actorName },
+            serviceId: incident.serviceId,
+            channelId: payload.channel?.id || payload.container?.channel_id,
+            slackUserId,
+          })
+        );
+      }
+
       // On an OpsKnight incident card the reply replaces the card with its fresh state and the
       // clicker gets an ephemeral confirmation; anywhere else (war-room cards, older cards) the
       // text reply below is posted as before.
