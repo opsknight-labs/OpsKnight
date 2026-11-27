@@ -54,6 +54,8 @@ The server calculates metrics from records the current authorization actor can r
 
 An empty chart is not automatically a runtime failure. It can mean no matching incidents exist in the selected window, the team/service combination has no matching records, the user cannot read those records, or the metric has no valid samples (for example, no resolved incidents for MTTR). Widen the time range, clear team/service filters, and compare with the incident list before escalating.
 
+If the query behind the **Incident Heatmap** fails, the widget (and the incident history on the Dashboard) says "Incident history is temporarily unavailable." instead of drawing an empty calendar, so a grey calendar always means no incidents.
+
 The **Updated** timestamp reports when the server rendered the current view.
 Open **Live** to refresh immediately or select automatic refresh every 30
 seconds, 1 minute, or 5 minutes. The countdown pauses while the browser tab is

@@ -34,6 +34,8 @@ export type DashboardAnalyticsSnapshot = {
   ackCompliance: number | null;
   resolveCompliance: number | null;
   heatmapData: Array<{ date: string; count: number }>;
+  /** False when the heatmap query failed, so an empty calendar is not read as zero incidents. */
+  heatmapAvailable?: boolean;
   serviceMetrics: Array<{
     id: string;
     name: string;
@@ -153,6 +155,7 @@ async function calculate(
         date: point.date,
         count: point.count,
       })),
+      heatmapAvailable: metrics.heatmapAvailable,
       serviceMetrics: metrics.serviceMetrics.map(item => ({
         id: item.id,
         name: item.name,
