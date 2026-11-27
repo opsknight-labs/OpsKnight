@@ -276,9 +276,7 @@ export default function PostmortemForm({
     return (
       [values.summary, values.rootCause, values.resolution, values.lessons].some(v => v?.trim()) ||
       timelineEvents.length > 0 ||
-      Object.values(impactMetrics).some(v =>
-        Array.isArray(v) ? v.length > 0 : v != null && v !== ''
-      ) ||
+      Object.values(impactMetrics).some(v => (Array.isArray(v) ? v.length > 0 : Boolean(v))) ||
       fiveWhysSteps.some(step => step.question.trim() || step.answer.trim()) ||
       selectedFactors.length > 0
     );
