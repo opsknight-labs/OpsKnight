@@ -40,7 +40,7 @@ Access tokens last **300 seconds**. Passing a raw access token to an API as a st
 3. Store the refresh token, the client_id and the token endpoint `<origin>/oauth/mcp/token` in the platform's credential store. Do not store the access token.
 4. Before each run (or when a call returns 401), exchange the refresh token for a new access token with `grant_type=refresh_token`, `client_id` and `resource`.
 
-Refresh **rotates** the token: every refresh returns a new refresh token, and the old one stops working. Reusing an old refresh token after the reuse grace period (30 seconds; fixed, with no setting in the administration UI), or after its successor was used, is treated as theft and revokes the whole connection. Concurrent workers must not share one refresh token: give each worker its own connection, or serialise refreshes through one place.
+Refresh **rotates** the token: every refresh returns a new refresh token, and the old one stops working. Sending an old refresh token again within the reuse grace period (30 seconds; fixed, with no setting in the administration UI) is accepted as a retry, even if its successor was already used: you get a new pair, and the successor is withdrawn. Reusing an old refresh token after the grace period is treated as theft and revokes the whole connection. Concurrent workers must not share one refresh token: give each worker its own connection, or serialise refreshes through one place.
 
 Provider notes (follow the provider's own documentation for request fields and any beta headers):
 

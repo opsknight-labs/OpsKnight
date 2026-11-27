@@ -325,8 +325,13 @@ test('refresh rotates the token, retires the old one, and replaying it revokes t
     });
     expect(stale.status()).toBe(401);
 
-    // Replaying the already-used refresh token after its successor was used is theft: the whole
-    // grant ends, including the token that was just issued.
+    // Replaying the already-used refresh token after the reuse grace window is theft: the whole
+    // grant ends, including the token that was just issued. (Inside the window the replay is
+    // accepted as a retry.) Age the rotation past the window rather than waiting for it.
+    await db.mcpToken.updateMany({
+      where: { grantId: grant.id, rotatedAt: { not: null } },
+      data: { rotatedAt: new Date(Date.now() - 31_000) },
+    });
     const replay = await refreshWith(refresh);
     expect(replay.status()).toBe(400);
     expect(await replay.json()).toMatchObject({ error: 'invalid_grant' });

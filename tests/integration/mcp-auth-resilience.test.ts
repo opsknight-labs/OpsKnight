@@ -322,11 +322,32 @@ describe('B3: refresh reuse grace window', () => {
     expect(await grantRevoked(f)).toBe(false);
   });
 
-  it('revokes the grant when the successor was already used', async () => {
+  it('reissues on a replay within the window even when the successor was already used', async () => {
+    const f = await fixture();
+    const first = await access(f);
+    const next: Tokens = await (await refresh(f, first.refresh_token)).json();
+    // A second process that read the old token before the first rotated it sends it now.
+    await authenticateMcp(bearer(next.access_token), null);
+    const replay = await refresh(f, first.refresh_token);
+    expect(replay.status).toBe(200);
+    const replayTokens: Tokens = await replay.json();
+    expect(await grantRevoked(f)).toBe(false);
+    // Only the replay's pair is live; the used successor was withdrawn.
+    await expect(authenticateMcp(bearer(next.access_token), null)).rejects.toThrow(
+      'MCP_INVALID_TOKEN'
+    );
+    await expect(authenticateMcp(bearer(replayTokens.access_token), null)).resolves.toBeTruthy();
+  });
+
+  it('revokes the grant when the successor was already used and the window has passed', async () => {
     const f = await fixture();
     const first = await access(f);
     const next: Tokens = await (await refresh(f, first.refresh_token)).json();
     await authenticateMcp(bearer(next.access_token), null);
+    await db.mcpToken.updateMany({
+      where: { grantId: f.grant.id, rotatedAt: { not: null } },
+      data: { rotatedAt: new Date(Date.now() - 31000) },
+    });
     const replay = await refresh(f, first.refresh_token);
     expect(replay.status).toBe(400);
     expect(await grantRevoked(f)).toBe(true);
