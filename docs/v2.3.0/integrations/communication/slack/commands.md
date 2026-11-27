@@ -70,6 +70,8 @@ Three commands work in **any** channel; the rest work in an incident war room:
 
 When Squire is enabled for chat, `ask <question>` and `investigate [focus]` answer privately about the channel's incident, under your linked account's access. Provide required text and avoid sensitive information in notes/summaries.
 
+`postmortem` creates a draft postmortem from the incident's timeline and notes, or returns the existing one. It works only for a resolved incident: for an open incident the channel gets "Postmortems can only be created for resolved incidents." The draft records the affected service and the downtime in minutes, keeps the first 100 `todo:`, `action item:`, `fix:` or `followup:` notes as action items, and does not put your name into the public resolution text. Creating it is written to the audit log as `postmortem.created`.
+
 ## Complete the action
 
 1. Enter `/incident <command>` with its argument.

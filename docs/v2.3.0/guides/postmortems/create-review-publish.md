@@ -27,8 +27,12 @@ verification:
 ## Before you begin
 
 Resolve the incident first; OpsKnight rejects postmortem creation for an active
-incident. Confirm the incident timeline and service ownership are accurate and
-identify the review facilitator and action-item owners.
+incident, and you must be able to read the incident (for an incident outside
+your read scope the editor answers `Incident not found`). Only creating a
+postmortem needs the incident to be resolved: once one exists it stays editable
+if the incident is later reopened. Confirm the incident timeline and service
+ownership are accurate and identify the review facilitator and action-item
+owners.
 
 ## Open the feature
 
@@ -55,7 +59,9 @@ incident's **Postmortem** tab. Select the incident when prompted.
    reducing systemic conditions to individual blame.
 7. Record resolution and lessons.
 8. Add action items with owner, due date, status, priority, and an observable
-   completion outcome.
+   completion outcome. A postmortem holds at most 100 action items; the editor
+   refuses to save more with "A postmortem can have at most 100 action items."
+   A draft generated from ChatOps keeps only the first 100 follow-up notes.
 9. Save, reopen, and confirm the draft retained all sections.
 
 ### Drafting help
@@ -90,11 +96,37 @@ Change status to **Published** only after reviewers accept the learning record.
 The first publication records its publication time. Publishing does not complete
 action items. Use the public-status control separately when the postmortem is
 appropriate for a status-page audience; verify the public rendering contains no
-internal-only detail. The public page serves only **Published** postmortems. On
+internal-only detail. The public page leaves out timeline entries that came from
+responder notes (titled **Note by …**), so internal notes that an Auto-Draft or
+ChatOps draft copied into the timeline are not shown to customers; still review
+the summary, root cause and lessons text yourself. The
+public page serves only **Published** postmortems. On
 a draft the control reads **Allow on Status Page** and the badge reads **Public
 once published**; customers see nothing until the status is **Published**. If
 the visibility change fails, a message shows the reason and the setting stays as
-it was.
+it was. Only people who can edit the postmortem can change this setting: an
+administrator, its author, the incident assignee, or a member of the owning
+service's team. Anyone else gets "Forbidden: You do not have permission to
+change this postmortem". Each change is written to the audit log as
+`postmortem.visibility.changed` on the incident, with the person who made it and
+the old and new `isPublic` value.
+
+## Who can see drafts and archived postmortems
+
+Anyone who can read the incident can read its **Published** postmortem. **Draft**
+and **Archived** postmortems are working material and are visible only to people
+with the `postmortem.draft.read` permission (**View draft postmortems**): the
+built-in Admin and Responder roles, and any custom role or temporary access that
+includes it. Users and Auditors see published postmortems only.
+
+- On **Postmortems**, the Drafts and Archived counts and the matching status
+  filter options appear only for people who can read them. A `DRAFT` or
+  `ARCHIVED` status in the page address is ignored for everyone else, so a
+  filtered list never falls back to showing published rows under the wrong
+  heading.
+- The same rule applies to API v2, MCP, the mobile postmortem pages, the Action
+  Items page and global search. Search results cannot be used to probe draft
+  root-cause or lessons text.
 
 ## Remove, archive, or follow up
 
@@ -104,7 +136,12 @@ keep OpsKnight status consistent with the supported synchronization workflow.
 
 Use **Archived** when the record should leave the active review set without
 being deleted. Delete only when policy authorizes permanent removal; deletion
-and bulk deletion are not substitutes for archival.
+and bulk deletion are not substitutes for archival. Administrators can delete
+any postmortem; anyone else can delete only postmortems they wrote. If a bulk
+delete includes a postmortem written by someone else, nothing is deleted, an
+error message says "Only administrators or the postmortem author can delete the
+selected records", and the selection stays so you can adjust it. A successful
+bulk delete reports how many postmortems were removed.
 
 ## Troubleshooting
 
