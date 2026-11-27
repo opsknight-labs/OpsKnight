@@ -78,14 +78,43 @@ function compare(
   return { field, live, rollup, divergence: d, withinTolerance: within };
 }
 
+/** One run per process at a time: a second call while one is computing skips instead of stacking. */
+let runInProgress = false;
+
 /**
  * Run a one-shot drift check.
  *
- * Uses `pg_try_advisory_xact_lock` so two scheduled invocations don't
- * stack — if one is already running, the second skips with
- * `ran: false` rather than waiting.
+ * The two aggregates run first, outside any transaction (they can take
+ * longer than a transaction timeout). Only reporting is serialized across
+ * instances, by `pg_try_advisory_xact_lock` in a short transaction: a run
+ * that finds another reporting skips with `ran: false` rather than waiting.
  */
 export async function runSLADriftDetection(options?: {
+  windowDaysAgo?: number;
+  toleranceFraction?: number;
+}): Promise<DriftReport> {
+  if (runInProgress) {
+    const now = new Date().toISOString();
+    logger.info('[SLA-Drift] Another drift run in progress; skipping');
+    return {
+      windowStart: now,
+      windowEnd: now,
+      ranAt: now,
+      samples: [],
+      withinTolerance: true,
+      ran: false,
+      skippedReason: 'concurrent-run',
+    };
+  }
+  runInProgress = true;
+  try {
+    return await executeDriftRun(options);
+  } finally {
+    runInProgress = false;
+  }
+}
+
+async function executeDriftRun(options?: {
   windowDaysAgo?: number;
   toleranceFraction?: number;
 }): Promise<DriftReport> {
@@ -107,14 +136,116 @@ export async function runSLADriftDetection(options?: {
   windowStartDate.setUTCDate(windowStartDate.getUTCDate());
   windowStartDate.setUTCHours(0, 0, 0, 0);
 
+  // Both paths apply retention bounds; pre-clip so the comparison
+  // is apples-to-apples.
+  const { start, end, isClipped } = await getQueryDateBounds(
+    windowStartDate,
+    windowEndDate,
+    'incident'
+  );
+  if (isClipped) {
+    logger.warn('[SLA-Drift] Sample window clipped by retention; comparison may be skewed');
+  }
+
+  // Run both paths in parallel.
+  const [liveResult, rollupResult] = await Promise.all([
+    // Force the live path by passing explicit dates and an
+    // urgency filter that's "any" — but to truly force live we
+    // pass an empty filter; that's already the default. The
+    // boundary check in calculateSLAMetrics will still take the
+    // hybrid path for this range because end is older than now -
+    // 90 days... actually that means it'd take the *rollup* path.
+    // To force live, we use the realTimeWindowDays=0 trick by
+    // hand: query directly via the same SQL the live path uses.
+    //
+    // Pragmatic shortcut: temporarily override the policy by
+    // passing a windowDays that places the range inside the
+    // live window from the call's perspective. The simplest is
+    // to invoke calculateSLAMetrics with startDate / endDate
+    // for the sample window. With the existing branching, that
+    // range is entirely historical → takes the rollup path.
+    // So instead we go directly: run a minimal live aggregate
+    // here. To avoid duplicating SQL, we accept that
+    // `calculateSLAMetrics` for this window will return the
+    // rollup result, and pair it against `calculateSLAMetricsFromRollups`
+    // directly to detect *internal* rollup-vs-rollup drift only.
+    //
+    // Limitation noted: a fuller live-vs-rollup drift detector
+    // needs an exported "force-live" helper from sla-server;
+    // documented as a follow-up.
+    calculateSLAMetrics({
+      startDate: start,
+      endDate: end,
+      _forceLive: true,
+      // A diagnostic run must not add a synthetic sample to the performance log.
+      _skipPerformanceLog: true,
+    }),
+    calculateSLAMetricsFromRollups(start, end, start, end, false, {}),
+  ]);
+
+  const samples: DriftSample[] = [
+    compare(
+      'totalIncidents',
+      liveResult.totalIncidents,
+      rollupResult.totalIncidents,
+      options?.toleranceFraction,
+      DEFAULT_SMALL_COUNT_TOLERANCE
+    ),
+    compare(
+      'highUrgencyCount',
+      liveResult.highUrgencyCount,
+      rollupResult.highUrgencyCount,
+      options?.toleranceFraction,
+      DEFAULT_SMALL_COUNT_TOLERANCE
+    ),
+    compare(
+      'mediumUrgencyCount',
+      liveResult.mediumUrgencyCount,
+      rollupResult.mediumUrgencyCount,
+      options?.toleranceFraction,
+      DEFAULT_SMALL_COUNT_TOLERANCE
+    ),
+    compare(
+      'lowUrgencyCount',
+      liveResult.lowUrgencyCount,
+      rollupResult.lowUrgencyCount,
+      options?.toleranceFraction,
+      DEFAULT_SMALL_COUNT_TOLERANCE
+    ),
+    compare(
+      'ackBreaches',
+      liveResult.ackBreaches,
+      rollupResult.ackBreaches,
+      options?.toleranceFraction,
+      DEFAULT_SMALL_COUNT_TOLERANCE
+    ),
+    compare(
+      'resolveBreaches',
+      liveResult.resolveBreaches,
+      rollupResult.resolveBreaches,
+      options?.toleranceFraction,
+      DEFAULT_SMALL_COUNT_TOLERANCE
+    ),
+    compare('mttr', liveResult.mttr, rollupResult.mttr, options?.toleranceFraction ?? 0.02),
+    compare(
+      'autoResolvedCount',
+      liveResult.autoResolvedCount,
+      rollupResult.autoResolvedCount,
+      options?.toleranceFraction,
+      DEFAULT_SMALL_COUNT_TOLERANCE
+    ),
+  ];
+
+  // Only the reporting is serialized, in a short transaction: the heavy reads above hold no
+  // connection or lock, so a slow aggregate can no longer abort the run.
   return prisma.$transaction(
     async tx => {
       const acquired = await tryAdvisoryLock(tx, LOCK_KEYS.DRIFT_DETECTION);
       if (!acquired) {
-        logger.info('[SLA-Drift] Another drift run in progress; skipping');
+        logger.info('[SLA-Drift] Another drift run is reporting; skipping');
         return {
-          windowStart: windowStartDate.toISOString(),
-          windowEnd: windowEndDate.toISOString(),
+          windowStart: start.toISOString(),
+          windowEnd: end.toISOString(),
           ranAt,
           samples: [],
           withinTolerance: true,
@@ -122,100 +253,6 @@ export async function runSLADriftDetection(options?: {
           skippedReason: 'concurrent-run',
         };
       }
-
-      // Both paths apply retention bounds; pre-clip so the comparison
-      // is apples-to-apples.
-      const { start, end, isClipped } = await getQueryDateBounds(
-        windowStartDate,
-        windowEndDate,
-        'incident'
-      );
-      if (isClipped) {
-        logger.warn('[SLA-Drift] Sample window clipped by retention; comparison may be skewed');
-      }
-
-      // Run both paths in parallel.
-      const [liveResult, rollupResult] = await Promise.all([
-        // Force the live path by passing explicit dates and an
-        // urgency filter that's "any" — but to truly force live we
-        // pass an empty filter; that's already the default. The
-        // boundary check in calculateSLAMetrics will still take the
-        // hybrid path for this range because end is older than now -
-        // 90 days... actually that means it'd take the *rollup* path.
-        // To force live, we use the realTimeWindowDays=0 trick by
-        // hand: query directly via the same SQL the live path uses.
-        //
-        // Pragmatic shortcut: temporarily override the policy by
-        // passing a windowDays that places the range inside the
-        // live window from the call's perspective. The simplest is
-        // to invoke calculateSLAMetrics with startDate / endDate
-        // for the sample window. With the existing branching, that
-        // range is entirely historical → takes the rollup path.
-        // So instead we go directly: run a minimal live aggregate
-        // here. To avoid duplicating SQL, we accept that
-        // `calculateSLAMetrics` for this window will return the
-        // rollup result, and pair it against `calculateSLAMetricsFromRollups`
-        // directly to detect *internal* rollup-vs-rollup drift only.
-        //
-        // Limitation noted: a fuller live-vs-rollup drift detector
-        // needs an exported "force-live" helper from sla-server;
-        // documented as a follow-up.
-        calculateSLAMetrics({ startDate: start, endDate: end, _forceLive: true }),
-        calculateSLAMetricsFromRollups(start, end, start, end, false, {}),
-      ]);
-
-      const samples: DriftSample[] = [
-        compare(
-          'totalIncidents',
-          liveResult.totalIncidents,
-          rollupResult.totalIncidents,
-          options?.toleranceFraction,
-          DEFAULT_SMALL_COUNT_TOLERANCE
-        ),
-        compare(
-          'highUrgencyCount',
-          liveResult.highUrgencyCount,
-          rollupResult.highUrgencyCount,
-          options?.toleranceFraction,
-          DEFAULT_SMALL_COUNT_TOLERANCE
-        ),
-        compare(
-          'mediumUrgencyCount',
-          liveResult.mediumUrgencyCount,
-          rollupResult.mediumUrgencyCount,
-          options?.toleranceFraction,
-          DEFAULT_SMALL_COUNT_TOLERANCE
-        ),
-        compare(
-          'lowUrgencyCount',
-          liveResult.lowUrgencyCount,
-          rollupResult.lowUrgencyCount,
-          options?.toleranceFraction,
-          DEFAULT_SMALL_COUNT_TOLERANCE
-        ),
-        compare(
-          'ackBreaches',
-          liveResult.ackBreaches,
-          rollupResult.ackBreaches,
-          options?.toleranceFraction,
-          DEFAULT_SMALL_COUNT_TOLERANCE
-        ),
-        compare(
-          'resolveBreaches',
-          liveResult.resolveBreaches,
-          rollupResult.resolveBreaches,
-          options?.toleranceFraction,
-          DEFAULT_SMALL_COUNT_TOLERANCE
-        ),
-        compare('mttr', liveResult.mttr, rollupResult.mttr, options?.toleranceFraction ?? 0.02),
-        compare(
-          'autoResolvedCount',
-          liveResult.autoResolvedCount,
-          rollupResult.autoResolvedCount,
-          options?.toleranceFraction,
-          DEFAULT_SMALL_COUNT_TOLERANCE
-        ),
-      ];
 
       const withinTolerance = samples.every(s => s.withinTolerance);
       if (!withinTolerance) {
@@ -241,6 +278,6 @@ export async function runSLADriftDetection(options?: {
         ran: true,
       };
     },
-    { timeout: 30000, maxWait: 5000 }
+    { timeout: 5000, maxWait: 5000 }
   );
 }
