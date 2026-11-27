@@ -27,7 +27,7 @@ Open **Settings → Status Pages**. If no page exists, select **Create Status Pa
 
 ## Configure the page
 
-1. Create the page in draft/disabled state with a clear public name and unique slug.
+1. Create the page in draft/disabled state with a clear public name and unique slug. A slug is 2 to 80 lowercase letters, numbers and single hyphens, with no leading, trailing or doubled hyphen; the console and the API apply the same rule, and renaming a page to a name another page uses is refused in both.
 2. Map services, set their order, and enable **Show on page** only for customer-relevant services.
 3. Configure branding, organization/contact details, allowed incident fields, and privacy mode.
 4. Choose public access or **Require authentication**. Test restricted access in a signed-out browser.

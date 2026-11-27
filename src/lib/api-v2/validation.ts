@@ -1,5 +1,5 @@
 import { z } from 'zod/v3';
-import { STATUS_ANNOUNCEMENT_TYPES } from '@/lib/validation';
+import { STATUS_ANNOUNCEMENT_TYPES, isStatusPageSlug } from '@/lib/validation';
 import { APP_ROLES, isApiScope } from '@/lib/authorization';
 import { INTEGRATION_TYPES } from '@/lib/integrations/catalog';
 import { isValidTimeZone } from '@/lib/timezone';
@@ -287,8 +287,8 @@ export const StatusPageCreateV2Schema = z.object({
     .string()
     .trim()
     .min(2)
-    .max(100)
-    .regex(/^[a-z0-9-]+$/, 'Slug must consist of lowercase letters, numbers, and hyphens'),
+    .max(80)
+    .refine(isStatusPageSlug, 'Use lowercase letters, numbers, and single hyphens only.'),
   isDefault: z.boolean().default(false),
   // Status pages have no description column; reject rather than silently drop it.
   description: z
@@ -302,8 +302,8 @@ export const StatusPageUpdateV2Schema = z.object({
     .string()
     .trim()
     .min(2)
-    .max(100)
-    .regex(/^[a-z0-9-]+$/)
+    .max(80)
+    .refine(isStatusPageSlug, 'Use lowercase letters, numbers, and single hyphens only.')
     .optional(),
   isDefault: z.boolean().optional(),
   description: z
