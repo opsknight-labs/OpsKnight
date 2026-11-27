@@ -436,10 +436,11 @@ test.describe.serial('AIOps overview', () => {
     await expectAccessible(page);
     await page.screenshot({ path: testInfo.outputPath('changes-desktop.png'), fullPage: true });
 
-    await filters.getByLabel('Risk').selectOption('high');
+    // Risk is a row of quick-filter chips (buttons), not a select.
+    await page.getByRole('button', { name: 'High risk' }).click();
     await expect(page).toHaveURL(/risk=high/);
     await expect(row).toHaveCount(1);
-    await filters.getByLabel('Risk').selectOption('low');
+    await page.getByRole('button', { name: 'Low risk' }).click();
     await expect(page.getByText('No changes match these filters')).toBeVisible();
     await page.getByRole('link', { name: 'Clear filters' }).first().click();
     await expect(page).toHaveURL(/\/changes$/);

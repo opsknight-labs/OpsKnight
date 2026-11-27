@@ -49,7 +49,8 @@ async function seed() {
         title: `${tag} incident ${i}`,
         serviceId: service.id,
         status: 'RESOLVED',
-        urgency: 'HIGH',
+        // Not critical: a critical or HIGH-urgency alert is never hidden by a window that does not cover critical.
+        urgency: 'MEDIUM',
         createdAt: new Date(at),
         resolvedAt: new Date(at + HOUR),
       },
@@ -61,7 +62,7 @@ async function seed() {
         serviceId: service.id,
         createdAt: new Date(at),
         dedupKey: `${tag}-${i}`,
-        severity: 'critical',
+        severity: 'warning',
         payload: { summary: `${tag} disk full ${i}`, source: 'prometheus' },
       },
     });
