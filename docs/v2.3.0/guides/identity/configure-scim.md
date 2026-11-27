@@ -443,9 +443,12 @@ Pre-authentication admission is process-local and bounded to 4096 pseudonymous
 keys; repeated unknown tokens are negatively cached for at most five seconds.
 Tokens OpsKnight has not verified recently are limited to 120 attempts per minute
 for each source address, so a flood of random tokens from one address cannot
-cause `429` for a directory connecting from another. Only requests with no usable
-source address share a single limit of 1200 attempts per minute. It does not
-cache successful credential authorization. Network-wide abuse control
+cause `429` for a directory connecting from another. Requests with no usable
+source address share a single limit of 1200 attempts per minute, and all unverified
+attempts together are capped at 6000 per minute, which only a flood spread over
+many addresses reaches. A directory whose token was verified in the last minute is
+not counted against either limit. It does not cache successful credential
+authorization. Network-wide abuse control
 remains an ingress deployment responsibility.
 
 ## Upgrading legacy membership ownership

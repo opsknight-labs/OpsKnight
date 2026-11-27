@@ -58,4 +58,20 @@ describe('SCIM pre-database admission', () => {
     // The flooding addresses themselves are still limited.
     await expect(acquireScimAdmission('more', '192.0.2.1')).rejects.toThrow('network admission');
   });
+  it('caps a flood spread over many addresses without starving a verified directory', async () => {
+    const { acquireScimAdmission } = await import('@/lib/scim/security/admission');
+    const known = await acquireScimAdmission('verified-directory', '203.0.113.9');
+    known.remember(true);
+    known.release();
+    // Up to the 6,000 per-minute ceiling (the verification above was the first), about 100 from each
+    // of 60 addresses, so every address stays under its own 120 limit.
+    for (let n = 0; n < 5999; n++)
+      (await acquireScimAdmission(`spread-${n}`, `192.0.2.${(n % 60) + 1}`)).release();
+    await expect(acquireScimAdmission('one-more', '198.51.100.200')).rejects.toThrow('busy');
+
+    // The directory whose credential was verified recently still gets in, from any address.
+    (await acquireScimAdmission('verified-directory', '203.0.113.9')).release();
+    vi.advanceTimersByTime(60000);
+    (await acquireScimAdmission('one-more', '198.51.100.200')).release();
+  });
 });
