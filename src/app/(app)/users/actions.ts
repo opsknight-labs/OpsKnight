@@ -11,6 +11,8 @@ import { administerUser } from '@/lib/users/administration';
 import { setTeamMembership, teamMemberInput } from '@/lib/teams/administration';
 
 import prisma from '@/lib/prisma';
+import { z } from 'zod';
+import { previewRotationChange, type RotationImpact } from '@/lib/schedules/rotation-change-preview';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
 import {
@@ -328,6 +330,25 @@ export async function removeUserFromTeam(memberId: string) {
   revalidatePath('/users');
   revalidatePath('/teams');
   revalidatePath('/audit');
+}
+
+/** Who is on call over the next 4 weeks if these users are deactivated; read-only, run before deactivating. */
+export async function previewUserDeactivation(userIds: string[]): Promise<RotationImpact> {
+  try {
+    await assertAdmin();
+  } catch {
+    return { changed: false, message: '' };
+  }
+  const input = z.array(z.string().min(1)).max(500).safeParse(userIds);
+  if (!input.success || input.data.length === 0) return { changed: false, message: '' };
+  try {
+    return await previewRotationChange({ userIds: input.data });
+  } catch {
+    return {
+      changed: true,
+      message: 'The change to the on-call schedules could not be previewed. Deactivate anyway?',
+    };
+  }
 }
 
 export async function deactivateUser(userId: string, _formData?: FormData) {

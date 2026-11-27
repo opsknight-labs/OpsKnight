@@ -21,7 +21,11 @@ const pageTwo = [person('u3', 'Carol'), person('u4', 'Dan')];
 
 const noop = vi.fn(async () => undefined);
 
-function list(users: ReturnType<typeof person>[], bulkUpdateUsers = vi.fn()) {
+function list(
+  users: ReturnType<typeof person>[],
+  bulkUpdateUsers = vi.fn(),
+  previewUserDeactivation?: (userIds: string[]) => Promise<{ changed: boolean; message: string }>
+) {
   return (
     <UserList
       users={users}
@@ -36,6 +40,7 @@ function list(users: ReturnType<typeof person>[], bulkUpdateUsers = vi.fn()) {
       generateInvite={vi.fn(async () => ({ error: null }))}
       getUserDependencyReport={vi.fn(async () => ({}))}
       bulkUpdateUsers={bulkUpdateUsers}
+      previewUserDeactivation={previewUserDeactivation}
     />
   );
 }
@@ -70,5 +75,21 @@ describe('UserList bulk selection', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Deactivate' }));
     await waitFor(() => expect(bulkUpdateUsers).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows who would be on call instead before a bulk deactivate', async () => {
+    const preview = vi.fn(async () => ({ changed: true, message: 'Platform: Bob becomes Carol' }));
+    render(list(pageOne, vi.fn(), preview));
+    fireEvent.click(screen.getAllByRole('checkbox', { name: 'Select Alice' })[0]);
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /Actions/ }), {
+      button: 0,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Deactivate' }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(await within(dialog).findByText('Platform: Bob becomes Carol')).toBeInTheDocument();
+    expect(preview).toHaveBeenCalledWith(['u1']);
   });
 });

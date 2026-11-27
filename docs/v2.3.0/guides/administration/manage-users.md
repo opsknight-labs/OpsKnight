@@ -231,7 +231,7 @@ cover the person's live operational responsibilities:
 
 Then:
 
-1. Open **Users**, locate the active account, and select **Deactivate**.
+1. Open **Users**, locate the active account, and select **Deactivate**. If the person is in an on-call rotation, the confirmation lists the shifts in the next 4 weeks that would pass to someone else.
 2. Confirm the account shows **Disabled**.
 3. Verify current sessions fail on the next authenticated operation.
 4. Confirm outstanding invitation/reset tokens, API keys, OIDC linking
@@ -250,8 +250,9 @@ offboarded user must not disappear from the operational record.
 
 ### Bulk deactivation
 
-Select the intended rows and choose the bulk deactivate action. Before
-confirming, recheck the filters and selection count. OpsKnight prevents the
+Select the intended rows and choose the bulk deactivate action. The confirmation
+lists the rotation shifts in the next 4 weeks that would pass to someone else.
+Before confirming, recheck the filters and selection count. OpsKnight prevents the
 acting administrator from including themselves and atomically checks the
 last-active-admin invariant. After completion, inspect every failed item rather
 than assuming a partial result applied uniformly.

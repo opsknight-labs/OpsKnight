@@ -25,6 +25,7 @@ import {
   moveLayerUser,
   moveLayerPrecedence,
   removeLayerUser,
+  previewLayerUserRemoval,
   updateLayer,
   updateSchedule,
 } from '../actions';
@@ -558,6 +559,7 @@ export default async function ScheduleDetailPage({
               addLayerUser={addLayerUser}
               moveLayerUser={moveLayerUser}
               removeLayerUser={removeLayerUser}
+              previewLayerUserRemoval={previewLayerUserRemoval}
               moveLayerPrecedence={moveLayerPrecedence}
               colorIndex={index}
               layerPosition={index}

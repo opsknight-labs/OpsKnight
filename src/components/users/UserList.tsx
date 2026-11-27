@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/shadcn/alert-dialog';
 import type { UserFormState } from '@/app/(app)/users/actions';
 import type { UserDependencyReport } from '@/lib/users/dependencies';
+import type { RotationImpact } from '@/lib/schedules/rotation-change-preview';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,6 +93,7 @@ type UserListProps = {
   updateUserRole: (userId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   addUserToTeam: (userId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   deactivateUser: (userId: string, formData?: FormData) => Promise<{ error?: string } | undefined>;
+  previewUserDeactivation?: (userIds: string[]) => Promise<RotationImpact>;
   reactivateUser: (userId: string, formData?: FormData) => Promise<{ error?: string } | undefined>;
   deleteUser: (userId: string, formData?: FormData) => Promise<{ error?: string } | undefined>;
   generateInvite: (
@@ -151,6 +153,7 @@ export default function UserList({
   updateUserRole,
   addUserToTeam,
   deactivateUser,
+  previewUserDeactivation,
   reactivateUser,
   deleteUser,
   generateInvite,
@@ -162,6 +165,7 @@ export default function UserList({
   const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
   const [confirmBulk, setConfirmBulk] = useState<'DEACTIVATE' | 'DELETE' | null>(null);
   const [isBulkActionPending, setIsBulkActionPending] = useState(false);
+  const [bulkRotationImpact, setBulkRotationImpact] = useState<RotationImpact | null>(null);
   // Only users on screen count as selected, so a page or filter change cannot carry a hidden selection.
   const selectedIds = useMemo(
     () => new Set(users.filter(user => pickedIds.has(user.id)).map(user => user.id)),
@@ -206,6 +210,19 @@ export default function UserList({
     [users.length, selectedIds.size]
   );
   const someSelected = selectedIds.size > 0 && !allSelected;
+
+  const openBulkDeactivate = () => {
+    setBulkRotationImpact(null);
+    setConfirmBulk('DEACTIVATE');
+    void previewUserDeactivation?.(Array.from(selectedIds))
+      .then(setBulkRotationImpact)
+      .catch(() =>
+        setBulkRotationImpact({
+          changed: true,
+          message: 'The change to the on-call schedules could not be previewed.',
+        })
+      );
+  };
 
   const handleBulkAction = async (action: 'DEACTIVATE' | 'ACTIVATE' | 'DELETE') => {
     if (selectedIds.size === 0) return;
@@ -310,6 +327,9 @@ export default function UserList({
       teams,
       onActivate: user.status === 'DISABLED' ? handleReactivate : undefined,
       onDeactivate: user.status === 'ACTIVE' ? handleDeactivate : undefined,
+      onPreviewRotationImpact: previewUserDeactivation
+        ? () => previewUserDeactivation([user.id])
+        : undefined,
       onDelete: handleDelete,
       onGetDependencies: () => getUserDependencyReport(user.id),
       onGenerateInvite: user.status === 'INVITED' ? handleGenerateInvite : undefined,
@@ -446,7 +466,7 @@ export default function UserList({
                 <UserCheck />
                 <span>Activate</span>
               </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onClick={() => setConfirmBulk('DEACTIVATE')}>
+              <DropdownMenuItem variant="destructive" onClick={() => openBulkDeactivate()}>
                 <UserX />
                 <span>Deactivate</span>
               </DropdownMenuItem>
@@ -477,6 +497,9 @@ export default function UserList({
                 .map(user => user.name)
                 .join(', ')}
               {selectedIds.size > 5 ? ` and ${selectedIds.size - 5} more` : ''}.
+              {confirmBulk === 'DEACTIVATE' && bulkRotationImpact?.changed && (
+                <span className="mt-3 block whitespace-pre-line">{bulkRotationImpact.message}</span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

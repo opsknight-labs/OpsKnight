@@ -41,6 +41,8 @@ Within 60 minutes before a shift starts, the incoming responder (when not alread
 
 The **on call until** time shown on mobile, in the dashboard on-call widget and in reminder emails is the real handoff: where the rotation or the next override takes over, even when that is days away (a weekly rotation with five days left shows the end of those five days). OpsKnight looks up to a year ahead to find it.
 
+Taking a responder out of a layer, or deactivating a user who is in one, moves later handoffs to other people because the layer picks responders by position. The console previews that for the next 4 weeks before it asks you to confirm; see [Build a schedule](./build-schedule).
+
 ## Verify it worked
 
 At/after the boundary, confirm current on-call is the expected responder and run a controlled [on-call test](./test-on-call). Check timeline/delivery evidence rather than only preview.

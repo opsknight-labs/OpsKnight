@@ -10,6 +10,7 @@ import {
   addUserToTeam,
   bulkUpdateUsers,
   deactivateUser,
+  previewUserDeactivation,
   deleteUser,
   generateInvite,
   getUserDependencyReport,
@@ -273,6 +274,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             updateUserRole={updateUserRole}
             addUserToTeam={addUserToTeam}
             deactivateUser={deactivateUser}
+            previewUserDeactivation={previewUserDeactivation}
             reactivateUser={reactivateUser}
             deleteUser={deleteUser}
             generateInvite={generateInvite}

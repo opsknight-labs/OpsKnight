@@ -27,6 +27,8 @@ import {
   type ScheduleDependency,
 } from '@/lib/schedules/mutations';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import { previewRotationChange, type RotationImpact } from '@/lib/schedules/rotation-change-preview';
+import { z } from 'zod';
 import {
   createScheduleLayer,
   updateScheduleLayer,
@@ -722,6 +724,32 @@ export async function moveLayerUser(
     revalidatePath('/schedules');
   } catch (error) {
     return scheduleActionError(error, 'Failed to reorder responder.');
+  }
+}
+
+/** Who is on call over the next 4 weeks if this responder leaves the layer; read-only, run before `removeLayerUser`. */
+export async function previewLayerUserRemoval(
+  layerId: string,
+  userId: string
+): Promise<RotationImpact> {
+  try {
+    await assertAdminOrResponder();
+  } catch {
+    // The removal itself rejects an unauthorised caller; reveal nothing about the schedule here.
+    return { changed: false, message: '' };
+  }
+  const input = z.object({ layerId: z.string().min(1), userId: z.string().min(1) }).safeParse({
+    layerId,
+    userId,
+  });
+  if (!input.success) return { changed: false, message: '' };
+  try {
+    return await previewRotationChange({ layerId: input.data.layerId, userIds: [input.data.userId] });
+  } catch {
+    return {
+      changed: true,
+      message: 'The change to the on-call schedule could not be previewed. Remove anyway?',
+    };
   }
 }
 

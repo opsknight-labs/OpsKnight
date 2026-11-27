@@ -50,6 +50,10 @@ Under **Rotation layers**, choose **Add Layer** and configure:
 
 Save the layer. The form checks these values against the same rules as the API and names the field that is wrong, for example `Rotation length must be a whole number of hours.` A responder can belong to only one layer in the same schedule; remove them from the existing layer before moving them.
 
+### Remove a responder from a layer
+
+Each handoff picks the responder by position in the layer, so taking one person out moves every later handoff to a different person; a replacement override that names a person only applies in the slots where that person is still on call. Before the removal, OpsKnight shows the shifts in the next 4 weeks whose responder would change, as "A becomes B" for each stretch with its time in the schedule time zone, and asks you to confirm (**Remove responder**). If no shift in those 4 weeks changes hands, the responder is removed without a prompt. If the preview cannot be calculated, you are asked to confirm anyway. The same preview appears before you deactivate a user who is in a rotation (see [Manage users](../administration/manage-users)). Check the schedule afterwards and re-create any override that no longer covers the intended person.
+
 ### Edit the schedule or a layer
 
 Open the schedule's settings to rename it or change its time zone. Changing the time zone asks you to confirm first (**Change schedule time zone?**), because every layer's coverage hours and handoff times are then read in the new zone and who is on call can change. After you confirm, schedule members get a notification that states the rename and the old and new time zone; a save that changes neither sends none.
