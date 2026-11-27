@@ -347,7 +347,9 @@ failure but not after UNKNOWN, non-idempotent steps never auto-retry.
    3600 seconds. Agent claims use a renewable 300-second lease.
 3. Select **Publish draft**, review the confirmation, and confirm.
 4. Only the **saved** draft is published — unsaved editor contents are not
-   included.
+   included. While the builder shows **Unsaved changes** or **Unapplied JSON**,
+   the **Publish draft** confirmation says so and its button stays disabled, so
+   publishing cannot discard your edits. Save (or discard) them first.
 5. Verify the published version in **Versions** before attaching it to a
    service.
 

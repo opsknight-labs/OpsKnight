@@ -58,6 +58,7 @@ import StepNavigator, { getStepSummary } from './builder/StepNavigator';
 import StepEditor from './builder/StepEditor';
 import ReadinessBar from './builder/ReadinessBar';
 import { validateRunbook } from './builder/validation';
+import { setRunbookBuilderDirty } from '@/lib/runbooks/builder-dirty';
 import { JsonCodeEditor } from './builder/JsonCodeEditor';
 
 function firstSchemaIssue(result: {
@@ -246,6 +247,13 @@ export default function RunbookBuilder({
       document.removeEventListener('click', guard, true);
     };
   }, [dirty, unappliedJson, pendingKeys.size]);
+
+  // Tell the Publish button whether publishing now would discard edits that are not saved.
+  const hasUnsavedEdits = dirty || unappliedJson || pendingKeys.size > 0;
+  useEffect(() => {
+    setRunbookBuilderDirty(hasUnsavedEdits);
+  }, [hasUnsavedEdits]);
+  useEffect(() => () => setRunbookBuilderDirty(false), []);
 
   function commitInputKey(identity: string, index: number) {
     const nextKey = pendingKeys.get(identity)?.trim();

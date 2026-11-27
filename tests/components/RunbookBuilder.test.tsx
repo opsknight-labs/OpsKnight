@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RunbookBuilder, { getInputUsage } from '@/components/runbooks/RunbookBuilder';
 import { newBuilderStep } from '@/lib/runbooks/builder';
+import { getRunbookBuilderDirty } from '@/lib/runbooks/builder-dirty';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
 import { validateRunbook, validateStep } from '@/components/runbooks/builder/validation';
 import ConditionActionEditor from '@/components/runbooks/builder/action-editors/ConditionActionEditor';
@@ -121,6 +122,24 @@ describe('Runbook nested check builder', () => {
       within(before).getByRole('button', { name: 'Remove Systemd from Before action' })
     );
     expect(saved().steps[0].precheck).toBeUndefined();
+  });
+
+  it('tells the Publish button about unsaved edits, and clears that when it goes away', () => {
+    const { unmount } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [newBuilderStep('MANUAL', 'action')] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+    expect(getRunbookBuilderDirty()).toBe(false);
+
+    const before = screen.getByRole('region', { name: 'Before action checks' });
+    fireEvent.click(within(before).getByRole('button', { name: 'Add precheck' }));
+    expect(getRunbookBuilderDirty()).toBe(true);
+
+    unmount();
+    expect(getRunbookBuilderDirty()).toBe(false);
   });
 
   it('keeps published definitions read-only and summarizes existing checks', () => {

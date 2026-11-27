@@ -401,6 +401,7 @@ export default async function RunbookDetailPage({
         title={`Publish immutable v${runbook.draftVersion.version}?`}
         description="Only the saved draft is published. Save any builder changes first. Published definitions cannot be edited."
         successMessage="Draft published"
+        blockWhileBuilderDirty
       />
     ) : canManage && nextDraftSource ? (
       <ActionForm
