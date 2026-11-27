@@ -33,7 +33,7 @@ Open **Incidents → select incident** and locate the **Create war room** button
 - **Manual:** a responder opens an incident and explicitly creates the room.
   Use this when only selected incidents require a dedicated channel. Creating
   and closing a room need the `operations.manage` permission (Admin, Responder,
-  or a custom role or temporary access that includes it). The page shows the
+  or a custom role, temporary access or emergency access for that incident that includes it). The page shows the
   controls to exactly the people the server accepts, and applies the same check
   when you submit. If a create or close fails, for example because a policy
   denies it, an error message appears with the reason and the placeholder room
