@@ -18,6 +18,7 @@ describe('warnAndContinue', () => {
   });
 
   it('copes with a rejection that is not an Error', async () => {
+    // eslint-disable-next-line prefer-promise-reject-errors -- the case under test is a rejection that is not an Error
     await Promise.reject('plain').catch(warnAndContinue('x'));
     expect(warn).toHaveBeenCalledWith('[Squire] x', { error: 'error' });
   });
