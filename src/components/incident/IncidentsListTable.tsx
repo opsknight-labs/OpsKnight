@@ -420,7 +420,7 @@ export default function IncidentsListTable({
   );
 
   // Real-time updates & newly incoming pulse tracking
-  const { recentIncidents, isConnected } = useRealtime();
+  const { recentIncidents, isConnected, connectionEpoch } = useRealtime();
   const [highlightedIncidentIds, setHighlightedIncidentIds] = useState<Set<string>>(new Set());
 
   // Keyboard navigation focus index & global G sequence coordination
@@ -532,6 +532,21 @@ export default function IncidentsListTable({
       el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }, [focusedIndex]);
+
+  // The stream only carries the most recently updated incidents, so anything that changed while
+  // the tab was hidden or the connection was down is missed. Every reconnect re-reads the list.
+  const seenConnectionEpochRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!connectionEpoch) return;
+    if (seenConnectionEpochRef.current === null) {
+      // The first connect matches the page the server just rendered.
+      seenConnectionEpochRef.current = connectionEpoch;
+      return;
+    }
+    if (seenConnectionEpochRef.current === connectionEpoch) return;
+    seenConnectionEpochRef.current = connectionEpoch;
+    router.refresh();
+  }, [connectionEpoch, router]);
 
   const totalItems = pagination?.totalItems ?? displayedIncidents.length;
   const showingFrom =
