@@ -1130,6 +1130,8 @@ model SlackIntegration {
   id            String             @id @default(cuid())
   workspaceId   String
   workspaceName String?
+  /// Enterprise Grid org id when installed org-wide or inside a Grid org; null for plain workspaces.
+  enterpriseId  String?
   botToken      String
   signingSecret String?
   installedBy   String?
@@ -1147,6 +1149,7 @@ model SlackIntegration {
 
   @@unique([workspaceId])
   @@index([workspaceId])
+  @@index([enterpriseId])
 }
 
 model SlackDestination {
@@ -3802,6 +3805,12 @@ model ChatOpsConfig {
   slackWarRoomPrivate     Boolean  @default(false)
   /// Hours to wait after resolve before archiving the war room; null archives at once (today's behaviour).
   warRoomArchiveDelayHours Int?
+  /// Minutes after an incident opens with no acknowledgement before a thread reply nudges its Slack card; null = off.
+  slackUnackedNudgeMinutes Int?
+  /// Minutes without a note or timeline update before a thread reply nudges the Slack card; null = off.
+  slackNoUpdateNudgeMinutes Int?
+  /// Emails invited to new Slack war rooms through Slack Connect (needs conversations.connect:write).
+  slackWarRoomExternalEmails String[] @default([])
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 

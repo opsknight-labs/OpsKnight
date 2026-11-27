@@ -39,6 +39,9 @@ type ChatOpsConfigView = {
   /** Optional: rows and callers from before private war rooms / delayed archive. */
   slackWarRoomPrivate?: boolean;
   warRoomArchiveDelayHours?: number | null;
+  slackUnackedNudgeMinutes?: number | null;
+  slackNoUpdateNudgeMinutes?: number | null;
+  slackWarRoomExternalEmails?: string[];
   defaultVideoBridge: string;
   customBridgeUrlTemplate: string | null;
   updatedAt: Date;
@@ -203,6 +206,15 @@ export default function ChatOpsSettingsPage({
   const [archiveDelay, setArchiveDelay] = useState(
     config?.warRoomArchiveDelayHours != null ? String(config.warRoomArchiveDelayHours) : ''
   );
+  const [unackedNudge, setUnackedNudge] = useState(
+    config?.slackUnackedNudgeMinutes != null ? String(config.slackUnackedNudgeMinutes) : ''
+  );
+  const [noUpdateNudge, setNoUpdateNudge] = useState(
+    config?.slackNoUpdateNudgeMinutes != null ? String(config.slackNoUpdateNudgeMinutes) : ''
+  );
+  const [externalEmails, setExternalEmails] = useState(
+    (config?.slackWarRoomExternalEmails ?? []).join(', ')
+  );
   const [selectedBridge, setSelectedBridge] = useState<string>(
     config?.defaultVideoBridge ?? 'JITSI'
   );
@@ -221,6 +233,13 @@ export default function ChatOpsSettingsPage({
     setArchiveDelay(
       config?.warRoomArchiveDelayHours != null ? String(config.warRoomArchiveDelayHours) : ''
     );
+    setUnackedNudge(
+      config?.slackUnackedNudgeMinutes != null ? String(config.slackUnackedNudgeMinutes) : ''
+    );
+    setNoUpdateNudge(
+      config?.slackNoUpdateNudgeMinutes != null ? String(config.slackNoUpdateNudgeMinutes) : ''
+    );
+    setExternalEmails((config?.slackWarRoomExternalEmails ?? []).join(', '));
     setSelectedBridge(config?.defaultVideoBridge || 'JITSI');
     setCustomUrl(config?.customBridgeUrlTemplate || '');
   }
@@ -253,6 +272,13 @@ export default function ChatOpsSettingsPage({
       slackPrivate !== (config.slackWarRoomPrivate ?? false) ||
       archiveDelay !==
         (config.warRoomArchiveDelayHours != null ? String(config.warRoomArchiveDelayHours) : '') ||
+      unackedNudge !==
+        (config.slackUnackedNudgeMinutes != null ? String(config.slackUnackedNudgeMinutes) : '') ||
+      noUpdateNudge !==
+        (config.slackNoUpdateNudgeMinutes != null
+          ? String(config.slackNoUpdateNudgeMinutes)
+          : '') ||
+      externalEmails !== (config.slackWarRoomExternalEmails ?? []).join(', ') ||
       selectedBridge !== config.defaultVideoBridge ||
       customUrl !== (config.customBridgeUrlTemplate || '')
     );
@@ -267,6 +293,9 @@ export default function ChatOpsSettingsPage({
     archiveOnResolve,
     slackPrivate,
     archiveDelay,
+    unackedNudge,
+    noUpdateNudge,
+    externalEmails,
     selectedBridge,
     customUrl,
   ]);
@@ -769,6 +798,76 @@ export default function ChatOpsSettingsPage({
               disabled={!isAdmin}
             />
             <input type="hidden" name="slackWarRoomPrivate" value={slackPrivate ? 'on' : 'off'} />
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3 pt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="slackUnackedNudgeMinutes" className="text-xs font-semibold">
+                Nudge when unacknowledged (minutes)
+              </Label>
+              <Input
+                id="slackUnackedNudgeMinutes"
+                name="slackUnackedNudgeMinutes"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={1440}
+                step={1}
+                placeholder="Off"
+                value={unackedNudge}
+                onChange={event => setUnackedNudge(event.target.value)}
+                disabled={!isAdmin}
+                aria-describedby="slackUnackedNudgeMinutes-help"
+                className="h-9 max-w-40 text-xs"
+              />
+              <p id="slackUnackedNudgeMinutes-help" className="text-2xs text-muted-foreground">
+                Reply on the Slack incident card while nobody has acknowledged it, repeating at this
+                interval up to 6 times. Empty or 0 is off.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="slackNoUpdateNudgeMinutes" className="text-xs font-semibold">
+                Nudge when there is no update (minutes)
+              </Label>
+              <Input
+                id="slackNoUpdateNudgeMinutes"
+                name="slackNoUpdateNudgeMinutes"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={1440}
+                step={1}
+                placeholder="Off"
+                value={noUpdateNudge}
+                onChange={event => setNoUpdateNudge(event.target.value)}
+                disabled={!isAdmin}
+                aria-describedby="slackNoUpdateNudgeMinutes-help"
+                className="h-9 max-w-40 text-xs"
+              />
+              <p id="slackNoUpdateNudgeMinutes-help" className="text-2xs text-muted-foreground">
+                Reply on the card when an open incident has no note or timeline update for this
+                long. Any update resets it. Empty or 0 is off.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="slackWarRoomExternalEmails" className="text-xs font-semibold">
+              Slack Connect invites (emails)
+            </Label>
+            <Input
+              id="slackWarRoomExternalEmails"
+              name="slackWarRoomExternalEmails"
+              type="text"
+              placeholder="vendor@example.com, partner@example.org"
+              value={externalEmails}
+              onChange={event => setExternalEmails(event.target.value)}
+              disabled={!isAdmin}
+              aria-describedby="slackWarRoomExternalEmails-help"
+              className="h-9 text-xs"
+            />
+            <p id="slackWarRoomExternalEmails-help" className="text-2xs text-muted-foreground">
+              Invite these external people to every new Slack war room (up to 20, comma separated).
+              Needs a paid Slack plan and the conversations.connect:write scope; skipped otherwise.
+            </p>
           </div>
           <div className="grid sm:grid-cols-2 gap-2 text-2xs text-muted-foreground bg-muted/20 p-3 rounded-lg border">
             <div>
