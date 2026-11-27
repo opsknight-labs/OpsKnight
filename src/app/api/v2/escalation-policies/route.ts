@@ -22,6 +22,7 @@ import {
   firstEscalationStepIssue,
   type ValidatedEscalationStep,
 } from '@/lib/escalation/policy-validation';
+import { assertResponderPolicySnapshotSafeForApi } from '@/lib/escalation/automation-snapshot';
 import { AppError } from '@/lib/errors';
 import type { Prisma } from '@prisma/client';
 import { withV2Observability } from '@/lib/api-v2/observability';
@@ -182,6 +183,8 @@ export const POST = withV2Observability(async function POST(req: NextRequest) {
           },
         });
       }
+
+      await assertResponderPolicySnapshotSafeForApi(tx, policy.id);
 
       const result = await tx.escalationPolicy.findUnique({
         where: { id: policy.id },

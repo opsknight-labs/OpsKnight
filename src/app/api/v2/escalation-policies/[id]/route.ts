@@ -22,6 +22,10 @@ import {
   matchReplacementSteps,
   remapOpenIncidentEscalationCursors,
 } from '@/lib/escalation/step-cursor';
+import {
+  assertResponderPolicySnapshotSafeForApi,
+  lockResponderPolicy,
+} from '@/lib/escalation/automation-snapshot';
 import { AppError } from '@/lib/errors';
 import { withV2Observability } from '@/lib/api-v2/observability';
 
@@ -122,6 +126,8 @@ export const PATCH = withV2Observability(async function PATCH(
       prisma.$transaction(async tx => {
         // MCP approval recheck inside the change's own transaction; a no-op for REST callers.
         await internalV2MutationGuard()?.(tx);
+        // Serialize with other edits so the size check below sees the complete definition.
+        await lockResponderPolicy(tx, id);
         await tx.escalationPolicy.update({
           where: { id, ...ifMatchWhere(expected) },
           data: {
@@ -178,6 +184,8 @@ export const PATCH = withV2Observability(async function PATCH(
             });
           }
         }
+
+        await assertResponderPolicySnapshotSafeForApi(tx, id);
 
         const result = await tx.escalationPolicy.findUnique({
           where: { id },

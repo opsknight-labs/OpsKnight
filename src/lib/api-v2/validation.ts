@@ -4,6 +4,7 @@ import { APP_ROLES, isApiScope } from '@/lib/authorization';
 import { INTEGRATION_TYPES } from '@/lib/integrations/catalog';
 import { isValidTimeZone } from '@/lib/timezone';
 import { MAX_ESCALATION_DELAY_MINUTES } from '@/lib/escalation/policy-validation';
+import { MAX_ESCALATION_STEPS } from '@/lib/escalation/automation-snapshot';
 
 const IanaTimeZoneSchema = z
   .string()
@@ -203,16 +204,22 @@ export const EscalationStepSchema = z.object({
   conditions: z.array(EscalationStepConditionSchema).optional(),
 });
 
+// Same cap as the UI and the responder snapshot; an empty list would leave the engine with NO_POLICY.
+const EscalationStepsSchema = z
+  .array(EscalationStepSchema)
+  .min(1, 'At least one escalation step is required')
+  .max(MAX_ESCALATION_STEPS, `A policy can have at most ${MAX_ESCALATION_STEPS} steps`);
+
 export const EscalationPolicyCreateV2Schema = z.object({
   name: z.string().trim().min(2).max(100),
   description: z.string().trim().max(1000).optional().nullable(),
-  steps: z.array(EscalationStepSchema).min(1, 'At least one escalation step is required'),
+  steps: EscalationStepsSchema,
 });
 
 export const EscalationPolicyUpdateV2Schema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
   description: z.string().trim().max(1000).optional().nullable(),
-  steps: z.array(EscalationStepSchema).optional(),
+  steps: EscalationStepsSchema.optional(),
 });
 
 export const IntegrationUpdateV2Schema = z
