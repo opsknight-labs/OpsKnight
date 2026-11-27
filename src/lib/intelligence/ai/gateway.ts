@@ -664,7 +664,8 @@ class GatewayPort implements LanguageModelPort {
     // without it (`lean`), so a small budget still answers; a top-up is never retried smaller.
     const cap = () => (structured ? this.structuredCap(request) : this.answerCap(request));
     if (!this.lean.has(request) && !extend) {
-      const full = await this.holdTokens(request, provider, input, cap());
+      // A probe: if only the lean hold below fits, the call still runs, so this refusal is not a rejection.
+      const full = await this.holdTokens(request, provider, input, cap(), undefined, true);
       if (full) return full;
       this.lean.add(request);
     }
@@ -676,7 +677,8 @@ class GatewayPort implements LanguageModelPort {
     provider: GatewayProvider,
     input: number,
     output: number,
-    extend?: AiReservation
+    extend?: AiReservation,
+    probe = false
   ): Promise<AiReservation | null> {
     const inputEstimate =
       input +
@@ -701,6 +703,7 @@ class GatewayPort implements LanguageModelPort {
         capability: request.context.capability,
         callSite: request.context.callSite,
         costMicros: costMicrosFor({ inputTokens: inputEstimate, outputTokens: output }, price),
+        ...(probe ? { probe } : {}),
       },
       extend
     );
@@ -944,6 +947,8 @@ class GatewayPort implements LanguageModelPort {
   }
 
   async generateStructured<T>(request: AiStructuredRequest<T>): Promise<AiStructuredResult<T>> {
+    // Lean means "sent without thinking room": the caller counts its own tokens from the cap it asked for.
+    if (request.thinkingRoom === false) this.lean.add(request);
     await this.admit(request);
     let attempts = 0;
     let invalidOutputs = 0;

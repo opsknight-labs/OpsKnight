@@ -15,6 +15,8 @@ export interface ReservationScope {
   costMicros?: number | null;
   /** Where the call comes from; proactive and background holds count against the background allowance. */
   callSite?: 'interactive' | 'proactive' | 'background' | null;
+  /** A first attempt that has a smaller retry behind it: a refusal here is not counted as a rejection. */
+  probe?: boolean;
 }
 
 /** What a settled call actually used, for dollars and the per-team/capability/model breakdown. */

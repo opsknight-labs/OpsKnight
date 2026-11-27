@@ -144,6 +144,11 @@ export interface AiStructuredRequest<T> extends AiGenerateRequest {
   schema: AiOutputSchema<T> & object;
   /** Short name for the object, shown to providers that support named outputs. */
   schemaName: string;
+  /**
+   * Off for a caller that counts its own tokens against an aggregate ceiling from the cap it asks for (the
+   * investigation planner and diagnoser): the gateway then sends exactly that cap, with no thinking room.
+   */
+  thinkingRoom?: boolean;
 }
 
 export interface AiStructuredResult<T> extends Omit<AiGenerateResult, 'text' | 'toolCalls'> {
