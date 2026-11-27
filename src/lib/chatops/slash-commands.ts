@@ -14,6 +14,7 @@ import { z } from 'zod/v3';
 import { normalizeError } from '@/lib/errors';
 import { enqueueChatOpsIntent } from '@/lib/chatops/intents';
 import { escapeSlack } from '@/lib/chatops/squire/render';
+import { replaceHandleMentions } from '@/lib/slack/mentions';
 import { UPDATE_SUBCOMMANDS, handleUpdateSlashCommand } from '@/lib/chatops/slash/update-commands';
 import { SLACK_COMMAND_USAGE_HINT } from '@/lib/slack/app-manifest';
 import {
@@ -189,6 +190,9 @@ export async function resolveOpsKnightUser(
 /** The `/incident` usage hint, for the Slack app manifest (A3 owns the manifest constant). */
 /** Same text as the manifest's `/incident` usage hint, so Slack's autocomplete and `help` agree. */
 export const SLACK_INCIDENT_COMMAND_USAGE_HINT = SLACK_COMMAND_USAGE_HINT;
+
+/** Subcommands whose arguments can name a person. */
+const MENTION_COMMANDS: ReadonlySet<string> = new Set(['role', 'page', 'assign', 'action']);
 
 /** Subcommands that work in any channel, not only in a war room. */
 export const ANYWHERE_SUBCOMMANDS: ReadonlySet<string> = new Set([
@@ -418,7 +422,9 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     : undefined;
 
   // Parse subcommand and preserve raw argument formatting (including newlines and tabs)
-  const { subcommand, args } = parseSlashCommandText(text);
+  const parsedText = parseSlashCommandText(text);
+  const { subcommand } = parsedText;
+  let { args } = parsedText;
 
   // Find incident linked to this channel
   const incident = await prisma.incident.findFirst({
@@ -523,6 +529,9 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
       ? await resolveOpsKnightUser(user_id, botToken, workspace)
       : null;
   if (mutatingCommands.has(subcommand) && !actor) return NOT_LINKED_REPLY;
+  // A typed @handle reaches us as plain text; turn it into the mention form these commands parse.
+  if (MENTION_COMMANDS.has(subcommand) && botToken)
+    args = await replaceHandleMentions(args, botToken);
   const incidentTitle = escapeSlack(incident.title ?? '');
 
   switch (subcommand) {
