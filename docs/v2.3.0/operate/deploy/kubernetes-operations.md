@@ -173,6 +173,8 @@ The manifests use:
 - a `Host: localhost` probe header;
 - 30 seconds termination grace for Web/Scheduler and 60 seconds for workers in split mode.
 
+On `SIGTERM` the process stops its job worker, scheduler and MCP activity-log flush, and does not exit until they have stopped (or after 55 seconds), even when Next has already closed its HTTP server. Size the grace period for the longest in-flight job you want to finish; whatever is still running when the platform sends `SIGKILL` falls back to lease expiry.
+
 Do not replace readiness with a process-only check. Readiness intentionally detects dependencies and role health. A failing readiness probe removes a pod from service; a failing liveness probe restarts it. Diagnose the underlying check before relaxing thresholds.
 
 ```sh

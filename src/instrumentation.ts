@@ -15,6 +15,8 @@ let stopIntegratedRunbookWorkerService: (() => Promise<void>) | null = null;
 let stopIngestionWorkerService: (() => Promise<void>) | null = null;
 let stopIntelligenceLaneService: (() => Promise<void>) | null = null;
 let shutdownPromise: Promise<void> | null = null;
+/** Longest the exit is held for the drain; the orchestrator's kill timer is the real bound. */
+const SHUTDOWN_DRAIN_MAX_WAIT_MS = 55_000;
 
 async function stopRuntimeServices(): Promise<void> {
   // Release realtime streams first: refuse new ones, then close open ones spread over a few
@@ -207,6 +209,9 @@ export async function register() {
       shutdownHandlersRegistered = true;
       process.once('SIGTERM', requestShutdown);
       process.once('SIGINT', requestShutdown);
+      // Next exits as soon as its HTTP server is closed; hold that exit until the drain is done.
+      const { deferExitWhileDraining } = await import('./lib/graceful-exit');
+      deferExitWhileDraining(process, () => shutdownPromise, SHUTDOWN_DRAIN_MAX_WAIT_MS);
     }
   }
 }
