@@ -150,6 +150,8 @@ const HOUR = 60 * MINUTE;
 const JOB_OVERDUE_GRACE_MS = 5 * MINUTE;
 /** Failures in the last hour that turn the jobs check from degraded to unhealthy. */
 export const JOB_FAILURES_UNHEALTHY_PER_HOUR = 5;
+/** Notifications due but unsent for 5+ minutes that turn the check from degraded to unhealthy. */
+export const NOTIFICATIONS_STUCK_UNHEALTHY = 10;
 
 /** One transient failure or a moment of queue latency must not flip the card; a pattern does. */
 export function backgroundJobsStatus(input: {
@@ -161,6 +163,17 @@ export function backgroundJobsStatus(input: {
     return 'unhealthy';
   }
   return input.failedLastHour > 0 || input.overdue > 0 ? 'degraded' : 'healthy';
+}
+
+export function notificationsStatus(input: {
+  incompleteProviders: number;
+  stuck: number;
+  failed24h: number;
+}): HealthLevel {
+  if (input.incompleteProviders > 0 || input.stuck >= NOTIFICATIONS_STUCK_UNHEALTHY) {
+    return 'unhealthy';
+  }
+  return input.stuck > 0 || input.failed24h > 0 ? 'degraded' : 'healthy';
 }
 
 function ageLabel(date: Date | null): string {
@@ -969,8 +982,10 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
           orderBy: { provider: 'asc' },
         }),
         prisma.notification.count({ where: { status: 'FAILED', createdAt: { gte: since } } }),
+        // Due for 5+ minutes and still unsent. A later nextAttemptAt is a deliberate hold
+        // (provider backoff, quiet hours), not a stuck queue.
         prisma.notification.count({
-          where: { status: 'PENDING', createdAt: { lt: new Date(now.getTime() - 5 * MINUTE) } },
+          where: { status: 'PENDING', nextAttemptAt: { lt: new Date(now.getTime() - 5 * MINUTE) } },
         }),
       ]);
       const enabled = providers.filter(provider => provider.enabled);
@@ -982,11 +997,14 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         id: 'notifications',
         label: 'Notification providers',
         category: 'alerting',
-        status:
-          incomplete.length > 0 || pending > 0 ? 'unhealthy' : failed > 0 ? 'degraded' : 'healthy',
+        status: notificationsStatus({
+          incompleteProviders: incomplete.length,
+          stuck: pending,
+          failed24h: failed,
+        }),
         summary: `${enabled.length} enabled provider(s); ${failed} failed delivery record(s) in 24 hours.`,
         details: [
-          `Pending longer than 5 minutes: ${pending}`,
+          `Due and unsent for more than 5 minutes: ${pending}`,
           `Enabled without configuration: ${incomplete.map(item => item.provider).join(', ') || 'none'}`,
         ],
         telemetry: {

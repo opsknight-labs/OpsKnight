@@ -73,8 +73,12 @@ database state, an external dependency, or only the replica serving the page.
 - **Paging configuration coverage** finds services without a policy or whose
   policy has no steps. It does not send a page.
 - **Notification providers** combines enabled provider configuration with
-  delivery records, including failures in 24 hours and work pending over five
-  minutes. Open Notification History for provider responses and retries.
+  delivery records, including failures in 24 hours and notifications due for
+  more than five minutes but still unsent. Notifications held to a later attempt
+  by provider backoff or quiet hours are not counted. Fewer than ten late
+  notifications degrade the check; ten or more, or an enabled provider without
+  configuration, mark it unhealthy. Open Notification History for provider
+  responses and retries.
 - **Inbound integrations** uses process-local adapter metrics. Those counters
   reset on restart and are not cluster-aggregated; durable delivery state and
   logs remain authoritative.
