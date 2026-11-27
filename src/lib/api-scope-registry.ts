@@ -381,7 +381,7 @@ export const API_SCOPE_REGISTRY: Record<ApiScope, ApiScopeDefinition> = {
     S.STATUS_PAGES_WRITE,
     'Status pages manage',
     'Status pages',
-    'Create status pages, configure supported sections and service components, post announcements and request durable publication retry. Subscriber contacts and revocation require separate explicit subscriber scopes; domain proof and asset upload remain unfinished.',
+    'Create status pages, configure supported sections and service components, post and end announcements and request durable publication retry. Subscriber contacts and revocation require separate explicit subscriber scopes; domain proof and asset upload remain unfinished.',
     { write: true, issuableBy: ADMINS }
   ),
   [S.SERVICE_OBJECTIVES_READ]: def(

@@ -3636,6 +3636,17 @@
     "contractSha256": "fbf3eac1782fd7bbdfc2a31dd340347b6a63c0ab7001f8f2017e6dfebe652a9a",
     "actions": ["status_page.manage"]
   },
+  "endStatusPageAnnouncement": {
+    "status": "APPROVAL_REQUIRED",
+    "risk": "R2",
+    "reason": "Frozen prepare, independent native review and atomic commit through the existing REST command; never generic.",
+    "tool": null,
+    "routeSha256": "ff0eb7c0f034c9c10a4c66f49edf4621b76daa17812c2fab32a5e4e88238f856",
+    "resourceFilter": "existing REST route authorization and scoped projection",
+    "evidence": "tests/integration/mcp-operation-approval.test.ts",
+    "contractSha256": "6d410d5b35322e05c88527ce6bc3bf1d4fbc126981ba3c8cdb5156c94706f3cc",
+    "actions": ["status_page.manage"]
+  },
   "getStatusPage": {
     "status": "CURATED",
     "risk": "R0",

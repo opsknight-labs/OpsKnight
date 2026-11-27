@@ -2146,6 +2146,24 @@ function buildBaseSpec(): Record<string, unknown> {
           },
         },
       },
+      '/status-pages/{id}/announcements/{announcementId}/end': {
+        post: {
+          tags: ['Status Pages'],
+          summary: 'End a status page announcement now',
+          description:
+            'Sets the announcement inactive so the status page stops showing it, and cancels subscriber notices that have not been sent. Ending an announcement that is already ended answers the same success. Requires the same permission as creating an announcement.',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'announcementId', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          responses: {
+            '200': { description: 'Announcement ended' },
+            '401': { $ref: '#/components/responses/ProblemError' },
+            '403': { $ref: '#/components/responses/ProblemError' },
+            '404': { $ref: '#/components/responses/ProblemError' },
+          },
+        },
+      },
       '/runbooks': {
         get: {
           tags: ['Runbooks'],

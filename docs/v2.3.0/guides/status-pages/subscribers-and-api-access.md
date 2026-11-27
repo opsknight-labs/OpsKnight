@@ -33,7 +33,7 @@ Open **Settings → Status Pages**, select the page, then use its announcements,
 
 1. Create announcements with type, schedule, message, and affected services; preview before publishing.
 
-   An announcement created through the API (`POST /api/v2/status-pages/{id}/announcements`) or an MCP assistant notifies subscribers when it is published, the same as one created in the console. Create it with `isActive: false` to hold it back without notifying. The API cannot yet end or cancel an announcement: set `endDate` when you create it, or end it from the page workspace.
+   An announcement created through the API (`POST /api/v2/status-pages/{id}/announcements`) or an MCP assistant notifies subscribers when it is published, the same as one created in the console. Create it with `isActive: false` to hold it back without notifying. End one now with `POST /api/v2/status-pages/{id}/announcements/{announcementId}/end` (`endStatusPageAnnouncement`, scope `status-pages:write`, administrators only, like creating one): the page stops showing it and subscriber notices that have not been sent are cancelled. Ending an announcement that is already ended answers the same success, and an unknown page or announcement is a `404`. An MCP assistant ends one through the same operation once a person approves it.
 2. Review verified active subscribers separately from unverified/unsubscribed records.
 3. Configure webhook endpoints and use the built-in test before relying on them.
 4. Create a page-scoped API token, copy it once to the approved secret manager, and record its owner/purpose.
@@ -74,7 +74,7 @@ An invalid or expired confirm or unsubscribe link shows the page's own "invalid 
 
 The verification link confirms only a pending subscription (or one that is already active). A subscriber suppressed after a complaint or repeated bounces stays suppressed when the original email's link is opened again.
 
-Administrator changes to the page's tokens, webhooks and announcements are recorded in the [audit log](../administration/audit-logs) with the acting administrator. Each record is written in the same transaction as the change. The actions are `status_page.api_token.created` and `status_page.api_token.revoked`; `status_page.webhook.created`, `.updated`, `.deleted` and `.tested`; and `status_page.announcement.created`, `.updated` and `.deleted`. The entries never contain the token, the webhook secret or the webhook URL.
+Administrator changes to the page's tokens, webhooks and announcements are recorded in the [audit log](../administration/audit-logs) with the acting administrator. Each record is written in the same transaction as the change. The actions are `status_page.api_token.created` and `status_page.api_token.revoked`; `status_page.webhook.created`, `.updated`, `.deleted` and `.tested`; and `status_page.announcement.created`, `.updated`, `.deleted` and `.ended`. The entries never contain the token, the webhook secret or the webhook URL.
 
 ## Verify the setup
 

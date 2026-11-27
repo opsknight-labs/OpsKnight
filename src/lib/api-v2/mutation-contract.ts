@@ -1127,6 +1127,9 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
   'POST /api/v2/status-pages/[id]/announcements': supported(
     'Announcements can notify subscribers.'
   ),
+  'POST /api/v2/status-pages/[id]/announcements/[announcementId]/end': supported(
+    'Ending sets the announcement inactive, so a repeat, with or without a key, answers the same success.'
+  ),
   'POST /api/v2/service-accounts': supported('Creation without secret material in the response.'),
   'DELETE /api/v2/service-accounts/[id]': natural('A repeat returns 404.'),
   'POST /api/v2/service-accounts/[id]/tokens': {

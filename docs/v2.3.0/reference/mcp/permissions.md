@@ -104,7 +104,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `services:write` | Change services (higher-risk changes wait for approval) | Services | Change | ✓ | ✓ |  |  |  | 1 | 1 | 0 | 23 |
 | `status-page-subscribers:read` | View status page subscribers | Status pages | View | ✓ |  |  |  |  | 0 | 1 | 0 | 0 |
 | `status-pages:read` | View status pages | Status pages | View | ✓ | ✓ | ✓ |  |  | 5 | 9 | 0 | 2 |
-| `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 11 |
+| `status-pages:write` | Change status pages (higher-risk changes wait for approval) | Status pages | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 12 |
 | `teams:read` | View teams | Teams and people | View | ✓ | ✓ | ✓ | ✓ | ✓ | 6 | 1 | 0 | 2 |
 | `teams:write` | Change teams (higher-risk changes wait for approval) | Teams and people | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 0 | 7 |
 | `users:read` | View people | Teams and people | View | ✓ | ✓ | ✓ |  |  | 3 | 0 | 0 | 0 |
@@ -146,10 +146,10 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | service-reviews | 3 | 1 | 1 | 1 |
 | services | 45 | 21 | 21 | 3 |
 | settings | 12 | 5 | 5 | 2 |
-| status-pages | 33 | 15 | 11 | 7 |
+| status-pages | 34 | 15 | 12 | 7 |
 | teams | 14 | 7 | 7 | 0 |
 | users | 13 | 4 | 0 | 9 |
-| **All** | 393 | 179 | 130 | 84 |
+| **All** | 394 | 179 | 131 | 84 |
 
 <details>
 <summary>Operations by area</summary>
@@ -619,6 +619,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `createStatusPage` | `operation_prepare`, then approval |
 | `createStatusPageAnnouncement` | `operation_prepare`, then approval |
 | `deleteStatusPageAsset` | `operation_prepare`, then approval |
+| `endStatusPageAnnouncement` | `operation_prepare`, then approval |
 | `getStatusPage` | `status_page_get` |
 | `getStatusPageAppearance` | `read_operation` (sensitive reads on) |
 | `getStatusPageAsset` | `read_operation` (sensitive reads on) |
