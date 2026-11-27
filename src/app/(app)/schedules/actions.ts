@@ -26,7 +26,13 @@ import {
   type ScheduleDependency,
 } from '@/lib/schedules/mutations';
 import { runSerializableTransaction } from '@/lib/db-utils';
-import { createScheduleLayer, updateScheduleLayer, deleteScheduleLayer, reorderScheduleLayers } from '@/lib/schedules/layer-commands';
+import {
+  createScheduleLayer,
+  updateScheduleLayer,
+  deleteScheduleLayer,
+  reorderScheduleLayers,
+  scheduleLayerUpdateSchema,
+} from '@/lib/schedules/layer-commands';
 
 type ScheduleFormState = ScheduleActionState;
 
@@ -215,6 +221,34 @@ export async function updateSchedule(
   }
 }
 
+/**
+ * The bounds the API enforces on layer values (whole hours, at most a year, unique days), so a form
+ * value like 1.5 hours is refused here instead of failing at the integer column.
+ */
+function checkLayerValues(values: {
+  name: string;
+  start: Date;
+  end: Date | null;
+  rotationLengthHours: number;
+  shiftLengthHours: number | null;
+  restrictions: { daysOfWeek?: number[]; startHour?: number; endHour?: number } | undefined;
+}) {
+  const parsed = scheduleLayerUpdateSchema.safeParse({
+    ...values,
+    start: values.start.toISOString(),
+    end: values.end?.toISOString() ?? null,
+    restrictions: values.restrictions ?? null,
+  });
+  if (parsed.success) return { error: undefined, values: parsed.data };
+  const issue = parsed.error.issues[0];
+  return {
+    error: scheduleValidationError(issue.message, [
+      { field: issue.path.join('.'), code: issue.code, message: issue.message },
+    ]),
+    values: undefined,
+  };
+}
+
 export async function createLayer(
   scheduleId: string,
   formData: FormData
@@ -306,14 +340,24 @@ export async function createLayer(
   if (endDate && endDate <= startDate) {
     return scheduleValidationError('End date must be after start date.');
   }
+  const checked = checkLayerValues({
+    name,
+    start: startDate,
+    end: endDate,
+    rotationLengthHours: rotationLength,
+    shiftLengthHours: shiftLength,
+    restrictions,
+  });
+  if (checked.error) return checked.error;
 
   try {
     await runSerializableTransaction(async tx => {
       const created = await createScheduleLayer(
         tx, scheduleId,
         {
-          name, start: startDate, end: endDate,
-          rotationLengthHours: rotationLength, shiftLengthHours: shiftLength,
+          name: checked.values.name, start: startDate, end: endDate,
+          rotationLengthHours: checked.values.rotationLengthHours,
+          shiftLengthHours: checked.values.shiftLengthHours,
           restrictions: restrictions ?? null,
         },
         responderIds
@@ -511,14 +555,24 @@ export async function updateLayer(
   if (endDate && endDate <= startDate) {
     return scheduleValidationError('End date must be after start date.');
   }
+  const checked = checkLayerValues({
+    name,
+    start: startDate,
+    end: endDate,
+    rotationLengthHours: rotationLength,
+    shiftLengthHours: shiftLength,
+    restrictions,
+  });
+  if (checked.error) return checked.error;
 
   try {
     await runSerializableTransaction(async tx => {
       await updateScheduleLayer(
         tx, layerMeta.scheduleId, layerId,
         {
-          name, start: startDate, end: endDate,
-          rotationLengthHours: rotationLength, shiftLengthHours: shiftLength,
+          name: checked.values.name, start: startDate, end: endDate,
+          rotationLengthHours: checked.values.rotationLengthHours,
+          shiftLengthHours: checked.values.shiftLengthHours,
           restrictions: restrictions ?? null,
         }
       );
