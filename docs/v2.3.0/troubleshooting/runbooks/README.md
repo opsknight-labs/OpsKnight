@@ -97,6 +97,11 @@ and cannot determine which should execute the write.
 **Cause**: The Agent lost contact or its lease expired after a write started.
 The write may or may not have executed.
 
+A result the Agent produced before the lease expired, or within 60 seconds
+after it, is still accepted while the attempt has not yet been marked
+`UNKNOWN`. A result produced later than that is refused as expired and the
+step becomes `UNKNOWN`.
+
 **Resolution**:
 
 1. **Inspect the actual target** before any retry — the write may have
