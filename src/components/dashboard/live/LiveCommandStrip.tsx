@@ -177,6 +177,11 @@ export function buildInsight(summary: LiveSummary | null): { text: string; tone:
     };
   if (summary.slaAtRisk > 0)
     return { text: `${summary.slaAtRisk} incidents at SLA risk`, tone: 'amber' };
+  if (summary.slaBreached > 0)
+    return {
+      text: `${summary.slaBreached} active incident${summary.slaBreached === 1 ? ' has' : 's have'} breached SLA`,
+      tone: 'rose',
+    };
   if (summary.unassigned > 0)
     return { text: `${summary.unassigned} active incidents are unassigned`, tone: 'amber' };
   if (summary.active > 0)

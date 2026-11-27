@@ -145,6 +145,9 @@ The wallboard is read-only and has no navigation chrome. It:
   in a maximized window);
 - cycles through views every 20 seconds (`Space` or **Auto-cycle** pauses;
   `?cycle=off` disables it);
+- leads with one headline: critical incidents, SLA at risk, SLA breached,
+  unassigned incidents, then "all owned and within SLA". The last form appears
+  only when no active incident is critical, at risk, breached, or unassigned;
 - scales text with `+` and `-` or `?scale=` for distant screens;
 - keeps the screen awake where supported, hides an idle cursor, shifts content
   slightly every few minutes to limit burn-in, and reloads itself every
