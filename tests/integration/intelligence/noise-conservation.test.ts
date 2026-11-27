@@ -134,7 +134,7 @@ describe('alert conservation under random noise-control configurations', () => {
       const service = services[index]!;
       const key = pick(KEYS);
       const slot = `${service.id}:${key}`;
-      const send = (action: EventPayload['event_action'], severity: string) =>
+      const send = (action: EventPayload['event_action'], severity: (typeof SEVERITIES)[number]) =>
         processEvent(
           {
             event_action: action,
