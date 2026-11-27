@@ -15,6 +15,7 @@ const db = vi.hoisted(() => {
     incidentWarRoom: { findUnique: vi.fn() },
     chatIdentityLink: { findMany: vi.fn(), findFirst: vi.fn() },
     user: { findMany: vi.fn() },
+    chatOpsConfig: { findUnique: vi.fn() },
     $transaction: vi.fn(async (cb: (t: typeof tx) => unknown) => cb(tx)),
   };
 });
@@ -30,6 +31,7 @@ import {
 describe('Slack war-room participants resolve by email when no identity link exists', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    db.chatOpsConfig.findUnique.mockResolvedValue(null);
     db.chatIdentityLink.findMany.mockResolvedValue([]);
     db.chatIdentityLink.findFirst.mockResolvedValue(null);
     db.user.findMany.mockResolvedValue([{ id: 'u1', email: 'dev@example.com' }]);

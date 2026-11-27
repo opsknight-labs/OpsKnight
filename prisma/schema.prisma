@@ -1157,6 +1157,9 @@ model SlackDestination {
   channelName   String?
   isPrivate     Boolean  @default(false)
   enabled       Boolean  @default(true)
+  /// Post new cards only for these incident priorities / urgencies; empty matches all. Existing cards always edit.
+  priorities    String[] @default([])
+  urgencies     String[] @default([])
   integrationId String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -2046,6 +2049,22 @@ model OnCallSchedule {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   escalationRules EscalationRule[]
+  slackSync       SlackOnCallSync?
+}
+
+/// Keeps a Slack user group's members equal to who is on call for a schedule (needs usergroups:write).
+model SlackOnCallSync {
+  id           String         @id @default(cuid())
+  scheduleId   String         @unique
+  usergroupId  String
+  enabled      Boolean        @default(true)
+  lastSyncedAt DateTime?
+  lastError    String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  schedule     OnCallSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([enabled])
 }
 
 model OnCallLayer {
@@ -3800,6 +3819,8 @@ model ChatOpsConfig {
   customBridgeUrlTemplate String?
   /// New Slack war-room channels are private (needs groups:write). Never tied to status-page visibility.
   slackWarRoomPrivate     Boolean  @default(false)
+  /// Opt-in: add whoever is currently on call for the incident's escalation schedules to the war room.
+  warRoomInviteOnCall     Boolean  @default(false)
   /// Hours to wait after resolve before archiving the war room; null archives at once (today's behaviour).
   warRoomArchiveDelayHours Int?
   createdAt               DateTime @default(now())

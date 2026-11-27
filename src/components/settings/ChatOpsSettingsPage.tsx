@@ -38,6 +38,7 @@ type ChatOpsConfigView = {
   archiveOnResolve: boolean;
   /** Optional: rows and callers from before private war rooms / delayed archive. */
   slackWarRoomPrivate?: boolean;
+  warRoomInviteOnCall?: boolean;
   warRoomArchiveDelayHours?: number | null;
   defaultVideoBridge: string;
   customBridgeUrlTemplate: string | null;
@@ -200,6 +201,7 @@ export default function ChatOpsSettingsPage({
   );
   const [archiveOnResolve, setArchiveOnResolve] = useState(config?.archiveOnResolve ?? true);
   const [slackPrivate, setSlackPrivate] = useState(config?.slackWarRoomPrivate ?? false);
+  const [inviteOnCall, setInviteOnCall] = useState(config?.warRoomInviteOnCall ?? false);
   const [archiveDelay, setArchiveDelay] = useState(
     config?.warRoomArchiveDelayHours != null ? String(config.warRoomArchiveDelayHours) : ''
   );
@@ -218,6 +220,7 @@ export default function ChatOpsSettingsPage({
     setSelectedPriorities(config?.autoCreateOnPriority || ['P1', 'P2']);
     setArchiveOnResolve(config?.archiveOnResolve ?? true);
     setSlackPrivate(config?.slackWarRoomPrivate ?? false);
+    setInviteOnCall(config?.warRoomInviteOnCall ?? false);
     setArchiveDelay(
       config?.warRoomArchiveDelayHours != null ? String(config.warRoomArchiveDelayHours) : ''
     );
@@ -251,6 +254,7 @@ export default function ChatOpsSettingsPage({
       !prioritiesMatch ||
       archiveOnResolve !== config.archiveOnResolve ||
       slackPrivate !== (config.slackWarRoomPrivate ?? false) ||
+      inviteOnCall !== (config.warRoomInviteOnCall ?? false) ||
       archiveDelay !==
         (config.warRoomArchiveDelayHours != null ? String(config.warRoomArchiveDelayHours) : '') ||
       selectedBridge !== config.defaultVideoBridge ||
@@ -258,6 +262,7 @@ export default function ChatOpsSettingsPage({
     );
   }, [
     config,
+    inviteOnCall,
     enabled,
     channelPrefix,
     selectedDefaultOption,
@@ -769,6 +774,28 @@ export default function ChatOpsSettingsPage({
               disabled={!isAdmin}
             />
             <input type="hidden" name="slackWarRoomPrivate" value={slackPrivate ? 'on' : 'off'} />
+          </div>
+          <div className="flex items-center justify-between gap-4 pt-2">
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="warRoomInviteOnCall"
+                className="text-xs font-semibold text-foreground cursor-pointer"
+              >
+                Invite the on-call responder
+              </Label>
+              <p id="warRoomInviteOnCall-help" className="text-2xs text-muted-foreground">
+                Add whoever is currently on call for the service&apos;s escalation schedules to new
+                war rooms.
+              </p>
+            </div>
+            <Switch
+              id="warRoomInviteOnCall"
+              aria-describedby="warRoomInviteOnCall-help"
+              checked={inviteOnCall}
+              onCheckedChange={setInviteOnCall}
+              disabled={!isAdmin}
+            />
+            <input type="hidden" name="warRoomInviteOnCall" value={inviteOnCall ? 'on' : 'off'} />
           </div>
           <div className="grid sm:grid-cols-2 gap-2 text-2xs text-muted-foreground bg-muted/20 p-3 rounded-lg border">
             <div>

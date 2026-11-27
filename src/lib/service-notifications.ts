@@ -6,6 +6,7 @@ import { enqueueCentralNotification } from './notification-control-plane';
 import { getBaseUrl } from './env-validation';
 import type { SlackCardEvent } from './slack/incident-card';
 import type { SlackLiveCardRequest } from './slack/live-card';
+import { slackDestinationMatches } from './slack/destination-conditions';
 
 export type ServiceNotificationEventType = 'triggered' | 'acknowledged' | 'resolved' | 'updated';
 
@@ -217,22 +218,36 @@ export async function sendServiceNotifications(
                   id: string;
                   channelId: string;
                   channelName: string | null;
+                  priorities?: string[];
+                  urgencies?: string[];
                 }>
               >;
             };
           }
         ).slackDestination?.findMany({
           where: { serviceId: service.id, enabled: true },
-          select: { id: true, channelId: true, channelName: true },
+          select: {
+            id: true,
+            channelId: true,
+            channelName: true,
+            priorities: true,
+            urgencies: true,
+          },
           orderBy: { createdAt: 'asc' },
         })) ?? [];
 
-      const rawChannels: Array<{ id: string; address: string; name: string | null }> =
+      const rawChannels: Array<{
+        id: string;
+        address: string;
+        name: string | null;
+        matches?: boolean;
+      }> =
         slackDestinations.length > 0
           ? slackDestinations.map(d => ({
               id: d.id,
               address: (d.channelId || d.channelName || '').trim(),
               name: d.channelName?.trim() || null,
+              matches: slackDestinationMatches(d, incident),
             }))
           : service.slackChannel?.trim()
             ? [
@@ -246,7 +261,7 @@ export async function sendServiceNotifications(
 
       // Filter empty addresses and deduplicate by address
       const seenAddresses = new Set<string>();
-      const activeChannels: Array<{ id: string; address: string; name: string | null }> = [];
+      const activeChannels: typeof rawChannels = [];
       for (const target of rawChannels) {
         const normalized = target.address.toLowerCase();
         if (normalized && !seenAddresses.has(normalized)) {
@@ -262,6 +277,9 @@ export async function sendServiceNotifications(
           activeChannels.map(async target => {
             const channelAddress = target.address;
             if (!channelAddress) return;
+            // A destination whose conditions no longer match still edits a card it already posted.
+            const conditionEditOnly = target.matches === false;
+            if (conditionEditOnly && !(await liveCardExists())) return;
             const channelDeliveryKey = `${deliveryKey}:${target.id}${
               eventType === 'updated' && options.subEvent ? `:${options.subEvent}` : ''
             }${notifyEnabled ? '' : ':edit'}`;
@@ -269,7 +287,7 @@ export async function sendServiceNotifications(
               event: slackEvent,
               eventKey: channelDeliveryKey,
               reply: slackReply,
-              ...(slackEditOnly ? { editOnly: true } : {}),
+              ...(slackEditOnly || conditionEditOnly ? { editOnly: true } : {}),
             };
             const result = await persistIntent(async () => {
               await enqueueCentralNotification(
