@@ -153,7 +153,7 @@ export const SERVICE_OBJECTIVE_SCHEMAS: Record<string, Schema> = {
     sampleCount: nullableString,
     target: { type: 'number' },
     breached: { type: ['boolean', 'null'] },
-    dataState: { type: 'string', enum: ['AVAILABLE', 'NO_DATA', 'UNAVAILABLE'] },
+    dataState: { type: 'string', enum: ['AVAILABLE', 'NO_DATA', 'UNAVAILABLE', 'PARTIAL'] },
     definitionVersion: integer,
     createdAt: date,
   }),
