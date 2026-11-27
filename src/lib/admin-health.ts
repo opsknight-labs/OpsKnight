@@ -146,6 +146,23 @@ type SlaPerformanceSummaryRow = {
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
+/** Jobs this long past their schedule are late; ordinary queue latency is not. */
+const JOB_OVERDUE_GRACE_MS = 5 * MINUTE;
+/** Failures in the last hour that turn the jobs check from degraded to unhealthy. */
+export const JOB_FAILURES_UNHEALTHY_PER_HOUR = 5;
+
+/** One transient failure or a moment of queue latency must not flip the card; a pattern does. */
+export function backgroundJobsStatus(input: {
+  staleProcessing: number;
+  failedLastHour: number;
+  overdue: number;
+}): HealthLevel {
+  if (input.staleProcessing > 0 || input.failedLastHour >= JOB_FAILURES_UNHEALTHY_PER_HOUR) {
+    return 'unhealthy';
+  }
+  return input.failedLastHour > 0 || input.overdue > 0 ? 'degraded' : 'healthy';
+}
+
 function ageLabel(date: Date | null): string {
   if (!date) return 'never';
   const ageMs = Math.max(0, Date.now() - date.getTime());
@@ -648,11 +665,19 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
 
     try {
       const since24h = new Date(now.getTime() - 24 * HOUR);
-      const [pending, processing, failed, overdue, stale] = await Promise.all([
+      const [pending, processing, failed, failedLastHour, overdue, stale] = await Promise.all([
         prisma.backgroundJob.count({ where: { status: 'PENDING' } }),
         prisma.backgroundJob.count({ where: { status: 'PROCESSING' } }),
         prisma.backgroundJob.count({ where: { status: 'FAILED', updatedAt: { gte: since24h } } }),
-        prisma.backgroundJob.count({ where: { status: 'PENDING', scheduledAt: { lt: now } } }),
+        prisma.backgroundJob.count({
+          where: { status: 'FAILED', updatedAt: { gte: new Date(now.getTime() - HOUR) } },
+        }),
+        prisma.backgroundJob.count({
+          where: {
+            status: 'PENDING',
+            scheduledAt: { lt: new Date(now.getTime() - JOB_OVERDUE_GRACE_MS) },
+          },
+        }),
         prisma.backgroundJob.count({
           where: { status: 'PROCESSING', startedAt: { lt: new Date(now.getTime() - 10 * MINUTE) } },
         }),
@@ -661,15 +686,24 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         id: 'jobs',
         label: 'Background jobs',
         category: 'workers',
-        status: stale > 0 || failed > 0 ? 'unhealthy' : overdue > 0 ? 'degraded' : 'healthy',
+        status: backgroundJobsStatus({
+          staleProcessing: stale,
+          failedLastHour,
+          overdue,
+        }),
         summary: `${pending} pending, ${processing} processing, ${failed} failed in 24 hours.`,
-        details: [`Overdue pending: ${overdue}`, `Processing longer than 10 minutes: ${stale}`],
+        details: [
+          `Failed in the last hour: ${failedLastHour}`,
+          `Overdue pending (more than 5 minutes late): ${overdue}`,
+          `Processing longer than 10 minutes: ${stale}`,
+        ],
         telemetry: {
           queueDistribution: { pending, processing, failed, overdue, stale },
           rawPayload: {
             pendingJobs: pending,
             processingJobs: processing,
             failedJobs: failed,
+            failedJobsLastHour: failedLastHour,
             overduePending: overdue,
             staleProcessing: stale,
           },
