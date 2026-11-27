@@ -22,6 +22,10 @@ verification:
     - src/lib/status-pages/business-service-overrides.ts
     - src/lib/status-pages/snapshot.ts
     - src/components/status-page/StatusPageAnnouncementManager.tsx
+    - docs/v2.3.0/assets/status-page-business-groups.png
+    - docs/v2.3.0/assets/status-page-business-expanded.png
+    - docs/v2.3.0/assets/status-page-business-mobile.png
+    - docs/v2.3.0/assets/status-page-business-settings.png
 ---
 
 # Status page layouts
@@ -76,6 +80,24 @@ this includes incidents on any of its services and incidents that name the busin
    republishes, like any change that shows less.
 
 Changing only the layout never publishes a service that is not already on the page.
+
+![Status page settings: the Business services, expandable layout and the business services on the page](/docs/v2.3.0/assets/status-page-business-settings.png)
+
+## What visitors see
+
+Each business service is one card with its worst status, merged 90-day history and uptime. A group
+with an affected service opens by itself, as **Alert Ingestion** does here:
+
+![A business service group open on the public status page, one of its three services in a major outage](/docs/v2.3.0/assets/status-page-business-groups.png)
+
+A group with nothing wrong stays closed. The **Show services** bar under its history opens it and
+turns into **Hide services**:
+
+![An operational group opened from the Show services bar](/docs/v2.3.0/assets/status-page-business-expanded.png)
+
+On a phone the cards stack and the **Subscribe to updates** button stays pinned to the bottom:
+
+![The business services section on a 375 px wide screen](/docs/v2.3.0/assets/status-page-business-mobile.png)
 
 ## Rename, hide and order business services
 

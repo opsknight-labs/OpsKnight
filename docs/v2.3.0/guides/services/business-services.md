@@ -33,6 +33,11 @@ verification:
     - src/components/service/BusinessServiceForm.tsx
     - src/components/incident/detail/IncidentImpacts.tsx
     - src/app/api/v2/business-services/route.ts
+    - docs/v2.3.0/assets/business-services-catalog.png
+    - docs/v2.3.0/assets/business-service-overview.png
+    - docs/v2.3.0/assets/business-service-members.png
+    - docs/v2.3.0/assets/business-service-status-pages.png
+    - docs/v2.3.0/assets/business-service-form.png
 ---
 
 # Business services
@@ -46,10 +51,29 @@ too; [Business service health](../../concepts/business-service-health) explains 
 Nothing changes until you create one. Technical services, alerts and paging behave exactly as
 before.
 
+## An example: how OpsKnight describes itself
+
+The public OpsKnight status page groups the product into four business services. Each one is what
+a customer would say they depend on, and each is built from the technical services that deliver it.
+
+| Business service          | Tier   | Error budget target | Technical services                                                                                               |
+| ------------------------- | ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Alert Ingestion           | Tier 0 | 99.95%              | US-East Ingestion Gateway (Events API v2), EU-West Edge Ingress & Webhooks, AP-South Ingestion & Routing Cluster |
+| Incident Response         | Tier 0 | 99.9%               | Incident Command & War Rooms, Paging & Multi-Channel Dispatcher                                                  |
+| Web & Mobile Console      | Tier 1 | 99.9%               | OpsKnight Web & Mobile Console                                                                                   |
+| Analytics & SLA Reporting | Tier 2 | 99.5%               | Real-Time SLA & Analytics Engine                                                                                 |
+
+All four are owned by the Platform team. When the AP-South cluster has a high-urgency incident,
+**Alert Ingestion** becomes a major outage ("1 of 3 services affected") while **Incident
+Response** stays operational, because none of its services are involved. That is the point of the
+grouping: one row per thing customers care about, with the technical detail one click away.
+
 ## Browse the catalog
 
 Open **Services** and select **Business services**, or press <kbd>⌘K</kbd> and type "business
 services". Everyone who can see services can open it, including stakeholders.
+
+![The business service catalog: health by tier, filters and one row per business service](/docs/v2.3.0/assets/business-services-catalog.png)
 
 - The header counts business services, how many are **impacted now** (degraded or worse) and how
   many sit in each tier. Select a count to filter by it.
@@ -73,6 +97,8 @@ business services, and can **Mark reviewed today**. Select **Preview** to see wh
 for each one, then **Apply to N**. Up to 100 business services change at a time.
 
 ## Read a business service overview
+
+![A business service overview: health, owner, on-call, error budget, then incidents and 30-day figures](/docs/v2.3.0/assets/business-service-overview.png)
 
 Select a business service to open its overview. The header shows its health and since when, its
 tier, and four figures: **Owner**, **On call now**, **Error budget** and **Open incidents**. The
@@ -120,6 +146,19 @@ Responders and Admins can create and edit business services.
    technical service can belong to several business services. You can only add services you can
    see; members you cannot see stay when you save.
 5. Optionally pick **followers** (see below), then select **Create business service**.
+
+![The business service form: name, description, tier, owner team and technical services](/docs/v2.3.0/assets/business-service-form.png)
+
+The **Members** tab then lists each technical service with its current status and whether it
+**drives health**. A critical service can take the business service down; a non-critical one can
+make it degraded at most.
+
+![The Members tab: each technical service with its status and how much it drives health](/docs/v2.3.0/assets/business-service-members.png)
+
+The **Status pages** tab shows where the business service is published and lets you open that
+page's layout.
+
+![The Status pages tab of a business service](/docs/v2.3.0/assets/business-service-status-pages.png)
 
 The form also has **Contact channel** (see [Status changes in Slack and
 Teams](#status-changes-in-slack-and-teams)) and **Publish status page updates automatically** (see
