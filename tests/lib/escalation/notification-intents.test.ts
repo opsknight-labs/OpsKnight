@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getUserNotificationChannels: vi.fn(),
@@ -102,6 +102,76 @@ describe('central escalation notification intents', () => {
       expect.objectContaining({ trafficClass: 'CRITICAL', channel: 'SMS' }),
       expect.anything()
     );
+  });
+
+  describe('quiet hours', () => {
+    const lowIncident = { ...input.incident, urgency: 'LOW' as const };
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-04-01T12:00:00.000Z'));
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        status: 'ACTIVE',
+        email: 'responder@example.com',
+        phoneNumber: '+15550100',
+        timeZone: 'UTC',
+        quietHoursEnabled: true,
+        quietHoursStartMinutes: 0,
+        quietHoursEndMinutes: 1_439,
+        quietHoursWeekendAllDay: false,
+      } as never);
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it('leaves a SKIPPED record, with a reason, for a channel held back by quiet hours', async () => {
+      mocks.getUserNotificationChannels.mockResolvedValue(['SMS', 'EMAIL']);
+      const plan = await planEscalationNotificationIntents({
+        ...input,
+        incident: lowIncident,
+        stepChannels: undefined,
+      });
+      expect(
+        plan.intents.map(intent => [intent.channel, Boolean(intent.suppressedReason)])
+      ).toEqual([
+        ['SMS', true],
+        ['EMAIL', false],
+      ]);
+      expect(plan.unreachableUserIds).toEqual([]);
+
+      mocks.createCentralNotificationIntent.mockImplementation(async intent => ({
+        id: `stored-${intent.channel}`,
+        created: true,
+        ...(intent.suppressedReason ? { skipped: true } : {}),
+      }));
+      await materializeEscalationNotificationIntents({} as never, plan);
+      expect(mocks.createCentralNotificationIntent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channel: 'SMS',
+          eventKey: `${input.eventKey}:suppressed`,
+          suppressedReason: expect.stringContaining('quiet hours'),
+        }),
+        expect.anything()
+      );
+      expect(mocks.createCentralNotificationIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ channel: 'EMAIL', eventKey: input.eventKey }),
+        expect.anything()
+      );
+      await expect(deliverEscalationNotificationIntents(plan)).resolves.toEqual([
+        { userId: 'user-1', channel: 'SMS', outcome: 'SKIPPED' },
+        { userId: 'user-1', channel: 'EMAIL', outcome: 'DELIVERED' },
+      ]);
+    });
+
+    it('still reports the responder unreachable when quiet hours hold back every channel', async () => {
+      const plan = await planEscalationNotificationIntents({ ...input, incident: lowIncident });
+      expect(plan.intents).toHaveLength(1);
+      expect(plan.intents[0].suppressedReason).toBeTruthy();
+      expect(plan.unreachableUserIds).toEqual(['user-1']);
+    });
+
+    it('records nothing for a higher-urgency incident', async () => {
+      const plan = await planEscalationNotificationIntents(input);
+      expect(plan.intents.some(intent => intent.suppressedReason)).toBe(false);
+    });
   });
 
   it('delivers by the central row id and leaves failures queued', async () => {

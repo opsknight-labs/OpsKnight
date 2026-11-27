@@ -20,7 +20,7 @@ import { createInAppNotifications } from '../in-app-notifications';
 import { buildNotificationEnvelope, encodeNotificationEnvelope } from '../notification-payload';
 import { notificationIntentId } from '../notification-identity';
 import { NOTIFICATION_CHANNELS, type NotificationDeliveryChannel } from '../notification-delivery';
-import { filterChannelsForQuietHours } from '../quiet-hours';
+import { filterChannelsForQuietHours, QUIET_HOURS_SUPPRESSION_REASON } from '../quiet-hours';
 import { getUserNotificationChannels } from '../user-notifications';
 import { PAGE_NOTIFICATION_TITLE } from '../notification-titles';
 
@@ -55,6 +55,8 @@ export interface EscalationPageIntent {
   providerKey?: string;
   /** The recipient opted in to bundling and the incident is low urgency. */
   bundle?: boolean;
+  /** Stored as a SKIPPED record with this reason and never dispatched (quiet hours). */
+  suppressedReason?: string;
 }
 
 export interface EscalationNotificationPlan {
@@ -221,6 +223,29 @@ export async function planEscalationNotificationIntents(input: {
     }
 
     const quietHours = filterChannelsForQuietHours(channels, incident.urgency, recipient);
+    // Leave a SKIPPED record for each channel quiet hours held back, so history says why.
+    for (const channel of channels.filter(channel => quietHours.blockedChannels.has(channel))) {
+      const recipientAddress = recipientAddressFor(channel, {
+        userId,
+        email: recipient.email,
+        phoneNumber: recipient.phoneNumber,
+      });
+      if (!PERSONAL_CHANNELS.includes(channel) || !recipientAddress) continue;
+      plan.intents.push({
+        notificationId: notificationIntentId({
+          eventKey: `${input.eventKey}:suppressed`,
+          eventType: 'triggered',
+          eventAt: incident.createdAt,
+          userId,
+          channel,
+          triggerGeneration: input.generation,
+        }),
+        userId,
+        channel,
+        recipientAddress,
+        suppressedReason: QUIET_HOURS_SUPPRESSION_REASON,
+      });
+    }
     channels = quietHours.channels.filter(channel => PERSONAL_CHANNELS.includes(channel));
 
     if (channels.length === 0) {
@@ -258,10 +283,11 @@ export async function planEscalationNotificationIntents(input: {
     }
   }
 
-  if (plan.controlPlane && plan.intents.length > 0) {
+  const deliverable = plan.intents.filter(intent => !intent.suppressedReason);
+  if (plan.controlPlane && deliverable.length > 0) {
     const { pinNotificationProviderKeys } = await import('../notification-control-plane');
-    const pinned = await pinNotificationProviderKeys(plan.intents.map(intent => intent.channel));
-    for (const intent of plan.intents) {
+    const pinned = await pinNotificationProviderKeys(deliverable.map(intent => intent.channel));
+    for (const intent of deliverable) {
       intent.providerKey = pinned.get(intent.channel);
     }
   }
@@ -312,7 +338,9 @@ export async function materializeEscalationNotificationIntents(
         templateKey: 'incident-triggered',
         sourceType: 'INCIDENT',
         sourceId: plan.incidentId,
-        eventKey: plan.eventKey,
+        // A suppressed record has its own key, so it can never block a real page.
+        eventKey: intent.suppressedReason ? `${plan.eventKey}:suppressed` : plan.eventKey,
+        suppressedReason: intent.suppressedReason,
         displayMessage: 'Incident notification',
         trafficClass: 'CRITICAL',
         // A bundled page is low urgency by construction, and the noise controller only bundles below

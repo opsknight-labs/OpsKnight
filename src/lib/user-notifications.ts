@@ -17,7 +17,7 @@ import { isChannelAvailable } from './notification-providers';
 import { createInAppNotifications } from './in-app-notifications';
 import { logger } from './logger';
 import { ASSIGNED_NOTIFICATION_TITLE, PAGE_NOTIFICATION_TITLE } from './notification-titles';
-import { filterChannelsForQuietHours } from './quiet-hours';
+import { filterChannelsForQuietHours, QUIET_HOURS_SUPPRESSION_REASON } from './quiet-hours';
 import type {
   NotificationDeliveryOutcome,
   NotificationDeliveryResult,
@@ -227,6 +227,20 @@ export async function getUserNotificationChannels(
   return channels;
 }
 
+/** Leaves a SKIPPED notification for each channel quiet hours held back, so history says why. */
+async function recordQuietHoursSuppressions(
+  held: NotificationChannel[],
+  send: (channel: NotificationChannel, suppressedReason: string) => Promise<unknown>
+) {
+  await Promise.all(
+    held.map(channel =>
+      send(channel, QUIET_HOURS_SUPPRESSION_REASON).catch(error =>
+        logger.warn('user_notifications.quiet_hours_record_failed', { channel, error })
+      )
+    )
+  );
+}
+
 /**
  * Direct/escalation notification. All selected user-enabled channels are
  * independent intents; success on one never suppresses another.
@@ -332,6 +346,11 @@ export async function sendUserNotification(
   }
 
   const quietHoursResult = filterChannelsForQuietHours(channels, incident.urgency, recipient);
+  await recordQuietHoursSuppressions(
+    channels.filter(channel => quietHoursResult.blockedChannels.has(channel)),
+    (channel, reason) =>
+      sendNotification(incidentId, userId, channel, message, undefined, eventType, eventKey, reason)
+  );
   channels = quietHoursResult.channels;
 
   if (channels.length === 0 && quietHoursResult.blockedChannels.size > 0) {
@@ -631,6 +650,20 @@ export async function sendIncidentNotifications(
       }
 
       const quietHoursResult = filterChannelsForQuietHours(channels, incidentRecord.urgency, user);
+      await recordQuietHoursSuppressions(
+        channels.filter(channel => quietHoursResult.blockedChannels.has(channel)),
+        (channel, reason) =>
+          sendNotification(
+            incidentId,
+            userId,
+            channel,
+            eventMessage,
+            notificationIncident,
+            eventType,
+            undefined,
+            reason
+          )
+      );
       if (quietHoursResult.channels.length === 0 && quietHoursResult.blockedChannels.size > 0) {
         return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
       }

@@ -284,6 +284,8 @@ export type CentralNotificationInput = {
   bundle?: boolean;
   /** Escalation step that sent this page, stored for step analytics. */
   escalationStepIndex?: number;
+  /** Record the page as SKIPPED for this reason (for example quiet hours) instead of delivering it. */
+  suppressedReason?: string;
 };
 
 const centralNotificationInputSchema = z
@@ -330,6 +332,7 @@ const centralNotificationInputSchema = z
     rollUpParentId: z.string().max(191).optional(),
     bundle: z.boolean().optional(),
     escalationStepIndex: z.number().int().min(0).max(1_000).optional(),
+    suppressedReason: z.string().max(500).optional(),
   })
   .strict();
 
@@ -629,19 +632,21 @@ export async function createCentralNotificationIntent(
     9
   );
   const id = intentId(deliveryKey);
-  const noiseDecision = unavailableEndpointStatus
-    ? ({ action: 'DELIVER' } as const)
-    : await notificationNoiseDecision(store, {
-        recipientId: input.recipientId || recipientHash,
-        sourceType: input.sourceType,
-        sourceId: input.sourceId,
-        eventType: input.templateKey,
-        trafficClass,
-        priority,
-        rollUpParentId: input.rollUpParentId,
-        bundle: input.bundle,
-        channel: input.channel,
-      });
+  const suppressedReason = input.suppressedReason;
+  const noiseDecision =
+    unavailableEndpointStatus || suppressedReason
+      ? ({ action: 'DELIVER' } as const)
+      : await notificationNoiseDecision(store, {
+          recipientId: input.recipientId || recipientHash,
+          sourceType: input.sourceType,
+          sourceId: input.sourceId,
+          eventType: input.templateKey,
+          trafficClass,
+          priority,
+          rollUpParentId: input.rollUpParentId,
+          bundle: input.bundle,
+          channel: input.channel,
+        });
   const effectiveScheduledAt =
     noiseDecision.action === 'DEFER' || noiseDecision.action === 'BUNDLE'
       ? noiseDecision.until
@@ -655,7 +660,9 @@ export async function createCentralNotificationIntent(
         userId: input.userId,
         channel: input.channel,
         status:
-          unavailableEndpointStatus || noiseDecision.action === 'SUPPRESS' ? 'SKIPPED' : 'PENDING',
+          unavailableEndpointStatus || suppressedReason || noiseDecision.action === 'SUPPRESS'
+            ? 'SKIPPED'
+            : 'PENDING',
         message:
           noiseDecision.action === 'GROUP'
             ? `Grouped notification (${noiseDecision.groupKey}): ${input.displayMessage}`.slice(
@@ -688,13 +695,14 @@ export async function createCentralNotificationIntent(
         expiresAt: input.expiresAt ?? resolveNotificationExpiry(input, scheduledAt),
         errorMsg: unavailableEndpointStatus
           ? `Notification endpoint is unavailable: ${unavailableEndpointStatus}`
-          : noiseDecision.action === 'SUPPRESS'
-            ? noiseDecision.reason
-            : undefined,
+          : (suppressedReason ??
+            (noiseDecision.action === 'SUPPRESS' ? noiseDecision.reason : undefined)),
       },
       select: { id: true },
     });
-    return unavailableEndpointStatus ? { id, created: true, skipped: true } : { id, created: true };
+    return unavailableEndpointStatus || suppressedReason
+      ? { id, created: true, skipped: true }
+      : { id, created: true };
   } catch (error) {
     if (!isUniqueConstraintError(error)) throw error;
     const existing = await store.notification.findUnique({

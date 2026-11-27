@@ -28,6 +28,7 @@ vi.mock('@/lib/notification-providers', () => ({
 }));
 vi.mock('@/lib/quiet-hours', () => ({
   filterChannelsForQuietHours: mocks.filterChannelsForQuietHours,
+  QUIET_HOURS_SUPPRESSION_REASON: 'held by quiet hours',
 }));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), error: vi.fn() } }));
 import { sendIncidentNotifications, sendUserNotification } from '@/lib/user-notifications';
@@ -199,6 +200,30 @@ describe('incident notification fan-out', () => {
     // PUSH, SMS, VOICE and EMAIL once for the whole fan-out, not once per recipient.
     expect(mocks.isChannelAvailable).toHaveBeenCalledTimes(4);
   });
+  it('records the channels quiet hours held back as suppressed, not as silence', async () => {
+    mocks.userFindMany.mockResolvedValue([
+      { ...recipient, pushNotificationsEnabled: true, emailNotificationsEnabled: true },
+    ]);
+    mocks.filterChannelsForQuietHours.mockImplementation(channels => ({
+      channels: channels.filter((channel: string) => channel !== 'PUSH'),
+      blockedChannels: new Set(['PUSH']),
+    }));
+    mocks.sendNotification.mockResolvedValue({
+      success: true,
+      outcome: 'DELIVERED',
+      notificationId: 'intent',
+    });
+
+    await sendIncidentNotifications('inc-1', 'acknowledged');
+
+    const calls = mocks.sendNotification.mock.calls;
+    expect(calls.map(call => [call[2], call[7]])).toEqual(
+      expect.arrayContaining([
+        ['PUSH', 'held by quiet hours'],
+        ['EMAIL', undefined],
+      ])
+    );
+  });
   it('includes the assigned team in resolve closure delivery', async () => {
     mocks.incidentFindUnique.mockResolvedValue({
       ...incident,
@@ -279,6 +304,9 @@ describe('incident notification fan-out', () => {
       success: true,
       outcome: 'SKIPPED',
     });
-    expect(mocks.sendNotification).not.toHaveBeenCalled();
+    // Only the suppression record is written; nothing is delivered.
+    expect(mocks.sendNotification.mock.calls.map(call => [call[2], call[7]])).toEqual([
+      ['PUSH', 'held by quiet hours'],
+    ]);
   });
 });

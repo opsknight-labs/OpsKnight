@@ -234,6 +234,20 @@ describe('central notification control plane', () => {
     }
   );
 
+  it('stores a suppressed page as SKIPPED with its reason and reports it skipped', async () => {
+    vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notification-held' } as never);
+
+    await expect(
+      createCentralNotificationIntent({ ...input, suppressedReason: 'Held by quiet hours' })
+    ).resolves.toMatchObject({ created: true, skipped: true });
+
+    expect(prisma.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'SKIPPED', errorMsg: 'Held by quiet hours' }),
+      })
+    );
+  });
+
   it('includes recently persisted intents when applying batch noise limits', async () => {
     vi.mocked(prisma.notification.findMany).mockResolvedValue(
       Array.from({ length: 15 }, () => ({
