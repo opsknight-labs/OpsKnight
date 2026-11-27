@@ -1495,7 +1495,7 @@
   },
   "DELETE /schedules/{id} [schedules:write]": {
     "ADMIN": "allow:global",
-    "RESPONDER": "allow:global",
+    "RESPONDER": "deny:MISSING_CAPABILITY",
     "AUDITOR": "deny:MISSING_CAPABILITY",
     "USER": "deny:MISSING_CAPABILITY"
   },
