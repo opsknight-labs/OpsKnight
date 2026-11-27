@@ -53,6 +53,8 @@ describe('More actions overflow', () => {
     expect(menu.options.map(o => JSON.parse(o.value))).toEqual([
       { action: 'add_responder', incidentId: 'inc-1' },
       { action: 'reassign', incidentId: 'inc-1' },
+      { action: 'update_details', incidentId: 'inc-1' },
+      { action: 'status_update', incidentId: 'inc-1' },
     ]);
     expect(menu.options.every(o => o.value.length <= 150)).toBe(true);
   });

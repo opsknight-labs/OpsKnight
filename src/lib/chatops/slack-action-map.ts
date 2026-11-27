@@ -55,16 +55,26 @@ export function isSlackSupportedKind(kind: string): boolean {
 export const SLACK_MORE_ACTIONS_ACTION_ID = 'incident_more_actions';
 export type SlackModalAction = 'add_responder' | 'reassign';
 export const SLACK_MODAL_ACTIONS: readonly SlackModalAction[] = ['add_responder', 'reassign'];
+/** Overflow options handled by the update module (src/lib/slack/update-actions.ts). */
+const SLACK_UPDATE_ACTIONS = ['update_details', 'status_update'] as const;
 
 /** Overflow element for an open incident (counts as one element of the actions block). */
 export function moreActionsOverflow(incidentId: string) {
-  const option = (text: string, action: SlackModalAction) => ({
+  const option = (
+    text: string,
+    action: SlackModalAction | (typeof SLACK_UPDATE_ACTIONS)[number]
+  ) => ({
     text: { type: 'plain_text', text },
     value: JSON.stringify({ action, incidentId }),
   });
   return {
     type: 'overflow',
     action_id: SLACK_MORE_ACTIONS_ACTION_ID,
-    options: [option('Add responder', 'add_responder'), option('Reassign', 'reassign')],
+    options: [
+      option('Add responder', 'add_responder'),
+      option('Reassign', 'reassign'),
+      option('Update details', 'update_details'),
+      option('Post status update', 'status_update'),
+    ],
   };
 }

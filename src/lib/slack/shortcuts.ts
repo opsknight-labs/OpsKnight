@@ -8,24 +8,15 @@ import { logger } from '@/lib/logger';
 import { normalizeError } from '@/lib/errors';
 import { callSlackApi } from '@/lib/slack/api';
 
-export const DECLARE_FROM_MESSAGE_CALLBACK = 'declare_from_message';
-export const DECLARE_GLOBAL_CALLBACK = 'declare_incident';
-
-/** The manifest's `features.shortcuts` array. */
-export const SLACK_SHORTCUTS = [
-  {
-    name: 'Declare incident',
-    type: 'message',
-    callback_id: DECLARE_FROM_MESSAGE_CALLBACK,
-    description: 'Declare an OpsKnight incident from this message',
-  },
-  {
-    name: 'Declare incident',
-    type: 'global',
-    callback_id: DECLARE_GLOBAL_CALLBACK,
-    description: 'Declare an OpsKnight incident',
-  },
-] as const;
+export {
+  DECLARE_FROM_MESSAGE_CALLBACK,
+  DECLARE_GLOBAL_CALLBACK,
+  SLACK_SHORTCUTS,
+} from '@/lib/slack/shortcut-definitions';
+import {
+  DECLARE_FROM_MESSAGE_CALLBACK,
+  DECLARE_GLOBAL_CALLBACK,
+} from '@/lib/slack/shortcut-definitions';
 
 type ShortcutPayload = {
   type?: unknown;
