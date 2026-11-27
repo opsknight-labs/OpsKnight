@@ -704,6 +704,14 @@ async function runOnce() {
       logger.warn('[Cron] Maintenance schedule materialization failed', { error });
     }
 
+    // Slack on-call user groups: self-throttled, a no-op unless a schedule is mapped.
+    try {
+      const { runOnCallSyncPass } = await import('./slack/oncall-sync');
+      await runOnCallSyncPass(new Date());
+    } catch (error) {
+      logger.warn('[Cron] Slack on-call usergroup sync failed', { error });
+    }
+
     // Weekly analytics emails: bounded per tick, idempotent per view and week.
     try {
       const { sendWeeklyAnalyticsReports } = await import('./analytics/weekly-report');

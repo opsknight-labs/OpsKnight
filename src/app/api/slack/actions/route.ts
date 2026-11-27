@@ -14,6 +14,7 @@ import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
 } from '@/lib/incidents/chatops-lifecycle';
+import { SLACK_MORE_ACTIONS_ACTION_ID } from '@/lib/chatops/slack-action-map';
 import { isOpsKnightIncidentCard } from '@/lib/slack/incident-card';
 
 /**
@@ -194,7 +195,13 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         incident.slackWorkspaceId ||
         incident.service.slackIntegration?.workspaceId ||
         incident.service.slackWorkspaceId;
-      if (!workspaceId || !incidentWorkspaceId || workspaceId !== incidentWorkspaceId) {
+      const { slackWorkspaceMatches } = await import('@/lib/slack/workspace-match');
+      const sameWorkspace = await slackWorkspaceMatches({
+        teamId: workspaceId,
+        enterpriseId: typeof payload.enterprise?.id === 'string' ? payload.enterprise.id : null,
+        incidentWorkspaceId,
+      });
+      if (!workspaceId || !sameWorkspace) {
         logger.warn('[Slack Actions] Rejected action from a different Slack workspace', {
           incidentId,
           workspaceId,
@@ -220,6 +227,22 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
           replace_original: false,
           text: '⚠️ Your Slack account is not linked to an active OpsKnight account. Match the email addresses before changing incidents.',
         });
+      }
+
+      // SlackOps E: runbook preview / confirm buttons (ephemeral, never replace the card).
+      const runbookFlow = await import('@/lib/slack/runbook-flow');
+      if (runbookFlow.isRunbookAction(actionType)) {
+        return NextResponse.json(
+          await runbookFlow.handleRunbookButton({
+            actionType,
+            value: actionValue,
+            incidentId,
+            actor: { id: actorUser.id, name: actorName },
+            serviceId: incident.serviceId,
+            channelId: payload.channel?.id || payload.container?.channel_id,
+            slackUserId,
+          })
+        );
       }
 
       // On an OpsKnight incident card the reply replaces the card with its fresh state and the
@@ -500,6 +523,12 @@ export async function POST(request: NextRequest) {
         : '';
   const slackUserId = typeof payload.user?.id === 'string' ? payload.user.id : '';
   if (!workspaceId) return NextResponse.json({ error: 'Missing Slack workspace' }, { status: 400 });
+  // SlackOps: shortcuts, update/status modals (opened inline for trigger_id), Home "Declare".
+  {
+    const { handleSlackOpsInteractive } = await import('@/lib/slack/update-actions');
+    const handled = await handleSlackOpsInteractive(payload, signature);
+    if (handled) return handled;
+  }
   // `/incident declare` modal submit: validated inline (errors show on the form), then queued.
   if (
     payload.type === 'view_submission' &&
@@ -507,6 +536,21 @@ export async function POST(request: NextRequest) {
   ) {
     const { acceptSlackDeclareSubmission } = await import('@/lib/chatops/slash-commands');
     return acceptSlackDeclareSubmission(payload, signature);
+  }
+  // Both modals of the card's More actions menu: validated inline, then queued.
+  if (payload.type === 'view_submission') {
+    const { incidentModalActionForCallback, acceptIncidentModalSubmission } =
+      await import('@/lib/chatops/slack-incident-modals');
+    const modalAction = incidentModalActionForCallback(payload.view?.callback_id);
+    if (modalAction) return acceptIncidentModalSubmission(modalAction, payload, signature);
+  }
+  // The More actions menu opens a modal right away: trigger_id expires in three seconds.
+  if (
+    payload.type === 'block_actions' &&
+    payload.actions?.[0]?.action_id === SLACK_MORE_ACTIONS_ACTION_ID
+  ) {
+    const { openIncidentActionModal } = await import('@/lib/chatops/slack-incident-modals');
+    return openIncidentActionModal(payload);
   }
   // URL buttons (View Details) only open a link; there is no effect to queue.
   if (

@@ -7,6 +7,7 @@
  * incoming webhooks and response_url replacements.
  */
 import { escapeSlack } from '@/lib/chatops/squire/render';
+import { moreActionsOverflow } from '@/lib/chatops/slack-action-map';
 
 /** Marks a message as an OpsKnight incident card, so a button click can safely replace it. */
 export const SLACK_INCIDENT_CARD_BLOCK_ID = 'opsknight_incident_card';
@@ -61,6 +62,8 @@ export type SlackCardIncident = {
   assigneeName?: string | null;
   /** Slack user ID of the assignee when their email maps to a workspace member. */
   assigneeSlackId?: string | null;
+  /** Provisioned meeting bridge (READY only); the button is shown for https join URLs. */
+  meeting?: { provider: string; joinUrl: string } | null;
 };
 
 export type SlackCardMessage = {
@@ -199,6 +202,33 @@ function confirm(title: string, text: string, ok: string, style?: 'danger') {
   };
 }
 
+const MEETING_LABEL = new Map([
+  ['MICROSOFT_TEAMS', 'Teams'],
+  ['ZOOM', 'Zoom'],
+  ['GOOGLE_MEET', 'Google Meet'],
+  ['JITSI', 'Jitsi'],
+]);
+
+/** URL button for the meeting bridge; empty when absent, resolved or not https. */
+export function bridgeActionElements(
+  incident: SlackCardIncident,
+  state: SlackCardState
+): SlackBlock[] {
+  const joinUrl = incident.meeting?.joinUrl;
+  if (!joinUrl || state === 'resolved' || !/^https:\/\//i.test(joinUrl) || joinUrl.length > 3000) {
+    return [];
+  }
+  const label = MEETING_LABEL.get(incident.meeting!.provider) ?? 'Video';
+  return [
+    {
+      type: 'button',
+      text: { type: 'plain_text', text: `Join ${label}`, emoji: true },
+      action_id: 'join_bridge',
+      url: joinUrl,
+    },
+  ];
+}
+
 /** Buttons that still apply in this state; resolved cards keep only the link. */
 export function cardActionElements(
   incidentId: string,
@@ -256,6 +286,7 @@ export function cardActionElements(
   }
   if (state !== 'resolved') {
     elements.push(button('Assign to me', 'assign_me_incident', incidentId, 'assign_me'));
+    elements.push(moreActionsOverflow(incidentId));
   }
   elements.push({
     type: 'button',
@@ -353,7 +384,10 @@ export function buildIncidentCard(
     type: 'actions',
     block_id: SLACK_INCIDENT_ACTIONS_BLOCK_ID,
     elements: options.interactive
-      ? cardActionElements(incident.id, state, incidentUrl)
+      ? [
+          ...cardActionElements(incident.id, state, incidentUrl),
+          ...bridgeActionElements(incident, state),
+        ].slice(0, 25)
       : [
           {
             type: 'button',

@@ -8,6 +8,8 @@
  * scopes the OAuth flow asked for, so a reinstall would have failed.
  */
 
+import { SLACK_SHORTCUTS } from '@/lib/slack/shortcut-definitions';
+
 /** Scopes without which core incident features break. */
 export const SLACK_REQUIRED_BOT_SCOPES = [
   'chat:write', // Post incident cards and war-room updates
@@ -36,12 +38,23 @@ export const SLACK_OPTIONAL_BOT_SCOPES = [
   'im:write', // Open DMs to page on-call responders in Slack
 ] as const;
 
+/**
+ * Scopes for features most workspaces never use. They are requested with the rest, but their absence is
+ * not reported as a gap: each feature explains itself where it is configured.
+ */
+export const SLACK_ADVANCED_BOT_SCOPES = [
+  'usergroups:read', // List user groups when mapping an on-call schedule to one
+  'usergroups:write', // Keep a Slack user group in step with who is on call
+  'conversations.connect:write', // Invite external people to a war room with Slack Connect
+] as const;
+
 /** Lets Squire's messages carry its own name and avatar instead of the app's. */
 export const SLACK_CUSTOMIZE_SENDER_SCOPE = 'chat:write.customize';
 
 export const SLACK_BOT_SCOPES: string[] = [
   ...SLACK_REQUIRED_BOT_SCOPES,
   ...SLACK_OPTIONAL_BOT_SCOPES,
+  ...SLACK_ADVANCED_BOT_SCOPES,
 ];
 
 /** Bot events OpsKnight subscribes to. */
@@ -54,11 +67,13 @@ export const SLACK_BOT_EVENTS = [
   // War-room channel capture (Settings → Intelligence); ignored unless that switch is on.
   'message.channels',
   'message.groups',
+  // The App Home tab (my incidents, who is on call, open incidents).
+  'app_home_opened',
 ] as const;
 
 /** Subcommands the dispatcher actually implements — keeps the hint honest. */
 export const SLACK_COMMAND_USAGE_HINT =
-  'declare | list [service] | oncall [service] | ack | resolve [summary] | note <text> | who | postmortem | ask <question> | investigate | help';
+  'declare | list [service] | oncall [service] | ack | resolve [summary] | note <text> | who | role <role> @person | page @person|team:<name>|schedule:<name> | assign @person|me | priority P1-P5 | urgency high|medium|low | title <text> | describe <text> | status <message> | runbook | action <text> [@person] [due:date] | actions | postmortem | ask <question> | investigate | help';
 
 export interface SlackManifestOptions {
   /** Public base URL, e.g. https://opsknight.example.com */
@@ -91,12 +106,15 @@ export function buildSlackAppManifest({
         display_name: botDisplayName,
         always_online: true,
       },
-      // Messages tab so responders can receive DM pages and reply to the bot.
+      // Home tab: my incidents, who is on call, open incidents. Messages tab so responders can
+      // receive DM pages and reply to the bot.
       app_home: {
-        home_tab_enabled: false,
+        home_tab_enabled: true,
         messages_tab_enabled: true,
         messages_tab_read_only_enabled: false,
       },
+      // "Declare incident" from any message, and from the shortcuts menu.
+      shortcuts: SLACK_SHORTCUTS.map(shortcut => ({ ...shortcut })),
       slash_commands: [
         {
           command: '/incident',

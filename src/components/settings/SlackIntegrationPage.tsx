@@ -35,9 +35,13 @@ import {
   type ChannelFilter,
 } from '@/components/settings/slack';
 import GuidedSlackSetup from '@/components/settings/GuidedSlackSetup';
-import { SlackHealthPanel, SlackScopeHealthNotice } from '@/components/settings/slack/SlackHealthPanel';
+import {
+  SlackHealthPanel,
+  SlackScopeHealthNotice,
+} from '@/components/settings/slack/SlackHealthPanel';
 import SlackSigningSecretCard from '@/components/settings/SlackSigningSecretCard';
 import SlackManifestCard from '@/components/settings/SlackManifestCard';
+import SlackOnCallSyncCard from '@/components/settings/SlackOnCallSyncCard';
 import { toneClasses } from '@/components/patterns';
 import { cn } from '@/lib/utils';
 import {
@@ -636,6 +640,8 @@ export default function SlackIntegrationPage({
             <div className="space-y-6">
               {/* Signing Secret Card */}
               <SlackSigningSecretCard isConfigured={isSigningSecretConfigured} />
+
+              <SlackOnCallSyncCard />
 
               {/* App Manifest & Live Webhook URLs */}
               <div className="rounded-lg border border-border bg-card p-5 sm:p-6 shadow-xs space-y-5">

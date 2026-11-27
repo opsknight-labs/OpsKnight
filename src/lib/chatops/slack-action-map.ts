@@ -50,3 +50,28 @@ export function isSlackSupportedKind(kind: string): boolean {
     kind === 'ASSIGN_TO_ME'
   );
 }
+
+/** The "More actions" overflow on incident cards; its options open a Slack modal. */
+export const SLACK_MORE_ACTIONS_ACTION_ID = 'incident_more_actions';
+export type SlackModalAction = 'add_responder' | 'reassign';
+export const SLACK_MODAL_ACTIONS: readonly SlackModalAction[] = ['add_responder', 'reassign'];
+/** Overflow options handled by the update module (src/lib/slack/update-actions.ts). */
+type SlackUpdateAction = 'update_details' | 'status_update';
+
+/** Overflow element for an open incident (counts as one element of the actions block). */
+export function moreActionsOverflow(incidentId: string) {
+  const option = (text: string, action: SlackModalAction | SlackUpdateAction) => ({
+    text: { type: 'plain_text', text },
+    value: JSON.stringify({ action, incidentId }),
+  });
+  return {
+    type: 'overflow',
+    action_id: SLACK_MORE_ACTIONS_ACTION_ID,
+    options: [
+      option('Add responder', 'add_responder'),
+      option('Reassign', 'reassign'),
+      option('Update details', 'update_details'),
+      option('Post status update', 'status_update'),
+    ],
+  };
+}

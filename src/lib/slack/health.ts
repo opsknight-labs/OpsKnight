@@ -7,8 +7,8 @@
  */
 import {
   SLACK_BOT_EVENTS,
-  SLACK_BOT_SCOPES,
   SLACK_OPTIONAL_BOT_SCOPES,
+  SLACK_REQUIRED_BOT_SCOPES,
   findMissingOptionalScopes,
   findMissingRequiredScopes,
 } from './app-manifest';
@@ -64,7 +64,10 @@ export function computeSlackScopeHealth(granted: string[] | null | undefined): S
     enables: SLACK_OPTIONAL_SCOPE_FEATURES[scope],
   }));
   const grantedSet = new Set(granted ?? []);
-  const manifestOutdated = SLACK_BOT_SCOPES.some(scope => !grantedSet.has(scope));
+  // Advanced scopes (user groups, Slack Connect) are not counted: most workspaces never need them.
+  const manifestOutdated = [...SLACK_REQUIRED_BOT_SCOPES, ...SLACK_OPTIONAL_BOT_SCOPES].some(
+    scope => !grantedSet.has(scope)
+  );
   return {
     missingRequired,
     missingOptional,

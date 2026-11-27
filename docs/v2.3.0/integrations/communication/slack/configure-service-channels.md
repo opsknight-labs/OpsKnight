@@ -10,8 +10,13 @@ reader:
   task: Route a service's incident lifecycle to Slack channels.
 verification:
   level: source
-  verified_at: 2026-09-28
-  evidence: [src/app/api/slack/destinations/route.ts]
+  verified_at: 2026-11-28
+  evidence:
+    - src/app/api/slack/destinations/route.ts
+    - src/lib/slack/destination-conditions.ts
+    - src/lib/service-notifications.ts
+    - src/components/service/SlackDestinationConditions.tsx
+    - tests/lib/slackops-b-routing.test.ts
 ---
 
 # Configure Slack service channels
@@ -36,6 +41,12 @@ All linked channels receive lifecycle messages; they are not a fallback chain.
 At the three-channel limit, unlink an obsolete channel before adding another.
 Channel destinations are independent from incident war rooms and user identity
 links.
+
+## Limit a channel by priority or urgency
+
+Each linked channel can be limited to certain priorities (P1 to P5) and urgencies (high, medium, low). For example, send only P1 and P2 to an incident channel and everything else to a quieter one. Choose the values under the channel on the same page and select **Save**. Leaving both lists empty means every incident, as before.
+
+The limit decides where **new** incident cards are posted. A card that has already been posted keeps updating even if the incident's priority later changes so it no longer matches, so the thread never goes stale.
 
 ## What OpsKnight does
 

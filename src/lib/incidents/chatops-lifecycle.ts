@@ -219,7 +219,10 @@ export async function executeChatOpsAssignment(input: {
   return runSerializableTransaction(async tx => {
     await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'MANAGE');
     const [target, incident] = await Promise.all([
-      tx.user.findUnique({ where: { id: input.targetUserId }, select: { id: true, status: true } }),
+      tx.user.findUnique({
+        where: { id: input.targetUserId },
+        select: { id: true, name: true, status: true },
+      }),
       tx.incident.findUnique({
         where: { id: input.incidentId },
         select: { assigneeId: true, teamId: true },
@@ -242,11 +245,13 @@ export async function executeChatOpsAssignment(input: {
           data: { assigneeId: target.id, teamId: null },
         });
         const label = chatOpsProviderDisplayLabel(input.provider);
+        // Reassigning to someone else names them, not the person who clicked.
+        const targetName = target.id === input.actor.id ? input.actor.name : target.name;
         await tx.incidentEvent.create({
           data: {
             incidentId: input.incidentId,
             type: 'ASSIGNMENT',
-            message: `Assigned to ${input.actor.name} via ${label} ChatOps`,
+            message: `Assigned to ${targetName} via ${label} ChatOps${targetName === input.actor.name ? '' : ` (by ${input.actor.name})`}`,
           },
         });
         await enqueueIncidentUpdateSideEffects(tx, input.incidentId, [
@@ -255,7 +260,7 @@ export async function executeChatOpsAssignment(input: {
         await enqueueWarRoomSideEffects(tx, input.incidentId, [
           {
             effect: 'WAR_ROOM_MESSAGE',
-            message: `👤 *Incident reassigned to ${input.actor.name}*`,
+            message: `👤 *Incident reassigned to ${targetName}*`,
           },
           { effect: 'WAR_ROOM_INVITE_USER', userId: target.id },
           { effect: 'WAR_ROOM_TOPIC' },
@@ -417,31 +422,53 @@ export async function executeChatOpsPriority(input: {
   });
 }
 
+/** Joins the actor as a responder, or (with `targetUserId`) adds someone else, which needs ESCALATE. */
 export async function executeChatOpsJoinResponder(input: {
   incidentId: string;
   actor: ChatOpsLifecycleActor;
+  targetUserId?: string;
   provider?: 'SLACK' | 'MICROSOFT_TEAMS';
   idempotency?: IdempotencyContext;
 }): Promise<{ changed: boolean }> {
+  const addingOther = Boolean(input.targetUserId && input.targetUserId !== input.actor.id);
   return runSerializableTransaction(async tx => {
-    await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'READ');
+    await authorizeChatOpsIncidentInTransaction(
+      tx,
+      input.incidentId,
+      input.actor.id,
+      addingOther ? 'ESCALATE' : 'READ'
+    );
+    const target = addingOther
+      ? await tx.user.findUnique({
+          where: { id: input.targetUserId },
+          select: { id: true, name: true, status: true },
+        })
+      : { id: input.actor.id, name: input.actor.name, status: 'ACTIVE' };
+    if (!target || target.status !== 'ACTIVE')
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'That person was not found or is not an active OpsKnight user.',
+      });
     const execution = await executeIdempotentOperation(tx, {
       scope: 'chatops-join-responder',
       context: input.idempotency,
-      payload: { incidentId: input.incidentId, userId: input.actor.id },
+      payload: { incidentId: input.incidentId, userId: target.id },
       execute: async () => {
         const existing = await tx.incidentWatcher.findUnique({
-          where: { incidentId_userId: { incidentId: input.incidentId, userId: input.actor.id } },
+          where: { incidentId_userId: { incidentId: input.incidentId, userId: target.id } },
         });
         if (existing) return { changed: false };
         await tx.incidentWatcher.create({
-          data: { incidentId: input.incidentId, userId: input.actor.id, role: 'FOLLOWER' },
+          data: { incidentId: input.incidentId, userId: target.id, role: 'FOLLOWER' },
         });
+        const via = chatOpsProviderDisplayLabel(input.provider);
         await tx.incidentEvent.create({
           data: {
             incidentId: input.incidentId,
             type: 'COMMENT',
-            message: `${input.actor.name} joined as a responder via ${chatOpsProviderDisplayLabel(input.provider)} ChatOps`,
+            message: addingOther
+              ? `${input.actor.name} added ${target.name} as a responder via ${via} ChatOps`
+              : `${input.actor.name} joined as a responder via ${via} ChatOps`,
           },
         });
         await enqueueIncidentUpdateSideEffects(tx, input.incidentId, [
@@ -469,6 +496,55 @@ export async function executeChatOpsJoinResponder(input: {
     });
     return execution.value;
   });
+}
+
+export type ChatOpsPageTarget =
+  | { kind: 'user'; userId: string }
+  | { kind: 'team'; teamId: string }
+  | { kind: 'schedule'; scheduleId: string };
+
+/**
+ * `/incident page`: hands the incident to a person, a team or whoever is on call now, through the
+ * normal assignment paths (so the assignee/team is notified and the war room invited).
+ */
+export async function executeChatOpsPage(input: {
+  incidentId: string;
+  actor: ChatOpsLifecycleActor;
+  target: ChatOpsPageTarget;
+  provider?: 'SLACK' | 'MICROSOFT_TEAMS';
+  idempotency?: IdempotencyContext;
+}): Promise<{ changed: boolean; targetName: string }> {
+  const { default: prisma } = await import('@/lib/prisma');
+  const { target } = input;
+  if (target.kind === 'team') {
+    await authorizeChatOpsIncident(input.incidentId, input.actor.id, 'MANAGE');
+    const { assignIncidentDomainCommand } = await import('@/lib/incidents/assignment');
+    const result = await assignIncidentDomainCommand({
+      incidentId: input.incidentId,
+      teamId: target.teamId,
+      actor: input.actor,
+    });
+    return { changed: true, targetName: result.teamName ?? 'the team' };
+  }
+  let userId = target.kind === 'user' ? target.userId : '';
+  if (target.kind === 'schedule') {
+    const { resolveEscalationTarget } = await import('@/lib/escalation');
+    [userId = ''] = await resolveEscalationTarget('SCHEDULE', target.scheduleId, new Date());
+    if (!userId)
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'Nobody is on call for that schedule right now.',
+      });
+  }
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const result = await executeChatOpsAssignment({
+    incidentId: input.incidentId,
+    actor: input.actor,
+    targetUserId: userId,
+    provider: input.provider,
+    idempotency: input.idempotency,
+  });
+  return { changed: result.changed, targetName: user?.name ?? 'the on-call responder' };
 }
 
 function actionForCommand(command: ChatOpsLifecycleCommand) {

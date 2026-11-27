@@ -58,11 +58,34 @@ export async function saveChatOpsConfig(
             ),
           }
         : {}),
+      ...(formData.has('warRoomInviteOnCall')
+        ? {
+            warRoomInviteOnCall: ['on', 'true'].includes(
+              String(formData.get('warRoomInviteOnCall') ?? '')
+            ),
+          }
+        : {}),
       ...(formData.has('warRoomArchiveDelayHours')
         ? {
             warRoomArchiveDelayHours: String(formData.get('warRoomArchiveDelayHours') ?? '').trim()
               ? Number(String(formData.get('warRoomArchiveDelayHours')).trim())
               : null,
+          }
+        : {}),
+      ...Object.fromEntries(
+        ['slackUnackedNudgeMinutes', 'slackNoUpdateNudgeMinutes']
+          .filter(key => formData.has(key))
+          .map(key => {
+            const raw = String(formData.get(key) ?? '').trim();
+            // Empty or 0 turns the nudge off.
+            return [key, raw && Number(raw) !== 0 ? Number(raw) : null];
+          })
+      ),
+      ...(formData.has('slackWarRoomExternalEmails')
+        ? {
+            slackWarRoomExternalEmails: String(formData.get('slackWarRoomExternalEmails') ?? '')
+              .split(/[\s,;]+/)
+              .filter(Boolean),
           }
         : {}),
       defaultVideoBridge: String(formData.get('defaultVideoBridge') ?? 'NONE'),

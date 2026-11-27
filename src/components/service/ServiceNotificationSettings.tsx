@@ -1,5 +1,6 @@
 'use client';
 
+import SlackDestinationConditions from './SlackDestinationConditions';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '@/lib/logger';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -133,6 +134,8 @@ export default function ServiceNotificationSettings({
       channelName: string | null;
       isPrivate: boolean;
       enabled: boolean;
+      priorities?: string[];
+      urgencies?: string[];
     }>
   >([]);
   const [slackLinking, setSlackLinking] = useState(false);
@@ -882,7 +885,7 @@ export default function ServiceNotificationSettings({
                           {existingSlackDests.map(dest => (
                             <div
                               key={dest.id}
-                              className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1.5 text-xs flex items-center justify-between gap-2"
+                              className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1.5 text-xs flex flex-wrap items-center justify-between gap-2"
                             >
                               <div className="flex items-center gap-1.5 font-medium text-emerald-800 dark:text-emerald-300 min-w-0">
                                 <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -917,6 +920,15 @@ export default function ServiceNotificationSettings({
                                   Unlink
                                 </Button>
                               </div>
+                              <SlackDestinationConditions
+                                key={`${dest.id}:${(dest.priorities ?? []).join()}:${(dest.urgencies ?? []).join()}`}
+                                serviceId={serviceId}
+                                channelId={dest.channelId}
+                                channelName={dest.channelName}
+                                priorities={dest.priorities ?? []}
+                                urgencies={dest.urgencies ?? []}
+                                onSaved={refreshSlackDestinations}
+                              />
                             </div>
                           ))}
                         </div>

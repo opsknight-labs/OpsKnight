@@ -158,6 +158,8 @@
     "alerts:backfill": "TS_NODE_PROJECT=tsconfig.script.json node --conditions=react-server -r dotenv/config -r ts-node/register -r tsconfig-paths/register scripts/backfill-alert-shape.ts"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "@ai-sdk/amazon-bedrock": "^4.0.204",
     "@ai-sdk/anthropic": "^3.0.135",
     "@ai-sdk/azure": "^3.0.145",
@@ -269,8 +271,6 @@
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.12",
     "@vitest/ui": "^4.1.12",
-    "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1",
     "ajv-formats-draft2019": "^1.6.1",
     "aria-query": "^5.3.2",
     "cssnano": "^7.1.9",

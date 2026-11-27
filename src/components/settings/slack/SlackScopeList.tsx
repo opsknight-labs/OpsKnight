@@ -48,6 +48,9 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   'pins:write': 'Pin the incident status card in war rooms',
   'bookmarks:write': 'Bookmark the incident in war-room channels',
   'im:write': 'Page responders with a Slack direct message',
+  'usergroups:read': 'List Slack user groups when mapping an on-call schedule to one',
+  'usergroups:write': 'Keep a Slack user group in step with who is on call',
+  'conversations.connect:write': 'Invite external people to a war room with Slack Connect',
 };
 
 function getScopeDescription(scope: string): string {

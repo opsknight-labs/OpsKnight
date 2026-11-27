@@ -195,6 +195,10 @@ export async function GET(request: NextRequest) {
     const integrationData = {
       workspaceId: teamInfo.id,
       workspaceName: teamInfo.name,
+      // Set for org-wide installs and installs inside a Grid org; kept as-is (never nulled) otherwise.
+      ...(typeof tokenData.enterprise?.id === 'string' && tokenData.enterprise.id
+        ? { enterpriseId: tokenData.enterprise.id as string }
+        : {}),
       botToken: encryptedBotToken,
       signingSecret: encryptedSigningSecret,
       installedBy: user.id,

@@ -14,12 +14,16 @@ import { z } from 'zod/v3';
 import { normalizeError } from '@/lib/errors';
 import { enqueueChatOpsIntent } from '@/lib/chatops/intents';
 import { escapeSlack } from '@/lib/chatops/squire/render';
+import { replaceHandleMentions } from '@/lib/slack/mentions';
+import { UPDATE_SUBCOMMANDS, handleUpdateSlashCommand } from '@/lib/chatops/slash/update-commands';
 import { SLACK_COMMAND_USAGE_HINT } from '@/lib/slack/app-manifest';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
   authorizeChatOpsIncident,
+  executeChatOpsAssignment,
   executeChatOpsNote,
+  executeChatOpsPage,
   executeChatOpsRole,
 } from '@/lib/incidents/chatops-lifecycle';
 import {
@@ -53,6 +57,26 @@ export function parseRoleCommandArgs(
     }
   }
   return { error: usage };
+}
+
+export type PageCommandTarget =
+  | { kind: 'slack'; slackUserId: string }
+  | { kind: 'team'; name: string }
+  | { kind: 'schedule'; name: string }
+  | { kind: 'name'; name: string };
+
+/** Parses `/incident page <@user | team:<name> | schedule:<name> | <team name>>`. */
+export function parsePageCommandArgs(args: string): PageCommandTarget | null {
+  const text = args.trim();
+  if (text.startsWith('<@') && text.endsWith('>')) {
+    const slackUserId = text.slice(2, -1).split('|')[0];
+    if (/^[A-Z0-9]+$/i.test(slackUserId)) return { kind: 'slack', slackUserId };
+  }
+  const prefixed = text.match(/^(team|schedule):\s*(.+)$/i);
+  if (prefixed) {
+    return { kind: prefixed[1].toLowerCase() as 'team' | 'schedule', name: prefixed[2].trim() };
+  }
+  return text ? { kind: 'name', name: text } : null;
 }
 
 function formatRolesText(roles: ReturnType<typeof summarizeIncidentRoles>): string {
@@ -167,6 +191,9 @@ export async function resolveOpsKnightUser(
 /** Same text as the manifest's `/incident` usage hint, so Slack's autocomplete and `help` agree. */
 export const SLACK_INCIDENT_COMMAND_USAGE_HINT = SLACK_COMMAND_USAGE_HINT;
 
+/** Subcommands whose arguments can name a person. */
+const MENTION_COMMANDS: ReadonlySet<string> = new Set(['role', 'page', 'assign', 'action']);
+
 /** Subcommands that work in any channel, not only in a war room. */
 export const ANYWHERE_SUBCOMMANDS: ReadonlySet<string> = new Set([
   'help',
@@ -198,6 +225,12 @@ export const SLASH_HELP_LINES = [
   '`/incident who` — Show incident roles and who is on-call',
   '`/incident roles` — Show who holds each incident role',
   '`/incident role commander @person|me|clear` — Assign or clear a role',
+  '`/incident priority P1-P5`, `urgency high|medium|low`, `title <text>`, `describe <text>` — Change the incident',
+  '`/incident status <message>` — Publish a status-page update (admins only)',
+  '`/incident runbook` — Preview and run a runbook attached to the service',
+  '`/incident action <text> [@person] [due:YYYY-MM-DD]` and `/incident actions` — Add and list follow-up action items',
+  '`/incident page @person|team:<name>|schedule:<name>` — Page someone onto this incident now',
+  '`/incident assign @person|me` — Reassign this incident',
   '`/incident postmortem` — Create a postmortem draft from timeline & notes',
   '`/incident ask <question>` — Ask Squire about this incident (when enabled)',
   '`/incident investigate [focus]` — Have Squire investigate this incident’s cause (when enabled)',
@@ -389,7 +422,9 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     : undefined;
 
   // Parse subcommand and preserve raw argument formatting (including newlines and tabs)
-  const { subcommand, args } = parseSlashCommandText(text);
+  const parsedText = parseSlashCommandText(text);
+  const { subcommand } = parsedText;
+  let { args } = parsedText;
 
   // Find incident linked to this channel
   const incident = await prisma.incident.findFirst({
@@ -480,12 +515,23 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     'investigate',
     'role',
     'roles',
+    'page',
+    'assign',
+    // Runbooks and action items
+    'runbook',
+    'action',
+    'actions',
+    // Update commands (priority, urgency, title, describe, status).
+    ...UPDATE_SUBCOMMANDS,
   ]);
   const actor =
     mutatingCommands.has(subcommand) && botToken
       ? await resolveOpsKnightUser(user_id, botToken, workspace)
       : null;
   if (mutatingCommands.has(subcommand) && !actor) return NOT_LINKED_REPLY;
+  // A typed @handle reaches us as plain text; turn it into the mention form these commands parse.
+  if (MENTION_COMMANDS.has(subcommand) && botToken)
+    args = await replaceHandleMentions(args, botToken);
   const incidentTitle = escapeSlack(incident.title ?? '');
 
   switch (subcommand) {
@@ -682,6 +728,101 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
       }
     }
 
+    case 'page':
+    case 'assign': {
+      const paging = subcommand === 'page';
+      const usage = paging
+        ? 'Usage: `/incident page @person`, `/incident page team:<name>` or `/incident page schedule:<name>`'
+        : 'Usage: `/incident assign @person` or `/incident assign me`';
+      const parsedTarget = paging
+        ? parsePageCommandArgs(args)
+        : /^me$/i.test(args.trim())
+          ? ({ kind: 'slack', slackUserId: user_id } as const)
+          : parsePageCommandArgs(args);
+      if (!parsedTarget || (!paging && parsedTarget.kind !== 'slack')) {
+        return { response_type: 'ephemeral', text: `⚠️ ${usage}` };
+      }
+      const actorRef = { id: actor!.id, name: actor!.name };
+      try {
+        let user: { id: string; name: string } | null = null;
+        let target:
+          | { kind: 'user'; userId: string }
+          | { kind: 'team'; teamId: string }
+          | { kind: 'schedule'; scheduleId: string }
+          | null = null;
+        if (parsedTarget.kind === 'slack') {
+          user = botToken
+            ? await resolveOpsKnightUser(parsedTarget.slackUserId, botToken, workspace)
+            : null;
+          if (!user) {
+            return {
+              response_type: 'ephemeral',
+              text: '⚠️ That Slack user is not linked to an active OpsKnight account (their emails must match).',
+            };
+          }
+          target = { kind: 'user', userId: user.id };
+        } else {
+          const name = parsedTarget.name.slice(0, 200);
+          const byName = { name: { equals: name, mode: 'insensitive' as const } };
+          const team =
+            parsedTarget.kind !== 'schedule'
+              ? await prisma.team.findFirst({ where: byName, select: { id: true } })
+              : null;
+          const schedule =
+            !team && parsedTarget.kind !== 'team'
+              ? await prisma.onCallSchedule.findFirst({ where: byName, select: { id: true } })
+              : null;
+          target = team
+            ? { kind: 'team', teamId: team.id }
+            : schedule
+              ? { kind: 'schedule', scheduleId: schedule.id }
+              : null;
+          if (!target) {
+            return {
+              response_type: 'ephemeral',
+              text: `⚠️ No team or schedule named \`${escapeSlack(name)}\` was found. ${usage}`,
+            };
+          }
+        }
+        const result = paging
+          ? await executeChatOpsPage({
+              incidentId: incident.id,
+              actor: actorRef,
+              target,
+              provider: 'SLACK',
+              ...(idempotency ? { idempotency } : {}),
+            })
+          : {
+              ...(await executeChatOpsAssignment({
+                incidentId: incident.id,
+                actor: actorRef,
+                targetUserId: user!.id,
+                provider: 'SLACK',
+                ...(idempotency ? { idempotency } : {}),
+              })),
+              targetName: user!.name,
+            };
+        const who = escapeSlack(result.targetName);
+        if (!result.changed) {
+          return { response_type: 'ephemeral', text: `ℹ️ Already assigned to *${who}*.` };
+        }
+        return {
+          response_type: 'in_channel',
+          text: paging
+            ? `📟 *Paged ${who}* for _${incidentTitle}_ (by <@${user_id}>)`
+            : `🙋 *Reassigned to ${who}* by <@${user_id}>\n_${incidentTitle}_`,
+        };
+      } catch (error) {
+        logger.warn('[ChatOps] Slash page/assign rejected', {
+          incidentId: incident.id,
+          userId: actor!.id,
+          error,
+        });
+        rethrowIfTransient(error, payload);
+        return { response_type: 'ephemeral', text: `⚠️ ${chatOpsLifecycleErrorMessage(error)}` };
+      }
+    }
+
     case 'who': {
       // Query on-call schedule for the service
       try {
@@ -751,6 +892,46 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
       });
     }
 
+    // SlackOps E hooks: runbook preview/run, action items.
+    case 'runbook':
+    case 'action':
+    case 'actions': {
+      try {
+        if (subcommand === 'runbook') {
+          const { handleRunbookCommand } = await import('@/lib/chatops/slash/runbook-command');
+          return await handleRunbookCommand(incident, actor!);
+        }
+        const actions = await import('@/lib/chatops/slash/action-command');
+        if (subcommand === 'actions')
+          return await actions.handleActionsListCommand({ incident, actor: actor! });
+        return await actions.handleActionCommand({
+          incident,
+          actor: actor!,
+          args,
+          channelName: payload.channel_name,
+          resolveOwner: slackId => resolveOpsKnightUser(slackId, botToken!, workspace),
+          ...(idempotency ? { idempotency } : {}),
+        });
+      } catch (error) {
+        logger.warn('[ChatOps] Slash command failed', { subcommand, error });
+        rethrowIfTransient(error, payload);
+        return { response_type: 'ephemeral', text: `⚠️ ${chatOpsLifecycleErrorMessage(error)}` };
+      }
+    }
+    case 'priority':
+    case 'urgency':
+    case 'title':
+    case 'describe':
+    case 'status':
+      return handleUpdateSlashCommand({
+        subcommand,
+        args,
+        incidentId: incident.id,
+        actor: { id: actor!.id, name: actor!.name },
+        idempotency,
+        rethrowIfTransient: error => rethrowIfTransient(error, payload),
+      });
+
     default:
       return {
         response_type: 'ephemeral',
@@ -794,7 +975,7 @@ const declareMetadataSchema = z.object({
 });
 
 /** The bot token of the installation for this Slack workspace (rotating tokens refreshed). */
-async function workspaceBotToken(teamId: string): Promise<string | null> {
+export async function workspaceBotToken(teamId: string): Promise<string | null> {
   const installation = teamId
     ? await prisma.slackIntegration.findFirst({
         where: { workspaceId: teamId, enabled: true },

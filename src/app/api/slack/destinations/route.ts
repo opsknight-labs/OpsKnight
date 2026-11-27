@@ -1,5 +1,9 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod/v3';
+import {
+  destinationPrioritiesSchema,
+  destinationUrgenciesSchema,
+} from '@/lib/slack/destination-conditions';
 import { assertCanModifyService } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
@@ -17,6 +21,8 @@ const upsertSchema = z.object({
   channelId: z.string().trim().min(1).max(255),
   channelName: z.string().trim().max(255).nullable().optional(),
   isPrivate: z.boolean().optional(),
+  priorities: destinationPrioritiesSchema.optional(),
+  urgencies: destinationUrgenciesSchema.optional(),
 });
 
 const deleteSchema = z.object({
@@ -80,6 +86,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { serviceId, channelId, channelName, isPrivate } = parsed.data;
+    // Only touched when sent, so older clients never reset an admin's conditions.
+    const conditions = {
+      ...(parsed.data.priorities ? { priorities: parsed.data.priorities } : {}),
+      ...(parsed.data.urgencies ? { urgencies: parsed.data.urgencies } : {}),
+    };
     const currentUser = await assertCanModifyService(serviceId);
     const actorId = currentUser?.id ?? null;
 
@@ -172,6 +183,7 @@ export async function POST(request: NextRequest) {
             isPrivate: isPrivate !== undefined ? isPrivate : existingTuple.isPrivate,
             integrationId: integrationId ?? existingTuple.integrationId,
             updatedBy: actorId,
+            ...conditions,
           },
         });
         return updated;
@@ -203,6 +215,7 @@ export async function POST(request: NextRequest) {
             integrationId,
             enabled: true,
             updatedBy: actorId,
+            ...conditions,
           },
         });
       } else {
@@ -217,6 +230,7 @@ export async function POST(request: NextRequest) {
             integrationId,
             enabled: true,
             updatedBy: actorId,
+            ...conditions,
           },
         });
       }

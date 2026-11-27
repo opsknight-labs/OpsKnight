@@ -1472,6 +1472,12 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           await markJobCompleted(job.id, claimAttempt, job.claimToken);
           return true;
         }
+        if (payloadValue(job.payload, 'task') === 'SLACK_NUDGE') {
+          const { processSlackNudge } = await import('../slack/nudges');
+          await processSlackNudge(job.payload);
+          await markJobCompleted(job.id, claimAttempt, job.claimToken);
+          return true;
+        }
         if (payloadValue(job.payload, 'task') === 'SQUIRE_CHANNEL_RETRY') {
           const { processSquireChannelRetry } = await import('../chatops/squire/publish');
           await processSquireChannelRetry(job.payload);

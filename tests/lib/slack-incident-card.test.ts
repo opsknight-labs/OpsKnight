@@ -88,12 +88,14 @@ describe('Slack incident card', () => {
       'snooze_incident',
       'escalate_incident',
       'assign_me_incident',
+      'incident_more_actions',
       'view_incident',
     ]);
     expect(actionIds(blocksOf({ ...base, status: 'ACKNOWLEDGED' }))).toEqual([
       'resolve_incident',
       'snooze_incident',
       'assign_me_incident',
+      'incident_more_actions',
       'view_incident',
     ]);
     expect(actionIds(blocksOf({ ...base, status: 'RESOLVED' }))).toEqual(['view_incident']);

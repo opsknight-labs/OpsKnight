@@ -10,7 +10,7 @@ reader:
   task: Create, verify, reconcile, and close a Slack incident war room.
 verification:
   level: source
-  verified_at: 2026-11-27
+  verified_at: 2026-11-28
   evidence:
     - src/lib/war-room/providers/slack/adapter.ts
     - src/lib/war-room/providers/slack/render.ts
@@ -18,6 +18,12 @@ verification:
     - src/lib/chatops/war-room-reactions.ts
     - src/components/settings/ChatOpsSettingsPage.tsx
     - tests/lib/slack-war-room-chatops.test.ts
+    - src/lib/war-room/oncall-responders.ts
+    - src/lib/war-room/providers/slack/connect-invites.ts
+    - src/lib/chatops/war-room-capture.ts
+    - tests/lib/slackops-b-routing.test.ts
+    - tests/lib/slack-connect-grid.test.ts
+    - tests/lib/slack-war-room-capture-refined.test.ts
 ---
 
 # Operate Slack incident war rooms
@@ -73,6 +79,14 @@ Under **Settings → Integrations → ChatOps**:
 - **Close Collaboration on Resolution** archives the room when the incident resolves. The optional **Archive delay (hours)** (1 to 720) keeps the room open for follow-up first; leave it empty to archive as soon as the incident resolves. The delay applies to Slack rooms; Teams rooms still archive as soon as the incident resolves.
 
 The archive settings are read when a room closes, so a change applies to existing rooms that resolve later, and changing the delay re-times an archive that is already waiting. **Private Slack war rooms** applies only to rooms created afterwards. Existing rooms keep their names and topics.
+
+## Optional room behaviour
+
+All of these are off by default and are set under **Settings → Integrations → ChatOps**.
+
+- **Invite the on-call responder** adds whoever is on call now for the schedules in the service's escalation policy (ten people at most) to new war rooms. It is applied when the room's participants are synchronized; a handover in the middle of an incident is not followed automatically.
+- **Slack Connect invitations** take a comma-separated list of up to 20 external email addresses and invite each of them to every new Slack war room. It needs a paid Slack plan and the `conversations.connect:write` scope, and it is skipped, without failing room creation, when either is missing.
+- **Capture the conversation** (under **Settings → Intelligence**, off by default) saves war-room messages to the incident. Bot messages and very short messages are skipped, editing a captured message updates it, and deleting it removes it.
 
 ## Verify it worked
 

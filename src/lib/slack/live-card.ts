@@ -155,6 +155,8 @@ export async function loadSlackCardIncident(
   const assigneeSlackId = await lookupSlackUserIdByEmail(install, row.assignee?.email).catch(
     () => null
   );
+  const { getIncidentMeeting } = await import('@/lib/incident-collaboration/meeting-store');
+  const bridge = await getIncidentMeeting(row.id).catch(() => null);
   let acknowledger: string | null = null;
   if (options.withAcknowledger && row.acknowledgedById) {
     const user = await prisma.user.findUnique({
@@ -181,6 +183,10 @@ export async function loadSlackCardIncident(
       escalationStep: row.currentEscalationStep,
       assigneeName: row.assignee?.name ?? null,
       assigneeSlackId,
+      meeting:
+        bridge?.state === 'READY' && bridge.joinUrl
+          ? { provider: bridge.provider, joinUrl: bridge.joinUrl }
+          : null,
     },
   };
 }
@@ -408,5 +414,9 @@ async function postAndRecord(
       lastEventKey: request.eventKey,
     },
   });
+  // Channel nudges (off unless configured); never blocks or fails the card delivery.
+  await import('./nudges')
+    .then(({ armSlackNudges }) => armSlackNudges(input.incidentId))
+    .catch(error => logger.warn('[Slack] Could not arm nudges', { error: String(error) }));
   return { success: true, ts: posted.data.ts, channel: posted.data.channel };
 }

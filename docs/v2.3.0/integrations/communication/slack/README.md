@@ -45,6 +45,8 @@ which covers Slack app creation through production acceptance.
 - [Acknowledge and resolve incidents](./acknowledge-resolve)
 - [Use incident actions](./incident-actions) and [commands](./commands)
 - [Create and operate war rooms](./war-rooms)
+- [Declare from a message and use the Home tab](./shortcuts-and-app-home)
+- [Sync on-call to a Slack user group](./on-call-user-groups)
 - [Link responder identities](./user-identity-linking)
 - [Review permissions and scopes](./permissions-and-scopes)
 - [Review rate limits](./rate-limits)

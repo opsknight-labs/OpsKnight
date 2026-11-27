@@ -29,8 +29,17 @@ export const chatOpsConfigSchema = z
     archiveOnResolve: z.boolean(),
     /** Optional so API clients that predate these settings leave them unchanged. */
     slackWarRoomPrivate: z.boolean().optional(),
+    warRoomInviteOnCall: z.boolean().optional(),
     /** Hours after resolve before archiving; null archives on resolve. */
     warRoomArchiveDelayHours: z.number().int().min(1).max(720).nullable().optional(),
+    /** Slack channel nudges, minutes; null = off. */
+    slackUnackedNudgeMinutes: z.number().int().min(1).max(1440).nullable().optional(),
+    slackNoUpdateNudgeMinutes: z.number().int().min(1).max(1440).nullable().optional(),
+    /** Slack Connect invitees for new war rooms. */
+    slackWarRoomExternalEmails: z
+      .array(z.string().trim().toLowerCase().email().max(254))
+      .max(20)
+      .optional(),
     defaultVideoBridge: z.enum(['MICROSOFT_TEAMS', 'JITSI', 'ZOOM', 'GOOGLE_MEET', 'NONE']),
     customBridgeUrlTemplate: z.string().trim().max(2048),
     defaultProviders: z
@@ -85,7 +94,11 @@ export async function getChatOpsConfiguration(db: Prisma.TransactionClient = pri
     autoCreateOnPriority: config?.autoCreateOnPriority ?? ['P1', 'P2'],
     archiveOnResolve: config?.archiveOnResolve ?? true,
     slackWarRoomPrivate: config?.slackWarRoomPrivate ?? false,
+    warRoomInviteOnCall: config?.warRoomInviteOnCall ?? false,
     warRoomArchiveDelayHours: config?.warRoomArchiveDelayHours ?? null,
+    slackUnackedNudgeMinutes: config?.slackUnackedNudgeMinutes ?? null,
+    slackNoUpdateNudgeMinutes: config?.slackNoUpdateNudgeMinutes ?? null,
+    slackWarRoomExternalEmails: config?.slackWarRoomExternalEmails ?? [],
     defaultVideoBridge: config?.defaultVideoBridge ?? policy.defaultMeetingProvider,
     customBridgeUrlTemplate: config?.customBridgeUrlTemplate ?? '',
     defaultProviders: policy.defaultProviders,
@@ -117,8 +130,20 @@ export async function saveChatOpsConfiguration(
     ...(input.slackWarRoomPrivate !== undefined
       ? { slackWarRoomPrivate: input.slackWarRoomPrivate }
       : {}),
+    ...(input.warRoomInviteOnCall !== undefined
+      ? { warRoomInviteOnCall: input.warRoomInviteOnCall }
+      : {}),
     ...(input.warRoomArchiveDelayHours !== undefined
       ? { warRoomArchiveDelayHours: input.warRoomArchiveDelayHours }
+      : {}),
+    ...(input.slackUnackedNudgeMinutes !== undefined
+      ? { slackUnackedNudgeMinutes: input.slackUnackedNudgeMinutes }
+      : {}),
+    ...(input.slackNoUpdateNudgeMinutes !== undefined
+      ? { slackNoUpdateNudgeMinutes: input.slackNoUpdateNudgeMinutes }
+      : {}),
+    ...(input.slackWarRoomExternalEmails !== undefined
+      ? { slackWarRoomExternalEmails: [...new Set(input.slackWarRoomExternalEmails)] }
       : {}),
     defaultVideoBridge: input.defaultVideoBridge,
     customBridgeUrlTemplate: input.customBridgeUrlTemplate || null,

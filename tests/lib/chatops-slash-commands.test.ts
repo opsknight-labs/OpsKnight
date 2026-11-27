@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   handleSlashCommand,
   parseRoleCommandArgs,
+  parsePageCommandArgs,
   buildSlackDeclareModal,
   parseSlackDeclareSubmission,
   parseSlashCommandText,
@@ -14,6 +15,8 @@ import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsNote,
   executeChatOpsLifecycleCommand,
+  executeChatOpsAssignment,
+  executeChatOpsPage,
   executeChatOpsRole,
 } from '@/lib/incidents/chatops-lifecycle';
 import { sendIncidentNotifications } from '@/lib/user-notifications';
@@ -46,6 +49,8 @@ vi.mock('@/lib/prisma', () => ({
     escalationPolicy: {
       findUnique: vi.fn(),
     },
+    team: { findFirst: vi.fn() },
+    onCallSchedule: { findFirst: vi.fn() },
     postmortem: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -73,6 +78,8 @@ vi.mock('@/lib/incidents/chatops-lifecycle', () => ({
   executeChatOpsLifecycleCommand: vi.fn(),
   executeChatOpsNote: vi.fn().mockResolvedValue({ created: true }),
   executeChatOpsRole: vi.fn().mockResolvedValue({ changed: true, userName: 'Alice' }),
+  executeChatOpsAssignment: vi.fn().mockResolvedValue({ changed: true }),
+  executeChatOpsPage: vi.fn().mockResolvedValue({ changed: true, targetName: 'Alice' }),
   authorizeChatOpsIncident: vi.fn().mockResolvedValue(undefined),
   chatOpsLifecycleErrorMessage: vi.fn(error =>
     error instanceof Error ? error.message : 'Unable to update incident.'
@@ -187,6 +194,82 @@ describe('ChatOps Slash Command Dispatcher', () => {
       const result = await handleSlashCommand({ ...basePayload, text: 'roles' });
       expect(result.text).toContain('*Scribe:* Sam');
       expect(result.text).toContain('*Incident commander:* _unassigned_');
+    });
+  });
+
+  describe('/incident page and assign', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.incident.findFirst).mockResolvedValue({
+        id: 'inc-104',
+        title: 'Payments API Failure',
+        status: 'OPEN',
+        roleAssignments: [],
+        service: { id: 'srv-1', name: 'Payments' },
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    });
+
+    it.each([
+      ['<@U123|bob>', { kind: 'slack', slackUserId: 'U123' }],
+      ['team:SRE', { kind: 'team', name: 'SRE' }],
+      ['schedule: Primary', { kind: 'schedule', name: 'Primary' }],
+      ['SRE', { kind: 'name', name: 'SRE' }],
+      ['', null],
+    ])('parses %j', (args, expected) => {
+      expect(parsePageCommandArgs(args)).toEqual(expected);
+    });
+
+    it('pages a linked person in channel', async () => {
+      const result = await handleSlashCommand({ ...basePayload, text: 'page <@U123>' });
+      expect(result.response_type).toBe('in_channel');
+      expect(result.text).toContain('Paged Alice');
+      expect(executeChatOpsPage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          incidentId: 'inc-104',
+          target: { kind: 'user', userId: 'usr-alice' },
+        })
+      );
+    });
+
+    it('pages a team by name, and refuses an unknown target privately', async () => {
+      vi.mocked(prisma.team.findFirst).mockResolvedValueOnce({ id: 'team-1' } as never);
+      await handleSlashCommand({ ...basePayload, text: 'page team:SRE' });
+      expect(executeChatOpsPage).toHaveBeenCalledWith(
+        expect.objectContaining({ target: { kind: 'team', teamId: 'team-1' } })
+      );
+      vi.mocked(prisma.team.findFirst).mockResolvedValueOnce(null);
+      const unknown = await handleSlashCommand({ ...basePayload, text: 'page team:Nope' });
+      expect(unknown.response_type).toBe('ephemeral');
+      expect(unknown.text).toContain('No team or schedule');
+    });
+
+    it('answers an unlinked Slack target privately without paging', async () => {
+      vi.mocked(prisma.user.findFirst)
+        .mockResolvedValueOnce({ id: 'usr-alice', name: 'Alice' } as never)
+        .mockResolvedValueOnce(null);
+      const result = await handleSlashCommand({ ...basePayload, text: 'page <@U777>' });
+      expect(result.response_type).toBe('ephemeral');
+      expect(result.text).toContain('not linked');
+      expect(executeChatOpsPage).not.toHaveBeenCalled();
+    });
+
+    it('shows a permission refusal privately', async () => {
+      vi.mocked(executeChatOpsPage).mockRejectedValueOnce(
+        new Error('You cannot manage this incident.')
+      );
+      const result = await handleSlashCommand({ ...basePayload, text: 'page <@U123>' });
+      expect(result.response_type).toBe('ephemeral');
+      expect(result.text).toContain('You cannot manage this incident.');
+    });
+
+    it('assigns to me or a mention, and rejects other target forms', async () => {
+      const me = await handleSlashCommand({ ...basePayload, text: 'assign me' });
+      expect(me.response_type).toBe('in_channel');
+      expect(executeChatOpsAssignment).toHaveBeenCalledWith(
+        expect.objectContaining({ incidentId: 'inc-104', targetUserId: 'usr-alice' })
+      );
+      const bad = await handleSlashCommand({ ...basePayload, text: 'assign team:SRE' });
+      expect(bad.response_type).toBe('ephemeral');
+      expect(bad.text).toContain('Usage');
     });
   });
 
