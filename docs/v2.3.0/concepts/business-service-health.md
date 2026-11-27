@@ -54,6 +54,21 @@ Every status comes with its reasons. The worst reason wins.
 | `MANUAL`      | A responder marked the incident as impacting it, even below the threshold                                   | Same mapping as `DIRECT`                                                                         |
 | `MAINTENANCE` | Every critical member (every member when none is critical) is in a maintenance window                       | Under maintenance; any outage reason still wins                                                  |
 
+### A worked example
+
+**Alert Ingestion** is a Tier 0 business service with three critical members: the US-East, EU-West
+and AP-South ingestion services. A high-urgency incident opens on the AP-South cluster.
+
+1. Tier 0 counts high-urgency incidents, so the incident meets the threshold.
+2. The AP-South cluster is a member, so the reason is `DIRECT`. High urgency maps to **major
+   outage**, and a critical member is allowed to take the business service that far.
+3. **Alert Ingestion** shows a major outage, "1 of 3 services affected", with that one reason.
+4. **Incident Response** has no member in common and no dependency on it, so it stays operational.
+   Had it depended on Alert Ingestion as a business service, it would show **degraded** through a
+   `NESTED` reason instead.
+5. When the incident resolves, the interval closes. Health returns to operational within a minute,
+   and the time between counts against the 30-day error budget and uptime.
+
 A responder can also **unmark** an incident for a business service. That removes every reason the
 incident gave it, including impact through a supporting business service, and the exclusion is
 remembered for the life of the incident (until someone marks it again).
