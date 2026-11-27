@@ -347,8 +347,11 @@ DELETE. In a PATCH that sends both `displayName` and name parts (`name.givenName
 without one, the stored display name follows the name parts. Equality filters support `externalId` and `userName`. Groups support
 create, read, rename, PUT, ordered atomic PATCH and grant-revocation-on-DELETE. Equality
 filters support `displayName`, `externalId` and `id`. Group queries honor
-`excludedAttributes=members` without loading member collections. Group members must be
-users already provisioned through the same connection. `PUT`, `PATCH` and `DELETE` on
+`excludedAttributes=members` without loading member collections. Group members should be
+users already provisioned through the same connection: a member the connection does not
+know is skipped, the rest of the group is applied, and the skipped ids are recorded on the
+group's activity entry (`skippedUnprovisionedMemberIds`, first 100). The directory adds the
+member when it sends the group again after the user exists. `PUT`, `PATCH` and `DELETE` on
 the `/Users` or `/Groups` collection return `405`; use the resource URL.
 
 `startIndex` is a positive integer; `count` is a nonnegative integer capped at 100. `count=0` returns only the result count. Ordering is deterministic. Requests
