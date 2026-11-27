@@ -97,6 +97,21 @@ matched by the new key: its next trigger opens one new incident and the old one
 needs a manual resolve. Check open incidents from Grafana-without-fingerprint
 and generic-webhook integrations after the upgrade.
 
+## Late and repeated deliveries
+
+Senders retry, and some deliver out of order. For CloudWatch (alarm state change
+time), Azure Monitor (fired and resolved time), Google Cloud Monitoring (incident
+start and end), Grafana and Prometheus (`startsAt` for a firing alert, `endsAt`
+for a resolved one) OpsKnight compares the time the provider reports with the
+newest provider time it already accepted for the same alert key. A trigger or
+resolve that is older is ignored: the sender still gets a success response, so it
+does not retry, the incident is left alone, and the delivery's receipt shows
+`ignored` with the reason "Stale delivery". An event with the same or a newer time
+is applied as before, so a late ALARM retry after the OK no longer opens a new
+incident, while a genuinely new ALARM still does. Providers that send no usable
+time (Datadog, the generic webhook, Sentry and others) are not reordered. CloudWatch
+retries that repeat an SNS message ID are already dropped by the delivery ledger.
+
 ## Delivery history retention
 
 Each inbound delivery leaves one row that de-duplicates retries and feeds the

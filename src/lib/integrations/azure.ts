@@ -14,6 +14,7 @@ export type AzureAlertData = {
       monitorCondition?: string;
       monitorService?: string;
       firedDateTime?: string;
+      resolvedDateTime?: string;
       description?: string;
     };
     alertContext?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -89,6 +90,7 @@ export function transformAzureToEvent(data: AzureAlertData): {
         monitorCondition,
         monitorService: essentials?.monitorService,
         firedDateTime: essentials?.firedDateTime,
+        resolvedDateTime: essentials?.resolvedDateTime,
         alertContext: data.data?.alertContext,
         context: context,
         properties: data.data?.properties,
