@@ -28,6 +28,7 @@ type SlackEventEnvelope = {
     team?: unknown;
     /** The poster's home workspace; differs from team_id for someone from another workspace. */
     user_team?: unknown;
+    channel_type?: unknown;
   };
 };
 
