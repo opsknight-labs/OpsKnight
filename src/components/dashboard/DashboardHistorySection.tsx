@@ -565,7 +565,7 @@ function InsightsContent() {
         variant="inline"
         title="Trends are temporarily unavailable"
         message="They retry on their own. The live feed above is unaffected."
-        backHref={`/insights?range=${query.range}`}
+        backHref={`/insights?range=${query.range}d`}
         backLabel="Open full analytics"
         className={card}
       />
