@@ -6,6 +6,7 @@ import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
 import { assertCanManageScheduleOverrides } from '@/lib/schedules/capabilities';
+import { cancelScheduleOverrideMutation } from '@/lib/schedules/mutations';
 
 const paramsSchema = z
   .object({
@@ -51,23 +52,12 @@ export const DELETE = defineV2Route({
   handler: async ({ params, actor, apiKey, tx }) => {
     // Same rule as the schedule UI: operators need to be on the schedule or lead its owning team.
     await assertCanManageScheduleOverrides(tx!, params.id, actor);
-    const override = await tx!.onCallOverride.findFirst({
-      where: { id: params.overrideId, scheduleId: params.id },
-      select: { id: true, userId: true, replacesUserId: true },
-    });
-    if (!override) {
-      throw new AppError({ code: 'SCHEDULE_OVERRIDE_NOT_FOUND' });
-    }
-
-    const deleted = await tx!.onCallOverride.deleteMany({
-      where: { id: params.overrideId, scheduleId: params.id },
-    });
-    if (deleted.count !== 1) {
-      throw new AppError({ code: 'SCHEDULE_OVERRIDE_NOT_FOUND' });
-    }
+    // Same rule as the schedule UI: an override that has not started is removed, one in progress
+    // ends now (keeping what it served) and a finished one cannot be deleted.
+    const override = await cancelScheduleOverrideMutation(params.id, params.overrideId, tx!);
 
     await logV2Audit({
-      action: 'schedule.override.deleted',
+      action: override.outcome === 'ENDED' ? 'schedule.override.ended' : 'schedule.override.deleted',
       entityType: 'SCHEDULE',
       entityId: params.id,
       actorId: actor.id,
@@ -76,6 +66,8 @@ export const DELETE = defineV2Route({
         overrideId: override.id,
         userId: override.userId,
         replacesUserId: override.replacesUserId,
+        start: override.start.toISOString(),
+        end: override.end.toISOString(),
       },
       tx,
     });

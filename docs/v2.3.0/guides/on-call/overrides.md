@@ -71,7 +71,7 @@ Inspect a timestamp before, inside, and after the window. Confirm the expected r
 
 ## Remove or change the override
 
-Edit/remove the override through the schedule controls, then recheck inside/outside timestamps. For a recurring change, update the layer instead.
+Remove an override that has not started through the schedule controls, then recheck inside/outside timestamps. An override already in progress is ended now rather than erased, so the coverage it served stays in the schedule history; a finished override cannot be deleted. For a recurring change, update the layer instead.
 
 ## Troubleshooting
 

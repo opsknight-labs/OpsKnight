@@ -19,6 +19,7 @@ import {
 } from '@/lib/schedule-action-errors';
 import {
   addScheduleLayerUser,
+  cancelScheduleOverrideMutation,
   createScheduleOverrideMutation,
   deleteScheduleMutation,
   moveScheduleLayerUser,
@@ -864,34 +865,28 @@ export async function deleteOverride(
     return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   try {
-    const override = await prisma.onCallOverride.findFirst({
-      where: { id: overrideId, scheduleId },
-      select: { userId: true, replacesUserId: true },
-    });
-
-    if (!override) {
-      return scheduleActionError(
-        new AppError({
-          code: 'SCHEDULE_OVERRIDE_NOT_FOUND',
-          userMessage: 'Override not found for this schedule.',
-          details: { scheduleId, overrideId },
-        }),
-        'Override not found for this schedule.'
-      );
-    }
-
-    await prisma.$transaction(async tx => {
-      await tx.onCallOverride.delete({ where: { id: overrideId } });
+    const override = await prisma.$transaction(async tx => {
+      const cancelled = await cancelScheduleOverrideMutation(scheduleId, overrideId, tx);
       await logAudit(
         {
-          action: 'schedule.override.deleted',
+          action:
+            cancelled.outcome === 'ENDED'
+              ? 'schedule.override.ended'
+              : 'schedule.override.deleted',
           entityType: 'SCHEDULE',
           entityId: scheduleId,
           actorId,
-          details: { overrideId, userId: override.userId, replacesUserId: override.replacesUserId },
+          details: {
+            overrideId,
+            userId: cancelled.userId,
+            replacesUserId: cancelled.replacesUserId,
+            start: cancelled.start.toISOString(),
+            end: cancelled.end.toISOString(),
+          },
         },
         tx
       );
+      return cancelled;
     });
 
     const scheduleName = await getScheduleName(scheduleId);
@@ -902,7 +897,9 @@ export async function deleteOverride(
     await notifyScheduleMembers(
       scheduleId,
       'Schedule override',
-      `Override removed from ${scheduleName}`,
+      override.outcome === 'ENDED'
+        ? `Override ended early on ${scheduleName}`
+        : `Override removed from ${scheduleName}`,
       recipientIds
     );
 

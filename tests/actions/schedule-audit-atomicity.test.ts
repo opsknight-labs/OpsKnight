@@ -12,6 +12,7 @@ const m = vi.hoisted(() => {
     moveScheduleLayerUser: vi.fn(),
     removeScheduleLayerUser: vi.fn(),
     createScheduleOverrideMutation: vi.fn(),
+    cancelScheduleOverrideMutation: vi.fn(),
     overrideFindFirst: vi.fn(),
   };
 });
@@ -47,6 +48,7 @@ vi.mock('@/lib/schedules/mutations', () => ({
   moveScheduleLayerUser: m.moveScheduleLayerUser,
   removeScheduleLayerUser: m.removeScheduleLayerUser,
   createScheduleOverrideMutation: m.createScheduleOverrideMutation,
+  cancelScheduleOverrideMutation: m.cancelScheduleOverrideMutation,
   deleteScheduleMutation: vi.fn(),
 }));
 vi.mock('@/lib/schedules/layer-commands', () => ({
@@ -128,7 +130,14 @@ describe('schedule actions write the audit record in the change transaction', ()
       await afterCreate(m.tx, { id: 'ovr-1' });
       return { id: 'ovr-1' };
     });
-    m.overrideFindFirst.mockResolvedValue({ userId: 'user-2', replacesUserId: null });
+    m.cancelScheduleOverrideMutation.mockResolvedValue({
+      id: 'ovr-1',
+      userId: 'user-2',
+      replacesUserId: null,
+      start: new Date('2030-01-01T09:00:00Z'),
+      end: new Date('2030-01-01T17:00:00Z'),
+      outcome: 'DELETED',
+    });
 
     await createOverride(
       'sched-1',
@@ -138,5 +147,26 @@ describe('schedule actions write the audit record in the change transaction', ()
 
     expect(auditTx('schedule.override.created')).toBe(m.tx);
     expect(auditTx('schedule.override.deleted')).toBe(m.tx);
+    expect(m.cancelScheduleOverrideMutation).toHaveBeenCalledWith('sched-1', 'ovr-1', m.tx);
+  });
+
+  it('ending an override in progress is audited as ended, with the window it served', async () => {
+    m.cancelScheduleOverrideMutation.mockResolvedValue({
+      id: 'ovr-1',
+      userId: 'user-2',
+      replacesUserId: 'user-3',
+      start: new Date('2030-01-01T09:00:00Z'),
+      end: new Date('2030-01-01T12:00:00Z'),
+      outcome: 'ENDED',
+    });
+
+    await deleteOverride('sched-1', 'ovr-1');
+
+    expect(auditTx('schedule.override.ended')).toBe(m.tx);
+    expect(auditTx('schedule.override.deleted')).toBeUndefined();
+    expect(m.logAudit.mock.calls[0]![0].details).toMatchObject({
+      start: '2030-01-01T09:00:00.000Z',
+      end: '2030-01-01T12:00:00.000Z',
+    });
   });
 });

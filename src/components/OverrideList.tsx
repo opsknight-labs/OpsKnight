@@ -141,13 +141,14 @@ export default function OverrideList({
                       : 'Adds coverage without removing scheduled responders'}
                   </p>
                 </div>
-                {canDeleteOverride && (
+                {/* A finished override is history: analytics and past on-call lookups read it. */}
+                {canDeleteOverride && status !== 'COMPLETED' && (
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => setDeleteOverrideId(override.id)}
                     disabled={isPending}
-                    aria-label={`Delete override for ${override.user.name}`}
+                    aria-label={`${status === 'ACTIVE' ? 'End' : 'Delete'} override for ${override.user.name}`}
                     className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -162,9 +163,13 @@ export default function OverrideList({
       {deleteOverrideId && (
         <ConfirmDialog
           isOpen
-          title="Delete override"
-          message="Delete this override? Effective coverage will immediately return to the remaining schedule."
-          confirmText="Delete override"
+          title={status === 'ACTIVE' ? 'End override now' : 'Delete override'}
+          message={
+            status === 'ACTIVE'
+              ? 'End this override now? Coverage returns to the remaining schedule immediately, and the time it already covered stays in the schedule history.'
+              : 'Delete this override? Effective coverage will immediately return to the remaining schedule.'
+          }
+          confirmText={status === 'ACTIVE' ? 'End override' : 'Delete override'}
           cancelText="Keep override"
           variant="danger"
           onConfirm={() => handleDelete(deleteOverrideId)}
