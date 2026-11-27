@@ -16,6 +16,7 @@ const db = vi.hoisted(() => {
     chatIdentityLink: { findMany: vi.fn(), findFirst: vi.fn() },
     user: { findMany: vi.fn() },
     chatOpsConfig: { findUnique: vi.fn() },
+    service: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(async (cb: (t: typeof tx) => unknown) => cb(tx)),
   };
 });
