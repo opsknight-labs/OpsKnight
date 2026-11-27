@@ -77,9 +77,10 @@ const TONE_RECIPES: Record<ToneKey, ToneRecipe> = {
     text: 'text-orange-800 dark:text-orange-300',
   },
   neutral: {
-    // ink-600, not muted-foreground: muted text on the muted fill is only 4.3:1 in light mode. ink-600 does not
-    // flip with the theme (1.96:1 on the dark muted fill), so dark mode names its own light text.
-    soft: 'border-border bg-muted text-ink-600 dark:text-zinc-300',
+    // ink-600, not muted-foreground: muted text on the muted fill is only 4.3:1 in light mode. The ink ramp flips
+    // in dark mode but not inside an always-dark `.ok-inverse-surface` (page heroes), where bg-muted turns dark
+    // and ink-600 stays slate (1.96:1), so that surface names its own light text.
+    soft: 'border-border bg-muted text-ink-600 [.ok-inverse-surface_&]:text-zinc-300',
     solid: 'bg-ink-400',
     filled: 'border-transparent bg-ink-600 text-white dark:bg-ink-300 dark:text-zinc-950',
     hoverBorder: 'hover:border-ink-300',
