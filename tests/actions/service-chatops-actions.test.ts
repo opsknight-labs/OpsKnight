@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   assertCanModifyService: vi.fn(),
   serviceUpdate: vi.fn(),
+  userFindMany: vi.fn(),
   setServiceWarRoomPolicy: vi.fn(),
   logAudit: vi.fn(),
   revalidatePath: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('@/lib/prisma', () => ({
     service: {
       update: mocks.serviceUpdate,
     },
+    user: { findMany: mocks.userFindMany },
   },
 }));
 
@@ -38,7 +40,10 @@ vi.mock('next/navigation', () => ({
   redirect: mocks.redirect,
 }));
 
-import { updateServiceChatOpsSettings } from '@/app/(app)/services/actions';
+import {
+  updateServiceChatOpsSettings,
+  updateServiceWarRoomAutoAdd,
+} from '@/app/(app)/services/actions';
 
 describe('updateServiceChatOpsSettings', () => {
   beforeEach(() => {
@@ -207,5 +212,49 @@ describe('updateServiceChatOpsSettings', () => {
       'user-1',
       undefined
     );
+  });
+});
+
+describe('updateServiceWarRoomAutoAdd', () => {
+  const form = (team: string, ids: string[]) => {
+    const data = new FormData();
+    data.set('serviceId', 'svc-1');
+    data.set('warRoomAutoAddTeam', team);
+    ids.forEach(id => data.append('userIds', id));
+    return data;
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.assertCanModifyService.mockResolvedValue({ id: 'user-1' });
+    mocks.serviceUpdate.mockResolvedValue({});
+  });
+
+  it('saves the team option and only the active people chosen', async () => {
+    mocks.userFindMany.mockResolvedValue([{ id: 'a' }]);
+    const result = await updateServiceWarRoomAutoAdd(undefined, form('MANAGERS', ['a', 'gone']));
+    expect(result).toEqual({ success: true, error: null });
+    expect(mocks.userFindMany.mock.calls[0][0].where.status).toBe('ACTIVE');
+    expect(mocks.serviceUpdate).toHaveBeenCalledWith({
+      where: { id: 'svc-1' },
+      data: { warRoomAutoAddTeam: 'MANAGERS', warRoomAutoAddUserIds: ['a'] },
+    });
+  });
+
+  it('rejects an unknown team option and more than 25 people without saving', async () => {
+    expect((await updateServiceWarRoomAutoAdd(undefined, form('EVERYONE', []))).error).toMatch(
+      /Invalid/
+    );
+    const many = Array.from({ length: 26 }, (_, i) => `u${i}`);
+    expect((await updateServiceWarRoomAutoAdd(undefined, form('NONE', many))).error).toMatch(
+      /at most 25/
+    );
+    expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('is refused when the user cannot modify the service', async () => {
+    mocks.assertCanModifyService.mockRejectedValue(new Error('Forbidden'));
+    const result = await updateServiceWarRoomAutoAdd(undefined, form('ALL', []));
+    expect(result.error).toBe('Forbidden');
+    expect(mocks.serviceUpdate).not.toHaveBeenCalled();
   });
 });

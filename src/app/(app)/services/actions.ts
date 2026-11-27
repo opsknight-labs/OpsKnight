@@ -405,6 +405,53 @@ export async function updateServiceChatOpsSettings(
   }
 }
 
+const WAR_ROOM_TEAM_MODES = new Set(['NONE', 'MANAGERS', 'ALL']);
+const MAX_AUTO_ADD_PEOPLE = 25;
+
+/** Who a service always adds to its war rooms: owning-team members (all or managers) plus named people. */
+export async function updateServiceWarRoomAutoAdd(
+  _prevState: { success?: boolean; error?: string | null } | undefined,
+  formData: FormData
+): Promise<{ success?: boolean; error?: string | null }> {
+  try {
+    const serviceId = String(formData.get('serviceId') ?? '').trim();
+    if (!serviceId) return { error: 'Service ID is required.' };
+    const currentUser = await assertCanModifyService(serviceId);
+    const team = String(formData.get('warRoomAutoAddTeam') ?? 'NONE');
+    if (!WAR_ROOM_TEAM_MODES.has(team)) return { error: 'Invalid team option.' };
+    const requested = [...new Set(formData.getAll('userIds').map(value => String(value)))];
+    if (requested.length > MAX_AUTO_ADD_PEOPLE) {
+      return { error: `Choose at most ${MAX_AUTO_ADD_PEOPLE} people.` };
+    }
+    const active = requested.length
+      ? await prisma.user.findMany({
+          where: { id: { in: requested }, status: 'ACTIVE' },
+          select: { id: true },
+        })
+      : [];
+    const userIds = active.map(user => user.id);
+    await prisma.service.update({
+      where: { id: serviceId },
+      data: {
+        warRoomAutoAddTeam: team as 'NONE' | 'MANAGERS' | 'ALL',
+        warRoomAutoAddUserIds: userIds,
+      },
+    });
+    await logAudit({
+      action: 'service.chatops.updated',
+      entityType: 'SERVICE',
+      entityId: serviceId,
+      actorId: currentUser.id,
+      details: { warRoomAutoAddTeam: team, warRoomAutoAddCount: userIds.length },
+    });
+    revalidatePath(`/services/${serviceId}/settings`);
+    revalidatePath(`/services/${serviceId}`);
+    return { success: true, error: null };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to save.' };
+  }
+}
+
 export async function saveJiraServiceMapping(
   _prevState: { success?: boolean; error?: string | null } | undefined,
   formData: FormData

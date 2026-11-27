@@ -27,3 +27,36 @@ export async function resolveOnCallWarRoomResponders(serviceId: string): Promise
   }
   return [...ids].slice(0, MAX_ON_CALL_RESPONDERS);
 }
+
+const MAX_SERVICE_RESPONDERS = 25;
+
+/**
+ * People a service always adds to its war rooms: the owning team's members (all, or only owners and
+ * admins) plus any named people, who need not belong to the team. Only active users, capped.
+ */
+export async function resolveServiceWarRoomResponders(serviceId: string): Promise<string[]> {
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { teamId: true, warRoomAutoAddTeam: true, warRoomAutoAddUserIds: true },
+  });
+  if (!service) return [];
+  const ids = new Set<string>(service.warRoomAutoAddUserIds ?? []);
+  if (service.teamId && service.warRoomAutoAddTeam !== 'NONE') {
+    const members = await prisma.teamMember.findMany({
+      where: {
+        teamId: service.teamId,
+        ...(service.warRoomAutoAddTeam === 'MANAGERS' ? { role: { in: ['OWNER', 'ADMIN'] } } : {}),
+      },
+      select: { userId: true },
+      take: 200,
+    });
+    for (const member of members) ids.add(member.userId);
+  }
+  if (ids.size === 0) return [];
+  const active = await prisma.user.findMany({
+    where: { id: { in: [...ids] }, status: 'ACTIVE' },
+    select: { id: true },
+    take: MAX_SERVICE_RESPONDERS,
+  });
+  return active.map(user => user.id);
+}
