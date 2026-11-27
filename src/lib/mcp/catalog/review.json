@@ -73,7 +73,7 @@
     "routeSha256": "5ffb07e762e43ca9b9d935291ed924a0cb96ab05cd2a45d46bf19d4f6964169d",
     "resourceFilter": "existing REST route authorization and scoped projection",
     "evidence": "tests/integration/mcp-approval-destructive.test.ts",
-    "contractSha256": "05d59fa68e63ba8459a58527e0c067df160b9a021558b7cefe4bdbef0c58d353",
+    "contractSha256": "74cba20eb30ba47bd94dfc8ee0a962de15ac4b639f0dc8bd812fa566f07f576a",
     "additionalScopes": ["custom-fields:read"],
     "impactPreview": "getCustomFieldDefinition",
     "actions": ["custom_field.manage"]

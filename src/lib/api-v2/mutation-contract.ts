@@ -77,7 +77,7 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     preconditionRequired: true,
     responseEtag: false,
     rationale:
-      'Exact revision fences deletion; populated fields cannot be deleted and audit commits with the replay receipt.',
+      'Exact revision fences deletion; a field that holds incident values is refused unless cascade=true deletes the values with it, and audit commits with the replay receipt.',
   },
   'POST /api/v2/audit-exports': {
     idempotency: 'required',
