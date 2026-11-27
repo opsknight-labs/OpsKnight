@@ -5,6 +5,7 @@ import { AppError } from '@/lib/errors';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { readTextBodyWithLimit, RequestBodyTooLargeError } from '@/lib/request-body';
 import {
   applyCatalogImport,
   MAX_IMPORT_BYTES,
@@ -36,15 +37,14 @@ export async function POST(request: NextRequest) {
     return deny(403, 'Operator access is required');
   if (!(await checkRateLimit(`intelligence:topology-import:${actor.id}`, 10, 60_000)).allowed)
     return deny(429, 'Too many imports. Try again in a minute.');
-  const length = Number(request.headers.get('content-length') ?? 0);
-  if (length > MAX_IMPORT_BYTES) return deny(413, 'Catalog is larger than 2 MB');
   let text: string;
   try {
-    text = await request.text();
-  } catch {
+    // A real byte ceiling while the stream is read: a chunked upload with no Content-Length is cut off too.
+    text = await readTextBodyWithLimit(request, MAX_IMPORT_BYTES);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) return deny(413, 'Catalog is larger than 2 MB');
     return deny(400, 'Could not read the request body');
   }
-  if (text.length > MAX_IMPORT_BYTES) return deny(413, 'Catalog is larger than 2 MB');
   try {
     const entities = parseCatalog(text);
     const summary = await prisma.$transaction(tx =>

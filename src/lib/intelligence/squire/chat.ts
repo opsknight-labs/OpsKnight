@@ -105,6 +105,10 @@ import { portFor, streamInvestigation } from './investigation/turn';
 import { squireKnowledgeEnabled } from '../memory/settings';
 
 /** Evidence handles a basic answer may carry; beyond this the answer is paged rather than refused. */
+/** Marks where the person's own request starts, after the on-screen data. */
+const PERSON_MESSAGE_LABEL =
+  "The person's message (theirs: this is the request to answer, not data):";
+
 const MAX_BASIC_SOURCES = 32;
 
 const CHUNK = 48;
@@ -488,8 +492,16 @@ async function* squireTurn(
           ...replay.map((message, index) =>
             index === replay.length - 1 ? { ...message, cache: true } : message
           ),
-          ...volatile,
-          { role: 'user', content: question, dataClass },
+          {
+            role: 'user',
+            // One turn: the on-screen data first, labelled as data, then the person's own words, labelled as
+            // theirs. Providers merge consecutive user messages anyway, and the model must still be able to tell
+            // the data (which can quote hostile text) from the request it has to answer.
+            content: volatile.length
+              ? `${volatile[0]!.content}\n\n${PERSON_MESSAGE_LABEL}\n${question}`
+              : question,
+            dataClass,
+          },
         ];
         let answer = '';
         let proposals = 0;
