@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { statusPageSlugMatches } from '@/lib/status-page-resolver';
 import { hashSubscriptionToken } from '@/lib/status-pages/subscription-tokens';
+import { invalidLinkRedirect } from '@/lib/status-pages/invalid-link';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
     .safeParse({ token, slug });
 
   if (!parsed.success) {
-    return NextResponse.redirect(new URL('/status', req.url), 303);
+    return invalidLinkRedirect(req, 'verify', token);
   }
 
   const subscription = await prisma.statusPageSubscription.findFirst({
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
     !subscription ||
     !statusPageSlugMatches(subscription.statusPage.slug, parsed.data.slug || undefined)
   ) {
-    return NextResponse.redirect(new URL('/status', req.url), 303);
+    return invalidLinkRedirect(req, 'verify', token);
   }
 
   if (
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
       where: { id: subscription.id, verificationToken: hashSubscriptionToken(parsed.data.token) },
       data: { verificationToken: null, verificationTokenExpiresAt: null },
     });
-    return NextResponse.redirect(new URL('/status', req.url), 303);
+    return invalidLinkRedirect(req, 'verify', token);
   }
 
   // If this was an ACTIVE subscriber's pending preference change, atomically install it.

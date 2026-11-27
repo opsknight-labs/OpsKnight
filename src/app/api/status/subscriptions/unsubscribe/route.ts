@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { unsubscribeByToken } from '@/lib/status-pages/unsubscribe';
+import { invalidLinkRedirect } from '@/lib/status-pages/invalid-link';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,5 +31,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.redirect(new URL(destination, req.url), 303);
   }
 
-  return NextResponse.redirect(new URL('/status', req.url), 303);
+  return invalidLinkRedirect(req, 'unsubscribe', token);
 }
