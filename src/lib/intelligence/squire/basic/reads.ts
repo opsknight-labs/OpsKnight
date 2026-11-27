@@ -1,6 +1,7 @@
 import 'server-only';
 import type { IncidentUrgency, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { actionItemOverdueBefore } from '@/lib/action-item-due-dates';
 import { pageByUrgency } from '@/lib/incidents/urgency-order';
 import { AuthorizationError } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
@@ -792,7 +793,7 @@ async function followups(ctx: Context): Promise<string> {
       status: /\b(completed|done)\b/i.test(ctx.message)
         ? 'COMPLETED'
         : { in: ['OPEN', 'IN_PROGRESS', 'BLOCKED'] },
-      ...(/\boverdue\b/i.test(ctx.message) ? { dueDate: { lt: ctx.now } } : {}),
+      ...(/\boverdue\b/i.test(ctx.message) ? { dueDate: { lt: actionItemOverdueBefore(ctx.now) } } : {}),
     },
     take: LIMIT + 1,
     orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],

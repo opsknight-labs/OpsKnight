@@ -611,7 +611,7 @@ export async function queryFollowThrough(
       (SELECT COUNT(*) FROM "ActionItem" ai JOIN metric_rows m ON m.id = ai."incidentId"
         WHERE ai.status <> 'COMPLETED'::"ActionItemStatus")::int AS open,
       (SELECT COUNT(*) FROM "ActionItem" ai JOIN metric_rows m ON m.id = ai."incidentId"
-        WHERE ai.status <> 'COMPLETED'::"ActionItemStatus" AND ai."dueDate" < NOW())::int AS overdue,
+        WHERE ai.status <> 'COMPLETED'::"ActionItemStatus" AND ai."dueDate" < (NOW() AT TIME ZONE 'UTC')::date)::int AS overdue,
       (SELECT COUNT(*) FROM "ActionItem" ai JOIN metric_rows m ON m.id = ai."incidentId"
         WHERE ai.status = 'COMPLETED'::"ActionItemStatus")::int AS completed`);
   const row = rows[0];

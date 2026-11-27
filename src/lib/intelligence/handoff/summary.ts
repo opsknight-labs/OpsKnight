@@ -1,6 +1,7 @@
 import 'server-only';
 import type { IncidentUrgency } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { actionItemOverdueBefore } from '@/lib/action-item-due-dates';
 import { pageByUrgency } from '@/lib/incidents/urgency-order';
 import { logger } from '@/lib/logger';
 import { escapeHtml } from '../digest/render';
@@ -116,7 +117,7 @@ export async function buildHandoffSummary(
     client.actionItem.findMany({
       where: {
         status: { in: ['OPEN', 'IN_PROGRESS', 'BLOCKED'] },
-        dueDate: { lt: now },
+        dueDate: { lt: actionItemOverdueBefore(now) },
         incident: { serviceId: { in: serviceIds } },
       },
       orderBy: { dueDate: 'asc' },

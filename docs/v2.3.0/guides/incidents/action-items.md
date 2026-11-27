@@ -79,6 +79,8 @@ Use the statuses consistently:
 
 Selecting **Completed** records a completion time. Moving the item back to another state clears that completion time. The application keeps normalized action-item records and compatible postmortem data aligned during the migration boundary.
 
+A due date is a calendar date, shown as entered whatever your time zone. An item is **Due today** all through its due date and becomes overdue when the next UTC day begins (the global board count, the `overdue` filter in API v2, the daily reminders, Analytics and handoff summaries all use this rule).
+
 Review unassigned, overdue, blocked, and high-priority items on a regular operational cadence. Closing or deleting a parent incident does not make remediation unnecessary.
 
 ### Overdue reminders

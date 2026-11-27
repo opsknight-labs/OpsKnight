@@ -31,11 +31,12 @@ export function getDueDateStatus(
     return { type: 'none' };
   }
 
-  // Calculate day difference at midnight boundaries
-  const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // A due date is a calendar date stored at 00:00Z: read it in UTC, and compare it with the
+  // viewer's own today so it is never shifted a day by their zone.
+  const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   const msPerDay = 1000 * 60 * 60 * 24;
-  const daysDiff = Math.round((dueMidnight.getTime() - nowMidnight.getTime()) / msPerDay);
+  const daysDiff = Math.round((dueDay - today) / msPerDay);
 
   if (daysDiff < 0) {
     return { type: 'overdue', daysDiff: Math.abs(daysDiff) };
@@ -61,7 +62,7 @@ function DueDateBadge({
     const formatted = completedAt
       ? formatDateTime(completedAt, userTimeZone, { format: 'date' })
       : dueDate
-        ? formatDateTime(dueDate, userTimeZone, { format: 'date' })
+        ? formatDateTime(dueDate, 'UTC', { format: 'date' })
         : null;
 
     return (
@@ -81,7 +82,7 @@ function DueDateBadge({
     return null;
   }
 
-  const formattedDate = dueDate ? formatDateTime(dueDate, userTimeZone, { format: 'date' }) : '';
+  const formattedDate = dueDate ? formatDateTime(dueDate, 'UTC', { format: 'date' }) : '';
 
   if (result.type === 'overdue') {
     const days = result.daysDiff ?? 1;

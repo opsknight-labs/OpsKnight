@@ -46,6 +46,15 @@ describe('overdue action item notifications', () => {
     });
   });
 
+  it('treats a due date as overdue only after its UTC day has passed', async () => {
+    await notifyOverdueActionItems(new Date('2026-11-20T23:30:00.000Z'));
+
+    // An item due on Nov 20 (stored 2026-11-20T00:00Z) is not overdue until Nov 21 begins.
+    expect(db.actionItem.findMany.mock.calls[0]?.[0].where.dueDate).toEqual({
+      lt: new Date('2026-11-20T00:00:00.000Z'),
+    });
+  });
+
   it('notifies only the owner, once per day, and never fans out to administrators', async () => {
     db.actionItem.findMany.mockResolvedValueOnce(items(0, 2));
     db.inAppNotification.findMany.mockResolvedValueOnce([

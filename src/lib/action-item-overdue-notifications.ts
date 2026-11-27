@@ -1,3 +1,5 @@
+import { actionItemOverdueBefore } from './action-item-due-dates';
+
 const OVERDUE_STATUSES = ['OPEN', 'IN_PROGRESS', 'BLOCKED'] as const;
 const PAGE_SIZE = 500;
 // Bounds one run at 20,000 overdue items; the next day's run continues the reminders.
@@ -13,7 +15,7 @@ const UNOWNED_ENTITY_ID = 'unowned';
 export async function notifyOverdueActionItems(now: Date): Promise<number> {
   const { default: prisma } = await import('./prisma');
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const overdue = { status: { in: [...OVERDUE_STATUSES] }, dueDate: { lt: now } };
+  const overdue = { status: { in: [...OVERDUE_STATUSES] }, dueDate: { lt: actionItemOverdueBefore(now) } };
 
   let created = 0;
   let cursor: string | undefined;
