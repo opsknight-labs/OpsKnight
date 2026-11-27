@@ -57,6 +57,11 @@ database state, an external dependency, or only the replica serving the page.
 
 - **Database** tests connectivity. **Database capacity** inspects connection
   use against configured/runtime capacity; neither proves query performance.
+  Connection use counts client backends only. A transaction that has been
+  actively running for more than five minutes marks the check unhealthy. Idle
+  sessions, including idle-in-transaction ones, and transactions run by
+  `pg_dump` or `pg_basebackup` (matched by `application_name`) are ignored, so a
+  backup does not turn the card red.
 - **Migrations** compares committed and recorded migration state. Follow the
   database-migration runbook before changing `_prisma_migrations`.
 - **Scheduler** reads the singleton scheduler state and heartbeat. A current

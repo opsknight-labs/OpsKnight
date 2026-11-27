@@ -473,12 +473,15 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
           current_database() AS "databaseName",
           pg_database_size(current_database())::bigint::text AS "sizeBytes",
           current_setting('max_connections')::int AS "maxConnections",
-          (SELECT count(*)::int FROM pg_stat_activity) AS "usedConnections",
-          (SELECT count(*)::int FROM pg_stat_activity WHERE state = 'active') AS "activeConnections",
+          (SELECT count(*)::int FROM pg_stat_activity
+            WHERE backend_type = 'client backend') AS "usedConnections",
+          (SELECT count(*)::int FROM pg_stat_activity
+            WHERE backend_type = 'client backend' AND state = 'active') AS "activeConnections",
           (SELECT count(*)::int FROM pg_stat_activity
             WHERE datname = current_database()
-              AND xact_start IS NOT NULL
-              AND xact_start < NOW() - INTERVAL '5 minutes') AS "longTransactions"
+              AND state = 'active'
+              AND xact_start < NOW() - INTERVAL '5 minutes'
+              AND application_name NOT IN ('pg_dump', 'pg_basebackup')) AS "longTransactions"
       `;
       const sizeBytesNum = capacity ? Number(capacity.sizeBytes) : 0;
       const sizeFormatted = capacity ? byteLabel(sizeBytesNum) : 'Unknown';
@@ -504,7 +507,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         details: capacity
           ? [
               `Active connections: ${capacity.activeConnections}`,
-              `Transactions open longer than 5 minutes: ${capacity.longTransactions}`,
+              `Active transactions running longer than 5 minutes (backups excluded): ${capacity.longTransactions}`,
               `Database size: ${sizeFormatted}`,
               'Host CPU, memory, storage capacity, replicas, and pool wait require external telemetry.',
             ]

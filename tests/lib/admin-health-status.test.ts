@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const m = vi.hoisted(() => ({
   jobCount: vi.fn(),
   notificationCount: vi.fn(),
+  queryRaw: vi.fn(async (_strings: TemplateStringsArray) => []),
 }));
 
 // Every other query the health report makes answers "nothing there": those checks are not under test.
@@ -19,7 +20,7 @@ vi.mock('@/lib/prisma', () => {
     }
   );
   const base: Record<string, unknown> = {
-    $queryRaw: async () => [],
+    $queryRaw: m.queryRaw,
     $executeRaw: async () => 0,
     backgroundJob: {
       count: m.jobCount,
@@ -153,5 +154,23 @@ describe('scheduler check when the internal cron is disabled', () => {
     expect(scheduler?.status).toBe('informational');
     expect(scheduler?.summary).toContain('External scheduler');
     expect(calculateOperationalScore(scheduler ? [scheduler] : []).overall).toBe('healthy');
+  });
+});
+
+describe('database capacity query', () => {
+  it('counts only active transactions and client backends, and skips backup tools', async () => {
+    resetAdminHealthCacheForTests();
+    m.queryRaw.mockClear();
+    await collectAdminHealth({ force: true });
+
+    const sql = m.queryRaw.mock.calls
+      .map(([strings]) => strings.join('?'))
+      .find(text => text.includes('longTransactions'));
+    expect(sql).toBeDefined();
+    const longTransactions = sql?.slice(sql.indexOf('WHERE datname'), sql.indexOf('"longTransactions"'));
+    expect(longTransactions).toContain("state = 'active'");
+    expect(longTransactions).toContain("'pg_dump'");
+    expect(longTransactions).toContain("'pg_basebackup'");
+    expect(sql).toContain("backend_type = 'client backend'");
   });
 });
