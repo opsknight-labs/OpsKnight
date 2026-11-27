@@ -3,11 +3,13 @@ import {
   bulkAcknowledge,
   bulkResolve,
   bulkSnooze,
+  bulkUnsnooze,
   bulkUpdatePriority,
   bulkUpdateStatus,
   bulkUpdateUrgency,
 } from '@/app/(app)/incidents/bulk-actions';
 import prisma from '@/lib/prisma';
+import { AppError } from '@/lib/errors';
 import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
 import {
   executeIncidentLifecycleBatch,
@@ -165,6 +167,32 @@ describe('Bulk Actions', () => {
 
       expect(result).toEqual({ success: false, error: 'Failed to resolve incidents' });
       expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bulkUnsnooze', () => {
+    it('tells the user why the selection was refused and that nothing changed', async () => {
+      vi.mocked(executeIncidentLifecycleBatch).mockRejectedValue(
+        new AppError({
+          code: 'INCIDENT_INVALID_TRANSITION',
+          userMessage: 'Cannot unsnooze an incident while it is ACKNOWLEDGED.',
+        })
+      );
+
+      const result = await bulkUnsnooze(['snoozed-1', 'acked-1']);
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Cannot unsnooze an incident while it is ACKNOWLEDGED. No incidents were changed.',
+      });
+    });
+
+    it('keeps the generic message for unexpected failures', async () => {
+      vi.mocked(executeIncidentLifecycleBatch).mockRejectedValue(new Error('connection reset'));
+
+      const result = await bulkUnsnooze(['snoozed-1']);
+
+      expect(result).toEqual({ success: false, error: 'Failed to unsnooze incidents' });
     });
   });
 

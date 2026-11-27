@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
+import { isAppError } from '@/lib/errors';
 import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import { isPageableRole } from '@/lib/authorization';
@@ -24,6 +25,15 @@ function changedIncidentIds(results: readonly IncidentLifecycleResult[]): string
 }
 
 type BulkLifecycleActor = { id: string; name?: string };
+
+// The batch is one transaction, so a refused incident rolls back the whole selection.
+// Say why (and that nothing changed) instead of a fixed string.
+function bulkFailureMessage(error: unknown, fallback: string): string {
+  if (isAppError(error) && error.exposure === 'public') {
+    return `${error.userMessage} No incidents were changed.`;
+  }
+  return fallback;
+}
 
 async function runBulkLifecycleCommand(
   incidentIds: string[],
@@ -93,7 +103,7 @@ export async function bulkAcknowledge(incidentIds: string[]) {
     return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk acknowledge failed', { component: 'bulk-actions', error, incidentIds });
-    return { success: false, error: 'Failed to acknowledge incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to acknowledge incidents') };
   }
 }
 
@@ -122,7 +132,7 @@ export async function bulkResolve(incidentIds: string[]) {
     return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk resolve failed', { component: 'bulk-actions', error, incidentIds });
-    return { success: false, error: 'Failed to resolve incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to resolve incidents') };
   }
 }
 
@@ -269,7 +279,7 @@ export async function bulkSnooze(
       incidentIds,
       durationMinutes,
     });
-    return { success: false, error: 'Failed to snooze incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to snooze incidents') };
   }
 }
 
@@ -297,7 +307,7 @@ export async function bulkUnsnooze(incidentIds: string[]) {
     return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk unsnooze failed', { component: 'bulk-actions', error, incidentIds });
-    return { success: false, error: 'Failed to unsnooze incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to unsnooze incidents') };
   }
 }
 
@@ -325,7 +335,7 @@ export async function bulkSuppress(incidentIds: string[]) {
     return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk suppress failed', { component: 'bulk-actions', error, incidentIds });
-    return { success: false, error: 'Failed to suppress incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to suppress incidents') };
   }
 }
 
@@ -353,7 +363,7 @@ export async function bulkUnsuppress(incidentIds: string[]) {
     return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk unsuppress failed', { component: 'bulk-actions', error, incidentIds });
-    return { success: false, error: 'Failed to unsuppress incidents' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to unsuppress incidents') };
   }
 }
 
@@ -436,6 +446,6 @@ export async function bulkUpdateStatus(incidentIds: string[], status: BulkLifecy
       incidentIds,
       status,
     });
-    return { success: false, error: 'Failed to update status' };
+    return { success: false, error: bulkFailureMessage(error, 'Failed to update status') };
   }
 }
