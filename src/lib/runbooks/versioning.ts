@@ -529,6 +529,48 @@ export async function retireRunbookVersion(versionId: string, actorId: string) {
   });
 }
 
+/**
+ * Unpublishes a runbook: its current published version is retired and the runbook has no published
+ * version until one is published again. Rules pinned to that version, and rules following the latest
+ * published version, stop with a clear reason; nothing is detached or deleted.
+ */
+export async function unpublishRunbook(runbookId: string, actorId: string) {
+  return prisma.$transaction(async tx => {
+    await lockRunbookForUpdate(tx, runbookId, { action: 'unpublish' });
+    const runbook = await tx.runbook.findUniqueOrThrow({
+      where: { id: runbookId },
+      select: {
+        id: true,
+        publishedVersion: { select: { id: true, version: true, checksum: true } },
+      },
+    });
+    const published = runbook.publishedVersion;
+    if (!published) {
+      throw new RunbookDefinitionError('This runbook has no published version to unpublish.', {
+        runbookId,
+      });
+    }
+    const retired = await tx.runbookVersion.updateMany({
+      where: { id: published.id, state: 'PUBLISHED' },
+      data: { state: 'RETIRED' },
+    });
+    if (retired.count !== 1) throw new RunbookVersionImmutableError(published.id, 'RETIRED');
+    await tx.runbook.update({ where: { id: runbookId }, data: { publishedVersionId: null } });
+    await logAudit(
+      {
+        action: 'runbook.unpublished',
+        entityType: 'RUNBOOK',
+        entityId: runbookId,
+        actorId,
+        oldValue: { publishedVersionId: published.id, version: published.version },
+        newValue: { publishedVersionId: null, retiredChecksum: published.checksum },
+      },
+      tx
+    );
+    return { id: runbookId, version: published.version };
+  });
+}
+
 export function summarizeVersionDiff(
   previous: Pick<RunbookVersion, 'version' | 'definition' | 'checksum'>,
   current: Pick<RunbookVersion, 'version' | 'definition' | 'checksum'>

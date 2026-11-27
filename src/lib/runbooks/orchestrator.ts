@@ -67,6 +67,7 @@ import {
   RunbookDefinitionError,
   RunbookExecutionInvalidTransitionError,
   RunbookExecutionNotFoundError,
+  assertRunbookVersionRunnable,
 } from './errors';
 import { lockRunbookForShare } from './locking';
 import { assertIndependentPreviewReview } from './preview-review';
@@ -394,22 +395,13 @@ async function prepareRunbookExecution(
       where: {
         id: versionId,
         runbookId: runbook.id,
-        state:
-          input.runbookVersionId || suggestion ? { in: ['PUBLISHED', 'RETIRED'] } : 'PUBLISHED',
+        state: { in: ['PUBLISHED', 'RETIRED'] },
       },
       include: { inputs: { orderBy: { sequence: 'asc' } } },
     });
     if (!version)
       throw new RunbookDefinitionError('Only an immutable published version can execute.');
-    if (
-      version.state === 'RETIRED' &&
-      !suggestion &&
-      (!binding || binding.versionStrategy !== 'PINNED' || binding.runbookVersionId !== version.id)
-    ) {
-      throw new RunbookDefinitionError(
-        'A retired version can execute only through the binding that pinned it while published.'
-      );
-    }
+    assertRunbookVersionRunnable(version);
     const definition = parseRunbookDefinition(version.definition, version.inputs);
     if (computeDefinitionChecksum(definition) !== version.checksum) {
       throw new RunbookDefinitionError('Published runbook checksum does not match its definition.');

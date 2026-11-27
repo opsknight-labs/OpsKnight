@@ -53,6 +53,15 @@ export class RunbookDefinitionError extends RunbookError {
   }
 }
 
+/** A retired version never starts a run. Name it and say what to do instead. */
+export function assertRunbookVersionRunnable(version: { id: string; version: number; state: string }) {
+  if (version.state === 'RETIRED')
+    throw new RunbookDefinitionError(
+      `Runbook version ${version.version} is retired and cannot run. Publish a current version, or pin the rule to a published version.`,
+      { versionId: version.id, version: version.version }
+    );
+}
+
 export class RunbookStepKeyDuplicateError extends RunbookError {
   constructor(key: string) {
     super({

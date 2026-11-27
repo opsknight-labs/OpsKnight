@@ -50,7 +50,7 @@ import {
   saveDraftAction,
   updateRunbookMetadataAction,
 } from '../actions';
-import { retireVersionAction } from './version-actions';
+import { retireVersionAction, unpublishRunbookAction } from './version-actions';
 import DetailTabs from '@/components/ui/DetailTabs';
 import RunbookBuilder from '@/components/runbooks/RunbookBuilder';
 import {
@@ -383,6 +383,10 @@ export default async function RunbookDetailPage({
     retireAction:
       canPublish && version.state === 'PUBLISHED' && version.id !== publishedId
         ? retireVersionAction.bind(null, version.id, runbook.id)
+        : undefined,
+    unpublishAction:
+      canPublish && version.state === 'PUBLISHED' && version.id === publishedId
+        ? unpublishRunbookAction.bind(null, runbook.id)
         : undefined,
   }));
 

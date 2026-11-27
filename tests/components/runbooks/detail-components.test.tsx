@@ -112,6 +112,37 @@ describe('VersionTimeline', () => {
   });
 });
 
+describe('VersionTimeline unpublish', () => {
+  it('offers Unpublish only on the live version and asks before running it', () => {
+    const unpublishAction = vi.fn();
+    render(
+      <VersionTimeline
+        versions={[
+          {
+            ...baseVersion,
+            id: 'ver_2',
+            version: 2,
+            isCurrentPublished: true,
+            compareHref: null,
+            unpublishAction,
+          },
+          { ...baseVersion, retireAction: vi.fn() },
+        ]}
+      />
+    );
+    const items = within(screen.getByRole('list', { name: 'Version history' })).getAllByRole(
+      'listitem'
+    );
+    expect(within(items[1]).queryByRole('button', { name: 'Unpublish' })).toBeNull();
+    fireEvent.click(within(items[0]).getByRole('button', { name: 'Unpublish' }));
+    expect(screen.getByText('Unpublish version 2?')).toBeInTheDocument();
+    expect(
+      screen.getByText(/has no published version until you publish again/)
+    ).toBeInTheDocument();
+    expect(unpublishAction).not.toHaveBeenCalled();
+  });
+});
+
 describe('VersionStepDiff', () => {
   it('shows changed steps with badges and collapses unchanged steps', () => {
     const side = { summary: 'Step · MANUAL · READ_ONLY', configuration: '{}' };

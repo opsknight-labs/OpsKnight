@@ -148,6 +148,7 @@ export function readinessFixHint(
     case 'VERSION_NOT_PINNED':
       return { label: 'Pin a published version', href: configure };
     case 'VERSION_UNAVAILABLE':
+    case 'VERSION_RETIRED':
       return { label: 'Publish or select an available version', href: `/runbooks/${runbookId}` };
     case 'AUTOMATIC_DYNAMIC_TARGET_UNSUPPORTED':
     case 'TARGET_MISSING':

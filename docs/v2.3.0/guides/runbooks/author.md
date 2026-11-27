@@ -363,9 +363,17 @@ safely rejected.
 | ----------- | ------------------------------------------------------------- | -------- |
 | `DRAFT`     | Work in progress — only one draft per Runbook                 | Yes      |
 | `PUBLISHED` | Immutable, checksummed version available for service bindings | No       |
-| `RETIRED`   | Removed from active use, preserved for audit                  | No       |
+| `RETIRED`   | Cannot start a run; preserved for audit                       | No       |
 
 ### Version management operations
+
+**Unpublish** (on the live version in the version history, with a confirmation)
+retires that version so the runbook has no published version until you publish
+again. Service rules that follow the latest version, or are pinned to the
+retired version, stop starting runs: a pinned rule's readiness shows **Version N
+is retired and cannot run**, and a latest-version rule shows that no version is
+available. Nothing is detached or deleted, and the action is written to the
+audit log as `runbook.unpublished`.
 
 | Operation              | Required permission | Notes                                         |
 | ---------------------- | ------------------- | --------------------------------------------- |
@@ -374,6 +382,7 @@ safely rejected.
 | Publish draft          | `runbook.publish`   | Draft → PUBLISHED; immutable after            |
 | Clone version to draft | `runbook.manage`    | Creates new draft from any version; see below |
 | Retire version         | `runbook.publish`   | Only non-current published versions           |
+| Unpublish Runbook      | `runbook.publish`   | Retires the live version; none stays published |
 | Archive Runbook        | `runbook.manage`    | Soft-delete; preserves history                |
 | Restore Runbook        | `runbook.manage`    | Un-archives; bindings remain disabled         |
 | Delete Runbook         | `runbook.manage`    | Only if no executions or published versions   |
@@ -412,8 +421,11 @@ rule's pin:
   options. A newly required input breaks rules that do not pass it, so check
   those rules before publishing. The API diff returns the same list as
   `inputChanges`, naming a changed default without returning its value.
-- Rules using latest publication track future publications; pinned rules and
-  existing executions retain their frozen versions. The rule list is labelled
+- Rules using latest publication track future publications; existing executions
+  retain their frozen versions. A pinned rule keeps its version only while that
+  version is live: publishing a newer version, or unpublishing, retires it, and a
+  retired version never starts a run (`Runbook version N is retired and cannot
+  run. Publish a current version, or pin the rule to a published version.`). The rule list is labelled
   for the versions you compare: **tracks new publication** only when the
   version you compare to is the draft or the live version, otherwise
   **tracks live version**. Detached rules never run and are not listed, and a

@@ -65,7 +65,9 @@ A Runbook progresses through these stages:
 4. **Executed** — A responder (or automatic trigger) starts an execution that
    follows the frozen plan through dispatch, approval, action, and verification.
 5. **Retired** — A published version can be retired from active use while
-   preserving its audit history.
+   preserving its audit history. A retired version never starts a run, including
+   from a rule pinned to it: publishing a newer version or unpublishing retires
+   the old one, and the rule needs a published version to run again.
 
 ## Binding modes and versions
 
@@ -76,7 +78,7 @@ A Runbook progresses through these stages:
 | **Automatic** | A matching trigger starts the workflow. Requires a pinned published version. Approval requirements still apply. |
 
 **Latest-published** bindings follow future publications automatically. **Pinned**
-bindings retain the chosen version. A suggestion freezes its resolved plan when
+bindings retain the chosen version for as long as it is the published one. A suggestion freezes its resolved plan when
 generated, so later binding edits do not silently change what an existing
 suggestion starts.
 

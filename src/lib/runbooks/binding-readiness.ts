@@ -72,7 +72,15 @@ export async function getBindingReadiness(
     binding.versionStrategy === 'PINNED'
       ? binding.runbookVersion
       : binding.runbook.publishedVersion;
-  if (!version || binding.runbook.archivedAt || !['PUBLISHED', 'RETIRED'].includes(version.state)) {
+  if (version?.state === 'RETIRED' && !binding.runbook.archivedAt) {
+    checks.push({
+      code: 'VERSION_RETIRED',
+      state: 'blocked',
+      message: `Version ${version.version} is retired and cannot run. Publish a current version and pin this rule to it.`,
+    });
+    return result('BLOCKED');
+  }
+  if (!version || binding.runbook.archivedAt || version.state !== 'PUBLISHED') {
     checks.push({
       code: 'VERSION_UNAVAILABLE',
       state: 'blocked',
