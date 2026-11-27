@@ -29,6 +29,7 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import prisma from '@/lib/prisma';
+import { listRunbookTeamOptions } from '@/lib/runbooks/team-options';
 import { CAPABILITIES } from '@/lib/authorization';
 import {
   assertCapability,
@@ -181,13 +182,7 @@ export default async function RunbookDetailPage({
           select: { id: true, name: true },
         })
       : Promise.resolve<NamedEntity[]>([]),
-    canManage
-      ? prisma.team.findMany({
-          select: { id: true, name: true },
-          orderBy: { name: 'asc' },
-          take: 500,
-        })
-      : Promise.resolve<NamedEntity[]>([]),
+    canManage ? listRunbookTeamOptions() : Promise.resolve<NamedEntity[]>([]),
   ]);
   if (runbook.ownerTeam && !teams.some(team => team.id === runbook.ownerTeam!.id)) {
     teams.unshift(runbook.ownerTeam);

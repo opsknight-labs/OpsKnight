@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import prisma from '@/lib/prisma';
+import { listRunbookTeamOptions } from '@/lib/runbooks/team-options';
 import { CAPABILITIES } from '@/lib/authorization';
 import {
   assertCapability,
@@ -110,11 +111,7 @@ export default async function RunbooksPage({
       prisma.runbook.count({
         where: { archivedAt: { not: null } },
       }),
-      prisma.team.findMany({
-        select: { id: true, name: true },
-        orderBy: { name: 'asc' },
-        take: 200,
-      }),
+      listRunbookTeamOptions(),
       getPopularRunbookTags(),
     ]);
   const [permissions, runbooks, navigation] = await Promise.all([
