@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { compilePolicy } from '@/lib/intelligence/noise-controls/cache';
-import { evaluatePrePagingControls } from '@/lib/intelligence/noise-controls/evaluate';
-import type { PrePagingLookups, PrePagingSnapshot } from '@/lib/intelligence/noise-controls/evaluate';
+import {
+  evaluatePrePagingControls,
+  type PrePagingLookups,
+  type PrePagingSnapshot,
+} from '@/lib/intelligence/noise-controls/evaluate';
 import type { PrePagingInput } from '@/lib/intelligence/noise-controls/contract';
 
 /**

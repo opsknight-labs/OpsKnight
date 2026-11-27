@@ -294,7 +294,9 @@ function scheduleRefresh(snapshot: PrePagingSnapshot | null): void {
 const REFRESH_TIMEOUT_MS = 15_000;
 let loadSnapshot: () => Promise<PrePagingSnapshot> = () => loadPrePagingSnapshot();
 /** Tests only: replace the database load (null restores it). */
-export function setPrePagingSnapshotLoader(loader: (() => Promise<PrePagingSnapshot>) | null): void {
+export function setPrePagingSnapshotLoader(
+  loader: (() => Promise<PrePagingSnapshot>) | null
+): void {
   loadSnapshot = loader ?? (() => loadPrePagingSnapshot());
 }
 

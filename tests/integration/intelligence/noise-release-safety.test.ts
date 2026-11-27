@@ -7,7 +7,11 @@ import {
   resetPrePagingSnapshot,
   setPrePagingDeadlineMs,
 } from '@/lib/intelligence/noise-controls';
-import { setPrePagingSnapshotLoader, refreshPrePagingSnapshot, peekPrePagingSnapshot } from '@/lib/intelligence/noise-controls/cache';
+import {
+  setPrePagingSnapshotLoader,
+  refreshPrePagingSnapshot,
+  peekPrePagingSnapshot,
+} from '@/lib/intelligence/noise-controls/cache';
 import { runtimeOperationalMetrics } from '@/lib/metrics/operational/registry';
 import { disconnectNoiseLookupClient } from '@/lib/intelligence/noise-controls/lookup-client';
 import { createLaneState, runIntelligenceCycle } from '@/lib/intelligence/jobs/runner';
@@ -296,7 +300,11 @@ describe('a dropped alert does not swallow its re-fire (N9)', () => {
 describe('overlapping windows give one stable answer (N7)', () => {
   it('lets a SUPPRESS window win over a DOWNGRADE window, whatever the row order', async () => {
     const service = await createTestService('Checkout');
-    await activeWindow(service.id, { name: 'Downgrade', effect: 'DOWNGRADE', downgradeUrgency: 'LOW' });
+    await activeWindow(service.id, {
+      name: 'Downgrade',
+      effect: 'DOWNGRADE',
+      downgradeUrgency: 'LOW',
+    });
     await activeWindow(service.id, { name: 'Suppress' });
     await policy(service.id);
     const results = [] as string[];
@@ -309,7 +317,9 @@ describe('overlapping windows give one stable answer (N7)', () => {
 
 describe('the audit trail never beats paging (N11)', () => {
   afterEach(async () => {
-    await db.$executeRawUnsafe('DROP TRIGGER IF EXISTS fail_decision_insert ON "PrePagingDecision"');
+    await db.$executeRawUnsafe(
+      'DROP TRIGGER IF EXISTS fail_decision_insert ON "PrePagingDecision"'
+    );
     await db.$executeRawUnsafe('DROP FUNCTION IF EXISTS fail_decision_insert()');
   });
 
@@ -375,7 +385,9 @@ describe('a hung snapshot refresh cannot freeze the policy (N12)', () => {
     const hung = refreshPrePagingSnapshot();
     await vi.advanceTimersByTimeAsync(16_000);
     expect(await hung).toBe(before); // the old snapshot stays in use
-    const failures = runtimeOperationalMetrics().get('opsknight_prepaging_snapshot_refresh_failures_total');
+    const failures = runtimeOperationalMetrics().get(
+      'opsknight_prepaging_snapshot_refresh_failures_total'
+    );
     expect(failures?.[0]?.value).toBeGreaterThanOrEqual(1);
 
     // The database answers again: the next refresh is not blocked by the abandoned one.

@@ -12,7 +12,12 @@ import {
   sweepHeartbeatMonitors,
 } from '@/lib/intelligence/noise-controls/heartbeats';
 import { disconnectNoiseLookupClient } from '@/lib/intelligence/noise-controls/lookup-client';
-import { createTestService, createTestUser, resetDatabase, testPrisma as db } from '../../helpers/test-db';
+import {
+  createTestService,
+  createTestUser,
+  resetDatabase,
+  testPrisma as db,
+} from '../../helpers/test-db';
 
 /**
  * A heartbeat is a dead-man's switch: silence must raise an incident that pages, and a ping must close it.

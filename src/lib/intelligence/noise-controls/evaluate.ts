@@ -204,7 +204,10 @@ function windowApplies(
 }
 
 /** HIGH urgency or critical severity: the page-immediately class that static controls must not hide. */
-export function isCriticalAlert(urgency: IncidentUrgency, severity: string | null | undefined): boolean {
+export function isCriticalAlert(
+  urgency: IncidentUrgency,
+  severity: string | null | undefined
+): boolean {
   return urgency === 'HIGH' || severity?.toLowerCase() === 'critical';
 }
 
@@ -227,7 +230,11 @@ export function decideStatic(
   decision: Omit<PrePagingDecisionResult, 'elapsedMs' | 'mode' | 'policyRevision' | 'apply'> | null;
   transform: PrePagingTransform | null;
   /** Controls that matched a critical alert but were skipped because they do not cover critical. */
-  guarded: Array<{ control: 'MAINTENANCE' | 'SUPPRESSION' | 'ORCHESTRATION'; id: string; name: string }>;
+  guarded: Array<{
+    control: 'MAINTENANCE' | 'SUPPRESSION' | 'ORCHESTRATION';
+    id: string;
+    name: string;
+  }>;
 } {
   const transform: PrePagingTransform = {};
   let transformed = false;

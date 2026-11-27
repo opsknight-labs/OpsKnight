@@ -159,7 +159,8 @@ describe('alert conservation under random noise-control configurations', () => {
       const label = `step ${step} ${service.name} ${key} ${severity}`;
 
       if (open.has(slot)) {
-        if (result.action !== 'deduplicated') failures.push(`${label}: expected a dedup, got ${result.action}`);
+        if (result.action !== 'deduplicated')
+          failures.push(`${label}: expected a dedup, got ${result.action}`);
         continue;
       }
       if (result.action === 'dropped') {
@@ -183,7 +184,9 @@ describe('alert conservation under random noise-control configurations', () => {
         });
         if (decided === 0) failures.push(`${label}: suppressed with no decision row`);
         if (severity === 'critical' && !(coversCritical.window || coversCritical.rule))
-          failures.push(`${label}: a critical alert was suppressed by a control that does not cover it`);
+          failures.push(
+            `${label}: a critical alert was suppressed by a control that does not cover it`
+          );
       } else if ((await pagingJobs(incident.id)) !== 1) {
         failures.push(`${label}: opened ${incident.status} but was not paged`);
       }
