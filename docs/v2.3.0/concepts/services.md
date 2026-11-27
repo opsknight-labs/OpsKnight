@@ -274,6 +274,18 @@ incident frequency, and SLA compliance for the selected time window. These are
 derived operational measures, not promises created merely by choosing an SLA
 tier label.
 
+Service uptime, in analytics, uptime objectives and the status-page uptime export, is
+`(period − downtime) / period`:
+
+- The period is the selected range, moved forward to the service's creation date, so a new service
+  is measured only from the day it existed.
+- Downtime is the union of the service's incident intervals, each running from the incident's
+  creation to its resolution (or to the end of the period while it is still open), clipped to the
+  period. Overlapping incidents count once.
+- The incident's current status does not matter. Snoozing, suppressing or acknowledging an incident
+  does not end an outage, so a past period never changes because an incident was snoozed later.
+- A period with no measurable time shows 100%.
+
 When interpreting a result, verify time range, incident visibility/scope,
 excluded states, service objective revisions, and whether required scheduler/
 projection jobs are healthy. Use the analytics and service-objective references

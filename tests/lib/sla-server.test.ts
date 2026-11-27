@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
 import {
+  calculateMultiServiceAvailability,
   calculateMultiServiceUptime,
   calculateSLAMetrics,
   deriveServiceSlaStatus,
@@ -131,6 +132,80 @@ describe('calculateMultiServiceUptime visibility', () => {
         }),
       })
     );
+  });
+});
+
+describe('calculateMultiServiceUptime from recorded outages', () => {
+  const HOUR = 3_600_000;
+  const periodEnd = new Date(Date.now() - 1000);
+  const periodStart = new Date(periodEnd.getTime() - 10 * 24 * HOUR);
+  const at = (hoursFromStart: number) => new Date(periodStart.getTime() + hoursFromStart * HOUR);
+  const periodMs = periodEnd.getTime() - periodStart.getTime();
+  const serviceCreated = (createdAt: Date) =>
+    prismaMock.service.findMany.mockResolvedValueOnce([{ id: 'svc', createdAt }]);
+  const incidents = (
+    rows: Array<{
+      createdAt: Date;
+      resolvedAt: Date | null;
+      status: string;
+    }>
+  ) =>
+    prismaMock.incident.findMany.mockResolvedValueOnce(
+      rows.map(row => ({ serviceId: 'svc', updatedAt: row.createdAt, ...row }))
+    );
+
+  it('keeps counting an incident after it is snoozed or suppressed', async () => {
+    serviceCreated(at(-1000));
+    incidents([
+      { createdAt: at(10), resolvedAt: at(20), status: 'SNOOZED' },
+      { createdAt: at(30), resolvedAt: at(40), status: 'SUPPRESSED' },
+    ]);
+
+    const result = await calculateMultiServiceUptime(['svc'], periodStart, periodEnd);
+
+    expect(result.svc).toBeCloseTo(100 - (20 * HOUR * 100) / periodMs, 6);
+  });
+
+  it('reads unresolved incidents of any status, not only open ones', async () => {
+    serviceCreated(at(-1000));
+    incidents([]);
+
+    await calculateMultiServiceUptime(['svc'], periodStart, periodEnd);
+
+    const call = prismaMock.incident.findMany.mock.calls.at(-1) as [{ where: unknown }];
+    const where = call[0].where;
+    expect(JSON.stringify(where)).toContain('"resolvedAt":null,"status":{"not":"RESOLVED"}');
+  });
+
+  it('counts overlapping incidents once', async () => {
+    serviceCreated(at(-1000));
+    incidents([
+      { createdAt: at(10), resolvedAt: at(20), status: 'RESOLVED' },
+      { createdAt: at(15), resolvedAt: at(25), status: 'RESOLVED' },
+    ]);
+
+    const result = await calculateMultiServiceUptime(['svc'], periodStart, periodEnd);
+
+    expect(result.svc).toBeCloseTo(100 - (15 * HOUR * 100) / periodMs, 6);
+  });
+
+  it('measures a service only from its creation and reports the measured downtime', async () => {
+    serviceCreated(new Date(periodEnd.getTime() - 24 * HOUR));
+    incidents([
+      {
+        createdAt: new Date(periodEnd.getTime() - 12 * HOUR),
+        resolvedAt: new Date(periodEnd.getTime() - 6 * HOUR),
+        status: 'RESOLVED',
+      },
+    ]);
+
+    const result = await calculateMultiServiceAvailability(['svc'], periodStart, periodEnd);
+
+    expect(result.svc).toEqual({
+      uptimePercent: 75,
+      downtimeMs: 6 * HOUR,
+      periodMs: 24 * HOUR,
+    });
   });
 });
 

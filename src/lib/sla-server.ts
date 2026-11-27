@@ -10,6 +10,7 @@ import {
   calculatePercentile,
 } from './analytics-metrics';
 import { getServiceDynamicStatus } from './service-status';
+import { computeUptime, type UptimeResult } from './uptime';
 import { logger } from './logger';
 import { activeIncidentStatuses, activeIncidentStatusesForFilter } from './incident-status';
 import { getRetentionPolicy, getQueryDateBounds, shouldUseRollups } from './retention-policy';
@@ -2960,26 +2961,29 @@ function calculateMergedDuration(intervals: Array<{ start: Date; end: Date }>): 
   }, 0);
 }
 
+type UptimeOptions =
+  | 'PUBLIC'
+  | 'PRIVATE'
+  | 'ALL'
+  | {
+      visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
+      incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
+    };
+
 /**
- * Calculates uptime percentage for a set of services over a given period
- * Shared logic for Status Pages and Exports
+ * Uptime, downtime and measured period per service. The rule lives in computeUptime (lib/uptime.ts):
+ * recorded outage intervals regardless of snooze or suppress state, period clamped to the service's
+ * createdAt. Shared logic for SLO evaluation, analytics, Status Pages exports.
  */
-export async function calculateMultiServiceUptime(
+export async function calculateMultiServiceAvailability(
   serviceIds: string[],
   startDate: Date,
   endDate: Date = new Date(),
-  options:
-    | 'PUBLIC'
-    | 'PRIVATE'
-    | 'ALL'
-    | {
-        visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
-        incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
-      } = {},
-  db?: Pick<import('@prisma/client').PrismaClient, 'incident'>
-): Promise<Record<string, number>> {
+  options: UptimeOptions = {},
+  db?: Pick<import('@prisma/client').PrismaClient, 'incident' | 'service'>
+): Promise<Record<string, UptimeResult>> {
   const { default: prisma } = await import('./prisma');
-  const incidentReader = db ?? prisma;
+  const reader = db ?? prisma;
 
   const { start: effectiveStart, end: effectiveEnd } = await getQueryDateBounds(
     startDate,
@@ -2995,65 +2999,78 @@ export async function calculateMultiServiceUptime(
       ? { visibility: normalizedOptions.visibility }
       : {};
 
-  const incidents = await incidentReader.incident.findMany({
-    where: {
-      serviceId: { in: serviceIds },
-      ...visibilityFilter,
-      AND: [
-        normalizedOptions.incidentWhere ?? {},
-        { createdAt: { lt: effectiveEnd } },
-        {
-          OR: [
-            { resolvedAt: { gte: effectiveStart } },
-            { updatedAt: { gte: effectiveStart } },
-            { status: { in: activeIncidentStatuses() } },
-          ],
-        },
-      ],
-    },
-    select: {
-      serviceId: true,
-      createdAt: true,
-      resolvedAt: true,
-      updatedAt: true,
-      status: true,
-    },
-  });
+  const [services, incidents] = await Promise.all([
+    reader.service.findMany({
+      where: { id: { in: serviceIds } },
+      select: { id: true, createdAt: true },
+    }),
+    reader.incident.findMany({
+      where: {
+        serviceId: { in: serviceIds },
+        ...visibilityFilter,
+        AND: [
+          normalizedOptions.incidentWhere ?? {},
+          { createdAt: { lt: effectiveEnd } },
+          {
+            // Any status can still be an outage: only a resolution ends one.
+            OR: [
+              { resolvedAt: { gte: effectiveStart } },
+              { resolvedAt: null, status: { not: 'RESOLVED' } },
+              { resolvedAt: null, status: 'RESOLVED', updatedAt: { gte: effectiveStart } },
+            ],
+          },
+        ],
+      },
+      select: {
+        serviceId: true,
+        createdAt: true,
+        resolvedAt: true,
+        updatedAt: true,
+        status: true,
+      },
+    }),
+  ]);
 
-  const uptimeByService: Record<string, number> = {};
-  const totalMs = effectiveEnd.getTime() - effectiveStart.getTime();
-
-  for (const serviceId of serviceIds) {
-    if (totalMs <= 0) {
-      // Service IDs are authorized database values, not object-property paths.
-      // eslint-disable-next-line security/detect-object-injection
-      uptimeByService[serviceId] = 100;
-      continue;
-    }
-
-    const serviceIncidents = incidents.filter(
-      inc => inc.serviceId === serviceId && inc.status !== 'SUPPRESSED' && inc.status !== 'SNOOZED'
-    );
-
-    const intervals = serviceIncidents
-      .map(incident => {
-        const resolvedTime =
-          incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
-        return {
-          start: incident.createdAt > effectiveStart ? incident.createdAt : effectiveStart,
-          end: resolvedTime && resolvedTime < effectiveEnd ? resolvedTime : effectiveEnd,
-        };
-      })
-      .filter(interval => interval.start < interval.end);
-
-    const downtimeMs = calculateMergedDuration(intervals);
-    const uptime = ((totalMs - downtimeMs) / totalMs) * 100;
-    // Service IDs are authorized database values, not object-property paths.
-    // eslint-disable-next-line security/detect-object-injection
-    uptimeByService[serviceId] = Math.max(0, Math.min(100, uptime));
+  const createdAtById = new Map(services.map(service => [service.id, service.createdAt]));
+  const incidentsByService = new Map<string, typeof incidents>();
+  for (const incident of incidents) {
+    const list = incidentsByService.get(incident.serviceId) ?? [];
+    list.push(incident);
+    incidentsByService.set(incident.serviceId, list);
   }
 
-  return uptimeByService;
+  const result: Record<string, UptimeResult> = {};
+  for (const serviceId of serviceIds) {
+    // Service IDs are authorized database values, not object-property paths.
+    // eslint-disable-next-line security/detect-object-injection
+    result[serviceId] = computeUptime({
+      periodStart: effectiveStart,
+      periodEnd: effectiveEnd,
+      createdAt: createdAtById.get(serviceId),
+      incidents: incidentsByService.get(serviceId) ?? [],
+    });
+  }
+  return result;
+}
+
+/** Uptime percentage per service; see calculateMultiServiceAvailability. */
+export async function calculateMultiServiceUptime(
+  serviceIds: string[],
+  startDate: Date,
+  endDate: Date = new Date(),
+  options: UptimeOptions = {},
+  db?: Pick<import('@prisma/client').PrismaClient, 'incident' | 'service'>
+): Promise<Record<string, number>> {
+  const availability = await calculateMultiServiceAvailability(
+    serviceIds,
+    startDate,
+    endDate,
+    options,
+    db
+  );
+  return Object.fromEntries(
+    Object.entries(availability).map(([serviceId, row]) => [serviceId, row.uptimePercent])
+  );
 }
 
 /**

@@ -12,10 +12,12 @@ import {
   type AuthorizationActor,
 } from '@/lib/authorization-policy';
 import {
+  calculateMultiServiceAvailability,
   calculateMultiServiceUptime,
   calculateSLAMetrics,
   type SLAMetricsFilter,
 } from '@/lib/sla-server';
+import type { UptimeResult } from '@/lib/uptime';
 import type { SLAMetrics } from '@/lib/sla';
 
 /**
@@ -48,6 +50,18 @@ export function calculateActorMultiServiceUptime(
   endDate: Date = new Date()
 ): Promise<Record<string, number>> {
   return calculateMultiServiceUptime(serviceIds, startDate, endDate, {
+    incidentWhere: incidentReadWhere(actor),
+  });
+}
+
+/** Same boundary as above, with downtime and the measured period (shorter for a new service). */
+export function calculateActorMultiServiceAvailability(
+  actor: AuthorizationActor,
+  serviceIds: string[],
+  startDate: Date,
+  endDate: Date = new Date()
+): Promise<Record<string, UptimeResult>> {
+  return calculateMultiServiceAvailability(serviceIds, startDate, endDate, {
     incidentWhere: incidentReadWhere(actor),
   });
 }
