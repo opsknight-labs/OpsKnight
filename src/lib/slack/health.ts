@@ -29,6 +29,7 @@ export const SLACK_OPTIONAL_SCOPE_FEATURES: Record<
   'pins:write': 'Pin the incident status card in war rooms',
   'bookmarks:write': 'Bookmark the incident in war-room channels',
   'im:write': 'Page responders with a Slack direct message',
+  'im:history': 'Squire answers direct messages to the app',
 };
 
 export type SlackHealthStatus = 'ok' | 'warn' | 'error';

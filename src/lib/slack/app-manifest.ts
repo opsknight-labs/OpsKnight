@@ -36,6 +36,7 @@ export const SLACK_OPTIONAL_BOT_SCOPES = [
   'pins:write', // Pin the incident status card in war rooms
   'bookmarks:write', // Bookmark the incident link in war-room channels
   'im:write', // Open DMs to page on-call responders in Slack
+  'im:history', // Read direct messages to the app so Squire can answer them
 ] as const;
 
 /**
@@ -46,7 +47,6 @@ export const SLACK_ADVANCED_BOT_SCOPES = [
   'usergroups:read', // List user groups when mapping an on-call schedule to one
   'usergroups:write', // Keep a Slack user group in step with who is on call
   'conversations.connect:write', // Invite external people to a war room with Slack Connect
-  'im:history', // Read direct messages to the app so Squire can answer them
 ] as const;
 
 /** Lets Squire's messages carry its own name and avatar instead of the app's. */
