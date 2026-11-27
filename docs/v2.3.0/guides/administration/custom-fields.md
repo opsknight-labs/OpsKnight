@@ -57,6 +57,8 @@ Keys are unique across the workspace. Treat a key as an integration contract: th
 
 Empty input becomes no value. An empty required field is rejected with `<field name> is required.` Required custom fields also block human/operator incident resolution (web, bulk, REST API, runbooks) until completed. Fields added after an incident was opened do not block it. Automated upstream resolution and surfaces that cannot fill fields (Slack/Teams, voice, mobile) are not subject to that gate.
 
+When an incident is created without a value for a field, its default is used. On the New incident form a field starts with its default; clear an optional field to leave it empty and the empty value is kept (the default is not applied again). Clearing a required field shows `Required field missing` and the incident is not created. API clients can do the same by sending the field with an empty value.
+
 The create-definition endpoint accepts a default as text. Test that the default is valid for its type before relying on it; incident value validation is authoritative.
 
 ## Edit a definition

@@ -623,8 +623,10 @@ function CreateIncidentModalContent({
       if (selectedTemplateId) formData.append('templateId', selectedTemplateId);
 
       customFields.forEach(field => {
-        const effectiveValue = (customFieldValues[field.id] ?? field.defaultValue ?? '').trim();
-        if (effectiveValue) {
+        const entered = customFieldValues[field.id];
+        const effectiveValue = (entered ?? field.defaultValue ?? '').trim();
+        // A cleared field is sent empty on purpose; leaving it out would apply its default.
+        if (effectiveValue || entered !== undefined) {
           formData.append(`customField_${field.id}`, effectiveValue);
         }
       });
@@ -1846,7 +1848,7 @@ function CreateIncidentModalContent({
                           <CustomFieldInput
                             key={field.id}
                             field={field}
-                            value={customFieldValues[field.id] || ''}
+                            value={customFieldValues[field.id]}
                             onChange={value =>
                               setCustomFieldValues(previous => ({
                                 ...previous,

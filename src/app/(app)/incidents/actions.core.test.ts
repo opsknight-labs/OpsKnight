@@ -54,6 +54,22 @@ describe('incident creation action adapters', () => {
     return form;
   }
 
+  it('passes an explicitly empty custom field through, so its default is not re-applied', async () => {
+    const form = formData();
+    form.append('customField_tier', '   ');
+
+    await createIncident(form);
+
+    expect(mocks.executeIncidentCreation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customFields: [
+          { fieldId: 'impact', value: 'customer-facing' },
+          { fieldId: 'tier', value: '' },
+        ],
+      })
+    );
+  });
+
   it('authorizes the service and delegates WEB creation to the domain engine', async () => {
     const result = await createIncident(formData());
 

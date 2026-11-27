@@ -150,8 +150,8 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
   for (const [key, value] of formData.entries()) {
     if (!key.startsWith('customField_') || typeof value !== 'string') continue;
     const fieldId = key.slice('customField_'.length);
-    const fieldValue = value.trim();
-    if (fieldValue) customFieldMap.set(fieldId, fieldValue);
+    // An empty value is kept: it means "no value", so the field default is not applied.
+    customFieldMap.set(fieldId, value.trim());
   }
 
   const rawVisibility = formData.get('visibility');

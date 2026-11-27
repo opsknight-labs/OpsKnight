@@ -402,6 +402,80 @@ describe('CreateIncidentModal', () => {
     });
   });
 
+  it('lets an optional custom field with a default be cleared and sends it empty', async () => {
+    mockOpenOptions = { serviceId: 'srv-checkout' };
+    mockGetIncidentCreationContext.mockResolvedValueOnce({
+      ...mockContextData,
+      customFields: [
+        {
+          id: 'cf-tier',
+          name: 'Tier',
+          key: 'tier',
+          type: 'TEXT',
+          required: false,
+          defaultValue: 'Gold',
+        },
+      ],
+    });
+
+    render(<CreateIncidentModal />);
+
+    fireEvent.change(
+      await screen.findByPlaceholderText(/Primary database connection pool exhausted/i),
+      { target: { value: 'Production Incident' } }
+    );
+    const tier = await screen.findByDisplayValue('Gold');
+    fireEvent.change(tier, { target: { value: '' } });
+    // It stays empty instead of snapping back to the default.
+    expect((tier as HTMLInputElement).value).toBe('');
+
+    fireEvent.click(await screen.findByRole('button', { name: /^create incident$/i }));
+
+    await waitFor(() => {
+      expect(mockCreateIncident).toHaveBeenCalled();
+      const formData = mockCreateIncident.mock.calls[0][0] as FormData;
+      expect(formData.has('customField_cf-tier')).toBe(true);
+      expect(formData.get('customField_cf-tier')).toBe('');
+    });
+  });
+
+  it('warns about a required custom field that was cleared, rather than showing its default', async () => {
+    mockOpenOptions = { serviceId: 'srv-checkout' };
+    mockGetIncidentCreationContext.mockResolvedValueOnce({
+      ...mockContextData,
+      customFields: [
+        {
+          id: 'cf-env',
+          name: 'Environment',
+          key: 'env',
+          type: 'TEXT',
+          required: true,
+          defaultValue: 'Production',
+        },
+      ],
+    });
+
+    render(<CreateIncidentModal />);
+
+    fireEvent.change(
+      await screen.findByPlaceholderText(/Primary database connection pool exhausted/i),
+      { target: { value: 'Production Incident' } }
+    );
+    const env = await screen.findByDisplayValue('Production');
+    fireEvent.change(env, { target: { value: '' } });
+    expect((env as HTMLInputElement).value).toBe('');
+
+    fireEvent.click(await screen.findByRole('button', { name: /^create incident$/i }));
+
+    await waitFor(() => {
+      expect(mockToastWarning).toHaveBeenCalledWith(
+        'Required field missing: Environment',
+        expect.anything()
+      );
+      expect(mockCreateIncident).not.toHaveBeenCalled();
+    });
+  });
+
   it('ignores a repeated Cmd+Enter while the first create is in flight', async () => {
     mockOpenOptions = { serviceId: 'srv-checkout' };
     mockCreateIncident.mockImplementationOnce(
