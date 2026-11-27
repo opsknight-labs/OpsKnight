@@ -110,6 +110,10 @@ const parsedMax = Number.parseInt(process.env.LOG_BUFFER_MAX || '500', 10);
 const LOG_BUFFER_MAX =
   Number.isFinite(parsedMax) && parsedMax >= 0 ? Math.min(parsedMax, 5000) : 500;
 const logBuffer: LogEntry[] = [];
+// Entries that came in through the unauthenticated /api/logs/ingest route live in their own small
+// ring, so a flood of forged client logs can never push real server entries out of the buffer.
+export const CLIENT_LOG_BUFFER_MAX = Math.min(100, LOG_BUFFER_MAX);
+const clientLogBuffer: LogEntry[] = [];
 
 function getBufferLimit(limit?: number) {
   const safeLimit = Number.isFinite(limit) ? Math.floor(limit as number) : LOG_BUFFER_MAX;
@@ -236,18 +240,28 @@ function addToBuffer(entry: LogEntry) {
   if (LOG_BUFFER_MAX <= 0) {
     return;
   }
-  logBuffer.push(entry);
-  if (logBuffer.length > LOG_BUFFER_MAX) {
-    logBuffer.splice(0, logBuffer.length - LOG_BUFFER_MAX);
+  // The ingest route is the only writer of source: 'client' and sets it after the caller's fields.
+  const fromClient = entry.context?.source === 'client';
+  const buffer = fromClient ? clientLogBuffer : logBuffer;
+  const max = fromClient ? CLIENT_LOG_BUFFER_MAX : LOG_BUFFER_MAX;
+  buffer.push(entry);
+  if (buffer.length > max) {
+    buffer.splice(0, buffer.length - max);
   }
 }
 
+/**
+ * The last `limit` server entries plus whatever the bounded client ring holds, oldest first.
+ * `limit` counts server entries only, so client entries never displace them from the result.
+ */
 export function getLogBuffer(limit?: number) {
   const sliceLimit = getBufferLimit(limit);
   if (sliceLimit === 0) {
     return [];
   }
-  return logBuffer.slice(-sliceLimit);
+  const server = logBuffer.slice(-sliceLimit);
+  if (clientLogBuffer.length === 0) return server;
+  return [...server, ...clientLogBuffer].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 }
 
 class Logger {

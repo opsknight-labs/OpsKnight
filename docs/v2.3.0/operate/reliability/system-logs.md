@@ -48,6 +48,7 @@ Set these variables on every runtime role and restart that role:
 - `LOG_LEVEL`: `debug`, `info`, `warn`, or `error`. The default is `info`.
 - `LOG_FORMAT`: `json` for structured output or `pretty` for human-oriented local output. Production defaults to JSON; other environments default to pretty output.
 - `LOG_BUFFER_MAX`: number of entries retained by each process. The default is 500, values above 5000 are capped at 5000, and `0` disables the in-process buffer without disabling stdout/stderr.
+- Browser-reported entries (`source: client`, posted to the unauthenticated `/api/logs/ingest`) are kept in a separate ring of at most 100 entries (never more than `LOG_BUFFER_MAX`), so they cannot push server entries out of the buffer. The endpoint accepts one entry per request, rejects bodies over 50 KB, and allows 30 requests per minute per client address. Treat those entries as untrusted: any caller can post them.
 
 For production, keep JSON output and collect stdout/stderr with the platform agent: for example Fluent Bit or Promtail on Kubernetes, a Docker logging driver, or an agent shipping to Loki, Elastic, CloudWatch, or another protected log store. Apply access controls and retention appropriate for operational metadata.
 

@@ -74,4 +74,62 @@ describe('client log ingestion', () => {
       clientClaims: expect.objectContaining({ userId: 'victim-1', component: 'billing' }),
     });
   });
+
+  describe('abuse limits (the route is unauthenticated on purpose)', () => {
+    const post = (body: unknown, headers: Record<string, string> = {}) =>
+      POST(
+        new NextRequest('http://localhost/api/logs/ingest', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...headers },
+          body: typeof body === 'string' ? body : JSON.stringify(body),
+        })
+      );
+
+    it('rate limits each client address and logs nothing once the limit is hit', async () => {
+      checkRateLimit.mockResolvedValue({ allowed: false });
+
+      const response = await post({ level: 'error', message: 'spam' });
+
+      expect(response.status).toBe(429);
+      expect(checkRateLimit).toHaveBeenCalledWith(
+        expect.stringMatching(/^api:logs:ingest:/),
+        30,
+        60_000
+      );
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('checks the rate limit before it reads the body', async () => {
+      checkRateLimit.mockResolvedValue({ allowed: false });
+
+      const response = await post('x'.repeat(200 * 1024));
+
+      expect(response.status).toBe(429);
+    });
+
+    it('accepts one entry per request: a batch is rejected', async () => {
+      const response = await post([
+        { level: 'error', message: 'one' },
+        { level: 'error', message: 'two' },
+      ]);
+
+      expect(response.status).toBe(400);
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('caps the message length', async () => {
+      expect((await post({ message: 'x'.repeat(10_000) })).status).toBe(200);
+      expect((await post({ message: 'x'.repeat(10_001) })).status).toBe(400);
+    });
+
+    it('rejects an oversized body even when it is not valid JSON', async () => {
+      expect((await post('{'.repeat(60 * 1024))).status).toBe(413);
+    });
+
+    it('marks every accepted entry as client-origin so the logger keeps it in its own buffer', async () => {
+      await post({ level: 'warn', message: 'w', context: { source: 'server' } });
+
+      expect(logger.warn).toHaveBeenCalledWith('w', expect.objectContaining({ source: 'client' }));
+    });
+  });
 });
