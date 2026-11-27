@@ -229,12 +229,16 @@ function byWorst(a: ImpactReason, b: ImpactReason) {
   return rank(b.status) - rank(a.status) || KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
 }
 
-/** The member or child business service a reason is about; null for page-wide reasons. */
-function reasonSubject(reason: ImpactReason): string | null {
+/**
+ * The member or child business service a reason is about. Reasons about no member (manual
+ * marks, maintenance, customer reports) count as one subject per kind, so the worst reason,
+ * which sets the status, always survives the cap.
+ */
+function reasonSubject(reason: ImpactReason): string {
   if (reason.kind === 'DIRECT') return `s:${reason.serviceId}`;
   if (reason.kind === 'DEPENDENCY') return `s:${reason.viaServiceId}`;
   if (reason.kind === 'NESTED') return `b:${reason.childBusinessServiceId}`;
-  return null;
+  return `k:${reason.kind}`;
 }
 
 /**
@@ -249,7 +253,7 @@ function capReasons(sorted: ImpactReason[]): ImpactReason[] {
   const rest: ImpactReason[] = [];
   for (const reason of sorted) {
     const subject = reasonSubject(reason);
-    if (subject && !seen.has(subject)) {
+    if (!seen.has(subject)) {
       seen.add(subject);
       firsts.push(reason);
     } else rest.push(reason);
