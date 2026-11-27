@@ -27,6 +27,7 @@ import {
   signalIntelligenceIncident,
   type IngestNoiseDecision,
 } from './intelligence/ingest-hooks';
+import { suppressionCoversCritical } from '@/lib/intelligence/noise-controls/critical-release';
 import { sanitizeIntegrationEnvelope } from './integrations/payload-security';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
 import {
@@ -479,7 +480,8 @@ async function applyEvent(
         if (
           existingIncident.status === 'SUPPRESSED' &&
           urgencyRaised &&
-          effectiveUrgency === 'HIGH'
+          effectiveUrgency === 'HIGH' &&
+          !(await suppressionCoversCritical(tx, existingIncident.id, serviceId))
         ) {
           releasedFlappingHold = (
             await applyIncidentLifecycleCommand(tx, {

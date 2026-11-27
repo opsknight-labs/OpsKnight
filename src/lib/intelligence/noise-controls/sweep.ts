@@ -127,36 +127,43 @@ async function endedReason(
         ])
       )
     : new Map();
-  // An orchestration SUPPRESS lasts only while an ON policy (the alert's service or the global one) still
-  // holds the rule with a SUPPRESS action; a disabled or deleted rule, or a policy switched off, releases it.
+  // An orchestration SUPPRESS lasts only while the policy that applies to the alert's service (its own, else the
+  // global one, exactly as the hook resolves it) is ON and still holds the rule with a SUPPRESS action. A
+  // disabled or deleted rule, a policy switched off, or a service policy that replaced the global one releases it.
   const orchRows = eligible.filter(row => row.control === 'ORCHESTRATION' && row.sourceId);
-  const activeOrchestration = new Set<string>();
+  const suppressRulesByScope = new Map<string, { on: boolean; rules: Set<string> }>();
   if (orchRows.length) {
     const policies = await prisma.noiseControlPolicy.findMany({
       where: {
-        mode: 'ON',
         OR: [
           { serviceId: null },
           { serviceId: { in: [...new Set(orchRows.map(row => row.alertServiceId ?? ''))] } },
         ],
       },
-      select: { serviceId: true, definition: true },
+      select: { serviceId: true, mode: true, definition: true },
     });
     for (const policy of policies) {
       const parsed = noiseControlDefinitionSchema.safeParse(policy.definition);
-      if (!parsed.success) continue;
-      for (const rule of parsed.data.orchestration.rules)
-        if (rule.enabled && rule.actions.some(action => action.type === 'SUPPRESS'))
-          activeOrchestration.add(`${policy.serviceId ?? ''}:${rule.id}`);
+      suppressRulesByScope.set(policy.serviceId ?? '', {
+        on: policy.mode === 'ON',
+        rules: new Set(
+          parsed.success
+            ? parsed.data.orchestration.rules
+                .filter(
+                  rule => rule.enabled && rule.actions.some(action => action.type === 'SUPPRESS')
+                )
+                .map(rule => rule.id)
+            : []
+        ),
+      });
     }
   }
   const ended = new Map<string, string>();
   for (const row of eligible) {
     if (row.control === 'ORCHESTRATION') {
-      const held =
-        row.sourceId !== null &&
-        (activeOrchestration.has(`:${row.sourceId}`) ||
-          activeOrchestration.has(`${row.alertServiceId ?? ''}:${row.sourceId}`));
+      const effective =
+        suppressRulesByScope.get(row.alertServiceId ?? '') ?? suppressRulesByScope.get('');
+      const held = Boolean(effective?.on && row.sourceId && effective.rules.has(row.sourceId));
       if (!held) ended.set(row.id, 'its orchestration rule ended');
     } else if (row.control === 'MAINTENANCE') {
       const window = row.sourceId ? windows.get(row.sourceId) : undefined;

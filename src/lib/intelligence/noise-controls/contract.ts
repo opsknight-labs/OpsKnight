@@ -45,20 +45,56 @@ const labelKey = z
   .max(64)
   .regex(/^[a-z0-9_.:/-]+$/i, 'Label keys use letters, digits and . _ : / -');
 
+/**
+ * A group that is repeated without a bound (`+`, `*` or `{`) while holding alternatives or an unbounded repeat
+ * of its own, at any depth: `(a+)+`, `(a|aa)+`, `((a|aa))+`, `(?:(a|aa)){1,40}`. These backtrack exponentially on
+ * input that almost matches. An optional group `(a|b)?` is safe. Escapes and character classes are skipped.
+ */
+function hasCatastrophicRepeat(pattern: string): boolean {
+  const stack: Array<{ alternatives: boolean; repeats: boolean }> = [];
+  let inClass = false;
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern.charAt(index);
+    if (char === '\\') {
+      index += 1;
+      continue;
+    }
+    if (inClass) {
+      if (char === ']') inClass = false;
+      continue;
+    }
+    if (char === '[') inClass = true;
+    else if (char === '(') stack.push({ alternatives: false, repeats: false });
+    else if (char === '|') {
+      const group = stack.at(-1);
+      if (group) group.alternatives = true;
+    } else if (char === '+' || char === '*') {
+      const group = stack.at(-1);
+      if (group) group.repeats = true;
+    } else if (char === ')') {
+      const group = stack.pop();
+      if (!group) continue;
+      const next = pattern.charAt(index + 1);
+      const repeated = next === '+' || next === '*' || next === '{';
+      if (repeated && (group.alternatives || group.repeats)) return true;
+      const parent = stack.at(-1);
+      if (parent) {
+        parent.alternatives ||= group.alternatives;
+        parent.repeats ||= group.repeats || next === '+' || next === '*';
+      }
+    }
+  }
+  return false;
+}
+
 /** Patterns that can blow up on long inputs are rejected at save time; the hook never compiles user text. */
 export function assertSafeRegex(pattern: string): void {
   if (pattern.length === 0 || pattern.length > PREPAGING_LIMITS.regexLength)
     throw new Error('Pattern must be between 1 and 200 characters');
   if (/\\[1-9]/.test(pattern)) throw new Error('Back-references are not supported');
-  if (/\([^)]*[+*][^)]*\)[+*{]/.test(pattern) || /[+*]\)?[+*]/.test(pattern))
+  if (hasCatastrophicRepeat(pattern) || /[+*]\)?[+*]/.test(pattern))
     throw new Error(
-      'This pattern can backtrack catastrophically; simplify nested or stacked repeats such as (a+)+'
-    );
-  // A repeated group with alternatives, (a|aa)+ or (x|y){1,40}, backtracks exponentially on overlapping
-  // alternatives; only an optional group (a|b)? is safe.
-  if (/\([^)]*\|[^)]*\)[+*{]/.test(pattern))
-    throw new Error(
-      'This pattern can backtrack catastrophically; do not repeat a group that has alternatives, such as (a|b)+'
+      'This pattern can backtrack catastrophically; do not repeat a group that has alternatives or its own repeat, such as (a+)+ or (a|b)+'
     );
   try {
     // Validated once at save time, bounded in length and shape above; never compiled on the hot path.

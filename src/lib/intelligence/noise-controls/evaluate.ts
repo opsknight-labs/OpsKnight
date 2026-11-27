@@ -239,6 +239,8 @@ export function decideStatic(
   const transform: PrePagingTransform = {};
   let transformed = false;
   const ruleHits: string[] = [];
+  // A rule that lowers urgency or severity must not strip the protection the alert arrived with.
+  const originallyCritical = isCriticalAlert(input.urgency, input.severity);
   const guarded: Array<{
     control: 'MAINTENANCE' | 'SUPPRESSION' | 'ORCHESTRATION';
     id: string;
@@ -253,7 +255,8 @@ export function decideStatic(
       if (
         (action.type === 'DROP' || action.type === 'SUPPRESS') &&
         !rule.coversCritical &&
-        isCriticalAlert(transform.urgency ?? input.urgency, transform.severity ?? input.severity)
+        (originallyCritical ||
+          isCriticalAlert(transform.urgency ?? input.urgency, transform.severity ?? input.severity))
       ) {
         guarded.push({ control: 'ORCHESTRATION', id: rule.id, name: rule.name });
         continue;
@@ -323,7 +326,8 @@ export function decideStatic(
     }
   }
   const effectiveUrgency = transform.urgency ?? input.urgency;
-  const critical = isCriticalAlert(effectiveUrgency, transform.severity ?? input.severity);
+  const critical =
+    originallyCritical || isCriticalAlert(effectiveUrgency, transform.severity ?? input.severity);
   const teamId = input.teamId ?? snapshot.serviceTeams.get(input.serviceId) ?? null;
 
   for (const window of snapshot.windows) {

@@ -406,3 +406,76 @@ describe('a hung snapshot refresh cannot freeze the policy (N12)', () => {
     expect(fresh?.windows).toHaveLength(1);
   });
 });
+
+describe('a re-fire honours the opt-in of the control that suppressed the incident', () => {
+  it('keeps a window-suppressed incident suppressed when it re-fires as critical and the window covers critical', async () => {
+    const service = await createTestService('Checkout');
+    await activeWindow(service.id, { coversCritical: true });
+    await policy(service.id);
+    const first = incidentOf(await send(service.id, { severity: 'warning' }, 'same-key'));
+    expect(first.status).toBe('SUPPRESSED');
+
+    const second = await send(service.id, { severity: 'critical' }, 'same-key');
+    const after = await db.incident.findUniqueOrThrow({ where: { id: incidentOf(second).id } });
+    expect(after.status).toBe('SUPPRESSED');
+    expect(await pagingJobs(after.id)).toHaveLength(0);
+  });
+
+  it('keeps an orchestration-suppressed incident suppressed when its rule covers critical', async () => {
+    const service = await createTestService('Checkout');
+    await policy(service.id, {
+      orchestration: {
+        rules: [
+          {
+            id: 'quiet-prom',
+            name: 'Quiet prometheus',
+            coversCritical: true,
+            conditions: matchAll,
+            actions: [{ type: 'SUPPRESS' }],
+          },
+        ],
+      },
+    });
+    const first = incidentOf(await send(service.id, { severity: 'warning' }, 'same-key'));
+    expect(first.status).toBe('SUPPRESSED');
+    await send(service.id, { severity: 'critical' }, 'same-key');
+    const after = await db.incident.findUniqueOrThrow({ where: { id: first.id } });
+    expect(after.status).toBe('SUPPRESSED');
+  });
+});
+
+describe('a service policy replaces the global one for the release sweep', () => {
+  it('pages a global-rule suppression once the service has its own policy without that rule', async () => {
+    const service = await createTestService('Checkout');
+    await db.noiseControlPolicy.create({
+      data: {
+        scopeKey: 'global',
+        serviceId: null,
+        mode: 'ON',
+        definition: {
+          schemaVersion: 1,
+          orchestration: {
+            rules: [
+              {
+                id: 'quiet-prom',
+                name: 'Quiet prometheus',
+                conditions: matchAll,
+                actions: [{ type: 'SUPPRESS' }],
+              },
+            ],
+          },
+        } as Prisma.InputJsonObject,
+      },
+    });
+    await primePrePagingSnapshot();
+    const incident = incidentOf(await send(service.id, { severity: 'warning' }));
+    expect(incident.status).toBe('SUPPRESSED');
+
+    // The service gets its own policy, which no longer carries that rule: the global one stops applying to it.
+    await policy(service.id);
+    await runUnsuppressSweep({ maxDbMs: 5_000 }, { now: new Date(Date.now() + 60_000) });
+    const after = await db.incident.findUniqueOrThrow({ where: { id: incident.id } });
+    expect(after.status).toBe('OPEN');
+    expect(await pagingJobs(incident.id)).toHaveLength(1);
+  });
+});

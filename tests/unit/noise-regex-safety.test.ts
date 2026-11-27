@@ -6,8 +6,22 @@ import { compileMatcher, matches } from '@/lib/intelligence/noise-controls/match
  * Matching runs on the ingestion event loop with no timeout, so a pattern that backtracks exponentially
  * stalls every alert behind it. These shapes slipped past the save-time check.
  */
-const BACKTRACKING = ['(a|aa)+$', '(a|a)*b', '(\\w|\\d)+x', '(?:foo|foob)+z', '(x|xx){1,40}y'];
+const BACKTRACKING = [
+  '((a|aa))+b',
+  '((a|aa)){1,40}b',
+  '(?:(a|aa))+b',
+  '(a+)+$',
+  '((a+))*b',
+  '(a|aa)+$',
+  '(a|a)*b',
+  '(\\w|\\d)+x',
+  '(?:foo|foob)+z',
+  '(x|xx){1,40}y',
+];
 const FINE = [
+  '^(?:error|fatal): [a-z]+ \\(code \\d+\\)$',
+  '[(|]x[)|]+',
+  '(a|b)?c',
   '^disk .* full$',
   'timeout|refused',
   '(prod|staging)-db',
