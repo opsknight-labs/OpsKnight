@@ -10,7 +10,13 @@ import { aggregatePublicRegions } from '@/lib/status-pages/history';
 import { STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
 import { STATUS_PAGE_THEMES } from '@/lib/status-pages/theme-contract';
 
-vi.mock('@/components/status-page/StatusPageSubscribe', () => ({ default: () => null }));
+const subscribeProps = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+vi.mock('@/components/status-page/StatusPageSubscribe', () => ({
+  default: (props: Record<string, unknown>) => {
+    subscribeProps.push(props);
+    return null;
+  },
+}));
 
 const service = (over: Partial<PublicStatusService> = {}): PublicStatusService => ({
   id: 'svc-1',
@@ -263,6 +269,34 @@ describe('StatusPageV3', () => {
   it('does not invent a service section when the V3 projection contains no services', () => {
     render(<StatusPageV3 snapshot={snapshotOf([])} />);
     expect(screen.queryByRole('heading', { name: 'Services' })).not.toBeInTheDocument();
+  });
+
+  it('lets the slugless default page offer every subscriber channel', () => {
+    subscribeProps.length = 0;
+    const channels = ['EMAIL', 'WEBHOOK', 'SLACK', 'MICROSOFT_TEAMS', 'SMS'];
+    const base = snapshotOf([service()]);
+    render(
+      <StatusPageV3
+        snapshot={{
+          ...base,
+          page: {
+            ...base.page,
+            showSubscribe: true,
+            subscription: {
+              enabled: true,
+              channels,
+              verificationRequired: true,
+              serviceSelectionSupported: true,
+            },
+          },
+        }}
+      />
+    );
+    expect(subscribeProps.at(-1)).toMatchObject({
+      subscribeSlug: 'default',
+      webhookSlug: 'default',
+      channels,
+    });
   });
 
   it('explains an empty filter result', () => {

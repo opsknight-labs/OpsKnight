@@ -170,7 +170,8 @@ channel**, such as an email address, is shown as text and gets no posts.
 When a business service becomes impacted, or recovers, OpsKnight writes an update on every
 enabled status page that shows it, using the name the page shows. By default it is a **draft**:
 an admin reviews it under the page's announcements (**Drafts**) and publishes it as usual.
-When it recovers, an impact draft nobody published is removed.
+When it recovers, an impact draft nobody published is removed. With automatic publishing on, the
+published impact update also ends when the recovery is published, so the page stops showing it.
 
 Turn on **Publish status page updates automatically** in the business service form to publish
 these updates straight away and notify subscribers. It is off by default; keep it for business

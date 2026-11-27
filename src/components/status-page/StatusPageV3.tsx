@@ -160,9 +160,11 @@ export default function StatusPageV3({
     page.slug && !page.isDefault ? `/status/${encodeURIComponent(page.slug)}` : '/status';
   // Permalink, history and embed routes exist only under /status/[slug].
   const hasSlugRoutes = Boolean(page.slug && !page.isDefault);
+  // Subscribe APIs live under /api/status/[slug]; the route key "default" resolves the default page,
+  // which usually has no slug. Without it, webhook, Slack, Teams and SMS never showed there.
+  const subscribeSlug = page.slug || (page.isDefault ? 'default' : null);
   const webhookSlug =
-    hasSlugRoutes && page.subscription?.channels?.includes('WEBHOOK') ? page.slug : null;
-  const subscribeSlug = hasSlugRoutes ? page.slug : null;
+    subscribeSlug && page.subscription?.channels?.includes('WEBHOOK') ? subscribeSlug : null;
   const subscribeChannels = page.subscription?.channels ?? null;
   const apiPath =
     page.slug && !page.isDefault ? `/api/status/${encodeURIComponent(page.slug)}` : '/api/status';

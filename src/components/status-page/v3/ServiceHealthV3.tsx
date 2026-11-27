@@ -650,7 +650,9 @@ export default function ServiceHealthV3({
               <span className="status-v3-services__legend-count">
                 {business
                   ? business.rows.length === business.total
-                    ? t('services.businessCount', { count: business.total })
+                    ? t(business.total === 1 ? 'services.businessOne' : 'services.businessCount', {
+                        count: business.total,
+                      })
                     : t('services.countOf', { shown: business.rows.length, total: business.total })
                   : filtered.length === services.length
                     ? serviceCount(services.length, t)

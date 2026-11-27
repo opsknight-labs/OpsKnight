@@ -499,12 +499,13 @@ function StatusPageLivePreview({
       {/* 2. Designer Canvas with Subtle Studio Dot Grid */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto p-4 select-none flex items-center justify-center"
+        className="flex-1 overflow-auto p-4 select-none flex items-start justify-center"
         style={{
           background:
-            'radial-gradient(circle, hsl(var(--muted-foreground) / 0.12) 1px, transparent 1px)',
+            'radial-gradient(circle, hsl(var(--ui-muted-foreground) / 0.12) 1px, transparent 1px)',
           backgroundSize: '16px 16px',
-          backgroundColor: 'hsl(var(--muted) / 0.35)',
+          // --ui-* are HSL triplets; --muted is an RGB triplet in light mode, which drew yellow here.
+          backgroundColor: 'hsl(var(--ui-muted) / 0.35)',
         }}
       >
         {/* Device Frame Outer Chassis */}
