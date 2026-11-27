@@ -30,5 +30,5 @@ export function DashboardAnalyticsHeatmap() {
       </p>
     );
   }
-  return <IncidentHeatmapWidget data={data.heatmapData} year={new Date().getFullYear()} />;
+  return <IncidentHeatmapWidget data={data.heatmapData} />;
 }

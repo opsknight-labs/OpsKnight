@@ -122,7 +122,8 @@ The period selector in this section changes only historical analytics. It
 never filters the live feed or the Command Center counts. The section shows
 created versus resolved incidents over the period, MTTA and MTTR compared with
 the previous period, acknowledgement and resolution SLA compliance, an activity
-timeline with type filters, team load, and the incident heatmap. Empty or
+timeline with type filters, team load, and the incident heatmap (the last 365
+days, each day in your time zone). Empty or
 unavailable data is different from a measured zero. **Full analytics** (also
 offered as **Open full analytics** when trends cannot load) opens Analytics with
 the same 7, 30 or 90 day period.
