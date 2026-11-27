@@ -259,7 +259,7 @@ export async function deliverLiveIncidentCard(input: {
     interactive: input.interactive,
     note: input.note,
   });
-  const message = { text: card.text, attachments: card.attachments };
+  const message = { text: card.text, blocks: card.blocks, attachments: card.attachments };
   const store = cardStore();
   if (!store) {
     if (request.editOnly) return { success: true, skipped: true };

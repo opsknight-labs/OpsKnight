@@ -368,6 +368,9 @@ export async function projectSlackWarRoomCard(
       channel: room.providerChannelId,
       text: rendered.text,
       blocks: rendered.blocks,
+      // The card links the incident and opsknight.com; previews of those pages would bury it.
+      unfurl_links: false,
+      unfurl_media: false,
     });
     if (!created.ok) {
       const retryable = isRetryableSlackProjectionError(created.error);

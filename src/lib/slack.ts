@@ -391,7 +391,7 @@ export async function sendSlackMessageToChannel(
           const posted = await postSlackChannelMessage(
             install,
             postChannel,
-            { text: card.text, attachments: card.attachments },
+            { text: card.text, blocks: card.blocks, attachments: card.attachments },
             maxAttempts
           );
           if (posted.ok) return { success: true, ts: posted.data.ts, channel: posted.data.channel };

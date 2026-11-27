@@ -1064,6 +1064,8 @@ export async function provisionSlackWarRoom(
       incidentUrl: dashboardUrl,
     }),
     text: `War room for ${escapeSlack(incident.title)}. The status card below has the live state and actions.`,
+    unfurl_links: false,
+    unfurl_media: false,
   }).catch(err => logger.warn('[ChatOps] Failed to post welcome card', { error: err }));
   // Off unless the war-room kickoff switch is on; best effort, never fails provisioning.
   const { postWarRoomKickoff } = await import('@/lib/chatops/war-room-kickoff');

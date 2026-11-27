@@ -163,6 +163,18 @@ describe('Slack war-room status card', () => {
     expect(fallback).toContain('*Assignee:* Ada &lt;x&gt;');
   });
 
+  it('offers Escalate only while the incident is open, since escalation refuses anything else', () => {
+    const ids = (status: string) =>
+      (
+        renderSlackWarRoomProjection(buildWarRoomProjection({ ...incident, status })).blocks.find(
+          block => block.type === 'actions'
+        ) as { elements: Array<Record<string, unknown>> }
+      ).elements.map(e => e.action_id);
+    expect(ids('OPEN')).toContain('escalate_incident');
+    expect(ids('SNOOZED')).not.toContain('escalate_incident');
+    expect(ids('ACKNOWLEDGED')).not.toContain('escalate_incident');
+  });
+
   it('has no buttons once resolved', () => {
     const card = renderSlackWarRoomProjection(
       buildWarRoomProjection({ ...incident, status: 'RESOLVED', resolvedAt: new Date() })
