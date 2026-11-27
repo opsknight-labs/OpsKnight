@@ -518,7 +518,6 @@ export async function bulkUpdateUsers(
       userIds,
       action === 'setRole' ? formData.get('role') : null
     );
-    if (action === 'setRole') await assertRoleChangeStepUp(admin, formData.get('role'));
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unauthorized.' };
   }
@@ -670,6 +669,12 @@ export async function bulkUpdateUsers(
 
     if (admin && userIds.includes(admin.id)) {
       return { error: 'You cannot change your own role.' };
+    }
+    // After the cheap input checks, before the database-backed ones and the write.
+    try {
+      await assertRoleChangeStepUp(admin, role);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Unauthorized.' };
     }
     try {
       await assertCanBecomeStakeholder(userIds, role);
