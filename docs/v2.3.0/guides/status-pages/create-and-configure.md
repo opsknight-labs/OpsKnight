@@ -34,6 +34,8 @@ Open **Settings → Status Pages**. If no page exists, select **Create Status Pa
 5. Configure the default route and optional subdomain/custom domain only after DNS/TLS planning.
 6. Preview the live snapshot, then enable/publish the page.
 
+Each settings section (General, Appearance, Content, Services, Privacy, Advanced) has its own **Save** button, and a save publishes only the settings that section edits. An unsaved change in another section, such as a colour you tweaked in Appearance, stays unsaved and does not go live when you save Content.
+
 ## What OpsKnight does
 
 The page workspace builds a public/preview snapshot from mapped services, incidents, announcements, privacy policy, and routing configuration. Disabled pages remain administrative drafts. Default routing, slug, subdomain, and custom domain are distinct resolution paths.
