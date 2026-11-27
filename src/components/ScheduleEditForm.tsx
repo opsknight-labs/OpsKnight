@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { notify } from '@/lib/toast';
 import type { ScheduleActionState } from '@/lib/schedule-action-errors';
+import ConfirmDialog from './ConfirmDialog';
 import TimeZoneSelect from './TimeZoneSelect';
 
 type ScheduleEditFormProps = {
@@ -42,6 +43,7 @@ export default function ScheduleEditForm({
   const [name, setName] = useState(currentName);
   const [timeZone, setTimeZone] = useState(currentTimeZone);
   const [isPending, startTransition] = useTransition();
+  const [confirmingTimeZone, setConfirmingTimeZone] = useState(false);
 
   // Re-sync the draft when the saved values change (adjust-state-during-render, not an effect).
   const [syncedName, setSyncedName] = useState(currentName);
@@ -65,7 +67,15 @@ export default function ScheduleEditForm({
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isDirty || isPending || !name.trim()) return;
+    // A new zone silently re-reads every layer restriction and handoff time in that zone.
+    if (timeZone !== currentTimeZone) {
+      setConfirmingTimeZone(true);
+      return;
+    }
+    save();
+  };
 
+  const save = () => {
     const formData = new FormData();
     formData.set('name', name.trim());
     formData.set('timeZone', timeZone);
@@ -185,6 +195,22 @@ export default function ScheduleEditForm({
           </div>
         </CardFooter>
       </form>
+
+      {confirmingTimeZone && (
+        <ConfirmDialog
+          isOpen
+          title="Change schedule time zone?"
+          message={`Restriction hours and handoff times on every layer will be read in ${timeZone} instead of ${currentTimeZone}. Who is on call at a given moment can change, so review the layers and the preview after saving.`}
+          confirmText="Change time zone"
+          cancelText="Keep current time zone"
+          variant="warning"
+          onConfirm={() => {
+            setConfirmingTimeZone(false);
+            save();
+          }}
+          onCancel={() => setConfirmingTimeZone(false)}
+        />
+      )}
     </Card>
   );
 }

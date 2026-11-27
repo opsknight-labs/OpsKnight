@@ -159,6 +159,10 @@ export async function updateSchedule(
 
   try {
     const normalizedName = await assertScheduleNameAvailable(name, { excludeId: scheduleId });
+    const before = await prisma.onCallSchedule.findUnique({
+      where: { id: scheduleId },
+      select: { name: true, timeZone: true },
+    });
     await prisma.$transaction(async tx => {
       await tx.onCallSchedule.update({
         where: { id: scheduleId },
@@ -176,12 +180,22 @@ export async function updateSchedule(
       );
     });
 
-    const scheduleName = await getScheduleName(scheduleId);
-    await notifyScheduleMembers(
-      scheduleId,
-      'Schedule updated',
-      `Schedule "${scheduleName}" timezone and name updated`
-    );
+    // Say what actually changed: a time zone change re-interprets every restriction and handoff.
+    const changes = [
+      before && before.name !== normalizedName
+        ? `renamed from "${before.name}" to "${normalizedName}"`
+        : null,
+      before && before.timeZone !== timeZone
+        ? `time zone changed from ${before.timeZone} to ${timeZone}, so restriction hours and handoffs now follow ${timeZone}`
+        : null,
+    ].filter((change): change is string => change !== null);
+    if (changes.length > 0) {
+      await notifyScheduleMembers(
+        scheduleId,
+        'Schedule updated',
+        `Schedule "${normalizedName}" ${changes.join('; ')}`
+      );
+    }
 
     revalidatePath(`/schedules/${scheduleId}`);
     revalidatePath('/schedules');
