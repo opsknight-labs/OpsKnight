@@ -304,8 +304,8 @@ describe('generate24HourHistory', () => {
   it('uses fixed clock-hour buckets instead of rolling windows ending at now', async () => {
     const prisma = (await import('@/lib/prisma')).default;
     vi.mocked(prisma.backgroundJob.findMany).mockResolvedValueOnce([
-      { id: 'job-a', createdAt: new Date('2026-09-05T13:20:00.000Z') },
-      { id: 'job-b', createdAt: new Date('2026-09-05T14:05:00.000Z') },
+      { id: 'job-a', failedAt: new Date('2026-09-05T13:20:00.000Z') },
+      { id: 'job-b', failedAt: new Date('2026-09-05T14:05:00.000Z') },
     ] as unknown as never);
     const now = new Date('2026-09-05T14:37:00.000Z');
 
@@ -341,6 +341,20 @@ describe('generate24HourHistory', () => {
     const priorHours = samples.slice(0, 23);
     expect(priorHours.every(s => s.status === 'healthy')).toBe(true);
     expect(priorHours.every(s => s.scorePercent === 100)).toBe(true);
+  });
+
+  it('buckets a failed job by when it failed, not when it was created', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.backgroundJob.findMany).mockClear();
+    const now = new Date('2026-09-05T14:37:00.000Z');
+
+    await generate24HourHistory(mockBaseChecks, 'healthy', now);
+
+    const query = vi.mocked(prisma.backgroundJob.findMany).mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    };
+    expect(query.where).toHaveProperty('failedAt');
+    expect(query.where).not.toHaveProperty('createdAt');
   });
 
   it('does not classify customer incidents as OpsKnight platform-health failures', async () => {

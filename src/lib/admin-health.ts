@@ -347,14 +347,14 @@ export async function generate24HourHistory(
   // Fixed clock-hour buckets (UTC); the viewer's time zone is applied in the browser from `timestamp`.
   const currentHourStart = Math.floor(now.getTime() / HOUR) * HOUR;
   const since = new Date(currentHourStart - 23 * HOUR);
-  type FailedJob = { id: string; createdAt: Date };
+  type FailedJob = { id: string; failedAt: Date | null };
   type FailedDelivery = { id: string; createdAt: Date };
   type FailedNotification = { id: string; startedAt: Date };
 
   const historyResults = await Promise.allSettled([
     prisma.backgroundJob.findMany({
-      where: { createdAt: { gte: since }, status: 'FAILED' },
-      select: { id: true, createdAt: true },
+      where: { failedAt: { gte: since }, status: 'FAILED' },
+      select: { id: true, failedAt: true },
     }),
     prisma.inboundDelivery.findMany({
       where: { createdAt: { gte: since }, status: 'FAILED' },
@@ -386,7 +386,7 @@ export async function generate24HourHistory(
     const windowEnd = new Date(windowStart.getTime() + HOUR);
     const hourLabel = `${windowStart.getUTCHours().toString().padStart(2, '0')}:00 UTC`;
     const hourlyFailedJobs = failedJobs.filter(
-      job => job.createdAt >= windowStart && job.createdAt < windowEnd
+      job => job.failedAt && job.failedAt >= windowStart && job.failedAt < windowEnd
     );
     const hourlyFailedDeliveries = failedDeliveries.filter(
       delivery => delivery.createdAt >= windowStart && delivery.createdAt < windowEnd

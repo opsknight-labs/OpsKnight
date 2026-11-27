@@ -57,7 +57,8 @@ database state, an external dependency, or only the replica serving the page.
 
 The ribbon at the top has one bar for each of the last 24 clock hours (UTC hour
 boundaries; the last bar is the hour in progress). Hover a bar to see the hour it
-starts, shown in your browser's time zone with the zone named.
+starts, shown in your browser's time zone with the zone named. A failed
+background job is counted in the hour it failed, whenever it was created.
 
 ## What the checks measure
 
