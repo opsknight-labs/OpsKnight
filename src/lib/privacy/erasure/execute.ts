@@ -382,9 +382,11 @@ export async function executeErasure(
           where: { createdById: subjectId },
           data: { createdById: null },
         });
+        // Hand templates to the erasing admin: a private template with no owner would be
+        // invisible in the UI while its globally unique name stays reserved.
         await tx.incidentTemplate.updateMany({
           where: { createdById: subjectId },
-          data: { createdById: null },
+          data: { createdById: actor.id === subjectId ? null : actor.id },
         });
         await tx.actionItem.updateMany({ where: { ownerId: subjectId }, data: { ownerId: null } });
         // Structured recipient fields, not just the userId reference — the

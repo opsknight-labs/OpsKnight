@@ -374,7 +374,7 @@ export async function getIncidentCreationContext() {
     }),
     prisma.customField.findMany({ orderBy: { order: 'asc' } }),
     prisma.team.findMany({ where: teamScope, orderBy: { name: 'asc' } }),
-    getAllTemplates(permissions.id),
+    getAllTemplates(permissions.id, permissions.role === 'ADMIN'),
   ]);
 
   return { canCreateIncident: true as const, services, users, teams, customFields, templates };

@@ -515,6 +515,20 @@ describe('executeErasure', () => {
     );
   });
 
+  it('hands the erased user\'s incident templates to the erasing admin instead of orphaning them', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+
+    await executeErasure(REQUEST_ID, ACTOR);
+
+    expect(mocks.tx.incidentTemplate.updateMany).toHaveBeenCalledWith({
+      where: { createdById: SUBJECT_ID },
+      data: { createdById: ACTOR.id },
+    });
+  });
+
   it('rolls back and reports FAILED/BLOCKED when in-transaction verification fails', async () => {
     mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
     mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);

@@ -14,7 +14,7 @@ export default async function TemplatesPage() {
   const permissions = await getUserPermissions();
   const canManageTemplates = permissions.isResponderOrAbove;
 
-  const templates = await getAllTemplates(permissions.id);
+  const templates = await getAllTemplates(permissions.id, permissions.role === 'ADMIN');
 
   const totalCount = templates.length;
   const highUrgencyCount = templates.filter(t => t.defaultUrgency === 'HIGH').length;
