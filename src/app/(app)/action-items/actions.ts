@@ -2,7 +2,8 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { assertResponderOrAbove } from '@/lib/rbac';
+import { assertResponderOrAbove, getCurrentAuthorizationActor } from '@/lib/rbac';
+import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { ActionItemStatus, Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 
@@ -38,8 +39,10 @@ export async function updateActionItemStatus(
   }
 
   try {
+    // Same visibility as the board and API v2: items on postmortems the actor cannot read are not found.
+    const actor = await getCurrentAuthorizationActor();
     const existing = await prisma.actionItem.findUnique({
-      where: { id: itemId },
+      where: { id: itemId, postmortem: postmortemReadWhere(actor) },
       include: { postmortem: true },
     });
 

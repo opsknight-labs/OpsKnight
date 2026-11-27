@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     assertAdminOrResponder: vi.fn(),
+    getCurrentAuthorizationActor: vi.fn(),
     actionItemFindUnique: vi.fn(),
     incidentFindUnique: vi.fn(),
     externalIssueFindFirst: vi.fn(),
@@ -30,6 +31,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/lib/rbac', () => ({
   assertAdminOrResponder: mocks.assertAdminOrResponder,
+  getCurrentAuthorizationActor: mocks.getCurrentAuthorizationActor,
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -80,6 +82,8 @@ import {
   syncIncidentJiraIssue,
   unlinkJiraIssueFromIncident,
 } from '@/app/(app)/incidents/jira/actions';
+import { postmortemReadWhere } from '@/lib/authorization-filters';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
 
 const OPERATIONAL_CAPABILITY = {
   workspaceState: 'ENABLED' as const,
@@ -98,6 +102,12 @@ describe('Jira P0 production action contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.assertAdminOrResponder.mockResolvedValue({ id: 'responder-1' });
+    mocks.getCurrentAuthorizationActor.mockResolvedValue({
+      id: 'responder-1',
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+      teamIds: [],
+    });
     mocks.externalIssueDeleteMany.mockResolvedValue({ count: 1 });
     mocks.tx.externalIssueLink.deleteMany.mockResolvedValue({ count: 1 });
     mocks.incidentEventCreate.mockResolvedValue({ id: 'event-1' });
@@ -115,6 +125,35 @@ describe('Jira P0 production action contract', () => {
       expect(result).toEqual({ success: false, error: 'Invalid Jira action request.' });
       expect(mocks.assertAdminOrResponder).not.toHaveBeenCalled();
       expect(mocks.linkExistingJiraIssue).not.toHaveBeenCalled();
+    });
+
+    it('scopes every action-item lookup to postmortems the actor may read', async () => {
+      // A scoped user holding a temporary operations grant must not reach other teams' items by id.
+      const scoped: AuthorizationActor = {
+        id: 'scoped-1',
+        role: 'USER',
+        status: 'ACTIVE',
+        teamIds: ['team-a'],
+      };
+      mocks.getCurrentAuthorizationActor.mockResolvedValue(scoped);
+      const readable = postmortemReadWhere(scoped);
+      expect(readable).not.toEqual({});
+      mocks.actionItemFindUnique.mockResolvedValue(null);
+      mocks.externalIssueFindFirst.mockResolvedValue(null);
+
+      await createJiraIssueFromActionItem('action-1');
+      await linkJiraIssueToActionItem('action-1', 'OPS-1');
+      await syncActionItemJiraIssue('action-1', 'link-1');
+      await unlinkJiraIssueFromActionItem('action-1', 'link-1');
+
+      for (const call of mocks.actionItemFindUnique.mock.calls) {
+        expect(call[0].where).toEqual({ id: 'action-1', postmortem: readable });
+      }
+      expect(mocks.actionItemFindUnique).toHaveBeenCalledTimes(2);
+      expect(mocks.externalIssueFindFirst.mock.calls.map(call => call[0].where.actionItem)).toEqual([
+        { postmortem: readable },
+        { postmortem: readable },
+      ]);
     });
 
     it('rejects stale Create Jira requests when the action item is already linked', async () => {
@@ -208,7 +247,12 @@ describe('Jira P0 production action contract', () => {
 
       expect(result).toEqual({ success: true });
       expect(mocks.externalIssueFindFirst).toHaveBeenCalledWith({
-        where: { id: 'link-1', provider: 'JIRA', actionItemId: 'action-1' },
+        where: {
+          id: 'link-1',
+          provider: 'JIRA',
+          actionItemId: 'action-1',
+          actionItem: { postmortem: { incident: {} } },
+        },
         select: {
           id: true,
           externalKey: true,
