@@ -30,6 +30,8 @@ describe('serializePublicPostmortem', () => {
         row('draft-evt-1', 'Incident acknowledged by Jane Responder', 'Incident acknowledged by Jane Responder'),
         row('event-clx9abc', 'Incident acknowledged by Jane Responder', 'Incident acknowledged by Jane Responder'),
         row('event-clx9def', 'war-room chat', 'internal-chat: rotate the prod-db password'),
+        row('draft-axis-0', 'Alert fired', 'captured war-room chat: rotate the prod-db password'),
+        row('draft-run-clx1', 'Runbook Restart db', 'runbook output internal-chat'),
         row('draft-note-2', 'Note by Jane Responder', 'root cause is the prod-db password rotation'),
         row('note-3', 'Note by Deleted user', 'internal chatter'),
         row('manual-4', 'Note by Jane Responder', 'renamed row still carries the note title'),

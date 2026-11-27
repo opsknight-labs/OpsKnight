@@ -103,9 +103,9 @@ internal-only detail. The public page shows only the title, summary, root cause,
 resolution, lessons, impact numbers, the incident title and resolution time, and
 the timeline entries you wrote yourself plus the generated **Incident Started**
 and **Incident Resolved** rows. Everything else is left out: the Auto-Draft and
-ChatOps draft rows copied from responder notes (**Note by …**), captured chat and
-incident events (which can name the responder), author names and emails, action
-items and SLA counts. To show a drafted event publicly, add your own timeline
+ChatOps draft rows copied from responder notes (**Note by …**), captured chat,
+alert, change and runbook-run evidence rows, and incident events (which can name
+the responder), author names and emails, action items and SLA counts. To show a drafted event publicly, add your own timeline
 entry for it. Still review the summary, root cause and lessons text yourself. The
 public page serves only **Published** postmortems. On
 a draft the control reads **Allow on Status Page** and the badge reads **Public

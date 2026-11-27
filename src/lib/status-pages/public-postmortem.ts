@@ -46,10 +46,11 @@ function finiteNumber(value: unknown): number | undefined {
  * Auto-drafts copy internal incident data into the timeline: responder notes, captured chat, and event
  * messages that name the responder ("Incident acknowledged by <name>"). Only rows an author wrote
  * (`event-<timestamp>` from the timeline editor, API-supplied ids) and the fixed `draft-start` and
- * `draft-end` rows are public; every generated row is internal.
+ * `draft-end` rows are public; every other `draft-` row (events, notes, evidence axes, runbook runs)
+ * is internal, so a new generated kind is hidden by default.
  */
 function isGeneratedInternalRow(id: string): boolean {
-  return /^(draft-evt-|draft-note-|note-)/.test(id) || /^event-(?!\d+$)/.test(id);
+  return /^(draft-(?!start$|end$)|note-)/.test(id) || /^event-(?!\d+$)/.test(id);
 }
 
 function publicTimeline(value: unknown): PublicTimelineEvent[] | undefined {
