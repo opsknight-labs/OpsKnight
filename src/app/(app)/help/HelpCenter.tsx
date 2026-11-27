@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { Input } from '@/components/ui/shadcn/input';
 import {
   Book,
-  Github,
+  GitFork,
   ExternalLink,
   HelpCircle,
   CheckCircle2,
@@ -725,7 +725,7 @@ export default function HelpCenter({ mcpEntry }: { mcpEntry?: React.ReactNode })
         <div className="flex flex-col md:flex-row md:items-center justify-between p-6 sm:p-7 gap-6">
           <div className="max-w-xl space-y-2">
             <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-foreground">
-              <Github className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              <GitFork className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
               Need help from the maintainers?
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">

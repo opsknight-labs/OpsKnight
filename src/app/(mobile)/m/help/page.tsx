@@ -1,6 +1,6 @@
 'use client';
 
-import { Book, Github, Globe, Mail, ChevronRight, ExternalLink, Heart } from 'lucide-react';
+import { Book, GitFork, Globe, Mail, ChevronRight, ExternalLink, Heart } from 'lucide-react';
 import { APP_VERSION } from '@/lib/constants';
 // MobileHeader is provided by layout
 
@@ -28,7 +28,7 @@ export default function MobileHelpPage() {
       href: 'https://github.com/opsknight-labs/OpsKnight',
       title: 'GitHub',
       subtitle: 'Code & Community',
-      icon: Github,
+      icon: GitFork,
       color: 'text-zinc-900 dark:text-zinc-100',
       bg: 'bg-zinc-900/10 dark:bg-zinc-100/10',
     },

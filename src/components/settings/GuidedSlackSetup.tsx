@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
-import { Slack, ExternalLink, Copy, CheckCircle2, ArrowRight, ArrowLeft, Info } from 'lucide-react';
+import { SlackLogo } from '@/components/common/BrandLogos';
+import { ExternalLink, Copy, CheckCircle2, ArrowRight, ArrowLeft, Info } from 'lucide-react';
 import { notify as toast } from '@/lib/toast';
 import SlackManifestCard from '@/components/settings/SlackManifestCard';
 import { SLACK_BOT_EVENTS, SLACK_BOT_SCOPES } from '@/lib/slack/app-manifest';
@@ -118,7 +119,7 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className="p-3 rounded-lg bg-primary/10">
-              <Slack className="h-6 w-6 text-primary" />
+              <SlackLogo className="h-6 w-6 text-primary" />
             </div>
             <div>
               <CardTitle className="text-xl">Setup Wizard</CardTitle>
@@ -493,7 +494,7 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
 
             <Button size="lg" asChild>
               <a href="/api/slack/oauth">
-                <Slack className="h-4 w-4 mr-2" />
+                <SlackLogo className="h-4 w-4 mr-2" />
                 Connect to Slack
               </a>
             </Button>
