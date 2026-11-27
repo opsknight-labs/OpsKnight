@@ -526,6 +526,12 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
 
+  // The draft copies the incident's timeline and notes, so the caller must be able to read it.
+  const readable = await prisma.incident.count({
+    where: { AND: [{ id: incidentId }, incidentReadWhere(await getCurrentAuthorizationActor())] },
+  });
+  if (!readable) throw new Error('Incident not found');
+
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
     include: {
