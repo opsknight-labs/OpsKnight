@@ -52,7 +52,7 @@ you can:
 - replace its displayed title;
 - choose a width from one to four columns;
 - choose compact, standard, or expanded row height (after a width or height change the widgets re-flow row by row, so none overlap or run past the last column);
-- display a chart as line, bar, or pie; and
+- display a chart as line, bar, or pie (a chart with its own type, such as MTTA vs MTTR, shows that type in the list and keeps it until you pick another); and
 - set an optional SLA target for gauges and rate widgets.
 
 Select **Apply Changes**, review the result, and then select **Save Changes**.

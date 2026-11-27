@@ -66,4 +66,29 @@ describe('WidgetConfigModal Component', () => {
     // Title should be reset to default definition name "Incident Trend"
     expect(titleInput).toHaveValue('Incident Trend');
   });
+
+  it('shows a special chart type in the select and keeps it when applied', () => {
+    const special: ConfigurableWidget = {
+      ...mockWidget,
+      id: 'widget-mtta-1',
+      widgetDefinitionId: 'mtta-mttr-trend',
+      title: 'MTTA/MTTR Trend',
+      config: { chartType: 'mttaVsMttr' },
+    };
+    render(<WidgetConfigModal {...defaultProps} widget={special} />);
+
+    expect(screen.getByText('MTTA vs MTTR (two series)')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: /apply changes/i }));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ config: expect.objectContaining({ chartType: 'mttaVsMttr' }) })
+    );
+  });
+
+  it('does not add an extra option for a line, bar or pie chart', () => {
+    render(<WidgetConfigModal {...defaultProps} />);
+    expect(screen.queryByText('MTTA vs MTTR (two series)')).toBeNull();
+    expect(screen.getByText('Line Chart (Continuous Trend)')).toBeDefined();
+  });
 });
