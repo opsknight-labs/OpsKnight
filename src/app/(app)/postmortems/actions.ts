@@ -64,7 +64,7 @@ export type PostmortemData = {
   resolution?: string;
   actionItems?: ActionItem[];
   lessons?: string;
-  status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  status?: 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'ARCHIVED';
   isPublic?: boolean;
   /** Revision the editor loaded; required when editing an existing postmortem. */
   expectedRevision?: number;
@@ -138,7 +138,7 @@ const postmortemInputSchema = z.object({
     .max(MAX_POSTMORTEM_ACTION_ITEMS, 'A postmortem can have at most 100 action items.')
     .optional(),
   lessons: text(10_000).optional(),
-  status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
+  status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']).optional(),
   isPublic: z.boolean().optional(),
   expectedRevision: z.number().int().positive().optional(),
 });

@@ -74,6 +74,15 @@ describe('upsertPostmortem creating a postmortem', () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
+  it('validates an IN_REVIEW postmortem with a 150-character title, as the API allows', async () => {
+    mocks.incidentCount.mockResolvedValue(0);
+
+    // Reaching the incident lookup means the editor input passed validation.
+    await expect(
+      upsertPostmortem('inc-1', { title: 'T'.repeat(150), status: 'IN_REVIEW' })
+    ).rejects.toThrow('Incident not found');
+  });
+
   it('creates the postmortem when the caller can read the incident', async () => {
     mocks.incidentCount.mockResolvedValue(1);
     mocks.transaction.mockResolvedValue({ id: 'pm-1' });

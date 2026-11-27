@@ -75,9 +75,9 @@ import {
 } from './postmortem/root-cause-format';
 
 const postmortemSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(100, 'Title must be less than 100 characters'),
+  title: z.string().min(1, 'Title is required').max(200, 'Title must be 200 characters or fewer'),
   summary: z.string().optional(),
-  status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']),
+  status: z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED']),
   isPublic: z.boolean(),
   rootCause: z.string().optional(),
   resolution: z.string().optional(),
@@ -183,7 +183,7 @@ export default function PostmortemForm({
     defaultValues: {
       title: initialData?.title || '',
       summary: initialData?.summary || '',
-      status: (initialData?.status as 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') || 'DRAFT',
+      status: (initialData?.status as PostmortemFormValues['status']) || 'DRAFT',
       isPublic: initialData?.isPublic ?? true,
       rootCause: extractNarrative(initialData?.rootCause),
       resolution: initialData?.resolution || '',

@@ -43,8 +43,11 @@ Open **Postmortems**, or open a resolved incident and select its **Postmortem** 
 Open **Postmortems** and select **Create Postmortem**, or open a resolved
 incident's **Postmortem** tab. Select the incident when prompted.
 
-1. Enter a specific title and stakeholder summary.
-2. Keep status **Draft** while evidence and reviewers are incomplete.
+1. Enter a specific title (up to 200 characters, the same limit as the API) and
+   stakeholder summary.
+2. Keep status **Draft** while evidence and reviewers are incomplete. Use **In
+   review** once reviewers have it; a postmortem set to **In review** through the
+   API can be edited and saved in the editor like any other.
 3. Use **Auto-Draft** when useful, then verify every generated statement against
    incident evidence; generated text is a starting point, not an approval.
    **Auto-Draft** replaces the summary, root cause, resolution, lessons,

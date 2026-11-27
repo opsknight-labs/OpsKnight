@@ -2,6 +2,7 @@ import { Search, Megaphone, Wrench, CheckCircle2 } from 'lucide-react';
 
 export const POSTMORTEM_STATUS_CONFIG = {
   DRAFT: { label: 'Draft', variant: 'warning' as const },
+  IN_REVIEW: { label: 'In review', variant: 'info' as const },
   PUBLISHED: { label: 'Published', variant: 'success' as const },
   ARCHIVED: { label: 'Archived', variant: 'neutral' as const },
 };
