@@ -57,6 +57,12 @@ Service scope controls incident routing and is reused by reports, dashboards,
 integrations, teams, and status communication. Changing its team or policy
 affects future routing; it does not rewrite historical incident ownership.
 
+Only administrators can move a service to a different team, or clear its team,
+from service settings; this is the same rule as assigning services from the team
+page. Anyone else who can edit the service must keep its current team, and a
+change is refused with "Unauthorized. Only administrators can move a service
+between teams."
+
 ## Service intelligence
 
 Users with the `intelligence.read` permission see an **Intelligence** tab on the
