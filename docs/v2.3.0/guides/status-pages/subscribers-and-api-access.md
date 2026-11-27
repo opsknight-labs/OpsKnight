@@ -68,6 +68,8 @@ A subscriber who picked services or business services receives only incidents on
 
 Verification mail is limited so a public form cannot be used to flood an inbox: at most 5 verification mails per address per page per day, and 1,000 per page per hour. A request over a limit gets the same generic answer as any other, sends nothing, and leaves the link already sent valid. An already active subscriber who submits the same service picks they already have, or a change that is already waiting for their confirmation, is not mailed again.
 
+`POST /api/status/[slug]/subscribe` (and the older `POST /api/status/subscribe`) accept `email`, `timezone` and `preferences` and apply the same checks and rate limits as the page's own form. An unknown slug returns 404; a page id in the body never replaces it.
+
 An invalid or expired confirm or unsubscribe link shows the page's own "invalid or has expired" message, on a custom domain as well as on the application host, rather than a Not Found error.
 
 The verification link confirms only a pending subscription (or one that is already active). A subscriber suppressed after a complaint or repeated bounces stays suppressed when the original email's link is opened again.
