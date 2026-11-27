@@ -12,7 +12,8 @@ import {
   ServiceUpdateV2Schema,
 } from '@/lib/api-v2';
 import { etagHeaders, ifMatchWhere, parseIfMatch, withIfMatch } from '@/lib/api-v2/concurrency';
-import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { actorHasCapability, AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { CAPABILITIES } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
 import { assertServicePolicyAssignableForApi } from '@/lib/automation/service-policy';
 import { withV2Observability } from '@/lib/api-v2/observability';
@@ -109,6 +110,19 @@ export const PATCH = withV2Observability(async function PATCH(
     });
 
     const validated = ServiceUpdateV2Schema.parse(body);
+
+    // Same rule as service settings: only administrators move a service between teams.
+    if (
+      existing.teamId &&
+      validated.teamId &&
+      validated.teamId !== existing.teamId &&
+      !actorHasCapability(actor, CAPABILITIES.ADMIN_MANAGE)
+    ) {
+      throw new AppError({
+        code: 'AUTHORIZATION_DENIED',
+        userMessage: 'Only administrators can move a service between teams.',
+      });
+    }
 
     if (validated.teamId) {
       const team = await prisma.team.findUnique({
