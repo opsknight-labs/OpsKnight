@@ -171,7 +171,11 @@ export async function POST(req: NextRequest) {
       const existingSmsConfig = isProviderConfig(existingSmsProvider?.config)
         ? await decryptProviderConfig(smsProvider, existingSmsProvider.config)
         : {};
-      let smsConfig: Record<string, unknown> = { enabled: body.sms.enabled || false };
+      // Start from what is stored so settings this body does not carry (voiceEnabled, ...) survive.
+      let smsConfig: Record<string, unknown> = {
+        ...existingSmsConfig,
+        enabled: body.sms.enabled || false,
+      };
 
       if (smsProvider === 'twilio') {
         smsConfig.accountSid = body.sms.accountSid || '';
@@ -257,27 +261,34 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.whatsapp) {
-      const whatsappNumber = body.whatsapp.number ?? existingTwilioConfig.whatsappNumber ?? '';
+      // Read again: the SMS block above may just have written this same Twilio record.
+      const currentTwilioProvider = await prisma.notificationProvider.findUnique({
+        where: { provider: 'twilio' },
+      });
+      const currentTwilioConfig = isProviderConfig(currentTwilioProvider?.config)
+        ? await decryptProviderConfig('twilio', currentTwilioProvider.config)
+        : {};
+      const whatsappNumber = body.whatsapp.number ?? currentTwilioConfig.whatsappNumber ?? '';
       let updatedTwilioConfig: Record<string, unknown> = {
-        ...existingTwilioConfig,
+        ...currentTwilioConfig,
         whatsappNumber,
         whatsappContentSid:
-          body.whatsapp.contentSid ?? existingTwilioConfig.whatsappContentSid ?? '',
+          body.whatsapp.contentSid ?? currentTwilioConfig.whatsappContentSid ?? '',
         whatsappEnabled:
-          body.whatsapp.enabled ?? existingTwilioConfig.whatsappEnabled ?? Boolean(whatsappNumber),
+          body.whatsapp.enabled ?? currentTwilioConfig.whatsappEnabled ?? Boolean(whatsappNumber),
         whatsappAccountSid:
-          body.whatsapp.accountSid ?? existingTwilioConfig.whatsappAccountSid ?? '',
-        whatsappAuthToken: body.whatsapp.authToken ?? existingTwilioConfig.whatsappAuthToken ?? '',
+          body.whatsapp.accountSid ?? currentTwilioConfig.whatsappAccountSid ?? '',
+        whatsappAuthToken: body.whatsapp.authToken ?? currentTwilioConfig.whatsappAuthToken ?? '',
       };
 
       updatedTwilioConfig = mergeSensitiveProviderFields(
         'twilio',
         updatedTwilioConfig,
-        existingTwilioConfig
+        currentTwilioConfig
       );
       updatedTwilioConfig = await encryptProviderConfig('twilio', updatedTwilioConfig);
 
-      if (existingTwilioProvider) {
+      if (currentTwilioProvider) {
         await prisma.notificationProvider.update({
           where: { provider: 'twilio' },
           data: {
