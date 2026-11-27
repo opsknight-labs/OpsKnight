@@ -68,7 +68,7 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
     );
     return grant;
   };
-  /** The successor that a replay within the grace window replaces, or null. */
+  /** The unused successor that a replay within the grace window replaces, or null. */
   const graceReplay = async (token: {
     grantId: string;
     rotatedAt: Date | null;
@@ -82,11 +82,9 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
     const graceMs = (policy?.refreshReuseGraceSeconds ?? 0) * 1000;
     if (graceMs <= 0 || Date.now() - token.rotatedAt.getTime() > graceMs) return null;
     const now = new Date();
-    // Withdraw the successor only while it is still current; the update is the check. A successor
-    // that was already used is withdrawn too: a second process that read the old token before the
-    // first one rotated it is the usual cause, and it must not cost the person the whole grant.
+    // Revoke the successor only if it is still unused and current; the update is the check.
     const revoked = await db.mcpToken.updateMany({
-      where: { id: token.successorId, grantId: token.grantId, rotatedAt: null },
+      where: { id: token.successorId, grantId: token.grantId, rotatedAt: null, lastUsedAt: null },
       data: { rotatedAt: now },
     });
     return revoked.count === 1 ? token.successorId : null;
@@ -237,8 +235,8 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
         where: { refreshHash: digestMcpSecret(refreshToken) },
       });
       if (!token) return false;
-      // A replay is a harmless retry (a lost response, a second terminal or process) only while it
-      // is recent, as in other providers' rotation grace windows. Anything else is treated as theft.
+      // A replay is a harmless retry (a lost response, a second terminal) only while it is recent
+      // and the token that replaced it was never used. Anything else is treated as theft.
       const retried = token.rotatedAt ? await graceReplay(token) : null;
       if (token.rotatedAt && !retried) {
         onReuse(token.grantId);
@@ -269,7 +267,7 @@ export function createMcpOAuthModel(db: Database, onReuse: (grantId: string) => 
       };
     },
     revokeToken: async token => {
-      // The replayed token was already rotated; its successor was revoked instead.
+      // The replayed token was already rotated; its unused successor was revoked instead.
       if (token.user?.graceReplay === true) return true;
       const result = await db.mcpToken.updateMany({
         where: { refreshHash: digestMcpSecret(token.refreshToken), rotatedAt: null },
