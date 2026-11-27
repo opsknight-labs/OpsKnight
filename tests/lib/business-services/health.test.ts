@@ -293,6 +293,22 @@ describe('computeHealth', () => {
     }
   });
 
+  it('keeps every impacted member in the capped reasons when one member has many incidents', () => {
+    const noisy = Array.from({ length: 40 }, (_, n) => incident(`noisy-${n}`, 'alerts', 'HIGH'));
+    const health = computeHealth(
+      inputs({
+        businessServices: [bs('platform', ['alerts', 'web'])],
+        incidents: [...noisy, incident('quiet', 'web', 'HIGH')],
+      })
+    ).get('platform')!;
+    const subjects = new Set(
+      health.reasons.map(reason => (reason.kind === 'DIRECT' ? reason.serviceId : null))
+    );
+    expect(subjects).toEqual(new Set(['alerts', 'web']));
+    expect(health.reasons).toHaveLength(25);
+    expect(health.impactedMemberCount).toBe(2);
+  });
+
   it('reports since as the earliest incident behind the current status', () => {
     const early = new Date('2026-11-22T09:00:00Z');
     const health = computeHealth(

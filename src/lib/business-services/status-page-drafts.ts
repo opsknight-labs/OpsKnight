@@ -85,6 +85,21 @@ export async function draftStatusPageUpdates(input: {
               },
             })
           : { count: 0 };
+      // A published recovery also ends the published impact notice: otherwise the page kept
+      // saying "We are investigating" after the recovery (which ends at once and never shows).
+      const closed =
+        kind === 'RECOVERY' && publish
+          ? await tx.statusPageAnnouncement.updateMany({
+              where: {
+                statusPageId: page.statusPageId,
+                id: { startsWith: AUTO_DRAFT_ID_PREFIX },
+                isActive: true,
+                endDate: null,
+                affectedBusinessServiceIds: { array_contains: [bs.id] },
+              },
+              data: { endDate: now },
+            })
+          : { count: 0 };
       const announcement = await tx.statusPageAnnouncement.create({
         data: {
           id,
@@ -122,6 +137,7 @@ export async function draftStatusPageUpdates(input: {
             from: input.from,
             to: input.to,
             withdrawnDrafts: withdrawn.count,
+            closedNotices: closed.count,
           },
         },
         tx

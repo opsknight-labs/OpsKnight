@@ -605,10 +605,18 @@ export default function IncidentsV3({
 
       {shown.length === 0 ? (
         <div className="status-v3-incidents-inline__empty">
-          <p className="status-v3-incidents-inline__empty-title">No incidents for this service.</p>
-          <button type="button" className="status-v3-pill__more" onClick={() => setService('all')}>
-            Clear filter
-          </button>
+          <p className="status-v3-incidents-inline__empty-title">
+            {service === 'all' ? t('incidents.noneRecent') : t('incidents.noneForService')}
+          </p>
+          {service !== 'all' && (
+            <button
+              type="button"
+              className="status-v3-pill__more"
+              onClick={() => setService('all')}
+            >
+              {t('incidents.clearFilter')}
+            </button>
+          )}
         </div>
       ) : (
         <div className="status-v3-incidents-inline__list" role="list">
