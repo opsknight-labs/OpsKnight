@@ -232,8 +232,9 @@ See [Status page layouts](../status-pages/business-service-layouts).
 | Read, update, delete               | `GET/PATCH/DELETE /api/v2/business-services/{id}`                                |
 | Incidents that impacted it         | `GET /api/v2/business-services/{id}/incidents`                                   |
 | Impact timeline, uptime, MTTA/MTTR | `GET /api/v2/business-services/{id}/impact-timeline`                             |
+| Error budget and burn state        | `GET /api/v2/business-services/{id}/error-budget`                                |
 | Changes on member services         | `GET /api/v2/business-services/{id}/changes`                                     |
-| Monthly SLA report                 | `GET /api/v2/business-services/{id}/sla-report`                                  |
+| Monthly SLA report (JSON or CSV)   | `GET /api/v2/business-services/{id}/sla-report` (`format=csv` for the file)      |
 | Scorecard                          | `GET /api/v2/business-services/{id}/scorecard`                                   |
 | Scorecard rubric                   | `GET/PUT /api/v2/settings/business-service-scorecard`                            |
 | Mark or unmark an incident impact  | `PUT/DELETE /api/v2/incidents/{id}/business-service-impacts/{businessServiceId}` |

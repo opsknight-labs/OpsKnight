@@ -871,6 +871,14 @@
     "requiredHeaders": [],
     "bodyRequired": false
   },
+  "getBusinessServiceErrorBudget": {
+    "method": "GET",
+    "path": "/business-services/{id}/error-budget",
+    "kind": "item",
+    "idempotency": null,
+    "requiredHeaders": [],
+    "bodyRequired": false
+  },
   "listBusinessServiceCustomerReports": {
     "method": "GET",
     "path": "/business-services/{id}/customer-reports",

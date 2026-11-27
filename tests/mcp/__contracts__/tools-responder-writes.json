@@ -36,6 +36,18 @@
     "descriptionSha256": "1648b216ce9397edafbdafba925b543768a79be1158a5a0c38692f308ba78a37"
   },
   {
+    "name": "business_service_error_budget",
+    "title": "Business service error budget",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchemaSha256": "ba90a5e437ec76d5ab725982363c3f00f084c6f35086fe44ecfdc57f3f624ae7",
+    "descriptionSha256": "c91636e8fcd99e4401739d880da212e5b76992c1a83d80a9fa72cc895567b230"
+  },
+  {
     "name": "business_service_get",
     "title": "Get a business service",
     "annotations": {
@@ -711,7 +723,7 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchemaSha256": "1facbee642cbc8aa290cd351f99b973a91665eb2508912de65108bc0ab1d3e0d",
+    "inputSchemaSha256": "9d83897a22de364c06b061acade2213c444d6e5af92d9827111f4a87d21d903e",
     "descriptionSha256": "aa34ce123b0a98b24380074156124d9778145e8b44cd0caf44130618b5673b85"
   },
   {

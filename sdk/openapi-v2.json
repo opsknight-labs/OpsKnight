@@ -5752,6 +5752,48 @@
         ],
         "additionalProperties": false
       },
+      "BusinessServiceErrorBudget": {
+        "type": "object",
+        "properties": {
+          "businessServiceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sloTarget": {
+            "type": ["number", "null"]
+          },
+          "sloWindowDays": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "errorBudget": {
+            "type": ["object", "null"],
+            "description": "Null when the business service has no SLO target.",
+            "properties": {
+              "allowedMinutes": {
+                "type": "number",
+                "minimum": 0
+              },
+              "consumedMinutes": {
+                "type": "number",
+                "minimum": 0
+              },
+              "remainingPercent": {
+                "type": "number",
+                "description": "Negative once breached."
+              },
+              "burnState": {
+                "type": "string",
+                "enum": ["OK", "AT_RISK", "BREACHED"]
+              }
+            },
+            "required": ["allowedMinutes", "consumedMinutes", "remainingPercent", "burnState"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["businessServiceId", "sloTarget", "sloWindowDays", "errorBudget"],
+        "additionalProperties": false
+      },
       "BusinessServiceSlaReport": {
         "type": "object",
         "properties": {
@@ -39484,6 +39526,92 @@
         "x-required-scope": "services:read"
       }
     },
+    "/business-services/{id}/error-budget": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "Read the error budget and burn state of a business service",
+        "description": "Allowed and consumed minutes over the SLO window (planned maintenance excluded, severity-weighted), the share left and the burn state: OK, AT_RISK below 25% left, BREACHED at 0%. errorBudget is null without an SLO target.\n\nRequires API scope `services:read` (Services read).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BusinessServiceErrorBudget"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["data", "requestId", "timestamp"]
+                }
+              }
+            },
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Requests allowed per window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests left in the window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time at which the window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProblemError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemError"
+          }
+        },
+        "operationId": "getBusinessServiceErrorBudget",
+        "x-required-scope": "services:read"
+      }
+    },
     "/business-services/{id}/graph": {
       "get": {
         "tags": ["Services"],
@@ -42200,7 +42328,7 @@
     "/business-services/{id}/sla-report": {
       "get": {
         "tags": ["Services"],
-        "summary": "Monthly SLA report of a business service",
+        "summary": "Monthly SLA report of a business service, as JSON or CSV (format=csv)",
         "description": "Uptime, severity-weighted uptime against the SLO target (met or missed), downtime minutes and incidents for one UTC month (default: this month, to date). estimatedCostCents and currency only for Responders and Admins.\n\nRequires API scope `services:read` (Services read).",
         "parameters": [
           {
@@ -42220,6 +42348,17 @@
               "type": "string",
               "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
               "description": "YYYY-MM."
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["json", "csv"],
+              "default": "json",
+              "description": "csv returns the report as a text/csv attachment."
             }
           }
         ],
@@ -42243,6 +42382,11 @@
                     }
                   },
                   "required": ["data", "requestId", "timestamp"]
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
                 }
               }
             },

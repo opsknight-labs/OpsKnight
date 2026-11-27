@@ -1183,6 +1183,17 @@ export type BusinessServiceChange = {
   occurredAt: string;
   riskScore: number | null;
 };
+export type BusinessServiceErrorBudget = {
+  businessServiceId: string;
+  sloTarget: number | null;
+  sloWindowDays: number;
+  errorBudget: {
+    allowedMinutes: number;
+    consumedMinutes: number;
+    remainingPercent: number;
+    burnState: 'OK' | 'AT_RISK' | 'BREACHED';
+  } | null;
+};
 export type BusinessServiceSlaReport = {
   businessServiceId: string;
   name: string;
@@ -3626,6 +3637,7 @@ export interface OperationRequests {
     params: { id: string };
     query?: { from?: string; to?: string };
   };
+  getBusinessServiceErrorBudget: { params: { id: string } };
   listBusinessServiceCustomerReports: { params: { id: string }; query?: { limit?: number } };
   createBusinessServiceCustomerReport: {
     params: { id: string };
@@ -3901,7 +3913,10 @@ export interface OperationRequests {
     params: { id: string };
     query?: { from?: string; to?: string; limit?: number };
   };
-  getBusinessServiceSlaReport: { params: { id: string }; query?: { month?: string } };
+  getBusinessServiceSlaReport: {
+    params: { id: string };
+    query?: { month?: string; format?: 'json' | 'csv' };
+  };
   listStatusPageServices: { params: { id: string }; query?: { limit?: number; cursor?: string } };
   setStatusPageServices: {
     params: { id: string };
@@ -5596,6 +5611,11 @@ export interface OperationResponses {
   } & Record<string, unknown>;
   getBusinessServiceImpactTimeline: {
     data: BusinessServiceImpactTimeline;
+    requestId: string;
+    timestamp: string;
+  } & Record<string, unknown>;
+  getBusinessServiceErrorBudget: {
+    data: BusinessServiceErrorBudget;
     requestId: string;
     timestamp: string;
   } & Record<string, unknown>;
@@ -7732,6 +7752,14 @@ export const OPERATIONS = {
   getBusinessServiceImpactTimeline: {
     method: 'GET',
     path: '/business-services/{id}/impact-timeline',
+    kind: 'item',
+    idempotency: null,
+    requiredHeaders: [],
+    bodyRequired: false,
+  },
+  getBusinessServiceErrorBudget: {
+    method: 'GET',
+    path: '/business-services/{id}/error-budget',
     kind: 'item',
     idempotency: null,
     requiredHeaders: [],

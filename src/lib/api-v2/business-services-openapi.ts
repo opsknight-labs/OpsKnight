@@ -574,6 +574,23 @@ export const BUSINESS_SERVICE_SCHEMAS: Record<string, Schema> = {
     occurredAt: date,
     riskScore: { type: ['number', 'null'], minimum: 0, maximum: 1 },
   }),
+  BusinessServiceErrorBudget: object({
+    businessServiceId: id,
+    sloTarget: { type: ['number', 'null'] },
+    sloWindowDays: { type: 'integer', minimum: 1 },
+    errorBudget: {
+      type: ['object', 'null'],
+      description: 'Null when the business service has no SLO target.',
+      properties: {
+        allowedMinutes: { type: 'number', minimum: 0 },
+        consumedMinutes: { type: 'number', minimum: 0 },
+        remainingPercent: { type: 'number', description: 'Negative once breached.' },
+        burnState: { type: 'string', enum: ['OK', 'AT_RISK', 'BREACHED'] },
+      },
+      required: ['allowedMinutes', 'consumedMinutes', 'remainingPercent', 'burnState'],
+      additionalProperties: false,
+    },
+  }),
   BusinessServiceSlaReport: withoutRequired(
     object({
       businessServiceId: id,
@@ -790,6 +807,13 @@ export const BUSINESS_SERVICE_OPERATIONS: {
   },
   {
     method: 'get',
+    path: '/business-services/{id}/error-budget',
+    summary: 'Read the error budget and burn state of a business service',
+    description:
+      'Allowed and consumed minutes over the SLO window (planned maintenance excluded, severity-weighted), the share left and the burn state: OK, AT_RISK below 25% left, BREACHED at 0%. errorBudget is null without an SLO target.',
+  },
+  {
+    method: 'get',
     path: '/business-services/{id}/graph',
     summary: 'Read the dependency graph around a business service',
     description:
@@ -1000,11 +1024,17 @@ export const BUSINESS_SERVICE_OPERATIONS: {
   {
     method: 'get',
     path: '/business-services/{id}/sla-report',
-    summary: 'Monthly SLA report of a business service',
+    summary: 'Monthly SLA report of a business service, as JSON or CSV (format=csv)',
     description:
       'Uptime, severity-weighted uptime against the SLO target (met or missed), downtime minutes and incidents for one UTC month (default: this month, to date). estimatedCostCents and currency only for Responders and Admins.',
     query: {
       month: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$', description: 'YYYY-MM.' },
+      format: {
+        type: 'string',
+        enum: ['json', 'csv'],
+        default: 'json',
+        description: 'csv returns the report as a text/csv attachment.',
+      },
     },
   },
 ];
