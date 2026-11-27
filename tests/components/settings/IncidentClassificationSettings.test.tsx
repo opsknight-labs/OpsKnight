@@ -66,7 +66,7 @@ describe('IncidentClassificationSettings', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /save classification policy/i }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    const saved = save.mock.calls[0][0].rules;
+    const saved = (save.mock.calls[0][0] as { rules: unknown[] }).rules;
     expect(saved).toHaveLength(4);
     for (const rule of saved) {
       expect(rule).toEqual(
