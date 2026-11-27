@@ -1106,6 +1106,23 @@ async function pushSnapshotToServingStore(
   }
 }
 
+/**
+ * An incident became private: stop serving the previous projection (which still shows it) on every
+ * page that publishes its service, then rebuild right away rather than waiting for the projector.
+ * A rebuild that cannot finish leaves the page withheld; the projector retries it.
+ */
+export async function withholdStatusPagesForService(serviceId: string) {
+  const mappings = await prisma.statusPageService.findMany({
+    where: { serviceId },
+    select: { statusPageId: true },
+    distinct: ['statusPageId'],
+  });
+  for (const { statusPageId } of mappings) {
+    await getStatusPageServingStore().revoke(statusPageId, 'PRIVACY');
+    await publishStatusPageSnapshot(statusPageId);
+  }
+}
+
 /** Bounded reconciliation also advances maintenance boundaries and time-derived uptime. */
 export async function reconcileStatusPageSnapshots(limit = 10) {
   const [health] = await prisma.$queryRaw<
@@ -1195,16 +1212,13 @@ export async function readStatusPageSnapshot(pageId: string): Promise<StatusPage
 /**
  * Return a sanitized projection, preferring the current revision.
  *
- * When the current revision is not servable, the previous one is used only if the control plane
- * marked the invalidation as benign. That marker is written exclusively by a configuration change
- * classified as non-tightening, so every disclosure-narrowing transition -- a tightened setting, a
- * disabled page, or any invalidation of unknown provenance, including the database triggers that
- * cannot classify themselves -- leaves the marker fail-closed and withholds everything.
- *
- * The fallback body is safe to show because it is a previously published projection, already
- * sanitized under a disclosure policy at least as broad as the one now in force. The access gate
- * cannot be weakened this way either: raising `requireAuth` classifies as tightening and fails
- * closed, while lowering it can only leave a stale `true` behind, which merely over-prompts.
+ * While a rebuild is pending the last good projection keeps being served (`STALE_OK`), so an
+ * ordinary incident write never darkens a live page. Disclosure-narrowing changes must not wait for
+ * the projector: the control plane revokes the page (`FAIL_CLOSED`, see `revoke`) at the moment of
+ * the change, which withholds everything until the rebuild lands. A configuration change that
+ * tightens disclosure does this, and so does an incident turning private
+ * (`withholdStatusPagesForService`). Anything else that goes stale is withheld by
+ * `reconcileStatusPageSnapshots` once it stays unrebuilt past the bounded window.
  */
 export async function getStatusPageSnapshot(pageId: string): Promise<{
   snapshot: StatusPageSnapshot | null;

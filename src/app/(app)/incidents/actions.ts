@@ -37,6 +37,7 @@ import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { loadTemplateDefaultRoles } from '@/lib/incidents/roles-command';
 import { setIncidentWatcher, deleteIncidentWatcher } from '@/lib/incidents/watchers';
 import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
+import { withholdStatusPagesForService } from '@/lib/status-pages/snapshot';
 
 const allowedUrgencies = new Set<IncidentUrgency>(['LOW', 'MEDIUM', 'HIGH']);
 
@@ -302,7 +303,7 @@ export async function removeWatcher(incidentId: string, watcherId: string) {
 export async function updateIncidentVisibility(id: string, visibility: 'PUBLIC' | 'PRIVATE') {
   await assertResponderOrAbove();
 
-  await prisma.incident.update({
+  const updated = await prisma.incident.update({
     where: { id },
     data: {
       visibility,
@@ -313,7 +314,10 @@ export async function updateIncidentVisibility(id: string, visibility: 'PUBLIC' 
         },
       },
     },
+    select: { serviceId: true },
   });
+  // Going private narrows what the public status pages may show, so it takes effect now.
+  if (visibility === 'PRIVATE') await withholdStatusPagesForService(updated.serviceId);
 
   revalidatePath(`/incidents/${id}`);
   revalidatePath('/incidents');
