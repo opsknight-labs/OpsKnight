@@ -174,6 +174,9 @@ export function recordFailedAttempt(
   // Increment attempt count
   record.count++;
   record.lastAttempt = now;
+  // Re-insert so the Map's insertion order is least-recently-failed: a spray of new keys evicts
+  // idle keys first, not a victim that is part-way to its lockout.
+  attemptStore.delete(key);
 
   // Check if should lock out
   if (record.count >= LOGIN_SECURITY_CONFIG.MAX_ATTEMPTS) {
@@ -305,7 +308,7 @@ export function formatLockoutDuration(ms: number): string {
 
 /**
  * Keeps the store under MAX_TRACKED_KEYS before a new key is added: expired records go first,
- * then the oldest keys that are not locked out (so a spray cannot unlock a locked account).
+ * then the least recently failed keys that are not locked out (so a spray cannot unlock a locked account).
  */
 function makeRoomForNewKey(now: number): void {
   if (attemptStore.size < LOGIN_SECURITY_CONFIG.MAX_TRACKED_KEYS) return;

@@ -37,6 +37,16 @@ describe('login-security attempt store is bounded', () => {
     expect(checkLoginAttempt('victim@example.com', IP).allowed).toBe(false);
   });
 
+  it('keeps a key that is still failing while a spray of new keys evicts the idle ones', () => {
+    const victim = 'part-way@example.com';
+    for (let i = 0; i < LOGIN_LIMITS.MAX_ATTEMPTS - 2; i++) recordFailedAttempt(victim, IP);
+    spray(300_000, 300_000 + MAX_KEYS - 1_000);
+    recordFailedAttempt(victim, IP);
+    spray(400_000, 400_000 + 2_500);
+
+    expect(getAttemptCount(victim, IP)).toBe(LOGIN_LIMITS.MAX_ATTEMPTS - 1);
+  });
+
   it('sweeps records past the reset window before evicting live ones', () => {
     vi.useFakeTimers();
     spray(200_000, 200_000 + MAX_KEYS);
