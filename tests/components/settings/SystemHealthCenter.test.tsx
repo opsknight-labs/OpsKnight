@@ -247,6 +247,46 @@ describe('SystemHealthCenter', () => {
     expect(screen.getByText('• 100% Signal Score')).toBeInTheDocument();
   });
 
+  it('scores the trend only from hours that were read, so an unreadable hour does not drag it down', () => {
+    const report: AdminHealthReport = {
+      ...mockReport,
+      overall: 'healthy',
+      history: [
+        {
+          timestamp: '2026-09-02T10:00:00.000Z',
+          hourLabel: '10:00 UTC',
+          status: 'unknown',
+          scorePercent: 0,
+          reason: '1 historical evidence source(s) unavailable',
+        },
+        {
+          timestamp: '2026-09-02T11:00:00.000Z',
+          hourLabel: '11:00 UTC',
+          status: 'healthy',
+          scorePercent: 100,
+        },
+      ],
+    };
+    render(<SystemHealthCenter initialReport={report} />);
+    expect(screen.getByText('• 100% Signal Score')).toBeInTheDocument();
+  });
+
+  it('says there is no trend score when no hour could be read', () => {
+    const report: AdminHealthReport = {
+      ...mockReport,
+      history: [
+        {
+          timestamp: '2026-09-02T11:00:00.000Z',
+          hourLabel: '11:00 UTC',
+          status: 'unknown',
+          scorePercent: 0,
+        },
+      ],
+    };
+    render(<SystemHealthCenter initialReport={report} />);
+    expect(screen.getByText('• No signal score')).toBeInTheDocument();
+  });
+
   it('renders visual telemetry gauges, latency pills, and queue distribution bars', () => {
     render(<SystemHealthCenter initialReport={mockReport} />);
 

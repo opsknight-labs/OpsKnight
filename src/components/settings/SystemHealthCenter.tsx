@@ -694,16 +694,27 @@ function HealthHistoryRibbon({
   const isClient = useIsClient();
   if (!history || history.length === 0) return null;
 
-  const totalScore = history.reduce((sum, s) => sum + s.scorePercent, 0);
-  const avgScore = totalScore / history.length;
-  const uptimePercent = Number.isInteger(avgScore) ? avgScore.toString() : avgScore.toFixed(1);
+  // A bar whose evidence could not be read says "unknown"; it carries no score to average.
+  const scored = history.filter(sample => sample.status !== 'unknown');
+  const avgScore =
+    scored.length > 0
+      ? scored.reduce((sum, sample) => sum + sample.scorePercent, 0) / scored.length
+      : null;
+  const uptimePercent =
+    avgScore === null
+      ? null
+      : Number.isInteger(avgScore)
+        ? avgScore.toString()
+        : avgScore.toFixed(1);
 
   const percentColorClass =
-    avgScore >= 98
-      ? toneClasses('ok').text
-      : avgScore >= 80
-        ? toneClasses('elevated').text
-        : toneClasses('critical').text;
+    avgScore === null
+      ? 'text-muted-foreground'
+      : avgScore >= 98
+        ? toneClasses('ok').text
+        : avgScore >= 80
+          ? toneClasses('elevated').text
+          : toneClasses('critical').text;
 
   const statusMap: Record<HealthLevel, string> = {
     healthy: 'Operational',
@@ -722,7 +733,7 @@ function HealthHistoryRibbon({
             24-Hour Recorded Signal Trend
           </span>
           <span className={cn('text-2xs font-mono font-semibold', percentColorClass)}>
-            • {uptimePercent}% Signal Score
+            • {uptimePercent === null ? 'No signal score' : `${uptimePercent}% Signal Score`}
           </span>
         </div>
         <div className="hidden sm:flex items-center gap-2.5 text-2xs text-muted-foreground font-mono">
@@ -804,7 +815,9 @@ function HealthHistoryRibbon({
                     >
                       {statusLabel}
                     </span>
-                    <span className="text-muted-foreground">({sample.scorePercent}%)</span>
+                    {sample.status !== 'unknown' && (
+                      <span className="text-muted-foreground">({sample.scorePercent}%)</span>
+                    )}
                   </div>
                   {sample.reason && (
                     <div className="text-2xs text-muted-foreground max-w-56 truncate pt-0.5 font-sans">

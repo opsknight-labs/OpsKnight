@@ -61,7 +61,9 @@ starts, shown in your browser's time zone with the zone named. A failed
 background job is counted in the hour it failed, whenever it was created. A bar
 shows the worst status that applies to its hour; the bar for the hour in
 progress also takes the live overall status, so a critical check is not shown as
-merely degraded because a job failed.
+merely degraded because a job failed. If a history query fails, the hours it
+cannot vouch for show as unknown (grey) and are left out of the **Signal
+Score**, which is averaged only over the hours that were read.
 
 ## What the checks measure
 
