@@ -193,7 +193,8 @@ export async function GET(req: NextRequest) {
           });
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
 
-          const last = batch[batch.length - 1];
+          // Typed explicitly: the next page's filter depends on it, which would otherwise be a circular inference.
+          const last: { createdAt: Date; id: string } = batch[batch.length - 1];
           after = { createdAt: last.createdAt, id: last.id };
           sent += batch.length;
           batchNumber++;
