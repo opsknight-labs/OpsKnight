@@ -33,7 +33,8 @@ async function getAvailableUsers(
 
     const users = await prisma.user.findMany({
       where: {
-        status: { not: 'DISABLED' },
+        // Adding a member requires an active user, so an invited one would only fail when picked.
+        status: 'ACTIVE',
         teamMemberships: { none: { teamId } },
         ...(query.length > 0
           ? {
