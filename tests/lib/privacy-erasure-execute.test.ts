@@ -115,6 +115,7 @@ const mocks = vi.hoisted(() => {
     callback(tx)
   );
   const transitionPrivacyRequest = vi.fn().mockResolvedValue({});
+  const getHeldUserIds = vi.fn().mockResolvedValue([] as string[]);
   const emitAuditEvent = vi.fn().mockResolvedValue(undefined);
 
   return {
@@ -148,6 +149,7 @@ const mocks = vi.hoisted(() => {
     acquireAdvisoryLock,
     runSerializableTransaction,
     transitionPrivacyRequest,
+    getHeldUserIds,
     emitAuditEvent,
   };
 });
@@ -169,6 +171,10 @@ vi.mock('@/lib/privacy/erasure/verify', () => ({
 }));
 vi.mock('@/lib/privacy/requests', () => ({
   transitionPrivacyRequest: mocks.transitionPrivacyRequest,
+}));
+vi.mock('@/lib/retention/lifecycle', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/retention/lifecycle')>()),
+  getHeldUserIds: mocks.getHeldUserIds,
 }));
 vi.mock('@/lib/audit', () => ({
   emitAuditEvent: mocks.emitAuditEvent,
@@ -235,6 +241,7 @@ describe('executeErasure', () => {
       })
     );
     mocks.transitionPrivacyRequest.mockResolvedValue({});
+    mocks.getHeldUserIds.mockResolvedValue([]);
     // In-tx authoritative blocker revalidation defaults to "no blockers" so the
     // happy-path tests stay green. Individual regression tests override these
     // to inject a stale-plan race.
@@ -408,17 +415,17 @@ describe('executeErasure', () => {
 
     expect(mocks.tx.auditLog.updateMany).toHaveBeenCalledWith({
       where: {
-        OR: [{ actorId: SUBJECT_ID }, { actorEmail: 'alice@example.com' }],
+        AND: [{ OR: [{ actorId: SUBJECT_ID }, { actorEmail: 'alice@example.com' }] }, {}],
       },
       data: { actorEmail: null, actorName: null },
     });
     expect(mocks.tx.auditLog.updateMany).toHaveBeenCalledWith({
-      where: { targetEmail: 'alice@example.com' },
+      where: { AND: [{ targetEmail: 'alice@example.com' }, {}] },
       data: { targetEmail: null },
     });
     // Email-keyed rows (failed sign-ins) must not keep the address in entityId either.
     expect(mocks.tx.auditLog.updateMany).toHaveBeenCalledWith({
-      where: { entityId: { equals: 'alice@example.com', mode: 'insensitive' } },
+      where: { AND: [{ entityId: { equals: 'alice@example.com', mode: 'insensitive' } }, {}] },
       data: { entityId: null },
     });
     for (const call of mocks.tx.auditLog.updateMany.mock.calls) {
@@ -489,6 +496,34 @@ describe('executeErasure', () => {
     expect(mocks.tx.auditLog.updateMany).not.toHaveBeenCalled();
     expect(mocks.tx.$executeRaw).not.toHaveBeenCalled();
     expect(mocks.tx.user.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('keeps the rows a legal hold on another user protects out of all three identifier updates', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+    mocks.getHeldUserIds.mockResolvedValue(['cheld0000001']);
+
+    await executeErasure(REQUEST_ID, ACTOR);
+
+    const outsideHold = {
+      AND: [
+        { OR: [{ actorId: null }, { actorId: { notIn: ['cheld0000001'] } }] },
+        {
+          OR: [
+            { entityType: { not: 'USER' } },
+            { entityId: null },
+            { entityId: { notIn: ['cheld0000001'] } },
+          ],
+        },
+      ],
+    };
+    const identifierUpdates = mocks.tx.auditLog.updateMany.mock.calls
+      .map(call => call[0] as { where: { AND?: unknown[] }; data: Record<string, unknown> })
+      .filter(call => !('ip' in call.data));
+    expect(identifierUpdates).toHaveLength(3);
+    for (const call of identifierUpdates) expect(call.where.AND?.at(-1)).toEqual(outsideHold);
   });
 
   it('deletes the User row and transitions the request to COMPLETED on success', async () => {

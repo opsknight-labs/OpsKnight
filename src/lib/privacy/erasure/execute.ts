@@ -12,6 +12,7 @@ import { buildSubjectErasurePlan } from './plan';
 import { verifySubjectErasure } from './verify';
 import { discoverErasureBlockersTx, type ErasureDomainCounts } from './discover';
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
+import { auditRowsOutsideHeldUsers, getHeldUserIds } from '@/lib/retention/lifecycle';
 import {
   pseudonymiseSubjectAuditRows,
   pseudonymiseSubjectIncidentText,
@@ -310,21 +311,34 @@ export async function executeErasure(
         // the User row is deleted below. We match by both actorId and actorEmail
         // because auth and session events (LOGIN_SUCCESS, SESSION_HEARTBEAT, etc.)
         // record actorEmail while actorId is null.
+        // The same legal-hold protection as the pseudonymisation above: rows a held user performed
+        // or that are about a held user's account keep their identifiers.
+        const unprotected = auditRowsOutsideHeldUsers(await getHeldUserIds(tx));
         await tx.auditLog.updateMany({
           where: {
-            OR: [{ actorId: subjectId }, ...(subjectEmail ? [{ actorEmail: subjectEmail }] : [])],
+            AND: [
+              {
+                OR: [
+                  { actorId: subjectId },
+                  ...(subjectEmail ? [{ actorEmail: subjectEmail }] : []),
+                ],
+              },
+              unprotected,
+            ],
           },
           data: { actorEmail: null, actorName: null },
         });
         if (subjectEmail) {
           await tx.auditLog.updateMany({
-            where: { targetEmail: subjectEmail },
+            where: { AND: [{ targetEmail: subjectEmail }, unprotected] },
             data: { targetEmail: null },
           });
           // Failed sign-ins for an unrecognised account are keyed by the typed email, so the
           // address survives in entityId (and audit search) after the columns above are scrubbed.
           await tx.auditLog.updateMany({
-            where: { entityId: { equals: subjectEmail, mode: 'insensitive' } },
+            where: {
+              AND: [{ entityId: { equals: subjectEmail, mode: 'insensitive' } }, unprotected],
+            },
             data: { entityId: null },
           });
         }

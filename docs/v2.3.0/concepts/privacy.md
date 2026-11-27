@@ -40,7 +40,7 @@ the IP address is cleared, and their email, name, phone number and the IP
 addresses seen on those entries are replaced with `[erased]` wherever they appear
 in the entry's details. An entry keyed by the person's email address also loses
 that address from its entity ID, so an audit search for the email finds nothing. Entries that a hold on another user protects are left as
-they are, and a hold on the person blocks the erasure. Entries that only mention
+they are (including their email columns), and a hold on the person blocks the erasure. Entries that only mention
 the person inside someone else's free text, values written in a different form
 (a misspelt name, a reformatted phone number), and logs outside the database
 cannot be attributed and are covered by the manual-review step.
