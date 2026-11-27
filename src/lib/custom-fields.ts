@@ -1,5 +1,8 @@
 import type { CustomField } from '@prisma/client';
 
+/** UTF-8 bytes of one custom field value; well under the btree entry limit of CustomFieldValue.value. */
+export const MAX_CUSTOM_FIELD_VALUE_BYTES = 2000;
+
 export function validateCustomFieldValue(
   field: Pick<CustomField, 'name' | 'type' | 'required' | 'options'>,
   value: string | number | boolean | null | undefined
@@ -12,6 +15,16 @@ export function validateCustomFieldValue(
   }
 
   const val = String(value).trim();
+
+  // The value column is btree-indexed, which cannot hold an entry of about 2.7 KB: refuse a long
+  // value here with a clear message instead of failing the insert with a 500.
+  if (new TextEncoder().encode(val).length > MAX_CUSTOM_FIELD_VALUE_BYTES) {
+    return {
+      valid: false,
+      error: `${field.name} is too long: the limit is ${MAX_CUSTOM_FIELD_VALUE_BYTES.toLocaleString('en-US')} bytes of text.`,
+      normalizedValue: null,
+    };
+  }
 
   switch (field.type) {
     case 'NUMBER': {

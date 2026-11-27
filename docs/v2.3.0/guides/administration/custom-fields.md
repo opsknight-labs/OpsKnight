@@ -55,6 +55,8 @@ Keys are unique across the workspace. Treat a key as an integration contract: th
 - `URL`: must begin with `http://` or `https://`.
 - `EMAIL`: must match the current email form, contain no whitespace, and include an `@` plus dotted domain. It is stored lowercase.
 
+Every type has a size limit: a value (after whitespace is removed) can be at most 2,000 bytes of UTF-8 text, which is about 2,000 English characters and fewer for characters outside ASCII. A longer value is rejected with `<field name> is too long: the limit is 2,000 bytes of text.` (HTTP 400 from the API) because incident values are indexed for search.
+
 Empty input becomes no value. An empty required field is rejected with `<field name> is required.` Required custom fields also block human/operator incident resolution (web, bulk, REST API, runbooks) until completed. Fields added after an incident was opened do not block it. Automated upstream resolution and surfaces that cannot fill fields (Slack/Teams, voice, mobile) are not subject to that gate.
 
 When an incident is created without a value for a field, its default is used. On the New incident form a field starts with its default; clear an optional field to leave it empty and the empty value is kept (the default is not applied again). Clearing a required field shows `Required field missing` and the incident is not created. API clients can do the same by sending the field with an empty value.
