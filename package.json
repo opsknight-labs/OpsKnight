@@ -269,7 +269,7 @@
     "@types/pg": "8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^5.2.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "@vitest/coverage-v8": "^4.1.12",
     "@vitest/ui": "^4.1.12",
     "ajv-formats-draft2019": "^1.6.1",
@@ -308,7 +308,7 @@
     "uuid": "^11.1.1",
     "eslint": "$eslint",
     "fast-uri": "^3.1.9",
-    "vite": "^7.3.7",
+    "vite": "^8.4.0",
     "follow-redirects": "^1.16.2",
     "glob": "^14.0.3",
     "readdir-glob": {
