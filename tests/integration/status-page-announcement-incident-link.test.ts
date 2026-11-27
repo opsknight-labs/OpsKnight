@@ -3,12 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createTestIncident,
   createTestService,
+  createTestUser,
   resetDatabase,
   testPrisma as db,
 } from '../helpers/test-db';
 
+// The audit row references the acting admin, so the mocked admin must be a real user.
+const admin = vi.hoisted(() => ({ id: 'admin' }));
 vi.mock('@/lib/rbac', () => ({
-  assertAdmin: vi.fn().mockResolvedValue({ id: 'admin' }),
+  assertAdmin: vi.fn(async () => ({ id: admin.id })),
   getCurrentAuthorizationActor: vi.fn(),
 }));
 
@@ -21,6 +24,7 @@ beforeEach(async () => {
     throw new Error('Dedicated test DB required');
   }
   await resetDatabase();
+  admin.id = (await createTestUser({ role: 'ADMIN' })).id;
 });
 
 const post = (body: Record<string, unknown>) =>
