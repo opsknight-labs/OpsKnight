@@ -574,30 +574,36 @@ export async function recreateDueEscalationJob(input: {
   stepIndex: number;
   scheduledAt: Date;
 }): Promise<string | null> {
-  return runSerializableTransaction(async tx => {
-    const current = await tx.incident.findUnique({
-      where: { id: input.incidentId },
-      select: {
-        status: true,
-        escalationStatus: true,
-        escalationGeneration: true,
-        currentEscalationStep: true,
-        nextEscalationAt: true,
-      },
-    });
-    if (
-      !current ||
-      current.status !== 'OPEN' ||
-      current.escalationStatus !== 'ESCALATING' ||
-      (current.escalationGeneration ?? 0) !== input.generation ||
-      (current.currentEscalationStep ?? 0) !== input.stepIndex ||
-      !current.nextEscalationAt ||
-      current.nextEscalationAt.getTime() > input.scheduledAt.getTime()
-    ) {
-      return null;
-    }
-    return createEscalationJob(tx, input);
+  return runSerializableTransaction(tx => recreateDueEscalationJobInTransaction(tx, input));
+}
+
+/** The same re-check and job creation, inside a transaction the caller already holds. */
+async function recreateDueEscalationJobInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { incidentId: string; generation: number; stepIndex: number; scheduledAt: Date }
+): Promise<string | null> {
+  const current = await tx.incident.findUnique({
+    where: { id: input.incidentId },
+    select: {
+      status: true,
+      escalationStatus: true,
+      escalationGeneration: true,
+      currentEscalationStep: true,
+      nextEscalationAt: true,
+    },
   });
+  if (
+    !current ||
+    current.status !== 'OPEN' ||
+    current.escalationStatus !== 'ESCALATING' ||
+    (current.escalationGeneration ?? 0) !== input.generation ||
+    (current.currentEscalationStep ?? 0) !== input.stepIndex ||
+    !current.nextEscalationAt ||
+    current.nextEscalationAt.getTime() > input.scheduledAt.getTime()
+  ) {
+    return null;
+  }
+  return createEscalationJob(tx, input);
 }
 
 /**
@@ -738,8 +744,24 @@ export async function moveIncidentEscalationCursors(
   incidentIds: readonly string[],
   stepIndex: number
 ): Promise<void> {
+  // A worker may have claimed the old step (the lease is set). Its commit will see the moved cursor
+  // and stand down, so its job completes without paging. Release the lease and queue the new step in
+  // this transaction instead of leaving the incident parked until the lease times out.
+  const claimed = await tx.incident.findMany({
+    where: { id: { in: [...incidentIds] }, escalationProcessingAt: { not: null } },
+    select: { id: true, escalationGeneration: true, nextEscalationAt: true },
+  });
   await tx.incident.updateMany({
     where: { id: { in: [...incidentIds] } },
-    data: { currentEscalationStep: stepIndex },
+    data: { currentEscalationStep: stepIndex, escalationProcessingAt: null },
   });
+  for (const row of claimed) {
+    if (!row.nextEscalationAt) continue;
+    await recreateDueEscalationJobInTransaction(tx, {
+      incidentId: row.id,
+      generation: row.escalationGeneration ?? 0,
+      stepIndex,
+      scheduledAt: row.nextEscalationAt,
+    });
+  }
 }

@@ -104,7 +104,12 @@ describe('remapOpenIncidentEscalationCursors', () => {
     return {
       $queryRaw: vi.fn().mockResolvedValue(rows),
       $executeRaw: vi.fn().mockResolvedValue(1),
-      incident: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      incident: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findMany: vi.fn().mockResolvedValue([]),
+        findUnique: vi.fn(),
+      },
+      backgroundJob: { create: vi.fn().mockResolvedValue({ id: 'job-new' }) },
       escalationRule: { findMany: vi.fn() },
     };
   }
@@ -135,11 +140,66 @@ describe('remapOpenIncidentEscalationCursors', () => {
 
     // A is gone: C is next at 1, B is next at 0 (kept), and an unstarted incident stays at 0.
     expect(tx.incident.updateMany.mock.calls.map(call => call[0])).toEqual([
-      { where: { id: { in: ['inc-late', 'inc-late-2'] } }, data: { currentEscalationStep: 1 } },
-      { where: { id: { in: ['inc-mid'] } }, data: { currentEscalationStep: 0 } },
+      {
+        where: { id: { in: ['inc-late', 'inc-late-2'] } },
+        data: { currentEscalationStep: 1, escalationProcessingAt: null },
+      },
+      {
+        where: { id: { in: ['inc-mid'] } },
+        data: { currentEscalationStep: 0, escalationProcessingAt: null },
+      },
     ]);
     expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
     expect(moved).toBe(3);
+  });
+
+  it('releases the lease of an incident a worker had claimed and queues the moved step', async () => {
+    const dueAt = new Date('2026-12-01T10:00:00.000Z');
+    const tx = txMock([{ id: 'inc-claimed', step: 2 }]);
+    // First read is the FOR UPDATE select; later reads are the job lookup (no job exists).
+    tx.$queryRaw.mockReset();
+    tx.$queryRaw.mockResolvedValueOnce([{ id: 'inc-claimed', step: 2 }]).mockResolvedValue([]);
+    tx.incident.findMany.mockResolvedValue([
+      { id: 'inc-claimed', escalationGeneration: 4, nextEscalationAt: dueAt },
+    ]);
+    // What the incident looks like once the cursor has moved: still escalating, due now.
+    tx.incident.findUnique.mockResolvedValue({
+      status: 'OPEN',
+      escalationStatus: 'ESCALATING',
+      escalationGeneration: 4,
+      currentEscalationStep: 1,
+      nextEscalationAt: dueAt,
+    });
+
+    await remapOpenIncidentEscalationCursors(tx as unknown as Prisma.TransactionClient, {
+      policyId: 'pol-1',
+      before: ['A', 'B', 'C'],
+      after: ['B', 'C'],
+    });
+
+    expect(tx.incident.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['inc-claimed'] } },
+      data: { currentEscalationStep: 1, escalationProcessingAt: null },
+    });
+    const created = tx.backgroundJob.create.mock.calls.map(
+      call => call[0] as { data: { status: string; scheduledAt: Date; payload: Record<string, unknown> } }
+    );
+    expect(created).toHaveLength(1);
+    expect(created[0].data).toMatchObject({
+      status: 'PENDING',
+      scheduledAt: dueAt,
+      payload: { incidentId: 'inc-claimed', stepIndex: 1, generation: 4 },
+    });
+  });
+
+  it('queues nothing for an incident no worker had claimed', async () => {
+    const tx = txMock([{ id: 'inc-idle', step: 2 }]);
+    await remapOpenIncidentEscalationCursors(tx as unknown as Prisma.TransactionClient, {
+      policyId: 'pol-1',
+      before: ['A', 'B', 'C'],
+      after: ['B', 'C'],
+    });
+    expect(tx.backgroundJob.create).not.toHaveBeenCalled();
   });
 
   it('locks only open incidents that follow the live policy', async () => {
