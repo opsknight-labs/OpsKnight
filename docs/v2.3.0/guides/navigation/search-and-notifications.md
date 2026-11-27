@@ -44,7 +44,12 @@ notification drawer.
 
 Record results are permission-aware. Incident and service queries apply
 authorization filters, and privileged-only result types are not a bypass around
-normal access. Generic navigation suggestions are a static convenience list and
+normal access. User and escalation-policy results are returned only to people who
+can open those pages (`user.read.all` and `policy.read.all`: Admin, Responder,
+Auditor, or a custom role or temporary access with them), so a User does not get
+results that lead to an Access denied page. Draft and archived postmortems are
+returned only to people with `postmortem.draft.read`; text inside a draft cannot
+be matched by anyone else. Generic navigation suggestions are a static convenience list and
 can include a destination the current role cannot use; the destination still
 enforces authorization. The endpoint is rate limited, so rapid automation or
 repeated queries can return a temporary rate-limit response.
