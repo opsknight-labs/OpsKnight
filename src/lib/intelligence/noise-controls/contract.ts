@@ -54,6 +54,12 @@ export function assertSafeRegex(pattern: string): void {
     throw new Error(
       'This pattern can backtrack catastrophically; simplify nested or stacked repeats such as (a+)+'
     );
+  // A repeated group with alternatives, (a|aa)+ or (x|y){1,40}, backtracks exponentially on overlapping
+  // alternatives; only an optional group (a|b)? is safe.
+  if (/\([^)]*\|[^)]*\)[+*{]/.test(pattern))
+    throw new Error(
+      'This pattern can backtrack catastrophically; do not repeat a group that has alternatives, such as (a|b)+'
+    );
   try {
     // Validated once at save time, bounded in length and shape above; never compiled on the hot path.
     // eslint-disable-next-line security/detect-non-literal-regexp

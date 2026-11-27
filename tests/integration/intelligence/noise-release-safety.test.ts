@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { processEvent, type EventPayload } from '@/lib/events';
 import { INTELLIGENCE_SETTINGS_DEFAULTS } from '@/lib/intelligence/contract';
@@ -301,5 +301,34 @@ describe('overlapping windows give one stable answer (N7)', () => {
       results.push((await send(service.id, { severity: 'warning' })).action);
     }
     expect(new Set(results).size).toBe(1);
+  });
+});
+
+describe('the audit trail never beats paging (N11)', () => {
+  afterEach(async () => {
+    await db.$executeRawUnsafe('DROP TRIGGER IF EXISTS fail_decision_insert ON "PrePagingDecision"');
+    await db.$executeRawUnsafe('DROP FUNCTION IF EXISTS fail_decision_insert()');
+  });
+
+  it('still opens and pages the incident when recording a shadow decision fails', async () => {
+    const service = await createTestService('Checkout');
+    await activeWindow(service.id);
+    await db.noiseControlPolicy.create({
+      data: {
+        scopeKey: `service:${service.id}`,
+        serviceId: service.id,
+        mode: 'SHADOW',
+        definition: { schemaVersion: 1 } as Prisma.InputJsonObject,
+      },
+    });
+    await primePrePagingSnapshot();
+    await db.$executeRawUnsafe(`CREATE FUNCTION fail_decision_insert() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'decision table unavailable'; END; $$ LANGUAGE plpgsql`);
+    await db.$executeRawUnsafe(`CREATE TRIGGER fail_decision_insert BEFORE INSERT ON "PrePagingDecision"
+      FOR EACH ROW EXECUTE FUNCTION fail_decision_insert()`);
+
+    const incident = incidentOf(await send(service.id, { severity: 'warning' }));
+    expect(incident.status).toBe('OPEN');
+    expect(await pagingJobs(incident.id)).toHaveLength(1);
   });
 });
