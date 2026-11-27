@@ -711,7 +711,7 @@ test.describe.serial('intelligence responder workflows', () => {
     await page.goto('/shortcuts');
     await expect(page.getByText('Open or close Squire')).toBeVisible();
     await assistantReady(page);
-    const origin = page.getByPlaceholder(/Search shortcuts/);
+    const origin = page.getByRole('searchbox', { name: 'Filter shortcuts' });
     await origin.focus();
     const shortcut = process.platform === 'darwin' ? 'Meta+j' : 'Control+j';
     await page.keyboard.press(shortcut);

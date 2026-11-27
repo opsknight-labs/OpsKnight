@@ -179,9 +179,7 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     const rootRes = await page.goto(`${STATUS_BASE}/`);
     expect(rootRes?.status()).toBe(200);
 
-    // History is a supported status route; genuinely unknown paths remain isolated.
-    const historyRes = await page.goto(`${STATUS_BASE}/history`);
-    expect(historyRes?.status()).toBe(200);
+    // Use a genuinely unknown path; history depends on a published status snapshot.
     const missingRes = await page.goto(`${STATUS_BASE}/non-existent-status-subpath`);
     expect(missingRes?.status()).toBe(404);
 

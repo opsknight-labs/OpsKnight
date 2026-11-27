@@ -145,12 +145,16 @@ test.describe('mobile responsive visual integrity matrix', () => {
         #icon { left: 50px; top: 150px; white-space: nowrap; overflow: hidden; }
         .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
         #icon svg { width: 37px; height: 20px; }
+        #covered { left: 150px; top: 150px; }
+        #fixed-bar { position: fixed; left: 140px; top: 140px; width: 64px; height: 64px; background: white; z-index: 2; }
       </style>
       <aside id="closed" inert><button>Hidden</button></aside>
       <button id="expanded" aria-label="Expanded"></button>
       <button id="small" aria-label="Too small"></button>
       <div id="clip"><button id="clipped" aria-label="Clipped"></button></div>
       <button id="icon"><svg></svg><span class="sr-only">Icon description</span></button>
+      <button id="covered" aria-label="Covered by fixed chrome"></button>
+      <div id="fixed-bar" aria-hidden="true"></div>
     `);
     const violations = await checkResponsiveIntegrity(page);
     expect(

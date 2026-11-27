@@ -248,8 +248,15 @@ export async function checkResponsiveIntegrity(
               (rect.height < 44 - opts.tolerance || rect.width < 44 - opts.tolerance) &&
               !hasExpandedTouchTarget(el, rect)
             ) {
+              // Content beneath a fixed mobile action bar is not a visible tap target.
+              const centerHit = document.elementFromPoint(
+                rect.left + rect.width / 2,
+                rect.top + rect.height / 2
+              );
               // Only report if it's within viewport bounds
               if (
+                centerHit !== null &&
+                (centerHit === el || el.contains(centerHit)) &&
                 rect.top >= 0 &&
                 rect.top < viewportHeight &&
                 rect.bottom <= viewportHeight + 100 &&
