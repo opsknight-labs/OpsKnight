@@ -41,14 +41,24 @@ The new schedule has no coverage until it has an active layer and responder.
 Under **Rotation layers**, choose **Add Layer** and configure:
 
 - **Name:** the layer's purpose.
-- **Each responder is on call for:** the handoff interval; 168 hours is weekly.
-- **This layer is active for:** optional coverage within each handoff. Leave blank for coverage until the next handoff. It cannot exceed the handoff interval.
+- **Each responder is on call for:** the handoff interval, in whole hours from 1 to 8,760 (one year); 168 hours is weekly.
+- **This layer is active for:** optional coverage within each handoff, in whole hours. Leave blank for coverage until the next handoff. It cannot exceed the handoff interval or 8,760 hours.
 - **First responder starts:** the first handoff in the schedule time zone.
 - **Rotation ends:** optional final date and time.
-- **Repeating coverage hours:** optional days and whole-hour boundaries; leave empty for 24×7.
+- **Repeating coverage hours:** optional days and whole-hour boundaries; leave empty for 24×7. Each day of the week can be chosen once.
 - **Responders:** active users in rotation order.
 
-Save the layer. A responder can belong to only one layer in the same schedule; remove them from the existing layer before moving them.
+Save the layer. The form checks these values against the same rules as the API and names the field that is wrong, for example `Rotation length must be a whole number of hours.` A responder can belong to only one layer in the same schedule; remove them from the existing layer before moving them.
+
+### Edit the schedule or a layer
+
+Open the schedule's settings to rename it or change its time zone. Changing the time zone asks you to confirm first (**Change schedule time zone?**), because every layer's coverage hours and handoff times are then read in the new zone and who is on call can change. After you confirm, schedule members get a notification that states the rename and the old and new time zone; a save that changes neither sends none.
+
+If someone else changed the schedule or the layer after you opened the page, your save is refused with `Someone else changed this schedule after you opened it. Reload the page to see their changes, then make yours again.` Reload and repeat your change. API v2 fences the same revision with `If-Match` and answers `412` for a stale one.
+
+### Who can change what
+
+Admins and Responders (the `operations.manage` capability) can edit rotations and schedule settings. Only an administrator can delete a schedule, in the console and through API v2 (`DELETE /api/v2/schedules/{id}`). Overrides follow the rule in [Add an on-call override](./overrides#who-can-add-or-end-an-override).
 
 ## 3. Cover gaps deliberately
 
@@ -77,6 +87,6 @@ Create a test incident. Confirm the schedule resolves to the responder shown in 
 
 **Cannot add a responder:** the user must be active and not assigned to another layer in this schedule.
 
-**Cannot delete the schedule:** remove it from every escalation-policy step first.
+**Cannot delete the schedule:** only an administrator can delete one. Also remove it from every escalation-policy step first; the check and the delete run in one transaction, so a step added meanwhile also blocks the delete.
 
 **Coverage is correct but no alert arrives:** verify the policy link, service link, matching policy step, selected channel, and responder endpoint.

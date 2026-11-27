@@ -37,6 +37,8 @@ Open **Schedules → select schedule** and inspect the effective on-call preview
 
 Schedule computation changes effective ownership at the configured boundary; it does not confirm the incoming human read a handoff message or that their provider endpoint works.
 
+The **on call until** time shown on mobile, in the dashboard on-call widget and in reminder emails is the real handoff: where the rotation or the next override takes over, even when that is days away (a weekly rotation with five days left shows the end of those five days). OpsKnight looks up to a year ahead to find it.
+
 ## Verify it worked
 
 At/after the boundary, confirm current on-call is the expected responder and run a controlled [on-call test](./test-on-call). Check timeline/delivery evidence rather than only preview.

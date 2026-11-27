@@ -29,6 +29,10 @@ Identify the covered responder, replacement responder, and exact time window.
 
 Open **Schedules → select schedule → Overrides**.
 
+### Who can add or end an override
+
+The console and API v2 use one rule. An administrator can add or end an override on any schedule. Anyone else needs the `operations.manage` capability (Responder) and must be on the schedule (placed in one of its layers) or lead a team that owns a service paged by it. An Auditor placed in a layer is read-only. API v2 refuses anyone else with `403 SCHEDULE_OVERRIDE_ACCESS_DENIED`: `Only an administrator, or an operator who is on this schedule or leads its owning team, can manage overrides.`
+
 ## Configure the override
 
 1. Select the replacement responder and explicit start/end times.
