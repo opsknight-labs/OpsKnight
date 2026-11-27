@@ -46,26 +46,7 @@ export async function generateSubjectExport(
   }
 
   const userId = input.subjectId;
-  const [
-    profile,
-    identities,
-    memberships,
-    incidents,
-    incidentNotes,
-    schedules,
-    notifications,
-    auditEvents,
-  ] = await Promise.all([
-    domains.fetchProfile(userId),
-    domains.fetchIdentities(userId),
-    domains.fetchMemberships(userId),
-    domains.fetchIncidents(userId),
-    domains.fetchIncidentNotes(userId),
-    domains.fetchSchedules(userId),
-    domains.fetchNotifications(userId),
-    domains.fetchAuditEvents(userId),
-  ]);
-
+  const profile = await domains.fetchProfile(userId);
   if (!profile) {
     throw new AppError({
       code: 'RESOURCE_NOT_FOUND',
@@ -73,65 +54,94 @@ export async function generateSubjectExport(
     });
   }
 
-  const files: Record<string, unknown> = {
-    'profile.json': serializers.serializeProfile(profile),
-    'identities.json': serializers.serializeIdentities(identities),
-    'memberships.json': serializers.serializeMemberships(memberships),
-    'incidents.json': serializers.serializeIncidents(incidents),
-    'incident-notes.json': serializers.serializeIncidentNotes(incidentNotes),
-    'schedules.json': serializers.serializeSchedules(schedules),
-    'notifications.json': serializers.serializeNotifications(notifications),
-    'audit-events.json': serializers.serializeAuditEvents(auditEvents),
-  };
+  const zip = new JSZip();
+  // Placeholder keeps the manifest the first entry; its counts are only known after every category.
+  zip.file('manifest.json', '{}');
+  zip.file('README.txt', README);
+  const domainSummary: ExportDomainSummary[] = [];
 
-  for (const [name, content] of Object.entries(files)) {
+  // Defense in depth: each category is checked for secret-like keys before it is added to the archive.
+  const addFile = (name: string, content: unknown) => {
     assertNoSecretLikeKeys(content, name);
-  }
+    zip.file(name, JSON.stringify(content, null, 2));
+  };
+  // One category at a time, so its rows and their serialized form are released before the next
+  // category is fetched instead of every category being held in memory together.
+  const addCategory = async <T>(
+    file: string,
+    domain: string,
+    fetchRows: () => Promise<T>,
+    serialize: (rows: T) => unknown,
+    count: (rows: T) => { exportedCount: number; totalCount: number; truncated: boolean }
+  ) => {
+    const rows = await fetchRows();
+    addFile(file, serialize(rows));
+    domainSummary.push({ domain, ...count(rows) });
+  };
+  const complete = (items: readonly unknown[]) => ({
+    exportedCount: items.length,
+    totalCount: items.length,
+    truncated: false,
+  });
 
-  const domainSummary: ExportDomainSummary[] = [
-    {
-      domain: 'identities',
-      exportedCount: identities.length,
-      totalCount: identities.length,
-      truncated: false,
-    },
-    {
-      domain: 'memberships',
-      exportedCount: memberships.length,
-      totalCount: memberships.length,
-      truncated: false,
-    },
-    {
-      domain: 'incidents',
-      exportedCount: incidents.length,
-      totalCount: incidents.length,
-      truncated: false,
-    },
-    {
-      domain: 'incident-notes',
-      exportedCount: incidentNotes.length,
-      totalCount: incidentNotes.length,
-      truncated: false,
-    },
-    {
-      domain: 'schedules',
-      exportedCount: schedules.shifts.length + schedules.overrides.length,
-      totalCount: schedules.shifts.length + schedules.overrides.length,
-      truncated: false,
-    },
-    {
-      domain: 'notifications',
+  addFile('profile.json', serializers.serializeProfile(profile));
+  await addCategory(
+    'identities.json',
+    'identities',
+    () => domains.fetchIdentities(userId),
+    serializers.serializeIdentities,
+    complete
+  );
+  await addCategory(
+    'memberships.json',
+    'memberships',
+    () => domains.fetchMemberships(userId),
+    serializers.serializeMemberships,
+    complete
+  );
+  await addCategory(
+    'incidents.json',
+    'incidents',
+    () => domains.fetchIncidents(userId),
+    serializers.serializeIncidents,
+    complete
+  );
+  await addCategory(
+    'incident-notes.json',
+    'incident-notes',
+    () => domains.fetchIncidentNotes(userId),
+    serializers.serializeIncidentNotes,
+    complete
+  );
+  await addCategory(
+    'schedules.json',
+    'schedules',
+    () => domains.fetchSchedules(userId),
+    serializers.serializeSchedules,
+    schedules => complete([...schedules.shifts, ...schedules.overrides])
+  );
+  await addCategory(
+    'notifications.json',
+    'notifications',
+    () => domains.fetchNotifications(userId),
+    serializers.serializeNotifications,
+    notifications => ({
       exportedCount: notifications.items.length,
       totalCount: notifications.totalCount,
       truncated: notifications.truncated,
-    },
-    {
-      domain: 'audit-events',
+    })
+  );
+  await addCategory(
+    'audit-events.json',
+    'audit-events',
+    () => domains.fetchAuditEvents(userId),
+    serializers.serializeAuditEvents,
+    auditEvents => ({
       exportedCount: auditEvents.items.length,
       totalCount: auditEvents.totalCount,
       truncated: auditEvents.truncated,
-    },
-  ];
+    })
+  );
 
   const manifest = buildManifest({
     requestId: input.requestId,
@@ -140,13 +150,7 @@ export async function generateSubjectExport(
     generatedAt: new Date(),
     domainSummary,
   });
-
-  const zip = new JSZip();
   zip.file('manifest.json', JSON.stringify(manifest, null, 2));
-  zip.file('README.txt', README);
-  for (const [name, content] of Object.entries(files)) {
-    zip.file(name, JSON.stringify(content, null, 2));
-  }
 
   const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
