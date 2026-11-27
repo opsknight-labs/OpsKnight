@@ -1672,13 +1672,13 @@
     "actions": ["incident.read"]
   },
   "listIncidentCustomFields": {
-    "status": "DISCOVERABLE",
-    "risk": "R0",
-    "reason": "Candidate in-process REST contract adapter; current role, scopes and resource authorization required.",
+    "status": "SENSITIVE_READ",
+    "risk": "R2",
+    "reason": "Reviewed configuration read: read-only generic dispatch behind the administrator sensitive-reads opt-in, native authorization and recursive redaction.",
     "tool": null,
     "routeSha256": "9820bb8b2a18aca13b9bb85e54491c8dff891cdc6c13104deff4af4896ce8be7",
     "resourceFilter": "existing REST route authorization and scoped projection",
-    "evidence": "pending final-SHA parity certification",
+    "evidence": "tests/integration/mcp-sensitive-reads.test.ts",
     "contractSha256": "0509eb8aecea45b1280f8f0edb5aefd2ac4af08589c544e199d1721d94da1cd4",
     "actions": ["incident.read"]
   },

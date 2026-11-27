@@ -71,7 +71,7 @@ Operation columns count catalog operations that need the permission: plain reads
 | `custom-fields:write` | Change custom fields (higher-risk changes wait for approval) | Settings | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 3 |
 | `escalation-policies:read` | View escalation policies | Schedules and escalation | View | ✓ | ✓ | ✓ |  |  | 5 | 1 | 0 | 1 |
 | `escalation-policies:write` | Change escalation policies (higher-risk changes wait for approval) | Schedules and escalation | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 3 |
-| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ |  | 26 | 12 | 2 | 16 |
+| `incidents:read` | View incidents | Incidents | View | ✓ | ✓ | ✓ | ✓ |  | 25 | 13 | 2 | 16 |
 | `incidents:write` | Change incidents (higher-risk changes wait for approval) | Incidents | Change | ✓ | ✓ |  | ✓ |  | 0 | 0 | 13 | 13 |
 | `integrations:delete` | Delete integrations | Services | Change | ✓ |  |  |  |  | 0 | 0 | 0 | 1 |
 | `integrations:read` | View integrations | Services | View | ✓ | ✓ | ✓ | ✓ | ✓ | 1 | 3 | 0 | 1 |
@@ -284,7 +284,7 @@ Every REST v2 operation by area: how many an assistant can use directly (curated
 | `getIncidentTimeline` | `incident_get_timeline` |
 | `getIncidentWatcher` | `read_operation` (sensitive reads on) |
 | `listIncidentAlerts` | `read_operation` (sensitive reads on) |
-| `listIncidentCustomFields` | `read_operation` |
+| `listIncidentCustomFields` | `read_operation` (sensitive reads on) |
 | `listIncidentNotes` | `incident_list_notes` |
 | `listIncidentNotificationAttempts` | `read_operation` (sensitive reads on) |
 | `listIncidentRoles` | `incident_roles_list` |
