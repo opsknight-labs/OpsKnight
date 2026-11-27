@@ -24,6 +24,14 @@ describe('mergeLatestWithOlder', () => {
     expect(merged.map(item => item.id)).toEqual(['b', 'a']);
   });
 
+  it('does not keep a row that vanished from the newest page at the same instant', () => {
+    const latest = [row('c', '2026-01-03'), row('b', '2026-01-02')];
+    // 'x' shares the oldest timestamp but is absent from the fresh page, so it was removed.
+    const merged = mergeLatestWithOlder(latest, [...latest, row('x', '2026-01-02')]);
+
+    expect(merged.map(item => item.id)).toEqual(['c', 'b']);
+  });
+
   it('returns the incoming list itself when nothing older was loaded', () => {
     const latest = [row('c', '2026-01-03')];
     expect(mergeLatestWithOlder(latest, [row('c', '2026-01-03')])).toBe(latest);
