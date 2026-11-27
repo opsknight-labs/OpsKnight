@@ -30,7 +30,7 @@ capabilities.
 | `runbook.read.all`          | `RUNBOOK_READ_ALL`          | View all Runbooks, executions, Agents, and health                       |
 | `runbook.read.scoped`       | `RUNBOOK_READ_SCOPED`       | View only service-scoped Runbooks (reserved for future scoped views)    |
 | `runbook.manage`            | `RUNBOOK_MANAGE`            | Create/edit/archive/delete drafts, manage service bindings              |
-| `runbook.publish`           | `RUNBOOK_PUBLISH`           | Publish an immutable version, retire versions, unpublish a runbook                           |
+| `runbook.publish`           | `RUNBOOK_PUBLISH`           | Publish an immutable version, retire versions, unpublish a runbook       |
 | `runbook.execute`           | `RUNBOOK_EXECUTE`           | Start executions, request cancellation, re-run                          |
 | `runbook.approve`           | `RUNBOOK_APPROVE`           | Approve a step's exact plan                                             |
 | `runbook.agent.manage`      | `RUNBOOK_AGENT_MANAGE`      | Enroll/revoke Agents, manage pools, rotate signing keys                 |

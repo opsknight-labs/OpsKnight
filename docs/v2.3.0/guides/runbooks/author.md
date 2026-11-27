@@ -363,17 +363,16 @@ safely rejected.
 | ----------- | ------------------------------------------------------------- | -------- |
 | `DRAFT`     | Work in progress — only one draft per Runbook                 | Yes      |
 | `PUBLISHED` | Immutable, checksummed version available for service bindings | No       |
-| `RETIRED`   | Cannot start a run; preserved for audit                       | No       |
+| `RETIRED`   | Removed from active use, preserved for audit                  | No       |
 
 ### Version management operations
 
 **Unpublish** (on the live version in the version history, with a confirmation)
 retires that version so the runbook has no published version until you publish
-again. Service rules that follow the latest version, or are pinned to the
-retired version, stop starting runs: a pinned rule's readiness shows **Version N
-is retired and cannot run**, and a latest-version rule shows that no version is
-available. Nothing is detached or deleted, and the action is written to the
-audit log as `runbook.unpublished`.
+again. Service rules that follow the latest version stop starting runs and show
+that no version is available. A rule pinned to the retired version keeps running
+that exact version until you detach or re-pin it. Nothing is detached or
+deleted, and the action is written to the audit log as `runbook.unpublished`.
 
 | Operation              | Required permission | Notes                                         |
 | ---------------------- | ------------------- | --------------------------------------------- |
@@ -422,10 +421,8 @@ rule's pin:
   those rules before publishing. The API diff returns the same list as
   `inputChanges`, naming a changed default without returning its value.
 - Rules using latest publication track future publications; existing executions
-  retain their frozen versions. A pinned rule keeps its version only while that
-  version is live: publishing a newer version, or unpublishing, retires it, and a
-  retired version never starts a run (`Runbook version N is retired and cannot
-  run. Publish a current version, or pin the rule to a published version.`). The rule list is labelled
+  retain their frozen versions. A pinned rule keeps running exactly its pinned
+  version even after a newer publication or an unpublish retires it. The rule list is labelled
   for the versions you compare: **tracks new publication** only when the
   version you compare to is the draft or the live version, otherwise
   **tracks live version**. Detached rules never run and are not listed, and a

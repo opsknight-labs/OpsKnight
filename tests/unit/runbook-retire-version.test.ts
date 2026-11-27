@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
-import {
-  RunbookArchivedError,
-  RunbookError,
-  assertRunbookVersionRunnable,
-} from '@/lib/runbooks/errors';
+import { RunbookArchivedError, RunbookError } from '@/lib/runbooks/errors';
 import { retireRunbookVersion, unpublishRunbook } from '@/lib/runbooks/versioning';
 
 vi.mock('@/lib/audit', () => ({ logAudit: vi.fn().mockResolvedValue(undefined) }));
@@ -106,28 +102,6 @@ describe('retireRunbookVersion', () => {
     await expect(retireRunbookVersion('ver_old', 'user_1')).rejects.toBeInstanceOf(
       RunbookArchivedError
     );
-  });
-});
-
-describe('assertRunbookVersionRunnable', () => {
-  it('refuses a retired version, naming it and saying what to do', () => {
-    const error = (() => {
-      try {
-        assertRunbookVersionRunnable({ id: 'ver_old', version: 4, state: 'RETIRED' });
-      } catch (caught) {
-        return caught as RunbookError;
-      }
-    })();
-    expect(error).toBeInstanceOf(RunbookError);
-    expect(error?.userMessage).toMatch(
-      /Runbook version 4 is retired and cannot run\. Publish a current version, or pin the rule to a published version\./
-    );
-  });
-
-  it('lets a published version run', () => {
-    expect(() =>
-      assertRunbookVersionRunnable({ id: 'ver_new', version: 5, state: 'PUBLISHED' })
-    ).not.toThrow();
   });
 });
 

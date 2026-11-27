@@ -1807,7 +1807,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     ).toBe(1);
   });
 
-  it('refuses to start a run on a retired version, even through the binding that pinned it', async () => {
+  it('executes a retired version only through its existing pinned binding', async () => {
     const definition: RunbookDefinition = {
       description: 'Pinned retirement',
       steps: [
@@ -1826,16 +1826,21 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       data: { state: 'RETIRED' },
     });
 
-    for (const bindingId of [target.binding.id, undefined]) {
-      await expect(
-        startRunbookExecution({
-          runbookId: target.runbook.id,
-          runbookVersionId: target.version.id,
-          serviceId: target.service.id,
-          bindingId,
-        })
-      ).rejects.toThrow(/Runbook version \d+ is retired and cannot run\. Publish a current version/);
-    }
+    await expect(
+      startRunbookExecution({
+        runbookId: target.runbook.id,
+        runbookVersionId: target.version.id,
+        serviceId: target.service.id,
+        bindingId: target.binding.id,
+      })
+    ).resolves.toMatchObject({ runbookVersionId: target.version.id });
+    await expect(
+      startRunbookExecution({
+        runbookId: target.runbook.id,
+        runbookVersionId: target.version.id,
+        serviceId: target.service.id,
+      })
+    ).rejects.toThrow(/retired version/);
   });
 
   it('reconciles a fenced spooled result produced before lease expiry', async () => {

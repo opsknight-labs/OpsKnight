@@ -198,7 +198,7 @@ export function VersionTimeline({ versions }: { versions: VersionTimelineItem[] 
                       label="Unpublish"
                       variant="outline"
                       title={`Unpublish version ${version.version}?`}
-                      description={`Retires the live version, so this runbook has no published version until you publish again. Nothing new can start on it: service rules that follow the latest version, or are pinned to version ${version.version}, stop with a clear reason (${plural(version.pinnedRuleCount, 'rule')} pinned now). The version stays in history.`}
+                      description={`Retires the live version, so this runbook has no published version until you publish again. Service rules that follow the latest version stop with a clear reason. Rules pinned to version ${version.version} keep running that exact version until you detach or re-pin them (${plural(version.pinnedRuleCount, 'rule')} pinned now). The version stays in history.`}
                       successMessage="Runbook unpublished"
                     />
                   )}
