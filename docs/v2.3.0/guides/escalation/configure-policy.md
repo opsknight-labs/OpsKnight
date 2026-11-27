@@ -61,6 +61,8 @@ Under **Steps**, choose **Add Escalation Step** and set:
 
 Selected channels are an allow-list. Delivery also respects recipient preferences and requires a configured endpoint.
 
+A policy holds at most 50 steps, and its responder snapshot must stay under 65,536 bytes. The console and API v2 enforce the same limits and the same delay range, so a policy built in the console can be read and written back through `GET` and `PATCH /api/v2/escalation-policies/{id}`. API v2 rejects a `steps` list that is empty or has more than 50 steps with a validation error (`At least one escalation step is required`, `A policy can have at most 50 steps`), and answers `422 INVALID_ESCALATION_STEP` when a write would push the snapshot over its size limit. A `PATCH` that rewrites steps locks the policy while it runs, so two concurrent edits cannot both pass the size check.
+
 ## 3. Add fallbacks and verify timing
 
 A practical starting sequence is primary schedule at `0`, backup team at `5`, and incident commander at `10`. Each value is the wait before a reachable step at that timeline position; the policy header shows the maximum total duration. Steps whose conditions fail or whose targets have no eligible responders are skipped immediately, without waiting their configured delay. OpsKnight advances while the incident remains unacknowledged.
