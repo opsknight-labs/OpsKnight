@@ -38,7 +38,7 @@ Open `/m`. Use bottom navigation for primary views and **More** for schedules, p
 
 ## What OpsKnight does
 
-Mobile pages query the same authorized product data with compact navigation and cached-state notices. Detail links keep the mobile route family; desktop preference can redirect when explicitly selected.
+Mobile pages query the same authorized product data with compact navigation and cached-state notices. Detail links keep the mobile route family; desktop preference can redirect when explicitly selected. A desktop link opened on a phone goes to its mobile page when one exists: a list, one record, a service's automation, or a postmortem (by postmortem or incident id). Pages with no mobile version, such as a service's settings, business services, policy or postmortem creation, and incident templates, stay on the desktop page instead of showing not found.
 
 ### AIOps and assistant on mobile
 
