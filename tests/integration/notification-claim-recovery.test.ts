@@ -293,6 +293,43 @@ it('lets a late provider acceptance settle its own recovered ambiguous marker', 
   expect(mocks.send).toHaveBeenCalledOnce();
 });
 
+it('lets a late definite failure settle its own recovered ambiguous marker', async () => {
+  const row = await intent('late-failure');
+  await db.notification.update({ where: { id: row.id }, data: { trafficClass: 'CRITICAL' } });
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  mocks.send.mockImplementationOnce(async () => {
+    await gate;
+    return { success: false, statusCode: 404, error: 'Webhook returned 404: gone' };
+  });
+  const delivery = deliverCentralNotification(row.id);
+  try {
+    await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledOnce());
+    await db.notification.update({
+      where: { id: row.id },
+      data: { claimHeartbeatAt: new Date(Date.now() - 21000) },
+    });
+    expect(
+      await recoverAbandonedNotificationDispatches(new Date(), UNKNOWN_RECONCILIATION_DELAY_MS)
+    ).toBe(1);
+    expect((await db.notification.findUniqueOrThrow({ where: { id: row.id } })).status).toBe(
+      'UNKNOWN'
+    );
+  } finally {
+    release();
+  }
+  expect(await delivery).toMatchObject({ success: false, claimed: true });
+  expect((await db.notification.findUniqueOrThrow({ where: { id: row.id } })).status).toBe(
+    'FAILED'
+  );
+  expect(
+    (await db.notificationDeliveryAttempt.findFirstOrThrow({ where: { notificationId: row.id } }))
+      .outcome
+  ).toBe('PERMANENT_FAILURE');
+});
+
 it('keeps ownership until a rejected dispatch can be durably settled', async () => {
   const row = await intent('rejected-ledger-failure');
   mocks.send.mockResolvedValue({ success: false, statusCode: 429, error: 'Rate limited' });

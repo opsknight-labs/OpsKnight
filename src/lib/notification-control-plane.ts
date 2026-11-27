@@ -2138,7 +2138,9 @@ async function finishAttempt(input: {
   try {
     if (input.attemptId) {
       const settled = await prisma.notificationDeliveryAttempt.updateMany({
-        where: { id: input.attemptId, outcome: 'IN_FLIGHT' },
+        // A lapsed lease can have parked the attempt as UNKNOWN while the provider call was running;
+        // a definite result that arrives afterwards still settles it.
+        where: { id: input.attemptId, finishedAt: null, outcome: { in: ['IN_FLIGHT', 'UNKNOWN'] } },
         data: {
           outcome: input.outcome,
           provider: input.provider,
@@ -3123,7 +3125,7 @@ async function deliverCentralNotificationOwned(
       await prisma.notification.updateMany({
         where: {
           id: candidate.id,
-          status: 'PENDING',
+          status: { in: ['PENDING', 'UNKNOWN'] },
           lastAttemptAt: now,
           claimToken: ownershipToken,
         },
@@ -3170,7 +3172,7 @@ async function deliverCentralNotificationOwned(
       await prisma.notification.updateMany({
         where: {
           id: candidate.id,
-          status: 'PENDING',
+          status: { in: ['PENDING', 'UNKNOWN'] },
           lastAttemptAt: now,
           claimToken: ownershipToken,
         },
@@ -3202,7 +3204,7 @@ async function deliverCentralNotificationOwned(
     const failedUpdate = await prisma.notification.updateMany({
       where: {
         id: candidate.id,
-        status: 'PENDING',
+        status: { in: ['PENDING', 'UNKNOWN'] },
         lastAttemptAt: now,
         claimToken: ownershipToken,
       },
@@ -3227,7 +3229,12 @@ async function deliverCentralNotificationOwned(
   const finalAttempts = candidate.attempts + 1;
   const isExhausted = finalAttempts >= candidate.maxAttempts;
   await prisma.notification.updateMany({
-    where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now, claimToken: ownershipToken },
+    where: {
+      id: candidate.id,
+      status: { in: ['PENDING', 'UNKNOWN'] },
+      lastAttemptAt: now,
+      claimToken: ownershipToken,
+    },
     data: {
       status: 'FAILED',
       failedAt: new Date(),

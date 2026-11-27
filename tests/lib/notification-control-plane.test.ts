@@ -400,6 +400,42 @@ describe('central notification control plane', () => {
     expect(failed?.attempts).toBe(expectedAttempts);
   });
 
+  it('lets a definite failure settle a row that a lapsed lease already parked as UNKNOWN', async () => {
+    const due = new Date(Date.now() - 60_000);
+    const payload = { kind: 'WEBHOOK', url: 'https://example.com/events', payload: {} };
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'webhook-late-failure',
+      status: 'PENDING',
+      category: 'SECURITY',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+    } as never);
+    vi.mocked(prisma.notificationDeliveryAttempt.create).mockResolvedValue({} as never);
+    mocks.sendWebhook.mockResolvedValue({
+      success: false,
+      statusCode: 404,
+      error: 'Webhook returned 404: nope',
+    });
+
+    await deliverCentralNotification('webhook-late-failure');
+
+    // Recovery sets both the row and its attempt to UNKNOWN while the provider call runs.
+    expect(prisma.notificationDeliveryAttempt.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ outcome: { in: ['IN_FLIGHT', 'UNKNOWN'] } }),
+      })
+    );
+    const failedCall = vi
+      .mocked(prisma.notification.updateMany)
+      .mock.calls.find(([args]) => (args?.data as { status?: string })?.status === 'FAILED');
+    expect(failedCall?.[0]?.where).toMatchObject({ status: { in: ['PENDING', 'UNKNOWN'] } });
+  });
+
   it('signs queued integration webhooks with the current secret and revokes on type change', async () => {
     const due = new Date(Date.now() - 60_000);
     const payload = {
@@ -720,7 +756,7 @@ describe('central notification control plane', () => {
 
     expect(prisma.notificationDeliveryAttempt.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ outcome: 'IN_FLIGHT' }),
+        where: expect.objectContaining({ outcome: { in: ['IN_FLIGHT', 'UNKNOWN'] } }),
         data: expect.objectContaining({ outcome: 'NOT_DISPATCHED' }),
       })
     );

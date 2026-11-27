@@ -41,7 +41,7 @@ Use this decision table for one notification ID:
 | deferred | quiet hours, policy delay, provider capacity admission, or a sign-in security email whose recipient policy could not be read (retried shortly, nothing sent) | verify scheduled next-attempt time |
 | retrying | transient provider/network response | inspect status code and backoff; do not create another intent |
 | permanent failure | invalid endpoint, credentials, template, or provider rejection | repair endpoint/configuration, then use supported retry |
-| unknown | ambiguous provider outcome (timeout, reset, HTTP 5xx) | check the provider; requeue only if a duplicate is acceptable. Unconfirmed rows settle as failed when they expire. A configuration error such as an unknown provider is a permanent failure, and a connection that was never made (host not found, refused, network unreachable) is retried, because nothing was sent |
+| unknown | ambiguous provider outcome (timeout, reset, HTTP 5xx) | check the provider; requeue only if a duplicate is acceptable. Unconfirmed rows settle as failed when they expire. If the sending worker lost its claim while the provider call was running, the row shows unknown until the call returns; a definite answer that arrives afterwards (accepted, or refused such as an invalid number) still settles the row as sent or failed. A configuration error such as an unknown provider is a permanent failure, and a connection that was never made (host not found, refused, network unreachable) is retried, because nothing was sent |
 | provider accepted, user did not receive | downstream provider/device/destination issue | use provider message ID and feedback receipt |
 
 Channel-specific checks:
