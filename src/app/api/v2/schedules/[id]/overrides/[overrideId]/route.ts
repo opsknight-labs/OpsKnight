@@ -5,6 +5,7 @@ import { logV2Audit } from '@/lib/api-v2/audit';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
+import { assertCanManageScheduleOverrides } from '@/lib/schedules/capabilities';
 
 const paramsSchema = z
   .object({
@@ -48,6 +49,8 @@ export const DELETE = defineV2Route({
   idempotent: true,
   idempotencyRequired: true,
   handler: async ({ params, actor, apiKey, tx }) => {
+    // Same rule as the schedule UI: operators need to be on the schedule or lead its owning team.
+    await assertCanManageScheduleOverrides(tx!, params.id, actor);
     const override = await tx!.onCallOverride.findFirst({
       where: { id: params.overrideId, scheduleId: params.id },
       select: { id: true, userId: true, replacesUserId: true },
