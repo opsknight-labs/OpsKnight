@@ -119,6 +119,8 @@ Clear search and status, owner, and priority filters. Confirm the postmortem was
 
 Refresh, verify the item still exists, and confirm responder access. If the parent or item changed concurrently, use its current state before retrying.
 
+On the board a failed status change puts back only that item, shows the reason in a message, and leaves earlier successful changes to other items in place; several items can be saving at once. If the item was deleted meanwhile (for example through the API), the change is refused with `Action item not found` instead of appearing to succeed. Status changes and the Jira actions (create, link, sync, unlink) apply only to action items of postmortems you can read; an item outside that scope, such as one on another team's private incident, is reported as not found even for a person holding a temporary operations grant.
+
 ### Jira controls are unavailable
 
 Check workspace Jira configuration, the service's Jira project, whether metadata sync is enabled, and your management capability. The UI deliberately hides or rejects operations that the resolved service capability does not allow.

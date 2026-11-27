@@ -91,6 +91,8 @@ per-incident choice.
   the relevant status configuration includes the service.
 - Private incidents remain internal and have tighter scoped-user visibility.
 
+Making an incident private takes effect on status pages at once. Every status page that publishes the incident's service stops serving its last projection, which still shows the incident, and is rebuilt immediately instead of waiting for the projector's next pass (up to about a minute). If the rebuild cannot finish, the page stays withheld and the projector retries. Making an incident public still waits for the projector, because that only widens what the page shows.
+
 Public does not mean anonymous access to the full internal incident. Status
 pages expose their own selected projection. Changing service default visibility
 does not rewrite existing incidents.
@@ -146,8 +148,12 @@ acknowledgement SLA capture.
 
 Snooze requires a valid future end time and accepts a reason up to the current
 limit. It changes status to `SNOOZED`, pauses escalation and the effective SLA
-clock, and clears the next escalation time. Updating an existing snooze is
-treated as a real change when end time or reason differs.
+clock, and clears the next escalation time. Snoozing an `ACKNOWLEDGED` incident
+also ends its acknowledgement (time, who and how), as Unacknowledge does, so the
+incident wakes as `OPEN` with no stale acknowledgement and a later
+acknowledgement records a new time; the first acknowledgement SLA sample is
+kept. Updating an existing snooze is treated as a real change when end time or
+reason differs.
 
 Unsnooze closes the pause, returns to `OPEN`, increments escalation generation,
 and reschedules the current step with its delay. Expiry automation must still
@@ -252,7 +258,31 @@ from a display name in Slack or Teams.
 
 Bulk lifecycle requests are limited to 100 incidents per request and apply the
 same lifecycle rules. Review partial/individual results rather than assuming a
-bulk click bypasses conflicts or required fields.
+bulk click bypasses conflicts or required fields. On the **Incidents** list:
+
+- **Read scope:** a bulk action, and the CSV/XLSX export, cover only incidents
+  you can read, the same set the list shows you. A selection that includes an
+  incident you cannot read is refused before anything changes. The export file
+  contains only the incidents you can read.
+- **All or nothing:** a lifecycle action runs in one transaction. If one
+  selected incident cannot take it (for example unsnoozing an incident that is
+  `ACKNOWLEDGED`), none change and the message says why, such as `Cannot unsnooze
+  an incident while it is ACKNOWLEDGED. No incidents were changed.`
+- **Resolve:** asks once for a resolution note of 10 to 1,000 characters, the
+  same note the single resolve dialog requires, and applies it to every selected
+  incident. The bulk **Status** menu does not offer **Resolved**.
+- **Reassign:** uses the same assignment command as the incident page, so each
+  incident gets an assignment timeline event, the assignee is notified, and the
+  war room is updated. Resolved incidents are skipped, and the count shown is
+  the number of incidents actually changed. Select at most 100.
+- **Priority:** sets P1 to P5, or clears it (**Auto**). Each incident records a
+  status-change timeline event and posts the war-room message, as the incident
+  page control does. Select at most 100.
+
+Anyone who can read an incident can follow or unfollow it themselves. Adding or
+removing other people as watchers needs `operations.manage` from any source: a
+built-in role, a custom role or a temporary grant. The incident page shows the
+add and remove controls to exactly those people.
 
 ## Operational verification
 

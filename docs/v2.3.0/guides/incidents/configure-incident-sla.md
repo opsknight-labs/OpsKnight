@@ -95,6 +95,8 @@ Open **SLA Objectives (P1–P5)**:
 5. Review the effective-target summary, then select **Save SLA policy**.
 6. Confirm the success message and new policy version.
 
+Saving a service-specific SLA policy needs an administrator, the same as the workspace policy and the REST endpoints: a responder on the owning team cannot change a service's SLA targets. For everyone else the **Incident SLA** tab on the service page is read-only. The **Alert Classification** and **Support Hours & Coverage** tabs still follow team permission.
+
 For a service-specific policy:
 
 1. Open the service's **Response Policy → Incident SLA**.

@@ -31,9 +31,9 @@ Open **Incidents → Templates**. Select an existing template to use/delete, or 
 1. Open **Incidents → Templates**.
 2. Select **New Template**.
 3. Enter a unique **Template name** between 3 and 100 characters. This identifies the template in the chooser.
-4. Optionally enter an internal **Description** explaining when responders should use it.
-5. Enter the default incident **Title**, between 5 and 255 characters.
-6. Add optional incident description/runbook content. The form previews headings, lists, bold text, inline code, and links.
+4. Optionally enter an internal **Description** explaining when responders should use it, up to 5,000 characters.
+5. Enter the default incident **Title**, between 5 and 200 characters.
+6. Add optional incident description/runbook content, up to 10,000 characters. The form previews headings, lists, bold text, inline code, and links.
 7. Choose default urgency: `HIGH`, `MEDIUM`, or `LOW`.
 8. Choose priority `P1` through `P5`, or leave it unset if the form permits.
 9. Optionally select a default service.
