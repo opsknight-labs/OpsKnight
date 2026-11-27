@@ -52,6 +52,10 @@ from the secret JWT capability. Revocation commits an audit and security alert.
 An emergency principal can revoke authentication sessions through the recovery
 console but cannot access ordinary product administration.
 
+Signing out ends the session on the server as well as in the browser: the session
+shows as revoked in **Signed-in Sessions**, and a copy of its cookie stops working
+at once instead of lasting until it expires.
+
 ## Configure revocation
 
 Revoke a specific unfamiliar session first when the account remains under your
