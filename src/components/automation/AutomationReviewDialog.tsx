@@ -12,6 +12,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { semanticSnapshotChanges } from '@/lib/automation/diff';
+import { describeObservationBacklog } from '@/lib/automation/readiness-policy';
 import {
   Dialog,
   DialogContent,
@@ -160,7 +161,10 @@ export function AutomationReviewDialog({
     readiness && !readiness.policyValid
       ? 'Repair the global readiness policy before activating this candidate.'
       : readiness && !readiness.backlogWithinPolicy
-        ? 'Wait for candidate observations to finish before activating this candidate.'
+        ? describeObservationBacklog(
+            readiness.pendingObservations,
+            readiness.policy.maximumPendingObservations
+          )
         : errors.length
           ? 'Fix the blocking issues above before confirming.'
           : liveReview && !version

@@ -499,6 +499,6 @@ it('requires review of insufficient recent candidate evidence and blocks an obse
   );
   expect(confirm).toBeDisabled();
   expect(confirm).toHaveAccessibleDescription(
-    'Wait for candidate observations to finish before activating this candidate.'
+    'Candidate observation backlog exceeds the readiness policy: at least 1 observation is pending or running and the policy allows 0. Wait for the worker to finish, or raise the limit under Settings → System → Automation → Shadow readiness → Maximum pending observations.'
   );
 });
