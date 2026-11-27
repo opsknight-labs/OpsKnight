@@ -35,7 +35,7 @@ import {
 import { getDefaultAnalyticsViewQuery, listAnalyticsViews } from '@/lib/analytics/views';
 import { getAuthOptions } from '@/lib/auth';
 import { opsHelpersOn } from '@/lib/intelligence/helpers/on-demand';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { CAPABILITIES } from '@/lib/authorization';
 import { actorHasCapability } from '@/lib/authorization-policy';
 import {
   dashboardUserReadWhere,
@@ -108,7 +108,8 @@ export default async function AnalyticsPage({
   const context = await createAnalyticsContext(actor, params, getUserTimeZone(user ?? undefined));
   const key = analyticsParamsKey(params);
   const exportQuery = toAnalyticsSearchParams(params).toString();
-  const canExport = hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT);
+  // The effective capabilities (custom role and grants included), as the export route checks.
+  const canExport = actorHasCapability(actor, CAPABILITIES.REPORT_EXPORT);
 
   return (
     <div className="space-y-4 sm:space-y-6">
