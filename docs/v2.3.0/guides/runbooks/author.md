@@ -395,6 +395,11 @@ rule's pin:
 
 - Review added/removed/changed actions, derived risk, masked configuration,
   prechecks, verification, and input changes side by side.
+- **Changed Inputs** lists an input that kept its key but changed its type,
+  became required (or stopped being required), or changed its default value or
+  options. A newly required input breaks rules that do not pass it, so check
+  those rules before publishing. The API diff returns the same list as
+  `inputChanges`, naming a changed default without returning its value.
 - Rules using latest publication track future publications; pinned rules and
   existing executions retain their frozen versions.
 - Comparison performs no action and cannot establish platform permission.

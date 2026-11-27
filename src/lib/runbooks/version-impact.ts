@@ -37,6 +37,27 @@ export async function getVersionImpact(
           : 'UNCHANGED',
     risk: after.get(key) ? minimumRiskForStep(after.get(key)!) : null,
   }));
+  const inputChanges = next.inputs.flatMap(input => {
+    const previous = base.inputs.find(candidate => candidate.key === input.key);
+    if (!previous) return [];
+    // Default values are named, never returned: they can be sensitive.
+    const changes = [
+      previous.type !== input.type && 'type',
+      previous.required !== input.required && 'required',
+      previous.defaultValue !== input.defaultValue && 'default',
+      JSON.stringify(previous.options) !== JSON.stringify(input.options) && 'options',
+    ].filter((change): change is 'type' | 'required' | 'default' | 'options' => change !== false);
+    return changes.length
+      ? [
+          {
+            key: input.key,
+            changes,
+            type: { before: previous.type, after: input.type },
+            required: { before: previous.required, after: input.required },
+          },
+        ]
+      : [];
+  });
   const rules = await prisma.serviceAutomationRule.findMany({
     where: { runbookId },
     include: {
@@ -54,6 +75,7 @@ export async function getVersionImpact(
     base: { version: base.version, checksum: base.checksum },
     next: { version: next.version, checksum: next.checksum },
     steps,
+    inputChanges,
     inputKeys: {
       added: next.inputs
         .filter(input => !base.inputs.some(previous => previous.key === input.key))

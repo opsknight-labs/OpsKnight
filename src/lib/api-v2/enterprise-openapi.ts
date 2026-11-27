@@ -33,14 +33,8 @@ import {
   incidentTemplateDefaultRoles,
   incidentRoleKeySchema,
 } from './incident-roles-openapi';
-import {
-  BUSINESS_SERVICE_SCHEMAS,
-  BUSINESS_SERVICE_OPERATIONS,
-} from './business-services-openapi';
-import {
-  DEPENDENCY_GRAPH_SCHEMAS,
-  DEPENDENCY_GRAPH_OPERATIONS,
-} from './dependency-graph-openapi';
+import { BUSINESS_SERVICE_SCHEMAS, BUSINESS_SERVICE_OPERATIONS } from './business-services-openapi';
+import { DEPENDENCY_GRAPH_SCHEMAS, DEPENDENCY_GRAPH_OPERATIONS } from './dependency-graph-openapi';
 import { statusPageSectionFields } from '@/lib/status-pages/settings-sections';
 import { AUTOMATION_SCHEMAS, automationDraftBody } from './automation-openapi';
 import {
@@ -1278,6 +1272,20 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
         )
       ),
       inputKeys: object({ added: array(string()), removed: array(string()) }, ['added', 'removed']),
+      inputChanges: array(
+        object(
+          {
+            key: string(),
+            changes: array({ type: 'string', enum: ['type', 'required', 'default', 'options'] }),
+            type: object({ before: string(), after: string() }, ['before', 'after']),
+            required: object({ before: { type: 'boolean' }, after: { type: 'boolean' } }, [
+              'before',
+              'after',
+            ]),
+          },
+          ['key', 'changes', 'type', 'required']
+        )
+      ),
       inputDetails: object(
         {
           added: array(
@@ -1336,7 +1344,17 @@ export const ENTERPRISE_SCHEMAS: Record<string, Schema> = {
       rulesTruncated: { type: 'boolean' },
       warning: string(),
     },
-    ['base', 'next', 'steps', 'inputKeys', 'inputDetails', 'rules', 'rulesTruncated', 'warning']
+    [
+      'base',
+      'next',
+      'steps',
+      'inputKeys',
+      'inputChanges',
+      'inputDetails',
+      'rules',
+      'rulesTruncated',
+      'warning',
+    ]
   ),
   RunbookDiffStep: object(
     {

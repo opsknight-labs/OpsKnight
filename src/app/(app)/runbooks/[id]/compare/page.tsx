@@ -342,7 +342,7 @@ export default async function VersionComparePage({
         {/* Input Contract Changes */}
         <SectionCard
           title={<span id="input-contract-heading">Input contract changes</span>}
-          description="Rules that pass removed inputs, or don’t pass new required ones, need review."
+          description="Rules that pass removed inputs, or don’t pass new or newly required ones, need review."
           icon={SlidersHorizontal}
         >
           <div className="grid gap-3.5 sm:grid-cols-2">
@@ -392,6 +392,35 @@ export default async function VersionComparePage({
               </div>
             </div>
           </div>
+          {impact.inputChanges.length > 0 && (
+            <div className="mt-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 space-y-2">
+              <span className="text-xs font-semibold text-foreground">Changed Inputs</span>
+              <ul className="space-y-1.5">
+                {impact.inputChanges.map(input => (
+                  <li key={input.key} className="flex flex-wrap items-center gap-1.5 text-xs">
+                    <Pill tone="warning" className="font-mono">
+                      {input.key}
+                    </Pill>
+                    <span className="text-muted-foreground">
+                      {input.changes
+                        .map(change =>
+                          change === 'type'
+                            ? `type ${input.type.before} → ${input.type.after}`
+                            : change === 'required'
+                              ? input.required.after
+                                ? 'now required'
+                                : 'no longer required'
+                              : change === 'default'
+                                ? 'default value changed'
+                                : 'options changed'
+                        )
+                        .join(' · ')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </SectionCard>
 
         {/* Service Rule Impact */}
