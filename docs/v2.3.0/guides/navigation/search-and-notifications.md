@@ -57,7 +57,10 @@ returned only to people with `postmortem.draft.read`; text inside a draft cannot
 be matched by anyone else. Generic navigation suggestions are a static convenience list and
 can include a destination the current role cannot use; the destination still
 enforces authorization. The endpoint is rate limited, so rapid automation or
-repeated queries can return a temporary rate-limit response.
+repeated queries can return a temporary rate-limit response (`429` with
+`Retry-After`). If the rate-limit store itself is unavailable, search answers
+`503` with `Retry-After: 5` instead, which means "try again shortly", not that
+you are limited.
 
 ## Process the notification inbox
 

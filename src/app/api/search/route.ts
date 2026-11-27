@@ -174,9 +174,19 @@ export async function GET(req: NextRequest) {
 
     const rate = await checkRateLimit(`api:search:user:${currentUser.id}`, 30, 60_000);
     if (!rate.allowed) {
-      return jsonError('Rate limit exceeded', 429, {
-        retryAfter: Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000)),
-      });
+      // The counter store failing says nothing about this user's quota: retry shortly, not "limited".
+      if (rate.unavailable) {
+        return jsonError('Search is temporarily unavailable', 503, undefined, {
+          'Retry-After': '5',
+        });
+      }
+      const retryAfter = Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000));
+      return jsonError(
+        'Rate limit exceeded',
+        429,
+        { retryAfter },
+        { 'Retry-After': String(retryAfter) }
+      );
     }
 
     const searchParams = req.nextUrl.searchParams;

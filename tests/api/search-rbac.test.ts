@@ -210,6 +210,38 @@ describe('global search RBAC', () => {
     });
   });
 
+  it('answers 503 with Retry-After when the rate-limit store is down, and 429 only when limited', async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'responder-1',
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+      teamMemberships: [],
+    });
+    const { checkRateLimit } = await import('@/lib/rate-limit');
+
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({
+      allowed: false,
+      remaining: 0,
+      resetAt: Date.now() + 60_000,
+      count: 31,
+      unavailable: true,
+    });
+    const down = await GET(new NextRequest('http://localhost/api/search?q=database'));
+    expect(down.status).toBe(503);
+    expect(down.headers.get('Retry-After')).toBe('5');
+
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({
+      allowed: false,
+      remaining: 0,
+      resetAt: Date.now() + 20_000,
+      count: 31,
+    });
+    const limited = await GET(new NextRequest('http://localhost/api/search?q=database'));
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get('Retry-After'))).toBeGreaterThan(0);
+    expect(mocks.findMany).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['AUDITOR', true],
     ['USER', true],
