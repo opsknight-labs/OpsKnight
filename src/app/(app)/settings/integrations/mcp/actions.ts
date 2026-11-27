@@ -207,13 +207,17 @@ export async function restoreMcpClient(form: FormData): Promise<McpClientFormRes
   const id = parsed.data;
   const restored = await prisma.$transaction(async tx => {
     await assertCurrentAdmin(tx, actor);
+    const updated = await tx.mcpClient.updateMany({
+      where: { id, revokedAt: { not: null } },
+      data: { revokedAt: null },
+    });
+    // Already active (a second admin's stale Restore): nothing to restore, and live grants stay.
+    if (!updated.count) return (await tx.mcpClient.count({ where: { id } })) > 0;
     // Anything still live from before the client was revoked must not come back with it.
     await tx.mcpGrant.updateMany({
       where: { clientId: id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    const updated = await tx.mcpClient.updateMany({ where: { id }, data: { revokedAt: null } });
-    if (!updated.count) return false;
     await logAudit(
       {
         source: 'UI',
