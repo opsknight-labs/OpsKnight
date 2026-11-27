@@ -162,7 +162,13 @@ export async function recordUserNotificationEndpointOutcome(
   if (existing) {
     if (existing.addressHash !== input.addressHash) return;
     await tx.userNotificationEndpoint.updateMany({
-      where: { id: existing.id, addressHash: input.addressHash },
+      // A late or out-of-order callback never revives (or re-labels) an INVALID, BOUNCED or OPTED_OUT
+      // endpoint; only a changed address or an explicit admin/user action clears those.
+      where: {
+        id: existing.id,
+        addressHash: input.addressHash,
+        status: { notIn: [...UNUSABLE_ENDPOINT_STATUSES] },
+      },
       data: input.delivered
         ? {
             status: 'HEALTHY',
