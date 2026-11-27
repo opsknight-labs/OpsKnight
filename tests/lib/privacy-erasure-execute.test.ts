@@ -67,7 +67,11 @@ const mocks = vi.hoisted(() => {
     microsoftTeamsInstallation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     microsoftTeamsDestination: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     team: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    incidentNote: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    incidentNote: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    incidentEvent: { findMany: vi.fn().mockResolvedValue([]) },
     postmortem: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     incidentTemplate: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     actionItem: { count: txActionItemCount, updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -267,6 +271,8 @@ describe('executeErasure', () => {
     mocks.tx.microsoftTeamsDestination.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.team.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.incidentNote.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.incidentNote.findMany.mockResolvedValue([] as never);
+    mocks.tx.incidentEvent.findMany.mockResolvedValue([] as never);
     mocks.tx.postmortem.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.incidentTemplate.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.actionItem.updateMany.mockResolvedValue({ count: 0 } as never);

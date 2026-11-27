@@ -209,7 +209,7 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     blocking: false,
     manualReviewRequired: true,
     notes:
-      'Note content preserved; author reference nulled (DB-level SetNull). Free-text content may still name the subject — matches the "incident-content" PARTIAL disposition in src/lib/privacy/registry.ts.',
+      'Note content preserved; author reference nulled (DB-level SetNull). The subject\'s email, name and phone number are replaced with "[erased]" in the notes they wrote and in timeline lines that name them. Notes written by others that name the subject are not attributable and may still do so — matches the "incident-content" PARTIAL disposition in src/lib/privacy/registry.ts.',
   },
   {
     id: 'postmortemsAuthored',

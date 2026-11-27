@@ -7,6 +7,7 @@ import {
   ERASED,
   buildIdentifierMatcher,
   pseudonymiseSubjectAuditRows,
+  pseudonymiseSubjectIncidentText,
   scrubJsonIdentifiers,
   subjectAuditAboutWhere,
   subjectAuditOwnWhere,
@@ -232,5 +233,150 @@ describe('pseudonymiseSubjectAuditRows', () => {
 
     expect(result.detailsScrubbed).toBe(1201);
     expect($executeRaw).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('pseudonymiseSubjectIncidentText', () => {
+  type Row = { id: string; incidentId: string; text: string };
+  type FindArgs = { where: { AND: Array<Record<string, unknown>> }; take: number };
+
+  /** Notes and events whose text lives in memory, so a second run sees the first run's writes. */
+  function fakeTx(options: { notes: Row[]; events: Row[]; heldIncidents?: string[] }) {
+    const notes = new Map(options.notes.map(row => [row.id, row]));
+    const events = new Map(options.events.map(row => [row.id, row]));
+    const page = (store: Map<string, Row>, args: FindArgs) => {
+      const [, hold, cursor] = args.where.AND.slice(-3) as [
+        unknown,
+        { incidentId?: { notIn: string[] } },
+        { id?: { gt: string } },
+      ];
+      return [...store.values()]
+        .filter(row => !hold.incidentId?.notIn.includes(row.incidentId))
+        .filter(row => !cursor.id || row.id > cursor.id.gt)
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .slice(0, args.take);
+    };
+    const write = (store: Map<string, Row>) => (ids: string[], texts: string[]) =>
+      ids.forEach((id, index) => {
+        const row = store.get(id);
+        if (row) row.text = texts.at(index) ?? row.text;
+      });
+    const noteFindMany = vi.fn(async (args: FindArgs) =>
+      page(notes, args).map(row => ({ id: row.id, content: row.text }))
+    );
+    const eventFindMany = vi.fn(async (args: FindArgs) =>
+      page(events, args).map(row => ({ id: row.id, message: row.text }))
+    );
+    const $executeRaw = vi.fn(
+      async (strings: TemplateStringsArray, ids: string[], texts: string[]) => {
+        write(strings.join('').includes('"IncidentNote"') ? notes : events)(ids, texts);
+        return ids.length;
+      }
+    );
+    const tx = {
+      incidentNote: { findMany: noteFindMany },
+      incidentEvent: { findMany: eventFindMany },
+      dataRetentionHold: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue((options.heldIncidents ?? []).map(scopeId => ({ scopeId }))),
+      },
+      $executeRaw,
+    };
+    return {
+      tx: tx as unknown as Prisma.TransactionClient,
+      notes,
+      events,
+      noteFindMany,
+      eventFindMany,
+      $executeRaw,
+    };
+  }
+
+  const subject = {
+    id: 'u1',
+    email: 'Alice@Example.com',
+    name: 'Alice Smith',
+    phoneNumber: '+15550100',
+  };
+
+  it('replaces the subject in the notes they wrote and the timeline lines that name them', async () => {
+    const { tx, notes, events } = fakeTx({
+      notes: [
+        { id: 'n1', incidentId: 'i1', text: 'Paged Alice Smith (alice@example.com) at +15550100.' },
+        { id: 'n2', incidentId: 'i1', text: 'No identifiers here.' },
+      ],
+      events: [
+        {
+          id: 'e1',
+          incidentId: 'i1',
+          text: 'Note added via Slack ChatOps by Alice Smith:\nrestart done',
+        },
+        { id: 'e2', incidentId: 'i1', text: 'Incident acknowledged' },
+        { id: 'e3', incidentId: 'i2', text: 'Resolved via Slack ChatOps by Alice Smith: fixed' },
+      ],
+    });
+
+    const result = await pseudonymiseSubjectIncidentText(tx, subject);
+
+    expect(result).toEqual({ notes: 1, events: 2 });
+    expect(notes.get('n1')?.text).toBe(`Paged ${ERASED} (${ERASED}) at ${ERASED}.`);
+    expect(notes.get('n2')?.text).toBe('No identifiers here.');
+    expect(events.get('e1')?.text).toBe(`Note added via Slack ChatOps by ${ERASED}:\nrestart done`);
+    expect(events.get('e2')?.text).toBe('Incident acknowledged');
+    expect(events.get('e3')?.text).toBe(`Resolved via Slack ChatOps by ${ERASED}: fixed`);
+  });
+
+  it('only reads notes the subject wrote, and narrows events to the text that mentions them', async () => {
+    const { tx, noteFindMany, eventFindMany } = fakeTx({ notes: [], events: [] });
+    await pseudonymiseSubjectIncidentText(tx, subject);
+    const noteWhere = (noteFindMany.mock.calls[0][0] as FindArgs).where.AND;
+    expect(noteWhere[0]).toEqual({ userId: 'u1' });
+    const eventWhere = (eventFindMany.mock.calls[0][0] as FindArgs).where.AND;
+    expect(eventWhere[0]).toEqual({
+      OR: [
+        { message: { contains: 'alice@example.com', mode: 'insensitive' } },
+        { message: { contains: '+15550100', mode: 'insensitive' } },
+        { message: { contains: 'Alice Smith', mode: 'insensitive' } },
+      ],
+    });
+  });
+
+  it('leaves incidents under a legal hold alone', async () => {
+    const { tx, notes, events } = fakeTx({
+      heldIncidents: ['held'],
+      notes: [{ id: 'n1', incidentId: 'held', text: 'Alice Smith was here' }],
+      events: [
+        { id: 'e1', incidentId: 'held', text: 'Acknowledged via Slack ChatOps by Alice Smith' },
+      ],
+    });
+    const result = await pseudonymiseSubjectIncidentText(tx, subject);
+    expect(result).toEqual({ notes: 0, events: 0 });
+    expect(notes.get('n1')?.text).toBe('Alice Smith was here');
+    expect(events.get('e1')?.text).toBe('Acknowledged via Slack ChatOps by Alice Smith');
+  });
+
+  it('is idempotent and pages through more rows than one batch', async () => {
+    const events: Row[] = Array.from({ length: 1201 }, (_, index) => ({
+      id: `e${String(index).padStart(5, '0')}`,
+      incidentId: 'i1',
+      text: 'Acknowledged via Slack ChatOps by Alice Smith',
+    }));
+    const { tx, $executeRaw } = fakeTx({ notes: [], events });
+
+    const first = await pseudonymiseSubjectIncidentText(tx, subject);
+    const second = await pseudonymiseSubjectIncidentText(tx, subject);
+
+    expect(first.events).toBe(1201);
+    expect(second.events).toBe(0);
+    expect($executeRaw).toHaveBeenCalledTimes(3);
+  });
+
+  it('does nothing when the subject has no identifier long enough to match', async () => {
+    const { tx, noteFindMany, eventFindMany } = fakeTx({ notes: [], events: [] });
+    const result = await pseudonymiseSubjectIncidentText(tx, { id: 'u1', email: null, name: 'Al' });
+    expect(result).toEqual({ notes: 0, events: 0 });
+    expect(noteFindMany).not.toHaveBeenCalled();
+    expect(eventFindMany).not.toHaveBeenCalled();
   });
 });

@@ -12,7 +12,10 @@ import { buildSubjectErasurePlan } from './plan';
 import { verifySubjectErasure } from './verify';
 import { discoverErasureBlockersTx, type ErasureDomainCounts } from './discover';
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
-import { pseudonymiseSubjectAuditRows } from './audit-pseudonymise';
+import {
+  pseudonymiseSubjectAuditRows,
+  pseudonymiseSubjectIncidentText,
+} from './audit-pseudonymise';
 
 export interface ErasureActor {
   id: string;
@@ -299,6 +302,8 @@ export async function executeErasure(
         // replaced inside `details`) while the identifier columns below still find them. Rows a
         // legal hold on another user protects are left as they are.
         await pseudonymiseSubjectAuditRows(tx, subjectIdentity);
+        // The subject's own notes and the timeline lines naming them, before the notes are detached.
+        await pseudonymiseSubjectIncidentText(tx, subjectIdentity);
 
         // --- ANONYMIZE: scrub the immutable audit-log PII snapshot in place.
         // actorId itself is left alone here; it is SetNull automatically when

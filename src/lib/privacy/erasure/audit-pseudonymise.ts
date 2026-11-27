@@ -1,5 +1,9 @@
 import type { Prisma } from '@prisma/client';
-import { auditRowsOutsideHeldUsers, getHeldUserIds } from '@/lib/retention/lifecycle';
+import {
+  auditRowsOutsideHeldUsers,
+  getHeldIncidentIds,
+  getHeldUserIds,
+} from '@/lib/retention/lifecycle';
 
 /**
  * Erasure keeps the subject's audit rows (GDPR Art. 17(3) retention) but pseudonymises them:
@@ -190,4 +194,105 @@ export async function pseudonymiseSubjectAuditRows(
     data: { ip: null },
   });
   return { rows: ids.length, detailsScrubbed, ipCleared: cleared.count };
+}
+
+type TextRow = { id: string; text: string };
+
+/** Pages through rows by id, rewrites the ones the matcher changes, and returns how many changed. */
+async function scrubTextRows(
+  fetchPage: (after: string | undefined) => Promise<TextRow[]>,
+  write: (ids: string[], texts: string[]) => Promise<unknown>,
+  matcher: RegExp
+): Promise<number> {
+  let after: string | undefined;
+  let changed = 0;
+  for (;;) {
+    const page: TextRow[] = await fetchPage(after);
+    if (page.length === 0) return changed;
+    after = page[page.length - 1].id;
+    const ids: string[] = [];
+    const texts: string[] = [];
+    for (const row of page) {
+      const scrubbed = scrubJsonIdentifiers(row.text, matcher);
+      if (!scrubbed.changed) continue;
+      ids.push(row.id);
+      texts.push(String(scrubbed.value));
+    }
+    if (ids.length === 0) continue;
+    await write(ids, texts);
+    changed += ids.length;
+  }
+}
+
+/**
+ * Replaces the subject's email, name and phone number in incident free text: the content of the
+ * notes they wrote, and every timeline event that names them (a timeline event has no author
+ * column, so the text is the only link, e.g. "Note added via Slack ChatOps by <name>"). Call inside
+ * the erasure transaction before the notes are detached. Incidents under a legal hold are left as
+ * they are. Idempotent. Text other people wrote about the subject in their own notes is not
+ * attributable and stays (manual review in policy.ts).
+ */
+export async function pseudonymiseSubjectIncidentText(
+  tx: Prisma.TransactionClient,
+  subject: ErasureSubjectIdentity
+): Promise<{ notes: number; events: number }> {
+  const email = subject.email?.toLowerCase() ?? null;
+  const phone = subject.phoneNumber?.trim() ?? '';
+  const name = subject.name?.trim() ?? '';
+  const matcher = buildIdentifierMatcher({
+    emails: email ? [email] : [],
+    phones: phone ? [phone] : [],
+    names: name ? [name] : [],
+    ips: [],
+  });
+  if (!matcher) return { notes: 0, events: 0 };
+
+  const held = await getHeldIncidentIds(tx);
+  const outsideHold = held.length ? { incidentId: { notIn: held } } : {};
+  const afterCursor = (after: string | undefined) => (after ? { id: { gt: after } } : {});
+  // The database narrows to rows that contain the text at all; the matcher decides what changes.
+  const needles = [
+    email,
+    phone.length >= MIN_PHONE_LENGTH ? phone : '',
+    name.length >= MIN_NAME_LENGTH ? name : '',
+  ]
+    .filter(Boolean)
+    .map(needle => ({ message: { contains: needle, mode: 'insensitive' as const } }));
+
+  const notes = await scrubTextRows(
+    async after =>
+      (
+        await tx.incidentNote.findMany({
+          where: { AND: [{ userId: subject.id }, outsideHold, afterCursor(after)] },
+          orderBy: { id: 'asc' },
+          take: BATCH_SIZE,
+          select: { id: true, content: true },
+        })
+      ).map(row => ({ id: row.id, text: row.content })),
+    (ids, texts) => tx.$executeRaw`
+      UPDATE "IncidentNote" AS t SET content = u.text
+      FROM unnest(${ids}::text[], ${texts}::text[]) AS u(id, text) WHERE t.id = u.id
+    `,
+    matcher
+  );
+  const events =
+    needles.length === 0
+      ? 0
+      : await scrubTextRows(
+          async after =>
+            (
+              await tx.incidentEvent.findMany({
+                where: { AND: [{ OR: needles }, outsideHold, afterCursor(after)] },
+                orderBy: { id: 'asc' },
+                take: BATCH_SIZE,
+                select: { id: true, message: true },
+              })
+            ).map(row => ({ id: row.id, text: row.message })),
+          (ids, texts) => tx.$executeRaw`
+            UPDATE "IncidentEvent" AS t SET message = u.text
+            FROM unnest(${ids}::text[], ${texts}::text[]) AS u(id, text) WHERE t.id = u.id
+          `,
+          matcher
+        );
+  return { notes, events };
 }
