@@ -232,6 +232,17 @@ breach only when elapsed SLA time is strictly greater than the target.
 Unacknowledging or reopening does not erase first-ACK historical truth. Do not
 recompute old compliance from the current policy.
 
+## Turn on SLA warnings for a service
+
+Every incident carries its SLA countdown, but warnings and breach alerts are opt-in
+per service and **off by default** for every new service. Until a service has **SLA
+Breach Warning** enabled, its incidents get no `SLA_WARNING` or `SLA_BREACHED`
+timeline entry, no breach notification and no scheduler wake-up for the deadline.
+To enable it, open the service's **Notification settings**, tick **SLA Breach Warning**
+and choose where the alert goes (or set `serviceNotifyOnSlaBreach` to `true` with
+`PATCH /api/v2/services/{id}/notification-settings`). It applies to the
+service's active incidents from the next scheduler tick.
+
 ## Verify the policy end to end
 
 Use a controlled non-production service or approved test window:
