@@ -7,6 +7,7 @@ const configSchema = z.object({
   mode: z.enum(['sync', 'postgres']),
   concurrency: z.coerce.number().int().min(1).max(32).default(4),
   maxInFlightRequests: z.coerce.number().int().min(1).max(1024).default(32),
+  requestWaitMs: z.coerce.number().int().min(0).max(1000).default(25),
   pollMs: z.coerce.number().int().min(50).max(30000).default(250),
   maxPending: z.coerce.number().int().min(64).max(10000000).default(100000),
   eventsPerMinute: z.coerce.number().int().min(1).max(10000000).default(120),
@@ -20,11 +21,31 @@ const configSchema = z.object({
     .default(1024 * 1024 * 1024),
 });
 
+export const MAX_INFLIGHT_REQUESTS_RANGE = { fallback: 32, min: 1, max: 1024 } as const;
+export const REQUEST_WAIT_MS_RANGE = { fallback: 25, min: 0, max: 1000 } as const;
+
+/** Read an integer environment value, clamped to its range; unset or non-numeric uses the fallback. */
+export function clampedIntegerEnv(
+  raw: string | undefined,
+  range: { fallback: number; min: number; max: number }
+): number {
+  const parsed = Number.parseInt(raw ?? '', 10);
+  if (!Number.isFinite(parsed)) return range.fallback;
+  return Math.min(range.max, Math.max(range.min, parsed));
+}
+
 export function ingestionConfig() {
   return configSchema.parse({
     mode: resolveIngestionMode(process.env.OPSKNIGHT_INGESTION_MODE),
     concurrency: process.env.OPSKNIGHT_INGESTION_CONCURRENCY,
-    maxInFlightRequests: process.env.OPSKNIGHT_INGESTION_MAX_INFLIGHT_REQUESTS,
+    maxInFlightRequests: clampedIntegerEnv(
+      process.env.OPSKNIGHT_INGESTION_MAX_INFLIGHT_REQUESTS,
+      MAX_INFLIGHT_REQUESTS_RANGE
+    ),
+    requestWaitMs: clampedIntegerEnv(
+      process.env.OPSKNIGHT_INGESTION_REQUEST_WAIT_MS,
+      REQUEST_WAIT_MS_RANGE
+    ),
     pollMs: process.env.OPSKNIGHT_INGESTION_POLL_MS,
     maxPending: process.env.OPSKNIGHT_INGESTION_MAX_PENDING,
     eventsPerMinute: process.env.OPSKNIGHT_INGESTION_EVENTS_PER_MINUTE,

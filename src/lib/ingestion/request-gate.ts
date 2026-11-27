@@ -7,14 +7,18 @@ import {
 } from '@/lib/metrics/operational/registry';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-const REQUEST_WAIT_MS = 25;
 type PendingRequest = {
   startedAt: number;
   timer: ReturnType<typeof setTimeout>;
   settled: boolean;
   resolve: (admitted: boolean) => void;
 };
-type RequestGate = { active: number; limit?: number; waiting?: PendingRequest[] };
+type RequestGate = {
+  active: number;
+  limit?: number;
+  waitMs?: number;
+  waiting?: PendingRequest[];
+};
 
 export function ingestionBodyReadTimeoutMs(): number | undefined {
   return globalThis.opsknightIngestionRequestBodyContext?.getStore() ? 5000 : undefined;
@@ -45,7 +49,7 @@ function drainWaitingRequests(state: RequestGate) {
     const pending = state.waiting[0];
     // A busy event loop may delay the timer callback. Never grant an expired
     // waiter just because its timeout has not executed yet.
-    if (performance.now() - pending.startedAt >= REQUEST_WAIT_MS) {
+    if (performance.now() - pending.startedAt >= (state.waitMs ?? 0)) {
       settleWaitingRequest(state, pending, false);
       continue;
     }
@@ -67,7 +71,7 @@ function waitForRequestSlot(state: RequestGate): Promise<boolean> {
       timer: setTimeout(() => {
         settleWaitingRequest(state, pending, false);
         drainWaitingRequests(state);
-      }, REQUEST_WAIT_MS),
+      }, state.waitMs ?? 0),
     };
     waiting.push(pending);
   });
@@ -85,6 +89,7 @@ export async function withIngestionRequestSlot<T extends Response>(
   if (config.mode !== 'postgres') return operation();
   const state = (globalThis.opsknightIngestionRequestGate ??= { active: 0 });
   state.limit = config.maxInFlightRequests;
+  state.waitMs = config.requestWaitMs;
   drainWaitingRequests(state);
   if (state.active < state.limit && !state.waiting?.length) {
     state.active++;
