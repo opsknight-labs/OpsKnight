@@ -7,6 +7,7 @@ import ProfileForm from '@/components/settings/ProfileForm';
 import { userIdentityStatus } from '@/lib/users/identity-status';
 import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
+import BlockedEndpointsNotice from '@/components/settings/BlockedEndpointsNotice';
 import WeeklyDigestToggle from '@/components/settings/WeeklyDigestToggle';
 import MyServiceReview from '@/components/settings/MyServiceReview';
 import SquireHeadsUpSettings from '@/components/settings/SquireHeadsUpSettings';
@@ -119,6 +120,17 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
         },
       })
     : null;
+  const blockedEndpoints = user
+    ? await prisma.userNotificationEndpoint.findMany({
+        where: {
+          userId: user.id,
+          status: { in: ['INVALID', 'BOUNCED'] },
+          channel: { in: ['EMAIL', 'SMS', 'VOICE', 'WHATSAPP', 'PUSH'] },
+        },
+        select: { channel: true, status: true },
+        orderBy: { channel: 'asc' },
+      })
+    : [];
   const chatIdentityLinks = user
     ? await prisma.chatIdentityLink.findMany({
         where: { userId: user.id, revokedAt: null },
@@ -251,6 +263,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
         }
         notificationsContent={
           <>
+            <BlockedEndpointsNotice endpoints={blockedEndpoints} />
             <NotificationPreferencesForm
               emailEnabled={user?.emailNotificationsEnabled ?? false}
               smsEnabled={user?.smsNotificationsEnabled ?? false}

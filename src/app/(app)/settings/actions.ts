@@ -28,6 +28,7 @@ import {
 } from '@/lib/api-v2/service-accounts';
 import { invalidateV2AuthCache } from '@/lib/api-v2/auth';
 import { updateNotificationPreferences as updateSharedNotificationPreferences } from '@/lib/notifications/preferences';
+import { resetUserNotificationEndpoint } from '@/lib/user-notification-endpoints';
 
 const passwordChangeSchema = z.object({
   currentPassword: z.string().max(1024),
@@ -297,6 +298,30 @@ export async function updateNotificationPreferences(
           ? error.message
           : 'Unable to update notification preferences. Please try again.',
     };
+  }
+}
+
+const resettableChannelInput = z.enum(['EMAIL', 'SMS', 'VOICE', 'WHATSAPP', 'PUSH']);
+
+/** Lets the signed-in person try a bounced or invalid contact again. */
+export async function resetNotificationEndpoint(
+  channel: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const parsed = resettableChannelInput.safeParse(channel);
+    if (!parsed.success) return { success: false, error: 'Choose a valid channel.' };
+    const user = await getCurrentUser();
+    const reset = await resetUserNotificationEndpoint({
+      userId: user.id,
+      channel: parsed.data,
+      actorId: user.id,
+    });
+    if (!reset) return { success: false, error: 'This contact is not blocked.' };
+    revalidatePath('/settings/profile');
+    return { success: true };
+  } catch (error) {
+    logger.error('Error resetting notification endpoint', { component: 'settings-actions', error });
+    return { success: false, error: 'Unable to reset this contact. Please try again.' };
   }
 }
 

@@ -3,6 +3,7 @@ import 'server-only';
 import crypto from 'crypto';
 import { Prisma, type NotificationChannel, type NotificationEndpointStatus } from '@prisma/client';
 import prisma from './prisma';
+import { logAudit } from './audit';
 import { getEncryptionKey } from './encryption';
 
 const UNUSABLE_ENDPOINT_STATUSES: readonly NotificationEndpointStatus[] = [
@@ -207,4 +208,37 @@ export async function recordUserNotificationEndpointOutcome(
     // A concurrent address refresh won the unique key. Never let this older
     // provider outcome mutate it; a later matching callback can update it.
   }
+}
+
+/**
+ * Lets a person try an INVALID or BOUNCED endpoint again. OPTED_OUT is left alone: only the
+ * recipient's own opt-in may lift it. Returns false when there was nothing to reset.
+ */
+export async function resetUserNotificationEndpoint(input: {
+  userId: string;
+  channel: NotificationChannel;
+  actorId: string;
+}): Promise<boolean> {
+  return prisma.$transaction(async tx => {
+    const reset = await tx.userNotificationEndpoint.updateMany({
+      where: {
+        userId: input.userId,
+        channel: input.channel,
+        status: { in: ['INVALID', 'BOUNCED'] },
+      },
+      data: { status: 'UNVERIFIED', failureCount: 0, lastFailureAt: null, lastErrorCode: null },
+    });
+    if (reset.count === 0) return false;
+    await logAudit(
+      {
+        action: 'notification.endpoint.reset',
+        entityType: 'USER',
+        entityId: input.userId,
+        actorId: input.actorId,
+        details: { channel: input.channel },
+      },
+      tx
+    );
+    return true;
+  });
 }
