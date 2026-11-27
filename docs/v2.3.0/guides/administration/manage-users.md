@@ -199,6 +199,8 @@ For multiple users, select rows and use the bulk role action. Bulk demotion also
 checks that at least one active administrator remains and refuses self-demotion.
 The bulk action has the same recent sign-in rule.
 
+A selection only covers the users on screen: moving to another page, or a filter that hides them, takes them out of it. Bulk **Deactivate** and **Delete** ask for confirmation first, showing how many users and who they are.
+
 ## Allow an existing account to link OIDC
 
 Email equality alone never attaches a new OIDC subject to an existing account.
