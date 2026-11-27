@@ -80,7 +80,9 @@ export async function runOnCallSyncPass(now: Date = new Date()): Promise<{ synce
         { lastSyncedAt: { lt: new Date(now.getTime() - ONCALL_SYNC_MIN_INTERVAL_MS) } },
       ],
     },
-    orderBy: { lastSyncedAt: { sort: 'asc', nulls: 'first' } },
+    // Oldest attempt first. A skipped mapping (nobody on call, no Slack match) never gets a lastSyncedAt but
+    // does have its row updated, so it moves to the back instead of starving the rest of the batch.
+    orderBy: { updatedAt: 'asc' },
     take: PASS_LIMIT,
   });
   if (due.length === 0) return { synced: 0 };

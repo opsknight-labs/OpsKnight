@@ -171,6 +171,8 @@ export async function postIncidentStatusUpdate(input: {
   actor: { id: string; name: string };
   message: string;
   notifySubscribers?: boolean;
+  /** Intent key: a retried delivery replays instead of publishing a second announcement. */
+  idempotency?: IdempotencyContext;
 }): Promise<{ ok: true; pages: string[] } | { ok: false; reason: string }> {
   const { resolveUserActor } = await import('@/lib/authorization-actors');
   const { CAPABILITIES } = await import('@/lib/authorization');
@@ -209,53 +211,63 @@ export async function postIncidentStatusUpdate(input: {
     publishAt: now,
     startDate: now,
   });
-  await prisma.$transaction(async tx => {
-    for (const page of pages) {
-      const announcement = await tx.statusPageAnnouncement.create({
-        data: {
-          statusPageId: page.id,
-          title: `Update: ${incident.title}`.slice(0, 200),
-          message: input.message.trim(),
-          type: 'INFO',
-          startDate: now,
-          publishAt: now,
-          timeMode: 'EXACT',
-          notificationTiming: timing,
-          isActive: true,
-          incidentId: incident.id,
-          affectedServiceIds: [
-            incident.serviceId,
-          ] as unknown as import('@prisma/client').Prisma.InputJsonValue,
-          affectedBusinessServiceIds: Prisma.JsonNull,
-        },
-      });
-      if (plan.shouldNotify && plan.scheduledAt) {
-        await createAnnouncementFanoutJob(tx, {
-          announcementId: announcement.id,
-          statusPageId: page.id,
-          scheduledAt: plan.scheduledAt,
-          generation: announcement.notificationGeneration,
-          deliveryMode: 'ALL_ELIGIBLE',
+  const { runSerializableTransaction } = await import('@/lib/db-utils');
+  const { executeIdempotentOperation } = await import('@/lib/idempotency');
+  await runSerializableTransaction(tx =>
+    executeIdempotentOperation(tx, {
+      scope: 'chatops-status-update',
+      context: input.idempotency,
+      payload: { incidentId: incident.id, message: input.message.trim() },
+      execute: async () => {
+        for (const page of pages) {
+          const announcement = await tx.statusPageAnnouncement.create({
+            data: {
+              statusPageId: page.id,
+              title: `Update: ${incident.title}`.slice(0, 200),
+              message: input.message.trim(),
+              type: 'INFO',
+              startDate: now,
+              publishAt: now,
+              timeMode: 'EXACT',
+              notificationTiming: timing,
+              isActive: true,
+              incidentId: incident.id,
+              affectedServiceIds: [
+                incident.serviceId,
+              ] as unknown as import('@prisma/client').Prisma.InputJsonValue,
+              affectedBusinessServiceIds: Prisma.JsonNull,
+            },
+          });
+          if (plan.shouldNotify && plan.scheduledAt) {
+            await createAnnouncementFanoutJob(tx, {
+              announcementId: announcement.id,
+              statusPageId: page.id,
+              scheduledAt: plan.scheduledAt,
+              generation: announcement.notificationGeneration,
+              deliveryMode: 'ALL_ELIGIBLE',
+            });
+          }
+          await emitAuditEvent(
+            {
+              action: 'status_page_announcement.created',
+              source: 'INTEGRATION',
+              target: { type: 'STATUS_PAGE', id: page.id },
+              actor: { type: 'USER', id: input.actor.id },
+              metadata: { announcementId: announcement.id, incidentId: incident.id, via: 'slack' },
+            },
+            tx
+          );
+        }
+        await tx.incidentEvent.create({
+          data: {
+            incidentId: incident.id,
+            message: `Status update published via Slack by ${input.actor.name}`,
+          },
         });
-      }
-      await emitAuditEvent(
-        {
-          action: 'status_page_announcement.created',
-          source: 'INTEGRATION',
-          target: { type: 'STATUS_PAGE', id: page.id },
-          actor: { type: 'USER', id: input.actor.id },
-          metadata: { announcementId: announcement.id, incidentId: incident.id, via: 'slack' },
-        },
-        tx
-      );
-    }
-  });
-  await prisma.incidentEvent.create({
-    data: {
-      incidentId: incident.id,
-      message: `Status update published via Slack by ${input.actor.name}`,
-    },
-  });
+        return true;
+      },
+    })
+  );
   return { ok: true, pages: pages.map(page => page.name) };
 }
 
@@ -280,6 +292,7 @@ export async function handleUpdateSlashCommand(input: {
         incidentId: input.incidentId,
         actor: input.actor,
         message: parsed.status,
+        idempotency: input.idempotency,
       });
       return result.ok
         ? {

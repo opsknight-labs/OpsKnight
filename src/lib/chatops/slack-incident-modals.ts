@@ -291,7 +291,13 @@ export async function handleIncidentModalSubmission(payload: IncidentModalSubmis
       incident?.slackWorkspaceId ||
       incident?.service.slackIntegration?.workspaceId ||
       incident?.service.slackWorkspaceId;
-    if (!incident || incidentWorkspace !== payload.team_id) {
+    const { slackWorkspaceMatches } = await import('@/lib/slack/workspace-match');
+    const inWorkspace = await slackWorkspaceMatches({
+      teamId: payload.team_id,
+      enterpriseId: payload.enterprise_id || null,
+      incidentWorkspaceId: incidentWorkspace,
+    });
+    if (!incident || !inWorkspace) {
       return ephemeralReply('⚠️ Incident not found.');
     }
     const token = await workspaceBotToken(payload.team_id);
@@ -326,17 +332,38 @@ export async function handleIncidentModalSubmission(payload: IncidentModalSubmis
       );
     }
     const result = await executeChatOpsJoinResponder(common);
+    let noteFailed = false;
     if (result.changed && parsed.data.note) {
-      await executeChatOpsNote({
-        incidentId: payload.incidentId,
-        actor: { id: actor.id, name: actor.name },
-        content: `To ${target.name}: ${parsed.data.note}`,
-        provider: 'SLACK',
-      });
+      try {
+        await executeChatOpsNote({
+          incidentId: payload.incidentId,
+          actor: { id: actor.id, name: actor.name },
+          content: `To ${target.name}: ${parsed.data.note}`,
+          provider: 'SLACK',
+          // Its own key, derived from the intent's, so a retry replays the join and the note once each.
+          ...(idempotency
+            ? {
+                idempotency: {
+                  key: `${idempotency.key}:note`,
+                  principalId: idempotency.principalId,
+                },
+              }
+            : {}),
+        });
+      } catch (noteError) {
+        // A transient failure retries the whole intent (the join replays, the note is saved once).
+        if (payload.__opsknightIntentId && normalizeError(noteError).retryable) throw noteError;
+        // Otherwise the responder was added; say so instead of reporting the whole action as failed.
+        logger.warn('[ChatOps] Responder note could not be saved', {
+          incidentId: payload.incidentId,
+          error: noteError,
+        });
+        noteFailed = true;
+      }
     }
     return ephemeralReply(
       result.changed
-        ? `➕ Added *${escapeSlack(target.name)}* as a responder.`
+        ? `➕ Added *${escapeSlack(target.name)}* as a responder.${noteFailed ? ' The note could not be saved.' : ''}`
         : `ℹ️ *${escapeSlack(target.name)}* is already a responder.`
     );
   } catch (error) {

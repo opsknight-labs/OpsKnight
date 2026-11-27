@@ -276,7 +276,7 @@ type Interactive = {
 const str = (value: unknown) => (typeof value === 'string' ? value : '');
 
 /** The incident's workspace must match the signed one, like every other Slack action. */
-async function loadIncidentForWorkspace(incidentId: string, teamId: string) {
+async function loadIncidentForWorkspace(incidentId: string, teamId: string, enterpriseId: string) {
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
     select: {
@@ -296,7 +296,11 @@ async function loadIncidentForWorkspace(incidentId: string, teamId: string) {
     incident.slackWorkspaceId ||
     incident.service.slackIntegration?.workspaceId ||
     incident.service.slackWorkspaceId;
-  return workspace && workspace === teamId ? incident : null;
+  // An Enterprise Grid org-wide install is stored under the enterprise id, so match through it too.
+  const { slackWorkspaceMatches } = await import('@/lib/slack/workspace-match');
+  return (await slackWorkspaceMatches({ teamId, enterpriseId, incidentWorkspaceId: workspace }))
+    ? incident
+    : null;
 }
 
 const ephemeralJson = (text: string) =>
@@ -315,7 +319,7 @@ async function openModalFromAction(
     const { workspaceBotToken } = await import('@/lib/chatops/slash-commands');
     const [token, incident] = await Promise.all([
       workspaceBotToken(teamId),
-      loadIncidentForWorkspace(incidentId, teamId),
+      loadIncidentForWorkspace(incidentId, teamId, str(payload.enterprise?.id)),
     ]);
     if (!incident || !token) return ephemeralJson('⚠️ Incident not found.');
     const responseUrl = str(payload.response_url) || undefined;
@@ -483,6 +487,14 @@ export async function processUpdateSubmission(payload: SubmissionPayload) {
         actor: { id: actor.id, name },
         message: String(payload.message ?? ''),
         notifySubscribers: payload.notify === true,
+        ...(payload.__opsknightIntentId
+          ? {
+              idempotency: {
+                key: payload.__opsknightIntentId,
+                principalId: `chatops:${payload.user_id}`,
+              },
+            }
+          : {}),
       });
       return result.ok
         ? reply(statusUpdateConfirmation(result.pages, name), true)
