@@ -6,14 +6,10 @@ export class RequestBodyTooLargeError extends Error {
 }
 
 /**
- * Parse a JSON request while enforcing a real byte ceiling as the body stream is
- * consumed. Content-Length is only an early rejection hint; chunked requests and
- * clients that omit it are still bounded by the streaming counter.
+ * Read a request body while enforcing a real byte ceiling as the stream is consumed. Content-Length is only
+ * an early rejection hint; chunked requests and clients that omit it are still bounded by the counter.
  */
-export async function readJsonBodyWithLimit(
-  request: Request,
-  maxBytes: number
-): Promise<unknown> {
+async function readBodyBytesWithLimit(request: Request, maxBytes: number): Promise<Uint8Array> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
     throw new TypeError('maxBytes must be a positive safe integer');
   }
@@ -57,7 +53,18 @@ export async function readJsonBodyWithLimit(
     body.set(chunk, offset);
     offset += chunk.byteLength;
   }
+  return body;
+}
 
+/** Parse a JSON request body under a streaming byte ceiling. */
+export async function readJsonBodyWithLimit(request: Request, maxBytes: number): Promise<unknown> {
+  const body = await readBodyBytesWithLimit(request, maxBytes);
   const text = new TextDecoder('utf-8', { fatal: true }).decode(body);
   return JSON.parse(text) as unknown;
+}
+
+/** Read a UTF-8 text request body (YAML, CSV, plain text) under a streaming byte ceiling. */
+export async function readTextBodyWithLimit(request: Request, maxBytes: number): Promise<string> {
+  const body = await readBodyBytesWithLimit(request, maxBytes);
+  return new TextDecoder('utf-8', { fatal: true }).decode(body);
 }

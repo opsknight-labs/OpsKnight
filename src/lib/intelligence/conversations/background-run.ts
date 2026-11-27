@@ -16,6 +16,7 @@ import {
 } from './background';
 import { getHistoryStatus } from './store';
 import { SquireTurnRecorder } from './turn-record';
+import { warnAndContinue } from './warn';
 
 /**
  * Runs answers left to finish in the background (see background.ts) in the web server process: one is
@@ -71,7 +72,9 @@ async function claimAndRun(): Promise<number> {
       .catch(error => failTurn(next.id, 'ERROR', error))
       .finally(() => {
         running.delete(next.id);
-        void startBackgroundTurns().catch(() => undefined);
+        void startBackgroundTurns().catch(
+          warnAndContinue('Could not start the next background answer')
+        );
       });
     running.set(next.id, { controller, done });
     started += 1;
