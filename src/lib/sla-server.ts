@@ -2972,15 +2972,16 @@ type UptimeOptions =
 
 /**
  * Uptime, downtime and measured period per service. The rule lives in computeUptime (lib/uptime.ts):
- * recorded outage intervals regardless of snooze or suppress state, period clamped to the service's
- * createdAt. Shared logic for SLO evaluation, analytics, Status Pages exports.
+ * recorded outage intervals regardless of snooze or suppress state minus the service's recorded
+ * maintenance windows, period clamped to the service's createdAt. Shared logic for SLO evaluation,
+ * analytics, Status Pages exports.
  */
 export async function calculateMultiServiceAvailability(
   serviceIds: string[],
   startDate: Date,
   endDate: Date = new Date(),
   options: UptimeOptions = {},
-  db?: Pick<import('@prisma/client').PrismaClient, 'incident' | 'service'>
+  db?: Pick<import('@prisma/client').PrismaClient, 'incident' | 'service' | 'maintenanceWindowService'>
 ): Promise<Record<string, UptimeResult>> {
   const { default: prisma } = await import('./prisma');
   const reader = db ?? prisma;
@@ -2999,7 +3000,7 @@ export async function calculateMultiServiceAvailability(
       ? { visibility: normalizedOptions.visibility }
       : {};
 
-  const [services, incidents] = await Promise.all([
+  const [services, incidents, windows] = await Promise.all([
     reader.service.findMany({
       where: { id: { in: serviceIds } },
       select: { id: true, createdAt: true },
@@ -3029,8 +3030,25 @@ export async function calculateMultiServiceAvailability(
         status: true,
       },
     }),
+    // shortcut: capped at 50,000 window rows across the services; past that the oldest are not subtracted (more downtime, never less).
+    reader.maintenanceWindowService.findMany({
+      where: {
+        serviceId: { in: serviceIds },
+        startsAt: { lt: effectiveEnd },
+        endsAt: { gt: effectiveStart },
+      },
+      orderBy: { startsAt: 'desc' },
+      take: 50_000,
+      select: { serviceId: true, startsAt: true, endsAt: true },
+    }),
   ]);
 
+  const windowsByService = new Map<string, Array<{ start: Date; end: Date }>>();
+  for (const window of windows) {
+    const list = windowsByService.get(window.serviceId) ?? [];
+    list.push({ start: window.startsAt, end: window.endsAt });
+    windowsByService.set(window.serviceId, list);
+  }
   const createdAtById = new Map(services.map(service => [service.id, service.createdAt]));
   const incidentsByService = new Map<string, typeof incidents>();
   for (const incident of incidents) {
@@ -3048,6 +3066,7 @@ export async function calculateMultiServiceAvailability(
       periodEnd: effectiveEnd,
       createdAt: createdAtById.get(serviceId),
       incidents: incidentsByService.get(serviceId) ?? [],
+      maintenanceWindows: windowsByService.get(serviceId),
     });
   }
   return result;
@@ -3059,7 +3078,7 @@ export async function calculateMultiServiceUptime(
   startDate: Date,
   endDate: Date = new Date(),
   options: UptimeOptions = {},
-  db?: Pick<import('@prisma/client').PrismaClient, 'incident' | 'service'>
+  db?: Pick<import('@prisma/client').PrismaClient, 'incident' | 'service' | 'maintenanceWindowService'>
 ): Promise<Record<string, number>> {
   const availability = await calculateMultiServiceAvailability(
     serviceIds,

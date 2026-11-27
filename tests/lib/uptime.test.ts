@@ -115,4 +115,66 @@ describe('computeUptime', () => {
     });
     expect(result.downtimeMs).toBe(2 * HOUR);
   });
+  describe('recorded maintenance windows', () => {
+    const window = (from: number, to: number) => ({ start: at(from), end: at(to) });
+
+    it('does not count an outage that sits inside a maintenance window', () => {
+      const result = computeUptime({
+        periodStart,
+        periodEnd,
+        incidents: [incident({ createdAt: at(4), resolvedAt: at(6), status: 'RESOLVED' })],
+        maintenanceWindows: [window(3, 8)],
+      });
+      expect(result.downtimeMs).toBe(0);
+      expect(result.uptimePercent).toBe(100);
+      expect(result.periodMs).toBe(24 * HOUR);
+    });
+
+    it('counts only the part of an outage outside the window', () => {
+      const result = computeUptime({
+        periodStart,
+        periodEnd,
+        incidents: [incident({ createdAt: at(2), resolvedAt: at(10), status: 'RESOLVED' })],
+        maintenanceWindows: [window(4, 6), window(9, 12)],
+      });
+      // outage 2-10 minus windows 4-6 and 9-12: 2-4 (2h) and 6-9 (3h)
+      expect(result.downtimeMs).toBe(5 * HOUR);
+      expect(result.uptimePercent).toBeCloseTo(((24 - 5) / 24) * 100, 6);
+    });
+
+    it('keeps a suppressed or snoozed incident as downtime outside any window, and ignores its status inside one', () => {
+      const result = computeUptime({
+        periodStart,
+        periodEnd,
+        incidents: [
+          incident({ createdAt: at(2), resolvedAt: at(4), status: 'SUPPRESSED' }),
+          incident({ createdAt: at(10), status: 'SNOOZED' }),
+        ],
+        maintenanceWindows: [window(0, 3)],
+      });
+      // SUPPRESSED 3-4 (1h) and SNOOZED 10-24 (14h, still unresolved)
+      expect(result.downtimeMs).toBe(15 * HOUR);
+    });
+
+    it('handles overlapping windows and windows that run past the period', () => {
+      const result = computeUptime({
+        periodStart,
+        periodEnd,
+        incidents: [incident({ createdAt: at(20), status: 'OPEN' })],
+        maintenanceWindows: [window(18, 22), window(21, 30), window(-5, 1)],
+      });
+      expect(result.downtimeMs).toBe(0);
+    });
+
+    it('is unchanged without windows or with windows far from any outage', () => {
+      const incidents = [incident({ createdAt: at(2), resolvedAt: at(5), status: 'RESOLVED' })];
+      const plain = computeUptime({ periodStart, periodEnd, incidents });
+      expect(computeUptime({ periodStart, periodEnd, incidents, maintenanceWindows: [] })).toEqual(
+        plain
+      );
+      expect(
+        computeUptime({ periodStart, periodEnd, incidents, maintenanceWindows: [window(10, 12)] })
+      ).toEqual(plain);
+    });
+  });
 });

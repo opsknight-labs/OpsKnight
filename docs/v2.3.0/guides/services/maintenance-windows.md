@@ -65,6 +65,9 @@ show an **In maintenance** badge in the service list and on the service page.
   to the window. Nobody is paged, the SLA clock is paused, and Runbooks are not started.
 - Incidents that were already open keep escalating. Incidents a person creates by hand are never held.
   A resolve event from the source still closes a held incident.
+- Time inside a window is not downtime in the service's uptime figure (analytics, SLO evaluation and the
+  status-page uptime export), also for incidents that are not held. A suppressed incident that no window
+  covers still counts until it is resolved.
 - Held incidents are hidden from the default incident list; the **Suppressed** filter shows them. The
   incident page shows **Held by maintenance window** with a link to the window.
 - Whether a window is active is worked out from its start and end times, so a stalled scheduler cannot

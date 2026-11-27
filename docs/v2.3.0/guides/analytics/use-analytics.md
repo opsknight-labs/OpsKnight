@@ -86,7 +86,7 @@ A metric with no qualifying incidents shows **No data**, never 0.
 | Open action items     | Postmortem action items not yet completed for incidents in the period.                                                                             |
 | Overdue action items  | Open action items whose due date has passed.                                                                                                       |
 | On-call hours         | Scheduled on-call time in the period, from schedule layers and overrides.                                                                          |
-| Uptime                | Share of the period with no open incident on the service, from each incident's creation until it is resolved, even if it was snoozed or suppressed later. Overlaps count once; a new service is measured from its creation. |
+| Uptime                | Share of the period with no open incident on the service, from each incident's creation until it is resolved, even if it was snoozed or suppressed later. Time inside the service's recorded maintenance windows is not counted as downtime. Overlaps count once; a new service is measured from its creation. |
 
 ## Export CSV
 

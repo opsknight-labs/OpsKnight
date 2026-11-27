@@ -318,8 +318,13 @@ Service uptime, in analytics, uptime objectives and the status-page uptime expor
 - Downtime is the union of the service's incident intervals, each running from the incident's
   creation to its resolution (or to the end of the period while it is still open), clipped to the
   period. Overlapping incidents count once.
+- Planned maintenance is not downtime. Time inside the service's recorded
+  [maintenance windows](../guides/services/maintenance-windows) is taken out of the outage intervals, so an incident
+  that overlaps a window counts only for the time outside it. The period is not shortened: a day that
+  is only maintenance still shows 100%.
 - The incident's current status does not matter. Snoozing, suppressing or acknowledging an incident
   does not end an outage, so a past period never changes because an incident was snoozed later.
+  A suppressed incident that no maintenance window covers still counts until it is resolved.
 - A period with no measurable time shows 100%.
 
 When interpreting a result, verify time range, incident visibility/scope,

@@ -1,4 +1,9 @@
-import { intersectInterval, intervalDurationMs, type TimeInterval } from './metrics/domain/interval';
+import {
+  intersectInterval,
+  intervalDurationMs,
+  intervalGaps,
+  type TimeInterval,
+} from './metrics/domain/interval';
 
 /**
  * The one uptime rule for services (SLO evaluation, analytics, uptime exports).
@@ -11,6 +16,9 @@ import { intersectInterval, intervalDurationMs, type TimeInterval } from './metr
  *   clipped to the period. The incident's current status does not matter: a snoozed, suppressed or
  *   acknowledged incident is still an outage until it is resolved, so a past period does not change when
  *   someone snoozes an incident later. Overlapping incidents count once.
+ * - planned maintenance is not downtime: the service's recorded maintenance windows are taken out of the
+ *   outage intervals, whatever the incident's status (an operator-suppressed incident with no window
+ *   still counts). The period itself is not shortened, so a quiet maintenance day reports 100%.
  * - a period with no measurable time reports 100% and zero downtime.
  */
 
@@ -43,6 +51,8 @@ export function computeUptime(input: {
   /** Start of the measured subject's life; omit when unknown. */
   createdAt?: Date | null;
   incidents: readonly OutageIncident[];
+  /** The subject's recorded maintenance windows; time inside them never counts as downtime. */
+  maintenanceWindows?: readonly TimeInterval[];
 }): UptimeResult {
   const start =
     input.createdAt && input.createdAt > input.periodStart ? input.createdAt : input.periodStart;
@@ -58,7 +68,10 @@ export function computeUptime(input: {
       )
     )
     .filter((interval): interval is TimeInterval => interval !== null);
-  const downtimeMs = intervalDurationMs(outages);
+  const maintenance = [...(input.maintenanceWindows ?? [])];
+  const downtimeMs = intervalDurationMs(
+    maintenance.length ? outages.flatMap(outage => intervalGaps(outage, maintenance)) : outages
+  );
   return {
     uptimePercent: Math.max(0, Math.min(100, ((periodMs - downtimeMs) / periodMs) * 100)),
     downtimeMs,

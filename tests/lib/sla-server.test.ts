@@ -33,6 +33,9 @@ vi.mock('@/lib/prisma', () => ({
     service: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    maintenanceWindowService: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     incidentEvent: {
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -71,6 +74,9 @@ type PrismaMock = {
     count: ReturnType<typeof vi.fn>;
   };
   service: {
+    findMany: ReturnType<typeof vi.fn>;
+  };
+  maintenanceWindowService: {
     findMany: ReturnType<typeof vi.fn>;
   };
   incidentEvent: {
@@ -175,6 +181,29 @@ describe('calculateMultiServiceUptime from recorded outages', () => {
     const call = prismaMock.incident.findMany.mock.calls.at(-1) as [{ where: unknown }];
     const where = call[0].where;
     expect(JSON.stringify(where)).toContain('"resolvedAt":null,"status":{"not":"RESOLVED"}');
+  });
+
+  it('does not count recorded maintenance of the service as downtime', async () => {
+    serviceCreated(at(-1000));
+    incidents([
+      { createdAt: at(10), resolvedAt: at(20), status: 'SUPPRESSED' },
+      { createdAt: at(30), resolvedAt: at(40), status: 'RESOLVED' },
+    ]);
+    prismaMock.maintenanceWindowService.findMany.mockResolvedValueOnce([
+      { serviceId: 'svc', startsAt: at(8), endsAt: at(16) },
+      { serviceId: 'other', startsAt: at(30), endsAt: at(40) },
+    ]);
+
+    const result = await calculateMultiServiceAvailability(['svc'], periodStart, periodEnd);
+
+    // 10-20 loses its first 6h; the other service's window does not apply to this one.
+    expect(result.svc.downtimeMs).toBe(14 * HOUR);
+    const call = prismaMock.maintenanceWindowService.findMany.mock.calls.at(-1) as [
+      { where: { serviceId: unknown; startsAt: { lt: Date }; endsAt: { gt: Date } } },
+    ];
+    expect(call[0].where.serviceId).toEqual({ in: ['svc'] });
+    expect(call[0].where.startsAt.lt).toEqual(periodEnd);
+    expect(call[0].where.endsAt.gt).toEqual(periodStart);
   });
 
   it('counts overlapping incidents once', async () => {
