@@ -148,8 +148,8 @@ everything done with it is in the audit log. Administrators can turn it off.
   quick way to spot someone who needs a team or role.
 - **Access policy** — turn incident work for Users, access requests, and emergency access on or
   off, set the emergency access limit, and decide whether people may approve their own access
-  requests (only useful with a single administrator). Access reviews never let anyone certify
-  their own access.
+  requests (only useful with a single administrator). This setting does not affect access
+  reviews: even with it on, nobody certifies their own access while another reviewer exists.
 
 Changes to roles, custom roles and the access policy require a recent sign-in. Every grant,
 request, decision, denial and review is recorded in the audit log.
