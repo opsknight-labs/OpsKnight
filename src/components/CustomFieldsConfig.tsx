@@ -388,7 +388,7 @@ export default function CustomFieldsConfig({
 
   return (
     <div className="space-y-6">
-      {error && (
+      {error && !dialogOpen && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
@@ -673,6 +673,13 @@ export default function CustomFieldsConfig({
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-5 pt-2">
+            {/* The page-level alert sits behind the modal, so save errors show here. */}
+            {error && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               {/* Field Label */}
               <div className="space-y-1.5">

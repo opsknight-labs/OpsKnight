@@ -85,6 +85,8 @@ value is treated as a different request.
 
 ## Troubleshooting
 
+If saving a field fails, the reason (for example a duplicate key or a default the type does not accept) appears at the top of the dialog, and the dialog stays open so you can correct it and save again.
+
 - **“A custom field with this key already exists”:** locate the existing definition or choose a genuinely new stable key.
 - **Key validation fails:** use only letters, numbers, and underscores, with no spaces or hyphens.
 - **A number changes format:** normalization stores the numeric value, not presentation formatting; use `TEXT` when leading zeros are meaningful.
