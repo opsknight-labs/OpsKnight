@@ -832,6 +832,15 @@ export default function StatusPageAnnouncementManager({
             )
               .map(id => serviceMap.get(id))
               .filter((service): service is AnnouncementService => Boolean(service));
+            // An update scoped only to business services is not global.
+            const affectedBusiness = (
+              Array.isArray(announcement.affectedBusinessServiceIds)
+                ? announcement.affectedBusinessServiceIds
+                : []
+            )
+              .map(id => businessServices.find(business => business.id === id))
+              .filter((business): business is { id: string; name: string } => Boolean(business));
+            const scope = [...affectedBusiness, ...affectedServices];
 
             return (
               <div
@@ -959,8 +968,8 @@ export default function StatusPageAnnouncementManager({
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <Layers className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <span className="font-medium text-foreground">Services:</span>
-                    {affectedServices.length > 0 ? (
-                      affectedServices.slice(0, 4).map(service => (
+                    {scope.length > 0 ? (
+                      scope.slice(0, 4).map(service => (
                         <Badge key={service.id} variant="secondary" size="xs">
                           {service.name}
                         </Badge>
@@ -970,9 +979,9 @@ export default function StatusPageAnnouncementManager({
                         All Services (Global)
                       </span>
                     )}
-                    {affectedServices.length > 4 && (
+                    {scope.length > 4 && (
                       <Badge variant="outline" size="xs">
-                        +{affectedServices.length - 4} more
+                        +{scope.length - 4} more
                       </Badge>
                     )}
                   </div>

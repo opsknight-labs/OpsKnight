@@ -160,13 +160,18 @@ describe('ServiceHealthV3 business groups as dropdowns', () => {
     showMetrics: false,
   };
 
-  it('makes the "N services ›" count part of the disclosure button', () => {
+  it('opens from a full-width "Show services" bar that flips to "Hide services"', () => {
     render(<ServiceHealthV3 {...base} businessServices={businessServices} />);
     const browsing = screen.getByRole('button', { name: /Browsing/ });
-    const count = within(browsing).getByText('1 service');
-    fireEvent.click(count);
-    expect(browsing).toHaveAttribute('aria-expanded', 'true');
+    expect(within(browsing).getByText('Show services')).toBeInTheDocument();
     expect(browsing.querySelector('.status-v3-business__chevron')).not.toBeNull();
+    fireEvent.click(browsing);
+    expect(browsing).toHaveAttribute('aria-expanded', 'true');
+    expect(within(browsing).getByText('Hide services')).toBeInTheDocument();
+    // The count stays in the group header as plain text, not inside the control.
+    expect(within(browsing).queryByText('1 service')).toBeNull();
+    const card = browsing.closest('.status-v3-business');
+    expect(card?.querySelector('.status-v3-business__tally')?.textContent).toBe('1 service');
   });
 
   it('counts members of a group that hides them', () => {

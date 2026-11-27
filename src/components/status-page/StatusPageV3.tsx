@@ -187,6 +187,25 @@ export default function StatusPageV3({
   const incidentHref = hasSlugRoutes
     ? (id: string) => `${statusPagePath}/incidents/${encodeURIComponent(id)}`
     : undefined;
+  // Live trouble stays above the service bars; a page with only resolved incidents lists them
+  // below, so a quiet history does not push the services off the first screen.
+  const incidentsBelow =
+    showIncidents &&
+    !snapshot.incidents.some(item => item.status === 'OPEN' || item.status === 'ACKNOWLEDGED');
+  const incidentsSection = showIncidents ? (
+    <IncidentsV3
+      incidents={snapshot.incidents}
+      timeZone={timeZone}
+      historyDays={snapshot.retention?.requestedHistoryDays ?? snapshot.historyDays}
+      permalinkHref={incidentHref}
+      historyHref={hasSlugRoutes ? `${statusPagePath}/history` : undefined}
+      postmortemHref={
+        postmortemsEnabled
+          ? id => `${statusPagePath}/postmortems/${encodeURIComponent(id)}`
+          : undefined
+      }
+    />
+  ) : null;
   return (
     <StatusLocaleProvider locale={locale}>
       <div
@@ -243,20 +262,7 @@ export default function StatusPageV3({
           {showAnnouncements && (
             <AnnouncementsV3 announcements={snapshot.announcements} timeZone={timeZone} />
           )}
-          {showIncidents && (
-            <IncidentsV3
-              incidents={snapshot.incidents}
-              timeZone={timeZone}
-              historyDays={snapshot.retention?.requestedHistoryDays ?? snapshot.historyDays}
-              permalinkHref={incidentHref}
-              historyHref={hasSlugRoutes ? `${statusPagePath}/history` : undefined}
-              postmortemHref={
-                postmortemsEnabled
-                  ? id => `${statusPagePath}/postmortems/${encodeURIComponent(id)}`
-                  : undefined
-              }
-            />
-          )}
+          {!incidentsBelow && incidentsSection}
           {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
           {showServices && (
             <ServiceHealthV3
@@ -284,6 +290,7 @@ export default function StatusPageV3({
               }
             />
           )}
+          {incidentsBelow && incidentsSection}
           {showChangelog && <ChangelogV3 changelog={snapshot.changelog} timeZone={timeZone} />}
         </div>
 

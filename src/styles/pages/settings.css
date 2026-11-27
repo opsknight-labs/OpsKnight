@@ -445,7 +445,7 @@
 
 /* Helper Text */
 .system-settings-helper {
-    background: hsl(var(--muted) / 0.5);
+    background: hsl(var(--ui-muted) / 0.5);
     border: 1px solid rgb(var(--ink-200));
     border-radius: var(--radius-md, 8px);
     padding: var(--spacing-3, 0.75rem);

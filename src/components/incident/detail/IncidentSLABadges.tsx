@@ -19,6 +19,10 @@ type IncidentSLABadgesProps = {
 type Phase = Extract<IncidentSlaState, { valid: true }>['ack'];
 
 /** Plain-language state for one SLA phase: what happened, how far over/under, and the tone. */
+/** Resolved before anyone acknowledged it: breached by policy, though no time is overdue. */
+const closedUnacknowledged = (phase: Phase) =>
+  phase.status === 'BREACHED' && phase.completedAt === null && phase.elapsedMs <= phase.targetMs;
+
 function describePhase(phase: Phase) {
   const target = formatTimeMinutesMs(phase.targetMs);
   switch (phase.status) {
@@ -33,7 +37,9 @@ function describePhase(phase: Phase) {
       return {
         tone: 'critical' as ToneKey,
         icon: AlertCircle,
-        state: `${formatTimeMinutesMs(Math.max(0, phase.elapsedMs - phase.targetMs))} overdue`,
+        state: closedUnacknowledged(phase)
+          ? 'Resolved without acknowledgement'
+          : `${formatTimeMinutesMs(phase.elapsedMs - phase.targetMs)} overdue`,
         target,
       };
     case 'NOT_REQUIRED':
@@ -64,7 +70,9 @@ function shortState(phase: Phase): string {
     case 'MET':
       return 'met';
     case 'BREACHED':
-      return `+${shortDuration(phase.elapsedMs - phase.targetMs)}`;
+      return closedUnacknowledged(phase)
+        ? 'Not acked'
+        : `+${shortDuration(phase.elapsedMs - phase.targetMs)}`;
     case 'NOT_REQUIRED':
       return 'n/a';
     default:
