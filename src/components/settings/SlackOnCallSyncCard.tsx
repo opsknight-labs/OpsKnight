@@ -16,6 +16,19 @@ type Data = {
   canWrite: boolean;
 };
 
+/** Accepts only a well-formed response, so a failed or odd reply hides the card instead of crashing the page. */
+function toData(body: unknown): Data | null {
+  const candidate = ((body as { data?: unknown } | null)?.data ?? body) as Partial<Data> | null;
+  if (!candidate || !Array.isArray(candidate.mappings) || !Array.isArray(candidate.schedules))
+    return null;
+  return {
+    mappings: candidate.mappings,
+    schedules: candidate.schedules,
+    usergroups: Array.isArray(candidate.usergroups) ? candidate.usergroups : null,
+    canWrite: candidate.canWrite === true,
+  };
+}
+
 /** Map an on-call schedule to a Slack user group so @oncall always pings the right people. */
 export default function SlackOnCallSyncCard() {
   const [data, setData] = useState<Data | null>(null);
@@ -26,8 +39,7 @@ export default function SlackOnCallSyncCard() {
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/slack/oncall-sync');
-      const body = await res.json();
-      setData((body?.data ?? body) as Data);
+      setData(toData(await res.json()));
     } catch {
       setData(null);
     }
@@ -35,7 +47,7 @@ export default function SlackOnCallSyncCard() {
   useEffect(() => {
     fetch('/api/slack/oncall-sync')
       .then(r => r.json())
-      .then(body => setData((body?.data ?? body) as Data))
+      .then(body => setData(toData(body)))
       .catch(() => setData(null));
   }, []);
 
