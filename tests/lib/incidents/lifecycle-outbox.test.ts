@@ -75,6 +75,19 @@ describe('unified lifecycle delivery matrix', () => {
       })
     ).toContain('LIFECYCLE_USER_NOTIFICATION');
   });
+  it.each(['SNOOZED', 'SUPPRESSED'] as const)(
+    '%s refreshes the chat cards without paging anyone',
+    status => {
+      const effects = getLifecycleSideEffects({
+        command: status === 'SNOOZED' ? 'SNOOZE' : 'SUPPRESS',
+        source: 'WEB',
+        previousStatus: 'ACKNOWLEDGED',
+        status,
+      });
+      expect(effects).toContain('LIFECYCLE_SERVICE_NOTIFICATION');
+      expect(effects).not.toContain('LIFECYCLE_USER_NOTIFICATION');
+    }
+  );
   it('persists REST resolve fan-out with one immutable lifecycle context', async () => {
     const tx = createTx();
     await enqueueLifecycleSideEffects(txClient(tx), {

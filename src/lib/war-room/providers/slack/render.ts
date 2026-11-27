@@ -149,15 +149,19 @@ export function renderSlackWarRoomProjection(
   const elements = isActive
     ? [
         ...actionButtons,
-        // The escalate handler re-checks the clicker's permission and that the incident is still open.
-        button('escalate_incident', 'Escalate', incidentValue('escalate'), {
-          style: 'danger',
-          confirm: confirmDialog(
-            'Escalate incident?',
-            'This pages the next escalation level now.',
-            'Escalate'
-          ),
-        }),
+        // Only an OPEN incident can escalate; the handler re-checks permission and status anyway.
+        ...(incident.status === 'OPEN'
+          ? [
+              button('escalate_incident', 'Escalate', incidentValue('escalate'), {
+                style: 'danger',
+                confirm: confirmDialog(
+                  'Escalate incident?',
+                  'This pages the next escalation level now.',
+                  'Escalate'
+                ),
+              }),
+            ]
+          : []),
         // URL buttons carry no value; the actions route acknowledges them without effect.
         {
           type: 'button',

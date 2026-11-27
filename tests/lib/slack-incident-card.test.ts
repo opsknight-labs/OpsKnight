@@ -30,7 +30,9 @@ const actionIds = (blocks: SlackBlock[]) =>
 describe('Slack incident card', () => {
   it('renders header, friendly labels, local time and an informative fallback', () => {
     const card = buildIncidentCard(base, { appUrl: 'https://ops.example.com', interactive: true });
-    const [header, context] = card.attachments[0].blocks as Array<Record<string, any>>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    // The header is a top-level block, so Slack hides `text` rather than showing the title twice.
+    const [header] = card.blocks as Array<Record<string, any>>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const [context] = card.attachments[0].blocks as Array<Record<string, any>>; // eslint-disable-line @typescript-eslint/no-explicit-any
     expect(header.text.text).toBe('🔴 [P1] Checkout latency');
     expect(context.elements[0].text).toContain('*Triggered*');
     expect(context.elements[0].text).toContain('High urgency');
@@ -50,7 +52,7 @@ describe('Slack incident card', () => {
       },
       { appUrl: 'https://ops.example.com', interactive: true, note: '<!subteam^S1> note' }
     );
-    const json = JSON.stringify({ text: card.text, blocks: card.attachments[0].blocks.slice(1) });
+    const json = JSON.stringify({ text: card.text, blocks: card.attachments[0].blocks });
     expect(json).not.toMatch(/<!(channel|here|everyone|subteam)/);
     expect(json).not.toContain('<https://evil');
     expect(json).not.toContain('<@U123>');
@@ -68,10 +70,14 @@ describe('Slack incident card', () => {
     expect(JSON.stringify(blocksOf(base))).toContain('_Unassigned_');
   });
 
-  it('shows the escalation level once escalated', () => {
-    const json = JSON.stringify(blocksOf({ ...base, escalationStep: 1 }));
+  it('shows the escalation level once escalated past level 1', () => {
+    // escalationStep is the step that runs next: 2 means levels 1 and 2 have paged.
+    const json = JSON.stringify(blocksOf({ ...base, escalationStep: 2 }));
     expect(json).toContain('Escalated to level 2');
     expect(json).toContain('Level 2');
+    expect(JSON.stringify(blocksOf({ ...base, escalationStep: 1 }))).not.toMatch(
+      /Escalated to level|\*Escalation\*/
+    );
     expect(JSON.stringify(blocksOf(base))).not.toContain('Escalated to level');
   });
 
@@ -125,7 +131,7 @@ describe('Slack incident card', () => {
     expect(buildThreadReply('resolved', resolved, { actor: '<@U1>' })).toBe(
       '✅ Resolved by <@U1> · 23m'
     );
-    expect(buildThreadReply('escalated', { ...base, escalationStep: 2 })).toBe(
+    expect(buildThreadReply('escalated', { ...base, escalationStep: 3 })).toBe(
       '⚡ Escalated to level 3'
     );
     expect(buildThreadReply('reassigned', { ...base, assigneeSlackId: 'U9' })).toBe(
@@ -136,7 +142,9 @@ describe('Slack incident card', () => {
 
   it('recognises only its own cards for in-place replacement', () => {
     const card = buildIncidentCard(base, { appUrl: 'https://x', interactive: true });
-    expect(isOpsKnightIncidentCard({ attachments: card.attachments })).toBe(true);
+    expect(isOpsKnightIncidentCard({ blocks: card.blocks, attachments: card.attachments })).toBe(
+      true
+    );
     expect(isOpsKnightIncidentCard({ blocks: [{ type: 'header', block_id: 'war_room' }] })).toBe(
       false
     );

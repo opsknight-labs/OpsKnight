@@ -81,6 +81,8 @@ export async function sendServiceNotifications(
     eventAt?: Date;
     escalationGeneration?: number;
     expectedStatus?: string;
+    /** Stop after the Slack and Teams cards: no webhooks (snooze and suppress). */
+    chatOnly?: boolean;
     /** What an `updated` event actually was (reopened, snoozed, reassigned...), for the Slack card. */
     subEvent?: SlackCardEvent;
     /** Refresh only the Slack channel cards (no Teams, webhook or Slack-webhook delivery). */
@@ -408,7 +410,7 @@ export async function sendServiceNotifications(
     }
 
     // Webhooks have no card to edit: with this event's notifications off they get nothing, as before.
-    if (slackOnly)
+    if (slackOnly || options.chatOnly)
       return { success: errors.length === 0, errors: errors.length ? errors : undefined };
 
     if (serviceChannels.includes('WEBHOOK')) {

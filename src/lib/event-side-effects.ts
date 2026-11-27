@@ -350,7 +350,7 @@ async function syncLifecycleWarRoom(payload: EventSideEffectPayload): Promise<vo
     kind: 'LIFECYCLE',
     incidentId: payload.incidentId,
     status: lifecycle.status,
-    message: `${emoji} *Status updated to ${lifecycle.status}*`,
+    message: `${emoji} *Status updated to ${lifecycle.status.charAt(0)}${lifecycle.status.slice(1).toLowerCase()}*`,
     incidentEventId: payload.sourceEventId,
   });
 }
@@ -530,6 +530,10 @@ export async function processEventSideEffect(
           escalationGeneration: payload.escalationGeneration,
           expectedStatus: lifecycle.status,
           ...(subEvent ? { subEvent } : {}),
+          // Snooze and suppress only refresh chat cards; webhooks never received them before.
+          ...(lifecycle.status === 'SNOOZED' || lifecycle.status === 'SUPPRESSED'
+            ? { chatOnly: true }
+            : {}),
         }),
         'lifecycle service notification'
       );

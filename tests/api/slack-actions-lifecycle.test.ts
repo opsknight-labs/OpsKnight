@@ -214,6 +214,8 @@ describe('Slack interactive lifecycle actions', () => {
 
     expect(body.response_type).toBe('ephemeral');
     expect(body.text).toBe('⚠️ You do not have permission to modify this incident.');
+    // Through response_url, a reply without this flag would overwrite the clicked card.
+    expect(body.replace_original).toBe(false);
   });
 
   it('commits assign-me and its durable notification intent in one transaction', async () => {

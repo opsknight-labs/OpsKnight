@@ -146,6 +146,9 @@ export function getLifecycleSideEffects(
   if (responderLifecycle) {
     effects.add('LIFECYCLE_USER_NOTIFICATION');
     effects.add('LIFECYCLE_SERVICE_NOTIFICATION');
+  } else if (input.status === 'SNOOZED' || input.status === 'SUPPRESSED') {
+    // Pages nobody: it only edits the live Slack/Teams cards so they stop showing the old state.
+    effects.add('LIFECYCLE_SERVICE_NOTIFICATION');
   }
   effects.add('LIFECYCLE_STATUS_PAGE');
   effects.add('LIFECYCLE_WEBHOOK');

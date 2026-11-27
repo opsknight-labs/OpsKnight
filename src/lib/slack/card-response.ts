@@ -33,5 +33,10 @@ export async function refreshedIncidentCardResponse(input: {
     if (!sent.ok)
       logger.warn('[Slack Actions] Ephemeral confirmation failed', { error: sent.error });
   }
-  return { replace_original: true, text: card.text, attachments: card.attachments };
+  return {
+    replace_original: true,
+    text: card.text,
+    blocks: card.blocks,
+    attachments: card.attachments,
+  };
 }

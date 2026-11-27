@@ -109,8 +109,9 @@ export async function loadTeamsCardPeople(incident: {
           const parsed = escalationFromEventMessage(event?.message);
           const level =
             parsed?.level ??
+            // currentEscalationStep is the step that runs next, which equals the levels already paged.
             (typeof incident.currentEscalationStep === 'number'
-              ? incident.currentEscalationStep + 1
+              ? incident.currentEscalationStep
               : null);
           if (level && level > 1) people.escalation = { level, target: parsed?.target ?? null };
         })

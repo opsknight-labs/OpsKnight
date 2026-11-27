@@ -56,7 +56,7 @@ export type SlackCardIncident = {
   acknowledgedAt?: Date | null;
   resolvedAt?: Date | null;
   snoozedUntil?: Date | null;
-  /** Zero-based escalation step; level = step + 1. */
+  /** `Incident.currentEscalationStep`: the zero-based step that runs *next*, so it equals the levels already paged. */
   escalationStep?: number | null;
   assigneeName?: string | null;
   /** Slack user ID of the assignee when their email maps to a workspace member. */
@@ -65,6 +65,8 @@ export type SlackCardIncident = {
 
 export type SlackCardMessage = {
   text: string;
+  /** The header sits outside the attachment: with top-level blocks Slack hides `text` instead of showing it twice. */
+  blocks: SlackBlock[];
   attachments: Array<{ color: string; fallback: string; blocks: SlackBlock[] }>;
 };
 
@@ -157,7 +159,8 @@ function assigneeText(incident: SlackCardIncident): string {
 
 function escalationLevel(incident: SlackCardIncident): number | null {
   const step = incident.escalationStep;
-  return typeof step === 'number' && step > 0 ? step + 1 : null;
+  // Level 1 is the normal first page, so only a move past it is worth showing.
+  return typeof step === 'number' && step > 1 ? step : null;
 }
 
 /** Push-notification and screen-reader text: "🔴 [P1] Triggered · payments — title". */
@@ -298,12 +301,12 @@ export function buildIncidentCard(
       : []),
   ].join('  ·  ');
 
+  const headerBlock: SlackBlock = {
+    type: 'header',
+    block_id: SLACK_INCIDENT_CARD_BLOCK_ID,
+    text: { type: 'plain_text', text: header, emoji: true },
+  };
   const blocks: SlackBlock[] = [
-    {
-      type: 'header',
-      block_id: SLACK_INCIDENT_CARD_BLOCK_ID,
-      text: { type: 'plain_text', text: header, emoji: true },
-    },
     { type: 'context', elements: [{ type: 'mrkdwn', text: truncate(context, 2900) }] },
   ];
 
@@ -362,7 +365,11 @@ export function buildIncidentCard(
   });
 
   const text = cardFallbackText(incident, state);
-  return { text, attachments: [{ color: style(state).color, fallback: text, blocks }] };
+  return {
+    text,
+    blocks: [headerBlock],
+    attachments: [{ color: style(state).color, fallback: text, blocks }],
+  };
 }
 
 /**

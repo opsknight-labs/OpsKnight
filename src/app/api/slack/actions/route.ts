@@ -108,8 +108,10 @@ function rethrowIfTransient(error: unknown, payload: SlackActionPayload): void {
   if (payload.__opsknightIntentId && normalizeError(error).retryable) throw error;
 }
 
+// Through response_url a reply without replace_original overwrites the clicked message, which wiped
+// pinned war-room status cards whenever an action was refused.
 function ephemeral(text: string) {
-  return NextResponse.json({ response_type: 'ephemeral', text });
+  return NextResponse.json({ response_type: 'ephemeral', replace_original: false, text });
 }
 
 /** Escalation failures, told apart so a timeout is not reported as a missing permission. */
@@ -126,6 +128,7 @@ function escalationFailureText(error: unknown): string {
 function lifecycleFailureResponse(error: unknown) {
   return NextResponse.json({
     response_type: 'ephemeral',
+    replace_original: false,
     text: `⚠️ ${chatOpsLifecycleErrorMessage(error)}`,
   });
 }
@@ -214,6 +217,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       if (!actorUser) {
         return NextResponse.json({
           response_type: 'ephemeral',
+          replace_original: false,
           text: '⚠️ Your Slack account is not linked to an active OpsKnight account. Match the email addresses before changing incidents.',
         });
       }
@@ -315,6 +319,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
               );
               return NextResponse.json({
                 response_type: 'ephemeral',
+                replace_original: false,
                 text: '⚠️ Could not match your Slack account to an OpsKnight user, so the incident was left unchanged. Make sure your Slack email matches your OpsKnight account email, then try again.',
               });
             }
@@ -338,6 +343,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         } else {
           return NextResponse.json({
             response_type: 'ephemeral',
+            replace_original: false,
             text: '⚠️ Could not identify your Slack user, so the incident was left unchanged.',
           });
         }
@@ -369,6 +375,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         if (!Number.isInteger(snoozeMinutes) || snoozeMinutes <= 0 || snoozeMinutes > 10_080) {
           return NextResponse.json({
             response_type: 'ephemeral',
+            replace_original: false,
             text: '⚠️ Snooze duration must be a positive number of minutes.',
           });
         }
@@ -494,7 +501,10 @@ export async function POST(request: NextRequest) {
   const slackUserId = typeof payload.user?.id === 'string' ? payload.user.id : '';
   if (!workspaceId) return NextResponse.json({ error: 'Missing Slack workspace' }, { status: 400 });
   // `/incident declare` modal submit: validated inline (errors show on the form), then queued.
-  if (payload.type === 'view_submission' && payload.view?.callback_id === 'opsknight_incident_declare') {
+  if (
+    payload.type === 'view_submission' &&
+    payload.view?.callback_id === 'opsknight_incident_declare'
+  ) {
     const { acceptSlackDeclareSubmission } = await import('@/lib/chatops/slash-commands');
     return acceptSlackDeclareSubmission(payload, signature);
   }
