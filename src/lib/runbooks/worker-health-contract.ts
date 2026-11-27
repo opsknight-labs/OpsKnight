@@ -35,7 +35,8 @@ export function evaluateRunbookWorkerEvidence(
     redundancy:
       expectedInstances === null ? 'UNCONFIGURED' : redundancyLost ? 'DEGRADED' : 'SATISFIED',
     status:
-      running.some(worker => worker.lastError) || (usable.length > 0 && redundancyLost)
+      // With a worker count configured, losing every worker is worse than losing one.
+      running.some(worker => worker.lastError) || redundancyLost
         ? ('DEGRADED' as const)
         : usable.length
           ? ('HEALTHY' as const)

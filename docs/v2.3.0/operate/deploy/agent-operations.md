@@ -235,7 +235,7 @@ Because `opsknight-agent.service` runs unprivileged under `NoNewPrivileges=true`
 
 ## Monitoring and recovery
 
-Set `OPSKNIGHT_RUNBOOK_EXPECTED_WORKERS` to the intended number of independently running Runbook workers (for example `2`). Shared evidence reports healthy versus expected instances; losing one of two workers is degraded even when the survivor continues processing. Without this setting, worker progress can be healthy while redundancy remains explicitly unverified. The scheduler watchdog uses a PostgreSQL advisory lock per recovery sweep. Recovery jobs have a stable execution-specific identity so concurrent sweeps cannot accumulate duplicate pending jobs.
+Set `OPSKNIGHT_RUNBOOK_EXPECTED_WORKERS` to the intended number of independently running Runbook workers (for example `2`). Shared evidence reports healthy versus expected instances; losing one of two workers is degraded even when the survivor continues processing, and losing every worker is degraded too (never milder than losing one). Without this setting, worker progress can be healthy while redundancy remains explicitly unverified. The scheduler watchdog uses a PostgreSQL advisory lock per recovery sweep. Recovery jobs have a stable execution-specific identity so concurrent sweeps cannot accumulate duplicate pending jobs.
 
 Use **Runbooks → Health** and Prometheus metrics to watch Agent status, active attempts, total spool depth, attempt states, and oldest pending age. Alert on stale heartbeats, non-zero spool depth that continues growing, repeated local-policy denial, and queue age above the execution SLO.
 

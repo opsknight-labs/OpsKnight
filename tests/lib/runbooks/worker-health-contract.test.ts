@@ -55,3 +55,18 @@ it('discloses lost redundancy even when a surviving worker makes progress', () =
     redundancy: 'UNCONFIGURED',
   });
 });
+
+it('reports a total outage at least as severe as a partial one when a worker count is configured', () => {
+  expect(evaluateRunbookWorkerEvidence([worker], now, 2).status).toBe('DEGRADED');
+  expect(evaluateRunbookWorkerEvidence([], now, 2)).toMatchObject({
+    status: 'DEGRADED',
+    healthyInstances: 0,
+    redundancy: 'DEGRADED',
+    reason: '0/2 expected workers have fresh dispatch and reconciliation evidence.',
+  });
+  expect(evaluateRunbookWorkerEvidence([{ ...worker, lastSuccessAt: null }], now, 2).status).toBe(
+    'DEGRADED'
+  );
+  // Nothing configured: an absent heartbeat stays unknown.
+  expect(evaluateRunbookWorkerEvidence([], now).status).toBe('UNKNOWN');
+});
