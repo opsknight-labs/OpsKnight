@@ -1699,9 +1699,10 @@ const operations: Operation[] = [
   {
     method: 'delete',
     path: '/custom-fields/{id}',
-    summary: 'Delete an unused custom-field definition',
+    summary: 'Delete a custom-field definition',
+    query: { cascade: { type: 'string', enum: ['true', 'false'], default: 'false' } },
     description:
-      'Rejects deletion while incident values still depend on the field. Requires exact If-Match and Idempotency-Key.',
+      'Rejects deletion with 409 while incident values still depend on the field. With cascade=true the stored values are deleted with the field in one transaction and the audit event records valuesDeleted, as the settings page does. Requires exact If-Match and Idempotency-Key.',
   },
   {
     method: 'post',

@@ -73,6 +73,14 @@ Deletion is destructive. The API deletes every `CustomFieldValue` associated wit
 
 Before confirming deletion, export anything that must be retained, remove the field from status-page privacy settings and external workflows, and check templates/runbooks that tell responders to populate it. Confirm the `custom_field.deleted` audit event afterward.
 
+The settings page always deletes the stored values together with the field. The v2 API and MCP are
+stricter by default: `DELETE /api/v2/custom-fields/{id}` answers `409` while any incident holds a
+stored value for the field (values cleared to empty do not count) and says how many. To delete the
+field and its values in one transaction, send `?cascade=true` (MCP: `query: { "cascade": "true" }`,
+which still goes through approval). The audit event then records `valuesDeleted`, the same as a
+deletion from the settings page. A retry with the same `Idempotency-Key` but a different `cascade`
+value is treated as a different request.
+
 ## Troubleshooting
 
 - **“A custom field with this key already exists”:** locate the existing definition or choose a genuinely new stable key.

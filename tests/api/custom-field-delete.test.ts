@@ -7,7 +7,7 @@ const m = vi.hoisted(() => {
     customField: { findUnique: vi.fn(), delete: vi.fn(), count: vi.fn() },
     customFieldValue: { count: vi.fn(), deleteMany: vi.fn() },
   };
-  return { tx, emitAuditEvent: vi.fn() };
+  return { tx, emitAuditEvent: vi.fn(), logV2Audit: vi.fn() };
 });
 
 vi.mock('next-auth', () => ({ getServerSession: async () => ({ user: { id: 'admin-1' } }) }));
@@ -23,7 +23,7 @@ vi.mock('@/lib/audit', () => ({ emitAuditEvent: m.emitAuditEvent }));
 vi.mock('@/lib/api-v2/endpoint', () => ({ defineV2Route: (config: unknown) => config }));
 vi.mock('@/lib/api-v2', () => ({
   defineV2Route: (config: unknown) => config,
-  logV2Audit: vi.fn(),
+  logV2Audit: m.logV2Audit,
 }));
 vi.mock('@/lib/api-v2/concurrency', () => ({
   etagHeaders: () => ({}),
@@ -76,9 +76,10 @@ describe('deleting a custom field that has stored values', () => {
   describe('the API', () => {
     type Handler = (args: Record<string, unknown>) => Promise<{ status: number }>;
     const handler = (deleteFromApi as unknown as { handler: Handler }).handler;
-    const call = () =>
+    const call = (query: { cascade?: 'true' | 'false' } = {}) =>
       handler({
         params: { id: 'cf-1' },
+        query,
         actor: { id: 'u1' },
         apiKey: { id: 'k1' },
         req: {},
@@ -97,11 +98,56 @@ describe('deleting a custom field that has stored values', () => {
       expect(m.tx.customField.delete).toHaveBeenCalled();
     });
 
-    it('still refuses while incidents hold a stored value', async () => {
+    it('still refuses while incidents hold a stored value, and says how to cascade', async () => {
       m.tx.customFieldValue.count.mockResolvedValue(2);
 
-      await expect(call()).rejects.toMatchObject({ code: 'RESOURCE_CONFLICT' });
+      for (const query of [{}, { cascade: 'false' as const }]) {
+        await expect(call(query)).rejects.toMatchObject({
+          code: 'RESOURCE_CONFLICT',
+          userMessage: expect.stringContaining('cascade=true'),
+        });
+      }
+      expect(m.tx.customFieldValue.deleteMany).not.toHaveBeenCalled();
       expect(m.tx.customField.delete).not.toHaveBeenCalled();
+    });
+
+    it('with cascade=true deletes the values and the field and audits valuesDeleted', async () => {
+      m.tx.customFieldValue.count.mockResolvedValue(4);
+
+      await expect(call({ cascade: 'true' })).resolves.toMatchObject({ status: 204 });
+
+      expect(m.tx.customFieldValue.deleteMany).toHaveBeenCalledWith({
+        where: { customFieldId: 'cf-1' },
+      });
+      expect(m.tx.customField.delete).toHaveBeenCalledWith({ where: { id: 'cf-1' } });
+      expect(m.logV2Audit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'custom_field.deleted',
+          entityId: 'cf-1',
+          details: { key: 'region', cascade: 'customFieldValue', valuesDeleted: 4 },
+          tx: m.tx,
+        })
+      );
+    });
+
+    it('only accepts cascade as true or false', () => {
+      const { querySchema } = deleteFromApi as unknown as {
+        querySchema: { parse: (input: unknown) => unknown };
+      };
+      expect(querySchema.parse({})).toEqual({});
+      expect(querySchema.parse({ cascade: 'true' })).toEqual({ cascade: 'true' });
+      expect(() => querySchema.parse({ cascade: 'yes' })).toThrow();
+      expect(() => querySchema.parse({ force: 'true' })).toThrow();
+    });
+
+    it('binds the cascade choice into the idempotency receipt', () => {
+      const { idempotencyPayload } = deleteFromApi as unknown as {
+        idempotencyPayload: (ctx: { req: { url: string } }) => unknown;
+      };
+      const payload = (url: string) => idempotencyPayload({ req: { url } });
+      expect(payload('http://x/api/v2/custom-fields/cf-1')).toEqual({ cascade: false });
+      expect(payload('http://x/api/v2/custom-fields/cf-1?cascade=false')).toEqual({ cascade: false });
+      expect(payload('http://x/api/v2/custom-fields/cf-1?cascade=true')).toEqual({ cascade: true });
     });
   });
 });

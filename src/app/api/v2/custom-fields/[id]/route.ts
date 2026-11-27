@@ -102,15 +102,21 @@ export const PATCH = defineV2Route({
 export const DELETE = defineV2Route({
   action: AUTHORIZATION_ACTIONS.CUSTOM_FIELD_MANAGE,
   paramsSchema,
-  querySchema: z.object({}).strict(),
+  // Opt-in: without cascade=true a field that still holds stored values is refused (409).
+  querySchema: z.object({ cascade: z.enum(['true', 'false']).optional() }).strict(),
   preconditionRequired: true,
   idempotent: true,
   idempotencyRequired: true,
+  // The query string is not part of the receipt scope, so bind the cascade choice into it:
+  // a retry of a plain delete must never replay as (or be replayed by) a cascading one.
+  idempotencyPayload: ({ req }) => ({
+    cascade: new URL(req.url).searchParams.get('cascade') === 'true',
+  }),
   replayAuthGuard: async ({ params, tx }) => {
     if (!(await tx!.customField.count({ where: { id: params.id } })))
       throw new AppError({ code: 'RESOURCE_NOT_FOUND' });
   },
-  handler: async ({ params, actor, apiKey, req, tx }) => {
+  handler: async ({ params, query, actor, apiKey, req, tx }) => {
     const expected = requireRevisionIfMatch(req);
     await tx!.$queryRaw`SELECT "id" FROM "CustomField" WHERE "id" = ${params.id} FOR UPDATE`;
     const existing = await tx!.customField.findUnique({ where: { id: params.id } });
@@ -120,12 +126,15 @@ export const DELETE = defineV2Route({
     const usageCount = await tx!.customFieldValue.count({
       where: { customFieldId: existing.id, value: { not: null } },
     });
-    if (usageCount)
+    if (usageCount && query.cascade !== 'true')
       throw new AppError({
         code: 'RESOURCE_CONFLICT',
-        userMessage: 'Remove incident values before deleting this field.',
+        userMessage: `This field holds ${usageCount} stored incident value${usageCount === 1 ? '' : 's'}. Remove them first, or send cascade=true to delete the field together with its values (this cannot be undone).`,
       });
-    await tx!.customFieldValue.deleteMany({ where: { customFieldId: existing.id } });
+    // The settings page deletes the values with the field in one transaction; so does cascade=true.
+    const { count: valuesDeleted } = await tx!.customFieldValue.deleteMany({
+      where: { customFieldId: existing.id },
+    });
     await tx!.customField.delete({ where: { id: existing.id } });
     await logV2Audit({
       action: 'custom_field.deleted',
@@ -133,7 +142,7 @@ export const DELETE = defineV2Route({
       entityId: existing.id,
       actorId: actor.id,
       apiKeyId: apiKey.id,
-      details: { key: existing.key },
+      details: { key: existing.key, cascade: 'customFieldValue', valuesDeleted },
       tx,
     });
     return { status: 204 };
