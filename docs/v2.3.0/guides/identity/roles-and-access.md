@@ -117,6 +117,7 @@ Choose how long you need it (1 hour to 7 days, or permanently) and say why.
 - You can ask to join any team by name, even if you are not in a team yet.
 - Approvers get a notification that opens the request directly. If you already received the access
   some other way, approving closes the request without changing anything (it never demotes you).
+  In the history it reads "Closed by" the approver, not "Cancelled by the requester".
 
 Temporary access ends automatically. A banner shows while you have it, and you can end it early.
 

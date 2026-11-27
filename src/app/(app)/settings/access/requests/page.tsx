@@ -4,6 +4,7 @@ import { CheckCircle2, History, Inbox, Lock, Route, Users } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { requirePageAccessSnapshot } from '@/lib/access/server';
 import {
+  closedByApprover,
   describeAccessRequest,
   effectiveAccessRequestStatus,
   getReviewableAccessRequest,
@@ -87,7 +88,9 @@ function decisionText(request: ReviewRequest, status: string, timeZone: string) 
   const by = request.decidedByName ? ` by ${request.decidedByName}` : '';
   if (status === 'APPROVED') return `Approved${by}${when}`;
   if (status === 'DENIED') return `Declined${by}${when}`;
-  if (status === 'CANCELLED') return 'Cancelled by the requester';
+  if (status === 'CANCELLED') {
+    return closedByApprover(request) ? `Closed${by}${when}` : 'Cancelled by the requester';
+  }
   if (status === 'EXPIRED') return 'Expired before anyone decided it';
   return '';
 }

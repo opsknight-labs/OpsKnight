@@ -723,6 +723,11 @@ export function effectiveAccessRequestStatus(
   return request.status === 'PENDING' && request.expiresAt <= now ? 'EXPIRED' : request.status;
 }
 
+/** CANCELLED is the requester withdrawing, or an approver closing a request already satisfied. */
+export function closedByApprover(request: { requesterId: string; decidedById: string | null }) {
+  return request.decidedById !== null && request.decidedById !== request.requesterId;
+}
+
 export async function expireStaleAccessRequests(now: Date = new Date()) {
   const result = await prisma.accessRequest.updateMany({
     where: { status: 'PENDING', expiresAt: { lte: now } },
