@@ -58,6 +58,8 @@ If the query behind the **Incident Heatmap** fails, the widget (and the incident
 
 The Dashboard's **Trends & insights** are calculated one at a time per server process. A request for a view that is not cached waits its turn (up to 10 seconds, with at most eight others queued) and only then reports "Trends are temporarily unavailable"; a cached view is served at once, marked stale while it refreshes.
 
+With several application replicas, one replica at a time computes a given view (a database advisory lock per view). A replica that finds the lock taken keeps serving its stale copy and refreshes on a later request; a replica with nothing cached waits up to 3 seconds for the lock and then computes for itself, so a lock problem never blocks the Dashboard. Each replica keeps its own cache, so every replica still computes a view once when it expires.
+
 The **Updated** timestamp reports when the server rendered the current view.
 Open **Live** to refresh immediately or select automatic refresh every 30
 seconds, 1 minute, or 5 minutes. The countdown pauses while the browser tab is

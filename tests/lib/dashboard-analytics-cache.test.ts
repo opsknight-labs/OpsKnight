@@ -3,9 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   calculate: vi.fn(),
   generation: vi.fn().mockResolvedValue('42'),
+  tryLock: vi.fn(),
+  transaction: vi.fn(),
 }));
 
 vi.mock('@/lib/actor-metrics', () => ({ calculateActorSLAMetrics: mocks.calculate }));
+vi.mock('@/lib/prisma', () => ({ default: { $transaction: mocks.transaction } }));
+vi.mock('@/lib/db-locks', () => ({ tryAdvisoryLock: mocks.tryLock }));
 vi.mock('@/lib/realtime-change-control-plane', () => ({
   getRealtimeChangeGeneration: mocks.generation,
 }));
@@ -39,6 +43,12 @@ const metrics = {
 describe('dashboard analytics cache', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.generation.mockResolvedValue('42');
+    // The lock is granted and held for the whole callback, as a real transaction would.
+    mocks.tryLock.mockResolvedValue(true);
+    mocks.transaction.mockImplementation(async (callback: (tx: object) => Promise<unknown>) =>
+      callback({})
+    );
     resetDashboardAnalyticsCacheForTests();
   });
 
@@ -58,8 +68,7 @@ describe('dashboard analytics cache', () => {
     mocks.calculate.mockResolvedValueOnce(metrics);
     const first = getDashboardAnalytics(actor, { rangeDays: 30 });
     const second = getDashboardAnalytics(actor, { rangeDays: 7 });
-    await Promise.resolve();
-    expect(mocks.calculate).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(mocks.calculate).toHaveBeenCalledOnce());
 
     finishFirst(metrics);
 
@@ -113,5 +122,121 @@ describe('dashboard analytics cache', () => {
     finish(metrics);
     await expect(Promise.all([first, second])).resolves.toHaveLength(2);
     expect(mocks.calculate).toHaveBeenCalledOnce();
+  });
+  describe('across replicas', () => {
+    const FRESH_MS = 30_000;
+
+    it('computes only while holding the advisory lock for that entry', async () => {
+      const order: string[] = [];
+      mocks.tryLock.mockImplementation(async () => {
+        order.push('lock');
+        return true;
+      });
+      mocks.calculate.mockImplementation(async () => {
+        order.push('compute');
+        return metrics;
+      });
+
+      await getDashboardAnalytics(actor, { rangeDays: 30 });
+      await getDashboardAnalytics(actor, { rangeDays: 7 });
+
+      expect(order).toEqual(['lock', 'compute', 'lock', 'compute']);
+      const keys = mocks.tryLock.mock.calls.map(call => (call as [unknown, bigint])[1]);
+      expect(typeof keys[0]).toBe('bigint');
+      expect(keys[0]).not.toBe(keys[1]);
+      resetDashboardAnalyticsCacheForTests();
+      await getDashboardAnalytics(actor, { rangeDays: 30 });
+      expect((mocks.tryLock.mock.calls[2] as [unknown, bigint])[1]).toBe(keys[0]);
+    });
+
+    it('serves the stale value instead of recomputing while another replica holds the lock', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        mocks.calculate.mockResolvedValue(metrics);
+        await getDashboardAnalytics(actor, { rangeDays: 30 });
+        vi.setSystemTime(Date.now() + FRESH_MS + 1);
+        mocks.tryLock.mockResolvedValue(false);
+
+        const result = await getDashboardAnalytics(actor, { rangeDays: 30 });
+        await vi.waitFor(() => expect(mocks.tryLock).toHaveBeenCalledTimes(2));
+
+        expect(result.freshness).toBe('stale');
+        expect(mocks.calculate).toHaveBeenCalledOnce();
+
+        // Once the other replica has released the lock, the next request refreshes it.
+        await new Promise(resolve => setTimeout(resolve, 0));
+        mocks.tryLock.mockResolvedValue(true);
+        await getDashboardAnalytics(actor, { rangeDays: 30 });
+        await vi.waitFor(() => expect(mocks.calculate).toHaveBeenCalledTimes(2));
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('lets a cold key wait for the other replica and then compute under the lock', async () => {
+      vi.useFakeTimers();
+      try {
+        mocks.tryLock.mockResolvedValueOnce(false).mockResolvedValue(true);
+        mocks.calculate.mockResolvedValue(metrics);
+
+        const pending = getDashboardAnalytics(actor, { rangeDays: 30 });
+        await vi.advanceTimersByTimeAsync(250);
+        const result = await pending;
+
+        expect(result.freshness).toBe('fresh');
+        expect(mocks.tryLock).toHaveBeenCalledTimes(2);
+        expect(mocks.calculate).toHaveBeenCalledOnce();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('computes for itself when the other replica is still busy after a few seconds', async () => {
+      vi.useFakeTimers();
+      try {
+        mocks.tryLock.mockResolvedValue(false);
+        mocks.calculate.mockResolvedValue(metrics);
+
+        const pending = getDashboardAnalytics(actor, { rangeDays: 30 });
+        await vi.advanceTimersByTimeAsync(3_000);
+        await expect(pending).resolves.toMatchObject({ freshness: 'fresh' });
+
+        expect(mocks.calculate).toHaveBeenCalledOnce();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('computes locally when the lock query fails', async () => {
+      mocks.tryLock.mockRejectedValue(new Error('connection reset'));
+      mocks.calculate.mockResolvedValue(metrics);
+
+      await expect(getDashboardAnalytics(actor, { rangeDays: 30 })).resolves.toMatchObject({
+        freshness: 'fresh',
+      });
+      expect(mocks.calculate).toHaveBeenCalledOnce();
+    });
+
+    it('reports a failed computation once and frees the process slot', async () => {
+      mocks.calculate.mockRejectedValueOnce(new Error('query failed'));
+      await expect(getDashboardAnalytics(actor, { rangeDays: 30 })).rejects.toThrow('query failed');
+      expect(mocks.calculate).toHaveBeenCalledOnce();
+
+      mocks.calculate.mockResolvedValue(metrics);
+      await expect(getDashboardAnalytics(actor, { rangeDays: 7 })).resolves.toBeDefined();
+    });
+
+    it('keeps the result when only closing the lock transaction fails', async () => {
+      mocks.calculate.mockResolvedValue(metrics);
+      mocks.transaction.mockImplementation(async (callback: (tx: object) => Promise<unknown>) => {
+        await callback({});
+        throw new Error('Transaction already closed');
+      });
+
+      await expect(getDashboardAnalytics(actor, { rangeDays: 30 })).resolves.toMatchObject({
+        mtta: 4,
+      });
+      expect(mocks.calculate).toHaveBeenCalledOnce();
+    });
   });
 });

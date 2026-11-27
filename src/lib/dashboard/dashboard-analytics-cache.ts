@@ -2,6 +2,8 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import type { IncidentStatus } from '@prisma/client';
+import prisma from '@/lib/prisma';
+import { tryAdvisoryLock } from '@/lib/db-locks';
 import {
   authorize,
   AUTHORIZATION_ACTIONS,
@@ -87,6 +89,11 @@ let activeCalculations = 0;
 const MAX_QUEUED = 8;
 const QUEUE_WAIT_MS = 10_000;
 const slotWaiters: Array<() => void> = [];
+/** A cold key waits this long for another replica's computation before computing for itself. */
+const CLUSTER_LOCK_WAIT_MS = 3_000;
+const CLUSTER_LOCK_POLL_MS = 250;
+/** The lock lives as long as its transaction, so this bounds the longest computation it covers. */
+const CLUSTER_LOCK_TX_TIMEOUT_MS = 60_000;
 let lastSuccessAt: Date | null = null;
 let lastFailureAt: Date | null = null;
 
@@ -212,6 +219,86 @@ async function calculate(
       error,
     });
     throw error;
+  }
+}
+
+type ClusterRun =
+  | { state: 'done'; entry: CacheEntry }
+  | { state: 'contended' }
+  | { state: 'unavailable' };
+
+function clusterLockKey(key: string): bigint {
+  return createHash('sha256').update(`dashboard-analytics:${key}`).digest().readBigInt64BE(0);
+}
+
+/**
+ * Runs `compute` while holding a transaction-scoped Postgres advisory lock for this cache key, so
+ * replicas do not recompute the same entry at the same time. The lock ends with the transaction
+ * (commit, rollback or a lost connection), never with a separate unlock call, which also keeps it
+ * correct behind a transaction-mode connection pooler. A failed lock query is `unavailable`.
+ */
+async function runUnderClusterLock(
+  key: string,
+  compute: () => Promise<CacheEntry>
+): Promise<ClusterRun> {
+  type Outcome = { entry: CacheEntry } | { error: unknown };
+  const run: { computing?: Promise<Outcome> } = {};
+  try {
+    const acquired = await prisma.$transaction(
+      async tx => {
+        if (!(await tryAdvisoryLock(tx, clusterLockKey(key)))) return false;
+        run.computing = compute().then(
+          (entry): Outcome => ({ entry }),
+          (error): Outcome => ({ error })
+        );
+        await run.computing;
+        return true;
+      },
+      { maxWait: 2_000, timeout: CLUSTER_LOCK_TX_TIMEOUT_MS }
+    );
+    if (!acquired) return { state: 'contended' };
+  } catch (error) {
+    // A computation that already started is not repeated if only closing the transaction failed.
+    if (!run.computing) {
+      logger.warn('dashboard.analytics.cluster_lock_unavailable', {
+        filterFingerprint: fingerprint(key),
+        error,
+      });
+      return { state: 'unavailable' };
+    }
+  }
+  const outcome = await run.computing;
+  if (!outcome) return { state: 'unavailable' };
+  if ('error' in outcome) throw outcome.error;
+  return { state: 'done', entry: outcome.entry };
+}
+
+/**
+ * One computation per entry across replicas. A refresh of an entry another replica is already
+ * computing keeps serving the stale value; a cold key waits a few seconds for that replica and
+ * then computes for itself, so a lock problem never fails a request. Always frees the process slot.
+ */
+async function calculateAcrossReplicas(
+  key: string,
+  actor: AuthorizationActor,
+  filters: DashboardAnalyticsFilters,
+  stale: CacheEntry | undefined
+): Promise<CacheEntry> {
+  const compute = () => calculate(key, actor, filters);
+  try {
+    const giveUpAt = Date.now() + CLUSTER_LOCK_WAIT_MS;
+    for (;;) {
+      const run = await runUnderClusterLock(key, compute);
+      if (run.state === 'done') return run.entry;
+      if (run.state === 'unavailable') return await compute();
+      logger.debug('dashboard.analytics.cluster_lock_contended', {
+        filterFingerprint: fingerprint(key),
+        serveStale: Boolean(stale),
+      });
+      if (stale) return stale;
+      if (Date.now() >= giveUpAt) return await compute();
+      await new Promise(resolve => setTimeout(resolve, CLUSTER_LOCK_POLL_MS));
+    }
   } finally {
     releaseSlot();
   }
@@ -258,8 +345,10 @@ function startCalculation(
   } else {
     return null;
   }
+  // Only a refresh has a stale value to fall back on; a cold key (queue) has none.
+  const stale = options.queue ? undefined : cache.get(key);
   const request = slot
-    .then(() => calculate(key, actor, filters))
+    .then(() => calculateAcrossReplicas(key, actor, filters, stale))
     .finally(() => {
       if (inFlight.get(key) === request) inFlight.delete(key);
     });
