@@ -10,8 +10,14 @@ reader:
   task: Create, verify, reconcile, and close a Slack incident war room.
 verification:
   level: source
-  verified_at: 2026-09-28
-  evidence: [src/lib/war-room/providers/slack/adapter.ts, src/lib/chatops/war-room.ts]
+  verified_at: 2026-11-27
+  evidence:
+    - src/lib/war-room/providers/slack/adapter.ts
+    - src/lib/war-room/providers/slack/render.ts
+    - src/lib/war-room/providers/slack/provision.ts
+    - src/lib/chatops/war-room-reactions.ts
+    - src/components/settings/ChatOpsSettingsPage.tsx
+    - tests/lib/slack-war-room-chatops.test.ts
 ---
 
 # Operate Slack incident war rooms
@@ -40,6 +46,34 @@ Confirm the Slack provider/workspace, intended public or private channel behavio
 
 OpsKnight creates or links a provider room, stores durable identity, publishes incident context with idempotent delivery keys, reconciles participants/messages, and performs terminal cleanup. The incident remains authoritative.
 
+## What the room contains
+
+A new room opens with a readable channel name, a plain description, and a topic that tracks the incident's state. OpsKnight then posts:
+
+1. A short welcome that names the incident and its service, who the incident commander is, and the commands to use in the room.
+2. A **status card**, pinned and bookmarked when the app has the `pins:write` and `bookmarks:write` scopes. The card shows the incident's state, service, urgency, priority, description, assignee, and the incident links, and it is edited as the incident changes.
+
+![The welcome message OpsKnight posts when it opens a Slack war room](/docs/v2.3.0/assets/slack-war-room-welcome.png)
+
+![The pinned war-room status card for a snoozed incident, with the description and the buttons that still apply](/docs/v2.3.0/assets/slack-war-room-status-card.png)
+
+The status card shows only the buttons that still apply. **Escalate** appears only while the incident is open, because escalation refuses anything else. A resolved incident has no buttons. If someone presses a button that OpsKnight refuses, they get a private message and the card stays as it is.
+
+Reacting to any message in the room with 📌 saves it as a note on the incident, credited to the person who reacted. Only a confirmed member of the workspace is credited, and reacting twice never saves the same message twice.
+
+From the incident page, the war-room panel links to the room with **Open in Slack** (opens the desktop app on the right workspace and channel) and **Open in browser**.
+
+![The incident page's war-room panel with the Open in Slack and Open in browser links](/docs/v2.3.0/assets/slack-war-room-open-links.png)
+
+## Room settings
+
+Under **Settings → Integrations → ChatOps**:
+
+- **Private Slack war rooms** creates new Slack rooms as private channels that only invited responders can see. It needs the `groups:write` scope and is separate from status-page incident visibility. It is off by default.
+- **Close Collaboration on Resolution** archives the room when the incident resolves. The optional **Archive delay (hours)** (1 to 720) keeps the room open for follow-up first; leave it empty to archive as soon as the incident resolves. The delay applies to Slack rooms; Teams rooms still archive as soon as the incident resolves.
+
+The archive settings are read when a room closes, so a change applies to existing rooms that resolve later, and changing the delay re-times an archive that is already waiting. **Private Slack war rooms** applies only to rooms created afterwards. Existing rooms keep their names and topics.
+
 ## Verify it worked
 
 Verify channel creation, topic/initial context, participant synchronization,
@@ -57,7 +91,7 @@ Close/reconcile through OpsKnight instead of manually deleting the Slack channel
 When Squire is enabled for chat (**Settings → Intelligence → AI**, the assistant
 and its chat switch), it works inside the war-room channel:
 
-- **Ask or investigate.** Mention the app (`@OpsKnight what changed?`), or type
+- **Ask or investigate.** Squire also answers `@OpsKnight` mentions in ordinary channels; in a war room it has the room's incident as context. Mention the app (`@OpsKnight what changed?`), or type
   `@Squire …` as plain text at the start of a message. `@OpsKnight investigate`
   (optionally `investigate <focus>`) runs Squire's investigation on the
   channel's incident. Squire replies in the thread, edits that reply with its

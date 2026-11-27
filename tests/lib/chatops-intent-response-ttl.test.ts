@@ -48,23 +48,6 @@ describe('Slack intent response delivery after response_url expiry', () => {
     );
   });
 
-  it('replaces the "Processing" note for a slash command, and falls back if Slack refuses', async () => {
-    decrypted.payload = {
-      __kind: 'SLASH_COMMAND',
-      response_url: 'https://hooks.slack.com/commands/T1/1/abc',
-    };
-    db.chatOpsIntent.findUnique.mockResolvedValue(intent(60_000));
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: false, status: 400 })
-      .mockResolvedValueOnce({ ok: true }) as unknown as typeof fetch;
-    await processChatOpsIntent('i1');
-    const bodies = vi
-      .mocked(global.fetch)
-      .mock.calls.map(call => JSON.parse(call[1]!.body as string));
-    expect(bodies).toEqual([{ text: 'ok', replace_original: true }, { text: 'ok' }]);
-  });
-
   it('still posts a fresh response', async () => {
     db.chatOpsIntent.findUnique.mockResolvedValue(intent(60_000));
     await processChatOpsIntent('i1');

@@ -7,8 +7,14 @@ product_area: chatops
 audience: [administrator, responder]
 verification:
   level: source
-  verified_at: 2026-09-28
-  evidence: [src/lib/slack/app-manifest.ts, src/lib/chatops/, src/lib/war-room/providers/slack/adapter.ts]
+  verified_at: 2026-11-27
+  evidence:
+    - src/lib/slack/app-manifest.ts
+    - src/lib/slack/health.ts
+    - src/app/api/slack/health/route.ts
+    - src/components/settings/slack/SlackHealthPanel.tsx
+    - src/lib/chatops/
+    - src/lib/war-room/providers/slack/adapter.ts
 ---
 
 # Slack ChatOps
@@ -44,6 +50,14 @@ which covers Slack app creation through production acceptance.
 - [Review rate limits](./rate-limits)
 - [Disconnect or reconnect](./disconnect-reconnect)
 - [Troubleshoot Slack](./troubleshooting)
+
+## Check setup and health
+
+**Settings → Integrations → Slack** has a **Setup and health** panel with live checks against Slack: the bot token, the workspace, required scopes, optional feature scopes, the signing secret, recent requests from Slack, and whether Squire is on. A guided checklist ticks as OpsKnight sees each step work, and shows the events, interactivity, and slash-command URLs to paste into the Slack app. Select **Run checks** to refresh. A missing scope shows a **Reconnect Slack** button; an app installed from an older manifest shows a notice listing what is missing (see [permissions and scopes](./permissions-and-scopes)).
+
+![The Slack setup and health panel with the guided setup steps and the passing health checks](/docs/v2.3.0/assets/slack-settings-health.png)
+
+The same checks are available to administrators as JSON at `/api/slack/health`.
 
 ## How the pieces relate
 

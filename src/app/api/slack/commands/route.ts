@@ -4,6 +4,9 @@ import { openSlackDeclareModal, parseSlashCommandText } from '@/lib/chatops/slas
 import { logger } from '@/lib/logger';
 import { verifySlackSignature } from '@/lib/slack-signature';
 
+/** Subcommands that call the model or build a report, so they can run well past a few seconds. */
+const SLOW_SUBCOMMANDS: ReadonlySet<string> = new Set(['ask', 'investigate', 'postmortem']);
+
 /**
  * Slack expects an acknowledgement in three seconds. Persisting the signed
  * request before returning makes that acknowledgement truthful: a worker owns
@@ -54,10 +57,15 @@ export async function POST(request: NextRequest) {
       slackUserId: payload.user_id,
       payload,
     });
-    return NextResponse.json({
-      response_type: 'ephemeral',
-      text: '⚙️ Processing `/incident` command...',
-    });
+    // Slack does not let the later answer replace this first reply, so a fast command gets a bare
+    // acknowledgement and its answer is the only message. Commands that can take many seconds keep the
+    // note, so the person knows the request arrived.
+    return SLOW_SUBCOMMANDS.has(parseSlashCommandText(payload.text).subcommand)
+      ? NextResponse.json({
+          response_type: 'ephemeral',
+          text: '⚙️ Working on it…',
+        })
+      : new Response(null, { status: 200 });
   } catch (error) {
     logger.error('[Slack] Commands API persistence error', { error });
     return NextResponse.json({ error: 'Unable to queue command' }, { status: 503 });

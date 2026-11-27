@@ -435,40 +435,18 @@ async function deferResponse(claim: ClaimedIntent, error: unknown): Promise<void
   });
 }
 
-async function postSlackResponse(responseUrl: string, body: unknown): Promise<Response> {
-  return fetch(responseUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(5_000),
-  });
-}
-
 async function sendSlackResponse(
   payload: Record<string, unknown>,
   response: Prisma.JsonValue | null
 ): Promise<void> {
   const responseUrl = toSlackResponseUrl(payload.response_url);
   if (!responseUrl || response === null) return;
-  // A slash command is first answered with "Processing /incident command...". Replacing that note
-  // with the real answer keeps one message instead of two; if Slack refuses the replacement, the
-  // answer is sent as a new message, so it is never lost.
-  if (
-    payload.__kind === 'SLASH_COMMAND' &&
-    typeof response === 'object' &&
-    !Array.isArray(response)
-  ) {
-    try {
-      const replaced = await postSlackResponse(responseUrl, {
-        ...response,
-        replace_original: true,
-      });
-      if (replaced.ok) return;
-    } catch {
-      // fall through to a plain reply
-    }
-  }
-  const request = await postSlackResponse(responseUrl, response);
+  const request = await fetch(responseUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(response),
+    signal: AbortSignal.timeout(5_000),
+  });
   if (!request.ok) throw new Error(`Slack response delivery failed (${request.status})`);
 }
 

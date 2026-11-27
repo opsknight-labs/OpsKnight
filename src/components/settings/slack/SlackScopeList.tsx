@@ -41,7 +41,7 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   'users:read.email': 'Match Slack users with OpsKnight responders for automated on-call paging',
   'im:read': 'Support 1-on-1 direct message triage notifications',
   'mpim:read': 'Support multi-party group direct message notifications',
-  'app_mentions:read': 'Receive @OpsKnight mentions so Squire can answer in incident channels',
+  'app_mentions:read': 'Receive @OpsKnight mentions so Squire can answer in channels',
   'chat:write.customize':
     'Post Squire messages under the Squire name and avatar (without it they post as OpsKnight with a Squire header)',
   'chat:write.public': 'Post to public channels without inviting the bot first',
@@ -185,17 +185,19 @@ export function SlackScopeList({
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 pt-3 border-t text-xs text-muted-foreground">
             <p>Scope changes take effect after reinstalling or reconnecting Slack.</p>
-            {(missingRequired.length > 0 || missingOptional.length > 0) && isAdmin && onReconnect && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onReconnect}
-                className="h-8 text-xs font-semibold gap-1.5 shrink-0 self-start sm:self-auto"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Reconnect to refresh scopes
-              </Button>
-            )}
+            {(missingRequired.length > 0 || missingOptional.length > 0) &&
+              isAdmin &&
+              onReconnect && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onReconnect}
+                  className="h-8 text-xs font-semibold gap-1.5 shrink-0 self-start sm:self-auto"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Reconnect to refresh scopes
+                </Button>
+              )}
           </div>
         </CollapsibleContent>
       </Collapsible>
