@@ -187,8 +187,8 @@ Use **Cancel execution** and confirm to request cancellation:
 - Cancel is a request, not an instant stop — the step may complete before the
   cancellation is processed.
 
-**Cancel**, step **approval** and **Re-run** in the console follow the same rule
-as the v2 API. You must be able to read the execution, and be an administrator,
+**Cancel**, step **approval** and **Re-run** in the console, on both the execution
+page and the incident page, follow the same rule as the v2 API. You must be able to read the execution, and be an administrator,
 the person who started it, or a member of the team that owns its service. An
 execution with no service can be controlled only by whoever started it or an
 administrator. An attached incident must also be one you can read. Anyone else
