@@ -30,6 +30,8 @@ const LOGIN_SECURITY_CONFIG = {
   ATTEMPT_WINDOW_MS: 15 * 60 * 1000,
   // Time after which attempts are reset if no new attempts
   RESET_AFTER_MS: 60 * 60 * 1000, // 1 hour
+  // Most keys held at once: a spray of random emails must not grow the heap without bound
+  MAX_TRACKED_KEYS: 10_000,
 };
 
 /**
@@ -155,6 +157,7 @@ export function recordFailedAttempt(
   let record = attemptStore.get(key);
 
   if (!record) {
+    makeRoomForNewKey(now);
     record = {
       count: 0,
       lastAttempt: now,
@@ -298,6 +301,24 @@ export function formatLockoutDuration(ms: number): string {
 
   const hours = Math.ceil(minutes / 60);
   return `${hours} hour${hours !== 1 ? 's' : ''}`;
+}
+
+/**
+ * Keeps the store under MAX_TRACKED_KEYS before a new key is added: expired records go first,
+ * then the oldest keys that are not locked out (so a spray cannot unlock a locked account).
+ */
+function makeRoomForNewKey(now: number): void {
+  if (attemptStore.size < LOGIN_SECURITY_CONFIG.MAX_TRACKED_KEYS) return;
+  cleanupExpiredRecords();
+  for (const [key, record] of attemptStore) {
+    if (attemptStore.size < LOGIN_SECURITY_CONFIG.MAX_TRACKED_KEYS) return;
+    if (!record.lockedUntil || record.lockedUntil <= now) attemptStore.delete(key);
+  }
+  // Every key is locked out: drop the oldest rather than exceed the bound.
+  if (attemptStore.size >= LOGIN_SECURITY_CONFIG.MAX_TRACKED_KEYS) {
+    const oldest = attemptStore.keys().next();
+    if (!oldest.done) attemptStore.delete(oldest.value);
+  }
 }
 
 /**
