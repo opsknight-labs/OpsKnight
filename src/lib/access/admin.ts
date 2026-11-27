@@ -430,7 +430,7 @@ export async function assignCustomRole(
  */
 export async function startAccessReview(
   actorId: string | null,
-  input: { name: string; dueAt?: Date | null }
+  input: { name: string; dueAt?: Date | null; supersedeOpen?: boolean }
 ) {
   const name =
     input.name.trim().slice(0, 120) || `Access review ${new Date().toISOString().slice(0, 10)}`;
@@ -518,7 +518,36 @@ export async function startAccessReview(
       },
     });
   }
-  const review = await prisma.$transaction(async tx => {
+  const review = await runSerializableTransaction(async tx => {
+    // One open review at a time: a second one would be hidden in the UI and could never be closed.
+    const stale = await tx.accessReview.findMany({
+      where: { status: 'OPEN' },
+      select: { id: true },
+    });
+    if (stale.length > 0) {
+      if (!input.supersedeOpen) {
+        throw new AppError({
+          code: 'RESOURCE_CONFLICT',
+          userMessage: 'An access review is already open. Complete or cancel it first.',
+        });
+      }
+      await tx.accessReview.updateMany({
+        where: { id: { in: stale.map(review => review.id) }, status: 'OPEN' },
+        data: { status: 'CANCELLED', completedAt: now },
+      });
+      for (const review of stale) {
+        await logAudit(
+          {
+            action: 'access_review.superseded',
+            entityType: 'ACCESS_REVIEW',
+            entityId: review.id,
+            actorId,
+            details: { reason: 'A scheduled review started while this one was still open.' },
+          },
+          tx
+        );
+      }
+    }
     const created = await tx.accessReview.create({
       data: { name, dueAt: input.dueAt ?? null, createdById: actorId, items: { create: items } },
     });
@@ -852,11 +881,11 @@ export async function maybeStartScheduledAccessReview(now: Date = new Date()) {
   if (now.getTime() - last < settings.accessReviewIntervalDays * 24 * 60 * 60 * 1000) {
     return { started: false };
   }
-  const open = await prisma.accessReview.count({ where: { status: 'OPEN' } });
-  if (open > 0) return { started: false };
+  // An open review older than the whole interval is stale; the new one supersedes it.
   await startAccessReview(null, {
     name: `Scheduled access review ${now.toISOString().slice(0, 10)}`,
     dueAt: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000),
+    supersedeOpen: true,
   });
   return { started: true };
 }

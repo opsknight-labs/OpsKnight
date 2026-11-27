@@ -146,7 +146,10 @@ everything done with it is in the audit log. Administrators can turn it off.
   decision cannot land after the review is completed ("This review is closed."). Completing a
   review removes what you marked, and the
   evidence can be downloaded for SOC 2 (CC6.2/CC6.3) or ISO 27001 (A.5.18) audits. Reviews can
-  start automatically every month, quarter, half-year or year.
+  start automatically every month, quarter, half-year or year. Only one review can be open at a
+  time, so starting another is refused until the open one is completed or cancelled. When a
+  scheduled review is due and an older one is still open, the old one is closed without changes
+  and recorded as `access_review.superseded`.
 - **Custom roles** — add specific permissions to specific people without promoting them, for
   example letting an Auditor run runbooks, or making someone an access reviewer. Organization
   administration can only be given with the Admin role. Changes take effect immediately and do
