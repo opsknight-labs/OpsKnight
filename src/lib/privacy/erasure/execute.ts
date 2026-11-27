@@ -13,6 +13,9 @@ import { verifySubjectErasure } from './verify';
 import { discoverErasureBlockersTx, type ErasureDomainCounts } from './discover';
 import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 import { auditRowsOutsideHeldUsers, getHeldUserIds } from '@/lib/retention/lifecycle';
+import { resolveUserActor } from '@/lib/authorization-actors';
+import { actorHasCapability } from '@/lib/authorization-policy';
+import { CAPABILITIES } from '@/lib/authorization';
 import {
   pseudonymiseSubjectAuditRows,
   pseudonymiseSubjectIncidentText,
@@ -258,6 +261,11 @@ export async function executeErasure(
         data: { resultSummary: domainCounts, manualReviewRequired },
       });
 
+      const actorIdentity = await resolveUserActor(actor.id);
+      const actorIsAdmin = Boolean(
+        actorIdentity && actorHasCapability(actorIdentity, CAPABILITIES.ADMIN_MANAGE)
+      );
+
       await runSerializableTransaction(async tx => {
         // Must hold USER_ADMIN_INVARIANT *before* PRIVACY_ERASURE so the
         // erasure serializes with the canonical admin-invariant writers in
@@ -401,11 +409,23 @@ export async function executeErasure(
           where: { createdById: subjectId },
           data: { createdById: null },
         });
-        // Hand templates to the erasing admin: a private template with no owner would be
-        // invisible in the UI while its globally unique name stays reserved.
+        // Hand templates to an administrator: a private template with no owner would be invisible
+        // in the UI while its globally unique name stays reserved. A privacy operator without
+        // ADMIN_MANAGE must not end up able to read the subject's private templates, so they go to
+        // the first active administrator instead.
+        const templateOwnerId =
+          actorIsAdmin && actor.id !== subjectId
+            ? actor.id
+            : ((
+                await tx.user.findFirst({
+                  where: { role: 'ADMIN', status: 'ACTIVE', id: { not: subjectId } },
+                  orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+                  select: { id: true },
+                })
+              )?.id ?? null);
         await tx.incidentTemplate.updateMany({
           where: { createdById: subjectId },
-          data: { createdById: actor.id === subjectId ? null : actor.id },
+          data: { createdById: templateOwnerId },
         });
         await tx.actionItem.updateMany({ where: { ownerId: subjectId }, data: { ownerId: null } });
         // Structured recipient fields, not just the userId reference — the

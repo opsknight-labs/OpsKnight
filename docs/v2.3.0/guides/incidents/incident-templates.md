@@ -46,7 +46,7 @@ Success means the template appears in **Incidents → Templates** and the incide
 
 The listing returns public templates plus private templates created by the current user; an administrator sees every template, including other users' private ones. `ADMIN` and `RESPONDER` can create templates. A non-admin can delete only a template they created; an administrator can delete any template.
 
-The creator relationship is ownership metadata. If you plan to disable a creator, inventory private templates first and create public or replacement templates where the workflow must continue. When a user is erased through a privacy request, their templates are not deleted: ownership moves to the administrator who runs the erasure, so the template and its name stay manageable.
+The creator relationship is ownership metadata. If you plan to disable a creator, inventory private templates first and create public or replacement templates where the workflow must continue. When a user is erased through a privacy request, their templates are not deleted: ownership moves to the administrator who runs the erasure (or, when the person running it does not have the `admin.manage` permission, to the first active administrator), so the template and its name stay manageable and a privacy operator never gains access to the subject's private templates.
 
 ## What OpsKnight does
 

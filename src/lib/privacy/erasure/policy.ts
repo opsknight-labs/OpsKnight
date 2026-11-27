@@ -227,7 +227,7 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     blocking: false,
     manualReviewRequired: true,
     notes:
-      'Ownership moves to the administrator who runs the erasure. Template body text may still name the subject — matches the "incident-content" PARTIAL disposition.',
+      'Ownership moves to the administrator who runs the erasure, or to the first active administrator when the operator lacks ADMIN_MANAGE. Template body text may still name the subject — matches the "incident-content" PARTIAL disposition.',
   },
   {
     id: 'actionItemsOwned',

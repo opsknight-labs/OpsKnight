@@ -80,6 +80,7 @@ const mocks = vi.hoisted(() => {
     userToken: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     user: {
       findUnique: txUserFindUnique,
+      findFirst: vi.fn().mockResolvedValue({ id: 'cfirstadmin01' }),
       count: txUserCount,
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
@@ -115,6 +116,7 @@ const mocks = vi.hoisted(() => {
     callback(tx)
   );
   const transitionPrivacyRequest = vi.fn().mockResolvedValue({});
+  const resolveUserActor = vi.fn();
   const getHeldUserIds = vi.fn().mockResolvedValue([] as string[]);
   const emitAuditEvent = vi.fn().mockResolvedValue(undefined);
 
@@ -149,6 +151,7 @@ const mocks = vi.hoisted(() => {
     acquireAdvisoryLock,
     runSerializableTransaction,
     transitionPrivacyRequest,
+    resolveUserActor,
     getHeldUserIds,
     emitAuditEvent,
   };
@@ -176,6 +179,7 @@ vi.mock('@/lib/retention/lifecycle', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/retention/lifecycle')>()),
   getHeldUserIds: mocks.getHeldUserIds,
 }));
+vi.mock('@/lib/authorization-actors', () => ({ resolveUserActor: mocks.resolveUserActor }));
 vi.mock('@/lib/audit', () => ({
   emitAuditEvent: mocks.emitAuditEvent,
 }));
@@ -242,6 +246,12 @@ describe('executeErasure', () => {
     );
     mocks.transitionPrivacyRequest.mockResolvedValue({});
     mocks.getHeldUserIds.mockResolvedValue([]);
+    mocks.resolveUserActor.mockResolvedValue({
+      id: 'cactor0000001',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      teamIds: [],
+    });
     // In-tx authoritative blocker revalidation defaults to "no blockers" so the
     // happy-path tests stay green. Individual regression tests override these
     // to inject a stale-plan race.
@@ -280,6 +290,7 @@ describe('executeErasure', () => {
     mocks.tx.incidentNote.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.incidentNote.findMany.mockResolvedValue([] as never);
     mocks.tx.incidentEvent.findMany.mockResolvedValue([] as never);
+    mocks.tx.user.findFirst.mockResolvedValue({ id: 'cfirstadmin01' } as never);
     mocks.tx.postmortem.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.incidentTemplate.updateMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.actionItem.updateMany.mockResolvedValue({ count: 0 } as never);
@@ -567,6 +578,47 @@ describe('executeErasure', () => {
     expect(mocks.tx.incidentTemplate.updateMany).toHaveBeenCalledWith({
       where: { createdById: SUBJECT_ID },
       data: { createdById: ACTOR.id },
+    });
+  });
+
+  it('gives the templates to the first active administrator when the operator lacks ADMIN_MANAGE', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+    // A privacy operator with a custom role: PRIVACY_ERASURE but no ADMIN_MANAGE.
+    mocks.resolveUserActor.mockResolvedValue({
+      id: ACTOR.id,
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+      teamIds: [],
+      capabilities: new Set(['privacy.erasure']),
+    });
+
+    await executeErasure(REQUEST_ID, ACTOR);
+
+    expect(mocks.tx.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { role: 'ADMIN', status: 'ACTIVE', id: { not: SUBJECT_ID } },
+      })
+    );
+    expect(mocks.tx.incidentTemplate.updateMany).toHaveBeenCalledWith({
+      where: { createdById: SUBJECT_ID },
+      data: { createdById: 'cfirstadmin01' },
+    });
+  });
+
+  it('does not hand templates to the subject when an administrator erases themselves', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+
+    await executeErasure(REQUEST_ID, { id: SUBJECT_ID });
+
+    expect(mocks.tx.incidentTemplate.updateMany).toHaveBeenCalledWith({
+      where: { createdById: SUBJECT_ID },
+      data: { createdById: 'cfirstadmin01' },
     });
   });
 
