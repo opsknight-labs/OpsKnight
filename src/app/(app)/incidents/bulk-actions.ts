@@ -2,13 +2,14 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
+import { assertResponderOrAbove, getCurrentAuthorizationActor, getCurrentUser } from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 import { isAppError } from '@/lib/errors';
 import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
-import { isPageableRole } from '@/lib/authorization';
+import { AuthorizationError, CAPABILITIES, isPageableRole } from '@/lib/authorization';
 import {
   executeIncidentLifecycleBatch,
   executeIncidentLifecycleTargetBatch,
@@ -33,6 +34,24 @@ function bulkFailureMessage(error: unknown, fallback: string): string {
     return `${error.userMessage} No incidents were changed.`;
   }
   return fallback;
+}
+
+/**
+ * Operations.manage alone does not say which incidents a person may read (custom roles separate
+ * the two), so a bulk selection is held to the same scope as the list it was made from.
+ */
+async function assertCanActOnIncidents(incidentIds: string[]): Promise<void> {
+  await assertResponderOrAbove();
+  const readable = incidentReadWhere(await getCurrentAuthorizationActor());
+  if (Object.keys(readable).length === 0) return;
+  const unique = [...new Set(incidentIds)];
+  const visible = await prisma.incident.count({ where: { AND: [{ id: { in: unique } }, readable] } });
+  if (visible !== unique.length) {
+    throw new AuthorizationError(
+      'Unauthorized. You cannot act on one or more of the selected incidents.',
+      CAPABILITIES.INCIDENT_READ_SCOPED
+    );
+  }
 }
 
 async function runBulkLifecycleCommand(
@@ -82,7 +101,7 @@ export async function bulkAcknowledge(incidentIds: string[]) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -113,7 +132,7 @@ export async function bulkResolve(incidentIds: string[]) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -146,7 +165,7 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -205,7 +224,7 @@ export async function bulkUpdatePriority(incidentIds: string[], priority: string
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -253,7 +272,7 @@ export async function bulkSnooze(
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -289,7 +308,7 @@ export async function bulkUnsnooze(incidentIds: string[]) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -317,7 +336,7 @@ export async function bulkSuppress(incidentIds: string[]) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -345,7 +364,7 @@ export async function bulkUnsuppress(incidentIds: string[]) {
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -373,7 +392,7 @@ export async function bulkUpdateUrgency(incidentIds: string[], urgency: 'HIGH' |
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -423,7 +442,7 @@ export async function bulkUpdateStatus(incidentIds: string[], status: BulkLifecy
   }
 
   try {
-    await assertResponderOrAbove();
+    await assertCanActOnIncidents(incidentIds);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' };
   }

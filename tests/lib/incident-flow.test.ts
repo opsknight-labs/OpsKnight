@@ -8,6 +8,11 @@ vi.mock('@/lib/rbac', () => ({
   assertCanCreateIncidentForService: vi.fn().mockResolvedValue(undefined),
   assertCanModifyIncident: vi.fn().mockResolvedValue(undefined),
   getCurrentUser: vi.fn().mockResolvedValue({ id: 'user-1', name: 'Alex' }),
+  getCurrentAuthorizationActor: vi.fn().mockResolvedValue({ id: 'user-1' }),
+}));
+
+vi.mock('@/lib/authorization-filters', () => ({
+  incidentReadWhere: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('@/lib/user-notifications', () => ({

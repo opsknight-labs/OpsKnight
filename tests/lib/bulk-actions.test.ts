@@ -10,7 +10,8 @@ import {
 } from '@/app/(app)/incidents/bulk-actions';
 import prisma from '@/lib/prisma';
 import { AppError } from '@/lib/errors';
-import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
+import { assertResponderOrAbove, getCurrentAuthorizationActor, getCurrentUser } from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import {
   executeIncidentLifecycleBatch,
   executeIncidentLifecycleTargetBatch,
@@ -21,6 +22,7 @@ vi.mock('@/lib/prisma', () => {
     updateMany: vi.fn(),
     findUnique: vi.fn(),
     findMany: vi.fn(),
+    count: vi.fn(),
   };
   const incidentEvent = {
     create: vi.fn(),
@@ -41,7 +43,12 @@ vi.mock('@/lib/prisma', () => {
 
 vi.mock('@/lib/rbac', () => ({
   getCurrentUser: vi.fn(),
+  getCurrentAuthorizationActor: vi.fn(),
   assertResponderOrAbove: vi.fn(),
+}));
+
+vi.mock('@/lib/authorization-filters', () => ({
+  incidentReadWhere: vi.fn(),
 }));
 
 vi.mock('@/lib/incidents/lifecycle', () => ({
@@ -64,6 +71,54 @@ describe('Bulk Actions', () => {
       role: 'RESPONDER',
     } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
     vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
+    vi.mocked(getCurrentAuthorizationActor).mockResolvedValue({ id: 'user-1' } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    vi.mocked(incidentReadWhere).mockReturnValue({});
+  });
+
+  describe('read scope of the selection', () => {
+    const scoped = { OR: [{ assigneeId: 'user-1' }] };
+
+    it('refuses a selection that includes an incident outside the actor read scope', async () => {
+      vi.mocked(incidentReadWhere).mockReturnValue(scoped);
+      vi.mocked(prisma.incident.count).mockResolvedValue(1);
+
+      const result = await bulkResolve(['mine', 'someone-elses']);
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Unauthorized. You cannot act on one or more of the selected incidents.',
+      });
+      expect(prisma.incident.count).toHaveBeenCalledWith({
+        where: { AND: [{ id: { in: ['mine', 'someone-elses'] } }, scoped] },
+      });
+      expect(executeIncidentLifecycleBatch).not.toHaveBeenCalled();
+    });
+
+    it('applies the same scope to the non-lifecycle bulk writes', async () => {
+      vi.mocked(incidentReadWhere).mockReturnValue(scoped);
+      vi.mocked(prisma.incident.count).mockResolvedValue(0);
+
+      await expect(bulkUpdatePriority(['x'], 'P1')).resolves.toMatchObject({ success: false });
+      await expect(bulkUpdateUrgency(['x'], 'HIGH')).resolves.toMatchObject({ success: false });
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('lets a fully readable selection through, counting each id once', async () => {
+      vi.mocked(incidentReadWhere).mockReturnValue(scoped);
+      vi.mocked(prisma.incident.count).mockResolvedValue(1);
+      vi.mocked(executeIncidentLifecycleBatch).mockResolvedValue([]);
+
+      await expect(bulkAcknowledge(['a', 'a'])).resolves.toEqual({ success: true, count: 0 });
+      expect(executeIncidentLifecycleBatch).toHaveBeenCalled();
+    });
+
+    it('skips the lookup when the actor reads every incident', async () => {
+      vi.mocked(executeIncidentLifecycleBatch).mockResolvedValue([]);
+
+      await bulkAcknowledge(['a']);
+
+      expect(prisma.incident.count).not.toHaveBeenCalled();
+    });
   });
 
   describe('bulkAcknowledge', () => {
