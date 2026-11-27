@@ -32,6 +32,14 @@ export interface OverviewSpeed {
   sampleTruncated: boolean;
 }
 
+/**
+ * A first insight later than this was written by the backfill after Intelligence was switched on (the same
+ * line the `time_to_first_insight_seconds` metric draws between `live` and `backfill`). Nobody waited for it,
+ * so it counts as covered but stays out of the timing: on staging 92 backfilled incidents turned a
+ * one-second median into "2.5 h".
+ */
+const LIVE_INSIGHT_SECONDS = 3600;
+
 const rate = (accepted: number, reviewed: number): AcceptanceRate => ({
   accepted,
   reviewed,
@@ -71,8 +79,8 @@ export async function getOverviewSpeed(
         )
         SELECT (SELECT count(*) FROM candidates)::bigint AS sampled,
           count(*)::bigint AS covered,
-          percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds)::float8 AS p50,
-          percentile_cont(0.9) WITHIN GROUP (ORDER BY seconds)::float8 AS p90
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds) FILTER (WHERE seconds <= ${LIVE_INSIGHT_SECONDS})::float8 AS p50,
+          percentile_cont(0.9) WITHIN GROUP (ORDER BY seconds) FILTER (WHERE seconds <= ${LIVE_INSIGHT_SECONDS})::float8 AS p90
         FROM firsts`);
 
       const [related] = await tx.$queryRaw<

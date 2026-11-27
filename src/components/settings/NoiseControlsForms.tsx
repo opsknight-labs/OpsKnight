@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useActionState, useId, useState } from 'react';
 import {
   createHeartbeatAction,
@@ -79,15 +80,24 @@ function ServiceSelect({
   services,
   allowAll,
   defaultValue,
+  onChange,
 }: {
   id: string;
-  name: string;
+  /** Omit for a select that only navigates and must not be submitted with its form. */
+  name?: string;
   services: Option[];
   allowAll?: string;
   defaultValue?: string;
+  onChange?: (value: string) => void;
 }) {
   return (
-    <select id={id} name={name} className={fieldClass} defaultValue={defaultValue ?? ''}>
+    <select
+      id={id}
+      name={name}
+      className={fieldClass}
+      defaultValue={defaultValue ?? ''}
+      onChange={onChange ? event => onChange(event.target.value) : undefined}
+    >
       {allowAll !== undefined ? (
         <option value="">{allowAll}</option>
       ) : (
@@ -158,6 +168,7 @@ export function NoisePolicyForm({
   runbooks?: Option[];
 }) {
   const [state, action, pending] = useActionState(savePolicyAction, initial);
+  const router = useRouter();
   const id = useId();
   const d = policy.definition;
   return (
@@ -190,19 +201,32 @@ export function NoisePolicyForm({
         marked wrong (max {readiness.maxFalsePositiveRate * 100}%).{' '}
         {readiness.ready ? <Badge>Ready</Badge> : <Badge variant="secondary">Keep shadowing</Badge>}
       </div>
-      <form action={action} className="grid gap-4">
+      {/* Keyed by scope: the fields are uncontrolled, so another service's policy needs a fresh form. */}
+      <form key={selectedServiceId ?? 'global'} action={action} className="grid gap-4">
         <input type="hidden" name="expectedRevision" value={policy.revision} />
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1">
             <label htmlFor={`${id}-service`} className={labelClass}>
               Service
             </label>
+            {/* The select only navigates. It is not submitted: until the page for the chosen scope has
+                loaded, this form still carries the scope and revision it was rendered with, together. */}
+            <input type="hidden" name="serviceId" value={selectedServiceId ?? ''} />
             <ServiceSelect
               id={`${id}-service`}
-              name="serviceId"
               services={services}
               allowAll="All services (global)"
               defaultValue={selectedServiceId ?? ''}
+              // The revision above belongs to the policy on screen. Picking another service here and
+              // publishing sent that revision for a service with no row yet ("modified since it was read"),
+              // so the page reloads for the chosen scope instead.
+              onChange={value =>
+                router.push(
+                  value
+                    ? `/settings/intelligence/noise-controls?service=${encodeURIComponent(value)}`
+                    : '/settings/intelligence/noise-controls'
+                )
+              }
             />
           </div>
           <div className="space-y-1">

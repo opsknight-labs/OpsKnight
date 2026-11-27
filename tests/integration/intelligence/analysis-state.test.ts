@@ -24,7 +24,7 @@ beforeEach(async () => {
     throw new Error('Dedicated test DB required');
   await resetDatabase();
 });
-async function fixture() {
+async function fixture(options: { allKinds?: boolean } = {}) {
   const admin = await createTestUser({ role: 'ADMIN' });
   const actor = (await resolveUserActor(admin.id))!;
   await db.intelligenceSettings.create({
@@ -36,7 +36,13 @@ async function fixture() {
       mode: 'SUGGEST',
       definition: {
         ...DEFAULT_POLICY_DEFINITION,
-        response: { ...DEFAULT_POLICY_DEFINITION.response, enabled: false },
+        response: { ...DEFAULT_POLICY_DEFINITION.response, enabled: options.allKinds ?? false },
+        ...(options.allKinds
+          ? {
+              similarity: { ...DEFAULT_POLICY_DEFINITION.similarity, enabled: true },
+              triage: { ...DEFAULT_POLICY_DEFINITION.triage, enabled: true },
+            }
+          : {}),
       },
       expectedHeadVersion: 0,
     },
@@ -64,6 +70,51 @@ it('distinguishes waiting from completed analysis with no qualifying findings', 
     status: 'CURRENT',
     lastSuccessfulAt: expect.any(String),
   });
+});
+it('is current when every expected kind of finding has a snapshot, however many kinds that is', async () => {
+  // Response and triage on: eight kinds. A status read that loaded fewer rows than that could never see them all
+  // and reported every incident as "not verified" forever.
+  const { actor, incident } = await fixture({ allKinds: true });
+  await analyze(incident.id);
+  const similar = await db.intelligenceAnalysisSnapshot.findUniqueOrThrow({
+    where: { incidentId_kind: { incidentId: incident.id, kind: 'SIMILAR_INCIDENT' } },
+  });
+  const others = [
+    'CHANGE_CORRELATION',
+    'PROBABLE_CAUSE',
+    'RUNBOOK_RECOMMENDATION',
+    'TRIAGE_URGENCY',
+    'TRIAGE_ASSIGNMENT',
+    'TRIAGE_DUPLICATE',
+    'TRIAGE_RESOLUTION_TIME',
+  ] as const;
+  await db.intelligenceAnalysisSnapshot.createMany({
+    data: others.map(kind => ({ ...similar, kind })),
+  });
+  expect(await db.intelligenceAnalysisSnapshot.count({ where: { incidentId: incident.id } })).toBe(
+    8
+  );
+  // Analysis chains triage work behind it; once the queue has drained nothing is outstanding.
+  await db.intelligenceWorkItem.deleteMany();
+  expect(await readIncidentAnalysisState(actor, incident.id)).toMatchObject({
+    status: 'CURRENT',
+    lastSuccessfulAt: expect.any(String),
+  });
+});
+it('says an incident older than the analysed history is unavailable instead of waiting forever', async () => {
+  const { actor, incident } = await fixture();
+  expect(await readIncidentAnalysisState(actor, incident.id)).toMatchObject({ status: 'WAITING' });
+  await db.incident.update({
+    where: { id: incident.id },
+    data: { createdAt: new Date(Date.now() - 45 * 86_400_000) },
+  });
+  // An operator can still ask for analysis by hand, whatever the age.
+  expect(await readIncidentAnalysisState(actor, incident.id)).toMatchObject({
+    status: 'UNAVAILABLE',
+    canRefresh: true,
+    message: expect.stringContaining('older than the 30 days'),
+  });
+  expect(await requestIncidentAnalysis(actor, incident.id)).toBe('requested');
 });
 it('labels source edits stale and never mistakes a stale fingerprint for fresh analysis', async () => {
   const { actor, incident } = await fixture();
@@ -312,7 +363,10 @@ it('converges to current when analysis lands after an unrelated update was re-in
   expect(await db.$transaction(tx => indexIncident(incident.id, tx))).toBe('unchanged');
   // ...while an analysis that read the fingerprint before that writes its result afterwards, so the
   // snapshot records the older source version of the same fingerprint content.
-  await analyzeIncident({ subjectKey: incident.id, generation: 1 }, await getIntelligenceSettings());
+  await analyzeIncident(
+    { subjectKey: incident.id, generation: 1 },
+    await getIntelligenceSettings()
+  );
   await db.intelligenceAnalysisSnapshot.updateMany({
     where: { incidentId: incident.id },
     data: { sourceUpdatedAt: read.sourceUpdatedAt },

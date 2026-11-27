@@ -46,8 +46,9 @@ export function runningLong(elapsedMs: number, baseline: ServiceBaseline | null)
   return ratio >= 2 ? Math.floor(ratio) : null;
 }
 
-/** "45m", "3h", "2d". */
+/** "40s", "45m", "3h", "2d". Under a minute it stays in seconds so "275x longer than usual" never sits beside "~1m". */
 export function shortDuration(ms: number): string {
+  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s`;
   const minutes = Math.max(1, Math.round(ms / 60_000));
   if (minutes < 90) return `${minutes}m`;
   const hours = Math.round(minutes / 60);

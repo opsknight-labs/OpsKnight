@@ -302,6 +302,44 @@ describe('AIOps overview data', () => {
     expect(week.current.incidents).toBe(9);
   });
 
+  it('keeps backfilled incidents out of the time to first insight', async () => {
+    const now = Date.now();
+    const team = await createTestTeam('Backfill');
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const service = await createTestService('Backfilled', team.id);
+    const finding = (incidentId: string, createdAt: Date) =>
+      db.intelligenceFinding.create({
+        data: {
+          incidentId,
+          kind: 'SIMILAR_INCIDENT',
+          subjectRef: incidentId,
+          evidence: {},
+          generation: 1,
+          engineVersion: 't',
+          createdAt,
+        },
+      });
+    // Three incidents analysed within 30 seconds, as they happened.
+    for (let i = 0; i < 3; i += 1) {
+      const createdAt = new Date(now - (i + 1) * HOUR);
+      const incident = await createTestIncident(`live ${i}`, service.id, { createdAt });
+      await finding(incident.id, new Date(createdAt.getTime() + 30_000));
+    }
+    // Two from two days ago, analysed only now, when Intelligence was switched on.
+    for (let i = 0; i < 2; i += 1) {
+      const incident = await createTestIncident(`backfilled ${i}`, service.id, {
+        createdAt: new Date(now - 2 * DAY),
+      });
+      await finding(incident.id, new Date(now));
+    }
+    const scope = await resolveOverviewScope(await actorOf(admin.id));
+    const speed = await getOverviewSpeed(scope, resolveOverviewWindow('7d', new Date(now)));
+    expect(speed.incidents).toBe(5);
+    expect(speed.incidentsWithInsight).toBe(5);
+    expect(speed.firstInsightP50Seconds).toBeCloseTo(30, 0);
+    expect(speed.firstInsightP90Seconds).toBeCloseTo(30, 0);
+  });
+
   it('ranks noisy and flapping services for readers with intelligence access only', async () => {
     const team = await createTestTeam('Noisy');
     const admin = await createTestUser({ role: 'ADMIN' });
@@ -309,11 +347,25 @@ describe('AIOps overview data', () => {
     const now = Date.now();
     for (let i = 0; i < 6; i += 1) {
       const createdAt = new Date(now - (i + 1) * HOUR);
-      await createTestIncident(`flap ${i}`, service.id, {
+      const incident = await createTestIncident(`flap ${i}`, service.id, {
         createdAt,
         status: i < 3 ? 'SUPPRESSED' : 'RESOLVED',
         resolvedAt: i < 3 ? null : new Date(createdAt.getTime() + MIN),
       });
+      // The flapping detector suppressed these three on arrival.
+      if (i < 3)
+        await db.prePagingDecision.create({
+          data: {
+            serviceId: service.id,
+            incidentId: incident.id,
+            control: 'FLAPPING',
+            action: 'SUPPRESS',
+            mode: 'ON',
+            applied: true,
+            reason: 'Flapping',
+            evidence: {},
+          },
+        });
     }
     const quality = await getOverviewQuality(await actorOf(admin.id), new Date(now));
     expect(quality.noisy.map(row => row.serviceId)).toEqual([service.id]);
@@ -324,6 +376,32 @@ describe('AIOps overview data', () => {
     expect((await getOverviewQuality(await actorOf(plain.id), new Date(now))).noisy).toEqual([]);
   });
 
+  it('does not call incidents suppressed by a rule or a maintenance window "flapping"', async () => {
+    const team = await createTestTeam('Muted');
+    const admin = await createTestUser({ role: 'ADMIN' });
+    const service = await createTestService('Muted by rule', team.id);
+    const now = Date.now();
+    for (let i = 0; i < 6; i += 1) {
+      const incident = await createTestIncident(`muted ${i}`, service.id, {
+        createdAt: new Date(now - (i + 1) * HOUR),
+        status: 'SUPPRESSED',
+      });
+      await db.prePagingDecision.create({
+        data: {
+          serviceId: service.id,
+          incidentId: incident.id,
+          control: i % 2 ? 'MAINTENANCE' : 'SUPPRESSION',
+          action: 'SUPPRESS',
+          mode: 'ON',
+          applied: true,
+          reason: 'Suppressed on purpose',
+          evidence: {},
+        },
+      });
+    }
+    const quality = await getOverviewQuality(await actorOf(admin.id), new Date(now));
+    expect(quality.flapping.find(row => row.serviceId === service.id)).toBeUndefined();
+  });
   it('reports lane health and backlog to administrators only', async () => {
     const admin = await createTestUser({ role: 'ADMIN' });
     const responder = await createTestUser({ role: 'RESPONDER' });

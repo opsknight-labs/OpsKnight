@@ -107,13 +107,20 @@ export async function getAlertQualityLeaderboard(
       flapping: number;
     }>
   >(Prisma.sql`
+    -- Only the flapping detector's own applied decisions: an incident a rule or a maintenance window
+    -- suppressed is not flapping, and counting it made a service look noisier for being suppressed.
+    WITH flapped AS (
+      SELECT DISTINCT d."incidentId" FROM "PrePagingDecision" d
+      WHERE d."control" = 'FLAPPING' AND d."applied" AND d."incidentId" IS NOT NULL
+        AND d."createdAt" >= ${since}
+    )
     SELECT "serviceId",
            count(*)::int AS incidents,
            count(*) FILTER (WHERE "resolvedAt" IS NOT NULL)::int AS resolved,
            count(*) FILTER (WHERE "resolvedAt" IS NOT NULL
              AND "resolvedAt" - "createdAt" <= make_interval(secs => ${QUICK_RESOLVE_SECONDS}::float))::int AS quick,
            count(*) FILTER (WHERE "resolvedAt" IS NOT NULL AND "acknowledgedAt" IS NULL)::int AS never,
-           count(*) FILTER (WHERE "status" = 'SUPPRESSED')::int AS flapping
+           count(*) FILTER (WHERE "id" IN (SELECT "incidentId" FROM flapped))::int AS flapping
     FROM "Incident"
     WHERE "createdAt" >= ${since} AND "serviceId" = ANY(${[...byId.keys()]})
     GROUP BY "serviceId"

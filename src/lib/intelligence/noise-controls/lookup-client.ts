@@ -4,6 +4,7 @@ import { createPrismaClient } from '@/lib/db/create-client';
 import { logger } from '@/lib/logger';
 import {
   configurePrismaDatasource,
+  prePagingDeadlineFromEnv,
   prePagingLookupPoolSize,
   primaryPoolSize,
   selectPrePagingLookupDatasourceUrl,
@@ -38,9 +39,14 @@ export function setPrePagingDeadlineMs(ms: number | null): void {
   deadlineOverrideMs = ms === null ? null : Math.min(MAX_DEADLINE_MS, Math.max(1, Math.round(ms)));
 }
 
+/**
+ * `PREPAGING_DEADLINE_MS` (1-50), read in `prisma-datasource`: for hosts where the 5 ms default is missed
+ * even though the lookups run in well under a millisecond in Postgres (a busy event loop or a slow pool
+ * hop). Dedup, flapping and storm grouping fail open past the deadline, so on such a host they never act.
+ */
 /** The deadline the hook enforces in this process. */
 export function prePagingDeadlineMs(): number {
-  return deadlineOverrideMs ?? PREPAGING_LIMITS.deadlineMs;
+  return deadlineOverrideMs ?? prePagingDeadlineFromEnv() ?? PREPAGING_LIMITS.deadlineMs;
 }
 
 /** Server-side timeout for a client-side deadline: whole milliseconds, at least 1. */
