@@ -28,6 +28,7 @@ type SlackEventEnvelope = {
     team?: unknown;
     /** The poster's home workspace; differs from team_id for someone from another workspace. */
     user_team?: unknown;
+    channel_type?: unknown;
   };
 };
 
@@ -115,17 +116,24 @@ export async function enqueueSlackSquireMention(envelope: SlackEventEnvelope): P
   if (userTeam && userTeam !== teamId) return false;
   let text = str(event.text, 4_000);
   if (event.type === 'message') {
-    // Cheap test first: every channel message passes through here.
-    if (event.subtype || !/^\s*@/.test(text)) return false;
-    const addressed = squireAddressedText(
-      text,
-      (await loadSquireIdentity()).name,
-      botUserId(envelope.authorizations)
-    );
-    if (addressed === null) return false;
-    // Plain-text addressing is only for incident channels; elsewhere "@Squire" is just text.
-    if (!(await findSlackIncidentForChannel(teamId, str(event.channel, 64)))) return false;
-    text = addressed;
+    if (event.subtype) return false;
+    if (event.channel_type === 'im') {
+      // A direct message to the app is a question for Squire: no @ and no incident needed.
+      text = text.trim();
+      if (!text) return false;
+    } else {
+      // Cheap test first: every channel message passes through here.
+      if (!/^\s*@/.test(text)) return false;
+      const addressed = squireAddressedText(
+        text,
+        (await loadSquireIdentity()).name,
+        botUserId(envelope.authorizations)
+      );
+      if (addressed === null) return false;
+      // Plain-text addressing is only for incident channels; elsewhere "@Squire" is just text.
+      if (!(await findSlackIncidentForChannel(teamId, str(event.channel, 64)))) return false;
+      text = addressed;
+    }
   } else if (event.type !== 'app_mention') return false;
   const enterpriseId = str(envelope.enterprise_id, 64);
   const payload: SlackSquireMentionPayload = {

@@ -51,6 +51,7 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   'usergroups:read': 'List Slack user groups when mapping an on-call schedule to one',
   'usergroups:write': 'Keep a Slack user group in step with who is on call',
   'conversations.connect:write': 'Invite external people to a war room with Slack Connect',
+  'im:history': 'Let Squire answer direct messages to the OpsKnight app',
 };
 
 function getScopeDescription(scope: string): string {

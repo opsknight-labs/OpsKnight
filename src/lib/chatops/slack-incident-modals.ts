@@ -68,7 +68,7 @@ export function buildIncidentActionModal(action: SlackModalAction, metadata: Mod
               type: 'input',
               block_id: NOTE.block,
               optional: true,
-              label: plain('Note (optional)'),
+              label: plain('Note'),
               element: {
                 type: 'plain_text_input',
                 action_id: NOTE.action,

@@ -36,6 +36,7 @@ export const SLACK_OPTIONAL_BOT_SCOPES = [
   'pins:write', // Pin the incident status card in war rooms
   'bookmarks:write', // Bookmark the incident link in war-room channels
   'im:write', // Open DMs to page on-call responders in Slack
+  'im:history', // Read direct messages to the app so Squire can answer them
 ] as const;
 
 /**
@@ -67,6 +68,8 @@ export const SLACK_BOT_EVENTS = [
   // War-room channel capture (Settings → Intelligence); ignored unless that switch is on.
   'message.channels',
   'message.groups',
+  // Direct messages to the app, answered by Squire.
+  'message.im',
   // The App Home tab (my incidents, who is on call, open incidents).
   'app_home_opened',
 ] as const;
