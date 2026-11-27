@@ -171,3 +171,59 @@ describe('getVersionImpact step order and run defaults', () => {
     expect((await getVersionImpact('rb', 'base', 'next')).defaults.changed).toBe(false);
   });
 });
+
+describe('getVersionImpact rule impact', () => {
+  const rule = (id: string, versionStrategy: 'PINNED' | 'LATEST_PUBLISHED') => ({
+    id,
+    name: id,
+    serviceId: 'svc',
+    enabled: true,
+    mode: 'MANUAL',
+    versionStrategy,
+    runbookVersionId: versionStrategy === 'PINNED' ? 'base' : null,
+    service: { id: 'svc', name: 'Checkout' },
+  });
+
+  it('does not say latest-publication rules track a version that is not the live one', async () => {
+    load(version('base', 1, ['a']), version('next', 2, ['a']));
+    mocks.runbook.mockResolvedValue({ publishedVersionId: 'v5' });
+    mocks.rules.mockResolvedValue([rule('latest', 'LATEST_PUBLISHED'), rule('pinned', 'PINNED')]);
+
+    const impact = await getVersionImpact('rb', 'base', 'next');
+
+    expect(impact.rules.map(r => [r.id, r.impact])).toEqual([
+      ['latest', 'TRACKS_LIVE_VERSION'],
+      ['pinned', 'PINNED_UNCHANGED'],
+    ]);
+  });
+
+  it('says latest-publication rules track the compared version when it is live or a draft', async () => {
+    load(version('base', 1, ['a']), version('next', 2, ['a']));
+    mocks.rules.mockResolvedValue([rule('latest', 'LATEST_PUBLISHED')]);
+
+    expect((await getVersionImpact('rb', 'base', 'next')).rules[0].impact).toBe(
+      'TRACKS_NEW_PUBLICATION'
+    );
+
+    load(version('base', 1, ['a']), version('next', 2, ['a'], [], 'DRAFT'));
+    mocks.runbook.mockResolvedValue({ publishedVersionId: 'v5' });
+
+    expect((await getVersionImpact('rb', 'base', 'next')).rules[0].impact).toBe(
+      'TRACKS_NEW_PUBLICATION'
+    );
+  });
+
+  it('leaves detached rules out and lists latest-publication rules first when truncated', async () => {
+    load(version('base', 1, ['a']), version('next', 2, ['a']));
+
+    await getVersionImpact('rb', 'base', 'next');
+
+    expect(mocks.rules).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { runbookId: 'rb', detachedAt: null },
+        orderBy: [{ versionStrategy: 'desc' }, { enabled: 'desc' }, { id: 'asc' }],
+        take: 501,
+      })
+    );
+  });
+});

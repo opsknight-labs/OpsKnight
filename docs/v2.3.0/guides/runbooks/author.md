@@ -405,7 +405,11 @@ rule's pin:
   those rules before publishing. The API diff returns the same list as
   `inputChanges`, naming a changed default without returning its value.
 - Rules using latest publication track future publications; pinned rules and
-  existing executions retain their frozen versions.
+  existing executions retain their frozen versions. The rule list is labelled
+  for the versions you compare: **tracks new publication** only when the
+  version you compare to is the draft or the live version, otherwise
+  **tracks live version**. Detached rules never run and are not listed, and a
+  list longer than 500 rules shows the latest-publication rules first.
 - Comparison performs no action and cannot establish platform permission.
 
 ## Diagnostics and smart targets

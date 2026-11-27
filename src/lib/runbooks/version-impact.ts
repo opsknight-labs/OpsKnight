@@ -72,8 +72,13 @@ export async function getVersionImpact(
         ]
       : [];
   });
+  const runbook = await prisma.runbook.findUnique({
+    where: { id: runbookId },
+    select: { publishedVersionId: true },
+  });
+  // Detached rules never run, so they are not affected by any version.
   const rules = await prisma.serviceAutomationRule.findMany({
-    where: { runbookId },
+    where: { runbookId, detachedAt: null },
     include: {
       service: {
         select: {
@@ -82,7 +87,8 @@ export async function getVersionImpact(
         },
       },
     },
-    orderBy: { id: 'asc' },
+    // Rules that follow the latest publication first, so a truncated list keeps the ones this affects.
+    orderBy: [{ versionStrategy: 'desc' }, { enabled: 'desc' }, { id: 'asc' }],
     take: 501,
   });
   return {
@@ -142,10 +148,13 @@ export async function getVersionImpact(
         versionStrategy: rule.versionStrategy,
         runbookVersionId: rule.runbookVersionId,
         service,
+        // A latest-publication rule runs the live version: only the draft or live version compared is its new target.
         impact:
-          rule.versionStrategy === 'LATEST_PUBLISHED'
-            ? 'TRACKS_NEW_PUBLICATION'
-            : 'PINNED_UNCHANGED',
+          rule.versionStrategy !== 'LATEST_PUBLISHED'
+            ? 'PINNED_UNCHANGED'
+            : next.state === 'DRAFT' || runbook?.publishedVersionId === next.id
+              ? 'TRACKS_NEW_PUBLICATION'
+              : 'TRACKS_LIVE_VERSION',
       };
     }),
     rulesTruncated: rules.length > 500,
