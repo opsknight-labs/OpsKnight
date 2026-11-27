@@ -44,7 +44,7 @@ show an **In maintenance** badge in the service list and on the service page.
 3. Under **Repeat**, keep **Does not repeat** for one-off work, or choose **Daily**, **Weekly** (pick the
    days), or **Monthly** (pick the day; it is moved to the last day of shorter months). Set how often it
    repeats, the start date and time, the **Time zone**, and an optional end date.
-4. For one-off work, choose **Start now** or a start time, then a **Duration** (30 minutes to 24 hours).
+4. For one-off work, choose **Start now** or a start time, then a **Duration** (30 minutes to 24 hours). **Start now** begins at the server's time, so a wrong clock on your computer or phone cannot delay the window or get it rejected as in the past.
 5. Select the services. One window can cover several services.
 6. Under **When the window ends**, choose:
    - **Page for alerts that are still firing (recommended)**: held incidents whose alerts are still

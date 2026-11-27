@@ -77,4 +77,28 @@ describe('maintenance server actions with an empty service set', () => {
     await createMaintenanceWindowAction('svc-a', { ...input, serviceIds: ['svc-a', 'svc-b'] });
     expect(rbac.assertCanModifyService.mock.calls).toEqual([['svc-a'], ['svc-b']]);
   });
+
+  it('starts a "Start now" window at the server clock, not a client time', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2030-06-01T12:00:00Z'));
+    try {
+      rbac.getCurrentUser.mockResolvedValue({ id: 'admin', role: 'ADMIN' });
+      await createMaintenanceWindowAction('svc-a', {
+        title: 'Patch',
+        serviceIds: [],
+        startNowForMinutes: 90,
+      });
+      expect(windows.createMaintenanceWindow).toHaveBeenCalledWith(
+        {
+          title: 'Patch',
+          serviceIds: [],
+          startsAt: new Date('2030-06-01T12:00:00Z'),
+          endsAt: new Date('2030-06-01T13:30:00Z'),
+        },
+        { id: 'admin', source: 'UI' }
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -77,14 +77,12 @@ export default function MobileServiceMaintenance({
       setError('Enter a title.');
       return;
     }
-    const startsAt = new Date();
     run(
       () =>
         createMaintenanceWindowAction(serviceId, {
           title,
           serviceIds: [serviceId],
-          startsAt,
-          endsAt: new Date(startsAt.getTime() + minutes * 60_000),
+          startNowForMinutes: minutes,
         }),
       'Maintenance started',
       () => setFormOpen(false)
@@ -172,7 +170,9 @@ export default function MobileServiceMaintenance({
               <p className="text-[13px] font-bold text-foreground">
                 Maintenance starts <MobileTime value={next.startsAt} format="short" />
               </p>
-              <p className="mt-0.5 wrap-break-word text-[12px] text-muted-foreground">{next.title}</p>
+              <p className="mt-0.5 wrap-break-word text-[12px] text-muted-foreground">
+                {next.title}
+              </p>
             </div>
           ) : (
             <p className="text-[12px] text-muted-foreground">No maintenance scheduled.</p>
