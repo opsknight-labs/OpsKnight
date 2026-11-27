@@ -1087,7 +1087,7 @@ export const V2_MUTATION_CONTRACT: Record<string, MutationContract> = {
     idempotency: 'required',
     concurrency: 'none',
     rationale:
-      'A credential-scoped replay returns the original cancellation. The override delete, attributed audit and receipt commit together; a new key after deletion receives 404.',
+      'A credential-scoped replay returns the original cancellation. The override removal (or, for an override in progress, ending it now), attributed audit and receipt commit together; a new key after removal receives 404, and a finished override is refused with 409.',
   },
   'POST /api/v2/escalation-policies': natural('Policy names are unique; a repeat returns 409.'),
   'PATCH /api/v2/escalation-policies/[id]': natural(
