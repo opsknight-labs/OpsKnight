@@ -352,30 +352,37 @@ export async function generate24HourHistory(
   // Fixed clock-hour buckets (UTC); the viewer's time zone is applied in the browser from `timestamp`.
   const currentHourStart = Math.floor(now.getTime() / HOUR) * HOUR;
   const since = new Date(currentHourStart - 23 * HOUR);
-  type FailedJob = { id: string; failedAt: Date | null };
-  type FailedDelivery = { id: string; createdAt: Date };
-  type FailedNotification = { id: string; startedAt: Date };
+  // Counted per hour in SQL: a provider outage must not load every failed row on each refresh.
+  type HourlyFailures = { hour: Date; failures: number };
 
   const historyResults = await Promise.allSettled([
-    prisma.backgroundJob.findMany({
-      where: { failedAt: { gte: since }, status: 'FAILED' },
-      select: { id: true, failedAt: true },
-    }),
-    prisma.inboundDelivery.findMany({
-      where: { createdAt: { gte: since }, status: 'FAILED' },
-      select: { id: true, createdAt: true },
-    }),
-    prisma.notificationDeliveryAttempt.findMany({
-      where: { startedAt: { gte: since }, outcome: 'FAILED' },
-      select: { id: true, startedAt: true },
-    }),
+    prisma.$queryRaw<HourlyFailures[]>`
+      SELECT date_trunc('hour', "failedAt") AS hour, COUNT(*)::int AS failures
+      FROM "BackgroundJob"
+      WHERE status = 'FAILED' AND "failedAt" >= ${since}
+      GROUP BY 1`,
+    prisma.$queryRaw<HourlyFailures[]>`
+      SELECT date_trunc('hour', "createdAt") AS hour, COUNT(*)::int AS failures
+      FROM "InboundDelivery"
+      WHERE status = 'FAILED' AND "createdAt" >= ${since}
+      GROUP BY 1`,
+    prisma.$queryRaw<HourlyFailures[]>`
+      SELECT date_trunc('hour', "startedAt") AS hour, COUNT(*)::int AS failures
+      FROM "NotificationDeliveryAttempt"
+      WHERE outcome = 'FAILED' AND "startedAt" >= ${since}
+      GROUP BY 1`,
   ]);
+  const failuresPerHour = (result: PromiseSettledResult<HourlyFailures[]>) => {
+    const counts = new Map<number, number>();
+    if (result.status === 'fulfilled') {
+      for (const row of result.value) counts.set(new Date(row.hour).getTime(), row.failures);
+    }
+    return counts;
+  };
   const [jobResult, deliveryResult, notificationResult] = historyResults;
-  const failedJobs: FailedJob[] = jobResult.status === 'fulfilled' ? jobResult.value : [];
-  const failedDeliveries: FailedDelivery[] =
-    deliveryResult.status === 'fulfilled' ? deliveryResult.value : [];
-  const failedNotifications: FailedNotification[] =
-    notificationResult.status === 'fulfilled' ? notificationResult.value : [];
+  const failedJobs = failuresPerHour(jobResult);
+  const failedDeliveries = failuresPerHour(deliveryResult);
+  const failedNotifications = failuresPerHour(notificationResult);
   const unavailableSources = historyResults.filter(result => result.status === 'rejected').length;
   const {
     scorePercent: liveScorePercent,
@@ -388,29 +395,22 @@ export async function generate24HourHistory(
   const samples: HealthHistorySample[] = [];
   for (let i = 23; i >= 0; i--) {
     const windowStart = new Date(currentHourStart - i * HOUR);
-    const windowEnd = new Date(windowStart.getTime() + HOUR);
     const hourLabel = `${windowStart.getUTCHours().toString().padStart(2, '0')}:00 UTC`;
-    const hourlyFailedJobs = failedJobs.filter(
-      job => job.failedAt && job.failedAt >= windowStart && job.failedAt < windowEnd
-    );
-    const hourlyFailedDeliveries = failedDeliveries.filter(
-      delivery => delivery.createdAt >= windowStart && delivery.createdAt < windowEnd
-    );
-    const hourlyFailedNotifications = failedNotifications.filter(
-      notification => notification.startedAt >= windowStart && notification.startedAt < windowEnd
-    );
+    const hourlyFailedJobs = failedJobs.get(windowStart.getTime()) ?? 0;
+    const hourlyFailedDeliveries = failedDeliveries.get(windowStart.getTime()) ?? 0;
+    const hourlyFailedNotifications = failedNotifications.get(windowStart.getTime()) ?? 0;
 
     let status: HealthLevel = 'healthy';
     let scorePercent = 100;
     let reason = 'All systems operating normally';
     let failuresSeen = true;
-    if (hourlyFailedJobs.length > 0) {
+    if (hourlyFailedJobs > 0) {
       status = 'degraded';
-      scorePercent = Math.max(70, 100 - hourlyFailedJobs.length * 10);
-      reason = `${hourlyFailedJobs.length} background job failure(s)`;
-    } else if (hourlyFailedDeliveries.length > 0 || hourlyFailedNotifications.length > 0) {
+      scorePercent = Math.max(70, 100 - hourlyFailedJobs * 10);
+      reason = `${hourlyFailedJobs} background job failure(s)`;
+    } else if (hourlyFailedDeliveries > 0 || hourlyFailedNotifications > 0) {
       status = 'degraded';
-      const totalErrors = hourlyFailedDeliveries.length + hourlyFailedNotifications.length;
+      const totalErrors = hourlyFailedDeliveries + hourlyFailedNotifications;
       scorePercent = Math.max(75, 100 - totalErrors * 5);
       reason = `${totalErrors} delivery error(s)`;
     } else {

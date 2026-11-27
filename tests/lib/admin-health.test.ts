@@ -38,6 +38,7 @@ describe('admin health guide links', () => {
 
 vi.mock('@/lib/prisma', () => ({
   default: {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     incident: { findMany: vi.fn().mockResolvedValue([]) },
     backgroundJob: { findMany: vi.fn().mockResolvedValue([]) },
     inboundDelivery: { findMany: vi.fn().mockResolvedValue([]) },
@@ -303,9 +304,8 @@ describe('generate24HourHistory', () => {
 
   it('uses fixed clock-hour buckets instead of rolling windows ending at now', async () => {
     const prisma = (await import('@/lib/prisma')).default;
-    vi.mocked(prisma.backgroundJob.findMany).mockResolvedValueOnce([
-      { id: 'job-a', failedAt: new Date('2026-09-05T13:20:00.000Z') },
-      { id: 'job-b', failedAt: new Date('2026-09-05T14:05:00.000Z') },
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+      { hour: new Date('2026-09-05T13:00:00.000Z'), failures: 2 },
     ] as unknown as never);
     const now = new Date('2026-09-05T14:37:00.000Z');
 
@@ -343,24 +343,45 @@ describe('generate24HourHistory', () => {
     expect(priorHours.every(s => s.scorePercent === 100)).toBe(true);
   });
 
-  it('buckets a failed job by when it failed, not when it was created', async () => {
+  it('buckets a failed job by when it failed, and counts in SQL instead of loading rows', async () => {
     const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.$queryRaw).mockClear();
     vi.mocked(prisma.backgroundJob.findMany).mockClear();
     const now = new Date('2026-09-05T14:37:00.000Z');
 
     await generate24HourHistory(mockBaseChecks, 'healthy', now);
 
-    const query = vi.mocked(prisma.backgroundJob.findMany).mock.calls[0][0] as {
-      where: Record<string, unknown>;
-    };
-    expect(query.where).toHaveProperty('failedAt');
-    expect(query.where).not.toHaveProperty('createdAt');
+    const sql = vi
+      .mocked(prisma.$queryRaw)
+      .mock.calls.map(call => (call[0] as unknown as TemplateStringsArray).join('?'));
+    expect(sql).toHaveLength(3);
+    const jobs = sql.find(text => text.includes('"BackgroundJob"'));
+    expect(jobs).toContain('"failedAt"');
+    expect(jobs).not.toContain('"createdAt"');
+    expect(sql.every(text => text.includes('GROUP BY'))).toBe(true);
+    expect(prisma.backgroundJob.findMany).not.toHaveBeenCalled();
+  });
+
+  it('marks hours unknown, not healthy, when a history query fails', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([] as unknown as never)
+      .mockRejectedValueOnce(new Error('inbound table unreadable'));
+
+    const samples = await generate24HourHistory(
+      mockBaseChecks,
+      'healthy',
+      new Date('2026-09-05T14:37:00.000Z')
+    );
+
+    expect(samples.slice(0, 23).every(sample => sample.status === 'unknown')).toBe(true);
+    expect(samples[23].status).toBe('healthy');
   });
 
   it('shows the worse of the live status and this hour failures in the current bar', async () => {
     const prisma = (await import('@/lib/prisma')).default;
-    vi.mocked(prisma.backgroundJob.findMany).mockResolvedValueOnce([
-      { id: 'job-now', failedAt: new Date('2026-09-05T14:20:00.000Z') },
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+      { hour: new Date('2026-09-05T14:00:00.000Z'), failures: 1 },
     ] as unknown as never);
     const criticalChecks: AdminHealthCheck[] = mockBaseChecks.map(check =>
       check.id === 'encryption'
@@ -378,8 +399,8 @@ describe('generate24HourHistory', () => {
 
   it('keeps this hour failures when the live status is healthy', async () => {
     const prisma = (await import('@/lib/prisma')).default;
-    vi.mocked(prisma.backgroundJob.findMany).mockResolvedValueOnce([
-      { id: 'job-now', failedAt: new Date('2026-09-05T14:20:00.000Z') },
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+      { hour: new Date('2026-09-05T14:00:00.000Z'), failures: 1 },
     ] as unknown as never);
 
     const samples = await generate24HourHistory(
