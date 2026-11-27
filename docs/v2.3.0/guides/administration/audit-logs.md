@@ -36,7 +36,7 @@ Sign in as an `ADMIN` or `AUDITOR`. Collect the action name, entity identifier, 
 
 1. Open **Audit Log** (`/audit`).
 2. Use **Search** to match action, entity ID, stored actor name/email, or the current actor relation's name/email.
-3. Select an **Entity type** to limit results to that resource category.
+3. Select an **Entity type** to limit results to that resource category. The list offers every entity type OpsKnight records, including incidents, privacy requests, access requests and reviews, runbooks and compliance evaluations.
 4. Select an **Action** when the filter offers the relevant action.
 5. Open a row to inspect its full details and old/new values.
 6. Move through results with **Previous** and **Next**. The page loads 50 newest-first records at a time.
