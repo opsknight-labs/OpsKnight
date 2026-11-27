@@ -14,7 +14,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
 import { isValidTimeZone } from '@/lib/timezone';
 import { hashSubscriptionToken } from './subscription-tokens';
-import { subscriptionRequestAction } from './subscription-policy';
+import { sameSubscriptionPicks, subscriptionRequestAction } from './subscription-policy';
 import { pageSubscriberChannels } from './subscriber-channel-policy';
 import {
   getStatusPageLogoUrl,
@@ -203,42 +203,40 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           // Persist pending preferences alongside the verification token so
           // the verify handler can atomically install them on confirmation.
           // Keep state=ACTIVE and current preferences untouched until verified.
-          if (!(await verificationMailAllowed(statusPageId, normalizedEmail))) {
-            return subscriptionAccepted();
-          }
           const pendingVerif = hashSubscriptionToken(verificationToken);
           const existingPrefs = (existing.preferences as Record<string, unknown> | null) ?? null;
           const pendingValue = normalizedPreferences !== null ? normalizedPreferences : null;
           const alreadyPending =
             existingPrefs !== null &&
             (existingPrefs as Record<string, unknown>)._pendingPreferences !== undefined;
-          // Avoid redundant writes when pending already matches
           const pendingJson = JSON.stringify(pendingValue);
           const currentPendingJson = alreadyPending
             ? JSON.stringify((existingPrefs as Record<string, unknown>)._pendingPreferences)
             : '__none__';
-          if (pendingJson !== currentPendingJson) {
-            await prisma.statusPageSubscription.update({
-              where: { id: existing.id },
-              data: {
-                verificationToken: pendingVerif,
-                verificationTokenExpiresAt: verificationExpiresAt,
-                preferences: {
-                  ...(existingPrefs ?? {}),
-                  _pendingPreferences: pendingValue,
-                  _pendingServiceIds: normalizedServiceIds,
-                } as unknown as Prisma.InputJsonValue,
-              },
-            });
-          } else {
-            await prisma.statusPageSubscription.update({
-              where: { id: existing.id },
-              data: {
-                verificationToken: pendingVerif,
-                verificationTokenExpiresAt: verificationExpiresAt,
-              },
-            });
+          // Nothing to confirm: the picks are what the subscriber already has, or the same change is
+          // already waiting for their confirmation. Do not mail or replace the link they hold.
+          if (
+            alreadyPending
+              ? pendingJson === currentPendingJson
+              : sameSubscriptionPicks(existingPrefs, normalizedPreferences)
+          ) {
+            return subscriptionAccepted();
           }
+          if (!(await verificationMailAllowed(statusPageId, normalizedEmail))) {
+            return subscriptionAccepted();
+          }
+          await prisma.statusPageSubscription.update({
+            where: { id: existing.id },
+            data: {
+              verificationToken: pendingVerif,
+              verificationTokenExpiresAt: verificationExpiresAt,
+              preferences: {
+                ...(existingPrefs ?? {}),
+                _pendingPreferences: pendingValue,
+                _pendingServiceIds: normalizedServiceIds,
+              } as unknown as Prisma.InputJsonValue,
+            },
+          });
           // Do NOT sync join table — stays as-is until verification confirms.
           isActivePendingChange = true;
         } else {

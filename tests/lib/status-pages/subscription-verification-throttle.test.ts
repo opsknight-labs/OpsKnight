@@ -11,6 +11,7 @@ const db = vi.hoisted(() => ({
     findUniqueOrThrow: vi.fn(),
   },
   statusPageSubscriptionService: { deleteMany: vi.fn() },
+  statusPageService: { findMany: vi.fn() },
 }));
 const rateLimit = vi.hoisted(() => vi.fn());
 const emailConfig = vi.hoisted(() => vi.fn());
@@ -130,5 +131,56 @@ describe('verification mail throttle', () => {
       ['api:status-page:verification-mail:address:page-1:mixed@example.com', 5, 86_400_000],
       ['api:status-page:verification-mail:page:page-1', 1000, 3_600_000],
     ]);
+  });
+});
+
+describe('re-verification of an ACTIVE subscriber', () => {
+  const active = (preferences: unknown) => ({
+    id: 'sub-1',
+    state: 'ACTIVE',
+    subscribedAt: longAgo,
+    preferences,
+  });
+
+  beforeEach(() => {
+    mailLimits(allow);
+    db.statusPage.findFirst.mockResolvedValue({
+      id: 'page-1',
+      enabled: true,
+      showSubscribe: true,
+      requireAuth: false,
+    });
+  });
+
+  it('sends nothing and keeps the link when the picks are unchanged', async () => {
+    db.statusPageSubscription.findUnique.mockResolvedValue(active(null));
+
+    const response = await subscribe({ preferences: {} });
+
+    expect(response.status).toBe(200);
+    expect(db.statusPageSubscription.update).not.toHaveBeenCalled();
+    expect(emailConfig).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing and keeps the link when the same change is already waiting for confirmation', async () => {
+    db.statusPageSubscription.findUnique.mockResolvedValue(
+      active({ _pendingPreferences: null, _pendingServiceIds: null })
+    );
+
+    await subscribe({ preferences: {} });
+
+    expect(db.statusPageSubscription.update).not.toHaveBeenCalled();
+    expect(emailConfig).not.toHaveBeenCalled();
+  });
+
+  it('asks for confirmation once when the picks actually change', async () => {
+    db.statusPageSubscription.findUnique.mockResolvedValue(active({ selectedServiceIds: ['a'] }));
+    // Both picks must belong to the page for the change to be accepted.
+    db.statusPageService.findMany.mockResolvedValue([{ serviceId: 'a' }, { serviceId: 'b' }]);
+
+    await subscribe({ preferences: { selectedServiceIds: ['a', 'b'] } });
+
+    expect(db.statusPageSubscription.update).toHaveBeenCalledTimes(1);
+    expect(emailConfig).toHaveBeenCalledTimes(1);
   });
 });

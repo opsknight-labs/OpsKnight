@@ -66,7 +66,7 @@ Subscriptions require verification and support unsubscribe. Page tokens and webh
 
 A subscriber who picked services or business services receives only incidents on those picks; a subscriber with no picks receives the whole page. Deleting a service (in the console or through API v2) or a business service therefore revokes, in the same transaction, every subscriber whose only pick it was. Their subscription becomes `UNSUBSCRIBED` and queued messages are skipped, so they are not widened to every incident on the page. Bounced, complained and suppressed subscribers keep that state, subscribers with other picks keep those, and the audit entry for a deleted service records `unsubscribedSubscribers`, the number revoked.
 
-Verification mail is limited so a public form cannot be used to flood an inbox: at most 5 verification mails per address per page per day, and 1,000 per page per hour. A request over a limit gets the same generic answer as any other, sends nothing, and leaves the link already sent valid.
+Verification mail is limited so a public form cannot be used to flood an inbox: at most 5 verification mails per address per page per day, and 1,000 per page per hour. A request over a limit gets the same generic answer as any other, sends nothing, and leaves the link already sent valid. An already active subscriber who submits the same service picks they already have, or a change that is already waiting for their confirmation, is not mailed again.
 
 The verification link confirms only a pending subscription (or one that is already active). A subscriber suppressed after a complaint or repeated bounces stays suppressed when the original email's link is opened again.
 
