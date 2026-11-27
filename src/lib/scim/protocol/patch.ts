@@ -42,6 +42,8 @@ function ignoredUserAttribute(path: string): boolean {
 }
 export function patchUser(existing: UserDocument, body: unknown) {
   const document: Record<string, unknown> = structuredClone(existing);
+  // A displayName this request set outranks the one derived from name parts, whatever the order.
+  let displayNameSetByRequest = false;
   const apply = (path: string, value: unknown, remove: boolean) => {
     const key = path.toLowerCase();
     if (key === 'active' && typeof value === 'string' && /^(true|false)$/i.test(value))
@@ -68,6 +70,7 @@ export function patchUser(existing: UserDocument, body: unknown) {
         if (name.formatted === document.displayName) delete name.formatted;
         document.name = name;
       }
+      if (key === 'displayname') displayNameSetByRequest = !remove;
       if (remove) delete document[simple[key]];
       else document[simple[key]] = value;
       // OpsKnight's work email and login name are one authoritative attribute.
@@ -88,7 +91,7 @@ export function patchUser(existing: UserDocument, body: unknown) {
       return;
     }
     if (key === 'name') {
-      delete document.displayName;
+      if (!displayNameSetByRequest) delete document.displayName;
       if (remove) delete document.name;
       else document.name = value;
       return;
@@ -105,7 +108,7 @@ export function patchUser(existing: UserDocument, body: unknown) {
       else name[sub] = value;
       if (sub !== 'formatted') delete name.formatted;
       document.name = name;
-      delete document.displayName;
+      if (!displayNameSetByRequest) delete document.displayName;
       return;
     }
     if (key === enterpriseSchema.toLowerCase()) {

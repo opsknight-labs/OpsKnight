@@ -65,6 +65,43 @@ describe('bounded SCIM protocol and ordered PATCH', () => {
       )
     ).toMatchObject({ userName: 'new@example.test', active: false });
   });
+  it('keeps an explicit displayName whichever order it and the name parts arrive in', () => {
+    const displayName = { op: 'replace', path: 'displayName', value: 'Jane Q. Public' };
+    const givenName = { op: 'replace', path: 'name.givenName', value: 'Jane' };
+    const familyName = { op: 'replace', path: 'name.familyName', value: 'Public' };
+
+    for (const operations of [
+      [displayName, givenName, familyName],
+      [givenName, displayName, familyName],
+      [givenName, familyName, displayName],
+    ])
+      expect(patchUser(user, patch(...operations))).toMatchObject({
+        displayName: 'Jane Q. Public',
+        name: { givenName: 'Jane', familyName: 'Public' },
+      });
+  });
+
+  it('still drops the stale display name when only name parts change', () => {
+    const result = patchUser(
+      user,
+      patch({ op: 'replace', path: 'name.givenName', value: 'Alicia' })
+    );
+    expect(result.displayName).toBeUndefined();
+    expect(result.name).toMatchObject({ givenName: 'Alicia' });
+  });
+
+  it('lets a later removal of displayName fall back to the name parts', () => {
+    const result = patchUser(
+      user,
+      patch(
+        { op: 'replace', path: 'displayName', value: 'Explicit' },
+        { op: 'remove', path: 'displayName' },
+        { op: 'replace', path: 'name.givenName', value: 'Alicia' }
+      )
+    );
+    expect(result.displayName).toBeUndefined();
+  });
+
   it('names the attributes when the work email differs from userName (Entra UPN ≠ mail)', () => {
     const create = {
       ...user,

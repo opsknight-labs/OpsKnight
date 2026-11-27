@@ -342,7 +342,9 @@ equality filters and offset pagination are supported. Bulk, sorting, password
 changes and ETags are not advertised.
 
 Users support create, read, PUT, ordered atomic PATCH, disable/reactivate and safe
-DELETE. Equality filters support `externalId` and `userName`. Groups support
+DELETE. In a PATCH that sends both `displayName` and name parts (`name.givenName`,
+`name.familyName`), the `displayName` you sent is kept whichever comes first;
+without one, the stored display name follows the name parts. Equality filters support `externalId` and `userName`. Groups support
 create, read, rename, PUT, ordered atomic PATCH and grant-revocation-on-DELETE. Equality
 filters support `displayName`, `externalId` and `id`. Group queries honor
 `excludedAttributes=members` without loading member collections. Group members must be
